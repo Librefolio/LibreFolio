@@ -13,17 +13,15 @@ from backend.app.db.models import (
     ValuationModel,
     TransactionType,
     CashMovementType,
-    PayloadType,
     # Models
     Broker,
     Asset,
     Transaction,
     PriceHistory,
-    PriceRawPayload,
     FxRate,
     CashAccount,
     CashMovement,
-)
+    )
 
 __all__ = [
     "SQLModel",
@@ -33,15 +31,12 @@ __all__ = [
     "ValuationModel",
     "TransactionType",
     "CashMovementType",
-    "PayloadType",
     # Models
     "Broker",
     "Asset",
     "Transaction",
     "PriceHistory",
-    "PriceRawPayload",
     "FxRate",
     "CashAccount",
     "CashMovement",
-]
-
+    ]

@@ -15,60 +15,10 @@ Usage:
     or via test_runner.py: python test_runner.py db validate
 """
 
-from pathlib import Path
-import subprocess
-import sys
-
-from backend.app.db import engine
-from backend.app.config import get_settings
 from sqlalchemy import inspect, text
 
-
-def ensure_database_exists():
-    """
-    Ensure database exists before running tests.
-    If database file doesn't exist, run migrations.
-    """
-    settings = get_settings()
-    db_url = settings.DATABASE_URL
-
-    if db_url.startswith("sqlite:///"):
-        db_path_str = db_url.replace("sqlite:///", "")
-
-        # Handle relative paths
-        if not db_path_str.startswith("/"):
-            project_root = Path(__file__).parent.parent.parent.parent
-            db_path = project_root / db_path_str
-        else:
-            db_path = Path(db_path_str)
-
-        if not db_path.exists():
-            print("⚠️  Database not found, running migrations...")
-
-            # Ensure directory exists
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Run Alembic migrations
-            try:
-                project_root = Path(__file__).parent.parent.parent.parent
-                alembic_ini = project_root / "backend" / "alembic.ini"
-
-                result = subprocess.run(
-                    ["alembic", "-c", str(alembic_ini), "upgrade", "head"],
-                    cwd=project_root,
-                    capture_output=True,
-                    text=True,
-                )
-
-                if result.returncode == 0:
-                    print("✅ Database created and migrated successfully\n")
-                else:
-                    print(f"❌ Failed to create database:\n{result.stderr}")
-                    sys.exit(1)
-
-            except Exception as e:
-                print(f"❌ Error creating database: {e}")
-                sys.exit(1)
+from backend.app.db import engine
+from backend.app.main import ensure_database_exists
 
 
 def test_tables_exist():
@@ -81,11 +31,10 @@ def test_tables_exist():
         'assets',
         'transactions',
         'price_history',
-        'price_raw_payloads',
         'fx_rates',
         'cash_accounts',
         'cash_movements',
-    }
+        }
 
     missing = required_tables - tables
     if missing:
@@ -105,7 +54,7 @@ def test_unique_constraints():
         'price_history': ['asset_id', 'date'],
         'fx_rates': ['date', 'base', 'quote'],
         'cash_accounts': ['broker_id', 'currency'],
-    }
+        }
 
     all_ok = True
     for table, expected_unique in checks.items():
@@ -125,10 +74,9 @@ def test_foreign_keys():
         'assets': [],  # No FK
         'transactions': [('asset_id', 'assets'), ('broker_id', 'brokers')],
         'price_history': [('asset_id', 'assets')],
-        'price_raw_payloads': [('asset_id', 'assets')],
         'cash_accounts': [('broker_id', 'brokers')],
         'cash_movements': [('cash_account_id', 'cash_accounts'), ('linked_transaction_id', 'transactions')],
-    }
+        }
 
     all_ok = True
     for table, expected_fks in fk_checks.items():
@@ -151,7 +99,7 @@ def test_indexes():
         'price_history': ['idx_price_history_asset_date'],
         'fx_rates': ['idx_fx_rates_base_quote_date'],
         'cash_movements': ['idx_cash_movements_account_date'],
-    }
+        }
 
     all_ok = True
     for table, expected_indexes in index_checks.items():
@@ -189,16 +137,16 @@ def test_enum_values():
         ValuationModel,
         TransactionType,
         CashMovementType,
-        PayloadType,
-    )
+        )
 
     # Just verify they can be accessed
     assert IdentifierType.ISIN == "ISIN"
     assert AssetType.STOCK == "STOCK"
+    assert AssetType.HOLD == "HOLD"
     assert ValuationModel.MARKET_PRICE == "MARKET_PRICE"
+    assert ValuationModel.MANUAL == "MANUAL"
     assert TransactionType.BUY == "BUY"
     assert CashMovementType.DEPOSIT == "DEPOSIT"
-    assert PayloadType.CURRENT == "current"
 
     print("✅ All enum types accessible")
     return True
@@ -206,16 +154,6 @@ def test_enum_values():
 
 def test_model_imports():
     """Test that all models can be imported."""
-    from backend.app.db.models import (
-        Broker,
-        Asset,
-        Transaction,
-        PriceHistory,
-        PriceRawPayload,
-        FxRate,
-        CashAccount,
-        CashMovement,
-    )
 
     print("✅ All model classes importable")
     return True
@@ -256,7 +194,7 @@ def main():
         ("Enum Types", test_enum_values),
         ("Model Imports", test_model_imports),
         ("Daily-Point Policy", test_daily_point_constraints),
-    ]
+        ]
 
     results = []
     for test_name, test_func in tests:
@@ -293,4 +231,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-

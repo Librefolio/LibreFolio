@@ -42,4 +42,3 @@ def get_settings() -> Settings:
         Settings: Application settings
     """
     return Settings()
-

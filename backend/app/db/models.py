@@ -19,8 +19,8 @@ from sqlalchemy import (
     Numeric,
     Text,
     event,
-    Date,
-)
+    CheckConstraint,
+    )
 from sqlmodel import Field, SQLModel
 
 
@@ -76,11 +76,19 @@ class AssetType(str, Enum):
     - BOND: Fixed income securities (government or corporate bonds)
     - CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)
     - FUND: Mutual funds or investment funds
+    - HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)
     - CROWDFUND_LOAN: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)
+    - HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)
     - OTHER: Any other asset type not listed above
-
+    - Affects default valuation_model:
+      - CROWDFUND_LOAN -> SCHEDULED_YIELD
+      - HOLD -> MANUAL
+      - Others -> MARKET_PRICE
     Impact:
-    - Affects default valuation_model (CROWDFUND_LOAN typically uses SCHEDULED_YIELD)
+    - Affects default valuation_model:
+      - CROWDFUND_LOAN -> SCHEDULED_YIELD
+      - HOLD -> MANUAL
+      - Others -> MARKET_PRICE
     - Used for portfolio breakdown and allocation analysis
     - May influence available data plugins (e.g., crypto uses different sources)
     """
@@ -90,6 +98,7 @@ class AssetType(str, Enum):
     CRYPTO = "CRYPTO"
     FUND = "FUND"
     CROWDFUND_LOAN = "CROWDFUND_LOAN"
+    HOLD = "HOLD"
     OTHER = "OTHER"
 
 
@@ -103,20 +112,27 @@ class ValuationModel(str, Enum):
       When to use: Stocks, ETFs, crypto, traded bonds - any asset with a market price
       Requires: price_history records with daily prices
       Example: Apple stock valued at current market price
-
-    - SCHEDULED_YIELD: Calculates value from interest_schedule
-      When to use: Loans, P2P lending, non-traded bonds - assets with defined payment schedule
-      Requires: face_value, maturity_date, interest_schedule fields populated
+    - SCHEDULED_YIELD: Computes NPV from interest_schedule for loans/bonds
+      When to use: Crowdfunding loans, bonds with fixed schedules
+      Requires: interest_schedule JSON with payment terms
       Example: Recrowd loan valued by remaining principal + accrued interest
+    - MANUAL: User-provided valuations only
+      When to use: Assets without market prices (real estate, art, unlisted companies, collectibles)
+      Requires: User manually enters prices in price_history (source_plugin_key="manual")
+      Default value: Purchase price from first BUY transaction
+      Example: Private company shares, real estate property, art collection
+      Note: User can update valuation anytime by adding new price_history record
 
     Impact:
-    - MARKET_PRICE → runtime service fetches latest price from price_history
-    - SCHEDULED_YIELD → runtime service computes NPV from interest_schedule
-    - Affects which data plugins are used (market data vs synthetic calculation)
+    - MARKET_PRICE -> runtime service fetches latest price from price_history (automated)
+    - SCHEDULED_YIELD -> runtime service computes NPV from interest_schedule (calculated)
+    - MANUAL -> runtime service uses latest price_history with source="manual" (user-provided)
+    - Affects which data plugins are used (market data vs synthetic vs manual)
     - Changes how portfolio value is computed in aggregation services
     """
     MARKET_PRICE = "MARKET_PRICE"
     SCHEDULED_YIELD = "SCHEDULED_YIELD"
+    MANUAL = "MANUAL"
 
 
 class TransactionType(str, Enum):
@@ -220,37 +236,37 @@ class CashMovementType(str, Enum):
     - BUY_SPEND: Cash spent on asset purchase
       When: Auto-created from BUY transaction
       Effect: ↓ cash balance
-      Link: linked_transaction_id → BUY transaction
+      Link: linked_transaction_id -> BUY transaction
       Example: Spend €1500 to buy 10 shares (price €150 each)
 
     - SALE_PROCEEDS: Cash received from asset sale
       When: Auto-created from SELL transaction
       Effect: ↑ cash balance
-      Link: linked_transaction_id → SELL transaction
+      Link: linked_transaction_id -> SELL transaction
       Example: Receive €3000 from selling 10 shares (price €300 each)
 
     - DIVIDEND_INCOME: Dividend payment received
       When: Auto-created from DIVIDEND transaction
       Effect: ↑ cash balance
-      Link: linked_transaction_id → DIVIDEND transaction
+      Link: linked_transaction_id -> DIVIDEND transaction
       Example: Receive €50 dividend from stock holdings
 
     - INTEREST_INCOME: Interest payment received
       When: Auto-created from INTEREST transaction
       Effect: ↑ cash balance
-      Link: linked_transaction_id → INTEREST transaction
+      Link: linked_transaction_id -> INTEREST transaction
       Example: Receive €20 monthly interest from loan
 
     - FEE: Fee/commission payment
       When: Auto-created from FEE transaction, or manual broker fees
       Effect: ↓ cash balance
-      Link: linked_transaction_id → FEE transaction (if applicable)
+      Link: linked_transaction_id -> FEE transaction (if applicable)
       Example: Pay €5 monthly account maintenance fee
 
     - TAX: Tax payment
       When: Auto-created from TAX transaction, or manual tax payments
       Effect: ↓ cash balance
-      Link: linked_transaction_id → TAX transaction (if applicable)
+      Link: linked_transaction_id -> TAX transaction (if applicable)
       Example: Pay €100 capital gains tax
 
     == Transfer movements (between brokers) ==
@@ -269,8 +285,6 @@ class CashMovementType(str, Enum):
     - All amounts are positive (direction implied by type)
     - Auto-generated movements have linked_transaction_id set
     - Cash balance = sum(DEPOSIT, SALE_PROCEEDS, DIVIDEND_INCOME, INTEREST_INCOME, TRANSFER_IN)
-                   - sum(WITHDRAWAL, BUY_SPEND, FEE, TAX, TRANSFER_OUT)
-    - Used for cash reconciliation and liquidity analysis
     """
     DEPOSIT = "DEPOSIT"
     WITHDRAWAL = "WITHDRAWAL"
@@ -282,31 +296,6 @@ class CashMovementType(str, Enum):
     TAX = "TAX"
     TRANSFER_IN = "TRANSFER_IN"
     TRANSFER_OUT = "TRANSFER_OUT"
-
-
-class PayloadType(str, Enum):
-    """
-    Raw payload type for price data.
-
-    Usage: Categorize raw JSON responses from data plugins for audit/debugging.
-
-    - CURRENT: Response from fetching current/latest price
-      When: Plugin fetches single current price point
-      Example: Latest Bitcoin price from CoinGecko API
-      Stored in: price_raw_payloads table
-
-    - HISTORY: Response from fetching historical price data
-      When: Plugin fetches price history (multiple dates)
-      Example: Last 30 days of AAPL prices from Yahoo Finance
-      Stored in: price_raw_payloads table
-
-    Impact:
-    - Used for debugging data plugin issues
-    - Allows replay/reprocessing of raw data
-    - Helps diagnose API changes or parsing errors
-    """
-    CURRENT = "current"
-    HISTORY = "history"
 
 
 # ============================================================================
@@ -413,17 +402,17 @@ class Transaction(SQLModel, table=True):
     - FEE, TAX: price = amount
 
     Cash impact (auto-generates cash_movements):
-    - BUY → BUY_SPEND
-    - SELL → SALE_PROCEEDS
-    - DIVIDEND → DIVIDEND_INCOME
-    - INTEREST → INTEREST_INCOME
-    - FEE → FEE
-    - TAX → TAX
+    - BUY -> BUY_SPEND
+    - SELL -> SALE_PROCEEDS
+    - DIVIDEND -> DIVIDEND_INCOME
+    - INTEREST -> INTEREST_INCOME
+    - FEE -> FEE
+    - TAX -> TAX
     """
     __tablename__ = "transactions"
     __table_args__ = (
         Index("idx_transactions_asset_broker_date", "asset_id", "broker_id", "trade_date", "id"),
-    )
+        )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -461,7 +450,7 @@ class PriceHistory(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("asset_id", "date", name="uq_price_history_asset_date"),
         Index("idx_price_history_asset_date", "asset_id", "date"),
-    )
+        )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -479,23 +468,6 @@ class PriceHistory(SQLModel, table=True):
     fetched_at: datetime = Field(default_factory=utcnow)
 
 
-class PriceRawPayload(SQLModel, table=True):
-    """
-    Raw JSON payloads from price data plugins.
-
-    Used for debugging and audit trail.
-    """
-    __tablename__ = "price_raw_payloads"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-
-    asset_id: int = Field(foreign_key="assets.id", nullable=False, index=True)
-    payload_type: PayloadType = Field(nullable=False)
-    raw_json: str = Field(sa_column=Column(Text, nullable=False))
-    source_plugin_key: str = Field(nullable=False)
-    fetched_at: datetime = Field(default_factory=utcnow)
-
-
 class FxRate(SQLModel, table=True):
     """
     Daily foreign exchange rates.
@@ -507,14 +479,19 @@ class FxRate(SQLModel, table=True):
     - Reverse rate computed as 1/rate in services
     - Upsert behavior: same as PriceHistory
 
-    Example: date=2025-01-15, base=EUR, quote=USD, rate=1.09
+    Example: date='2025-01-15', base='EUR', quote='USD', rate=1.09
     Means: 1 EUR = 1.09 USD
+
+    Important: To prevent duplicates (EUR/USD and USD/EUR both existing),
+    we enforce base < quote alphabetically via CHECK constraint.
+    Always store the pair in alphabetical order.
     """
     __tablename__ = "fx_rates"
     __table_args__ = (
         UniqueConstraint("date", "base", "quote", name="uq_fx_rates_date_base_quote"),
+        CheckConstraint("base < quote", name="ck_fx_rates_base_less_than_quote"),
         Index("idx_fx_rates_base_quote_date", "base", "quote", "date"),
-    )
+        )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -537,7 +514,7 @@ class CashAccount(SQLModel, table=True):
     __tablename__ = "cash_accounts"
     __table_args__ = (
         UniqueConstraint("broker_id", "currency", name="uq_cash_accounts_broker_currency"),
-    )
+        )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -564,7 +541,7 @@ class CashMovement(SQLModel, table=True):
     __tablename__ = "cash_movements"
     __table_args__ = (
         Index("idx_cash_movements_account_date", "cash_account_id", "trade_date", "id"),
-    )
+        )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -578,7 +555,7 @@ class CashMovement(SQLModel, table=True):
         default=None,
         foreign_key="transactions.id",
         index=True
-    )
+        )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -597,4 +574,3 @@ class CashMovement(SQLModel, table=True):
 def receive_before_update(mapper, connection, target):
     """Update updated_at timestamp on update."""
     target.updated_at = utcnow()
-

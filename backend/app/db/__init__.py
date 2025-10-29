@@ -9,17 +9,15 @@ from backend.app.db.base import (
     ValuationModel,
     TransactionType,
     CashMovementType,
-    PayloadType,
     # Models
     Broker,
     Asset,
     Transaction,
     PriceHistory,
-    PriceRawPayload,
     FxRate,
     CashAccount,
     CashMovement,
-)
+    )
 from backend.app.db.session import engine, get_session
 
 __all__ = [
@@ -32,16 +30,12 @@ __all__ = [
     "ValuationModel",
     "TransactionType",
     "CashMovementType",
-    "PayloadType",
     # Models
     "Broker",
     "Asset",
     "Transaction",
     "PriceHistory",
-    "PriceRawPayload",
     "FxRate",
     "CashAccount",
     "CashMovement",
-]
-
-
+    ]
