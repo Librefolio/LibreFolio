@@ -31,7 +31,7 @@ def configure_logging(log_level: str = "INFO") -> None:
         format="%(message)s",
         stream=sys.stdout,
         level=getattr(logging, log_level.upper()),
-    )
+        )
 
     # Configure structlog
     processors: list[Processor] = [
@@ -44,7 +44,7 @@ def configure_logging(log_level: str = "INFO") -> None:
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.JSONRenderer(),
-    ]
+        ]
 
     structlog.configure(
         processors=processors,
@@ -52,7 +52,7 @@ def configure_logging(log_level: str = "INFO") -> None:
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
-    )
+        )
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
@@ -66,4 +66,3 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
         structlog.stdlib.BoundLogger: Configured logger
     """
     return structlog.get_logger(name)
-

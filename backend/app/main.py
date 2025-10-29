@@ -2,18 +2,18 @@
 LibreFolio FastAPI application.
 Main entry point for the backend API.
 """
+import subprocess
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
-import subprocess
-import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.api.v1.router import router as api_v1_router
 from backend.app.config import get_settings
 from backend.app.logging_config import configure_logging, get_logger
-from backend.app.api.v1.router import router as api_v1_router
 
 settings = get_settings()
 
@@ -26,8 +26,10 @@ def ensure_database_exists():
     """
     Ensure database exists and is migrated.
     If database file doesn't exist, run migrations automatically.
-    ensure_database_exists()
 
+    This function is used by:
+    - Backend server on startup (via lifespan)
+    - Test scripts (db_schema_validate, populate_db)
     """
     # Extract database path from DATABASE_URL
     db_url = settings.DATABASE_URL
@@ -46,7 +48,7 @@ def ensure_database_exists():
             logger.warning(
                 "Database file not found, running migrations",
                 db_path=str(db_path)
-            )
+                )
 
             # Ensure directory exists
             db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -61,7 +63,7 @@ def ensure_database_exists():
                     cwd=project_root,
                     capture_output=True,
                     text=True,
-                )
+                    )
 
                 if result.returncode == 0:
                     logger.info("Database created and migrated successfully")
@@ -69,7 +71,7 @@ def ensure_database_exists():
                     logger.error(
                         "Failed to create database",
                         stderr=result.stderr
-                    )
+                        )
                     sys.exit(1)
 
             except Exception as e:
@@ -88,7 +90,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         "Starting LibreFolio",
         version=settings.VERSION,
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
-    )
+        )
+
+    # Ensure database exists and is migrated
+    ensure_database_exists()
+
     yield
     # Shutdown
     logger.info("Shutting down LibreFolio")
@@ -102,7 +108,7 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_PREFIX}/docs",
     redoc_url=f"{settings.API_V1_PREFIX}/redoc",
     lifespan=lifespan,
-)
+    )
 
 # Configure CORS
 app.add_middleware(
@@ -111,7 +117,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
+    )
 
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
@@ -127,5 +133,4 @@ async def root():
         "name": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "docs": f"{settings.API_V1_PREFIX}/docs",
-    }
-
+        }

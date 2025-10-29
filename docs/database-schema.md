@@ -104,12 +104,10 @@ Financial instruments you can own and trade.
 - Crypto: Bitcoin, Ethereum
 - Bonds: Government or corporate bonds
 - P2P Loans: Crowdfunding loans with scheduled repayments
+- HOLD assets: Real estate properties, art collections, unlisted company shares, physical gold
 
 **What it does NOT abstract:**
-- Physical commodities (gold bars, oil barrels)
-- Real estate properties
-- Collectibles (art, wine)
-- Business ownership (unless represented as shares)
+- Nothing - any asset can be tracked! Use asset_type=HOLD for assets without automatic market pricing
 
 **Schema:**
 ```sql
@@ -147,7 +145,51 @@ CREATE TABLE assets (
 - `valuation_model`:
   - `MARKET_PRICE`: Value based on market prices (stocks, ETFs, crypto)
   - `SCHEDULED_YIELD`: Value based on payment schedule (loans, some bonds)
+  - `MANUAL`: User-provided valuations (real estate, art, unlisted companies)
 - Plugin keys: `NULL` = manual entry allowed, value = automatic fetching
+
+**Valuation model details:**
+- **MARKET_PRICE**: Asset price fetched automatically from data sources (yfinance, APIs, plugins developed later by the community)
+- **SCHEDULED_YIELD**: Asset value calculated from `interest_schedule` (see below)
+- **MANUAL**: No automatic pricing. Value defaults to purchase price from first BUY transaction. User can manually update by adding price_history records with `source_plugin_key="manual"`
+
+**Interest schedule JSON (for SCHEDULED_YIELD assets):**
+```json
+[
+  {
+    "start_date": "2025-01-01",
+    "end_date": "2025-12-31",
+    "annual_rate": 0.085,
+    "compounding": "SIMPLE",
+    "compound_frequency": "MONTHLY",
+    "day_count": "ACT/365"
+  },
+  {
+    "start_date": "2026-01-01", // Note the start date is the day after previous end_date
+    "end_date": "2026-12-31",
+    "annual_rate": 0.095,
+    "compounding": "SIMPLE",
+    "compound_frequency": "MONTHLY",
+    "day_count": "ACT/365"
+  }
+]
+```
+**Why is it a list?** Interest rates can change over the loan lifetime. For example, a loan might have 8.5% APR for the first year, then 9.5% APR for the second year. Each period is a separate element in the array.
+
+[//]: # (TODO: creare la Interest Calculation Guide)
+The fields of each object is documented in detail in the [Interest Calculation Guide](docs/interest-calculation.md).
+
+**Late interest JSON (for SCHEDULED_YIELD assets):**
+```json
+{
+  "annual_rate": 0.12,
+  "grace_days": 0
+}
+```
+**Why is it NOT a list?** Late interest policy is typically uniform across the entire loan lifetime. If a payment is late, this single policy applies regardless of which payment period is late.
+
+[//]: # (TODO: creare la Interest Calculation Guide)
+The fields are documented in detail in the [Interest Calculation Guide](docs/interest-calculation.md).
 
 **Important distinction:**
 - An asset definition (AAPL) is **global** - defined once
@@ -184,9 +226,9 @@ CREATE TABLE cash_accounts (
 ```
 
 **Key points:**
-- **Broker-specific**: Each broker has its own isolated cash accounts
+- **Broker-specific**: Each cash account is conected with only one broker, to transfert money from one broker to another, need to create a cash_transaction
 - **One per currency**: A broker can have multiple cash accounts (EUR, USD, etc.)
-- **Balance computed at runtime**: Sum of cash_movements, never stored directly
+- **Balance computed at runtime**: Sum of cash_movements, never stored directly (to allow out-of-order entries)
 
 **Example scenario:**
 ```
@@ -267,6 +309,9 @@ CREATE TABLE transactions (
 
 **Key points:**
 - **Auto-generates cash movements**: BUY, SELL, DIVIDEND, INTEREST, FEE, TAX automatically create corresponding cash_movements
+  - ⚠️ **Important**: This is implemented in the **backend Python code**, NOT at database level with triggers
+  - The backend service creates both records in the same transaction
+  - If a transaction is deleted, the backend must also delete the linked cash_movement (cascade logic in Python)
 - **Quantity rules**: 
   - `> 0` for BUY, SELL, TRANSFER, ADD/REMOVE_HOLDING
   - `= 0` for DIVIDEND, INTEREST, FEE, TAX (cash-only)
@@ -353,7 +398,7 @@ Historical market prices for assets with `valuation_model = MARKET_PRICE`.
 - Daily Bitcoin prices
 
 **What it does NOT abstract:**
-- Intraday prices (we only store one price per day)
+- Intraday prices (we only store one price per day), in the today record any time you have a new input it replaces the existing one
 - Prices for scheduled-yield assets (those use interest_schedule)
 - Your purchase prices (those are in transactions)
 
@@ -402,7 +447,7 @@ Exchange rates between currencies for multi-currency portfolios.
 **What it does NOT abstract:**
 - Broker-specific exchange rates
 - Your actual currency conversions (those are transactions)
-- Crypto exchange rates (those are asset prices)
+- Crypto exchange rates (those are referred to the `price_history` and then converted to the desired currency)
 
 **Schema:**
 ```sql
@@ -420,9 +465,18 @@ CREATE TABLE fx_rates (
 ```
 
 **Key points:**
+- **base**: Currency you start with (valuta di partenza)
+- **quote**: Currency you want to get (valuta di arrivo)
 - **Interpretation**: `1 base = rate × quote`
 - **Daily-point policy**: One rate per day per currency pair
+- **Unique constraint**: `(date, base, quote)` - we store only one direction!
+- **CHECK constraint**: `base < quote` (alphabetically) - prevents storing both EUR/USD and USD/EUR
+  - We **always** store currency pairs in alphabetical order
+  - Example: Store EUR/USD (not USD/EUR), GBP/USD (not USD/GBP), EUR/GBP (not GBP/EUR)
+  - The backend must normalize pairs before inserting: if you want USD/EUR, store as EUR/USD with rate = 1/original_rate
 - **Reverse rate**: Calculated as `1/rate` in code (not stored twice)
+  - Example: If we have EUR/USD = 1.0850, we calculate USD/EUR = 1/1.0850 = 0.9217
+  - This saves space and avoids inconsistency
 - **Used for**: Portfolio valuation in a single currency
 
 **Example:**
@@ -437,31 +491,19 @@ date='2025-10-29', base='EUR', quote='USD', rate=1.0850
 
 ---
 
-### 8. `price_raw_payloads` - Plugin Response Cache
+### 8. `price_raw_payloads` - Plugin Response Cache (REMOVED)
 
-**What it abstracts:**
-Raw JSON responses from data plugins for debugging and audit.
+**Status:** ⚠️ This table has been removed from the schema.
 
-**Examples:**
-- Full Yahoo Finance API response for AAPL
-- CoinGecko API response for Bitcoin
+**Why removed:**
+Storing full API responses daily is unnecessarily heavy for the database. Raw payloads can be logged and analyzed in Python when needed, but don't need to be persisted.
 
-**Schema:**
-```sql
-CREATE TABLE price_raw_payloads (
-    id INTEGER PRIMARY KEY,
-    asset_id INTEGER NOT NULL,           -- FK to assets
-    payload_type TEXT NOT NULL,          -- "current" or "history"
-    raw_json TEXT NOT NULL,              -- Full JSON response
-    source_plugin_key TEXT NOT NULL,     -- "yfinance"
-    fetched_at DATETIME
-);
-```
+**Alternative approach:**
+- Log API responses to files or external logging system
+- Keep only last N responses in memory/cache
+- No database storage needed
 
-**Key points:**
-- Optional table for debugging
-- Allows replaying/reprocessing data
-- Helps diagnose API changes
+**Note:** If you need to debug API responses, use Python logging with rotation (e.g., keep last 1000 responses in log files, auto-delete older ones).
 
 ---
 
@@ -596,6 +638,9 @@ INSERT INTO cash_movements (
 **Result:**
 - Your AAPL holdings unchanged
 - Your USD cash in Degiro increased by $25
+
+**Important note on dividends:**
+When a dividend is paid, the stock price typically drops by approximately the dividend amount (ex-dividend effect). This is NOT handled internally by LibreFolio - the system simply fetches the new market price from external sources (yfinance, etc.) which will already reflect the post-dividend price. The database doesn't need to do anything special; the price_history table will naturally show the lower price on the ex-dividend date when the next price fetch occurs.
 
 ---
 
@@ -746,6 +791,5 @@ GROUP BY ca.id;
 
 For more technical details, see:
 - [Database Models Source Code](../backend/app/db/models.py)
-- [STEP 2 Completion Report](../STEP_2_COMPLETION_REPORT.md)
 - [Alembic Migration Guide](alembic-guide.md)
 

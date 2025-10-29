@@ -62,13 +62,14 @@ def print_info(text: str):
     print(f"{Colors.MAGENTA}ℹ️  {text}{Colors.NC}")
 
 
-def run_command(cmd: list[str], description: str) -> bool:
+def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool:
     """
     Run a command and return True if successful.
 
     Args:
         cmd: Command to run as list
         description: Description for logging
+        verbose: If True, show full command output (like calling script directly)
 
     Returns:
         bool: True if command succeeded
@@ -80,9 +81,9 @@ def run_command(cmd: list[str], description: str) -> bool:
         result = subprocess.run(
             cmd,
             cwd=Path(__file__).parent,
-            capture_output=False,
+            capture_output=not verbose,  # Capture only if not verbose
             text=True,
-        )
+            )
 
         if result.returncode == 0:
             print_success(f"{description} - PASSED")
@@ -100,7 +101,7 @@ def run_command(cmd: list[str], description: str) -> bool:
 # DATABASE TESTS
 # ============================================================================
 
-def db_create() -> bool:
+def db_create(verbose: bool = False) -> bool:
     """
     Create fresh database.
     Removes existing database and creates a new one from migrations.
@@ -123,8 +124,9 @@ def db_create() -> bool:
     print("\nCreating fresh database from migrations...")
     success = run_command(
         ["./dev.sh", "db:upgrade"],
-        "Create database via Alembic migrations"
-    )
+        "Create database via Alembic migrations",
+        verbose=verbose
+        )
 
     if success:
         print_success("Database created successfully")
@@ -134,7 +136,7 @@ def db_create() -> bool:
     return success
 
 
-def db_validate() -> bool:
+def db_validate(verbose: bool = False) -> bool:
     """
     Validate database schema.
     Checks that all expected tables, constraints, indexes exist.
@@ -146,11 +148,12 @@ def db_validate() -> bool:
 
     return run_command(
         ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.db_schema_validate"],
-        "Schema validation"
-    )
+        "Schema validation",
+        verbose=verbose
+        )
 
 
-def db_populate() -> bool:
+def db_populate(verbose: bool = False) -> bool:
     """
     Populate database with test data and verify.
     Inserts sample data and runs queries to verify integrity.
@@ -162,11 +165,12 @@ def db_populate() -> bool:
 
     return run_command(
         ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.populate_db"],
-        "Database population and query verification"
-    )
+        "Database population and query verification",
+        verbose=verbose
+        )
 
 
-def db_all() -> bool:
+def db_all(verbose: bool = False) -> bool:
     """
     Run all database tests in sequence.
     """
@@ -177,10 +181,10 @@ def db_all() -> bool:
 
     # Test order matters!
     tests = [
-        ("Create Fresh Database", db_create),
-        ("Validate Schema", db_validate),
-        ("Populate & Query Verification", db_populate),
-    ]
+        ("Create Fresh Database", lambda: db_create(verbose)),
+        ("Validate Schema", lambda: db_validate(verbose)),
+        ("Populate & Query Verification", lambda: db_populate(verbose)),
+        ]
 
     results = []
     for test_name, test_func in tests:
@@ -272,13 +276,21 @@ Examples:
   ./dev.sh test db all                  # Via dev.sh wrapper
   ./dev.sh test api test                # Via dev.sh wrapper
         """
-    )
+        )
+
+    # Global flags
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Show full test output (like calling test scripts directly)",
+        default=False
+        )
 
     subparsers = parser.add_subparsers(
         dest="category",
         help="Test category to run",
         required=True
-    )
+        )
 
     # ========================================================================
     # DATABASE TESTS SUBPARSER
@@ -301,13 +313,13 @@ Test commands:
   all      - Run all tests in sequence (create → validate → populate)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+        )
 
     db_parser.add_argument(
         "action",
         choices=["create", "validate", "populate", "all"],
         help="Database test to run"
-    )
+        )
 
     # ========================================================================
     # API TESTS SUBPARSER
@@ -329,13 +341,13 @@ Test commands:
 Note: Start the backend server first with './dev.sh server'
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+        )
 
     api_parser.add_argument(
         "action",
         choices=["test"],
         help="API test to run"
-    )
+        )
 
     return parser
 
@@ -347,17 +359,17 @@ def main():
 
     # Route to appropriate test handler
     success = False
-
+    verbose = args.verbose
     if args.category == "db":
         # Database tests
         if args.action == "create":
-            success = db_create()
+            success = db_create(verbose=verbose)
         elif args.action == "validate":
-            success = db_validate()
+            success = db_validate(verbose=verbose)
         elif args.action == "populate":
-            success = db_populate()
+            success = db_populate(verbose=verbose)
         elif args.action == "all":
-            success = db_all()
+            success = db_all(verbose=verbose)
 
     elif args.category == "api":
         # API tests
@@ -377,6 +389,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n{Colors.RED}❌ Unexpected error: {e}{Colors.NC}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
-

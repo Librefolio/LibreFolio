@@ -2,8 +2,8 @@
 Database session management.
 Handles SQLite connection and session lifecycle.
 """
-from typing import Generator
 from pathlib import Path
+from typing import Generator
 
 from sqlalchemy import event, create_engine
 from sqlalchemy.engine import Engine
@@ -43,7 +43,7 @@ def get_engine():
         settings.DATABASE_URL,
         echo=False,
         connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {},
-    )
+        )
     return engine
 
 
@@ -65,6 +65,3 @@ def get_session() -> Generator[Session, None, None]:
     """
     with Session(engine) as session:
         yield session
-
-
-

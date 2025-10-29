@@ -10,16 +10,12 @@ Usage:
     or via test_runner.py: python test_runner.py db populate
 """
 
-from decimal import Decimal
-from datetime import date, timedelta
-from pathlib import Path
 import json
-import subprocess
-import sys
+from datetime import date, timedelta
+from decimal import Decimal
 
 from sqlmodel import Session, select
 
-from backend.app.config import get_settings
 from backend.app.db import (
     engine,
     Broker,
@@ -34,50 +30,8 @@ from backend.app.db import (
     ValuationModel,
     TransactionType,
     CashMovementType,
-)
-
-
-def ensure_database_exists():
-    """
-    Ensure database exists before populating.
-    If database file doesn't exist, run migrations.
-    """
-    settings = get_settings()
-    db_url = settings.DATABASE_URL
-
-    if db_url.startswith("sqlite:///"):
-        db_path_str = db_url.replace("sqlite:///", "")
-
-        if not db_path_str.startswith("/"):
-            project_root = Path(__file__).parent.parent.parent.parent
-            db_path = project_root / db_path_str
-        else:
-            db_path = Path(db_path_str)
-
-        if not db_path.exists():
-            print("⚠️  Database not found, running migrations...")
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-
-            try:
-                project_root = Path(__file__).parent.parent.parent.parent
-                alembic_ini = project_root / "backend" / "alembic.ini"
-
-                result = subprocess.run(
-                    ["alembic", "-c", str(alembic_ini), "upgrade", "head"],
-                    cwd=project_root,
-                    capture_output=True,
-                    text=True,
-                )
-
-                if result.returncode == 0:
-                    print("✅ Database created and migrated successfully\n")
-                else:
-                    print(f"❌ Failed to create database:\n{result.stderr}")
-                    sys.exit(1)
-
-            except Exception as e:
-                print(f"❌ Error creating database: {e}")
-                sys.exit(1)
+    )
+from backend.app.main import ensure_database_exists
 
 
 def populate_brokers(session: Session):
@@ -90,18 +44,18 @@ def populate_brokers(session: Session):
             "name": "Interactive Brokers",
             "description": "Global multi-asset broker with low fees",
             "portal_url": "https://www.interactivebrokers.com",
-        },
+            },
         {
             "name": "Degiro",
             "description": "European discount broker",
             "portal_url": "https://www.degiro.com",
-        },
+            },
         {
             "name": "Recrowd",
             "description": "Italian P2P real estate lending platform",
             "portal_url": "https://www.recrowd.it",
-        },
-    ]
+            },
+        ]
 
     for data in brokers_data:
         broker = Broker(**data)
@@ -129,7 +83,7 @@ def populate_assets(session: Session):
             "current_data_plugin_params": json.dumps({"symbol": "AAPL"}),
             "history_data_plugin_key": "yfinance",
             "history_data_plugin_params": json.dumps({"symbol": "AAPL"}),
-        },
+            },
         {
             "display_name": "Microsoft Corporation",
             "identifier": "MSFT",
@@ -141,7 +95,7 @@ def populate_assets(session: Session):
             "current_data_plugin_params": json.dumps({"symbol": "MSFT"}),
             "history_data_plugin_key": "yfinance",
             "history_data_plugin_params": json.dumps({"symbol": "MSFT"}),
-        },
+            },
         {
             "display_name": "Tesla, Inc.",
             "identifier": "TSLA",
@@ -153,7 +107,7 @@ def populate_assets(session: Session):
             "current_data_plugin_params": json.dumps({"symbol": "TSLA"}),
             "history_data_plugin_key": "yfinance",
             "history_data_plugin_params": json.dumps({"symbol": "TSLA"}),
-        },
+            },
         # ETFs
         {
             "display_name": "Vanguard FTSE All-World UCITS ETF",
@@ -166,7 +120,7 @@ def populate_assets(session: Session):
             "current_data_plugin_params": json.dumps({"symbol": "VWCE.MI"}),
             "history_data_plugin_key": "yfinance",
             "history_data_plugin_params": json.dumps({"symbol": "VWCE.MI"}),
-        },
+            },
         {
             "display_name": "iShares Core S&P 500 UCITS ETF",
             "identifier": "CSPX",
@@ -178,7 +132,17 @@ def populate_assets(session: Session):
             "current_data_plugin_params": json.dumps({"symbol": "CSPX.L"}),
             "history_data_plugin_key": "yfinance",
             "history_data_plugin_params": json.dumps({"symbol": "CSPX.L"}),
-        },
+            },
+        # HOLD assets (manual valuation)
+        {
+            "display_name": "Apartment - Milano Navigli",
+            "identifier": "REALESTATE-001",
+            "identifier_type": IdentifierType.OTHER,
+            "currency": "EUR",
+            "asset_type": AssetType.HOLD,
+            "valuation_model": ValuationModel.MANUAL,
+            # No plugins - manual valuation only
+            },
         # P2P Loans
         {
             "display_name": "Real Estate Loan - Milano Centro",
@@ -197,13 +161,13 @@ def populate_assets(session: Session):
                     "compounding": "SIMPLE",
                     "compound_frequency": "MONTHLY",
                     "day_count": "ACT/365",
-                }
-            ]),
+                    }
+                ]),
             "late_interest": json.dumps({
                 "annual_rate": 0.12,
                 "grace_days": 0,
-            }),
-        },
+                }),
+            },
         {
             "display_name": "Real Estate Loan - Roma Parioli",
             "identifier": "RECROWD-12346",
@@ -221,14 +185,14 @@ def populate_assets(session: Session):
                     "compounding": "SIMPLE",
                     "compound_frequency": "MONTHLY",
                     "day_count": "ACT/365",
-                }
-            ]),
+                    }
+                ]),
             "late_interest": json.dumps({
                 "annual_rate": 0.12,
                 "grace_days": 0,
-            }),
-        },
-    ]
+                }),
+            },
+        ]
 
     for data in assets_data:
         asset = Asset(**data)
@@ -254,7 +218,7 @@ def populate_cash_accounts(session: Session):
                 broker_id=ib.id,
                 currency=currency,
                 display_name=f"Interactive Brokers {currency} Account",
-            )
+                )
             session.add(account)
             print(f"  ✅ {account.display_name}")
 
@@ -265,7 +229,7 @@ def populate_cash_accounts(session: Session):
             broker_id=degiro.id,
             currency="EUR",
             display_name="Degiro EUR Account",
-        )
+            )
         session.add(account)
         print(f"  ✅ {account.display_name}")
 
@@ -276,7 +240,7 @@ def populate_cash_accounts(session: Session):
             broker_id=recrowd.id,
             currency="EUR",
             display_name="Recrowd EUR Account",
-        )
+            )
         session.add(account)
         print(f"  ✅ {account.display_name}")
 
@@ -293,7 +257,7 @@ def populate_deposits(session: Session):
         ("Interactive Brokers", "USD", Decimal("10000.00"), "USD funding from bank"),
         ("Degiro", "EUR", Decimal("5000.00"), "Initial deposit"),
         ("Recrowd", "EUR", Decimal("15000.00"), "P2P lending capital"),
-    ]
+        ]
 
     for broker_name, currency, amount, note in deposits:
         broker = session.exec(select(Broker).where(Broker.name == broker_name)).first()
@@ -304,8 +268,8 @@ def populate_deposits(session: Session):
             select(CashAccount).where(
                 CashAccount.broker_id == broker.id,
                 CashAccount.currency == currency
-            )
-        ).first()
+                )
+            ).first()
 
         if cash_account:
             deposit = CashMovement(
@@ -314,7 +278,7 @@ def populate_deposits(session: Session):
                 amount=amount,
                 trade_date=date.today() - timedelta(days=30),
                 note=note,
-            )
+                )
             session.add(deposit)
             print(f"  ✅ {broker_name} {currency}: +{amount} {currency}")
 
@@ -352,7 +316,7 @@ def populate_transactions_and_cash(session: Session):
             "fees": Decimal("1.00"),
             "days_ago": 30,
             "note": "Initial AAPL purchase",
-        },
+            },
         # Day -25: Buy VWCE on Degiro
         {
             "broker": degiro,
@@ -364,7 +328,7 @@ def populate_transactions_and_cash(session: Session):
             "fees": Decimal("0.00"),
             "days_ago": 25,
             "note": "Start ETF accumulation plan",
-        },
+            },
         # Day -20: Invest in loan 1 on Recrowd
         {
             "broker": recrowd,
@@ -376,7 +340,7 @@ def populate_transactions_and_cash(session: Session):
             "fees": Decimal("0.00"),
             "days_ago": 20,
             "note": "P2P lending - Milano Centro",
-        },
+            },
         # Day -18: Buy MSFT on Interactive Brokers
         {
             "broker": ib,
@@ -388,7 +352,7 @@ def populate_transactions_and_cash(session: Session):
             "fees": Decimal("1.00"),
             "days_ago": 18,
             "note": "Diversification into MSFT",
-        },
+            },
         # Day -15: Invest in loan 2 on Recrowd
         {
             "broker": recrowd,
@@ -400,7 +364,7 @@ def populate_transactions_and_cash(session: Session):
             "fees": Decimal("0.00"),
             "days_ago": 15,
             "note": "P2P lending - Roma Parioli",
-        },
+            },
         # Day -10: Buy more VWCE on Degiro
         {
             "broker": degiro,
@@ -412,7 +376,7 @@ def populate_transactions_and_cash(session: Session):
             "fees": Decimal("0.00"),
             "days_ago": 10,
             "note": "Monthly ETF purchase",
-        },
+            },
         # Day -8: Receive dividend from AAPL
         {
             "broker": ib,
@@ -425,7 +389,7 @@ def populate_transactions_and_cash(session: Session):
             "taxes": Decimal("1.13"),
             "days_ago": 8,
             "note": "Q4 dividend payment",
-        },
+            },
         # Day -5: Sell some AAPL (taking profit)
         {
             "broker": ib,
@@ -437,7 +401,7 @@ def populate_transactions_and_cash(session: Session):
             "fees": Decimal("1.00"),
             "days_ago": 5,
             "note": "Taking profits",
-        },
+            },
         # Day -3: Interest payment from loan 1
         {
             "broker": recrowd,
@@ -449,7 +413,7 @@ def populate_transactions_and_cash(session: Session):
             "fees": Decimal("0.00"),
             "days_ago": 3,
             "note": "Monthly interest payment",
-        },
+            },
         # Day -1: Buy CSPX on Degiro
         {
             "broker": degiro,
@@ -461,8 +425,8 @@ def populate_transactions_and_cash(session: Session):
             "fees": Decimal("0.00"),
             "days_ago": 1,
             "note": "S&P 500 exposure",
-        },
-    ]
+            },
+        ]
 
     for tx_data in transactions:
         if not tx_data["broker"] or not tx_data["asset"]:
@@ -479,7 +443,7 @@ def populate_transactions_and_cash(session: Session):
             taxes=tx_data.get("taxes", Decimal("0.00")),
             trade_date=date.today() - timedelta(days=tx_data["days_ago"]),
             note=tx_data["note"],
-        )
+            )
         session.add(tx)
         session.flush()  # Get transaction ID
 
@@ -488,8 +452,8 @@ def populate_transactions_and_cash(session: Session):
             select(CashAccount).where(
                 CashAccount.broker_id == tx_data["broker"].id,
                 CashAccount.currency == tx_data["currency"]
-            )
-        ).first()
+                )
+            ).first()
 
         if cash_account:
             cash_type = None
@@ -515,7 +479,7 @@ def populate_transactions_and_cash(session: Session):
                     amount=cash_amount,
                     trade_date=tx.trade_date,
                     linked_transaction_id=tx.id,
-                )
+                    )
                 session.add(cash_mov)
 
         tx_type_emoji = {
@@ -523,7 +487,7 @@ def populate_transactions_and_cash(session: Session):
             TransactionType.SELL: "💰",
             TransactionType.DIVIDEND: "💵",
             TransactionType.INTEREST: "📈",
-        }.get(tx_data["type"], "📊")
+            }.get(tx_data["type"], "📊")
 
         print(f"  {tx_type_emoji} {tx_data['type'].value}: {tx_data['asset'].identifier} "
               f"(qty: {tx_data['quantity']}, price: {tx_data['price']} {tx_data['currency']})")
@@ -542,7 +506,7 @@ def populate_price_history(session: Session):
         ("TSLA", Decimal("242.00"), Decimal("2.50")),
         ("VWCE", Decimal("95.00"), Decimal("0.30")),
         ("CSPX", Decimal("485.00"), Decimal("0.80")),
-    ]
+        ]
 
     for identifier, base_price, daily_change in assets_with_prices:
         asset = session.exec(select(Asset).where(Asset.identifier == identifier)).first()
@@ -564,7 +528,7 @@ def populate_price_history(session: Session):
                 adjusted_close=day_price,
                 currency=asset.currency,
                 source_plugin_key="yfinance",
-            )
+                )
             session.add(price)
 
         print(f"  ✅ {identifier}: 7 days of prices")
@@ -589,7 +553,7 @@ def populate_fx_rates(session: Session):
             quote="USD",
             rate=rate,
             source="ECB",
-        )
+            )
         session.add(fx)
 
     print(f"  ✅ EUR/USD: 7 days of rates (current: {base_rate})")
@@ -650,4 +614,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-
