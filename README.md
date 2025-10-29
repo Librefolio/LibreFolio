@@ -91,59 +91,60 @@ LibreFolio/
 │   │   └── main.py       # FastAPI application
 │   ├── alembic/          # Database migrations
 │   ├── data/             # SQLite database (gitignored)
-│   └── scripts/          # Utility scripts
+│   └── test_scripts/     # Test scripts
+│       └── test_db/      # Database tests
+│           ├── db_schema_validate.py  # Schema validation
+│           └── populate_db.py         # Sample data population
+├── docs/                 # Documentation
+│   └── alembic-guide.md  # Alembic migrations guide
 ├── frontend/             # React frontend (coming soon)
 ├── Pipfile              # Python dependencies
+├── pyproject.toml       # Project metadata
+├── test_runner.py       # Centralized test orchestrator
+├── dev.sh               # Development helper script
 ├── .env                 # Environment configuration (create from .env.example)
-├── .env.example         # Example environment configuration
-└── dev.sh               # Development helper script
+└── .env.example         # Example environment configuration
 ```
 
 ## 🔧 Development Commands
 
-### Run the API server
+### Server Management
 ```bash
-./dev.sh server
+./dev.sh server              # Start FastAPI development server
+./dev.sh shell               # Open Python shell in virtualenv
 ```
 
-### Check Alembic migration status
+### Database Management
 ```bash
-./dev.sh db:current
+./dev.sh db:current          # Show current migration
+./dev.sh db:migrate "msg"    # Create new migration
+./dev.sh db:upgrade          # Apply migrations
+./dev.sh db:downgrade        # Rollback one migration
 ```
 
-### Create a new migration
+> 📚 **New to Alembic?** Read our [Alembic Simple Guide](docs/alembic-guide.md) to understand how database migrations work!
+
+### Testing
 ```bash
-./dev.sh db:migrate "description of changes"
+# Database tests via dev.sh
+./dev.sh test db validate           # Validate database schema
+./dev.sh test db populate           # Populate DB with sample data
+./dev.sh test db all                # Run all database tests
+./dev.sh test --reset db all        # Reset DB and run all tests
+./dev.sh test --help                # Show test options
+
+# Or use test_runner.py directly
+python test_runner.py db validate       # Validate schema only
+python test_runner.py db populate       # Populate DB only
+python test_runner.py db all            # All DB tests
+python test_runner.py --reset db all    # Reset env + all DB tests
 ```
 
-### Apply migrations
+### Code Quality
 ```bash
-./dev.sh db:upgrade
-```
-
-### Rollback last migration
-```bash
-./dev.sh db:downgrade
-```
-
-### Open a Python shell
-```bash
-./dev.sh shell
-```
-
-### Run tests (when available)
-```bash
-pipenv run pytest
-```
-
-### Format code
-```bash
-pipenv run black backend/
-```
-
-### Lint code
-```bash
-pipenv run ruff check backend/
+./dev.sh format              # Format code with black
+./dev.sh lint                # Lint code with ruff
+./dev.sh test                # Run pytest tests
 ```
 
 ## 🗄️ Database

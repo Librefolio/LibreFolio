@@ -6,7 +6,6 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
 
-
 # Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -20,12 +19,23 @@ function print_help() {
     echo ""
     echo "Commands:"
     echo "  install          Install all dependencies"
-    echo "  server           Start the FastAPI development server (python backend app)"
+    echo "  server           Start the FastAPI development server"
+    echo ""
+    echo "Database Management:"
     echo "  db:current       Show current database migration"
     echo "  db:migrate       Create a new migration (provide message)"
     echo "  db:upgrade       Apply pending migrations"
     echo "  db:downgrade     Rollback one migration"
-    echo "  test             Run tests"
+    echo ""
+    echo "Testing:"
+    echo "  test [args]      Run tests via test_runner.py"
+    echo "                   Examples:"
+    echo "                     ./dev.sh test db validate"
+    echo "                     ./dev.sh test db all"
+    echo "                     ./dev.sh test --reset db all"
+    echo "                     ./dev.sh test --help"
+    echo ""
+    echo "Development:"
     echo "  format           Format code with black"
     echo "  lint             Lint code with ruff"
     echo "  shell            Open a shell in the virtualenv"
@@ -70,8 +80,15 @@ function db_downgrade() {
 }
 
 function run_tests() {
-    echo -e "${GREEN}Running tests...${NC}"
-    pipenv run pytest
+    # Delegate all test execution to test_runner.py
+    # This passes all arguments from dev.sh to test_runner.py
+    if [ $# -eq 0 ]; then
+        # No arguments: show test_runner help
+        python test_runner.py --help
+    else
+        # Pass all arguments to test_runner
+        python test_runner.py "$@"
+    fi
 }
 
 function format_code() {
@@ -110,7 +127,9 @@ case "${1:-help}" in
         db_downgrade
         ;;
     test)
-        run_tests
+        # Pass all arguments after 'test' to test_runner.py
+        shift
+        run_tests "$@"
         ;;
     format)
         format_code

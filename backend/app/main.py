@@ -3,7 +3,10 @@ LibreFolio FastAPI application.
 Main entry point for the backend API.
 """
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
+import subprocess
+import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +20,61 @@ settings = get_settings()
 # Configure logging
 configure_logging(settings.LOG_LEVEL)
 logger = get_logger(__name__)
+
+
+def ensure_database_exists():
+    """
+    Ensure database exists and is migrated.
+    If database file doesn't exist, run migrations automatically.
+    ensure_database_exists()
+
+    """
+    # Extract database path from DATABASE_URL
+    db_url = settings.DATABASE_URL
+    if db_url.startswith("sqlite:///"):
+        db_path_str = db_url.replace("sqlite:///", "")
+
+        # Handle relative paths
+        if not db_path_str.startswith("/"):
+            # Relative path - resolve from project root
+            project_root = Path(__file__).parent.parent.parent
+            db_path = project_root / db_path_str
+        else:
+            db_path = Path(db_path_str)
+
+        if not db_path.exists():
+            logger.warning(
+                "Database file not found, running migrations",
+                db_path=str(db_path)
+            )
+
+            # Ensure directory exists
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Run Alembic migrations
+            try:
+                project_root = Path(__file__).parent.parent.parent
+                alembic_ini = project_root / "backend" / "alembic.ini"
+
+                result = subprocess.run(
+                    ["alembic", "-c", str(alembic_ini), "upgrade", "head"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                )
+
+                if result.returncode == 0:
+                    logger.info("Database created and migrated successfully")
+                else:
+                    logger.error(
+                        "Failed to create database",
+                        stderr=result.stderr
+                    )
+                    sys.exit(1)
+
+            except Exception as e:
+                logger.error("Error creating database", error=str(e))
+                sys.exit(1)
 
 
 @asynccontextmanager
