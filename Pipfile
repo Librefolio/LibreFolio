@@ -1,0 +1,34 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+sqlmodel = "*"
+sqlalchemy = "*"
+alembic = "*"
+pydantic = "*"
+pydantic-settings = "*"
+pandas = "*"
+numpy = "*"
+httpx = "*"
+beautifulsoup4 = "*"
+yfinance = "*"
+python-dotenv = "*"
+apscheduler = "*"
+structlog = "*"
+python-dateutil = "*"
+forex-python = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-asyncio = "*"
+black = "*"
+ruff = "*"
+mypy = "*"
+
+[requires]
+python_version = "3.13"
+
