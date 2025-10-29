@@ -2,12 +2,8 @@
 """
 Database population script for LibreFolio testing.
 
-This script populates the database with sample data for testing:
-1. Creating brokers
-2. Creating assets (both market-priced and scheduled-yield)
-3. Creating transactions
-4. Creating cash accounts and movements
-5. Daily-point policy for prices and FX rates
+This script populates the database with comprehensive sample data
+that demonstrates all features of the schema.
 
 Usage:
     python -m backend.test_scripts.test_db.populate_db
@@ -52,7 +48,6 @@ def ensure_database_exists():
     if db_url.startswith("sqlite:///"):
         db_path_str = db_url.replace("sqlite:///", "")
 
-        # Handle relative paths
         if not db_path_str.startswith("/"):
             project_root = Path(__file__).parent.parent.parent.parent
             db_path = project_root / db_path_str
@@ -61,11 +56,8 @@ def ensure_database_exists():
 
         if not db_path.exists():
             print("⚠️  Database not found, running migrations...")
-
-            # Ensure directory exists
             db_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Run Alembic migrations
             try:
                 project_root = Path(__file__).parent.parent.parent.parent
                 alembic_ini = project_root / "backend" / "alembic.ini"
@@ -88,15 +80,15 @@ def ensure_database_exists():
                 sys.exit(1)
 
 
-def demo_brokers(session: Session):
-    """Demo: Create brokers."""
+def populate_brokers(session: Session):
+    """Create realistic broker accounts."""
     print("\n📊 Creating Brokers...")
     print("-" * 60)
 
     brokers_data = [
         {
             "name": "Interactive Brokers",
-            "description": "Global online broker",
+            "description": "Global multi-asset broker with low fees",
             "portal_url": "https://www.interactivebrokers.com",
         },
         {
@@ -104,248 +96,547 @@ def demo_brokers(session: Session):
             "description": "European discount broker",
             "portal_url": "https://www.degiro.com",
         },
+        {
+            "name": "Recrowd",
+            "description": "Italian P2P real estate lending platform",
+            "portal_url": "https://www.recrowd.it",
+        },
     ]
 
     for data in brokers_data:
         broker = Broker(**data)
         session.add(broker)
-        print(f"  ✅ Created: {broker.name}")
+        print(f"  ✅ {broker.name}")
 
     session.commit()
 
 
-def demo_assets(session: Session):
-    """Demo: Create different types of assets."""
+def populate_assets(session: Session):
+    """Create diverse asset types."""
     print("\n📈 Creating Assets...")
     print("-" * 60)
 
-    # Market-priced stock
-    apple = Asset(
-        display_name="Apple Inc.",
-        identifier="AAPL",
-        identifier_type=IdentifierType.TICKER,
-        currency="USD",
-        asset_type=AssetType.STOCK,
-        valuation_model=ValuationModel.MARKET_PRICE,
-        # Plugin for market data
-        current_data_plugin_key="yfinance",
-        current_data_plugin_params=json.dumps({"symbol": "AAPL"}),
-        history_data_plugin_key="yfinance",
-        history_data_plugin_params=json.dumps({"symbol": "AAPL"}),
-    )
-    session.add(apple)
-    print(f"  ✅ Created stock: {apple.display_name} ({apple.identifier})")
+    assets_data = [
+        # Stocks
+        {
+            "display_name": "Apple Inc.",
+            "identifier": "AAPL",
+            "identifier_type": IdentifierType.TICKER,
+            "currency": "USD",
+            "asset_type": AssetType.STOCK,
+            "valuation_model": ValuationModel.MARKET_PRICE,
+            "current_data_plugin_key": "yfinance",
+            "current_data_plugin_params": json.dumps({"symbol": "AAPL"}),
+            "history_data_plugin_key": "yfinance",
+            "history_data_plugin_params": json.dumps({"symbol": "AAPL"}),
+        },
+        {
+            "display_name": "Microsoft Corporation",
+            "identifier": "MSFT",
+            "identifier_type": IdentifierType.TICKER,
+            "currency": "USD",
+            "asset_type": AssetType.STOCK,
+            "valuation_model": ValuationModel.MARKET_PRICE,
+            "current_data_plugin_key": "yfinance",
+            "current_data_plugin_params": json.dumps({"symbol": "MSFT"}),
+            "history_data_plugin_key": "yfinance",
+            "history_data_plugin_params": json.dumps({"symbol": "MSFT"}),
+        },
+        {
+            "display_name": "Tesla, Inc.",
+            "identifier": "TSLA",
+            "identifier_type": IdentifierType.TICKER,
+            "currency": "USD",
+            "asset_type": AssetType.STOCK,
+            "valuation_model": ValuationModel.MARKET_PRICE,
+            "current_data_plugin_key": "yfinance",
+            "current_data_plugin_params": json.dumps({"symbol": "TSLA"}),
+            "history_data_plugin_key": "yfinance",
+            "history_data_plugin_params": json.dumps({"symbol": "TSLA"}),
+        },
+        # ETFs
+        {
+            "display_name": "Vanguard FTSE All-World UCITS ETF",
+            "identifier": "VWCE",
+            "identifier_type": IdentifierType.TICKER,
+            "currency": "EUR",
+            "asset_type": AssetType.ETF,
+            "valuation_model": ValuationModel.MARKET_PRICE,
+            "current_data_plugin_key": "yfinance",
+            "current_data_plugin_params": json.dumps({"symbol": "VWCE.MI"}),
+            "history_data_plugin_key": "yfinance",
+            "history_data_plugin_params": json.dumps({"symbol": "VWCE.MI"}),
+        },
+        {
+            "display_name": "iShares Core S&P 500 UCITS ETF",
+            "identifier": "CSPX",
+            "identifier_type": IdentifierType.TICKER,
+            "currency": "EUR",
+            "asset_type": AssetType.ETF,
+            "valuation_model": ValuationModel.MARKET_PRICE,
+            "current_data_plugin_key": "yfinance",
+            "current_data_plugin_params": json.dumps({"symbol": "CSPX.L"}),
+            "history_data_plugin_key": "yfinance",
+            "history_data_plugin_params": json.dumps({"symbol": "CSPX.L"}),
+        },
+        # P2P Loans
+        {
+            "display_name": "Real Estate Loan - Milano Centro",
+            "identifier": "RECROWD-12345",
+            "identifier_type": IdentifierType.OTHER,
+            "currency": "EUR",
+            "asset_type": AssetType.CROWDFUND_LOAN,
+            "valuation_model": ValuationModel.SCHEDULED_YIELD,
+            "face_value": Decimal("10000.00"),
+            "maturity_date": date.today() + timedelta(days=365),
+            "interest_schedule": json.dumps([
+                {
+                    "start_date": str(date.today()),
+                    "end_date": str(date.today() + timedelta(days=365)),
+                    "annual_rate": 0.085,
+                    "compounding": "SIMPLE",
+                    "compound_frequency": "MONTHLY",
+                    "day_count": "ACT/365",
+                }
+            ]),
+            "late_interest": json.dumps({
+                "annual_rate": 0.12,
+                "grace_days": 0,
+            }),
+        },
+        {
+            "display_name": "Real Estate Loan - Roma Parioli",
+            "identifier": "RECROWD-12346",
+            "identifier_type": IdentifierType.OTHER,
+            "currency": "EUR",
+            "asset_type": AssetType.CROWDFUND_LOAN,
+            "valuation_model": ValuationModel.SCHEDULED_YIELD,
+            "face_value": Decimal("5000.00"),
+            "maturity_date": date.today() + timedelta(days=540),
+            "interest_schedule": json.dumps([
+                {
+                    "start_date": str(date.today()),
+                    "end_date": str(date.today() + timedelta(days=540)),
+                    "annual_rate": 0.095,
+                    "compounding": "SIMPLE",
+                    "compound_frequency": "MONTHLY",
+                    "day_count": "ACT/365",
+                }
+            ]),
+            "late_interest": json.dumps({
+                "annual_rate": 0.12,
+                "grace_days": 0,
+            }),
+        },
+    ]
 
-    # Market-priced ETF
-    vwce = Asset(
-        display_name="Vanguard FTSE All-World UCITS ETF",
-        identifier="VWCE",
-        identifier_type=IdentifierType.TICKER,
-        currency="EUR",
-        asset_type=AssetType.ETF,
-        valuation_model=ValuationModel.MARKET_PRICE,
-        current_data_plugin_key="yfinance",
-        current_data_plugin_params=json.dumps({"symbol": "VWCE.MI"}),
-        history_data_plugin_key="yfinance",
-        history_data_plugin_params=json.dumps({"symbol": "VWCE.MI"}),
-    )
-    session.add(vwce)
-    print(f"  ✅ Created ETF: {vwce.display_name} ({vwce.identifier})")
-
-    # Scheduled-yield loan (Recrowd style)
-    loan = Asset(
-        display_name="Real Estate Loan #12345",
-        identifier="RECROWD-12345",
-        identifier_type=IdentifierType.OTHER,
-        currency="EUR",
-        asset_type=AssetType.CROWDFUND_LOAN,
-        valuation_model=ValuationModel.SCHEDULED_YIELD,
-        # Loan details
-        face_value=Decimal("10000.00"),
-        maturity_date=date.today() + timedelta(days=365),
-        interest_schedule=json.dumps([
-            {
-                "start_date": str(date.today()),
-                "end_date": str(date.today() + timedelta(days=365)),
-                "annual_rate": 0.085,  # 8.5% APR
-                "compounding": "SIMPLE",
-                "compound_frequency": "DAILY",
-                "day_count": "ACT/365",
-            }
-        ]),
-        late_interest=json.dumps({
-            "annual_rate": 0.12,  # 12% APR for late payments
-            "grace_days": 0,
-        }),
-        # No market data plugin needed (computed synthetically)
-        current_data_plugin_key=None,  # allow_manual_current = True
-        history_data_plugin_key=None,  # allow_manual_history = True
-    )
-    session.add(loan)
-    print(f"  ✅ Created loan: {loan.display_name}")
-    print(f"     Face value: {loan.face_value} {loan.currency}")
-    print(f"     Maturity: {loan.maturity_date}")
-    print(f"     Interest: 8.5% APR (SIMPLE)")
+    for data in assets_data:
+        asset = Asset(**data)
+        session.add(asset)
+        asset_desc = f"{data['display_name']} ({data['identifier']})"
+        if data.get('face_value'):
+            asset_desc += f" - €{data['face_value']}"
+        print(f"  ✅ {asset_desc}")
 
     session.commit()
 
 
-def demo_transactions(session: Session):
-    """Demo: Create transactions."""
-    print("\n💰 Creating Transactions...")
+def populate_cash_accounts(session: Session):
+    """Create cash accounts for each broker."""
+    print("\n💵 Creating Cash Accounts...")
     print("-" * 60)
 
-    # Get broker and asset
-    broker = session.exec(select(Broker).where(Broker.name == "Degiro")).first()
-    apple = session.exec(select(Asset).where(Asset.identifier == "AAPL")).first()
+    # Interactive Brokers - multi-currency
+    ib = session.exec(select(Broker).where(Broker.name == "Interactive Brokers")).first()
+    if ib:
+        for currency in ["EUR", "USD"]:
+            account = CashAccount(
+                broker_id=ib.id,
+                currency=currency,
+                display_name=f"Interactive Brokers {currency} Account",
+            )
+            session.add(account)
+            print(f"  ✅ {account.display_name}")
 
-    if not broker or not apple:
-        print("  ⚠️  Skipping (broker or asset not found)")
-        return
-
-    # BUY transaction
-    buy_tx = Transaction(
-        asset_id=apple.id,
-        broker_id=broker.id,
-        type=TransactionType.BUY,
-        quantity=Decimal("10.0"),
-        price=Decimal("150.50"),
-        currency="USD",
-        fees=Decimal("1.50"),
-        trade_date=date.today(),
-        note="Initial purchase of Apple shares",
-    )
-    session.add(buy_tx)
-    print(f"  ✅ BUY: {buy_tx.quantity} shares @ {buy_tx.price} {buy_tx.currency}")
-    print(f"     Total: {buy_tx.quantity * buy_tx.price + buy_tx.fees} {buy_tx.currency}")
-
-    session.commit()
-
-
-def demo_cash(session: Session):
-    """Demo: Create cash accounts and movements."""
-    print("\n💵 Creating Cash Accounts & Movements...")
-    print("-" * 60)
-
-    broker = session.exec(select(Broker).where(Broker.name == "Degiro")).first()
-
-    if not broker:
-        print("  ⚠️  Skipping (broker not found)")
-        return
-
-    # Cash account in EUR
-    cash_account = CashAccount(
-        broker_id=broker.id,
-        currency="EUR",
-        display_name="Degiro EUR Account",
-    )
-    session.add(cash_account)
-    session.commit()
-    print(f"  ✅ Created cash account: {cash_account.display_name}")
-
-    # Initial deposit
-    deposit = CashMovement(
-        cash_account_id=cash_account.id,
-        type=CashMovementType.DEPOSIT,
-        amount=Decimal("5000.00"),
-        trade_date=date.today() - timedelta(days=1),
-        note="Initial funding",
-    )
-    session.add(deposit)
-    print(f"  ✅ DEPOSIT: {deposit.amount} {cash_account.currency}")
-
-    session.commit()
-
-
-def demo_prices(session: Session):
-    """Demo: Create price history (daily-point policy)."""
-    print("\n📊 Creating Price History (Daily-Point Policy)...")
-    print("-" * 60)
-
-    apple = session.exec(select(Asset).where(Asset.identifier == "AAPL")).first()
-
-    if not apple:
-        print("  ⚠️  Skipping (asset not found)")
-        return
-
-    # Create 3 days of price history
-    for i in range(3):
-        price_date = date.today() - timedelta(days=i)
-        base_price = Decimal("150.00") + Decimal(str(i * 0.5))
-
-        price = PriceHistory(
-            asset_id=apple.id,
-            date=price_date,
-            open=base_price - Decimal("0.25"),
-            high=base_price + Decimal("1.00"),
-            low=base_price - Decimal("0.50"),
-            close=base_price,
-            adjusted_close=base_price,
-            currency="USD",
-            source_plugin_key="yfinance",
+    # Degiro - EUR only
+    degiro = session.exec(select(Broker).where(Broker.name == "Degiro")).first()
+    if degiro:
+        account = CashAccount(
+            broker_id=degiro.id,
+            currency="EUR",
+            display_name="Degiro EUR Account",
         )
-        session.add(price)
-        print(f"  ✅ {price_date}: Close = {price.close} {price.currency}")
+        session.add(account)
+        print(f"  ✅ {account.display_name}")
 
-    print("\n  ℹ️  Note: Only one price per (asset, date) allowed (daily-point policy)")
+    # Recrowd - EUR only
+    recrowd = session.exec(select(Broker).where(Broker.name == "Recrowd")).first()
+    if recrowd:
+        account = CashAccount(
+            broker_id=recrowd.id,
+            currency="EUR",
+            display_name="Recrowd EUR Account",
+        )
+        session.add(account)
+        print(f"  ✅ {account.display_name}")
 
     session.commit()
 
 
-def demo_fx_rates(session: Session):
-    """Demo: Create FX rates (daily-point policy)."""
-    print("\n💱 Creating FX Rates (Daily-Point Policy)...")
+def populate_deposits(session: Session):
+    """Initial deposits to fund the accounts."""
+    print("\n💰 Creating Initial Deposits...")
     print("-" * 60)
 
-    # EUR/USD rate
-    fx_rate = FxRate(
-        date=date.today(),
-        base="EUR",
-        quote="USD",
-        rate=Decimal("1.0850"),
-        source="ECB",
-    )
-    session.add(fx_rate)
-    print(f"  ✅ {fx_rate.date}: 1 {fx_rate.base} = {fx_rate.rate} {fx_rate.quote}")
-    print(f"     (Reverse: 1 {fx_rate.quote} = {1/fx_rate.rate:.6f} {fx_rate.base})")
+    deposits = [
+        ("Interactive Brokers", "EUR", Decimal("15000.00"), "Initial funding from bank"),
+        ("Interactive Brokers", "USD", Decimal("10000.00"), "USD funding from bank"),
+        ("Degiro", "EUR", Decimal("5000.00"), "Initial deposit"),
+        ("Recrowd", "EUR", Decimal("15000.00"), "P2P lending capital"),
+    ]
 
-    print("\n  ℹ️  Note: Only one rate per (date, base, quote) allowed (daily-point policy)")
+    for broker_name, currency, amount, note in deposits:
+        broker = session.exec(select(Broker).where(Broker.name == broker_name)).first()
+        if not broker:
+            continue
 
+        cash_account = session.exec(
+            select(CashAccount).where(
+                CashAccount.broker_id == broker.id,
+                CashAccount.currency == currency
+            )
+        ).first()
+
+        if cash_account:
+            deposit = CashMovement(
+                cash_account_id=cash_account.id,
+                type=CashMovementType.DEPOSIT,
+                amount=amount,
+                trade_date=date.today() - timedelta(days=30),
+                note=note,
+            )
+            session.add(deposit)
+            print(f"  ✅ {broker_name} {currency}: +{amount} {currency}")
+
+    session.commit()
+
+
+def populate_transactions_and_cash(session: Session):
+    """Create realistic transaction history with automatic cash movements."""
+    print("\n📊 Creating Transactions & Cash Movements...")
+    print("-" * 60)
+
+    # Get brokers and assets
+    ib = session.exec(select(Broker).where(Broker.name == "Interactive Brokers")).first()
+    degiro = session.exec(select(Broker).where(Broker.name == "Degiro")).first()
+    recrowd = session.exec(select(Broker).where(Broker.name == "Recrowd")).first()
+
+    apple = session.exec(select(Asset).where(Asset.identifier == "AAPL")).first()
+    msft = session.exec(select(Asset).where(Asset.identifier == "MSFT")).first()
+    tsla = session.exec(select(Asset).where(Asset.identifier == "TSLA")).first()
+    vwce = session.exec(select(Asset).where(Asset.identifier == "VWCE")).first()
+    cspx = session.exec(select(Asset).where(Asset.identifier == "CSPX")).first()
+    loan1 = session.exec(select(Asset).where(Asset.identifier == "RECROWD-12345")).first()
+    loan2 = session.exec(select(Asset).where(Asset.identifier == "RECROWD-12346")).first()
+
+    # Transaction history (most recent first)
+    transactions = [
+        # Day -30: Buy AAPL on Interactive Brokers
+        {
+            "broker": ib,
+            "asset": apple,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("15.0"),
+            "price": Decimal("175.50"),
+            "currency": "USD",
+            "fees": Decimal("1.00"),
+            "days_ago": 30,
+            "note": "Initial AAPL purchase",
+        },
+        # Day -25: Buy VWCE on Degiro
+        {
+            "broker": degiro,
+            "asset": vwce,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("50.0"),
+            "price": Decimal("95.30"),
+            "currency": "EUR",
+            "fees": Decimal("0.00"),
+            "days_ago": 25,
+            "note": "Start ETF accumulation plan",
+        },
+        # Day -20: Invest in loan 1 on Recrowd
+        {
+            "broker": recrowd,
+            "asset": loan1,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("1.0"),
+            "price": Decimal("10000.00"),
+            "currency": "EUR",
+            "fees": Decimal("0.00"),
+            "days_ago": 20,
+            "note": "P2P lending - Milano Centro",
+        },
+        # Day -18: Buy MSFT on Interactive Brokers
+        {
+            "broker": ib,
+            "asset": msft,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("10.0"),
+            "price": Decimal("380.25"),
+            "currency": "USD",
+            "fees": Decimal("1.00"),
+            "days_ago": 18,
+            "note": "Diversification into MSFT",
+        },
+        # Day -15: Invest in loan 2 on Recrowd
+        {
+            "broker": recrowd,
+            "asset": loan2,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("1.0"),
+            "price": Decimal("5000.00"),
+            "currency": "EUR",
+            "fees": Decimal("0.00"),
+            "days_ago": 15,
+            "note": "P2P lending - Roma Parioli",
+        },
+        # Day -10: Buy more VWCE on Degiro
+        {
+            "broker": degiro,
+            "asset": vwce,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("30.0"),
+            "price": Decimal("96.10"),
+            "currency": "EUR",
+            "fees": Decimal("0.00"),
+            "days_ago": 10,
+            "note": "Monthly ETF purchase",
+        },
+        # Day -8: Receive dividend from AAPL
+        {
+            "broker": ib,
+            "asset": apple,
+            "type": TransactionType.DIVIDEND,
+            "quantity": Decimal("0.0"),
+            "price": Decimal("3.75"),
+            "currency": "USD",
+            "fees": Decimal("0.00"),
+            "taxes": Decimal("1.13"),
+            "days_ago": 8,
+            "note": "Q4 dividend payment",
+        },
+        # Day -5: Sell some AAPL (taking profit)
+        {
+            "broker": ib,
+            "asset": apple,
+            "type": TransactionType.SELL,
+            "quantity": Decimal("5.0"),
+            "price": Decimal("182.00"),
+            "currency": "USD",
+            "fees": Decimal("1.00"),
+            "days_ago": 5,
+            "note": "Taking profits",
+        },
+        # Day -3: Interest payment from loan 1
+        {
+            "broker": recrowd,
+            "asset": loan1,
+            "type": TransactionType.INTEREST,
+            "quantity": Decimal("0.0"),
+            "price": Decimal("70.83"),
+            "currency": "EUR",
+            "fees": Decimal("0.00"),
+            "days_ago": 3,
+            "note": "Monthly interest payment",
+        },
+        # Day -1: Buy CSPX on Degiro
+        {
+            "broker": degiro,
+            "asset": cspx,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("20.0"),
+            "price": Decimal("485.50"),
+            "currency": "EUR",
+            "fees": Decimal("0.00"),
+            "days_ago": 1,
+            "note": "S&P 500 exposure",
+        },
+    ]
+
+    for tx_data in transactions:
+        if not tx_data["broker"] or not tx_data["asset"]:
+            continue
+
+        tx = Transaction(
+            asset_id=tx_data["asset"].id,
+            broker_id=tx_data["broker"].id,
+            type=tx_data["type"],
+            quantity=tx_data["quantity"],
+            price=tx_data["price"],
+            currency=tx_data["currency"],
+            fees=tx_data.get("fees", Decimal("0.00")),
+            taxes=tx_data.get("taxes", Decimal("0.00")),
+            trade_date=date.today() - timedelta(days=tx_data["days_ago"]),
+            note=tx_data["note"],
+        )
+        session.add(tx)
+        session.flush()  # Get transaction ID
+
+        # Auto-generate cash movement
+        cash_account = session.exec(
+            select(CashAccount).where(
+                CashAccount.broker_id == tx_data["broker"].id,
+                CashAccount.currency == tx_data["currency"]
+            )
+        ).first()
+
+        if cash_account:
+            cash_type = None
+            cash_amount = Decimal("0.00")
+
+            if tx_data["type"] == TransactionType.BUY:
+                cash_type = CashMovementType.BUY_SPEND
+                cash_amount = tx_data["quantity"] * tx_data["price"] + tx_data.get("fees", Decimal("0.00"))
+            elif tx_data["type"] == TransactionType.SELL:
+                cash_type = CashMovementType.SALE_PROCEEDS
+                cash_amount = tx_data["quantity"] * tx_data["price"] - tx_data.get("fees", Decimal("0.00"))
+            elif tx_data["type"] == TransactionType.DIVIDEND:
+                cash_type = CashMovementType.DIVIDEND_INCOME
+                cash_amount = tx_data["price"] - tx_data.get("taxes", Decimal("0.00"))
+            elif tx_data["type"] == TransactionType.INTEREST:
+                cash_type = CashMovementType.INTEREST_INCOME
+                cash_amount = tx_data["price"]
+
+            if cash_type:
+                cash_mov = CashMovement(
+                    cash_account_id=cash_account.id,
+                    type=cash_type,
+                    amount=cash_amount,
+                    trade_date=tx.trade_date,
+                    linked_transaction_id=tx.id,
+                )
+                session.add(cash_mov)
+
+        tx_type_emoji = {
+            TransactionType.BUY: "🛒",
+            TransactionType.SELL: "💰",
+            TransactionType.DIVIDEND: "💵",
+            TransactionType.INTEREST: "📈",
+        }.get(tx_data["type"], "📊")
+
+        print(f"  {tx_type_emoji} {tx_data['type'].value}: {tx_data['asset'].identifier} "
+              f"(qty: {tx_data['quantity']}, price: {tx_data['price']} {tx_data['currency']})")
+
+    session.commit()
+
+
+def populate_price_history(session: Session):
+    """Create price history for market-priced assets."""
+    print("\n📈 Creating Price History...")
+    print("-" * 60)
+
+    assets_with_prices = [
+        ("AAPL", Decimal("175.00"), Decimal("0.50")),  # base price, daily change
+        ("MSFT", Decimal("380.00"), Decimal("1.20")),
+        ("TSLA", Decimal("242.00"), Decimal("2.50")),
+        ("VWCE", Decimal("95.00"), Decimal("0.30")),
+        ("CSPX", Decimal("485.00"), Decimal("0.80")),
+    ]
+
+    for identifier, base_price, daily_change in assets_with_prices:
+        asset = session.exec(select(Asset).where(Asset.identifier == identifier)).first()
+        if not asset:
+            continue
+
+        # Create 7 days of price history
+        for i in range(7):
+            price_date = date.today() - timedelta(days=i)
+            day_price = base_price + (daily_change * Decimal(str(i)))
+
+            price = PriceHistory(
+                asset_id=asset.id,
+                date=price_date,
+                open=day_price - Decimal("0.50"),
+                high=day_price + Decimal("1.00"),
+                low=day_price - Decimal("0.75"),
+                close=day_price,
+                adjusted_close=day_price,
+                currency=asset.currency,
+                source_plugin_key="yfinance",
+            )
+            session.add(price)
+
+        print(f"  ✅ {identifier}: 7 days of prices")
+
+    session.commit()
+
+
+def populate_fx_rates(session: Session):
+    """Create FX rates for currency conversion."""
+    print("\n💱 Creating FX Rates...")
+    print("-" * 60)
+
+    # Create 7 days of EUR/USD rates
+    base_rate = Decimal("1.0850")
+    for i in range(7):
+        rate_date = date.today() - timedelta(days=i)
+        rate = base_rate + (Decimal("0.001") * Decimal(str(i)))
+
+        fx = FxRate(
+            date=rate_date,
+            base="EUR",
+            quote="USD",
+            rate=rate,
+            source="ECB",
+        )
+        session.add(fx)
+
+    print(f"  ✅ EUR/USD: 7 days of rates (current: {base_rate})")
     session.commit()
 
 
 def main():
-    """Run all demos."""
-    # Ensure database exists before populating
+    """Run all population functions."""
     ensure_database_exists()
 
     print("=" * 60)
     print("LibreFolio Database Population")
     print("=" * 60)
-    print("\nThis script populates the database with sample data.")
-    print("All data is inserted into the actual database.")
+    print("\nPopulating database with comprehensive sample data...")
+    print("This demonstrates all features of the schema.\n")
 
     with Session(engine) as session:
         try:
-            demo_brokers(session)
-            demo_assets(session)
-            demo_transactions(session)
-            demo_cash(session)
-            demo_prices(session)
-            demo_fx_rates(session)
+            populate_brokers(session)
+            populate_assets(session)
+            populate_cash_accounts(session)
+            populate_deposits(session)
+            populate_transactions_and_cash(session)
+            populate_price_history(session)
+            populate_fx_rates(session)
 
             print("\n" + "=" * 60)
             print("✅ Database population completed successfully!")
             print("=" * 60)
-            print("\nYou can now inspect the database:")
+
+            # Print summary
+            print("\n📊 Summary:")
+            brokers = session.exec(select(Broker)).all()
+            assets = session.exec(select(Asset)).all()
+            transactions = session.exec(select(Transaction)).all()
+            cash_accounts = session.exec(select(CashAccount)).all()
+            cash_movements = session.exec(select(CashMovement)).all()
+
+            print(f"  • {len(brokers)} brokers")
+            print(f"  • {len(assets)} assets")
+            print(f"  • {len(cash_accounts)} cash accounts")
+            print(f"  • {len(transactions)} transactions")
+            print(f"  • {len(cash_movements)} cash movements")
+
+            print("\n💡 Explore the data:")
             print("  sqlite3 backend/data/sqlite/app.db")
-            print("\nOr query it with Python:")
-            print("  from backend.app.db import engine, Broker")
-            print("  from sqlmodel import Session, select")
-            print("  with Session(engine) as session:")
-            print("      brokers = session.exec(select(Broker)).all()")
-            print("      for broker in brokers:")
-            print("          print(broker.name)")
+            print("\n📚 See database-schema.md for explanation of all tables!")
 
             return 0
 

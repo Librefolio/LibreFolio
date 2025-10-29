@@ -125,19 +125,27 @@ LibreFolio/
 > 📚 **New to Alembic?** Read our [Alembic Simple Guide](docs/alembic-guide.md) to understand how database migrations work!
 
 ### Testing
-```bash
-# Database tests via dev.sh
-./dev.sh test db validate           # Validate database schema
-./dev.sh test db populate           # Populate DB with sample data
-./dev.sh test db all                # Run all database tests
-./dev.sh test --reset db all        # Reset DB and run all tests
-./dev.sh test --help                # Show test options
 
-# Or use test_runner.py directly
-python test_runner.py db validate       # Validate schema only
-python test_runner.py db populate       # Populate DB only
-python test_runner.py db all            # All DB tests
-python test_runner.py --reset db all    # Reset env + all DB tests
+**Database Tests** (SQLite file, no backend server)
+```bash
+./dev.sh test db create             # Create fresh database
+./dev.sh test db validate           # Validate schema
+./dev.sh test db populate           # Populate with test data
+./dev.sh test db all                # Run all DB tests
+./dev.sh test db --help             # Show DB test options
+```
+
+**API Tests** (requires running backend server)
+```bash
+./dev.sh test api test              # Run API tests (coming soon)
+./dev.sh test api --help            # Show API test options
+```
+
+**Direct usage** (without dev.sh)
+```bash
+python test_runner.py db all        # All DB tests
+python test_runner.py api test      # API tests
+python test_runner.py --help        # Show all options
 ```
 
 ### Code Quality
@@ -151,7 +159,18 @@ python test_runner.py --reset db all    # Reset env + all DB tests
 
 LibreFolio uses SQLite with Alembic for schema management. The database file is stored at `backend/data/sqlite/app.db`.
 
-For database inspection and debugging, see [DB Guide](LibreFolio_prompts_and_db_guide/db/DB_Guide_and_Debugging.md).
+**Documentation:**
+- 📚 **[Database Schema Documentation](docs/database-schema.md)** - Complete guide to all tables, relationships, and concepts
+- 🔧 [Alembic Migration Guide](docs/alembic-guide.md) - How to manage database migrations
+
+**Quick Example:**
+```bash
+# Populate database with example data
+./dev.sh test db all
+
+# Inspect the database
+sqlite3 backend/data/sqlite/app.db
+```
 
 ## 🌍 Internationalization
 

@@ -3,13 +3,11 @@
 LibreFolio Test Runner
 
 Central test orchestrator for running backend and frontend tests.
-Supports test execution in the correct order and environment reset.
+Organized into test categories with specific sub-commands.
 
-Usage:
-    python test_runner.py db validate          # Validate database schema
-    python test_runner.py db populate          # Populate database with sample data
-    python test_runner.py db all               # Run all database tests
-    python test_runner.py --reset db all       # Reset environment and run all DB tests
+Test Categories:
+  - db:  Database layer tests (SQLite file only, no backend server)
+  - api: API endpoint tests (requires running backend server)
 
 Author: LibreFolio Contributors
 """
@@ -27,6 +25,7 @@ class Colors:
     RED = '\033[0;31m'
     BLUE = '\033[0;34m'
     CYAN = '\033[0;36m'
+    MAGENTA = '\033[0;35m'
     NC = '\033[0m'  # No Color
 
 
@@ -56,6 +55,11 @@ def print_error(text: str):
 def print_warning(text: str):
     """Print warning message."""
     print(f"{Colors.YELLOW}⚠️  {text}{Colors.NC}")
+
+
+def print_info(text: str):
+    """Print info message."""
+    print(f"{Colors.MAGENTA}ℹ️  {text}{Colors.NC}")
 
 
 def run_command(cmd: list[str], description: str) -> bool:
@@ -92,72 +96,90 @@ def run_command(cmd: list[str], description: str) -> bool:
         return False
 
 
-def reset_environment():
-    """Reset the database environment."""
-    print_section("Resetting Environment")
+# ============================================================================
+# DATABASE TESTS
+# ============================================================================
+
+def db_create() -> bool:
+    """
+    Create fresh database.
+    Removes existing database and creates a new one from migrations.
+    """
+    print_section("Database Creation")
+    print_info("This test operates on: backend/data/sqlite/app.db")
+    print_info("The backend server is NOT used in this test")
 
     db_path = Path(__file__).parent / "backend" / "data" / "sqlite" / "app.db"
 
+    # Remove existing database
     if db_path.exists():
         print_warning(f"Removing existing database: {db_path}")
         db_path.unlink()
         print_success("Database removed")
     else:
-        print_warning("No database found, nothing to remove")
+        print_info("No existing database found")
 
-    # Run migrations
-    print("\nApplying fresh migrations...")
+    # Create fresh database
+    print("\nCreating fresh database from migrations...")
     success = run_command(
         ["./dev.sh", "db:upgrade"],
-        "Alembic migrations"
+        "Create database via Alembic migrations"
     )
 
     if success:
-        print_success("Environment reset complete")
+        print_success("Database created successfully")
     else:
-        print_error("Environment reset failed")
+        print_error("Database creation failed")
 
     return success
 
 
-def run_db_validate() -> bool:
-    """Run database schema validation."""
+def db_validate() -> bool:
+    """
+    Validate database schema.
+    Checks that all expected tables, constraints, indexes exist.
+    """
     print_section("Database Schema Validation")
+    print_info("This test operates on: backend/data/sqlite/app.db")
+    print_info("The backend server is NOT used in this test")
+    print_info("Testing: Tables, Foreign Keys, Constraints, Indexes, Enums")
+
     return run_command(
         ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.db_schema_validate"],
-        "DB Schema Validation"
+        "Schema validation"
     )
 
 
-def run_db_populate() -> bool:
-    """Run database population script."""
-    print_section("Database Population")
+def db_populate() -> bool:
+    """
+    Populate database with test data and verify.
+    Inserts sample data and runs queries to verify integrity.
+    """
+    print_section("Database Population & Query Verification")
+    print_info("This test operates on: backend/data/sqlite/app.db")
+    print_info("The backend server is NOT used in this test")
+    print_info("Testing: Data insertion, Queries, Relationships, Constraints")
+
     return run_command(
         ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.populate_db"],
-        "DB Population"
+        "Database population and query verification"
     )
 
 
-def run_db_tests(reset: bool = False) -> bool:
+def db_all() -> bool:
     """
-    Run all database tests in order.
-
-    Args:
-        reset: Whether to reset environment first
-
-    Returns:
-        bool: True if all tests passed
+    Run all database tests in sequence.
     """
     print_header("LibreFolio Database Tests")
-
-    if reset:
-        if not reset_environment():
-            return False
+    print_info("Testing the database layer (SQLite file)")
+    print_info("Backend server is NOT required for these tests")
+    print_info("Target: backend/data/sqlite/app.db")
 
     # Test order matters!
     tests = [
-        ("Schema Validation", run_db_validate),
-        ("Database Population", run_db_populate),
+        ("Create Fresh Database", db_create),
+        ("Validate Schema", db_validate),
+        ("Populate & Query Verification", db_populate),
     ]
 
     results = []
@@ -171,7 +193,7 @@ def run_db_tests(reset: bool = False) -> bool:
             break
 
     # Summary
-    print_section("Test Summary")
+    print_section("Database Test Summary")
     passed = sum(1 for _, success in results if success)
     total = len(results)
 
@@ -189,73 +211,158 @@ def run_db_tests(reset: bool = False) -> bool:
         return False
 
 
-def main():
-    """Main entry point."""
+# ============================================================================
+# API TESTS
+# ============================================================================
+
+def api_test() -> bool:
+    """
+    Run API tests (placeholder for now).
+    """
+    print_section("API Tests")
+    print_info("Testing REST API endpoints")
+    print_info("Requires: Running backend server on http://localhost:8000")
+    print_warning("API tests are not implemented yet")
+    print()
+    print("These tests will verify:")
+    print("  • HTTP endpoints respond correctly")
+    print("  • Request/response validation")
+    print("  • Authentication/authorization")
+    print("  • Error handling")
+    print("  • Data integrity through API")
+    print()
+    print_info("Coming soon in the next development phase!")
+
+    return True  # Return True for now (not implemented)
+
+
+# ============================================================================
+# MAIN ARGUMENT PARSER
+# ============================================================================
+
+def create_parser() -> argparse.ArgumentParser:
+    """Create and configure argument parser."""
     parser = argparse.ArgumentParser(
-        description="LibreFolio Test Runner",
+        description="LibreFolio Test Runner - Organized test execution",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  python test_runner.py db validate          # Validate database schema
-  python test_runner.py db populate          # Populate database
-  python test_runner.py db all               # Run all DB tests
-  python test_runner.py --reset db all       # Reset env and run all DB tests
+Test Categories:
   
-  # Future examples (when implemented):
-  python test_runner.py api all              # Run all API tests
-  python test_runner.py frontend all         # Run all frontend tests
-  python test_runner.py --reset all          # Reset and run all tests
+  db   - Database Layer Tests
+         Tests the SQLite database file directly without backend server.
+         Verifies: schema, constraints, data integrity, queries.
+         Target: backend/data/sqlite/app.db
+  
+  api  - API Endpoint Tests  
+         Tests REST API endpoints (requires running backend server).
+         Verifies: HTTP endpoints, validation, authentication, errors.
+         Target: http://localhost:8000
+
+Examples:
+  # Database tests (no backend server needed)
+  python test_runner.py db create       # Create fresh database
+  python test_runner.py db validate     # Validate schema
+  python test_runner.py db populate     # Populate and verify queries
+  python test_runner.py db all          # Run all DB tests
+  
+  # API tests (requires backend server running)
+  python test_runner.py api test        # Run API tests (not implemented yet)
+  
+  # Quick shortcuts
+  ./dev.sh test db all                  # Via dev.sh wrapper
+  ./dev.sh test api test                # Via dev.sh wrapper
         """
     )
 
-    parser.add_argument(
-        "--reset",
-        action="store_true",
-        help="Reset environment (delete DB, rerun migrations) before tests"
+    subparsers = parser.add_subparsers(
+        dest="category",
+        help="Test category to run",
+        required=True
     )
 
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Verbose output"
+    # ========================================================================
+    # DATABASE TESTS SUBPARSER
+    # ========================================================================
+    db_parser = subparsers.add_parser(
+        "db",
+        help="Database layer tests (SQLite file, no backend)",
+        description="""
+Database Layer Tests
+
+These tests operate directly on the SQLite database file:
+  • Target: backend/data/sqlite/app.db
+  • No backend server required
+  • Tests Python database functions that will be used by the backend
+
+Test commands:
+  create   - Delete existing DB and create fresh from migrations
+  validate - Verify all tables, constraints, indexes, foreign keys
+  populate - Insert test data and verify with queries
+  all      - Run all tests in sequence (create → validate → populate)
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    subparsers = parser.add_subparsers(dest="category", help="Test category")
-
-    # Database tests
-    db_parser = subparsers.add_parser("db", help="Database tests")
     db_parser.add_argument(
         "action",
-        choices=["validate", "populate", "all"],
-        help="Database test action"
+        choices=["create", "validate", "populate", "all"],
+        help="Database test to run"
     )
 
-    # Future: API tests
-    # api_parser = subparsers.add_parser("api", help="API tests")
-    # api_parser.add_argument("action", choices=["endpoints", "all"])
+    # ========================================================================
+    # API TESTS SUBPARSER
+    # ========================================================================
+    api_parser = subparsers.add_parser(
+        "api",
+        help="API endpoint tests (requires backend server)",
+        description="""
+API Endpoint Tests
 
-    # Future: Frontend tests
-    # frontend_parser = subparsers.add_parser("frontend", help="Frontend tests")
-    # frontend_parser.add_argument("action", choices=["unit", "e2e", "all"])
+These tests verify REST API endpoints:
+  • Target: http://localhost:8000
+  • Requires backend server running (./dev.sh server)
+  • Tests HTTP requests/responses, validation, authentication
 
-    # Parse arguments
+Test commands:
+  test - Run API endpoint tests (NOT IMPLEMENTED YET)
+  
+Note: Start the backend server first with './dev.sh server'
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    api_parser.add_argument(
+        "action",
+        choices=["test"],
+        help="API test to run"
+    )
+
+    return parser
+
+
+def main():
+    """Main entry point."""
+    parser = create_parser()
     args = parser.parse_args()
-
-    if not args.category:
-        parser.print_help()
-        return 0
 
     # Route to appropriate test handler
     success = False
 
     if args.category == "db":
-        if args.action == "validate":
-            success = run_db_validate()
+        # Database tests
+        if args.action == "create":
+            success = db_create()
+        elif args.action == "validate":
+            success = db_validate()
         elif args.action == "populate":
-            success = run_db_populate()
+            success = db_populate()
         elif args.action == "all":
-            success = run_db_tests(reset=args.reset)
+            success = db_all()
+
+    elif args.category == "api":
+        # API tests
+        if args.action == "test":
+            success = api_test()
 
     # Exit with appropriate code
     return 0 if success else 1

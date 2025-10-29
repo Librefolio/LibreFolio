@@ -18,11 +18,15 @@ todo: add more links when more docs are added
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
+| [database-schema.md](database-schema.md) | ⭐ Database tables & relationships | Everyone |
 | [alembic-guide.md](alembic-guide.md) | Learn database migrations | Everyone |
 | [README.md](../README.md) | Project overview | Everyone |
 
 
 ### I want to...
+**...understand the database structure**
+→ Read [Database Schema Documentation](database-schema.md)
+
 
 **...understand database migrations**
 → Read [Alembic Guide](alembic-guide.md)
