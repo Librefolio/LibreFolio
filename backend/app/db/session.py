@@ -53,12 +53,18 @@ engine = get_engine()
 
 def get_session() -> Generator[Session, None, None]:
     """
-    Dependency to get database session.
-    Use with FastAPI Depends() for automatic session management.
+    Get a database session for dependency injection.
+
+    Usage in FastAPI:
+        @app.get("/")
+        def endpoint(session: Session = Depends(get_session)):
+            ...
 
     Yields:
         Session: SQLModel session
     """
     with Session(engine) as session:
         yield session
+
+
 
