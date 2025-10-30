@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
 """
-Database population script for LibreFolio testing.
+Database mock data population script for LibreFolio.
 
-This script populates the database with comprehensive sample data
-that demonstrates all features of the schema.
+This script populates the database with comprehensive MOCK data
+for testing purposes (especially useful for frontend development).
+The data demonstrates all features of the schema with realistic examples.
+
+⚠️  WARNING: This is MOCK DATA for testing only!
+    - Brokers: Interactive Brokers, Degiro, Recrowd
+    - Assets: AAPL, MSFT, TSLA, VWCE, etc.
+    - Transactions: Buy, sell, dividends, etc.
+    - FX Rates: Last 30 days for USD, GBP, CHF, JPY
 
 Usage:
-    python -m backend.test_scripts.test_db.populate_db
+    python -m backend.test_scripts.test_db.populate_mock_data
     or via test_runner.py: python test_runner.py db populate
 """
+
+# Setup test database BEFORE importing app modules
+from backend.test_scripts.test_db_config import setup_test_database
+setup_test_database()
 
 import json
 from datetime import date, timedelta
@@ -541,34 +552,47 @@ def populate_fx_rates(session: Session):
     print("\n💱 Creating FX Rates...")
     print("-" * 60)
 
-    # Create 7 days of EUR/USD rates
-    base_rate = Decimal("1.0850")
-    for i in range(7):
-        rate_date = date.today() - timedelta(days=i)
-        rate = base_rate + (Decimal("0.001") * Decimal(str(i)))
+    # Realistic base rates for different currencies (as of 2025)
+    # Format: 1 base = rate * quote (alphabetically ordered)
+    currencies_rates = [
+        ("EUR", "USD", Decimal("1.0850")),  # 1 EUR = 1.0850 USD
+        ("EUR", "GBP", Decimal("0.8520")),  # 1 EUR = 0.8520 GBP
+        ("CHF", "EUR", Decimal("1.0650")),  # 1 CHF = 1.0650 EUR (inverted storage)
+        ("EUR", "JPY", Decimal("163.45")),  # 1 EUR = 163.45 JPY
+    ]
 
-        fx = FxRate(
-            date=rate_date,
-            base="EUR",
-            quote="USD",
-            rate=rate,
-            source="ECB",
+    # Create 30 days of rates with small daily variations
+    for base, quote, base_rate in currencies_rates:
+        for i in range(30):
+            rate_date = date.today() - timedelta(days=i)
+
+            # Simulate realistic daily variation (±0.5%)
+            variation = (i % 7 - 3) * Decimal("0.005")  # Oscillates between -0.015 and +0.015
+            rate = base_rate * (Decimal("1") + variation)
+
+            fx = FxRate(
+                date=rate_date,
+                base=base,
+                quote=quote,
+                rate=rate,
+                source="ECB",
             )
-        session.add(fx)
+            session.add(fx)
 
-    print(f"  ✅ EUR/USD: 7 days of rates (current: {base_rate})")
+        print(f"  ✅ {base}/{quote}: 30 days of rates (base: {base_rate})")
+
     session.commit()
 
 
 def main():
-    """Run all population functions."""
+    """Populate database with mock data for testing."""
     ensure_database_exists()
 
     print("=" * 60)
-    print("LibreFolio Database Population")
+    print("LibreFolio Database - Mock Data Population")
     print("=" * 60)
-    print("\nPopulating database with comprehensive sample data...")
-    print("This demonstrates all features of the schema.\n")
+    print("\n⚠️  Populating database with MOCK DATA for testing...")
+    print("This data is for development/testing purposes only.\n")
 
     with Session(engine) as session:
         try:
@@ -581,7 +605,7 @@ def main():
             populate_fx_rates(session)
 
             print("\n" + "=" * 60)
-            print("✅ Database population completed successfully!")
+            print("✅ Mock data population completed successfully!")
             print("=" * 60)
 
             # Print summary
@@ -614,3 +638,4 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+

@@ -15,6 +15,10 @@ Usage:
     or via test_runner.py: python test_runner.py db validate
 """
 
+# Setup test database BEFORE importing app modules
+from backend.test_scripts.test_db_config import setup_test_database
+setup_test_database()
+
 from sqlalchemy import inspect, text
 
 from backend.app.db import engine
