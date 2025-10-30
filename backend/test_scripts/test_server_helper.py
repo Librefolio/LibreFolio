@@ -66,14 +66,16 @@ class TestServerManager:
 
         # Start server in background
         self.server_process = subprocess.Popen(
-            ["pipenv", "run", "uvicorn", "backend.app.main:app",
-             "--host", TEST_SERVER_HOST, "--port", str(TEST_SERVER_PORT)],
+            [
+                "pipenv", "run", "uvicorn", "backend.app.main:app",
+                "--host", TEST_SERVER_HOST, "--port", str(TEST_SERVER_PORT)
+                ],
             cwd=self.project_root,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             env=env
-        )
+            )
 
         # Wait for server to be ready
         start_time = time.time()
@@ -111,4 +113,3 @@ class TestServerManager:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - cleanup server."""
         self.stop_server()
-

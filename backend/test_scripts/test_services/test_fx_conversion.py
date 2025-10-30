@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup test database BEFORE importing app modules
 from backend.test_scripts.test_db_config import setup_test_database
+
 setup_test_database()
 
 from sqlmodel import Session, select
@@ -30,7 +31,7 @@ from backend.test_scripts.test_utils import (
     print_test_header,
     print_test_summary,
     exit_with_result,
-)
+    )
 
 
 def test_identity_conversion():
@@ -71,7 +72,7 @@ def test_direct_conversion():
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
-        ).order_by(FxRate.date.desc()).limit(1)
+            ).order_by(FxRate.date.desc()).limit(1)
 
         rate_record = session.exec(stmt).first()
 
@@ -109,7 +110,7 @@ def test_inverse_conversion():
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
-        ).order_by(FxRate.date.desc()).limit(1)
+            ).order_by(FxRate.date.desc()).limit(1)
 
         rate_record = session.exec(stmt).first()
 
@@ -148,7 +149,7 @@ def test_roundtrip_conversion():
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
-        ).order_by(FxRate.date.desc()).limit(1)
+            ).order_by(FxRate.date.desc()).limit(1)
 
         rate_record = session.exec(stmt).first()
 
@@ -192,12 +193,12 @@ def test_cross_currency_conversion():
         usd_stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
-        ).order_by(FxRate.date.desc()).limit(1)
+            ).order_by(FxRate.date.desc()).limit(1)
 
         gbp_stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "GBP"
-        ).order_by(FxRate.date.desc()).limit(1)
+            ).order_by(FxRate.date.desc()).limit(1)
 
         usd_rate = session.exec(usd_stmt).first()
         gbp_rate = session.exec(gbp_stmt).first()
@@ -246,7 +247,7 @@ def test_forward_fill():
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
-        ).order_by(FxRate.date.desc()).limit(1)
+            ).order_by(FxRate.date.desc()).limit(1)
 
         rate_record = session.exec(stmt).first()
 
@@ -320,8 +321,8 @@ def run_all_tests():
         prerequisites=[
             "FX rates in database (run: python test_runner.py db fx-rates)",
             "Test database configured with recent rates"
-        ]
-    )
+            ]
+        )
 
     # Ensure database exists
     print_info("Initializing test database...")
@@ -335,7 +336,7 @@ def run_all_tests():
         "Cross-Currency Conversion": test_cross_currency_conversion(),
         "Forward-Fill Logic": test_forward_fill(),
         "Missing Rate Error": test_missing_rate_error(),
-    }
+        }
 
     # Summary
     success = print_test_summary(results, "FX Conversion Logic Tests")
@@ -345,4 +346,3 @@ def run_all_tests():
 if __name__ == "__main__":
     success = run_all_tests()
     exit_with_result(success)
-

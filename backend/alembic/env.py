@@ -17,9 +17,25 @@ from backend.app.config import get_settings
 # access to the values within the .ini file in use.
 config = context.config
 
-# Override sqlalchemy.url with our config
-settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Override sqlalchemy.url with our config or from -x parameter
+# Check if database URL was passed via -x sqlalchemy.url="..."
+db_url = None
+if hasattr(config, 'cmd_opts') and hasattr(config.cmd_opts, 'x'):
+    if config.cmd_opts.x:
+        for x_arg in config.cmd_opts.x:
+            if x_arg.startswith('sqlalchemy.url='):
+                db_url = x_arg.split('=', 1)[1]
+                break
+
+if db_url:
+    # Use URL passed from command line (e.g., for tests)
+    print(f"[Alembic env.py] Using DATABASE_URL from -x parameter: {db_url}")
+    config.set_main_option("sqlalchemy.url", db_url)
+else:
+    # Use URL from config.py (reads from environment/env file)
+    settings = get_settings()
+    print(f"[Alembic env.py] Using DATABASE_URL from config: {settings.DATABASE_URL}")
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

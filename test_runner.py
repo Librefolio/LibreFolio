@@ -135,31 +135,44 @@ def db_create(verbose: bool = False) -> bool:
     Removes existing database and creates a new one from migrations.
     """
     print_section("Database Creation")
-    print_info("This test operates on: backend/data/sqlite/app.db")
+
+    # Setup test database configuration
+    from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH, TEST_DATABASE_URL
+
+    setup_test_database()
+
+    print_info(f"This test operates on: {TEST_DB_PATH}")
     print_info("The backend server is NOT used in this test")
 
-    db_path = Path(__file__).parent / "backend" / "data" / "sqlite" / "app.db"
-
-    # Remove existing database
-    if db_path.exists():
-        print_warning(f"Removing existing database: {db_path}")
-        db_path.unlink()
-        print_success("Database removed")
+    # Remove existing test database
+    if TEST_DB_PATH.exists():
+        print_warning(f"Removing existing test database: {TEST_DB_PATH}")
+        TEST_DB_PATH.unlink()
+        print_success("Test database removed")
     else:
-        print_info("No existing database found")
+        print_info("No existing test database found")
 
-    # Create fresh database
-    print("\nCreating fresh database from migrations...")
+    # Create fresh test database
+    print("\nCreating fresh test database from migrations...")
+
+    # Pass database URL directly to dev.sh
     success = run_command(
-        ["./dev.sh", "db:upgrade"],
+        ["./dev.sh", "db:upgrade", TEST_DATABASE_URL],
         "Create database via Alembic migrations",
         verbose=verbose
-        )
+    )
 
     if success:
-        print_success("Database created successfully")
+        # Verify database file exists
+        if TEST_DB_PATH.exists():
+            print_success(f"Test database created successfully: {TEST_DB_PATH}")
+            print_info(f"Database file size: {TEST_DB_PATH.stat().st_size} bytes")
+        else:
+            print_error(f"Test database file not found at: {TEST_DB_PATH}")
+            print_error("Migration succeeded but database file was not created")
+            success = False
     else:
-        print_error("Database creation failed")
+        print_error("Test database creation failed")
 
     return success
 
@@ -170,7 +183,11 @@ def db_validate(verbose: bool = False) -> bool:
     Checks that all expected tables, constraints, indexes exist.
     """
     print_section("Database Schema Validation")
-    print_info("This test operates on: backend/data/sqlite/app.db")
+
+    # Get test database path
+    from backend.test_scripts.test_db_config import TEST_DB_PATH
+
+    print_info(f"This test operates on: {TEST_DB_PATH}")
     print_info("The backend server is NOT used in this test")
     print_info("Testing: Tables, Foreign Keys, Constraints, Indexes, Enums")
 
@@ -187,7 +204,11 @@ def db_populate(verbose: bool = False) -> bool:
     Inserts comprehensive sample data (useful for frontend development).
     """
     print_section("Database Mock Data Population")
-    print_info("This test operates on: backend/data/sqlite/app.db")
+
+    # Get test database path
+    from backend.test_scripts.test_db_config import TEST_DB_PATH
+
+    print_info(f"This test operates on: {TEST_DB_PATH}")
     print_info("The backend server is NOT used in this test")
     print_info("⚠️  Populating MOCK DATA for testing purposes")
 
@@ -204,7 +225,11 @@ def db_fx_rates(verbose: bool = False) -> bool:
     Tests fetching rates from ECB and persisting to database.
     """
     print_section("DB Test: FX Rates Persistence")
-    print_info("This test operates on: Test database (separate from production)")
+
+    # Get test database path
+    from backend.test_scripts.test_db_config import TEST_DB_PATH
+
+    print_info(f"This test operates on: {TEST_DB_PATH} (test database)")
     print_info("Testing: Fetch rates, Persist to DB, Overwrite, Idempotency, Constraints")
 
     return run_command(

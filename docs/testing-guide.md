@@ -70,7 +70,7 @@ These tests verify that external APIs (like ECB for currency rates) are accessib
 #### ✅ Test 1: ECB API Connection
 
 ```bash
-python test_runner.py external ecb
+python test_runner.py -v external ecb
 ```
 
 **What this test does:**
@@ -105,7 +105,7 @@ These tests verify the database structure and data persistence.
 #### ✅ Test 2: Database Creation
 
 ```bash
-python test_runner.py db create
+python test_runner.py -v db create
 ```
 
 **What this test does:**
@@ -121,15 +121,16 @@ python test_runner.py -v db validate
 **What you learned:**
 - LibreFolio uses SQLite database
 - Schema is managed via Alembic migrations
-- Test database: `backend/data/sqlite/test_app.db`
-- Production database: `backend/data/sqlite/app.db` (never touched by tests)
+- **Test database**: `backend/data/sqlite/test_app.db` ← Used by all tests
+- **Production database**: `backend/data/sqlite/app.db` ← Never touched by tests
+- Complete isolation between test and production data
 
 ---
 
 #### ✅ Test 3: Schema Validation
 
 ```bash
-python test_runner.py db validate
+python test_runner.py -v db validate
 ```
 
 **What this test does:**

@@ -100,8 +100,7 @@ LibreFolio fetches currency exchange rates from the **European Central Bank (ECB
 
 - **ECB SDW Web Services**: https://data.ecb.europa.eu/help/api/overview
 - **Data Navigation Tree**: https://data.ecb.europa.eu/data/datasets (explore available datasets)
-- **SDMX 2.1 RESTful API**: https://ec.europa.eu/eurostat/web/sdmx-web-services/rest-sdmx-2.1
-- **Interactive Explorer**: https://data.ecb.europa.eu/data/datasets/EXR/EXR.D..EUR.SP00.A
+- **SDMX 2.1 RESTful API**: https://github.com/sdmx-twg/sdmx-rest
 
 ### URL Structure
 

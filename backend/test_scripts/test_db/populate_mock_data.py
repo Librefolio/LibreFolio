@@ -19,6 +19,7 @@ Usage:
 
 # Setup test database BEFORE importing app modules
 from backend.test_scripts.test_db_config import setup_test_database
+
 setup_test_database()
 
 import json
@@ -559,7 +560,7 @@ def populate_fx_rates(session: Session):
         ("EUR", "GBP", Decimal("0.8520")),  # 1 EUR = 0.8520 GBP
         ("CHF", "EUR", Decimal("1.0650")),  # 1 CHF = 1.0650 EUR (inverted storage)
         ("EUR", "JPY", Decimal("163.45")),  # 1 EUR = 163.45 JPY
-    ]
+        ]
 
     # Create 30 days of rates with small daily variations
     for base, quote, base_rate in currencies_rates:
@@ -576,7 +577,7 @@ def populate_fx_rates(session: Session):
                 quote=quote,
                 rate=rate,
                 source="ECB",
-            )
+                )
             session.add(fx)
 
         print(f"  ✅ {base}/{quote}: 30 days of rates (base: {base_rate})")
@@ -638,4 +639,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-

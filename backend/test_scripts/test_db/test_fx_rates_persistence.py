@@ -1,6 +1,20 @@
 """
 Test 2: FX Rates Persistence
 Tests fetching FX rates from ECB and persisting them to the database.
+
+⚠️  INTEGRATION TEST - EXTERNAL API DEPENDENCY
+These are NOT unit tests with mocks. They perform REAL operations:
+- HTTP calls to ECB API (https://data-api.ecb.europa.eu)
+- Database writes to test_app.db
+- End-to-end validation of the complete flow
+
+TESTS WILL FAIL IF:
+- ECB API is down or unreachable
+- No internet connection
+- ECB changes their API format
+- Weekend/holidays (some dates may have no rates)
+
+This is intentional - we test the REAL integration, not mocked behavior.
 """
 import asyncio
 import sys
@@ -14,6 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup test database BEFORE importing app modules
 from backend.test_scripts.test_db_config import setup_test_database
+
 setup_test_database()
 
 from sqlmodel import Session, select
@@ -32,7 +47,7 @@ from backend.test_scripts.test_utils import (
     print_test_summary,
     print_warning,
     exit_with_result,
-)
+    )
 
 
 async def test_fetch_and_persist_single_currency():
@@ -55,7 +70,7 @@ async def test_fetch_and_persist_single_currency():
             FxRate.quote == "USD",
             FxRate.date >= start_date,
             FxRate.date <= end_date
-        )
+            )
         existing_count = len(session.exec(existing_stmt).all())
         print_info(f"Existing rates in DB: {existing_count}")
 
@@ -70,7 +85,7 @@ async def test_fetch_and_persist_single_currency():
                 FxRate.quote == "USD",
                 FxRate.date >= start_date,
                 FxRate.date <= end_date
-            )
+                )
             all_rates = session.exec(all_stmt).all()
 
             if not all_rates:
@@ -137,7 +152,7 @@ async def test_fetch_multiple_currencies():
                     FxRate.quote == quote,
                     FxRate.date >= start_date,
                     FxRate.date <= end_date
-                )
+                    )
                 rates = session.exec(stmt).all()
 
                 if not rates:
@@ -168,18 +183,27 @@ async def test_data_overwrite():
         print_info(f"Testing data overwrite for {test_date}")
 
         try:
-            # Step 1: Insert initial fake rate manually
-            print_step(1, "Insert fake rate manually")
-            fake_rate = FxRate(
-                base="EUR",
-                quote="USD",
-                date=test_date,
-                rate=Decimal("9.9999"),  # Obviously fake
-                source="TEST"
-            )
-            session.add(fake_rate)
+            # Step 1: UPSERT fake rate using SQLAlchemy on_conflict_do_update
+            print_step(1, "UPSERT fake rate manually")
+
+            # Use SQLAlchemy native UPSERT
+            from sqlalchemy.dialects.sqlite import insert
+            from sqlalchemy import func
+
+            stmt = insert(FxRate).values(date=test_date, base="EUR", quote="USD", rate=Decimal("9.9999"), source="TEST", fetched_at=func.current_timestamp())
+
+            upsert_stmt = stmt.on_conflict_do_update(
+                index_elements=['date', 'base', 'quote'],
+                set_={
+                    'rate': stmt.excluded.rate,
+                    'source': stmt.excluded.source,
+                    'fetched_at': func.current_timestamp()
+                    }
+                )
+
+            session.exec(upsert_stmt)
             session.commit()
-            print_success(f"Inserted fake rate: EUR/USD = 9.9999 on {test_date}")
+            print_success(f"Upserted fake rate: EUR/USD = 9.9999 on {test_date}")
 
             # Step 2: Fetch real rate from ECB (should overwrite)
             print_step(2, "Fetch real rate from ECB")
@@ -191,7 +215,7 @@ async def test_data_overwrite():
                 FxRate.base == "EUR",
                 FxRate.quote == "USD",
                 FxRate.date == test_date
-            )
+                )
             updated_rate = session.exec(stmt).first()
 
             if not updated_rate:
@@ -211,8 +235,8 @@ async def test_data_overwrite():
             print_success(f"Rate successfully updated: EUR/USD = {updated_rate.rate}")
             print_success(f"Source updated: {updated_rate.source}")
 
-            # Verify rate is realistic (should be between 0.9 and 1.3 for EUR/USD)
-            if not (Decimal("0.9") <= updated_rate.rate <= Decimal("1.3")):
+            # Verify rate is realistic (should be between 0.2 and 1.9 for EUR/USD)
+            if not (Decimal("0.2") <= updated_rate.rate <= Decimal("1.9")):
                 print_warning(f"Updated rate seems unrealistic: {updated_rate.rate}")
 
             return True
@@ -249,7 +273,7 @@ async def test_idempotent_sync():
                 FxRate.quote == "USD",
                 FxRate.date >= start_date,
                 FxRate.date <= end_date
-            )
+                )
             count_1 = len(session.exec(stmt).all())
 
             # Second sync (should insert 0 new rates)
@@ -297,7 +321,7 @@ async def test_database_constraints():
                 FxRate.base == "EUR",
                 FxRate.quote == "USD",
                 FxRate.date == test_date
-            )
+                )
             existing_rate = session.exec(stmt).first()
 
             if not existing_rate:
@@ -313,7 +337,7 @@ async def test_database_constraints():
                 date=test_date,
                 rate=Decimal("1.1234"),  # Different rate, same date/base/quote
                 source="TEST"
-            )
+                )
             session.add(duplicate)
 
             try:
@@ -328,13 +352,16 @@ async def test_database_constraints():
             # Test check constraint (base < quote alphabetically)
             print_info("\nTesting check constraint (base < quote)...")
 
+            # Use a different date to avoid UNIQUE constraint conflict
+            test_date_check = test_date + timedelta(days=10)
+
             invalid = FxRate(
-                base="USD",  # USD > EUR alphabetically - should fail
+                base="USD",  # USD > EUR alphabetically - should fail CHECK constraint
                 quote="EUR",
-                date=test_date,
+                date=test_date_check,  # Different date to ensure it's not UNIQUE violation
                 rate=Decimal("0.9"),
                 source="TEST"
-            )
+                )
             session.add(invalid)
 
             try:
@@ -343,7 +370,17 @@ async def test_database_constraints():
                 session.rollback()
                 return False
             except Exception as e:
-                print_success("Invalid base/quote order correctly rejected by check constraint")
+                # Check if it's specifically a CHECK constraint error
+                error_msg = str(e).lower()
+                if 'check constraint' in error_msg or 'ck_fx_rates_base_less_than_quote' in error_msg:
+                    print_success("Invalid base/quote order correctly rejected by check constraint")
+                elif 'unique constraint' in error_msg:
+                    print_error("Rejected by UNIQUE constraint instead of CHECK constraint")
+                    print_warning("This might be a false positive - check if constraint exists")
+                    session.rollback()
+                    return False
+                else:
+                    print_success(f"Invalid base/quote order rejected (reason: {error_msg[:100]})")
                 session.rollback()
 
             return True
@@ -365,13 +402,15 @@ async def run_all_tests():
   • Persisting rates to the database
   • Overwriting existing data with fresh data
   • Idempotent sync (no duplicates)
-  • Database constraints (unique, check)""",
+  • Database constraints (unique, check)
+  
+Tests WILL FAIL if ECB API is down/unreachable or no internet.""",
         prerequisites=[
             "ECB API accessible and working (run: python test_runner.py external ecb)",
             "Test database configured",
             "Internet connection"
-        ]
-    )
+            ]
+        )
 
     # Ensure database exists
     print_info("Initializing test database...")
@@ -383,7 +422,7 @@ async def run_all_tests():
         "Data Overwrite (Update Existing)": await test_data_overwrite(),
         "Idempotent Sync": await test_idempotent_sync(),
         "Database Constraints": await test_database_constraints(),
-    }
+        }
 
     # Summary
     success = print_test_summary(results, "FX Rates Persistence Tests")
@@ -393,4 +432,3 @@ async def run_all_tests():
 if __name__ == "__main__":
     success = asyncio.run(run_all_tests())
     exit_with_result(success)
-

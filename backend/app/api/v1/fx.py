@@ -16,7 +16,7 @@ from backend.app.services.fx import (
     convert,
     ensure_rates,
     get_available_currencies,
-)
+    )
 
 router = APIRouter(prefix="/fx", tags=["FX"])
 
@@ -65,7 +65,7 @@ async def sync_rates(
     end: date = Query(..., description="End date (inclusive)"),
     currencies: str = Query("USD,GBP,CHF,JPY", description="Comma-separated currency codes"),
     session: Session = Depends(get_session)
-):
+    ):
     """
     Synchronize FX rates from ECB for the specified date range and currencies.
 
@@ -93,7 +93,7 @@ async def sync_rates(
             synced=synced_count,
             date_range=(start.isoformat(), end.isoformat()),
             currencies=currency_list
-        )
+            )
     except FXServiceError as e:
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
 
@@ -105,7 +105,7 @@ async def convert_currency(
     to_cur: str = Query(..., alias="to", description="Target currency code"),
     date_param: date = Query(default_factory=date.today, alias="date", description="Date for conversion"),
     session: Session = Depends(get_session)
-):
+    ):
     """
     Convert an amount from one currency to another.
     Uses forward-fill logic if exact date rate is not available.
@@ -138,12 +138,11 @@ async def convert_currency(
             converted_amount=converted_amount,
             rate=rate,
             rate_date=date_param.isoformat()
-        )
+            )
     except RateNotFoundError as e:
         raise HTTPException(
             status_code=404,
             detail=f"FX rate not found: {str(e)}. Try syncing rates first using POST /api/v1/fx/sync"
-        )
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
-

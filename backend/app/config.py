@@ -2,7 +2,6 @@
 Application configuration module.
 Loads environment variables and provides application-wide settings.
 """
-from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings
@@ -41,12 +40,14 @@ class Settings(BaseSettings):
     class Config:
         env_file = str(PROJECT_ROOT / ".env")
         case_sensitive = True
+        # Environment variables take precedence over .env file
+        env_file_encoding = 'utf-8'
 
 
-@lru_cache()
 def get_settings() -> Settings:
     """
-    Get cached settings instance.
+    Get settings instance.
+
     Returns:
         Settings: Application settings
     """

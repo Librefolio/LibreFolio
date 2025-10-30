@@ -19,7 +19,7 @@ from backend.test_scripts.test_utils import (
     print_test_header,
     print_test_summary,
     exit_with_result,
-)
+    )
 
 
 async def test_ecb_connection():
@@ -64,7 +64,7 @@ async def test_currency_list():
             "CAD": "Canadian Dollar",
             "AUD": "Australian Dollar",
             "EUR": "Euro (base currency)",
-        }
+            }
 
         print_info("Checking for expected currencies...")
         missing = []
@@ -106,13 +106,13 @@ async def run_all_tests():
         prerequisites=[
             "Internet connection",
             "ECB API accessible (https://data-api.ecb.europa.eu)"
-        ]
-    )
+            ]
+        )
 
     results = {
         "ECB API Connection": await test_ecb_connection(),
         "Currency List Validation": await test_currency_list(),
-    }
+        }
 
     # Summary
     success = print_test_summary(results, "ECB API Connection Tests")

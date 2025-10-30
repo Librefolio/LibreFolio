@@ -160,4 +160,3 @@ def exit_failure():
 def exit_with_result(success: bool):
     """Exit with appropriate code based on result."""
     sys.exit(0 if success else 1)
-

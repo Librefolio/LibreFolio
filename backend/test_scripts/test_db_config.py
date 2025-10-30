@@ -62,4 +62,3 @@ def is_test_database_configured() -> bool:
     """Check if test database is configured."""
     db_url = os.environ.get("DATABASE_URL", "")
     return db_url == TEST_DATABASE_URL
-

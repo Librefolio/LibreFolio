@@ -48,7 +48,7 @@ async def get_available_currencies() -> list[str]:
         "format": "jsondata",
         "detail": "dataonly",
         "lastNObservations": 1  # We only need structure, not all data
-    }
+        }
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -98,10 +98,18 @@ async def ensure_rates(
     session: Session,
     date_range: tuple[date, date],
     currencies: list[str]
-) -> int:
+    ) -> int:
     """
-    Ensure FX rates exist in the database for the given date range and currencies.
-    Fetches missing rates from ECB API and persists them.
+    Synchronize FX rates from ECB API to the database.
+
+    This function fetches rates from ECB and UPSERTS them into the database:
+    - If a rate doesn't exist → INSERT new rate
+    - If a rate already exists → UPDATE with fresh data from ECB
+
+    This ensures that:
+    - All rates are present (no gaps)
+    - All rates are up-to-date (corrections from ECB are applied)
+    - Manual data is replaced with authoritative ECB data when they are finally available
 
     ECB provides rates as: 1 EUR = X currency
     We store them alphabetically ordered (base < quote).
@@ -112,13 +120,14 @@ async def ensure_rates(
         currencies: List of currency codes to sync (e.g., ["USD", "GBP"])
 
     Returns:
-        Number of new rates inserted
+        Number of rates with changes (new inserts + updates with value changes, excludes refreshes with no change)
 
     Raises:
         FXServiceError: If API request fails
     """
     start_date, end_date = date_range
     inserted_count = 0
+    total_changed_count = 0  # Total changes across all currencies (new + updated with value change)
 
     for currency in currencies:
         # Skip EUR as it's the reference currency
@@ -142,7 +151,7 @@ async def ensure_rates(
             FxRate.quote == quote,
             FxRate.date >= start_date,
             FxRate.date <= end_date
-        )
+            )
         existing_rates = session.exec(existing_stmt).all()
         existing_dates = {rate.date for rate in existing_rates}
 
@@ -153,7 +162,7 @@ async def ensure_rates(
             "format": "jsondata",
             "startPeriod": start_date.isoformat(),
             "endPeriod": end_date.isoformat()
-        }
+            }
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -185,22 +194,65 @@ async def ensure_rates(
 
                             observations.append((date.fromisoformat(rate_date_str), stored_rate))
 
-                # Insert missing rates
+                # UPSERT rates using SQLAlchemy on_conflict_do_update
+                from sqlalchemy.dialects.sqlite import insert
+                from sqlalchemy import func
+
+                changed_count = 0  # Count only actual changes (new inserts + updates with value change)
+                refreshed_count = 0  # Count updates with no value change
+
                 for rate_date, rate_value in observations:
-                    if rate_date not in existing_dates:
-                        fx_rate = FxRate(
-                            base=base,
-                            quote=quote,
-                            date=rate_date,
-                            rate=rate_value,
-                            source="ECB"
+                    # Check if this is an update or insert by looking at old value
+                    old_rate = None
+                    if rate_date in existing_dates:
+                        existing_rate = next(r for r in existing_rates if r.date == rate_date)
+                        old_rate = existing_rate.rate
+
+                    # Perform UPSERT (atomic operation)
+                    stmt = insert(FxRate).values(date=rate_date, base=base, quote=quote, rate=rate_value, source="ECB", fetched_at=func.current_timestamp())
+
+                    upsert_stmt = stmt.on_conflict_do_update(
+                        index_elements=['date', 'base', 'quote'],
+                        set_={
+                            'rate': stmt.excluded.rate,
+                            'source': stmt.excluded.source,
+                            'fetched_at': func.current_timestamp()
+                            }
                         )
-                        session.add(fx_rate)
+
+                    session.exec(upsert_stmt)
+
+                    # Track changes for logging
+                    if old_rate is not None:
+                        # This was an UPDATE
+                        if old_rate != rate_value:
+                            changed_count += 1  # Count as change
+                            logger.info(f"Updated FX rate: {base}/{quote} on {rate_date}: {old_rate} → {rate_value}")
+                        else:
+                            refreshed_count += 1  # Count as refresh (no change)
+                            logger.debug(f"Refreshed FX rate: {base}/{quote} on {rate_date} (unchanged: {rate_value})")
+                    else:
+                        # This was an INSERT
                         inserted_count += 1
+                        changed_count += 1  # Count as change
                         logger.debug(f"Inserted FX rate: {base}/{quote} = {rate_value} on {rate_date}")
 
                 session.commit()
-                logger.info(f"Synced {currency}: {len(observations)} rates fetched, {inserted_count} new rates inserted")
+
+                # Add to total changed count
+                total_changed_count += changed_count
+
+                # Log summary with details
+                updated_with_change = changed_count - inserted_count  # Updates that had value changes
+
+                if inserted_count > 0 and updated_with_change > 0:
+                    logger.info(f"Synced {currency}: {len(observations)} fetched, {inserted_count} new + {updated_with_change} changed ({refreshed_count} unchanged)")
+                elif updated_with_change > 0:
+                    logger.info(f"Synced {currency}: {len(observations)} fetched, {updated_with_change} changed ({refreshed_count} unchanged)")
+                elif inserted_count > 0:
+                    logger.info(f"Synced {currency}: {len(observations)} fetched, {inserted_count} new ({refreshed_count} unchanged)")
+                else:
+                    logger.info(f"Synced {currency}: {len(observations)} fetched, all unchanged")
 
         except httpx.HTTPError as e:
             logger.error(f"Failed to fetch FX rates for {currency}: {e}")
@@ -209,7 +261,7 @@ async def ensure_rates(
             logger.error(f"Failed to parse ECB response for {currency}: {e}")
             raise FXServiceError(f"Invalid ECB response for {currency}: {e}") from e
 
-    return inserted_count
+    return total_changed_count
 
 
 def convert(
@@ -218,7 +270,7 @@ def convert(
     from_currency: str,
     to_currency: str,
     as_of_date: date
-) -> Decimal:
+    ) -> Decimal:
     """
     Convert an amount from one currency to another using FX rates.
     Uses forward-fill logic: if rate for exact date is not found, uses the most recent rate before that date.
@@ -257,20 +309,20 @@ def convert(
         FxRate.base == base,
         FxRate.quote == quote,
         FxRate.date <= as_of_date
-    ).order_by(FxRate.date.desc()).limit(1)
+        ).order_by(FxRate.date.desc()).limit(1)
 
     rate_record = session.exec(stmt).first()
     if not rate_record:
         raise RateNotFoundError(
             f"No FX rate found for {base}/{quote} on or before {as_of_date}"
-        )
+            )
 
     # Log if using forward-fill
     if rate_record.date < as_of_date:
         logger.warning(
             f"Using forward-fill: rate for {base}/{quote} from {rate_record.date} "
             f"(requested: {as_of_date})"
-        )
+            )
 
     # Apply conversion
     # Stored: 1 base = rate * quote
@@ -280,4 +332,3 @@ def convert(
     else:
         # from=quote, to=base: amount_from / rate = amount_to
         return amount / rate_record.rate
-

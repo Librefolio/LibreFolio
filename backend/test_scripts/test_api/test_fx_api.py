@@ -16,6 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup test database BEFORE importing app modules
 from backend.test_scripts.test_db_config import setup_test_database
+
 setup_test_database()
 
 from backend.test_scripts.test_server_helper import TestServerManager, TEST_API_BASE_URL
@@ -27,13 +28,11 @@ from backend.test_scripts.test_utils import (
     print_test_header,
     print_test_summary,
     exit_with_result,
-)
-
+    )
 
 # Configuration - use test server port
 API_BASE_URL = TEST_API_BASE_URL  # http://localhost:8001/api/v1 (test port)
 TIMEOUT = 30.0
-
 
 
 def test_get_currencies():
@@ -101,9 +100,9 @@ def test_sync_rates():
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
                 "currencies": currencies
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         print_info(f"Status code: {response.status_code}")
 
@@ -133,9 +132,9 @@ def test_sync_rates():
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
                 "currencies": currencies
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response2.status_code != 200:
             print_error("Second sync request failed")
@@ -173,9 +172,9 @@ def test_convert_currency():
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
                 "currencies": "USD,GBP"
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
     except:
         pass  # Ignore errors, may already exist
 
@@ -190,9 +189,9 @@ def test_convert_currency():
                 "from": "USD",
                 "to": "EUR",
                 "date": end_date.isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         print_info(f"Status code: {response.status_code}")
 
@@ -225,9 +224,9 @@ def test_convert_currency():
                 "from": "EUR",
                 "to": "EUR",
                 "date": end_date.isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response2.status_code != 200:
             print_error("Identity conversion request failed")
@@ -256,9 +255,9 @@ def test_convert_currency():
                 "from": "USD",
                 "to": "EUR",
                 "date": end_date.isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response3.status_code != 200:
             print_error("First conversion failed")
@@ -274,9 +273,9 @@ def test_convert_currency():
                 "from": "EUR",
                 "to": "USD",
                 "date": end_date.isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response4.status_code != 200:
             print_error("Second conversion failed")
@@ -320,9 +319,9 @@ def test_convert_missing_rate():
                 "from": "USD",
                 "to": "EUR",
                 "date": old_date.isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         print_info(f"Status code: {response.status_code}")
 
@@ -359,9 +358,9 @@ def test_invalid_requests():
                 "start": "2025-01-10",
                 "end": "2025-01-01",
                 "currencies": "USD"
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response.status_code == 200:
             print_error("Invalid date range was accepted (should return 400)")
@@ -382,9 +381,9 @@ def test_invalid_requests():
                 "from": "USD",
                 "to": "EUR",
                 "date": date.today().isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response.status_code == 200:
             print_error("Negative amount was accepted (should return 422)")
@@ -405,9 +404,9 @@ def test_invalid_requests():
                 "from": "INVALID",
                 "to": "EUR",
                 "date": date.today().isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response.status_code == 200:
             print_error("Invalid currency code was accepted")
@@ -434,8 +433,8 @@ def run_all_tests():
             "Services FX conversion subsystem (run: python test_runner.py services fx)",
             "Test server will be started automatically on TEST_PORT",
             "Test server will be stopped automatically at end"
-        ]
-    )
+            ]
+        )
 
     # Use context manager for server - will start and stop automatically
     with TestServerManager() as server_manager:
@@ -465,7 +464,7 @@ def _run_tests():
         "GET /fx/convert": test_convert_currency(),
         "Missing Rate Error": test_convert_missing_rate(),
         "Invalid Request Handling": test_invalid_requests(),
-    }
+        }
 
     # Summary
     success = print_test_summary(results, "FX API Endpoint Tests")
@@ -475,4 +474,3 @@ def _run_tests():
 if __name__ == "__main__":
     success = run_all_tests()
     exit_with_result(success)
-

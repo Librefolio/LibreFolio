@@ -17,6 +17,7 @@ Usage:
 
 # Setup test database BEFORE importing app modules
 from backend.test_scripts.test_db_config import setup_test_database
+
 setup_test_database()
 
 from sqlalchemy import inspect, text
@@ -179,6 +180,28 @@ def test_daily_point_constraints():
     return True
 
 
+def test_check_constraints():
+    """
+    Verify CHECK constraints exist in database.
+
+    Note: SQLite limitation - Alembic autogenerate doesn't detect CHECK constraints.
+    This test ensures they were manually added to migrations.
+    """
+    from backend.alembic.check_constraints_hook import check_and_add_missing_constraints
+
+    print("  Verifying CHECK constraints from models...")
+    all_present, missing = check_and_add_missing_constraints(auto_fix=False, verbose=False)
+
+    if not all_present:
+        print(f"  ❌ Missing CHECK constraints: {', '.join(missing)}")
+        print("  ⚠️  SQLite/Alembic limitation: CHECK constraints must be added manually to migrations")
+        print("  Run: python -m backend.alembic.check_constraints_hook")
+        return False
+
+    print("✅ All CHECK constraints present")
+    return True
+
+
 def main():
     """Run all validation tests."""
     # Ensure database exists before testing
@@ -198,6 +221,7 @@ def main():
         ("Enum Types", test_enum_values),
         ("Model Imports", test_model_imports),
         ("Daily-Point Policy", test_daily_point_constraints),
+        ("CHECK Constraints", test_check_constraints),
         ]
 
     results = []
