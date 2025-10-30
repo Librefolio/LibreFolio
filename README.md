@@ -126,27 +126,70 @@ LibreFolio/
 
 ### Testing
 
-**Database Tests** (SQLite file, no backend server)
+**🆕 New to the project?** Start with the [Testing Guide for New Developers](docs/testing-guide.md) - A hands-on introduction to LibreFolio via the test suite!
+
+LibreFolio has a comprehensive test suite organized into 4 categories:
+
+**🔒 Test Database Isolation**
+- All tests use a **separate test database** (in temp directory)
+- Your development/production data is **never touched**
+- Test database is automatically created and cleaned up
+
+**External Services Tests** (no server required)
 ```bash
-./dev.sh test db create             # Create fresh database
-./dev.sh test db validate           # Validate schema
-./dev.sh test db populate           # Populate with test data
-./dev.sh test db all                # Run all DB tests
-./dev.sh test db --help             # Show DB test options
+python test_runner.py external ecb      # Test ECB API connection
+python test_runner.py external all      # All external service tests
 ```
 
-**API Tests** (requires running backend server)
+**Database Tests** (no server required)
 ```bash
-./dev.sh test api test              # Run API tests (coming soon)
-./dev.sh test api --help            # Show API test options
+python test_runner.py db create         # Create fresh database
+python test_runner.py db validate       # Validate schema
+python test_runner.py db fx-rates       # Test FX rates persistence
+python test_runner.py db populate       # Populate with MOCK DATA
+python test_runner.py db all            # All DB tests
 ```
 
-**Direct usage** (without dev.sh)
+**Backend Services Tests** (no server required)
 ```bash
-python test_runner.py db all        # All DB tests
-python test_runner.py api test      # API tests
-python test_runner.py --help        # Show all options
+python test_runner.py services fx       # Test FX conversion logic
+python test_runner.py services all      # All service tests
 ```
+
+**API Tests** (auto-starts server if needed)
+```bash
+# No need to start server manually - tests will auto-start it!
+python test_runner.py api fx            # Test FX API endpoints
+python test_runner.py api all           # All API tests
+
+# Note: If server was started by tests, it will be automatically stopped after
+```
+
+**Run ALL Tests** (optimal order)
+```bash
+python test_runner.py all               # Complete test suite
+```
+
+**Quick shortcuts via dev.sh:**
+```bash
+./dev.sh test all                       # Run complete test suite
+./dev.sh test db all                    # All database tests
+./dev.sh test external ecb              # ECB API test
+```
+
+**Help:**
+```bash
+python test_runner.py --help            # Show all categories
+python test_runner.py db --help         # Show DB test options
+python test_runner.py services --help   # Show services test options
+```
+
+**📋 Prerequisites Information**
+Each test clearly shows its prerequisites:
+- External tests: require internet connection
+- DB tests: require external services to be working
+- Services tests: require data in test database
+- API tests: auto-manage server lifecycle
 
 ### Code Quality
 ```bash
@@ -162,6 +205,7 @@ LibreFolio uses SQLite with Alembic for schema management. The database file is 
 **Documentation:**
 - 📚 **[Database Schema Documentation](docs/database-schema.md)** - Complete guide to all tables, relationships, and concepts
 - 🔧 [Alembic Migration Guide](docs/alembic-guide.md) - How to manage database migrations
+- ⚙️ [Environment Variables](docs/environment-variables.md) - Configuration options and Docker deployment
 
 **Quick Example:**
 ```bash
