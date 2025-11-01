@@ -46,5 +46,8 @@ frontend/node_modules/
 frontend/dist/
 frontend/build/
 
+# Pipenv
+Pipfile.lock
+
 # Dev stuff
 LibreFolio_prompts_and_db_guide/
