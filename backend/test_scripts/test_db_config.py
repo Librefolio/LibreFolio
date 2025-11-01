@@ -32,16 +32,16 @@ def setup_test_database():
     """
     Configure environment to use test database.
     Must be called BEFORE importing any app modules that use DATABASE_URL.
-
+    
     Returns:
         Path: Path to test database
     """
     # Ensure database directory exists
     DB_DIR.mkdir(parents=True, exist_ok=True)
-
+    
     # Set environment variable for test database (use URL from config)
     os.environ["DATABASE_URL"] = TEST_DATABASE_URL
-
+    
     return TEST_DB_PATH
 
 
@@ -62,3 +62,4 @@ def is_test_database_configured() -> bool:
     """Check if test database is configured."""
     db_url = os.environ.get("DATABASE_URL", "")
     return db_url == TEST_DATABASE_URL
+

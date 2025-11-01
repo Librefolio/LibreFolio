@@ -162,7 +162,44 @@ def check_and_add_missing_constraints(auto_fix: bool = False, verbose: bool = Tr
         if verbose:
             print(f"⚠️  Found {len(missing)} missing CHECK constraint(s)")
             print("   These constraints are defined in models but not in database.")
-            print("   You need to create a migration to add them.")
+            print()
+            print("🔧 HOW TO FIX:")
+            print()
+            print("STEP 1: Find the migration file")
+            print("  Look in: backend/alembic/versions/")
+            print("  Check the most recent migration or the one that created this table")
+            print()
+            print("STEP 2: Add the CHECK constraint to the migration")
+            print("  Edit the upgrade() function and add:")
+            print()
+
+            # Print concrete code examples for each missing constraint
+            for table_constraint in missing:
+                table_name, constraint_name = table_constraint.rsplit('.', 1)
+                # Find the constraint SQL
+                for tbl, constraints in model_constraints.items():
+                    if tbl == table_name:
+                        for cname, csql in constraints:
+                            if cname == constraint_name:
+                                print(f"  # For {table_name}.{constraint_name}")
+                                print(f"  with op.batch_alter_table('{table_name}', schema=None) as batch_op:")
+                                print(f"      batch_op.create_check_constraint(")
+                                print(f"          '{constraint_name}',")
+                                print(f"          '{csql}'")
+                                print(f"      )")
+                                print()
+
+            print("STEP 3: Apply the fix")
+            print("  If migration already applied (most common):")
+            print("    1. ./dev.sh db:downgrade")
+            print("    2. Edit the migration file as shown above")
+            print("    3. ./dev.sh db:upgrade")
+            print()
+            print("  If migration NOT yet applied:")
+            print("    1. Edit the migration file as shown above")
+            print("    2. ./dev.sh db:upgrade")
+            print()
+            print("📚 See: docs/alembic-guide.md (SQLite CHECK Constraints section)")
             print()
         return False, missing
     else:
