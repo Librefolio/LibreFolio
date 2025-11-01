@@ -17,13 +17,65 @@ from typing import Dict, List, Tuple
 
 from sqlalchemy import CheckConstraint, inspect, text
 from sqlmodel import Session
+from sqlalchemy import create_engine
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.db import engine
 from backend.app.db.base import SQLModel
+
+
+def get_engine_for_check():
+    """Get engine respecting DATABASE_URL environment variable if set.
+
+    This function carefully avoids importing anything that might create
+    the default database (app.db) when we want to work with a test database.
+    """
+    import os
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+    from pathlib import Path
+
+    # Check for custom override first (won't be overridden by .env loading)
+    # This is set by dev.sh when specifying a non-default database
+    database_url = os.environ.get('ALEMBIC_DATABASE_URL')
+
+    if not database_url:
+        # Fall back to DATABASE_URL from environment
+        database_url = os.environ.get('DATABASE_URL')
+
+
+    if not database_url:
+        # Load from .env file manually to avoid importing Settings
+        # (which might trigger other imports that create app.db)
+        env_file = Path(__file__).parent.parent.parent / '.env'
+        if env_file.exists():
+            with open(env_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        if key.strip() == 'DATABASE_URL':
+                            database_url = value.strip().strip('"').strip("'")
+                            break
+
+        # Fallback to hardcoded default if not found
+        if not database_url:
+            database_url = "sqlite:///./backend/data/sqlite/app.db"
+
+    # Always create a new engine (never import existing one)
+    # This prevents unintended database file creation
+    engine = create_engine(database_url, echo=False)
+
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_conn, connection_record):
+        """Enable foreign keys for SQLite."""
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    return engine
 
 
 def get_model_check_constraints() -> Dict[str, List[Tuple[str, str]]]:
@@ -62,6 +114,24 @@ def get_db_check_constraints(table_name: str) -> List[str]:
     Returns:
         List of constraint SQL expressions found in CREATE TABLE statement
     """
+    engine = get_engine_for_check()
+
+    # Check if database file exists (for SQLite)
+    # If it doesn't exist, return empty list (no constraints to check)
+    import os
+    from pathlib import Path
+
+    db_url = str(engine.url)
+    if db_url.startswith('sqlite:///'):
+        db_path = db_url.replace('sqlite:///', '')
+        # Handle relative paths
+        if not db_path.startswith('/'):
+            db_path = str(Path.cwd() / db_path)
+
+        if not Path(db_path).exists():
+            # Database doesn't exist yet, no constraints to verify
+            return []
+
     with Session(engine) as session:
         # Query sqlite_master for table definition
         result = session.execute(
@@ -74,11 +144,18 @@ def get_db_check_constraints(table_name: str) -> List[str]:
 
         create_sql = result[0]
 
+
         # Parse CHECK constraints from CREATE TABLE
         # Look for "CHECK (...)" or "CONSTRAINT name CHECK (...)"
         import re
+
+        # Use DOTALL flag to match across newlines
+        # Pattern explanation:
+        # - (?:CONSTRAINT\s+\w+\s+)? - optional CONSTRAINT name
+        # - CHECK\s*\( - CHECK keyword followed by opening paren
+        # - ([^)]+) - capture everything up to closing paren
         check_pattern = r'(?:CONSTRAINT\s+\w+\s+)?CHECK\s*\(([^)]+)\)'
-        matches = re.findall(check_pattern, create_sql, re.IGNORECASE)
+        matches = re.findall(check_pattern, create_sql, re.IGNORECASE | re.DOTALL)
 
         return matches
 
