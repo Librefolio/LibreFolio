@@ -137,7 +137,7 @@ def db_create(verbose: bool = False) -> bool:
     print_section("Database Creation")
 
     # Setup test database configuration
-    from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH, TEST_DATABASE_URL
+    from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH
 
     setup_test_database()
 
@@ -155,9 +155,9 @@ def db_create(verbose: bool = False) -> bool:
     # Create fresh test database
     print("\nCreating fresh test database from migrations...")
 
-    # Pass database URL directly to dev.sh
+    # Pass database path directly to dev.sh (it will convert to URL internally)
     success = run_command(
-        ["./dev.sh", "db:upgrade", TEST_DATABASE_URL],
+        ["./dev.sh", "db:upgrade", str(TEST_DB_PATH)],
         "Create database via Alembic migrations",
         verbose=verbose
     )

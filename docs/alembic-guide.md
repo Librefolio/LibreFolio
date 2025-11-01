@@ -261,6 +261,98 @@ rm backend/alembic/versions/[problematic_file].py
 
 ---
 
+## 💻 Code Examples: Adding CHECK Constraints
+
+### Basic Pattern:
+
+```python
+def upgrade() -> None:
+    """Add CHECK constraint to ensure data integrity."""
+    from alembic import op
+    
+    # Use batch_alter_table for SQLite compatibility
+    with op.batch_alter_table('table_name', schema=None) as batch_op:
+        batch_op.create_check_constraint(
+            'constraint_name',  # Give it a clear name
+            'column > 0'        # SQL expression to check
+        )
+
+def downgrade() -> None:
+    """Remove CHECK constraint."""
+    from alembic import op
+    
+    # Use try/except in case constraint doesn't exist
+    # (e.g., if the upgrade failed)
+    try:
+        with op.batch_alter_table('table_name', schema=None) as batch_op:
+            batch_op.drop_constraint('constraint_name', type_='check')
+    except ValueError:
+        # Constraint doesn't exist - this is OK
+        pass
+```
+
+### Real Example from LibreFolio:
+
+```python
+"""add CHECK constraint fx_rates
+
+Revision ID: 67e4740144e4
+"""
+
+def upgrade() -> None:
+    """Ensure base < quote alphabetically in fx_rates."""
+    from alembic import op
+    
+    with op.batch_alter_table('fx_rates', schema=None) as batch_op:
+        batch_op.create_check_constraint(
+            'ck_fx_rates_base_less_than_quote',
+            'base < quote'
+        )
+
+def downgrade() -> None:
+    """Remove CHECK constraint."""
+    from alembic import op
+    
+    try:
+        with op.batch_alter_table('fx_rates', schema=None) as batch_op:
+            batch_op.drop_constraint(
+                'ck_fx_rates_base_less_than_quote',
+                type_='check'
+            )
+    except ValueError:
+        pass  # Constraint may not exist if migration failed
+```
+
+### Common CHECK Constraint Patterns:
+
+```python
+# Positive values
+'amount > 0'
+
+# Non-negative values
+'quantity >= 0'
+
+# Enum-like values
+"status IN ('pending', 'approved', 'rejected')"
+
+# Date constraints
+'end_date >= start_date'
+
+# String length
+'LENGTH(email) > 5'
+
+# Multiple conditions (AND)
+'amount > 0 AND currency IS NOT NULL'
+
+# Multiple conditions (OR)
+'type = "CASH" OR account_id IS NOT NULL'
+
+# Alphabetical ordering (like our fx_rates)
+'base < quote'
+```
+
+---
+
 ## 🔍 Understanding Migration Files
 
 Each migration file has:
@@ -535,6 +627,161 @@ git commit -m "Add email field to users"
 > Keep iterating until happy, THEN create final migration!
 > 1. Experiment freely → 2. When done: delete all migrations
 > 3. Create ONE clean migration → 4. Commit when stable
+
+---
+
+## 🛡️ Migration Safety: Guiding Instead of Blocking
+
+LibreFolio uses a **guiding approach** to ensure migration safety, rather than blocking your workflow.
+
+### Philosophy:
+
+1. **`db:migrate` - Strict Checks** ✅
+   - Blocks if database is not at HEAD
+   - Blocks if CHECK constraints are missing
+   - Ensures clean starting point for new migrations
+
+2. **`db:upgrade` - Always Allowed** ⚠️
+   - Always applies migrations
+   - Post-flight warning if constraints are missing
+   - Provides detailed fix instructions
+
+### Why This Design?
+
+- **Prevents bad migrations**: Can't create migrations on broken foundation
+- **Allows workflow freedom**: Can always upgrade to see what happens
+- **Clear guidance**: Warnings with concrete examples when issues arise
+- **Developer-friendly**: Focuses on helping, not blocking
+
+---
+
+## 📝 Creating Migrations (`db:migrate`)
+
+### Pre-Creation Checks:
+
+Before creating a migration, the system verifies:
+
+1. ✅ **Database is at HEAD** (no pending migrations)
+2. ✅ **All CHECK constraints present** (database is consistent)
+
+### Example Scenarios:
+
+```bash
+# Scenario 1: Ready to create migration
+$ ./dev.sh db:migrate "add users table"
+Checking database state before creating migration...
+✅ Database is at HEAD
+✅ All CHECK constraints present
+Database is ready - creating migration: add users table
+[Migration created successfully]
+⚠️  Remember to check the generated migration file for CHECK constraints
+
+# Scenario 2: Pending migrations exist
+$ ./dev.sh db:migrate "add feature"
+❌ Cannot create migration: you have pending migrations
+Apply them first:
+  ./dev.sh db:upgrade
+
+# Scenario 3: Constraints missing
+$ ./dev.sh db:migrate "add feature"
+✅ Database is at HEAD
+❌ Cannot create migration: database has missing CHECK constraints
+Run for details:
+  ./dev.sh db:check
+Fix the database first (see: docs/alembic-guide.md - SQLite CHECK Constraints)
+```
+
+---
+
+## 🚀 Applying Migrations (`db:upgrade`)
+
+### Post-Upgrade Verification:
+
+Migrations are **always applied**, then the system verifies CHECK constraints:
+
+1. ✅ **Apply migrations** (no pre-flight blocking)
+2. ⚠️  **Check constraints** (warning only if missing)
+3. 📚 **Show fix instructions** (with concrete examples)
+
+### Example Scenarios:
+
+```bash
+# Scenario 1: Everything works correctly
+$ ./dev.sh db:upgrade
+Applying database migrations...
+  → Running upgrade 841800addc27 -> 67e4740144e4
+✅ Migrations applied successfully
+
+Post-upgrade verification: Checking CHECK constraints...
+✅ All CHECK constraints present
+
+# Scenario 2: Constraint not added (SQLite limitation)
+$ ./dev.sh db:upgrade
+Applying database migrations...
+  → Running upgrade 841800addc27 -> 67e4740144e4
+✅ Migrations applied successfully
+
+Post-upgrade verification: Checking CHECK constraints...
+⚠️  WARNING: Migration completed but CHECK constraints are missing!
+
+The following constraints are defined in models but not in the database:
+  - fx_rates.ck_fx_rates_base_less_than_quote: base < quote
+
+This is a known SQLite limitation - batch operations sometimes fail to add
+CHECK constraints. You need to fix the migration file and re-apply it.
+
+🔧 HOW TO FIX:
+
+STEP 1: Rollback the migration
+  $ ./dev.sh db:downgrade
+
+STEP 2: Edit the migration file
+  Look in: backend/alembic/versions/
+
+  Add to upgrade() function:
+    with op.batch_alter_table('fx_rates', schema=None) as batch_op:
+        batch_op.create_check_constraint(
+            'ck_fx_rates_base_less_than_quote',
+            'base < quote'
+        )
+
+  Add to downgrade() function:
+    try:
+        with op.batch_alter_table('fx_rates', schema=None) as batch_op:
+            batch_op.drop_constraint('ck_fx_rates_base_less_than_quote', type_='check')
+    except ValueError:
+        pass  # Constraint may not exist if migration failed
+
+STEP 3: Re-apply the migration
+  $ ./dev.sh db:upgrade
+
+📚 Full documentation: docs/alembic-guide.md
+   See section: SQLite Limitation - CHECK Constraints
+```
+
+**Note:** The warning does NOT prevent the migration from being applied. You can continue working and fix it later, or fix it immediately following the instructions.
+
+---
+
+## 🔧 Using Alternative Databases
+
+By default, all `dev.sh` commands use the main database (`backend/data/sqlite/app.db`). You can work with alternative databases (like test databases) by passing the SQLite file path:
+
+```bash
+# Check constraints in test database
+./dev.sh db:check backend/data/sqlite/test_app.db
+
+# Show current migration of test database
+./dev.sh db:current backend/data/sqlite/test_app.db
+
+# Apply migrations to test database
+./dev.sh db:upgrade backend/data/sqlite/test_app.db
+
+# Rollback test database
+./dev.sh db:downgrade backend/data/sqlite/test_app.db
+```
+
+**Note:** The path is automatically converted to the SQLite URL format internally (`sqlite:///path`). Just pass the file path!
 
 ---
 
