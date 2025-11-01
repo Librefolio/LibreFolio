@@ -22,7 +22,7 @@ setup_test_database()
 
 from sqlalchemy import inspect, text
 
-from backend.app.db import engine
+from backend.app.db import sync_engine as engine  # Use sync engine for validation script
 from backend.app.main import ensure_database_exists
 
 

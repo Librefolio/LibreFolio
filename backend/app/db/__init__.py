@@ -18,11 +18,12 @@ from backend.app.db.base import (
     CashAccount,
     CashMovement,
     )
-from backend.app.db.session import engine, get_session
+from backend.app.db.session import sync_engine, async_engine, get_session
 
 __all__ = [
     "SQLModel",
-    "engine",
+    "sync_engine",  # For sync scripts (migrations, populate, checks)
+    "async_engine",  # For async FastAPI app
     "get_session",
     # Enums
     "IdentifierType",

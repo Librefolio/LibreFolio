@@ -39,7 +39,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from backend.app.db import (
-    engine,
+    sync_engine as engine,  # Use sync engine for this script
     Broker,
     Asset,
     Transaction,

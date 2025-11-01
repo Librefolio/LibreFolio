@@ -7,6 +7,9 @@ Welcome to LibreFolio documentation!
 ### Getting Started
 - [Main README](../README.md) - Project overview and quick start
 
+### Architecture
+- **[Async Architecture Guide](async-architecture.md)** - ⭐ Understanding LibreFolio's high-performance concurrent request handling
+
 ### Database
 - **[Database Schema Documentation](database-schema.md)** - Complete guide to all tables and relationships
 - **[Alembic Migrations Guide](alembic-guide.md)** - Simple guide to database migrations
@@ -28,13 +31,20 @@ todo: add more links when more docs are added
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
-| [testing-guide.md](testing-guide.md) | ⭐ Learn the system via testing (new devs start here!) | New Developers |
-| [database-schema.md](database-schema.md) | Database tables & relationships | Everyone |
-| [alembic-guide.md](alembic-guide.md) | Learn database migrations | Everyone |
-| [fx-implementation.md](fx-implementation.md) | FX rates system implementation | Developers |
 | [environment-variables.md](environment-variables.md) | Configuration & deployment | Developers, DevOps |
+| [testing-guide.md](testing-guide.md) | ⭐ Learn the system via testing (new devs start here!) | New Developers |
+| [alembic-guide.md](alembic-guide.md) | Learn database migrations | Everyone |
+| [database-schema.md](database-schema.md) | Database tables & relationships | Everyone |
+| [async-architecture.md](async-architecture.md) | ⭐ Async/concurrent architecture explained | Contributors |
+| [fx-implementation.md](fx-implementation.md) | FX rates system implementation | Developers |
 | [README.md](../README.md) | Project overview | Everyone |
 
+
+**...understand the async architecture and performance**
+→ Read [Async Architecture Guide](async-architecture.md) - How concurrent requests are handled
+
+**...contribute to the backend (add endpoints, services)**
+→ Read [Async Architecture Guide](async-architecture.md) - Development patterns and best practices
 
 ### I want to...
 **...learn the system (I'm a new developer)**
