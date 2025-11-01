@@ -129,8 +129,8 @@ function db_check() {
     if [ -n "$db_url" ]; then
         echo -e "${GREEN}Verifying CHECK constraints in: ${YELLOW}$db_path${NC}"
         echo ""
-        # Set DATABASE_URL env var for the check script
-        DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook
+        # Use ALEMBIC_DATABASE_URL to avoid being overridden by .env loading
+        ALEMBIC_DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook
     else
         echo -e "${GREEN}Verifying CHECK constraints in default database${NC}"
         echo ""
@@ -203,7 +203,7 @@ function db_migrate() {
 
     local check_result
     if [ -n "$db_url" ]; then
-        DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook --quiet
+        ALEMBIC_DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook --quiet
         check_result=$?
     else
         pipenv run python -m backend.alembic.check_constraints_hook --quiet
@@ -279,7 +279,7 @@ function db_upgrade() {
 
     local check_result
     if [ -n "$db_url" ]; then
-        DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook --quiet
+        ALEMBIC_DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook --quiet
         check_result=$?
     else
         pipenv run python -m backend.alembic.check_constraints_hook --quiet
@@ -289,14 +289,13 @@ function db_upgrade() {
     if [ $check_result -ne 0 ]; then
         echo -e "${YELLOW}⚠️  WARNING: Migration completed but CHECK constraints are missing!${NC}"
         echo ""
-        echo -e "${YELLOW}The following constraints are defined in models but not in the database:${NC}"
-
-        # Show detailed output
-        if [ -n "$db_url" ]; then
-            DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook
+        echo -e "${YELLOW}Run this for details on what's missing:${NC}"
+        if [ -n "$db_path" ]; then
+            echo -e "  ./dev.sh db:check $db_path"
         else
-            pipenv run python -m backend.alembic.check_constraints_hook
+            echo -e "  ./dev.sh db:check"
         fi
+        echo ""
 
         echo ""
         echo -e "${YELLOW}This is a known SQLite limitation - batch operations sometimes fail to add${NC}"
