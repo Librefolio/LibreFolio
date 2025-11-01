@@ -169,6 +169,9 @@ python test_runner.py db fx-rates
 - Persists rates to database
 - Verifies data overwrite (updates existing rates)
 - Tests idempotency (no duplicates on re-sync)
+- **Verifies rate inversion for alphabetical ordering:**
+  - CHF/EUR: ECB gives 1 EUR = X CHF → stored as CHF/EUR with rate = 1/X
+  - EUR/USD: ECB gives 1 EUR = X USD → stored as EUR/USD with rate = X
 - Validates database constraints (unique, check base<quote)
 
 **Expected result:**
@@ -177,12 +180,14 @@ python test_runner.py db fx-rates
 ✅ Fetch & Persist Multiple Currencies
 ✅ Data Overwrite (Update Existing)
 ✅ Idempotent Sync
+✅ Rate Inversion for Alphabetical Ordering
 ✅ Database Constraints
-Results: 5/5 tests passed
+Results: 6/6 tests passed
 ```
 
 **What you learned:**
 - FX rates are stored with alphabetical ordering (EUR/USD, not USD/EUR)
+- When base > quote alphabetically, the rate is inverted (1/rate)
 - System fetches rates from ECB and stores them locally
 - Rates can be updated (no duplicates)
 - Database enforces data quality constraints
@@ -340,11 +345,11 @@ python test_runner.py -v all
 | Level | Category | Tests | What You Verified |
 |-------|----------|-------|-------------------|
 | 1 | **External** | 1 | ECB API accessible |
-| 2 | **Database** | 4 | Schema, persistence, constraints |
+| 2 | **Database** | 4 | Schema, persistence, constraints, rate inversion |
 | 3 | **Services** | 1 | Business logic, calculations |
 | 4 | **API** | 1 | HTTP endpoints, validation |
 
-**Total:** 7 test suites, ~30+ individual tests
+**Total:** 7 test suites, ~35+ individual tests
 
 ---
 

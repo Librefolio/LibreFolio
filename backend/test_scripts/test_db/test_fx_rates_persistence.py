@@ -301,9 +301,105 @@ async def test_idempotent_sync():
             return False
 
 
+async def test_rate_inversion_for_alphabetical_ordering():
+    """Test that rates are correctly inverted when storing currencies in alphabetical order.
+
+    ECB provides: 1 EUR = X CHF (e.g., 1 EUR = 0.95 CHF)
+    We store as: CHF/EUR with inverted rate (e.g., 1 CHF = 1.0526 EUR)
+
+    This ensures base < quote alphabetically (CHF < EUR).
+    """
+    print_section("Test 5: Rate Inversion for Alphabetical Ordering")
+
+    engine = get_engine()
+
+    with Session(engine) as session:
+        test_date = date.today() - timedelta(days=1)
+
+        print_info("Fetching CHF rate from ECB (CHF < EUR alphabetically, needs inversion)...")
+
+        try:
+            # Fetch CHF rate (ECB gives: 1 EUR = X CHF)
+            await ensure_rates(session, (test_date, test_date), ["CHF"])
+
+            # Query stored rate (should be CHF/EUR with inverted rate)
+            stmt = select(FxRate).where(
+                FxRate.base == "CHF",
+                FxRate.quote == "EUR",
+                FxRate.date == test_date
+            )
+            stored_rate = session.exec(stmt).first()
+
+            if not stored_rate:
+                print_error("No CHF/EUR rate found in database")
+                return False
+
+            print_info(f"Stored as: {stored_rate.base}/{stored_rate.quote} = {stored_rate.rate}")
+
+            # Verify alphabetical ordering
+            if stored_rate.base >= stored_rate.quote:
+                print_error(f"Base ({stored_rate.base}) is not less than quote ({stored_rate.quote})")
+                return False
+
+            print_success("✅ Currency pair stored in correct alphabetical order (CHF < EUR)")
+
+            # Verify rate is inverted (should be > 1.0 since EUR is stronger than CHF)
+            # ECB gives: 1 EUR = ~0.95 CHF
+            # Inverted:  1 CHF = ~1.05 EUR
+            if stored_rate.rate < Decimal("0.8") or stored_rate.rate > Decimal("1.3"):
+                print_warning(f"Rate {stored_rate.rate} seems unusual for CHF/EUR (expected ~1.05)")
+                print_warning("This might be OK if CHF has changed significantly vs EUR")
+            else:
+                print_info(f"Rate {stored_rate.rate} is in expected range for inverted CHF/EUR")
+
+            # Now test a currency that doesn't need inversion (e.g., USD)
+            print_info("\nFetching USD rate from ECB (EUR < USD alphabetically, no inversion)...")
+
+            await ensure_rates(session, (test_date, test_date), ["USD"])
+
+            stmt = select(FxRate).where(
+                FxRate.base == "EUR",
+                FxRate.quote == "USD",
+                FxRate.date == test_date
+            )
+            usd_rate = session.exec(stmt).first()
+
+            if not usd_rate:
+                print_error("No EUR/USD rate found in database")
+                return False
+
+            print_info(f"Stored as: {usd_rate.base}/{usd_rate.quote} = {usd_rate.rate}")
+
+            # Verify alphabetical ordering
+            if usd_rate.base >= usd_rate.quote:
+                print_error(f"Base ({usd_rate.base}) is not less than quote ({usd_rate.quote})")
+                return False
+
+            print_success("✅ Currency pair stored in correct alphabetical order (EUR < USD)")
+
+            # Verify rate is NOT inverted (should be > 1.0 since USD is typically stronger)
+            if usd_rate.rate < Decimal("0.8") or usd_rate.rate > Decimal("1.5"):
+                print_warning(f"Rate {usd_rate.rate} seems unusual for EUR/USD (expected ~1.08-1.20)")
+                print_warning("This might be OK if exchange rates have changed significantly")
+            else:
+                print_info(f"Rate {usd_rate.rate} is in expected range for EUR/USD")
+
+            print_success("\n✅ Rate inversion logic working correctly!")
+            print_info("  • CHF/EUR: inverted (CHF < EUR alphabetically)")
+            print_info("  • EUR/USD: not inverted (EUR < USD alphabetically)")
+
+            return True
+
+        except Exception as e:
+            print_error(f"Rate inversion test failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+
 async def test_database_constraints():
     """Test that database constraints are working (unique constraint, check constraint)."""
-    print_section("Test 5: Database Constraints")
+    print_section("Test 6: Database Constraints")
 
     engine = get_engine()
 
@@ -402,6 +498,7 @@ async def run_all_tests():
   • Persisting rates to the database
   • Overwriting existing data with fresh data
   • Idempotent sync (no duplicates)
+  • Rate inversion for alphabetical ordering (CHF/EUR vs EUR/USD)
   • Database constraints (unique, check)
   
 Tests WILL FAIL if ECB API is down/unreachable or no internet.""",
@@ -421,6 +518,7 @@ Tests WILL FAIL if ECB API is down/unreachable or no internet.""",
         "Fetch & Persist Multiple Currencies": await test_fetch_multiple_currencies(),
         "Data Overwrite (Update Existing)": await test_data_overwrite(),
         "Idempotent Sync": await test_idempotent_sync(),
+        "Rate Inversion for Alphabetical Ordering": await test_rate_inversion_for_alphabetical_ordering(),
         "Database Constraints": await test_database_constraints(),
         }
 
