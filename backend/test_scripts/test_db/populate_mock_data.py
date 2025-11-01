@@ -12,9 +12,16 @@ The data demonstrates all features of the schema with realistic examples.
     - Transactions: Buy, sell, dividends, etc.
     - FX Rates: Last 30 days for USD, GBP, CHF, JPY
 
+⚠️  DATABASE BEHAVIOR:
+    - If database already has data → script ABORTS with error
+    - Use --force flag to DELETE and recreate database
+    - Example: python -m backend.test_scripts.test_db.populate_mock_data --force
+
 Usage:
     python -m backend.test_scripts.test_db.populate_mock_data
-    or via test_runner.py: python test_runner.py db populate
+    python -m backend.test_scripts.test_db.populate_mock_data --force  # Delete and recreate
+    python test_runner.py db populate
+    python test_runner.py db populate --force  # Delete and recreate
 """
 
 # Setup test database BEFORE importing app modules
@@ -22,9 +29,12 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+import argparse
 import json
+import sys
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from sqlmodel import Session, select
 
@@ -585,15 +595,79 @@ def populate_fx_rates(session: Session):
     session.commit()
 
 
+def check_existing_data(session: Session) -> tuple[bool, dict]:
+    """Check if database already contains data.
+
+    Returns:
+        Tuple of (has_data, counts_dict)
+    """
+    counts = {
+        'brokers': len(session.exec(select(Broker)).all()),
+        'assets': len(session.exec(select(Asset)).all()),
+        'transactions': len(session.exec(select(Transaction)).all()),
+        'cash_accounts': len(session.exec(select(CashAccount)).all()),
+        'cash_movements': len(session.exec(select(CashMovement)).all()),
+        'price_history': len(session.exec(select(PriceHistory)).all()),
+        'fx_rates': len(session.exec(select(FxRate)).all()),
+    }
+
+    has_data = any(count > 0 for count in counts.values())
+    return has_data, counts
+
+
 def main():
     """Populate database with mock data for testing."""
-    ensure_database_exists()
+    # Parse arguments
+    parser = argparse.ArgumentParser(description='Populate database with mock data')
+    parser.add_argument('--force', action='store_true',
+                       help='Delete existing database and create fresh one')
+    args = parser.parse_args()
 
     print("=" * 60)
     print("LibreFolio Database - Mock Data Population")
     print("=" * 60)
     print("\n⚠️  Populating database with MOCK DATA for testing...")
     print("This data is for development/testing purposes only.\n")
+
+    # Get database path from config
+    from backend.app.config import get_settings
+    settings = get_settings()
+    # Extract path from sqlite URL
+    db_url = settings.TEST_DATABASE_URL if 'test' in sys.argv[0] or 'TEST' in str(Path.cwd()) else settings.DATABASE_URL
+    if db_url.startswith('sqlite:///'):
+        db_path = Path(db_url.replace('sqlite:///', ''))
+        if not db_path.is_absolute():
+            db_path = Path.cwd() / db_path
+    else:
+        print("❌ Error: This script only works with SQLite databases")
+        return 1
+
+    # Check if database file exists
+    if db_path.exists() and db_path.stat().st_size > 0:
+        # Database exists and is not empty
+        if args.force:
+            print(f"⚠️  Database file exists: {db_path}")
+            print(f"     Size: {db_path.stat().st_size} bytes")
+            print(f"\n🗑️  --force flag detected: Deleting database file...")
+
+            # Delete the database file
+            db_path.unlink()
+            print(f"  ✅ Database deleted\n")
+        else:
+            print(f"❌ Error: Database file already exists!")
+            print(f"     Path: {db_path}")
+            print(f"     Size: {db_path.stat().st_size} bytes")
+            print(f"\n💡 Solutions:")
+            print(f"  1. Use --force flag to delete and recreate:")
+            print(f"     python -m backend.test_scripts.test_db.populate_mock_data --force")
+            print(f"  2. Delete database manually:")
+            print(f"     rm {db_path}")
+            print(f"  3. Use test_runner.py with --force:")
+            print(f"     python test_runner.py db populate --force")
+            return 1
+
+    # Create fresh database
+    ensure_database_exists()
 
     with Session(engine) as session:
         try:
@@ -623,9 +697,9 @@ def main():
             print(f"  • {len(transactions)} transactions")
             print(f"  • {len(cash_movements)} cash movements")
 
-            print("\n💡 Explore the data:")
-            print("  sqlite3 backend/data/sqlite/app.db")
-            print("\n📚 See database-schema.md for explanation of all tables!")
+            print(f"\n💡 Explore the data:")
+            print(f"  sqlite3 {db_path}")
+            print(f"\n📚 See database-schema.md for explanation of all tables!")
 
             return 0
 

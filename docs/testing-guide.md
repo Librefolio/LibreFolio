@@ -142,12 +142,17 @@ python test_runner.py -v db validate
 
 **Expected result:**
 ```
-✅ Tables Exist
-python test_runner.py -v db fx-rates
-✅ Unique Constraints
-✅ Indexes Created
-✅ Decimal Precision
-Results: 5/5 tests passed
+✅ PASS     Tables Exist
+✅ PASS     Foreign Keys
+✅ PASS     Unique Constraints
+✅ PASS     Indexes
+✅ PASS     PRAGMA foreign_keys
+✅ PASS     Enum Types
+✅ PASS     Model Imports
+✅ PASS     Daily-Point Policy
+✅ PASS     CHECK Constraints
+
+Results: 9/9 tests passed
 ```
 
 **What you learned:**
@@ -158,15 +163,60 @@ Results: 5/5 tests passed
 
 ---
 
-#### ✅ Test 4: FX Rates Persistence
+#### ✅ Test 4: Mock Data Population
 
 ```bash
-python test_runner.py db fx-rates
+python test_runner.py db populate
+```
+
+**What this test does:**
+- Populates database with comprehensive MOCK data
+- Creates sample brokers (Interactive Brokers, Degiro, Recrowd)
+- Creates sample assets (AAPL, MSFT, TSLA, VWCE, etc.)
+- Creates sample transactions (buy, sell, dividends)
+- Inserts 30 days of mock FX rates
+
+**Expected result (database is present for tests above):**
+```
+❌ Mock data population - FAILED
+💡 Hint: Database might already contain data
+   Use --force to delete and recreate:
+     python test_runner.py db populate --force
+```
+
+To run successfully, use the `--force` flag to recreate the database from scratch:
+
+```bash
+python test_runner.py db populate --force
+```
+
+**Expected result (empty database):**
+```
+✅ Mock data population completed successfully!
+```
+
+**What you learned:**
+- Database can store complex portfolio data
+- Sample data useful for frontend development
+- Schema supports multiple asset types (stocks, ETFs, P2P loans)
+- Transactions linked to brokers and assets
+- Use `--force` flag to recreate from scratch
+
+**Note:** This is **MOCK DATA** for testing only!
+
+**💡 Why this test comes before FX rates:** Populate requires empty DB (or `--force`), while FX rates can run on existing data.
+
+---
+
+#### ✅ Test 5: FX Rates Persistence
+
+```bash
+python test_runner.py -v db fx-rates
 ```
 
 **What this test does:**
 - Fetches real FX rates from ECB API
-- Persists rates to database
+- Persists rates to database (uses UPSERT - can run on existing data)
 - Verifies data overwrite (updates existing rates)
 - Tests idempotency (no duplicates on re-sync)
 - **Verifies rate inversion for alphabetical ordering:**
@@ -192,33 +242,7 @@ Results: 6/6 tests passed
 - Rates can be updated (no duplicates)
 - Database enforces data quality constraints
 
----
-
-#### ✅ Test 5: Mock Data Population
-
-```bash
-python test_runner.py -v db populate
-```
-
-**What this test does:**
-- Populates database with comprehensive MOCK data
-- Creates sample brokers (Interactive Brokers, Degiro, Recrowd)
-- Creates sample assets (AAPL, MSFT, TSLA, VWCE, etc.)
-- Creates sample transactions (buy, sell, dividends)
-- Inserts 30 days of mock FX rates
-
-**Expected result:**
-```
-✅ Mock data population completed successfully!
-```
-
-**What you learned:**
-- Database can store complex portfolio data
-- Sample data useful for frontend development
-- Schema supports multiple asset types (stocks, ETFs, P2P loans)
-- Transactions linked to brokers and assets
-
-**Note:** This is **MOCK DATA** for testing only!
+**💡 This test can run multiple times:** It uses UPSERT, so existing data is updated, not duplicated.
 
 ---
 

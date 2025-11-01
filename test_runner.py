@@ -198,10 +198,14 @@ def db_validate(verbose: bool = False) -> bool:
         )
 
 
-def db_populate(verbose: bool = False) -> bool:
+def db_populate(verbose: bool = False, force: bool = False) -> bool:
     """
     Populate database with mock data for testing.
     Inserts comprehensive sample data (useful for frontend development).
+
+    Args:
+        verbose: Show verbose output
+        force: Delete existing database and recreate from scratch
     """
     print_section("Database Mock Data Population")
 
@@ -212,11 +216,28 @@ def db_populate(verbose: bool = False) -> bool:
     print_info("The backend server is NOT used in this test")
     print_info("⚠️  Populating MOCK DATA for testing purposes")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.populate_mock_data"],
+    if force:
+        print_warning("--force flag detected: Will DELETE existing data")
+
+    cmd = ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.populate_mock_data"]
+    if force:
+        cmd.append("--force")
+
+    success = run_command(
+        cmd,
         "Mock data population",
         verbose=verbose
         )
+
+    # If failed and not verbose, provide helpful hint
+    if not success and not verbose:
+        print_warning("\n💡 Hint: Database might already contain data")
+        print_info("   Run with -v to see detailed error:")
+        print_info(f"     python test_runner.py -v db populate")
+        print_info("   Or use --force to delete and recreate:")
+        print_info(f"     python test_runner.py db populate --force")
+
+    return success
 
 
 def db_fx_rates(verbose: bool = False) -> bool:
@@ -249,11 +270,14 @@ def db_all(verbose: bool = False) -> bool:
     print_info("Target: backend/data/sqlite/app.db")
 
     # Test order matters!
+    # Note: populate comes before fx-rates because:
+    #   - populate requires empty DB (or --force to delete)
+    #   - fx-rates can run on DB with existing data (uses UPSERT)
     tests = [
         ("Create Fresh Database", lambda: db_create(verbose)),
         ("Validate Schema", lambda: db_validate(verbose)),
+        ("Populate Mock Data", lambda: db_populate(verbose, force=True)),  # Use force in 'all' mode
         ("FX Rates Persistence", lambda: db_fx_rates(verbose)),
-        ("Populate Mock Data", lambda: db_populate(verbose)),
         ]
 
     results = []
@@ -578,13 +602,15 @@ Test commands:
   validate  - Verify all tables, constraints, indexes, foreign keys
               📋 Prerequisites: Database created (run: db create)
               
-  fx-rates  - Test FX rates persistence (fetch from ECB & persist)
-              📋 Prerequisites: External ECB API working (run: external ecb)
-              
   populate  - Populate database with MOCK DATA for testing/frontend dev
               📋 Prerequisites: Database created (run: db create)
+              💡 Use --force to delete existing data and recreate
               
-  all       - Run all DB tests (create → validate → fx-rates → populate)
+  fx-rates  - Test FX rates persistence (fetch from ECB & persist)
+              📋 Prerequisites: External ECB API working (run: external ecb)
+              💡 Can run on database with existing data (uses UPSERT)
+              
+  all       - Run all DB tests (create → validate → populate → fx-rates)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
@@ -593,6 +619,12 @@ Test commands:
         "action",
         choices=["create", "validate", "fx-rates", "populate", "all"],
         help="Database test to run"
+        )
+
+    db_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="[populate only] Delete existing database and recreate from scratch"
         )
 
     # ========================================================================
@@ -690,7 +722,8 @@ def main():
         elif args.action == "fx-rates":
             success = db_fx_rates(verbose=verbose)
         elif args.action == "populate":
-            success = db_populate(verbose=verbose)
+            force = getattr(args, 'force', False)
+            success = db_populate(verbose=verbose, force=force)
         elif args.action == "all":
             success = db_all(verbose=verbose)
 
