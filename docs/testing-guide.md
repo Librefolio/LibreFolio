@@ -2,6 +2,8 @@
 
 Welcome to LibreFolio! This guide will help you understand the testing system by running tests in the correct order, from external services to the full application.
 
+> 💡 **Want to understand the async architecture?** After running tests, read the [Async Architecture Guide](async-architecture.md) to understand how LibreFolio handles concurrent requests efficiently.
+
 ---
 
 ## 🎯 Purpose of This Guide
@@ -9,7 +11,7 @@ Welcome to LibreFolio! This guide will help you understand the testing system by
 This is a **hands-on introduction** to LibreFolio's test suite. By following this checklist, you will:
 - ✅ Verify your development environment is correctly set up
 - ✅ Understand the system architecture (external → database → services → API)
-- ✅ Learn how each component works
+- ✅ Learn how each component works and how async/await enables high performance
 - ✅ Gain confidence in the codebase
 
 ---

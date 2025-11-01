@@ -31,10 +31,11 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import FxRate
-from backend.app.db.session import get_engine
+from backend.app.db.session import get_async_engine
 from backend.app.main import ensure_database_exists
 from backend.app.services.fx import FXServiceError, ensure_rates
 from backend.test_scripts.test_utils import (
@@ -54,9 +55,9 @@ async def test_fetch_and_persist_single_currency():
     """Test fetching and persisting rates for a single currency."""
     print_section("Test 1: Fetch & Persist Single Currency (USD)")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         # Use recent date range to avoid weekends
         end_date = date.today() - timedelta(days=1)
         start_date = end_date - timedelta(days=5)
@@ -71,7 +72,8 @@ async def test_fetch_and_persist_single_currency():
             FxRate.date >= start_date,
             FxRate.date <= end_date
             )
-        existing_count = len(session.exec(existing_stmt).all())
+        result = await session.execute(existing_stmt)
+        existing_count = len(result.scalars().all())
         print_info(f"Existing rates in DB: {existing_count}")
 
         try:
@@ -86,7 +88,8 @@ async def test_fetch_and_persist_single_currency():
                 FxRate.date >= start_date,
                 FxRate.date <= end_date
                 )
-            all_rates = session.exec(all_stmt).all()
+            result = await session.execute(all_stmt)
+            all_rates = result.scalars().all()
 
             if not all_rates:
                 print_error("No rates found in database after sync")
@@ -122,9 +125,9 @@ async def test_fetch_multiple_currencies():
     """Test fetching and persisting rates for multiple currencies."""
     print_section("Test 2: Fetch & Persist Multiple Currencies")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         # Use recent date range
         end_date = date.today() - timedelta(days=1)
         start_date = end_date - timedelta(days=7)
@@ -153,7 +156,8 @@ async def test_fetch_multiple_currencies():
                     FxRate.date >= start_date,
                     FxRate.date <= end_date
                     )
-                rates = session.exec(stmt).all()
+                result = await session.execute(stmt)
+                rates = result.scalars().all()
 
                 if not rates:
                     print_error(f"  {currency}: No rates found (stored as {base}/{quote})")
@@ -175,9 +179,9 @@ async def test_data_overwrite():
     """Test that new data overwrites old data for same date/currency pair."""
     print_section("Test 3: Data Overwrite (Update Existing Rates)")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         test_date = date.today() - timedelta(days=1)
 
         print_info(f"Testing data overwrite for {test_date}")
@@ -201,8 +205,8 @@ async def test_data_overwrite():
                     }
                 )
 
-            session.exec(upsert_stmt)
-            session.commit()
+            await session.execute(upsert_stmt)
+            await session.commit()
             print_success(f"Upserted fake rate: EUR/USD = 9.9999 on {test_date}")
 
             # Step 2: Fetch real rate from ECB (should overwrite)
@@ -216,7 +220,8 @@ async def test_data_overwrite():
                 FxRate.quote == "USD",
                 FxRate.date == test_date
                 )
-            updated_rate = session.exec(stmt).first()
+            result = await session.execute(stmt)
+            updated_rate = result.scalars().first()
 
             if not updated_rate:
                 print_error("Rate not found after update")
@@ -245,7 +250,7 @@ async def test_data_overwrite():
             print_error(f"Data overwrite test failed: {e}")
             import traceback
             traceback.print_exc()
-            session.rollback()
+            await session.rollback()
             return False
 
 
@@ -253,9 +258,9 @@ async def test_idempotent_sync():
     """Test that syncing the same period twice doesn't create duplicates."""
     print_section("Test 4: Idempotent Sync (No Duplicates)")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         end_date = date.today() - timedelta(days=1)
         start_date = end_date - timedelta(days=3)
 
@@ -274,14 +279,16 @@ async def test_idempotent_sync():
                 FxRate.date >= start_date,
                 FxRate.date <= end_date
                 )
-            count_1 = len(session.exec(stmt).all())
+            result = await session.execute(stmt)
+            count_1 = len(result.scalars().all())
 
             # Second sync (should insert 0 new rates)
             synced_2 = await ensure_rates(session, (start_date, end_date), ["USD"])
             print_info(f"Second sync: {synced_2} new rates")
 
             # Count rates after second sync
-            count_2 = len(session.exec(stmt).all())
+            result = await session.execute(stmt)
+            count_2 = len(result.scalars().all())
 
             if synced_2 != 0:
                 print_error(f"Second sync inserted {synced_2} rates (expected 0)")
@@ -311,9 +318,9 @@ async def test_rate_inversion_for_alphabetical_ordering():
     """
     print_section("Test 5: Rate Inversion for Alphabetical Ordering")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         test_date = date.today() - timedelta(days=1)
 
         print_info("Fetching CHF rate from ECB (CHF < EUR alphabetically, needs inversion)...")
@@ -328,7 +335,8 @@ async def test_rate_inversion_for_alphabetical_ordering():
                 FxRate.quote == "EUR",
                 FxRate.date == test_date
             )
-            stored_rate = session.exec(stmt).first()
+            result = await session.execute(stmt)
+            stored_rate = result.scalars().first()
 
             if not stored_rate:
                 print_error("No CHF/EUR rate found in database")
@@ -362,7 +370,8 @@ async def test_rate_inversion_for_alphabetical_ordering():
                 FxRate.quote == "USD",
                 FxRate.date == test_date
             )
-            usd_rate = session.exec(stmt).first()
+            result = await session.execute(stmt)
+            usd_rate = result.scalars().first()
 
             if not usd_rate:
                 print_error("No EUR/USD rate found in database")
@@ -401,9 +410,9 @@ async def test_database_constraints():
     """Test that database constraints are working (unique constraint, check constraint)."""
     print_section("Test 6: Database Constraints")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         test_date = date.today() - timedelta(days=1)
 
         print_info("Testing unique constraint (date, base, quote)...")
@@ -418,7 +427,8 @@ async def test_database_constraints():
                 FxRate.quote == "USD",
                 FxRate.date == test_date
                 )
-            existing_rate = session.exec(stmt).first()
+            result = await session.execute(stmt)
+            existing_rate = result.scalars().first()
 
             if not existing_rate:
                 print_error("No rate found to test duplicate constraint")
@@ -437,13 +447,13 @@ async def test_database_constraints():
             session.add(duplicate)
 
             try:
-                session.commit()
+                await session.commit()
                 print_error("Duplicate insertion succeeded (unique constraint not working!)")
-                session.rollback()
+                await session.rollback()
                 return False
             except Exception as e:
                 print_success("Duplicate insertion correctly rejected by unique constraint")
-                session.rollback()
+                await session.rollback()
 
             # Test check constraint (base < quote alphabetically)
             print_info("\nTesting check constraint (base < quote)...")
@@ -461,9 +471,9 @@ async def test_database_constraints():
             session.add(invalid)
 
             try:
-                session.commit()
+                await session.commit()
                 print_error("Invalid base/quote order accepted (check constraint not working!)")
-                session.rollback()
+                await session.rollback()
                 return False
             except Exception as e:
                 # Check if it's specifically a CHECK constraint error
@@ -473,11 +483,11 @@ async def test_database_constraints():
                 elif 'unique constraint' in error_msg:
                     print_error("Rejected by UNIQUE constraint instead of CHECK constraint")
                     print_warning("This might be a false positive - check if constraint exists")
-                    session.rollback()
+                    await session.rollback()
                     return False
                 else:
                     print_success(f"Invalid base/quote order rejected (reason: {error_msg[:100]})")
-                session.rollback()
+                await session.rollback()
 
             return True
 
@@ -485,7 +495,7 @@ async def test_database_constraints():
             print_error(f"Constraint test failed: {e}")
             import traceback
             traceback.print_exc()
-            session.rollback()
+            await session.rollback()
             return False
 
 

@@ -7,8 +7,10 @@ name = "pypi"
 fastapi = "*"
 uvicorn = {extras = ["standard"], version = "*"}
 sqlmodel = "*"
-sqlalchemy = "*"
+sqlalchemy = {extras = ["asyncio"], version = "*"}
 alembic = "*"
+aiosqlite = "*"
+greenlet = "*"
 pydantic = "*"
 pydantic-settings = "*"
 pandas = "*"

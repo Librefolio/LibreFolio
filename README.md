@@ -5,6 +5,9 @@
 ## 🏗️ Architecture
 
 - **Backend**: Python (FastAPI + SQLModel + SQLite + Alembic)
+  - **Async-first**: High-performance concurrent request handling (5-10x throughput)
+  - **Dual Engine Pattern**: Sync for migrations/scripts, async for API
+  - 📚 [Read the Async Architecture Guide](docs/async-architecture.md)
 - **Frontend**: React (TypeScript + MUI + i18n) _(coming soon)_
 - **Deployment**: Single Docker image _(coming soon)_
 
@@ -205,6 +208,7 @@ LibreFolio uses SQLite with Alembic for schema management. The database file is 
 **Documentation:**
 - 📚 **[Database Schema Documentation](docs/database-schema.md)** - Complete guide to all tables, relationships, and concepts
 - 🔧 [Alembic Migration Guide](docs/alembic-guide.md) - How to manage database migrations
+- ⚡ **[Async Architecture Guide](docs/async-architecture.md)** - How LibreFolio handles concurrent requests efficiently
 - ⚙️ [Environment Variables](docs/environment-variables.md) - Configuration options and Docker deployment
 
 **Quick Example:**

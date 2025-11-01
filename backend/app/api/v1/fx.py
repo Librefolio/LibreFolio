@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlmodel import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_session
 from backend.app.services.fx import (
@@ -64,7 +64,7 @@ async def sync_rates(
     start: date = Query(..., description="Start date (inclusive)"),
     end: date = Query(..., description="End date (inclusive)"),
     currencies: str = Query("USD,GBP,CHF,JPY", description="Comma-separated currency codes"),
-    session: Session = Depends(get_session)
+    session: AsyncSession = Depends(get_session)
     ):
     """
     Synchronize FX rates from ECB for the specified date range and currencies.
@@ -100,11 +100,11 @@ async def sync_rates(
 
 @router.get("/convert", response_model=ConvertResponse)
 async def convert_currency(
-    amount: Decimal = Query(..., description="Amount to convert", gt=0),
-    from_cur: str = Query(..., alias="from", description="Source currency code"),
-    to_cur: str = Query(..., alias="to", description="Target currency code"),
-    date_param: date = Query(default_factory=date.today, alias="date", description="Date for conversion"),
-    session: Session = Depends(get_session)
+    amount: Decimal = Query(..., description="Amount to convert"),
+    from_currency: str = Query(..., alias="from", description="Source currency (ISO 4217)"),
+    to_currency: str = Query(..., alias="to", description="Target currency (ISO 4217)"),
+    on_date: date = Query(default_factory=date.today, description="Conversion date"),
+    session: AsyncSession = Depends(get_session)
     ):
     """
     Convert an amount from one currency to another.
@@ -112,19 +112,19 @@ async def convert_currency(
 
     Args:
         amount: Amount to convert
-        from_cur: Source currency (ISO 4217 code)
-        to_cur: Target currency (ISO 4217 code)
-        date_param: Date for which to use the rate (defaults to today)
+        from_currency: Source currency (ISO 4217 code)
+        to_currency: Target currency (ISO 4217 code)
+        on_date: Date for which to use the rate (defaults to today)
         session: Database session
 
     Returns:
         Conversion result with rate information
     """
-    from_cur = from_cur.upper()
-    to_cur = to_cur.upper()
+    from_cur = from_currency.upper()
+    to_cur = to_currency.upper()
 
     try:
-        converted_amount = convert(session, amount, from_cur, to_cur, date_param)
+        converted_amount = await convert(session, amount, from_cur, to_cur, on_date)
 
         # Calculate effective rate (for display purposes)
         rate = None
@@ -137,7 +137,7 @@ async def convert_currency(
             to_currency=to_cur,
             converted_amount=converted_amount,
             rate=rate,
-            rate_date=date_param.isoformat()
+            rate_date=on_date.isoformat()
             )
     except RateNotFoundError as e:
         raise HTTPException(

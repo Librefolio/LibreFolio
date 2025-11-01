@@ -7,7 +7,7 @@ from datetime import date
 from decimal import Decimal
 
 import httpx
-from sqlmodel import Session, select
+from sqlmodel import select
 
 from backend.app.db.models import FxRate
 
@@ -95,7 +95,7 @@ async def get_available_currencies() -> list[str]:
 
 
 async def ensure_rates(
-    session: Session,
+    session,  # AsyncSession
     date_range: tuple[date, date],
     currencies: list[str]
     ) -> int:
@@ -152,7 +152,8 @@ async def ensure_rates(
             FxRate.date >= start_date,
             FxRate.date <= end_date
             )
-        existing_rates = session.exec(existing_stmt).all()
+        result = await session.execute(existing_stmt)
+        existing_rates = result.scalars().all()
         existing_dates = {rate.date for rate in existing_rates}
 
         # Fetch from ECB API: D.{CURRENCY}.EUR.SP00.A
@@ -220,7 +221,7 @@ async def ensure_rates(
                             }
                         )
 
-                    session.exec(upsert_stmt)
+                    await session.execute(upsert_stmt)
 
                     # Track changes for logging
                     if old_rate is not None:
@@ -237,7 +238,7 @@ async def ensure_rates(
                         changed_count += 1  # Count as change
                         logger.debug(f"Inserted FX rate: {base}/{quote} = {rate_value} on {rate_date}")
 
-                session.commit()
+                await session.commit()
 
                 # Add to total changed count
                 total_changed_count += changed_count
@@ -264,8 +265,8 @@ async def ensure_rates(
     return total_changed_count
 
 
-def convert(
-    session: Session,
+async def convert(
+    session,  # AsyncSession
     amount: Decimal,
     from_currency: str,
     to_currency: str,
@@ -311,7 +312,8 @@ def convert(
         FxRate.date <= as_of_date
         ).order_by(FxRate.date.desc()).limit(1)
 
-    rate_record = session.exec(stmt).first()
+    result = await session.execute(stmt)
+    rate_record = result.scalars().first()
     if not rate_record:
         raise RateNotFoundError(
             f"No FX rate found for {base}/{quote} on or before {as_of_date}"

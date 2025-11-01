@@ -2,15 +2,17 @@
 
 This document describes the FX rate system implementation for LibreFolio.
 
+> 💡 **Want to understand how async/await works in this module?** Read the [Async Architecture Guide](async-architecture.md) first!
+
 ---
 
 ## 📋 Overview
 
 The FX system provides:
-- **Currency rate fetching** from ECB (European Central Bank) API
-- **Persistent storage** in SQLite database with alphabetical base/quote ordering
-- **Currency conversion** with forward-fill logic
-- **REST API endpoints** for frontend integration
+- **Currency rate fetching** from ECB (European Central Bank) API (async with httpx)
+- **Persistent storage** in SQLite database with alphabetical base/quote ordering (async with AsyncSession)
+- **Currency conversion** with forward-fill logic (async database queries)
+- **REST API endpoints** for frontend integration (async FastAPI endpoints)
 
 ---
 
@@ -52,21 +54,24 @@ date: 2025-01-15, base: CHF, quote: EUR, rate: 1.0650
 
 ## 🔧 Backend Components
 
+> 💡 **All functions are `async`**: See [Async Architecture Guide](async-architecture.md) for implementation details.
+
 ### 1. Service Layer: `backend/app/services/fx.py`
 
-**`get_available_currencies() -> list[str]`**
-- Fetches list of available currencies from ECB API
+**`async def get_available_currencies() -> list[str]`**
+- Fetches list of available currencies from ECB API (async httpx call)
 - Returns ISO 4217 currency codes
 
-**`ensure_rates(session, date_range, currencies) -> int`**
+**`async def ensure_rates(session: AsyncSession, date_range, currencies) -> int`**
 - Fetches missing rates from ECB for specified date range and currencies
 - ECB provides: 1 EUR = X {currency}
 - Converts to alphabetical storage format
 - Returns number of new rates inserted
 - Idempotent: safe to call multiple times
+- **Note**: Uses sequential loop (intentional) - see [Async Architecture Guide](async-architecture.md#service-layer) for reasoning
 
-**`convert(session, amount, from_currency, to_currency, as_of_date) -> Decimal`**
-- Converts amount between currencies
+**`async def convert(session: AsyncSession, amount, from_currency, to_currency, as_of_date) -> Decimal`**
+- Converts amount between currencies (async database query)
 - Handles:
   - **Identity**: Same currency → return amount unchanged
   - **Direct**: Stored pair → apply rate
