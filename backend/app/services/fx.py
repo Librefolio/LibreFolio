@@ -206,33 +206,20 @@ async def ensure_rates(
 
                             observations.append((date.fromisoformat(rate_date_str), stored_rate))
 
-                # UPSERT rates using SQLAlchemy on_conflict_do_update
+                # OPTIMIZATION: Batch UPSERT all observations for this currency
                 from sqlalchemy.dialects.sqlite import insert
                 from sqlalchemy import func
 
                 changed_count = 0  # Count only actual changes (new inserts + updates with value change)
                 refreshed_count = 0  # Count updates with no value change
 
+                # Track changes before batch insert (for logging)
                 for rate_date, rate_value in observations:
-                    # Check if this is an update or insert by looking at old value
                     old_rate = None
                     if rate_date in existing_dates:
                         existing_rate = next(r for r in existing_rates if r.date == rate_date)
                         old_rate = existing_rate.rate
 
-                    # Perform UPSERT (atomic operation)
-                    stmt = insert(FxRate).values(date=rate_date, base=base, quote=quote, rate=rate_value, source="ECB", fetched_at=func.current_timestamp())
-
-                    upsert_stmt = stmt.on_conflict_do_update(
-                        index_elements=['date', 'base', 'quote'],
-                        set_={
-                            'rate': stmt.excluded.rate,
-                            'source': stmt.excluded.source,
-                            'fetched_at': func.current_timestamp()
-                            }
-                        )
-
-                    await session.execute(upsert_stmt)
 
                     # Track changes for logging
                     if old_rate is not None:
@@ -248,6 +235,36 @@ async def ensure_rates(
                         inserted_count += 1
                         changed_count += 1  # Count as change
                         logger.debug(f"Inserted FX rate: {base}/{quote} = {rate_value} on {rate_date}")
+
+                # OPTIMIZATION: Single batch INSERT for all observations of this currency
+                if observations:
+                    values_list = [
+                        {
+                            'date': rate_date,
+                            'base': base,
+                            'quote': quote,
+                            'rate': rate_value,
+                            'source': 'ECB',
+                            'fetched_at': func.current_timestamp()
+                        }
+                        for rate_date, rate_value in observations
+                    ]
+
+                    # Single batch INSERT statement
+                    batch_stmt = insert(FxRate).values(values_list)
+
+                    # On conflict: update all fields
+                    batch_stmt = batch_stmt.on_conflict_do_update(
+                        index_elements=['date', 'base', 'quote'],
+                        set_={
+                            'rate': batch_stmt.excluded.rate,
+                            'source': batch_stmt.excluded.source,
+                            'fetched_at': func.current_timestamp()
+                        }
+                    )
+
+                    # Execute single batch statement (replaces N individual executes)
+                    await session.execute(batch_stmt)
 
                 await session.commit()
 
@@ -291,11 +308,8 @@ async def convert(
     return_rate_info: bool = False
     ) -> Decimal | tuple[Decimal, date, bool]:
     """
-    Convert an amount from one currency to another using FX rates.
-    Uses unlimited backward-fill: if rate for exact date is not found,
-    uses the most recent rate available (no time limit).
-
-    Rates are stored alphabetically (base < quote): 1 base = rate * quote
+    Convert a single amount from one currency to another.
+    This is a convenience wrapper around convert_bulk() for single conversions.
 
     Args:
         session: Database session
@@ -312,60 +326,308 @@ async def convert(
     Raises:
         RateNotFoundError: If no rate is found at all for this currency pair
     """
-    # Identity conversion
-    if from_currency == to_currency:
-        if return_rate_info:
-            return amount, as_of_date, False
-        return amount
+    # Call bulk version with single item (raise_on_error=True for backward compatibility)
+    results, errors = await convert_bulk(
+        session,
+        [(amount, from_currency, to_currency, as_of_date)],
+        raise_on_error=True
+    )
 
-    # Determine alphabetical ordering
-    if from_currency < to_currency:
-        # We need from/to, and it's stored as from/to
-        base, quote = from_currency, to_currency
-        direct = True
-    else:
-        # We need from/to, but it's stored as to/from
-        base, quote = to_currency, from_currency
-        direct = False
+    converted_amount, rate_date, backward_fill_applied = results[0]
 
-    # Query for rate with unlimited backward-fill
-    stmt = select(FxRate).where(
-        FxRate.base == base,
-        FxRate.quote == quote,
-        FxRate.date <= as_of_date
-        ).order_by(FxRate.date.desc()).limit(1)
+    if return_rate_info:
+        return converted_amount, rate_date, backward_fill_applied
+    return converted_amount
 
-    result = await session.execute(stmt)
-    rate_record = result.scalars().first()
 
-    if not rate_record:
-        # No rate found at all for this pair
-        raise RateNotFoundError(
-            f"No FX rate found for {base}/{quote} on or before {as_of_date}. "
-            f"Please sync rates using POST /api/v1/fx/sync"
-        )
+async def convert_bulk(
+    session,  # AsyncSession
+    conversions: list[tuple[Decimal, str, str, date]],  # [(amount, from, to, date), ...]
+    raise_on_error: bool = True
+    ) -> tuple[list[tuple[Decimal, date, bool] | None], list[str]]:
+    """
+    Convert multiple amounts in a single batch operation.
+    Uses unlimited backward-fill: if rate for exact date is not found,
+    uses the most recent rate available (no time limit).
 
-    # Track if backward-fill was applied
-    backward_fill_applied = rate_record.date < as_of_date
+    Rates are stored alphabetically (base < quote): 1 base = rate * quote
 
-    # Log if using backward-fill (rate is older than requested date)
-    if backward_fill_applied:
-        days_back = (as_of_date - rate_record.date).days
-        logger.info(
-            f"Using backward-fill: rate for {base}/{quote} from {rate_record.date} "
-            f"({days_back} days back, requested: {as_of_date})"
+    Args:
+        session: Database session
+        conversions: List of (amount, from_currency, to_currency, as_of_date) tuples
+        raise_on_error: If True, raise on first error. If False, collect errors and continue
+
+    Returns:
+        Tuple of (results, errors) where:
+        - results: List of (converted_amount, rate_date, backward_fill_applied) or None for failed conversions
+        - errors: List of error messages for failed conversions
+
+        If raise_on_error=True, raises on first error (legacy behavior)
+
+    Raises:
+        RateNotFoundError: If any conversion fails and raise_on_error=True
+    """
+    if not conversions:
+        return ([], [])
+
+    # OPTIMIZATION: Collect all unique currency pairs needed
+    pairs_needed = {}  # {(base, quote, max_date): [indices_needing_this_pair]}
+    conversion_metadata = []  # Store metadata for each conversion
+
+    for idx, (amount, from_currency, to_currency, as_of_date) in enumerate(conversions):
+        # Identity conversions don't need DB lookup
+        if from_currency == to_currency:
+            conversion_metadata.append({
+                'idx': idx,
+                'amount': amount,
+                'from': from_currency,
+                'to': to_currency,
+                'date': as_of_date,
+                'identity': True
+            })
+            continue
+
+        # Determine alphabetical ordering
+        if from_currency < to_currency:
+            base, quote = from_currency, to_currency
+            direct = True
+        else:
+            base, quote = to_currency, from_currency
+            direct = False
+
+        conversion_metadata.append({
+            'idx': idx,
+            'amount': amount,
+            'from': from_currency,
+            'to': to_currency,
+            'date': as_of_date,
+            'identity': False,
+            'base': base,
+            'quote': quote,
+            'direct': direct
+        })
+
+        # Group conversions by pair and max date needed
+        # We'll fetch the most recent rate for each pair that satisfies all dates
+        pair_key = (base, quote)
+        if pair_key not in pairs_needed:
+            pairs_needed[pair_key] = {'max_date': as_of_date, 'indices': []}
+        else:
+            # Track the maximum date needed for this pair
+            if as_of_date > pairs_needed[pair_key]['max_date']:
+                pairs_needed[pair_key]['max_date'] = as_of_date
+
+        pairs_needed[pair_key]['indices'].append(idx)
+
+    # OPTIMIZATION: Single batch query for all needed rates
+    # Build OR clauses for all pairs
+    if pairs_needed:
+        from sqlalchemy import or_, and_
+
+        conditions = []
+        for (base, quote), info in pairs_needed.items():
+            # For each pair, get all rates up to the max date needed
+            conditions.append(
+                and_(
+                    FxRate.base == base,
+                    FxRate.quote == quote,
+                    FxRate.date <= info['max_date']
+                )
             )
 
-    # Apply conversion
-    # Stored: 1 base = rate * quote
-    if direct:
-        # from=base, to=quote: amount_from * rate = amount_to
-        converted = amount * rate_record.rate
-    else:
-        # from=quote, to=base: amount_from / rate = amount_to
-        converted = amount / rate_record.rate
+        # Single query fetching all rates needed
+        stmt = select(FxRate).where(or_(*conditions)).order_by(
+            FxRate.base, FxRate.quote, FxRate.date.desc()
+        )
 
-    # Return with or without rate info
-    if return_rate_info:
-        return converted, rate_record.date, backward_fill_applied
-    return converted
+        result = await session.execute(stmt)
+        all_rates = result.scalars().all()
+
+        # Build lookup dictionary: {(base, quote): [rates_sorted_desc_by_date]}
+        rates_lookup = {}
+        for rate in all_rates:
+            pair_key = (rate.base, rate.quote)
+            if pair_key not in rates_lookup:
+                rates_lookup[pair_key] = []
+            rates_lookup[pair_key].append(rate)
+    else:
+        rates_lookup = {}
+
+    # Process conversions using cached rates
+    results = []
+    errors = []
+
+    for meta in conversion_metadata:
+        idx = meta['idx']
+
+        try:
+            # Identity conversion
+            if meta['identity']:
+                results.append((meta['amount'], meta['date'], False))
+                continue
+
+            # Find appropriate rate for this conversion
+            pair_key = (meta['base'], meta['quote'])
+            pair_rates = rates_lookup.get(pair_key, [])
+
+            # Find first rate <= requested date (backward-fill)
+            rate_record = None
+            for rate in pair_rates:
+                if rate.date <= meta['date']:
+                    rate_record = rate
+                    break
+
+            if not rate_record:
+                # No rate found at all for this pair
+                error_msg = (
+                    f"No FX rate found for {meta['base']}/{meta['quote']} on or before {meta['date']}. "
+                    f"Please sync rates using POST /api/v1/fx/sync"
+                )
+                if raise_on_error:
+                    raise RateNotFoundError(f"Conversion failed at index {idx}: {error_msg}")
+                else:
+                    errors.append(f"Conversion {idx}: {error_msg}")
+                    results.append(None)
+                    continue
+
+            # Track if backward-fill was applied
+            backward_fill_applied = rate_record.date < meta['date']
+
+            # Log if using backward-fill
+            if backward_fill_applied:
+                days_back = (meta['date'] - rate_record.date).days
+                logger.info(
+                    f"Using backward-fill: rate for {meta['base']}/{meta['quote']} from {rate_record.date} "
+                    f"({days_back} days back, requested: {meta['date']})"
+                )
+
+            # Apply conversion
+            if meta['direct']:
+                converted = meta['amount'] * rate_record.rate
+            else:
+                converted = meta['amount'] / rate_record.rate
+
+            results.append((converted, rate_record.date, backward_fill_applied))
+
+        except RateNotFoundError:
+            if raise_on_error:
+                raise
+            # Already appended error above
+        except Exception as e:
+            error_msg = f"Conversion {idx} failed: {str(e)}"
+            if raise_on_error:
+                raise RateNotFoundError(error_msg) from e
+            else:
+                errors.append(error_msg)
+                results.append(None)
+
+    return (results, errors)
+
+
+async def upsert_rates_bulk(
+    session,  # AsyncSession
+    rates: list[tuple[date, str, str, Decimal, str]]  # [(date, base, quote, rate, source), ...]
+    ) -> list[tuple[bool, str]]:  # [(success, action), ...]
+    """
+    Insert or update multiple FX rates in a single batch operation.
+
+    Args:
+        session: Database session
+        rates: List of (date, base, quote, rate, source) tuples
+
+    Returns:
+        List of (success, action) tuples where action is 'inserted' or 'updated'
+        Results are in the same order as input rates
+
+    Raises:
+        ValueError: If validation fails for any rate
+    """
+    from sqlalchemy.dialects.sqlite import insert
+    from sqlalchemy import func, select as sql_select, or_, and_
+
+    if not rates:
+        return []
+
+    # Validate and normalize all rates first
+    normalized_rates = []
+    for rate_date, base, quote, rate_value, source in rates:
+        base = base.upper()
+        quote = quote.upper()
+
+        if base == quote:
+            raise ValueError(f"Base and quote must be different (got {base} == {quote})")
+
+        if rate_value <= 0:
+            raise ValueError(f"Rate must be positive (got {rate_value})")
+
+        # Ensure alphabetical ordering
+        if base > quote:
+            base, quote = quote, base
+            rate_value = Decimal("1") / rate_value
+
+        normalized_rates.append((rate_date, base, quote, rate_value, source))
+
+    # OPTIMIZATION: Single batch query to check all existing rates
+    conditions = []
+    for rate_date, base, quote, _, _ in normalized_rates:
+        conditions.append(
+            and_(
+                FxRate.date == rate_date,
+                FxRate.base == base,
+                FxRate.quote == quote
+            )
+        )
+
+    # Fetch all existing rates in one query
+    stmt = sql_select(FxRate).where(or_(*conditions))
+    result = await session.execute(stmt)
+    existing_rates = result.scalars().all()
+
+    # Build lookup set for existing rates
+    existing_keys = {
+        (rate.date, rate.base, rate.quote)
+        for rate in existing_rates
+    }
+
+    # OPTIMIZATION: Prepare results tracking (before batch insert)
+    results = []
+    for rate_date, base, quote, rate_value, source in normalized_rates:
+        key = (rate_date, base, quote)
+        action = "updated" if key in existing_keys else "inserted"
+        results.append((True, action))
+
+    # OPTIMIZATION: Single batch INSERT with multiple VALUES
+    # Prepare all values for batch insert
+    values_list = [
+        {
+            'date': rate_date,
+            'base': base,
+            'quote': quote,
+            'rate': rate_value,
+            'source': source,
+            'fetched_at': func.current_timestamp()
+        }
+        for rate_date, base, quote, rate_value, source in normalized_rates
+    ]
+
+    # Single batch INSERT statement (all rates at once)
+    batch_insert = insert(FxRate).values(values_list)
+
+    # On conflict: update all fields for each row
+    batch_insert = batch_insert.on_conflict_do_update(
+        index_elements=['date', 'base', 'quote'],
+        set_={
+            'rate': batch_insert.excluded.rate,
+            'source': batch_insert.excluded.source,
+            'fetched_at': func.current_timestamp()
+        }
+    )
+
+    # Execute single batch statement (replaces N individual executes)
+    await session.execute(batch_insert)
+
+    # Single commit for all upserts
+    await session.commit()
+    return results
+
+
