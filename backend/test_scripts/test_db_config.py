@@ -63,3 +63,66 @@ def is_test_database_configured() -> bool:
     db_url = os.environ.get("DATABASE_URL", "")
     return db_url == TEST_DATABASE_URL
 
+
+def verify_test_database() -> tuple[bool, str]:
+    """
+    Verify that we're using the test database.
+
+    Returns:
+        tuple: (is_test_db, database_url)
+    """
+    from backend.app.config import get_settings
+    settings = get_settings()
+    db_url = settings.DATABASE_URL
+
+    is_test = "test_app.db" in db_url
+    return is_test, db_url
+
+
+def initialize_test_database(print_func=None):
+    """
+    Initialize test database with safety checks.
+
+    This function:
+    1. Ensures database directory exists
+    2. Verifies we're using test database (not production)
+    3. Creates database schema if needed (via ensure_database_exists)
+    4. Prints confirmation message
+
+    Args:
+        print_func: Optional print function (e.g., print_info from test_utils)
+                   If None, uses standard print
+
+    Returns:
+        bool: True if initialization successful and using test DB, False otherwise
+
+    Example:
+        from backend.test_scripts.test_db_config import initialize_test_database
+        from backend.test_scripts.test_utils import print_info
+
+        if not initialize_test_database(print_info):
+            sys.exit(1)
+    """
+    if print_func is None:
+        print_func = print
+
+    # Verify we're using test database
+    is_test, db_url = verify_test_database()
+
+    if not is_test:
+        print_func(f"⚠️  DANGER: Not using test database!")
+        print_func(f"Current DATABASE_URL: {db_url}")
+        print_func(f"Expected to contain: test_app.db")
+        print_func(f"Aborting for safety - tests should only modify test database.")
+        return False
+
+    # Print confirmation
+    print_func(f"✅ Using test database: {db_url}")
+
+    # Ensure database exists and is migrated
+    from backend.app.main import ensure_database_exists
+    ensure_database_exists()
+
+    return True
+
+

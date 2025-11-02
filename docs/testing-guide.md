@@ -104,6 +104,12 @@ Results: 2/2 tests passed
 
 These tests verify the database structure and data persistence.
 
+**🔒 Safety First**: All database tests display which database they're using at startup:
+```
+✅ Using test database: sqlite:///./backend/data/sqlite/test_app.db
+```
+This verification prevents accidental modification of production data. If a test tries to use the production database, it will abort immediately.
+
 #### ✅ Test 2: Database Creation
 
 ```bash
@@ -263,31 +269,45 @@ python test_runner.py -v services fx
 ```
 
 **What this test does:**
+- **Automatically inserts mock FX rates** for 3 dates (today, yesterday, 7 days ago)
+- **Verifies test database usage** (prevents accidental production DB modification)
 - Tests identity conversion (EUR→EUR)
 - Tests direct conversion using stored rate (EUR→USD)
 - Tests inverse conversion using 1/rate (USD→EUR)
 - Tests roundtrip conversion (EUR→USD→EUR ≈ original)
-- Tests cross-currency conversion via intermediate (USD→GBP via EUR)
+- Tests conversion with different dates (verifies date handling)
 - Tests forward-fill logic (uses most recent rate if date missing)
 - Tests error handling (missing rate raises exception)
 
 **Expected result:**
 ```
+✅ ✓ Using test database: sqlite:///./backend/data/sqlite/test_app.db
+ℹ️  Setting up mock FX rates for testing...
+✅ Mock FX rates ready (12 rates across 3 dates)
+
 ✅ Identity Conversion
 ✅ Direct Conversion (EUR→USD)
 ✅ Inverse Conversion (USD→EUR)
 ✅ Roundtrip Conversion
-✅ Cross-Currency Conversion
+✅ Different Dates
 ✅ Forward-Fill Logic
 ✅ Missing Rate Error
 Results: 7/7 tests passed
 ```
 
 **What you learned:**
-- Conversion service handles multiple scenarios
+- Test automatically sets up required mock data (no prerequisites!)
+- **Safety first**: Explicitly verifies test DB before making changes
+- Uses UPSERT so it's safe to run multiple times
+- Creates rates for multiple dates to test date handling
+- Conversion service handles identity, direct, and inverse conversions
+- System correctly picks rates based on date
 - System uses forward-fill for missing dates (weekend/holidays)
-- Cross-currency conversions work via EUR as intermediate
 - Error handling is robust
+- Cross-currency conversions (USD→GBP) will be handled by future FX plugins
+
+**💡 No prerequisites:** This test inserts its own mock data, so it works even on an empty database!  
+**🔒 Safe:** Explicit check ensures only test_app.db is modified, never production DB!
 
 ---
 

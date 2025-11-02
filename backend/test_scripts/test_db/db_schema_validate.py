@@ -16,14 +16,13 @@ Usage:
 """
 
 # Setup test database BEFORE importing app modules
-from backend.test_scripts.test_db_config import setup_test_database
+from backend.test_scripts.test_db_config import setup_test_database, initialize_test_database
 
 setup_test_database()
 
 from sqlalchemy import inspect, text
 
 from backend.app.db import sync_engine as engine  # Use sync engine for validation script
-from backend.app.main import ensure_database_exists
 
 
 def test_tables_exist():
@@ -204,12 +203,15 @@ def test_check_constraints():
 
 def main():
     """Run all validation tests."""
-    # Ensure database exists before testing
-    ensure_database_exists()
-
     print("=" * 70)
     print("LibreFolio Database Schema Validation")
     print("=" * 70)
+    print()
+
+    # Initialize database with safety checks
+    if not initialize_test_database():
+        return 1
+
     print()
 
     tests = [

@@ -25,7 +25,7 @@ Usage:
 """
 
 # Setup test database BEFORE importing app modules
-from backend.test_scripts.test_db_config import setup_test_database
+from backend.test_scripts.test_db_config import setup_test_database, initialize_test_database
 
 setup_test_database()
 
@@ -53,7 +53,6 @@ from backend.app.db import (
     TransactionType,
     CashMovementType,
     )
-from backend.app.main import ensure_database_exists
 
 
 def populate_brokers(session: Session):
@@ -666,8 +665,11 @@ def main():
             print(f"     python test_runner.py db populate --force")
             return 1
 
-    # Create fresh database
-    ensure_database_exists()
+    # Create fresh database with safety checks
+    print("\n🔧 Initializing database...")
+    if not initialize_test_database():
+        return 1
+    print()
 
     with Session(engine) as session:
         try:

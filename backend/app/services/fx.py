@@ -169,6 +169,17 @@ async def ensure_rates(
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
+
+                # ECB returns empty body (Content-Length: 0) when no data available
+                # This is normal for weekends/holidays - not an error
+                if not response.text:
+                    logger.info(
+                        f"No FX rates available for {currency} ({start_date} to {end_date}). "
+                        f"This is normal for weekends/holidays when ECB doesn't publish rates."
+                    )
+                    continue  # Skip this currency, move to next one
+
+                # Parse JSON (at this point we know body is not empty)
                 data = response.json()
 
                 # Parse observations
@@ -258,9 +269,15 @@ async def ensure_rates(
         except httpx.HTTPError as e:
             logger.error(f"Failed to fetch FX rates for {currency}: {e}")
             raise FXServiceError(f"ECB API error for {currency}: {e}") from e
-        except (KeyError, ValueError, IndexError) as e:
-            logger.error(f"Failed to parse ECB response for {currency}: {e}")
-            raise FXServiceError(f"Invalid ECB response for {currency}: {e}") from e
+        except ValueError as e:
+            # This catches json.JSONDecodeError (which is a subclass of ValueError)
+            # Should not happen now that we check for empty body, but kept as safety net
+            logger.error(f"Failed to parse ECB JSON response for {currency}: {e}")
+            logger.error(f"Response body preview: {response.text[:500] if 'response' in locals() else 'N/A'}")
+            raise FXServiceError(f"Invalid JSON response from ECB for {currency}: {e}") from e
+        except (KeyError, IndexError) as e:
+            logger.error(f"Failed to parse ECB response structure for {currency}: {e}")
+            raise FXServiceError(f"Unexpected ECB response format for {currency}: {e}") from e
 
     return total_changed_count
 

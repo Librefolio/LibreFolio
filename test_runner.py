@@ -316,11 +316,14 @@ def db_all(verbose: bool = False) -> bool:
 def services_fx_conversion(verbose: bool = False) -> bool:
     """
     Test FX conversion service logic.
-    Tests currency conversion algorithms (direct, inverse, cross-currency, forward-fill).
+    Tests currency conversion algorithms (direct, inverse, roundtrip, different dates, forward-fill).
+    Mock FX rates are automatically inserted across multiple dates.
     """
     print_section("Services: FX Conversion Logic")
     print_info("Testing: backend/app/services/fx.py convert() function")
-    print_info("Scenarios: Identity, Direct, Inverse, Roundtrip, Cross-currency, Forward-fill")
+    print_info("Scenarios: Identity, Direct, Inverse, Roundtrip, Different Dates, Forward-fill")
+    print_info("Safety: Verifies test database usage before modifying data")
+    print_info("Note: Mock FX rates automatically inserted for 3 dates")
 
     return run_command(
         ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_fx_conversion"],

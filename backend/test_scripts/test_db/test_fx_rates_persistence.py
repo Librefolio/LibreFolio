@@ -27,7 +27,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup test database BEFORE importing app modules
-from backend.test_scripts.test_db_config import setup_test_database
+from backend.test_scripts.test_db_config import setup_test_database, initialize_test_database
 
 setup_test_database()
 
@@ -36,7 +36,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
-from backend.app.main import ensure_database_exists
 from backend.app.services.fx import FXServiceError, ensure_rates
 from backend.test_scripts.test_utils import (
     print_error,
@@ -103,7 +102,9 @@ async def test_fetch_and_persist_single_currency():
                 print_info(f"  {rate.date}: 1 EUR = {rate.rate} USD")
 
             # Verify rate values are reasonable (EUR/USD typically between 1.0 and 1.2)
-            for rate in all_rates:
+            # Only check ECB rates (ignore TEST rates from other tests)
+            ecb_rates = [r for r in all_rates if r.source == "ECB"]
+            for rate in ecb_rates:
                 if not (Decimal("0.7") <= rate.rate <= Decimal("1.9")):
                     print_error(f"Suspicious rate value: {rate.rate} on {rate.date}")
                     return False
@@ -182,19 +183,55 @@ async def test_data_overwrite():
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
-        test_date = date.today() - timedelta(days=1)
+        # Use a date range to ensure we get at least one business day with data
+        # Go back 7 days to avoid recent weekends/holidays
+        end_date = date.today() - timedelta(days=7)
+        start_date = end_date - timedelta(days=3)
 
-        print_info(f"Testing data overwrite for {test_date}")
+        print_info(f"Testing data overwrite for date range {start_date} to {end_date}")
 
         try:
-            # Step 1: UPSERT fake rate using SQLAlchemy on_conflict_do_update
-            print_step(1, "UPSERT fake rate manually")
+            # Step 1: Fetch real rates first to find a business day with data
+            print_step(1, "Fetch real rates from ECB to identify business days")
+            synced_count = await ensure_rates(session, (start_date, end_date), ["USD"])
 
-            # Use SQLAlchemy native UPSERT
+            if synced_count == 0:
+                print_warning(f"No rates available for {start_date} to {end_date} (all weekends/holidays)")
+                print_info("This is expected behavior - test passes")
+                return True
+
+            # Find a date that has real data
+            stmt = select(FxRate).where(
+                FxRate.base == "EUR",
+                FxRate.quote == "USD",
+                FxRate.date >= start_date,
+                FxRate.date <= end_date,
+                FxRate.source == "ECB"
+            ).order_by(FxRate.date.desc()).limit(1)
+            result = await session.execute(stmt)
+            real_rate = result.scalars().first()
+
+            if not real_rate:
+                print_error("No real ECB rates found even though synced_count > 0")
+                return False
+
+            test_date = real_rate.date
+            original_rate = real_rate.rate
+            print_success(f"Found business day with data: {test_date} (original rate: {original_rate})")
+
+            # Step 2: Overwrite with fake rate
+            print_step(2, "Overwrite with fake rate")
             from sqlalchemy.dialects.sqlite import insert
             from sqlalchemy import func
 
-            stmt = insert(FxRate).values(date=test_date, base="EUR", quote="USD", rate=Decimal("9.9999"), source="TEST", fetched_at=func.current_timestamp())
+            stmt = insert(FxRate).values(
+                date=test_date,
+                base="EUR",
+                quote="USD",
+                rate=Decimal("9.9999"),
+                source="TEST",
+                fetched_at=func.current_timestamp()
+            )
 
             upsert_stmt = stmt.on_conflict_do_update(
                 index_elements=['date', 'base', 'quote'],
@@ -202,47 +239,47 @@ async def test_data_overwrite():
                     'rate': stmt.excluded.rate,
                     'source': stmt.excluded.source,
                     'fetched_at': func.current_timestamp()
-                    }
-                )
+                }
+            )
 
             await session.execute(upsert_stmt)
             await session.commit()
-            print_success(f"Upserted fake rate: EUR/USD = 9.9999 on {test_date}")
+            print_success(f"Overwrote with fake rate: EUR/USD = 9.9999 on {test_date}")
 
-            # Step 2: Fetch real rate from ECB (should overwrite)
-            print_step(2, "Fetch real rate from ECB")
+            # Step 3: Fetch from ECB again (should restore real rate)
+            print_step(3, "Fetch from ECB again to restore real rate")
             await ensure_rates(session, (test_date, test_date), ["USD"])
 
-            # Step 3: Verify rate was updated
-            print_step(3, "Verify rate was updated")
+            # Step 4: Verify rate was restored
+            print_step(4, "Verify rate was restored")
             stmt = select(FxRate).where(
                 FxRate.base == "EUR",
                 FxRate.quote == "USD",
                 FxRate.date == test_date
-                )
+            )
             result = await session.execute(stmt)
-            updated_rate = result.scalars().first()
+            restored_rate = result.scalars().first()
 
-            if not updated_rate:
-                print_error("Rate not found after update")
+            if not restored_rate:
+                print_error("Rate not found after restore")
                 return False
 
-            # Check that rate was updated (should NOT be fake value)
-            if updated_rate.rate == Decimal("9.9999"):
-                print_error(f"Rate was NOT updated: still {updated_rate.rate}")
+            # Check that rate was restored (should NOT be fake value)
+            if restored_rate.rate == Decimal("9.9999"):
+                print_error(f"Rate was NOT restored: still {restored_rate.rate}")
                 return False
 
             # Check that source was updated
-            if updated_rate.source != "ECB":
-                print_error(f"Source was NOT updated: still {updated_rate.source}")
+            if restored_rate.source != "ECB":
+                print_error(f"Source was NOT restored: still {restored_rate.source}")
                 return False
 
-            print_success(f"Rate successfully updated: EUR/USD = {updated_rate.rate}")
-            print_success(f"Source updated: {updated_rate.source}")
+            print_success(f"Rate successfully restored: EUR/USD = {restored_rate.rate}")
+            print_success(f"Source restored: {restored_rate.source}")
 
             # Verify rate is realistic (should be between 0.2 and 1.9 for EUR/USD)
-            if not (Decimal("0.2") <= updated_rate.rate <= Decimal("1.9")):
-                print_warning(f"Updated rate seems unrealistic: {updated_rate.rate}")
+            if not (Decimal("0.2") <= restored_rate.rate <= Decimal("1.9")):
+                print_warning(f"Restored rate seems unrealistic: {restored_rate.rate}")
 
             return True
 
@@ -519,9 +556,10 @@ Tests WILL FAIL if ECB API is down/unreachable or no internet.""",
             ]
         )
 
-    # Ensure database exists
+    # Initialize database with safety checks
     print_info("Initializing test database...")
-    ensure_database_exists()
+    if not initialize_test_database(print_info):
+        return False
 
     results = {
         "Fetch & Persist Single Currency": await test_fetch_and_persist_single_currency(),

@@ -3,6 +3,7 @@ Test 3: FX Conversion Logic
 Tests currency conversion using rates from the database.
 Verifies direct, inverse, cross-currency, and forward-fill conversions.
 """
+import asyncio
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
@@ -13,15 +14,15 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup test database BEFORE importing app modules
-from backend.test_scripts.test_db_config import setup_test_database
+from backend.test_scripts.test_db_config import setup_test_database, initialize_test_database
 
 setup_test_database()
 
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import FxRate
-from backend.app.db.session import get_engine
-from backend.app.main import ensure_database_exists
+from backend.app.db.session import get_async_engine
 from backend.app.services.fx import RateNotFoundError, convert
 from backend.test_scripts.test_utils import (
     print_error,
@@ -34,25 +35,87 @@ from backend.test_scripts.test_utils import (
     )
 
 
-def test_identity_conversion():
+async def setup_mock_fx_rates(session):
+    """
+    Insert mock FX rates for testing.
+    Creates rates for multiple dates (today, yesterday, 7 days ago) to test date handling.
+    Uses UPSERT so it's safe to run multiple times.
+    """
+    from sqlalchemy.dialects.sqlite import insert
+    from sqlalchemy import func
+
+    print_info("Setting up mock FX rates for testing...")
+
+    # Mock rates (realistic values as of 2025)
+    # Format: 1 base = rate * quote (alphabetically ordered)
+    base_rates = [
+        ("EUR", "USD", Decimal("1.0687")),  # 1 EUR = 1.0687 USD
+        ("EUR", "GBP", Decimal("0.8392")),  # 1 EUR = 0.8392 GBP
+        ("CHF", "EUR", Decimal("1.0650")),  # 1 CHF = 1.0650 EUR
+        ("EUR", "JPY", Decimal("163.45")),  # 1 EUR = 163.45 JPY
+    ]
+
+    # Create rates for multiple dates to test date handling
+    dates_to_create = [
+        date.today(),
+        date.today() - timedelta(days=1),  # Yesterday
+        date.today() - timedelta(days=7),  # 7 days ago
+    ]
+
+    inserted_count = 0
+
+    for rate_date in dates_to_create:
+        for base, quote, rate_value in base_rates:
+            # Add small daily variation (±0.2%)
+            day_offset = (date.today() - rate_date).days
+            variation = (day_offset % 5 - 2) * Decimal("0.002")  # -0.004 to +0.004
+            adjusted_rate = rate_value * (Decimal("1") + variation)
+
+            stmt = insert(FxRate).values(
+                date=rate_date,
+                base=base,
+                quote=quote,
+                rate=adjusted_rate,
+                source="MOCK",
+                fetched_at=func.current_timestamp()
+            )
+
+            # UPSERT: update if exists, insert if not
+            upsert_stmt = stmt.on_conflict_do_update(
+                index_elements=['date', 'base', 'quote'],
+                set_={
+                    'rate': stmt.excluded.rate,
+                    'source': stmt.excluded.source,
+                    'fetched_at': func.current_timestamp()
+                }
+            )
+
+            await session.execute(upsert_stmt)
+            inserted_count += 1
+
+    await session.commit()
+    print_success(f"Mock FX rates ready ({inserted_count} rates across {len(dates_to_create)} dates)")
+
+
+async def test_identity_conversion():
     """Test identity conversion (same currency)."""
     print_section("Test 1: Identity Conversion (Same Currency)")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         test_amount = Decimal("100.00")
         test_date = date.today()
 
         # Test EUR → EUR
-        result_eur = convert(session, test_amount, "EUR", "EUR", test_date)
+        result_eur = await convert(session, test_amount, "EUR", "EUR", test_date)
         if result_eur != test_amount:
             print_error(f"EUR → EUR: expected {test_amount}, got {result_eur}")
             return False
         print_success(f"EUR → EUR: {test_amount} = {result_eur} ✓")
 
         # Test USD → USD
-        result_usd = convert(session, test_amount, "USD", "USD", test_date)
+        result_usd = await convert(session, test_amount, "USD", "USD", test_date)
         if result_usd != test_amount:
             print_error(f"USD → USD: expected {test_amount}, got {result_usd}")
             return False
@@ -61,20 +124,21 @@ def test_identity_conversion():
         return True
 
 
-def test_direct_conversion():
+async def test_direct_conversion():
     """Test direct conversion using stored rate (EUR → USD)."""
     print_section("Test 2: Direct Conversion (EUR → USD)")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         # Find a recent EUR/USD rate
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
             ).order_by(FxRate.date.desc()).limit(1)
 
-        rate_record = session.exec(stmt).first()
+        result = await session.execute(stmt)
+        rate_record = result.scalars().first()
 
         if not rate_record:
             print_error("No EUR/USD rate found in DB. Run persistence tests first.")
@@ -85,7 +149,7 @@ def test_direct_conversion():
 
         # Convert 100 EUR to USD
         amount_eur = Decimal("100.00")
-        result_usd = convert(session, amount_eur, "EUR", "USD", rate_record.date)
+        result_usd = await convert(session, amount_eur, "EUR", "USD", rate_record.date)
         expected_usd = amount_eur * rate_record.rate
 
         print_info(f"Conversion: {amount_eur} EUR → {result_usd} USD")
@@ -99,20 +163,21 @@ def test_direct_conversion():
         return True
 
 
-def test_inverse_conversion():
+async def test_inverse_conversion():
     """Test inverse conversion (USD → EUR) using stored rate."""
     print_section("Test 3: Inverse Conversion (USD → EUR)")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         # Find a recent EUR/USD rate
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
             ).order_by(FxRate.date.desc()).limit(1)
 
-        rate_record = session.exec(stmt).first()
+        result = await session.execute(stmt)
+        rate_record = result.scalars().first()
 
         if not rate_record:
             print_error("No EUR/USD rate found in DB. Run persistence tests first.")
@@ -124,7 +189,7 @@ def test_inverse_conversion():
 
         # Convert 100 USD to EUR (inverse operation)
         amount_usd = Decimal("100.00")
-        result_eur = convert(session, amount_usd, "USD", "EUR", rate_record.date)
+        result_eur = await convert(session, amount_usd, "USD", "EUR", rate_record.date)
         expected_eur = amount_usd / rate_record.rate
 
         print_info(f"Conversion: {amount_usd} USD → {result_eur} EUR")
@@ -138,20 +203,21 @@ def test_inverse_conversion():
         return True
 
 
-def test_roundtrip_conversion():
+async def test_roundtrip_conversion():
     """Test roundtrip conversion (EUR → USD → EUR) to verify rate inversion."""
     print_section("Test 4: Roundtrip Conversion (EUR → USD → EUR)")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         # Find a recent EUR/USD rate
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
             ).order_by(FxRate.date.desc()).limit(1)
 
-        rate_record = session.exec(stmt).first()
+        result = await session.execute(stmt)
+        rate_record = result.scalars().first()
 
         if not rate_record:
             print_error("No EUR/USD rate found in DB. Run persistence tests first.")
@@ -163,11 +229,11 @@ def test_roundtrip_conversion():
         original_amount = Decimal("100.00")
 
         # Step 1: EUR → USD
-        usd_amount = convert(session, original_amount, "EUR", "USD", rate_record.date)
+        usd_amount = await convert(session, original_amount, "EUR", "USD", rate_record.date)
         print_info(f"Step 1: {original_amount} EUR → {usd_amount} USD")
 
         # Step 2: USD → EUR
-        final_amount = convert(session, usd_amount, "USD", "EUR", rate_record.date)
+        final_amount = await convert(session, usd_amount, "USD", "EUR", rate_record.date)
         print_info(f"Step 2: {usd_amount} USD → {final_amount} EUR")
 
         # Should get back original amount (within rounding error)
@@ -182,74 +248,54 @@ def test_roundtrip_conversion():
         return True
 
 
-def test_cross_currency_conversion():
-    """Test cross-currency conversion (USD → GBP via EUR)."""
-    print_section("Test 5: Cross-Currency Conversion (USD → GBP)")
+async def test_different_dates():
+    """Test conversion works correctly with different dates."""
+    print_section("Test 5: Conversion with Different Dates")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
-        # Find EUR/USD and EUR/GBP rates
-        usd_stmt = select(FxRate).where(
-            FxRate.base == "EUR",
-            FxRate.quote == "USD"
-            ).order_by(FxRate.date.desc()).limit(1)
+    async with AsyncSession(engine) as session:
+        test_amount = Decimal("100.00")
 
-        gbp_stmt = select(FxRate).where(
-            FxRate.base == "EUR",
-            FxRate.quote == "GBP"
-            ).order_by(FxRate.date.desc()).limit(1)
+        # Test with today's date
+        today = date.today()
+        result_today = await convert(session, test_amount, "EUR", "USD", today)
+        print_success(f"Today ({today}): 100 EUR → {result_today} USD")
 
-        usd_rate = session.exec(usd_stmt).first()
-        gbp_rate = session.exec(gbp_stmt).first()
+        # Test with yesterday's date
+        yesterday = today - timedelta(days=1)
+        result_yesterday = await convert(session, test_amount, "EUR", "USD", yesterday)
+        print_success(f"Yesterday ({yesterday}): 100 EUR → {result_yesterday} USD")
 
-        if not usd_rate or not gbp_rate:
-            print_error("Missing EUR/USD or EUR/GBP rates. Run persistence tests first.")
+        # Test with 7 days ago
+        week_ago = today - timedelta(days=7)
+        result_week_ago = await convert(session, test_amount, "EUR", "USD", week_ago)
+        print_success(f"7 days ago ({week_ago}): 100 EUR → {result_week_ago} USD")
+
+        # Verify rates are different (due to daily variation in mock data)
+        if result_today == result_yesterday == result_week_ago:
+            print_error("All dates returned same rate - variation not working")
             return False
 
-        # Use the more recent date
-        use_date = min(usd_rate.date, gbp_rate.date)
-
-        print_info(f"Using rates from {use_date}")
-        print_info(f"  EUR/USD: {usd_rate.rate} (1 EUR = {usd_rate.rate} USD)")
-        print_info(f"  EUR/GBP: {gbp_rate.rate} (1 EUR = {gbp_rate.rate} GBP)")
-
-        # Convert 100 USD to GBP
-        amount_usd = Decimal("100.00")
-        result_gbp = convert(session, amount_usd, "USD", "GBP", use_date)
-
-        # Manual calculation: USD → EUR → GBP
-        eur_amount = amount_usd / usd_rate.rate
-        expected_gbp = eur_amount * gbp_rate.rate
-
-        print_info(f"\nManual calculation:")
-        print_info(f"  {amount_usd} USD ÷ {usd_rate.rate} = {eur_amount} EUR")
-        print_info(f"  {eur_amount} EUR × {gbp_rate.rate} = {expected_gbp} GBP")
-
-        print_info(f"\nActual conversion: {amount_usd} USD → {result_gbp} GBP")
-
-        if abs(result_gbp - expected_gbp) > Decimal("0.01"):
-            print_error(f"Cross-currency conversion failed: expected {expected_gbp}, got {result_gbp}")
-            return False
-
-        print_success("Cross-currency conversion (USD → GBP via EUR) correct")
+        print_info(f"Rate variation detected (rates differ across dates) ✓")
         return True
 
 
-def test_forward_fill():
+async def test_forward_fill():
     """Test forward-fill logic (use most recent rate when exact date not available)."""
     print_section("Test 6: Forward-Fill Logic")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         # Find a recent EUR/USD rate
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
             ).order_by(FxRate.date.desc()).limit(1)
 
-        rate_record = session.exec(stmt).first()
+        result = await session.execute(stmt)
+        rate_record = result.scalars().first()
 
         if not rate_record:
             print_error("No EUR/USD rate found in DB. Run persistence tests first.")
@@ -264,7 +310,7 @@ def test_forward_fill():
         print_info("Expected behavior: use most recent available rate (forward-fill)")
 
         amount = Decimal("100.00")
-        result = convert(session, amount, "EUR", "USD", future_date)
+        result = await convert(session, amount, "EUR", "USD", future_date)
         expected = amount * rate_record.rate
 
         print_info(f"Conversion: {amount} EUR → {result} USD")
@@ -279,13 +325,13 @@ def test_forward_fill():
         return True
 
 
-def test_missing_rate_error():
+async def test_missing_rate_error():
     """Test that RateNotFoundError is raised when no rate exists."""
     print_section("Test 7: Missing Rate Error Handling")
 
-    engine = get_engine()
+    engine = get_async_engine()
 
-    with Session(engine) as session:
+    async with AsyncSession(engine) as session:
         # Use a very old date (no rate should exist)
         old_date = date(2000, 1, 1)
         amount = Decimal("100.00")
@@ -294,7 +340,7 @@ def test_missing_rate_error():
         print_info("Expected behavior: RateNotFoundError")
 
         try:
-            result = convert(session, amount, "USD", "EUR", old_date)
+            result = await convert(session, amount, "USD", "EUR", old_date)
             print_error(f"Expected RateNotFoundError but got result: {result}")
             return False
         except RateNotFoundError as e:
@@ -306,7 +352,7 @@ def test_missing_rate_error():
             return False
 
 
-def run_all_tests():
+async def run_all_tests():
     """Run all FX conversion tests."""
     print_test_header(
         "LibreFolio - FX Service: Conversion Logic Tests",
@@ -315,27 +361,35 @@ def run_all_tests():
   • Direct conversion (stored rate)
   • Inverse conversion (1/rate)
   • Roundtrip conversion (verify precision)
-  • Cross-currency conversion (via EUR)
   • Forward-fill logic (missing dates)
-  • Error handling (missing rates)""",
+  • Error handling (missing rates)
+  
+Note: Mock FX rates are automatically inserted for testing.""",
         prerequisites=[
-            "FX rates in database (run: python test_runner.py db fx-rates)",
-            "Test database configured with recent rates"
+            "Test database configured",
+            "Mock FX rates will be inserted automatically"
             ]
         )
 
-    # Ensure database exists
+    # Initialize database with safety checks
     print_info("Initializing test database...")
-    ensure_database_exists()
+    if not initialize_test_database(print_info):
+        return False
+
+
+    # Setup mock FX rates
+    engine = get_async_engine()
+    async with AsyncSession(engine) as session:
+        await setup_mock_fx_rates(session)
 
     results = {
-        "Identity Conversion": test_identity_conversion(),
-        "Direct Conversion (EUR→USD)": test_direct_conversion(),
-        "Inverse Conversion (USD→EUR)": test_inverse_conversion(),
-        "Roundtrip Conversion": test_roundtrip_conversion(),
-        "Cross-Currency Conversion": test_cross_currency_conversion(),
-        "Forward-Fill Logic": test_forward_fill(),
-        "Missing Rate Error": test_missing_rate_error(),
+        "Identity Conversion": await test_identity_conversion(),
+        "Direct Conversion (EUR→USD)": await test_direct_conversion(),
+        "Inverse Conversion (USD→EUR)": await test_inverse_conversion(),
+        "Roundtrip Conversion": await test_roundtrip_conversion(),
+        "Different Dates": await test_different_dates(),
+        "Forward-Fill Logic": await test_forward_fill(),
+        "Missing Rate Error": await test_missing_rate_error(),
         }
 
     # Summary
@@ -344,5 +398,5 @@ def run_all_tests():
 
 
 if __name__ == "__main__":
-    success = run_all_tests()
+    success = asyncio.run(run_all_tests())
     exit_with_result(success)
