@@ -287,11 +287,13 @@ async def convert(
     amount: Decimal,
     from_currency: str,
     to_currency: str,
-    as_of_date: date
-    ) -> Decimal:
+    as_of_date: date,
+    return_rate_info: bool = False
+    ) -> Decimal | tuple[Decimal, date, bool]:
     """
     Convert an amount from one currency to another using FX rates.
-    Uses forward-fill logic: if rate for exact date is not found, uses the most recent rate before that date.
+    Uses unlimited backward-fill: if rate for exact date is not found,
+    uses the most recent rate available (no time limit).
 
     Rates are stored alphabetically (base < quote): 1 base = rate * quote
 
@@ -301,15 +303,19 @@ async def convert(
         from_currency: Source currency code (ISO 4217)
         to_currency: Target currency code (ISO 4217)
         as_of_date: Date for which to use the FX rate
+        return_rate_info: If True, return (amount, rate_date, backward_fill_applied)
 
     Returns:
-        Converted amount
+        If return_rate_info=False: Converted amount
+        If return_rate_info=True: Tuple of (converted_amount, rate_date, backward_fill_applied)
 
     Raises:
-        RateNotFoundError: If no rate is found (even with forward-fill)
+        RateNotFoundError: If no rate is found at all for this currency pair
     """
     # Identity conversion
     if from_currency == to_currency:
+        if return_rate_info:
+            return amount, as_of_date, False
         return amount
 
     # Determine alphabetical ordering
@@ -322,7 +328,7 @@ async def convert(
         base, quote = to_currency, from_currency
         direct = False
 
-    # Query for rate with forward-fill
+    # Query for rate with unlimited backward-fill
     stmt = select(FxRate).where(
         FxRate.base == base,
         FxRate.quote == quote,
@@ -331,23 +337,35 @@ async def convert(
 
     result = await session.execute(stmt)
     rate_record = result.scalars().first()
-    if not rate_record:
-        raise RateNotFoundError(
-            f"No FX rate found for {base}/{quote} on or before {as_of_date}"
-            )
 
-    # Log if using forward-fill
-    if rate_record.date < as_of_date:
-        logger.warning(
-            f"Using forward-fill: rate for {base}/{quote} from {rate_record.date} "
-            f"(requested: {as_of_date})"
+    if not rate_record:
+        # No rate found at all for this pair
+        raise RateNotFoundError(
+            f"No FX rate found for {base}/{quote} on or before {as_of_date}. "
+            f"Please sync rates using POST /api/v1/fx/sync"
+        )
+
+    # Track if backward-fill was applied
+    backward_fill_applied = rate_record.date < as_of_date
+
+    # Log if using backward-fill (rate is older than requested date)
+    if backward_fill_applied:
+        days_back = (as_of_date - rate_record.date).days
+        logger.info(
+            f"Using backward-fill: rate for {base}/{quote} from {rate_record.date} "
+            f"({days_back} days back, requested: {as_of_date})"
             )
 
     # Apply conversion
     # Stored: 1 base = rate * quote
     if direct:
         # from=base, to=quote: amount_from * rate = amount_to
-        return amount * rate_record.rate
+        converted = amount * rate_record.rate
     else:
         # from=quote, to=base: amount_from / rate = amount_to
-        return amount / rate_record.rate
+        converted = amount / rate_record.rate
+
+    # Return with or without rate info
+    if return_rate_info:
+        return converted, rate_record.date, backward_fill_applied
+    return converted

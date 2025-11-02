@@ -281,9 +281,9 @@ async def test_different_dates():
         return True
 
 
-async def test_forward_fill():
-    """Test forward-fill logic (use most recent rate when exact date not available)."""
-    print_section("Test 6: Forward-Fill Logic")
+async def test_backward_fill():
+    """Test unlimited backward-fill logic and info tracking."""
+    print_section("Test 6: Backward-Fill Logic (Unlimited)")
 
     engine = get_async_engine()
 
@@ -304,52 +304,118 @@ async def test_forward_fill():
         print_info(f"Most recent rate in DB: {rate_record.date}")
         print_info(f"EUR/USD = {rate_record.rate}")
 
-        # Request conversion for a future date (30 days ahead)
-        future_date = date.today() + timedelta(days=30)
-        print_info(f"\nRequesting conversion for future date: {future_date}")
-        print_info("Expected behavior: use most recent available rate (forward-fill)")
-
+        # Test 1: Exact date match (no backward-fill)
+        print_info(f"\nTest 6.1: Exact date match ({rate_record.date})")
         amount = Decimal("100.00")
-        result = await convert(session, amount, "EUR", "USD", future_date)
-        expected = amount * rate_record.rate
 
-        print_info(f"Conversion: {amount} EUR → {result} USD")
-        print_info(f"Expected (using rate from {rate_record.date}): {expected} USD")
+        converted, actual_date, backward_filled = await convert(
+            session, amount, "EUR", "USD", rate_record.date, return_rate_info=True
+        )
 
-        if abs(result - expected) > Decimal("0.01"):
-            print_error("Forward-fill conversion failed")
+        if backward_filled:
+            print_error("Backward-fill should not be applied for exact date match")
             return False
 
-        print_success("Forward-fill logic works correctly")
-        print_info("Check logs above for forward-fill warning message")
+        print_success(f"✓ Exact match: no backward-fill applied")
+
+        # Test 2: Future date (should use backward-fill - unlimited)
+        future_date = rate_record.date + timedelta(days=365)  # 1 year ahead
+        print_info(f"\nTest 6.2: Future date ({future_date}, +365 days)")
+        print_info("Expected: Use unlimited backward-fill")
+
+        converted, actual_date, backward_filled = await convert(
+            session, amount, "EUR", "USD", future_date, return_rate_info=True
+        )
+
+        if not backward_filled:
+            print_error("Backward-fill should be applied for future date")
+            return False
+
+        days_back = (future_date - actual_date).days
+        print_success(f"✓ Backward-fill applied: used rate from {actual_date} ({days_back} days back)")
+
+        expected = amount * rate_record.rate
+        if abs(converted - expected) > Decimal("0.01"):
+            print_error("Conversion value incorrect")
+            return False
+
+        # Test 3: Very old date (before any rate exists - should fail)
+        very_old_date = rate_record.date - timedelta(days=3650)  # 10 years before
+        print_info(f"\nTest 6.3: Date before any rate exists ({very_old_date})")
+        print_info("Expected: RateNotFoundError")
+
+        try:
+            result = await convert(session, amount, "EUR", "USD", very_old_date)
+            print_error(f"Expected RateNotFoundError but got result: {result}")
+            return False
+        except RateNotFoundError:
+            print_success("✓ Correctly raised RateNotFoundError for date before any data")
+
+        print_success("Backward-fill logic works correctly (unlimited with tracking)")
         return True
 
 
 async def test_missing_rate_error():
-    """Test that RateNotFoundError is raised when no rate exists."""
+    """Test that RateNotFoundError is raised only when no rate exists before requested date."""
     print_section("Test 7: Missing Rate Error Handling")
 
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
-        # Use a very old date (no rate should exist)
-        old_date = date(2000, 1, 1)
+        # Find the oldest rate in DB
+        stmt = select(FxRate).where(
+            FxRate.base == "EUR",
+            FxRate.quote == "USD"
+        ).order_by(FxRate.date.asc()).limit(1)
+
+        result = await session.execute(stmt)
+        oldest_rate = result.scalars().first()
+
+        if not oldest_rate:
+            print_error("No EUR/USD rates in DB")
+            return False
+
+        print_info(f"Oldest rate in DB: {oldest_rate.date}")
+
+        # Test 1: Date before oldest rate (should fail)
+        date_before = oldest_rate.date - timedelta(days=1)
         amount = Decimal("100.00")
 
-        print_info(f"Attempting conversion for very old date: {old_date}")
-        print_info("Expected behavior: RateNotFoundError")
+        print_info(f"\nTest 7.1: Date before any data ({date_before})")
+        print_info("Expected: RateNotFoundError")
 
         try:
-            result = await convert(session, amount, "USD", "EUR", old_date)
+            result = await convert(session, amount, "EUR", "USD", date_before)
             print_error(f"Expected RateNotFoundError but got result: {result}")
             return False
         except RateNotFoundError as e:
-            print_success(f"Correctly raised RateNotFoundError")
-            print_info(f"Error message: {e}")
-            return True
-        except Exception as e:
-            print_error(f"Unexpected error type: {type(e).__name__}: {e}")
+            error_msg = str(e)
+            print_success("✓ Correctly raised RateNotFoundError")
+            print_info(f"Error message: {error_msg[:100]}...")
+
+        # Test 2: Very old date but after oldest rate (should work with backward-fill)
+        old_but_valid_date = oldest_rate.date + timedelta(days=365)  # 1 year after oldest
+        print_info(f"\nTest 7.2: Old date but after oldest rate ({old_but_valid_date})")
+        print_info("Expected: Success with backward-fill")
+
+        try:
+            converted, actual_date, backward_filled = await convert(
+                session, amount, "EUR", "USD", old_but_valid_date, return_rate_info=True
+            )
+
+            if not backward_filled:
+                print_error("Should use backward-fill for old date")
+                return False
+
+            days_back = (old_but_valid_date - actual_date).days
+            print_success(f"✓ Backward-fill used: {actual_date} ({days_back} days back)")
+
+        except RateNotFoundError:
+            print_error("Should not raise error for date after oldest rate")
             return False
+
+        print_success("Missing rate error handling works correctly")
+        return True
 
 
 async def run_all_tests():
@@ -388,7 +454,7 @@ Note: Mock FX rates are automatically inserted for testing.""",
         "Inverse Conversion (USD→EUR)": await test_inverse_conversion(),
         "Roundtrip Conversion": await test_roundtrip_conversion(),
         "Different Dates": await test_different_dates(),
-        "Forward-Fill Logic": await test_forward_fill(),
+        "Backward-Fill Logic": await test_backward_fill(),
         "Missing Rate Error": await test_missing_rate_error(),
         }
 

@@ -30,6 +30,64 @@ TEST_API_BASE_URL = f"{TEST_SERVER_URL}/api/v1"
 SERVER_START_TIMEOUT = 10  # seconds
 
 
+def check_port_available(port: int = TEST_SERVER_PORT) -> tuple[bool, str | None]:
+    """
+    Check if a port is available.
+
+    Returns:
+        tuple: (is_available, process_info_or_none)
+    """
+    import subprocess
+
+    try:
+        # Use lsof to check port (works on macOS/Linux)
+        result = subprocess.run(
+            ["lsof", "-i", f":{port}"],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            # Port is occupied
+            return False, result.stdout.strip()
+        else:
+            # Port is available
+            return True, None
+
+    except FileNotFoundError:
+        # lsof not available, try alternative method
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("localhost", port))
+                return True, None
+            except OSError:
+                return False, f"Port {port} is in use (unable to get process details)"
+
+
+def print_port_occupied_help(port: int, process_info: str):
+    """Print helpful instructions when port is occupied."""
+    print(f"\n{'='*60}")
+    print(f"⚠️  ERROR: Port {port} is already in use")
+    print(f"{'='*60}")
+    print("\n📋 Process using the port:")
+    print(process_info)
+    print("\n💡 How to fix this:")
+    print(f"\n1. Check what's using the port:")
+    print(f"   lsof -i :{port}")
+    print(f"\n2. Find the PID (Process ID) from the output above")
+    print(f"\n3. Kill the process:")
+    print(f"   kill <PID>")
+    print(f"   # Or forcefully:")
+    print(f"   kill -9 <PID>")
+    print(f"\n4. If it's a zombie uvicorn server:")
+    print(f"   pkill -f 'uvicorn.*{port}'")
+    print(f"\n5. Or kill all Python processes (⚠️  use with caution):")
+    print(f"   pkill -f python")
+    print(f"\n6. Then run the test again")
+    print(f"{'='*60}\n")
+
+
 class TestServerManager:
     """
     Manages backend server lifecycle for tests.
@@ -60,6 +118,12 @@ class TestServerManager:
         Returns:
             bool: True if server started successfully
         """
+        # Check if port is available before starting
+        is_available, process_info = check_port_available(TEST_SERVER_PORT)
+        if not is_available:
+            print_port_occupied_help(TEST_SERVER_PORT, process_info)
+            return False
+
         # Prepare environment with test port
         env = os.environ.copy()
         # Ensure TEST_PORT is used (already set in config, but can be overridden)
@@ -82,9 +146,34 @@ class TestServerManager:
         while time.time() - start_time < SERVER_START_TIMEOUT:
             if self.is_server_running():
                 return True
+
+            # Check if process crashed
+            if self.server_process.poll() is not None:
+                # Process exited
+                stdout, stderr = self.server_process.communicate()
+                print(f"\n{'='*60}")
+                print("⚠️  Server process exited unexpectedly")
+                print(f"{'='*60}")
+                print("\n📋 Server STDOUT:")
+                print(stdout[-500:] if stdout else "(empty)")
+                print("\n📋 Server STDERR:")
+                print(stderr[-500:] if stderr else "(empty)")
+                print(f"{'='*60}\n")
+                return False
+
             time.sleep(0.5)
 
-        # Server didn't start in time
+        # Server didn't start in time - show logs
+        stdout, stderr = self.server_process.communicate(timeout=1)
+        print(f"\n{'='*60}")
+        print(f"⚠️  Server didn't start within {SERVER_START_TIMEOUT} seconds")
+        print(f"{'='*60}")
+        print("\n📋 Server STDOUT:")
+        print(stdout[-500:] if stdout else "(empty)")
+        print("\n📋 Server STDERR:")
+        print(stderr[-500:] if stderr else "(empty)")
+        print(f"{'='*60}\n")
+
         self.stop_server()
         return False
 

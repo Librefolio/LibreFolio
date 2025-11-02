@@ -302,38 +302,273 @@ def test_convert_currency():
 
 
 def test_convert_missing_rate():
-    """Test error handling when rate is not available."""
-    print_section("Test 4: Missing Rate Error Handling")
+    """Test backward-fill behavior and warning for old dates."""
+    print_section("Test 4: Backward-Fill Warning")
 
-    # Try to convert with a very old date (no rate should exist)
-    old_date = date(2000, 1, 1)
+    # First, insert a rate for a date in the past (before requested date)
+    old_rate_date = date(1999, 12, 15)
+    requested_date = date(2000, 3, 20)  # 3 months after the rate
 
-    print_info(f"Attempting conversion for old date: {old_date}")
-    print_info("Expected: 404 error")
+    print_info(f"Step 1: Insert rate for past date ({old_rate_date})")
 
     try:
+        # Insert a manual rate
+        insert_response = httpx.post(
+            f"{API_BASE_URL}/fx/rate",
+            json={
+                "date": old_rate_date.isoformat(),
+                "base": "EUR",
+                "quote": "USD",
+                "rate": "1.05000",
+                "source": "TEST"
+            },
+            timeout=TIMEOUT
+        )
+
+        if insert_response.status_code != 200:
+            print_error(f"Failed to insert test rate: {insert_response.status_code}")
+            return False
+
+        print_success(f"Test rate inserted for {old_rate_date}")
+
+        # Now request conversion for a later date (should use backward-fill)
+        print_info(f"\nStep 2: Request conversion for later date ({requested_date})")
+        print_info(f"Expected: 200 OK with backward_fill_info (using rate from {old_rate_date})")
+
         response = httpx.get(
             f"{API_BASE_URL}/fx/convert",
             params={
                 "amount": "100.00",
                 "from": "USD",
                 "to": "EUR",
-                "date": old_date.isoformat()
+                "date": requested_date.isoformat()
                 },
             timeout=TIMEOUT
             )
 
         print_info(f"Status code: {response.status_code}")
 
-        if response.status_code != 404:
-            print_error(f"Expected status 404, got {response.status_code}")
+        if response.status_code != 200:
+            print_error(f"Expected status 200, got {response.status_code}")
             print_error(f"Response: {response.text}")
             return False
 
         data = response.json()
-        print_info(f"Error message: {data.get('detail', 'No detail')}")
 
-        print_success("Missing rate correctly returns 404 error")
+        # Verify backward_fill_info is present
+        if "backward_fill_info" not in data:
+            print_error("Response missing backward_fill_info field")
+            return False
+
+        fill_info = data["backward_fill_info"]
+
+        if fill_info is None:
+            print_error("backward_fill_info should not be null for old date")
+            return False
+
+        # Verify structure
+        required_fields = ["applied", "requested_date", "actual_rate_date", "days_back"]
+        for field in required_fields:
+            if field not in fill_info:
+                print_error(f"backward_fill_info missing field: {field}")
+                return False
+
+        if not fill_info["applied"]:
+            print_error("backward_fill_info.applied should be true")
+            return False
+
+        # Verify requested_date matches what we sent
+        if fill_info["requested_date"] != requested_date.isoformat():
+            print_error(f"requested_date mismatch: expected {requested_date.isoformat()}, got {fill_info['requested_date']}")
+            return False
+
+        # Verify actual_rate_date is <= requested_date
+        from datetime import date as date_type
+        actual_date = date_type.fromisoformat(fill_info["actual_rate_date"])
+        requested_date_parsed = date_type.fromisoformat(fill_info["requested_date"])
+
+        if actual_date > requested_date_parsed:
+            print_error(f"actual_rate_date ({actual_date}) should be <= requested_date ({requested_date_parsed})")
+            return False
+
+        # Verify days_back calculation is correct
+        expected_days_back = (requested_date_parsed - actual_date).days
+        if fill_info["days_back"] != expected_days_back:
+            print_error(f"days_back incorrect: expected {expected_days_back}, got {fill_info['days_back']}")
+            return False
+
+        print_success(f"✓ Backward-fill applied: {fill_info['days_back']} days back")
+        print_info(f"  Requested: {fill_info['requested_date']} ✓")
+        print_info(f"  Actual rate from: {fill_info['actual_rate_date']} ✓")
+        print_info(f"  Days back calculation: correct ✓")
+        print_success("Backward-fill warning works correctly with all validations passing")
+        return True
+
+    except Exception as e:
+        print_error(f"Request failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_manual_rate_upsert():
+    """Test POST /fx/rate endpoint for manual rate entry."""
+    print_section("Test 4: Manual Rate Upsert")
+
+    # Use a date far in the past to avoid interference from other rates
+    test_date = date(2020, 1, 15)
+
+    # Test 1: Insert new rate
+    print_info("Test 4.1: Insert new manual rate")
+    try:
+        response = httpx.post(
+            f"{API_BASE_URL}/fx/rate",
+            json={
+                "date": test_date.isoformat(),
+                "base": "EUR",
+                "quote": "USD",
+                "rate": "1.12345",
+                "source": "MANUAL"
+            },
+            timeout=TIMEOUT
+        )
+
+        print_info(f"Status code: {response.status_code}")
+
+        if response.status_code != 200:
+            print_error(f"Expected status 200, got {response.status_code}")
+            print_error(f"Response: {response.text}")
+            return False
+
+        data = response.json()
+
+        # Verify response structure
+        required_fields = ["success", "action", "rate", "date", "base", "quote"]
+        for field in required_fields:
+            if field not in data:
+                print_error(f"Missing field in response: {field}")
+                return False
+
+        if not data["success"]:
+            print_error("Operation reported as unsuccessful")
+            return False
+
+        if data["action"] not in ["inserted", "updated"]:
+            print_error(f"Invalid action: {data['action']}")
+            return False
+
+        print_success(f"Rate {data['action']}: {data['base']}/{data['quote']} = {data['rate']} on {data['date']}")
+
+        # Test 2: Update existing rate (upsert)
+        print_info("\nTest 4.2: Update existing rate (upsert)")
+        response2 = httpx.post(
+            f"{API_BASE_URL}/fx/rate",
+            json={
+                "date": test_date.isoformat(),
+                "base": "EUR",
+                "quote": "USD",
+                "rate": "1.23456",  # Different rate
+                "source": "MANUAL_CORRECTED"
+            },
+            timeout=TIMEOUT
+        )
+
+        if response2.status_code != 200:
+            print_error("Update request failed")
+            return False
+
+        data2 = response2.json()
+
+        if data2["action"] != "updated":
+            print_error(f"Expected action 'updated', got {data2['action']}")
+            return False
+
+        print_success(f"Rate updated: new value = {data2['rate']}")
+
+        # Test 3: Verify rate is usable in conversion
+        print_info("\nTest 4.3: Verify manual rate is used in conversion")
+        response3 = httpx.get(
+            f"{API_BASE_URL}/fx/convert",
+            params={
+                "amount": "100.00",
+                "from": "EUR",
+                "to": "USD",
+                "date": test_date.isoformat()
+            },
+            timeout=TIMEOUT
+        )
+
+        if response3.status_code != 200:
+            print_error("Conversion using manual rate failed")
+            return False
+
+        data3 = response3.json()
+        expected_amount = Decimal("100.00") * Decimal(data2["rate"])
+        actual_amount = Decimal(str(data3["converted_amount"]))
+
+        if abs(actual_amount - expected_amount) > Decimal("0.01"):
+            print_error(f"Conversion incorrect: expected {expected_amount}, got {actual_amount}")
+            return False
+
+        print_success("Manual rate correctly used in conversion")
+
+        # Test 4: Invalid request (same base and quote)
+        print_info("\nTest 4.4: Invalid request (base == quote)")
+        response4 = httpx.post(
+            f"{API_BASE_URL}/fx/rate",
+            json={
+                "date": test_date.isoformat(),
+                "base": "EUR",
+                "quote": "EUR",  # Same as base
+                "rate": "1.0",
+                "source": "MANUAL"
+            },
+            timeout=TIMEOUT
+        )
+
+        if response4.status_code == 200:
+            print_error("Same base/quote was accepted (should return 400)")
+            return False
+
+        print_success(f"Same base/quote rejected (status {response4.status_code})")
+
+        # Test 5: Automatic alphabetical ordering and rate inversion
+        print_info("\nTest 4.5: Automatic ordering (USD/EUR → EUR/USD with rate inversion)")
+        response5 = httpx.post(
+            f"{API_BASE_URL}/fx/rate",
+            json={
+                "date": test_date.isoformat(),
+                "base": "USD",  # Will be reordered to EUR/USD
+                "quote": "EUR",
+                "rate": "0.90000",  # 1 USD = 0.9 EUR
+                "source": "MANUAL"
+            },
+            timeout=TIMEOUT
+        )
+
+        if response5.status_code != 200:
+            print_error("Rate with reverse ordering failed")
+            return False
+
+        data5 = response5.json()
+
+        # Should be stored as EUR/USD
+        if data5["base"] != "EUR" or data5["quote"] != "USD":
+            print_error(f"Expected EUR/USD, got {data5['base']}/{data5['quote']}")
+            return False
+
+        # Rate should be inverted: 1/0.9 = 1.111...
+        expected_rate = Decimal("1") / Decimal("0.90000")
+        actual_rate = Decimal(str(data5["rate"]))
+
+        if abs(actual_rate - expected_rate) > Decimal("0.001"):
+            print_error(f"Rate not inverted correctly: expected ~{expected_rate}, got {actual_rate}")
+            return False
+
+        print_success(f"✓ Ordered as {data5['base']}/{data5['quote']}")
+        print_success(f"✓ Rate inverted: {data5['rate']}")
+
+        print_success("Manual rate upsert endpoint works correctly")
         return True
 
     except Exception as e:
@@ -344,12 +579,12 @@ def test_convert_missing_rate():
 
 
 def test_invalid_requests():
-    """Test validation and error handling for invalid requests."""
+    """Test comprehensive validation and error handling for invalid requests."""
     print_section("Test 5: Invalid Request Handling")
 
     all_ok = True
 
-    # Test 1: Invalid date range (start > end)
+    # Test 1: Invalid date range (start > end) with error detail check
     print_info("Test 5.1: Invalid date range (start > end)")
     try:
         response = httpx.post(
@@ -366,7 +601,13 @@ def test_invalid_requests():
             print_error("Invalid date range was accepted (should return 400)")
             all_ok = False
         else:
-            print_success(f"Invalid date range rejected (status {response.status_code})")
+            data = response.json()
+            if "detail" in data:
+                print_success(f"Invalid date range rejected (status {response.status_code})")
+                print_info(f"  Error message: {data['detail']}")
+            else:
+                print_error("Response missing 'detail' field")
+                all_ok = False
     except Exception as e:
         print_error(f"Request failed: {e}")
         all_ok = False
@@ -390,12 +631,64 @@ def test_invalid_requests():
             all_ok = False
         else:
             print_success(f"Negative amount rejected (status {response.status_code})")
+            data = response.json()
+            if "detail" in data:
+                print_info(f"  Error message: {str(data['detail'])[:80]}...")
     except Exception as e:
         print_error(f"Request failed: {e}")
         all_ok = False
 
-    # Test 3: Invalid currency code
-    print_info("\nTest 5.3: Invalid currency code")
+    # Test 3: Zero amount
+    print_info("\nTest 5.3: Zero amount")
+    try:
+        response = httpx.get(
+            f"{API_BASE_URL}/fx/convert",
+            params={
+                "amount": "0",
+                "from": "USD",
+                "to": "EUR",
+                "date": date.today().isoformat()
+                },
+            timeout=TIMEOUT
+            )
+
+        if response.status_code == 200:
+            print_error("Zero amount was accepted (should return 422)")
+            all_ok = False
+        else:
+            print_success(f"Zero amount rejected (status {response.status_code})")
+    except Exception as e:
+        print_error(f"Request failed: {e}")
+        all_ok = False
+
+    # Test 4: Non-numeric amount
+    print_info("\nTest 5.4: Non-numeric amount (abc)")
+    try:
+        response = httpx.get(
+            f"{API_BASE_URL}/fx/convert",
+            params={
+                "amount": "abc",
+                "from": "USD",
+                "to": "EUR",
+                "date": date.today().isoformat()
+                },
+            timeout=TIMEOUT
+            )
+
+        if response.status_code == 200:
+            print_error("Non-numeric amount was accepted (should return 422)")
+            all_ok = False
+        else:
+            print_success(f"Non-numeric amount rejected (status {response.status_code})")
+            data = response.json()
+            if "detail" in data:
+                print_info(f"  Error message: validation error detected")
+    except Exception as e:
+        print_error(f"Request failed: {e}")
+        all_ok = False
+
+    # Test 5: Invalid currency code format (too long)
+    print_info("\nTest 5.5: Invalid currency code format (INVALID)")
     try:
         response = httpx.get(
             f"{API_BASE_URL}/fx/convert",
@@ -417,6 +710,100 @@ def test_invalid_requests():
         print_error(f"Request failed: {e}")
         all_ok = False
 
+    # Test 6: Valid but unsupported currency code
+    print_info("\nTest 5.6: Valid format but unsupported currency (XXX)")
+    try:
+        response = httpx.get(
+            f"{API_BASE_URL}/fx/convert",
+            params={
+                "amount": "100.00",
+                "from": "XXX",
+                "to": "EUR",
+                "date": date.today().isoformat()
+                },
+            timeout=TIMEOUT
+            )
+
+        if response.status_code == 200:
+            print_error("Unsupported currency XXX was accepted")
+            all_ok = False
+        else:
+            print_success(f"Unsupported currency rejected (status {response.status_code})")
+    except Exception as e:
+        print_error(f"Request failed: {e}")
+        all_ok = False
+
+    # Test 7: Missing required parameter (amount)
+    print_info("\nTest 5.7: Missing required parameter (amount)")
+    try:
+        response = httpx.get(
+            f"{API_BASE_URL}/fx/convert",
+            params={
+                "from": "USD",
+                "to": "EUR",
+                "date": date.today().isoformat()
+                # amount is missing
+                },
+            timeout=TIMEOUT
+            )
+
+        if response.status_code == 200:
+            print_error("Request with missing amount was accepted (should return 422)")
+            all_ok = False
+        else:
+            print_success(f"Missing required parameter rejected (status {response.status_code})")
+            data = response.json()
+            if "detail" in data:
+                print_info(f"  Error indicates missing field")
+    except Exception as e:
+        print_error(f"Request failed: {e}")
+        all_ok = False
+
+    # Test 8: Missing required parameter (from currency)
+    print_info("\nTest 5.8: Missing required parameter (from currency)")
+    try:
+        response = httpx.get(
+            f"{API_BASE_URL}/fx/convert",
+            params={
+                "amount": "100.00",
+                "to": "EUR",
+                "date": date.today().isoformat()
+                # from is missing
+                },
+            timeout=TIMEOUT
+            )
+
+        if response.status_code == 200:
+            print_error("Request with missing 'from' was accepted (should return 422)")
+            all_ok = False
+        else:
+            print_success(f"Missing 'from' parameter rejected (status {response.status_code})")
+    except Exception as e:
+        print_error(f"Request failed: {e}")
+        all_ok = False
+
+    # Test 9: Empty currency string
+    print_info("\nTest 5.9: Empty currency string in sync")
+    try:
+        response = httpx.post(
+            f"{API_BASE_URL}/fx/sync",
+            params={
+                "start": date.today().isoformat(),
+                "end": date.today().isoformat(),
+                "currencies": ""  # Empty string
+                },
+            timeout=TIMEOUT
+            )
+
+        if response.status_code == 200:
+            print_error("Empty currencies was accepted (should return 400)")
+            all_ok = False
+        else:
+            print_success(f"Empty currencies rejected (status {response.status_code})")
+    except Exception as e:
+        print_error(f"Request failed: {e}")
+        all_ok = False
+
     return all_ok
 
 
@@ -427,8 +814,10 @@ def run_all_tests():
         description="""These tests verify:
   • GET /fx/currencies - List available currencies
   • POST /fx/sync - Sync FX rates from ECB
+  • POST /fx/rate - Manually insert/update individual rates
   • GET /fx/convert - Convert between currencies
-  • Error handling and validation""",
+  • Backward-fill warnings for old dates
+  • Comprehensive error handling and validation""",
         prerequisites=[
             "Services FX conversion subsystem (run: python test_runner.py services fx)",
             "Test server will be started automatically on TEST_PORT",
@@ -440,11 +829,20 @@ def run_all_tests():
     with TestServerManager() as server_manager:
         print_section("Backend Server Management")
 
-        print_info(f"Starting test server on port {server_manager.health_url.split(':')[2].split('/')[0]}...")
+        # Show database and port info
+        from backend.app.config import get_settings
+        settings = get_settings()
+        test_port = settings.TEST_PORT
+
+        print_info(f"Database: {settings.DATABASE_URL}")
+        print_info(f"Test server port: {test_port}")
+        print_info(f"API base URL: {API_BASE_URL}")
+
+        print_info(f"\nStarting test server...")
 
         if not server_manager.start_server():
             print_error("Failed to start backend server")
-            print_info(f"Check if port {TEST_API_BASE_URL.split(':')[2].split('/')[0]} is available")
+            print_info(f"Check if port {test_port} is available")
             return False
 
         print_success("Test server started successfully")
@@ -462,7 +860,8 @@ def _run_tests():
         "GET /fx/currencies": test_get_currencies(),
         "POST /fx/sync": test_sync_rates(),
         "GET /fx/convert": test_convert_currency(),
-        "Missing Rate Error": test_convert_missing_rate(),
+        "POST /fx/rate (Manual Upsert)": test_manual_rate_upsert(),
+        "Backward-Fill Warning": test_convert_missing_rate(),
         "Invalid Request Handling": test_invalid_requests(),
         }
 

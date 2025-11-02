@@ -418,10 +418,10 @@ def run_all_tests(verbose: bool = False) -> bool:
       1. External services (ECB API, etc.)
       2. Database (schema, persistence)
       3. Backend services (conversion logic, calculations)
-      4. API endpoints (REST API)
+      4. API endpoints (REST API - auto-starts test server on port 8001)
 
-    Note: API tests require running server, so they are skipped with a warning
-          if server is not available.
+    Note: API tests will automatically start and stop the test server.
+          If port 8001 is occupied, tests will fail with helpful instructions.
     """
     print_header("LibreFolio Complete Test Suite")
     print_info("Running all test categories in optimal order")
@@ -432,7 +432,7 @@ def run_all_tests(verbose: bool = False) -> bool:
         ("External Services", lambda: external_all(verbose)),
         ("Database Layer", lambda: db_all(verbose)),
         ("Backend Services", lambda: services_all(verbose)),
-        # API tests are optional (require server)
+        ("API Endpoints", lambda: api_test(verbose)),  # Auto-starts server via TestServerManager
         ]
 
     results = []
@@ -450,13 +450,6 @@ def run_all_tests(verbose: bool = False) -> bool:
             print_info("Fix the failing tests before continuing")
             break
 
-    # API tests (optional - require server)
-    if all(success for _, success in results):
-        print(f"\n{'=' * 70}")
-        print("API Tests (Optional - Requires Running Server)")
-        print('=' * 70)
-        print_warning("Skipping API tests (require backend server)")
-        print_info("To run API tests: ./dev.sh server (then run: python test_runner.py api all)")
 
     # Global Summary
     print_section("Complete Test Suite Summary")
@@ -691,25 +684,54 @@ Test commands:
         help="API test to run"
         )
 
+    # ========================================================================
+    # ALL TESTS CATEGORY
+    # ========================================================================
+    all_parser = subparsers.add_parser(
+        "all",
+        help="Run ALL tests in optimal order",
+        description="""
+Complete Test Suite
+
+Runs all test categories in the optimal order:
+  1. External Services (ECB API, etc.)
+  2. Database Layer (schema, persistence)
+  3. Backend Services (conversion logic, calculations)
+  4. API Endpoints (REST API - auto-starts test server on port 8001)
+
+This is the recommended way to verify your LibreFolio installation.
+
+Expected time: 3-7 minutes (depending on network speed for ECB API)
+
+✅ API tests now INCLUDED with automatic server start/stop
+   Test server runs on port 8001 (configurable via TEST_PORT env var)
+   If port 8001 is occupied, you'll see helpful troubleshooting instructions
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+
     return parser
 
 
 def main():
     """Main entry point."""
-    # Check if 'all' was passed as first argument (global all tests)
-    # Must check BEFORE parsing args because 'all' is not a valid category
-    if len(sys.argv) > 1 and sys.argv[1] == "all":
-        verbose = "--verbose" in sys.argv or "-v" in sys.argv
-        return 0 if run_all_tests(verbose=verbose) else 1
-
     parser = create_parser()
     args = parser.parse_args()
+
+    # If no category provided, show help
+    if not args.category:
+        parser.print_help()
+        return 1
 
     # Route to appropriate test handler
     success = False
     verbose = getattr(args, 'verbose', False)
 
-    if args.category == "external":
+    if args.category == "all":
+        # Run complete test suite
+        success = run_all_tests(verbose=verbose)
+
+    elif args.category == "external":
         # External services tests
         if args.action == "ecb":
             success = external_ecb(verbose=verbose)
