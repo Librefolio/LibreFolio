@@ -14,6 +14,9 @@ Welcome to LibreFolio documentation!
 - **[Database Schema Documentation](database-schema.md)** - Complete guide to all tables and relationships
 - **[Alembic Migrations Guide](alembic-guide.md)** - Simple guide to database migrations
 
+### Development
+- 🚀 **[API Development Guide](api-development-guide.md)** - ⭐ Complete guide for adding new REST API endpoints (bulk-first pattern, Pydantic, FastAPI)
+
 ### Features
 - **[FX Implementation](fx-implementation.md)** - Foreign exchange rates system (ECB API, conversion, testing)
 
@@ -33,6 +36,7 @@ todo: add more links when more docs are added
 |----------|---------|----------|
 | [environment-variables.md](environment-variables.md) | Configuration & deployment | Developers, DevOps |
 | [testing-guide.md](testing-guide.md) | ⭐ Learn the system via testing (new devs start here!) | New Developers |
+| [api-development-guide.md](api-development-guide.md) | 🚀 ⭐ Complete guide to add REST API endpoints | Contributors |
 | [alembic-guide.md](alembic-guide.md) | Learn database migrations | Everyone |
 | [database-schema.md](database-schema.md) | Database tables & relationships | Everyone |
 | [async-architecture.md](async-architecture.md) | ⭐ Async/concurrent architecture explained | Contributors |
@@ -43,8 +47,11 @@ todo: add more links when more docs are added
 **...understand the async architecture and performance**
 → Read [Async Architecture Guide](async-architecture.md) - How concurrent requests are handled
 
+**...add new REST API endpoints**
+→ Read [API Development Guide](api-development-guide.md) - Step-by-step guide with examples (bulk-first, Pydantic, FastAPI)
+
 **...contribute to the backend (add endpoints, services)**
-→ Read [Async Architecture Guide](async-architecture.md) - Development patterns and best practices
+→ Read [API Development Guide](api-development-guide.md) first, then [Async Architecture Guide](async-architecture.md)
 
 ### I want to...
 **...learn the system (I'm a new developer)**

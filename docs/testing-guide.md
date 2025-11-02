@@ -475,7 +475,9 @@ Now that you're familiar with the testing system:
    - `backend/app/db/models.py` - Database models
 
 2. **Read documentation:**
+   - 🚀 **[API Development Guide](./api-development-guide.md)** - ⭐ Start here to add new endpoints
    - [Database Schema](./database-schema.md)
+   - [Async Architecture](./async-architecture.md) - Understand async/await patterns
    - [FX Implementation](./fx-implementation.md)
    - [Alembic Guide](./alembic-guide.md)
 

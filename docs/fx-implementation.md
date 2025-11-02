@@ -395,6 +395,8 @@ See [Environment Variables](./environment-variables.md) for more details.
 
 ## 📚 Related Documentation
 
+- 🚀 **[API Development Guide](./api-development-guide.md)** - Learn how FX endpoints are built (reference implementation)
+- [Async Architecture Guide](./async-architecture.md) - Understand async patterns used in FX module
 - [Database Schema](./database-schema.md) - Full database documentation
 - [Environment Variables](./environment-variables.md) - Configuration options
 - [Alembic Guide](./alembic-guide.md) - Database migrations

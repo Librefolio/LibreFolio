@@ -94,7 +94,8 @@ function install_deps() {
 
 function start_server() {
     echo -e "${GREEN}Starting LibreFolio API server...${NC}"
-    echo -e "${YELLOW}API docs available at: http://localhost:8000/api/v1/docs${NC}"
+    echo -e "${YELLOW}API Redoc available at: http://localhost:8000/api/v1/redoc${NC}  # Render with Redoc"
+    echo -e "${YELLOW}API docs available at: http://localhost:8000/api/v1/docs${NC}    # Render with Swagger"
     pipenv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 }
 

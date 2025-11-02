@@ -209,6 +209,7 @@ LibreFolio uses SQLite with Alembic for schema management. The database file is 
 - 📚 **[Database Schema Documentation](docs/database-schema.md)** - Complete guide to all tables, relationships, and concepts
 - 🔧 [Alembic Migration Guide](docs/alembic-guide.md) - How to manage database migrations
 - ⚡ **[Async Architecture Guide](docs/async-architecture.md)** - How LibreFolio handles concurrent requests efficiently
+- 🚀 **[API Development Guide](docs/api-development-guide.md)** - Complete guide for adding new REST API endpoints
 - ⚙️ [Environment Variables](docs/environment-variables.md) - Configuration options and Docker deployment
 
 **Quick Example:**
@@ -242,5 +243,30 @@ TBD
 
 ## 🤝 Contributing
 
-TBD
+Contributions are welcome! Here's how to get started:
+
+### For New Contributors
+
+1. **Start with tests**: Run `python test_runner.py all` to understand the project
+2. **Read the guides**:
+   - 📖 [Testing Guide](docs/testing-guide.md) - Learn by running tests
+   - 🗄️ [Database Schema](docs/database-schema.md) - Understand data models
+   - 🚀 **[API Development Guide](docs/api-development-guide.md)** - Add new endpoints
+
+### Adding New Features
+
+When adding new API endpoints:
+1. Follow the [API Development Guide](docs/api-development-guide.md)
+2. Use **bulk-first** design pattern for better performance
+3. Write comprehensive tests (see existing tests as examples)
+4. Document your code with docstrings and examples
+5. Run `python test_runner.py all` before submitting
+
+### Code Standards
+
+- All code, comments, and docs must be in **English**
+- Use **type hints** everywhere
+- Follow **async/await** pattern (see [Async Guide](docs/async-architecture.md))
+- Add **Pydantic validation** for API models
+- Write **tests** for all new features
 
