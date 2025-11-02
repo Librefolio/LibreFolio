@@ -12,10 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.session import get_session
 from backend.app.services.fx import (
     FXServiceError,
-    RateNotFoundError,
-    convert,
+    convert_bulk,
     ensure_rates,
     get_available_currencies,
+    upsert_rates_bulk,
     )
 
 router = APIRouter(prefix="/fx", tags=["FX"])
@@ -36,8 +36,24 @@ class BackwardFillInfo(BaseModel):
     days_back: int = Field(..., description="Number of days back from requested date")
 
 
-class ConvertResponse(BaseModel):
-    """Response model for currency conversion."""
+class ConversionRequest(BaseModel):
+    """Single conversion request."""
+    amount: Decimal = Field(..., gt=0, description="Amount to convert (must be positive)")
+    from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
+    to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
+    conversion_date: date | None = Field(None, alias="date", description="Conversion date (defaults to today if not provided)")
+
+    class Config:
+        populate_by_name = True  # Allow using both 'date' and 'conversion_date'
+
+
+class ConvertRequest(BaseModel):
+    """Request model for bulk currency conversion."""
+    conversions: list[ConversionRequest] = Field(..., min_length=1, description="List of conversions to perform")
+
+
+class ConversionResult(BaseModel):
+    """Single conversion result."""
     amount: Decimal = Field(..., description="Original amount")
     from_currency: str = Field(..., description="Source currency code")
     to_currency: str = Field(..., description="Target currency code")
@@ -47,8 +63,14 @@ class ConvertResponse(BaseModel):
     backward_fill_info: BackwardFillInfo | None = Field(None, description="Info about backward-fill if applied")
 
 
-class UpsertRateRequest(BaseModel):
-    """Request model for manual rate upsert."""
+class ConvertResponse(BaseModel):
+    """Response model for bulk currency conversion."""
+    results: list[ConversionResult] = Field(..., description="Conversion results in order")
+    errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
+
+
+class RateUpsertItem(BaseModel):
+    """Single rate to upsert."""
     rate_date: date = Field(..., description="Date of the rate (ISO format)", alias="date")
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
@@ -56,17 +78,29 @@ class UpsertRateRequest(BaseModel):
     source: str = Field(default="MANUAL", description="Source of the rate")
 
     class Config:
-        populate_by_name = True  # Allow using both 'date' and 'rate_date'
+        populate_by_name = True
 
 
-class UpsertRateResponse(BaseModel):
-    """Response model for manual rate upsert."""
+class UpsertRatesRequest(BaseModel):
+    """Request model for bulk rate upsert."""
+    rates: list[RateUpsertItem] = Field(..., min_length=1, description="List of rates to insert/update")
+
+
+class RateUpsertResult(BaseModel):
+    """Single rate upsert result."""
     success: bool = Field(..., description="Whether the operation was successful")
     action: str = Field(..., description="Action taken: 'inserted' or 'updated'")
     rate: Decimal = Field(..., description="The rate value stored")
     date: str = Field(..., description="Date of the rate (ISO format)")
     base: str = Field(..., description="Base currency")
     quote: str = Field(..., description="Quote currency")
+
+
+class UpsertRatesResponse(BaseModel):
+    """Response model for bulk rate upsert."""
+    results: list[RateUpsertResult] = Field(..., description="Upsert results in order")
+    success_count: int = Field(..., description="Number of successful operations")
+    errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
 
 
 class CurrenciesResponse(BaseModel):
@@ -129,129 +163,136 @@ async def sync_rates(
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
 
 
-@router.post("/rate", response_model=UpsertRateResponse, status_code=200)
-async def upsert_rate(
-    request: UpsertRateRequest,
+@router.post("/rate", response_model=UpsertRatesResponse, status_code=200)
+async def upsert_rates_endpoint(
+    request: UpsertRatesRequest,
     session: AsyncSession = Depends(get_session)
     ):
     """
-    Manually insert or update a single FX rate.
+    Manually insert or update one or more FX rates (bulk operation).
 
-    This endpoint allows manual data entry or correction of FX rates.
+    This endpoint accepts a list of rates to insert/update. Even single rate
+    should be sent as a list with one element.
+
     Uses UPSERT logic: if a rate for the same date/base/quote exists, it will be updated.
+    Automatic alphabetical ordering and rate inversion is applied.
 
     Args:
-        request: Rate data to insert/update
+        request: List of rates to insert/update
         session: Database session
 
     Returns:
-        Operation result with action taken (inserted/updated)
+        Operation results with action taken (inserted/updated) for each rate
     """
-    from backend.app.db.models import FxRate
-    from sqlalchemy.dialects.sqlite import insert
-    from sqlalchemy import func, select
+    results = []
+    errors = []
 
-    base = request.base.upper()
-    quote = request.quote.upper()
+    for idx, rate_item in enumerate(request.rates):
+        base = rate_item.base.upper()
+        quote = rate_item.quote.upper()
 
-    # Validate currencies are different
-    if base == quote:
+        # Validate currencies are different
+        if base == quote:
+            error_msg = f"Rate {idx}: Base and quote must be different (got {base})"
+            errors.append(error_msg)
+            continue
+
+        # Ensure alphabetical ordering (base < quote)
+        if base > quote:
+            base, quote = quote, base
+            # Invert rate
+            rate_value = Decimal("1") / rate_item.rate
+        else:
+            rate_value = rate_item.rate
+
+        try:
+            # Use bulk service function
+            rate_results = await upsert_rates_bulk(
+                session,
+                [(rate_item.rate_date, base, quote, rate_value, rate_item.source)]
+            )
+
+            success, action = rate_results[0]
+
+            results.append(RateUpsertResult(
+                success=success,
+                action=action,
+                rate=rate_value,
+                date=rate_item.rate_date.isoformat(),
+                base=base,
+                quote=quote
+            ))
+
+        except ValueError as e:
+            error_msg = f"Rate {idx}: Validation error: {str(e)}"
+            errors.append(error_msg)
+        except Exception as e:
+            error_msg = f"Rate {idx}: Failed: {str(e)}"
+            errors.append(error_msg)
+
+    # If all rates failed, return 400
+    if errors and not results:
         raise HTTPException(
             status_code=400,
-            detail="Base and quote currencies must be different"
+            detail=f"All rates failed: {'; '.join(errors)}"
         )
 
-    # Ensure alphabetical ordering (base < quote)
-    if base > quote:
-        base, quote = quote, base
-        # Invert rate
-        rate_value = Decimal("1") / request.rate
-    else:
-        rate_value = request.rate
-
-    try:
-        # Check if rate already exists
-        stmt = select(FxRate).where(
-            FxRate.date == request.rate_date,
-            FxRate.base == base,
-            FxRate.quote == quote
-        )
-        result = await session.execute(stmt)
-        existing = result.scalars().first()
-
-        action = "updated" if existing else "inserted"
-
-        # UPSERT
-        upsert_stmt = insert(FxRate).values(
-            date=request.rate_date,
-            base=base,
-            quote=quote,
-            rate=rate_value,
-            source=request.source,
-            fetched_at=func.current_timestamp()
-        )
-
-        upsert_stmt = upsert_stmt.on_conflict_do_update(
-            index_elements=['date', 'base', 'quote'],
-            set_={
-                'rate': upsert_stmt.excluded.rate,
-                'source': upsert_stmt.excluded.source,
-                'fetched_at': func.current_timestamp()
-            }
-        )
-
-        await session.execute(upsert_stmt)
-        await session.commit()
-
-        return UpsertRateResponse(
-            success=True,
-            action=action,
-            rate=rate_value,
-            date=request.rate_date.isoformat(),
-            base=base,
-            quote=quote
-        )
-
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to upsert rate: {str(e)}")
+    return UpsertRatesResponse(
+        results=results,
+        success_count=len(results),
+        errors=errors
+    )
 
 
-@router.get("/convert", response_model=ConvertResponse)
-async def convert_currency(
-    amount: Decimal = Query(..., gt=0, description="Amount to convert (must be positive)"),
-    from_currency: str = Query(..., alias="from", description="Source currency (ISO 4217)"),
-    to_currency: str = Query(..., alias="to", description="Target currency (ISO 4217)"),
-    on_date: date = Query(default_factory=date.today, alias="date", description="Conversion date"),
+@router.post("/convert", response_model=ConvertResponse)
+async def convert_currency_bulk(
+    request: ConvertRequest,
     session: AsyncSession = Depends(get_session)
     ):
     """
-    Convert an amount from one currency to another.
-    Uses backward-fill logic with unlimit time range if exact date rate is not available.
+    Convert one or more amounts between currencies (bulk operation).
+
+    This endpoint accepts a list of conversions to perform. Even single conversions
+    should be sent as a list with one element.
+
+    Uses unlimited backward-fill logic: if rate for exact date is not available,
+    uses the most recent rate before the requested date.
 
     Args:
-        amount: Amount to convert (must be positive)
-        from_currency: Source currency (ISO 4217 code)
-        to_currency: Target currency (ISO 4217 code)
-        on_date: Date for which to use the rate (defaults to today)
+        request: List of conversions to perform
         session: Database session
 
     Returns:
-        Conversion result with rate information
+        Conversion results with rate information for each conversion
     """
-    from_cur = from_currency.upper()
-    to_cur = to_currency.upper()
+    # Prepare bulk conversions
+    bulk_conversions = []
+    for conversion in request.conversions:
+        from_cur = conversion.from_currency.upper()
+        to_cur = conversion.to_currency.upper()
+        on_date = conversion.conversion_date if conversion.conversion_date else date.today()
+        bulk_conversions.append((conversion.amount, from_cur, to_cur, on_date))
 
-    try:
-        # Get conversion with rate info
-        converted_amount, actual_rate_date, backward_fill_applied = await convert(
-            session, amount, from_cur, to_cur, on_date, return_rate_info=True
-        )
+    # Call convert_bulk with raise_on_error=False to get partial results
+    bulk_results, bulk_errors = await convert_bulk(session, bulk_conversions, raise_on_error=False)
+
+    results = []
+
+    # Process results
+    for idx, (conversion, bulk_result) in enumerate(zip(request.conversions, bulk_results)):
+        if bulk_result is None:
+            # This conversion failed (error already in bulk_errors)
+            continue
+
+        converted_amount, actual_rate_date, backward_fill_applied = bulk_result
+        from_cur = conversion.from_currency.upper()
+        to_cur = conversion.to_currency.upper()
+        on_date = conversion.conversion_date if conversion.conversion_date else date.today()
 
         # Calculate effective rate (for display purposes)
         rate = None
         if from_cur != to_cur:
-            rate = converted_amount / amount
+            rate = converted_amount / conversion.amount
 
         # Build backward-fill info if applicable
         backward_fill_info = None
@@ -264,19 +305,25 @@ async def convert_currency(
                 days_back=days_back
             )
 
-        return ConvertResponse(
-            amount=amount,
+        results.append(ConversionResult(
+            amount=conversion.amount,
             from_currency=from_cur,
             to_currency=to_cur,
             converted_amount=converted_amount,
             rate=rate,
             rate_date=actual_rate_date.isoformat(),
             backward_fill_info=backward_fill_info
-            )
-    except RateNotFoundError as e:
+        ))
+
+
+    # If all conversions failed, return 404
+    if bulk_errors and not results:
         raise HTTPException(
             status_code=404,
-            detail=f"FX rate not found: {str(e)}"
-            )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+            detail=f"All conversions failed: {'; '.join(bulk_errors)}"
+        )
+
+    return ConvertResponse(
+        results=results,
+        errors=bulk_errors
+    )
