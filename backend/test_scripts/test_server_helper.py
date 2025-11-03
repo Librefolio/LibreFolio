@@ -146,7 +146,7 @@ class TestServerManager:
         while time.time() - start_time < SERVER_START_TIMEOUT:
             if self.is_server_running():
                 return True
-
+            
             # Check if process crashed
             if self.server_process.poll() is not None:
                 # Process exited
@@ -160,7 +160,7 @@ class TestServerManager:
                 print(stderr[-500:] if stderr else "(empty)")
                 print(f"{'='*60}\n")
                 return False
-
+            
             time.sleep(0.5)
 
         # Server didn't start in time - show logs
@@ -173,7 +173,7 @@ class TestServerManager:
         print("\n📋 Server STDERR:")
         print(stderr[-500:] if stderr else "(empty)")
         print(f"{'='*60}\n")
-
+        
         self.stop_server()
         return False
 

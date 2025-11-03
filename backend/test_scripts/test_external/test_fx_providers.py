@@ -5,13 +5,13 @@ Tests all registered FX providers (ECB, FED, BOE, etc.) with uniform test suite.
 import asyncio
 import sys
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.services.fx import FXServiceError, FXProviderFactory
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,
@@ -21,6 +21,7 @@ from backend.test_scripts.test_utils import (
     print_test_summary,
     exit_with_result,
     )
+from backend.app.services.fx import FXServiceError, FXProviderFactory, normalize_rate_for_storage
 
 
 async def test_provider_metadata(provider_code: str) -> bool:
@@ -140,7 +141,7 @@ async def test_fetch_rates(provider_code: str) -> bool:
         rates_data = await provider.fetch_rates(
             (start_date, end_date),
             test_currencies
-        )
+            )
 
         if not rates_data:
             print_error("No rate data returned")
@@ -155,18 +156,21 @@ async def test_fetch_rates(provider_code: str) -> bool:
             if observations:
                 # Check first observation structure
                 first_obs = observations[0]
-                if not isinstance(first_obs, tuple) or len(first_obs) != 2:
+                if not isinstance(first_obs, tuple) or len(first_obs) != 4:
                     print_error(f"Invalid observation format for {currency}")
                     return False
 
-                obs_date, obs_rate = first_obs
+                obs_date, base, quote, obs_rate = first_obs
 
                 # Validate types
                 if not isinstance(obs_date, date):
                     print_error(f"Invalid date type for {currency}: {type(obs_date)}")
                     return False
 
-                from decimal import Decimal
+                if not isinstance(base, str) or not isinstance(quote, str):
+                    print_error(f"Invalid currency types for {currency}: {type(base)}, {type(quote)}")
+                    return False
+
                 if not isinstance(obs_rate, Decimal):
                     print_error(f"Invalid rate type for {currency}: {type(obs_rate)}")
                     return False
@@ -176,7 +180,7 @@ async def test_fetch_rates(provider_code: str) -> bool:
                     print_error(f"Invalid rate value for {currency}: {obs_rate}")
                     return False
 
-                print_success(f"  ✓ {currency}: {obs_date} = {obs_rate}")
+                print_success(f"  ✓ {currency}: {obs_date} {base}/{quote} = {obs_rate}")
 
         print_success("Rate data structure valid")
         return True
@@ -196,7 +200,6 @@ async def test_normalize_for_storage(provider_code: str) -> bool:
     print_section(f"Test 4: {provider_code} - Rate Normalization")
 
     try:
-        from decimal import Decimal
         provider = FXProviderFactory.get_provider(provider_code)
 
         print_info(f"Testing normalization for {provider.base_currency} base...")
@@ -210,8 +213,7 @@ async def test_normalize_for_storage(provider_code: str) -> bool:
 
         if test_currency_higher:
             rate = Decimal("1.5")
-            base, quote, normalized_rate = provider.normalize_for_storage(test_currency_higher, rate)
-
+            base, quote, normalized_rate = normalize_rate_for_storage(provider.base_currency, test_currency_higher, rate)
             print_info(f"  Case 1: {provider.base_currency} < {test_currency_higher}")
             print_info(f"    Input rate: {rate}")
             print_info(f"    Stored as: {base}/{quote} = {normalized_rate}")
@@ -235,7 +237,7 @@ async def test_normalize_for_storage(provider_code: str) -> bool:
 
         if test_currency_lower:
             rate = Decimal("1.5")
-            base, quote, normalized_rate = provider.normalize_for_storage(test_currency_lower, rate)
+            base, quote, normalized_rate = normalize_rate_for_storage(provider.base_currency, test_currency_lower, rate)
 
             print_info(f"  Case 2: {test_currency_lower} < {provider.base_currency}")
             print_info(f"    Input rate: {rate}")
@@ -266,9 +268,9 @@ async def test_single_provider(provider_code: str) -> dict[str, bool]:
     """Run all tests for a single provider."""
     results = {}
 
-    print_info(f"\n{'='*60}")
+    print_info(f"\n{'=' * 60}")
     print_info(f"Testing Provider: {provider_code}")
-    print_info(f"{'='*60}\n")
+    print_info(f"{'=' * 60}\n")
 
     # Run all tests
     results[f"{provider_code} - Metadata"] = await test_provider_metadata(provider_code)
@@ -319,9 +321,9 @@ This ensures all providers implement the interface correctly and work as expecte
         all_results.update(provider_results)
 
     # Summary
-    print_info(f"\n{'='*60}")
+    print_info(f"\n{'=' * 60}")
     print_info("OVERALL SUMMARY")
-    print_info(f"{'='*60}\n")
+    print_info(f"{'=' * 60}\n")
 
     success = print_test_summary(all_results, "All FX Providers Tests")
 

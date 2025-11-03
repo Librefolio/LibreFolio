@@ -20,100 +20,150 @@ from backend.test_scripts.test_db_config import setup_test_database, initialize_
 
 setup_test_database()
 
-from sqlalchemy import inspect, text
+# Standard library and SQLAlchemy imports
+from sqlalchemy import inspect, text, CheckConstraint, UniqueConstraint, ForeignKeyConstraint
 
+# App imports
 from backend.app.db import sync_engine as engine  # Use sync engine for validation script
+from backend.app.db.base import SQLModel
+from backend.app.db.models import (
+    IdentifierType,
+    AssetType,
+    ValuationModel,
+    TransactionType,
+    CashMovementType,
+)
+from backend.alembic.check_constraints_hook import check_and_add_missing_constraints
 
 
 def test_tables_exist():
-    """Verify all required tables exist."""
+    """
+    Verify all required tables exist.
+
+    Uses SQLModel metadata to dynamically discover expected tables from models.
+    This makes the test future-proof - new tables are automatically detected.
+    """
     inspector = inspect(engine)
-    tables = set(inspector.get_table_names())
+    actual_tables = set(inspector.get_table_names())
 
-    required_tables = {
-        'brokers',
-        'assets',
-        'transactions',
-        'price_history',
-        'fx_rates',
-        'cash_accounts',
-        'cash_movements',
-        }
+    # Get expected tables from SQLModel metadata (dynamically from models)
+    expected_tables = set(SQLModel.metadata.tables.keys())
+    
+    # Add alembic_version (created by Alembic, not in models)
+    expected_tables.add('alembic_version')
 
-    missing = required_tables - tables
+    # Check for missing tables (ERROR)
+    missing = expected_tables - actual_tables
     if missing:
-        print(f"❌ Missing tables: {missing}")
+        print(f"❌ Missing tables: {', '.join(sorted(missing))}")
+        print(f"   Expected (from models): {', '.join(sorted(expected_tables))}")
+        print(f"   Found (in database): {', '.join(sorted(actual_tables))}")
         return False
 
-    print(f"✅ All {len(required_tables)} required tables exist")
+    # Check for extra tables (WARNING - not an error)
+    extra = actual_tables - expected_tables
+    if extra:
+        print(f"⚠️  Extra tables found (not in models): {', '.join(sorted(extra))}")
+        print(f"   This might be OK (e.g., alembic_version, temp tables)")
+
+    print(f"✅ All {len(expected_tables)} required tables exist")
+    if extra:
+        print(f"   (plus {len(extra)} extra table(s) - see warning above)")
+
     return True
 
 
 def test_unique_constraints():
-    """Verify unique constraints."""
+    """
+    Verify unique constraints exist.
+    
+    Dynamically reads unique constraints from SQLModel metadata and verifies
+    they exist in the database.
+    """
     inspector = inspect(engine)
-
-    checks = {
-        'brokers': ['name'],
-        'price_history': ['asset_id', 'date'],
-        'fx_rates': ['date', 'base', 'quote'],
-        'cash_accounts': ['broker_id', 'currency'],
-        }
-
+    
+    # Get tables with unique constraints from models
+    tables_with_unique = []
+    for table_name, table in SQLModel.metadata.tables.items():
+        unique_constraints = [c for c in table.constraints if isinstance(c, UniqueConstraint)]
+        if unique_constraints:
+            tables_with_unique.append((table_name, len(unique_constraints)))
+            print(f"  {table_name}: {len(unique_constraints)} unique constraint(s) expected")
+    
+    # Verify in database
     all_ok = True
-    for table, expected_unique in checks.items():
-        unique_constraints = inspector.get_unique_constraints(table)
+    for table_name, expected_count in tables_with_unique:
+        db_unique = inspector.get_unique_constraints(table_name)
         # Note: SQLite may report indexes as constraints differently
-        print(f"  {table}: {len(unique_constraints)} unique constraint(s)")
+        # We just check that there are some constraints, not exact match
+        if len(db_unique) == 0 and expected_count > 0:
+            print(f"  ⚠️  {table_name}: Expected {expected_count} constraints, found 0 in DB")
+            print(f"      (May be implemented as unique indexes in SQLite)")
 
     print("✅ Unique constraints checked")
     return all_ok
 
 
 def test_foreign_keys():
-    """Verify foreign keys are defined."""
+    """
+    Verify foreign keys are defined.
+    
+    Dynamically reads foreign key constraints from SQLModel metadata and verifies
+    they exist in the database.
+    """
     inspector = inspect(engine)
-
-    fk_checks = {
-        'assets': [],  # No FK
-        'transactions': [('asset_id', 'assets'), ('broker_id', 'brokers')],
-        'price_history': [('asset_id', 'assets')],
-        'cash_accounts': [('broker_id', 'brokers')],
-        'cash_movements': [('cash_account_id', 'cash_accounts'), ('linked_transaction_id', 'transactions')],
-        }
-
+    
+    # Get tables with foreign keys from models
+    tables_with_fks = []
+    for table_name, table in SQLModel.metadata.tables.items():
+        fk_constraints = [c for c in table.constraints if isinstance(c, ForeignKeyConstraint)]
+        fk_count = len(fk_constraints)
+        tables_with_fks.append((table_name, fk_count))
+    
     all_ok = True
-    for table, expected_fks in fk_checks.items():
-        fks = inspector.get_foreign_keys(table)
-        if len(fks) != len(expected_fks):
-            print(f"⚠️  {table}: expected {len(expected_fks)} FKs, found {len(fks)}")
+    for table_name, expected_count in sorted(tables_with_fks):
+        fks = inspector.get_foreign_keys(table_name)
+        actual_count = len(fks)
+        
+        if actual_count != expected_count:
+            print(f"  ⚠️  {table_name}: expected {expected_count} FK(s), found {actual_count}")
+            all_ok = False
         else:
-            print(f"  ✅ {table}: {len(fks)} FK(s)")
+            print(f"  ✅ {table_name}: {actual_count} FK(s)")
 
     print("✅ Foreign keys verified")
     return all_ok
 
 
 def test_indexes():
-    """Verify indexes are created."""
+    """
+    Verify indexes are created.
+    
+    Dynamically reads indexes from SQLModel metadata and verifies they exist
+    in the database.
+    """
     inspector = inspect(engine)
-
-    index_checks = {
-        'transactions': ['idx_transactions_asset_broker_date'],
-        'price_history': ['idx_price_history_asset_date'],
-        'fx_rates': ['idx_fx_rates_base_quote_date'],
-        'cash_movements': ['idx_cash_movements_account_date'],
-        }
-
+    
+    # Get tables with indexes from models
+    tables_with_indexes = []
+    for table_name, table in SQLModel.metadata.tables.items():
+        # Count indexes defined in the model
+        index_count = len(table.indexes)
+        if index_count > 0:
+            tables_with_indexes.append((table_name, index_count, [idx.name for idx in table.indexes]))
+    
     all_ok = True
-    for table, expected_indexes in index_checks.items():
-        indexes = inspector.get_indexes(table)
-        index_names = [idx['name'] for idx in indexes if idx.get('name')]
-        print(f"  {table}: {len(indexes)} index(es)")
-
-        for exp_idx in expected_indexes:
-            if exp_idx not in index_names:
-                print(f"    ⚠️  Missing: {exp_idx}")
+    for table_name, expected_count, expected_names in sorted(tables_with_indexes):
+        db_indexes = inspector.get_indexes(table_name)
+        db_index_names = [idx['name'] for idx in db_indexes if idx.get('name')]
+        
+        print(f"  {table_name}: {len(db_indexes)} index(es)")
+        
+        # Check if expected indexes are present
+        for expected_name in expected_names:
+            if expected_name and expected_name not in db_index_names:
+                print(f"    ⚠️  Missing: {expected_name}")
+                all_ok = False
 
     print("✅ Indexes verified")
     return all_ok
@@ -135,13 +185,6 @@ def test_fk_pragma():
 
 def test_enum_values():
     """Test that enum values can be used."""
-    from backend.app.db.models import (
-        IdentifierType,
-        AssetType,
-        ValuationModel,
-        TransactionType,
-        CashMovementType,
-        )
 
     # Just verify they can be accessed
     assert IdentifierType.ISIN == "ISIN"
@@ -183,21 +226,41 @@ def test_check_constraints():
     """
     Verify CHECK constraints exist in database.
 
+    This test dynamically reads all CHECK constraints defined in SQLModel models
+    and verifies they exist in the actual database.
+
     Note: SQLite limitation - Alembic autogenerate doesn't detect CHECK constraints.
     This test ensures they were manually added to migrations.
     """
-    from backend.alembic.check_constraints_hook import check_and_add_missing_constraints
 
-    print("  Verifying CHECK constraints from models...")
+    # Get count of tables with CHECK constraints
+    tables_with_checks = []
+    for table_name, table in SQLModel.metadata.tables.items():
+        if any(isinstance(c, CheckConstraint) for c in table.constraints):
+            check_count = sum(1 for c in table.constraints if isinstance(c, CheckConstraint))
+            tables_with_checks.append((table_name, check_count))
+
+    if tables_with_checks:
+        print(f"  Found {len(tables_with_checks)} table(s) with CHECK constraints in models:")
+        for table_name, count in sorted(tables_with_checks):
+            print(f"    • {table_name}: {count} constraint(s)")
+    else:
+        print("  No CHECK constraints defined in models")
+        return True
+
+    print("  Verifying constraints exist in database...")
     all_present, missing = check_and_add_missing_constraints(auto_fix=False, verbose=False)
 
     if not all_present:
-        print(f"  ❌ Missing CHECK constraints: {', '.join(missing)}")
+        print(f"  ❌ Missing CHECK constraints:")
+        for constraint in missing:
+            print(f"     • {constraint}")
+        print()
         print("  ⚠️  SQLite/Alembic limitation: CHECK constraints must be added manually to migrations")
         print("  Run: python -m backend.alembic.check_constraints_hook")
         return False
 
-    print("✅ All CHECK constraints present")
+    print(f"✅ All CHECK constraints present in database")
     return True
 
 

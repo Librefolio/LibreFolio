@@ -167,36 +167,54 @@ class ECBProvider(FXRateProvider):
                     response.raise_for_status()
 
                     # ECB returns empty body when no data available (weekends/holidays)
+                    # This is NOT an error - it's ECB's way of saying "no rates for this period"
+                    # Happens when:
+                    # - Requesting weekend dates (Saturday/Sunday)
+                    # - Requesting EU holidays
+                    # - Requesting future dates
                     if not response.text:
                         logger.info(
                             f"No FX rates available for {currency} ({start_date} to {end_date}). "
-                            f"This is normal for weekends/holidays."
+                            f"This is normal for weekends/holidays when ECB doesn't publish rates."
                         )
                         results[currency] = []
                         continue
 
-                    # Parse JSON
+                    # Parse JSON response from ECB API
                     data = response.json()
 
-                    # Parse observations
+                    # Extract observations from ECB's nested JSON structure
                     observations = []
+
+                    # Check if dataSets exist (ECB returns empty dataSets on weekends/holidays)
                     if "dataSets" in data and len(data["dataSets"]) > 0:
                         series = data["dataSets"][0].get("series", {})
+
                         if series:
-                            # Get first series
+                            # ECB returns series as a dictionary with keys like "0:0:0:0"
+                            # We just need the first (and usually only) series
                             first_series = next(iter(series.values()))
                             obs_data = first_series.get("observations", {})
 
-                            # Get time period dimension
+                            # Get time period dimension to map observation indices to dates
+                            # ECB structure: dimensions.observation contains TIME_PERIOD values
                             dimensions = data["structure"]["dimensions"]["observation"]
                             time_periods = next(d["values"] for d in dimensions if d["id"] == "TIME_PERIOD")
 
+                            # Iterate through observations
+                            # Format: {"0": [1.0850], "1": [1.0860], ...}
+                            # Index maps to time_periods array
                             for obs_idx, obs_value in obs_data.items():
                                 idx = int(obs_idx)
-                                rate_date_str = time_periods[idx]["id"]
+                                rate_date_str = time_periods[idx]["id"]  # Format: "2025-01-01"
+                                
+                                # ECB gives: 1 EUR = X foreign currency
+                                # obs_value is array, first element is the rate
+                                # Return as (date, base, quote, rate)
                                 ecb_rate = Decimal(str(obs_value[0]))
+                                rate_date = date.fromisoformat(rate_date_str)
 
-                                observations.append((date.fromisoformat(rate_date_str), ecb_rate))
+                                observations.append((rate_date, self.base_currency, currency, ecb_rate))
 
                     results[currency] = observations
 

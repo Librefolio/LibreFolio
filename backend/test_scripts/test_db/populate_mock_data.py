@@ -45,6 +45,7 @@ from backend.app.db import (
     Transaction,
     PriceHistory,
     FxRate,
+    FxCurrencyPairSource,
     CashAccount,
     CashMovement,
     IdentifierType,
@@ -53,6 +54,7 @@ from backend.app.db import (
     TransactionType,
     CashMovementType,
     )
+from backend.app.services.fx import FXProviderFactory
 
 
 def populate_brokers(session: Session):
@@ -594,6 +596,61 @@ def populate_fx_rates(session: Session):
     session.commit()
 
 
+def populate_fx_currency_pair_sources(session: Session):
+    """
+    Create default FX provider configuration.
+
+    By default, ECB is used for all EUR/* pairs since it's the only provider
+    currently implemented. When new providers (FED, BOE, etc.) are added,
+    this function should be updated to assign appropriate providers.
+    """
+    print("\n🔧 Creating FX Provider Configuration...")
+    print("-" * 60)
+    
+    # Get all registered providers
+    try:
+        available_providers = FXProviderFactory.get_all_providers()
+        if not available_providers:
+            print("  ⚠️  No FX providers registered - skipping configuration")
+            return
+    except Exception as e:
+        print(f"  ⚠️  Could not load providers: {e}")
+        return
+
+    # For now, we only have ECB, so configure all EUR/* pairs with ECB
+    # In the future, when FED/BOE are added, update this logic
+
+    # Get ECB provider info
+    ecb_provider = next((p for p in available_providers if p['code'] == 'ECB'), None)
+    if not ecb_provider:
+        print("  ⚠️  ECB provider not found - skipping configuration")
+        return
+
+    # Common currency pairs that ECB should handle
+    # These match the test currencies from ECBProvider
+    eur_pairs = [
+        ("EUR", "USD"),  # Euro / US Dollar
+        ("EUR", "GBP"),  # Euro / British Pound
+        ("CHF", "EUR"),  # Swiss Franc / Euro (inverted)
+        ("EUR", "JPY"),  # Euro / Japanese Yen
+        ("CAD", "EUR"),  # Canadian Dollar / Euro (inverted)
+        ("AUD", "EUR"),  # Australian Dollar / Euro (inverted)
+    ]
+
+    for base, quote in eur_pairs:
+        pair_source = FxCurrencyPairSource(
+            base=base,
+            quote=quote,
+            provider_code="ECB",
+            priority=1  # Primary source
+        )
+        session.add(pair_source)
+        print(f"  ✅ {base}/{quote} → ECB (priority=1)")
+
+    session.commit()
+    print(f"\n  📊 Configured {len(eur_pairs)} currency pairs with ECB as provider")
+
+
 def check_existing_data(session: Session) -> tuple[bool, dict]:
     """Check if database already contains data.
 
@@ -608,6 +665,7 @@ def check_existing_data(session: Session) -> tuple[bool, dict]:
         'cash_movements': len(session.exec(select(CashMovement)).all()),
         'price_history': len(session.exec(select(PriceHistory)).all()),
         'fx_rates': len(session.exec(select(FxRate)).all()),
+        'fx_pair_sources': len(session.exec(select(FxCurrencyPairSource)).all()),
     }
 
     has_data = any(count > 0 for count in counts.values())
@@ -680,6 +738,7 @@ def main():
             populate_transactions_and_cash(session)
             populate_price_history(session)
             populate_fx_rates(session)
+            populate_fx_currency_pair_sources(session)
 
             print("\n" + "=" * 60)
             print("✅ Mock data population completed successfully!")
