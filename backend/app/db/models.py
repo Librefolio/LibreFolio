@@ -504,6 +504,56 @@ class FxRate(SQLModel, table=True):
     fetched_at: datetime = Field(default_factory=utcnow)
 
 
+class FxCurrencyPairSource(SQLModel, table=True):
+    """
+    Configuration table: which FX provider to use for each currency pair.
+
+    This table maps currency pairs to their authoritative data source.
+    When syncing rates, the system queries this table to determine
+    which provider (ECB, FED, BOE, etc.) should be used for each pair.
+
+    Examples:
+    - EUR/USD → ECB (European Central Bank provides EUR rates)
+    - USD/JPY → FED (Federal Reserve provides USD rates)
+    - GBP/CHF → BOE (Bank of England provides GBP rates)
+
+    Priority field allows fallback providers:
+    - priority=1: Primary source (used by default)
+    - priority=2: Fallback source (if primary fails)
+
+    Important: Currency pairs are stored alphabetically (base < quote)
+    to match the fx_rates table convention.
+    """
+    __tablename__ = "fx_currency_pair_sources"
+    __table_args__ = (
+        UniqueConstraint("base", "quote", "priority", name="uq_pair_source_base_quote_priority"),
+        CheckConstraint("base < quote", name="ck_pair_source_base_less_than_quote"),
+        Index("idx_pair_source_base_quote", "base", "quote"),
+        )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    # Currency pair (alphabetically ordered)
+    base: str = Field(nullable=False, min_length=3, max_length=3, index=True)
+    quote: str = Field(nullable=False, min_length=3, max_length=3, index=True)
+
+    # Provider configuration
+    provider_code: str = Field(
+        nullable=False,
+        description="Provider code (ECB, FED, BOE, etc.)"
+    )
+
+    priority: int = Field(
+        default=1,
+        ge=1,
+        description="Priority level (1=primary, 2=fallback, etc.)"
+    )
+
+    # Metadata
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class CashAccount(SQLModel, table=True):
     """
     Cash account per broker and currency.

@@ -624,7 +624,7 @@ async def test_bulk_raise_on_error():
             error_msg = str(e)
             print_success("✓ Correctly raised RateNotFoundError")
             print_info(f"  Error: {error_msg[:80]}...")
-
+            
             # Verify it mentions index
             if "index 1" in error_msg.lower() or "conversion 1" in error_msg.lower():
                 print_success("✓ Error message includes failing index")

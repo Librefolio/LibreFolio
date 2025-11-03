@@ -12,6 +12,68 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+function get_server_port() {
+    # Get server port from system environment variable
+    # Returns: port number (default: 8000)
+    #
+    # Note: The .env file is used by Docker/FastAPI at runtime, not by this script.
+    # If you need a custom port for dev.sh checks, set it in your shell:
+    #   export PORT=9000
+
+    echo "${PORT:-8000}"
+}
+
+function check_server_running() {
+    # Check if server is running on configured port
+    # Args:
+    #   $1: action (e.g., "creating migrations", "applying migrations")
+    #   $2: strictness ("strict" = exit immediately, "warn" = ask confirmation)
+    # Returns: 0 if can continue, 1 if should abort
+
+    local action="${1:-running migrations}"
+    local strictness="${2:-strict}"
+    local port=$(get_server_port)
+
+    # Check if port is in use
+    if ! lsof -ti:$port > /dev/null 2>&1; then
+        # Port not in use - all good
+        return 0
+    fi
+
+    # Port is in use - server is running
+    if [ "$strictness" = "strict" ]; then
+        # STRICT MODE: Hard stop, cannot continue
+        echo -e "${YELLOW}⚠️  Important: Migrations should be run with the server OFFLINE${NC}"
+        echo -e "${YELLOW}   Running migrations while the server is active can cause database locks.${NC}"
+        echo ""
+        echo -e "${RED}❌ Server is currently running on port $port${NC}"
+        echo ""
+        echo -e "${YELLOW}Please stop the server before $action:${NC}"
+        echo -e "  1. Stop the server (Ctrl+C in server terminal)"
+        echo -e "  2. Or kill the process: ${GREEN}lsof -ti:$port | xargs kill -9${NC}"
+        echo ""
+        echo -e "${YELLOW}Then run the command again.${NC}"
+        echo ""
+        return 1
+    else
+        # WARN MODE: Show warning and ask confirmation
+        echo -e "${YELLOW}⚠️  Warning: Server is running on port $port${NC}"
+        echo -e "${YELLOW}   ${action^} while server is active may cause database locks.${NC}"
+        echo ""
+        echo -e "${YELLOW}Recommended: Stop the server before running migrations.${NC}"
+        echo -e "  Kill server: ${GREEN}lsof -ti:$port | xargs kill -9${NC}"
+        echo ""
+        read -p "Continue anyway? (y/N) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}Operation cancelled.${NC}"
+            return 1
+        fi
+        echo ""
+        return 0
+    fi
+}
+
 function print_help() {
     echo "LibreFolio Development Helper"
     echo ""
@@ -183,6 +245,15 @@ function db_migrate() {
     echo -e "${GREEN}Checking database state before creating migration...${NC}"
     echo ""
 
+    # STEP 0: Check if server is running (avoid database locks)
+    if ! check_server_running "creating migrations" "strict"; then
+        exit 1
+    fi
+
+    local port=$(get_server_port)
+    echo -e "${GREEN}✅ Server is offline (port $port not in use)${NC}"
+    echo ""
+
     # STEP 1: Check if we're at HEAD
     if has_pending_migrations "$db_path"; then
         echo -e "${RED}❌ Cannot create migration: you have pending migrations${NC}"
@@ -255,6 +326,11 @@ function db_upgrade() {
         echo -e "${YELLOW}Database: $db_path${NC}"
     fi
     echo ""
+
+    # Check if server is running (avoid database locks)
+    if ! check_server_running "applying migrations" "warn"; then
+        exit 1
+    fi
 
     # Apply migrations (NO pre-flight blocking check)
     if [ -n "$db_url" ]; then
@@ -357,6 +433,11 @@ function db_downgrade() {
         echo -e "${YELLOW}Database: backend/data/sqlite/app.db (default)${NC}"
     fi
     echo ""
+
+    # Check if server is running (avoid database locks)
+    if ! check_server_running "rolling back migrations" "warn"; then
+        exit 1
+    fi
 
     if [ -n "$db_url" ]; then
         pipenv run alembic -c backend/alembic.ini -x sqlalchemy.url="$db_url" downgrade -1

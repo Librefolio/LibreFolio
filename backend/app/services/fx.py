@@ -88,6 +88,32 @@ class FXRateProvider(ABC):
         """
         return ["USD", "EUR", "GBP", "JPY", "CHF"]
 
+    @property
+    def multi_unit_currencies(self) -> set[str]:
+        """
+        Set of currencies quoted per 100 units instead of per 1 unit.
+
+        Some central banks quote certain currencies (typically those with small
+        unit values) per 100 units to make rates more readable.
+
+        Example:
+        - Normal: 1 EUR = 1.08 USD
+        - Multi-unit: 100 JPY = 0.67 CHF (instead of 1 JPY = 0.0067 CHF)
+
+        Common multi-unit currencies:
+        - JPY (Japanese Yen)
+        - SEK (Swedish Krona)
+        - NOK (Norwegian Krone)
+        - DKK (Danish Krone)
+
+        Override this property to specify which currencies this provider
+        quotes per 100 units. Default is empty set (no multi-unit currencies).
+
+        Returns:
+            Set of ISO 4217 currency codes quoted per 100 units
+        """
+        return set()
+
     @abstractmethod
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -111,27 +137,41 @@ class FXRateProvider(ABC):
         self,
         date_range: tuple[date, date],
         currencies: list[str]
-    ) -> dict[str, list[tuple[date, Decimal]]]:
+    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from provider API for given date range and currencies.
 
-        IMPORTANT: Rates MUST be normalized to provider's base currency.
-        Example: ECB provides "1 EUR = X USD", so return rate X for USD.
+        Providers return raw data as provided by their API, with multi-unit
+        adjustment applied if needed. NO inversion or alphabetical ordering.
+        The service layer will handle normalization for database storage.
 
         Args:
             date_range: (start_date, end_date) inclusive
-            currencies: List of currency codes (excluding base_currency)
+            currencies: List of currency codes to fetch (excluding base_currency)
 
         Returns:
-            Dictionary mapping currency -> [(date, rate), ...]
-            Each rate represents: 1 base_currency = rate * currency
+            Dictionary mapping currency -> [(date, base, quote, rate), ...]
+            Where:
+            - date: Rate date
+            - base: Base currency (provider's base_currency)
+            - quote: Quote currency (from currencies list)
+            - rate: Raw rate as provided by API (after multi-unit adjustment)
+
+            Rate semantics: 1 base = rate * quote
+            Example: (2025-01-01, 'EUR', 'USD', 1.08) means 1 EUR = 1.08 USD
 
         Example:
             ECB.fetch_rates((2025-01-01, 2025-01-03), ['USD', 'GBP'])
             Returns:
             {
-                'USD': [(2025-01-01, 1.08), (2025-01-02, 1.09), ...],
-                'GBP': [(2025-01-01, 0.85), (2025-01-02, 0.86), ...]
+                'USD': [
+                    (date(2025-01-01), 'EUR', 'USD', Decimal('1.08')),
+                    (date(2025-01-02), 'EUR', 'USD', Decimal('1.09')),
+                ],
+                'GBP': [
+                    (date(2025-01-01), 'EUR', 'GBP', Decimal('0.85')),
+                    (date(2025-01-02), 'EUR', 'GBP', Decimal('0.86')),
+                ]
             }
 
         Raises:
@@ -139,39 +179,43 @@ class FXRateProvider(ABC):
         """
         pass
 
-    def normalize_for_storage(
-        self,
-        currency: str,
-        rate: Decimal
-    ) -> tuple[str, str, Decimal]:
-        """
-        Normalize rate for alphabetical storage in database.
 
-        Database stores rates with: base < quote (alphabetically)
-        This method handles the conversion if needed.
+# ============================================================================
+# SERVICE LAYER HELPER FUNCTIONS
+# ============================================================================
 
-        Args:
-            currency: Quote currency
-            rate: Rate as provided by API (1 base_currency = rate * currency)
+def normalize_rate_for_storage(
+    base: str,
+    quote: str,
+    rate: Decimal
+) -> tuple[str, str, Decimal]:
+    """
+    Normalize FX rate for alphabetical storage in database.
 
-        Returns:
-            Tuple of (base, quote, normalized_rate)
+    Database stores rates with: base < quote (alphabetically)
+    This function handles the conversion if needed.
 
-        Example:
-            ECB (base=EUR), currency=USD, rate=1.08
-            → Returns ('EUR', 'USD', 1.08) because EUR < USD
+    Args:
+        base: Base currency (e.g., 'EUR')
+        quote: Quote currency (e.g., 'USD')
+        rate: Rate value (1 base = rate * quote)
 
-            ECB (base=EUR), currency=CHF, rate=0.95
-            → Returns ('CHF', 'EUR', 1.0526...) because CHF < EUR (inverted)
-        """
-        base = self.base_currency
+    Returns:
+        Tuple of (normalized_base, normalized_quote, normalized_rate)
 
-        if base < currency:
-            # Store as base/currency (e.g., EUR/USD)
-            return base, currency, rate
-        else:
-            # Store as currency/base (e.g., CHF/EUR) with inverted rate
-            return currency, base, Decimal("1") / rate
+    Example:
+        normalize_rate_for_storage('EUR', 'USD', 1.08)
+        → ('EUR', 'USD', 1.08) because EUR < USD
+
+        normalize_rate_for_storage('EUR', 'CHF', 0.95)
+        → ('CHF', 'EUR', 1.0526...) because CHF < EUR (inverted)
+    """
+    if base < quote:
+        # Already in correct order
+        return base, quote, rate
+    else:
+        # Invert: swap currencies and invert rate
+        return quote, base, Decimal("1") / rate
 
 
 # ============================================================================
@@ -379,12 +423,14 @@ async def ensure_rates_multi_source(
         total_fetched += len(observations)
 
         # Normalize for storage (alphabetical ordering)
+        # Observations now come as (date, base, quote, rate)
         normalized_observations = []
-        for obs_date, rate in observations:
-            base, quote, normalized_rate = provider.normalize_for_storage(currency, rate)
-            normalized_observations.append((obs_date, base, quote, normalized_rate))
+        for obs_date, base, quote, rate in observations:
+            # Apply alphabetical normalization
+            norm_base, norm_quote, norm_rate = normalize_rate_for_storage(base, quote, rate)
+            normalized_observations.append((obs_date, norm_base, norm_quote, norm_rate))
 
-        # Get base/quote from first observation (all same for this currency)
+        # Get base/quote from first observation (all same for this currency after normalization)
         if normalized_observations:
             _, base, quote, _ = normalized_observations[0]
 
@@ -854,4 +900,7 @@ async def upsert_rates_bulk(
 # Import providers to register them automatically in the factory
 # This happens when the fx module is imported
 from backend.app.services.fx_providers.ecb import ECBProvider  # noqa: F401
+from backend.app.services.fx_providers.fed import FEDProvider  # noqa: F401
+from backend.app.services.fx_providers.boe import BOEProvider  # noqa: F401
+from backend.app.services.fx_providers.snb import SNBProvider  # noqa: F401
 

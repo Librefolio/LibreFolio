@@ -83,6 +83,22 @@ def external_fx_source(verbose: bool = False) -> bool:
         )
 
 
+def external_fx_multi_unit(verbose: bool = False) -> bool:
+    """
+    Test multi-unit currency handling (JPY, SEK, NOK, DKK).
+    Validates correct 100x inversion logic.
+    """
+    print_section("External: Multi-Unit Currencies")
+    print_info("Testing multi-unit currency handling (JPY, SEK, NOK, DKK)")
+    print_info("Tests: Identification, rate reasonableness, calculation consistency")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_external.test_fx_multi_unit"],
+        "Multi-unit currency tests",
+        verbose=verbose
+        )
+
+
 def external_all(verbose: bool = False) -> bool:
     """
     Run all external service tests.
@@ -93,6 +109,7 @@ def external_all(verbose: bool = False) -> bool:
 
     tests = [
         ("External Forex data import API", lambda: external_fx_source(verbose)),
+        ("Multi-Unit Currency Handling", lambda: external_fx_multi_unit(verbose)),
         # Future: yfinance, other data sources
         ]
 
@@ -485,7 +502,7 @@ Test Categories:
   
   external - External Services Tests
              Tests external API integrations (no backend server needed).
-             Verifies: ECB API, yfinance, other data sources.
+             Verifies: External Forex API, yfinance, other data sources.
   
   db       - Database Layer Tests
              Tests the SQLite database file directly (no backend server needed).
@@ -557,14 +574,19 @@ External Services Tests
 
 These tests verify external API integrations:
   • No backend server required
-  • Tests connections to ECB, yfinance, other data sources
+  • Tests connections to ECB, FED, BOE, SNB and other data sources
   • Verifies data availability and format
 
 Test commands:
-  ecb  - Test ECB API connection and currency list
-         📋 Prerequisites: None - tests external service availability
+  fx-source      - Test all FX providers (ECB, FED, BOE, SNB)
+                   Tests: Metadata, API connection, rate fetching, normalization
+                   📋 Prerequisites: Internet connection
          
-  all  - Run all external service tests
+  fx-multi-unit  - Test multi-unit currency handling (JPY, SEK, NOK, DKK)
+                   Tests: Identification, rate reasonableness, 100x logic
+                   📋 Prerequisites: Internet connection
+         
+  all            - Run all external service tests
   
 Future: yfinance, other data sources will be added here
         """,
@@ -573,7 +595,7 @@ Future: yfinance, other data sources will be added here
 
     external_parser.add_argument(
         "action",
-        choices=["fx-source", "all"],
+        choices=["fx-source", "fx-multi-unit", "all"],
         help="External service test to run"
         )
 
@@ -735,6 +757,8 @@ def main():
         # External services tests
         if args.action == "fx-source":
             success = external_fx_source(verbose=verbose)
+        elif args.action == "fx-multi-unit":
+            success = external_fx_multi_unit(verbose=verbose)
         elif args.action == "all":
             success = external_all(verbose=verbose)
 
