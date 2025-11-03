@@ -23,6 +23,28 @@ function get_server_port() {
     echo "${PORT:-8000}"
 }
 
+function get_test_server_port() {
+    # Get test server port from environment variable
+    # Returns: port number (default: 8001)
+    echo "${TEST_PORT:-8001}"
+}
+
+function get_database_path() {
+    # Get production database path from environment variable
+    # Returns: relative path (default: backend/data/sqlite/app.db)
+    local db_url="${DATABASE_URL:-sqlite:///./backend/data/sqlite/app.db}"
+    # Extract path from URL (remove sqlite:///./  or sqlite:///)
+    echo "$db_url" | sed 's|sqlite:///\./||' | sed 's|sqlite:///||'
+}
+
+function get_test_database_path() {
+    # Get test database path from environment variable
+    # Returns: relative path (default: backend/data/sqlite/test_app.db)
+    local db_url="${TEST_DATABASE_URL:-sqlite:///./backend/data/sqlite/test_app.db}"
+    # Extract path from URL
+    echo "$db_url" | sed 's|sqlite:///\./||' | sed 's|sqlite:///||'
+}
+
 function check_server_running() {
     # Check if server is running on configured port
     # Args:
@@ -75,45 +97,53 @@ function check_server_running() {
 }
 
 function print_help() {
+    local prod_port=$(get_server_port)
+    local test_port=$(get_test_server_port)
+    local prod_db=$(get_database_path)
+    local test_db=$(get_test_database_path)
+
     echo "LibreFolio Development Helper"
     echo ""
     echo "Usage: ./dev.sh [command]"
     echo ""
     echo "Commands:"
     echo "  install          Install all dependencies"
-    echo "  server           Start the FastAPI development server"
+    echo "  server           Start the FastAPI development server (production mode)"
+    echo "                   Port: $prod_port | Database: $prod_db"
+    echo "  server:test      Start the FastAPI development server in TEST MODE"
+    echo "                   Port: $test_port | Database: $test_db"
     echo ""
     echo "Database Management:"
     echo "  db:check [path]      Verify CHECK constraints in database"
-    echo "                       Optional: SQLite file path (default: backend/data/sqlite/app.db)"
+    echo "                       Optional: SQLite file path (default: $prod_db)"
     echo "                       Examples:"
     echo "                         ./dev.sh db:check"
-    echo "                         ./dev.sh db:check backend/data/sqlite/test_app.db"
+    echo "                         ./dev.sh db:check $test_db"
     echo ""
     echo "  db:current [path]    Show current database migration"
-    echo "                       Optional: SQLite file path (default: backend/data/sqlite/app.db)"
+    echo "                       Optional: SQLite file path (default: $prod_db)"
     echo "                       Examples:"
     echo "                         ./dev.sh db:current"
-    echo "                         ./dev.sh db:current backend/data/sqlite/test_app.db"
+    echo "                         ./dev.sh db:current $test_db"
     echo ""
     echo "  db:migrate <msg> [path]  Create a new migration (provide message)"
-    echo "                           Optional: SQLite file path (default: backend/data/sqlite/app.db)"
+    echo "                           Optional: SQLite file path (default: $prod_db)"
     echo "                           Note: Database must be at HEAD with all constraints present"
     echo "                           Examples:"
     echo "                             ./dev.sh db:migrate 'add users table'"
-    echo "                             ./dev.sh db:migrate 'add feature' backend/data/sqlite/test_app.db"
+    echo "                             ./dev.sh db:migrate 'add feature' $test_db"
     echo ""
     echo "  db:upgrade [path]    Apply pending migrations"
-    echo "                       Optional: SQLite file path (default: backend/data/sqlite/app.db)"
+    echo "                       Optional: SQLite file path (default: $prod_db)"
     echo "                       Examples:"
     echo "                         ./dev.sh db:upgrade"
-    echo "                         ./dev.sh db:upgrade backend/data/sqlite/test_app.db"
+    echo "                         ./dev.sh db:upgrade $test_db"
     echo ""
     echo "  db:downgrade [path]  Rollback one migration"
-    echo "                       Optional: SQLite file path (default: backend/data/sqlite/app.db)"
+    echo "                       Optional: SQLite file path (default: $prod_db)"
     echo "                       Examples:"
     echo "                         ./dev.sh db:downgrade"
-    echo "                         ./dev.sh db:downgrade backend/data/sqlite/test_app.db"
+    echo "                         ./dev.sh db:downgrade $test_db"
     echo ""
     echo "Testing:"
     echo "  test [args]      Run tests via test_runner.py"
@@ -155,10 +185,31 @@ function install_deps() {
 }
 
 function start_server() {
+    local port=$(get_server_port)
+    local db=$(get_database_path)
+
     echo -e "${GREEN}Starting LibreFolio API server...${NC}"
-    echo -e "${YELLOW}API Redoc available at: http://localhost:8000/api/v1/redoc${NC}  # Render with Redoc"
-    echo -e "${YELLOW}API docs available at: http://localhost:8000/api/v1/docs${NC}    # Render with Swagger"
-    pipenv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+    echo -e "${YELLOW}Database: $db${NC}"
+    echo -e "${YELLOW}Port: $port${NC}"
+    echo -e "${YELLOW}API Redoc: http://localhost:$port/api/v1/redoc${NC}"
+    echo -e "${YELLOW}API Docs: http://localhost:$port/api/v1/docs${NC}"
+    echo ""
+    pipenv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port $port
+}
+
+function start_server_test() {
+    local port=$(get_test_server_port)
+    local db=$(get_test_database_path)
+
+    echo -e "${GREEN}Starting LibreFolio API server in TEST MODE...${NC}"
+    echo -e "${YELLOW}🧪 Database: $db${NC}"
+    echo -e "${YELLOW}🧪 Port: $port${NC}"
+    echo -e "${YELLOW}API Redoc: http://localhost:$port/api/v1/redoc${NC}"
+    echo -e "${YELLOW}API Docs: http://localhost:$port/api/v1/docs${NC}"
+    echo ""
+    echo -e "${YELLOW}⚠️  Warning: This uses the TEST database, not production!${NC}"
+    echo ""
+    LIBREFOLIO_TEST_MODE=1 pipenv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port $port
 }
 
 function has_pending_migrations() {
@@ -186,7 +237,7 @@ function has_pending_migrations() {
 
 function db_check() {
     # Accept optional SQLite file path as first parameter
-    local db_path="${1:-backend/data/sqlite/app.db}"
+    local db_path="${1:-$(get_database_path)}"
     local db_url=$(path_to_url "$db_path")
 
     if [ -n "$db_url" ]; then
@@ -211,7 +262,7 @@ function db_current() {
     if [ -n "$db_url" ]; then
         echo -e "${YELLOW}Database: $db_path${NC}"
     else
-        echo -e "${YELLOW}Database: backend/data/sqlite/app.db (default)${NC}"
+        echo -e "${YELLOW}Database: $(get_database_path) (default)${NC}"
     fi
     echo ""
 
@@ -430,7 +481,7 @@ function db_downgrade() {
     if [ -n "$db_url" ]; then
         echo -e "${YELLOW}Database: $db_path${NC}"
     else
-        echo -e "${YELLOW}Database: backend/data/sqlite/app.db (default)${NC}"
+        echo -e "${YELLOW}Database: $(get_database_path) (default)${NC}"
     fi
     echo ""
 
@@ -489,6 +540,9 @@ case "${1:-help}" in
         ;;
     server)
         start_server
+        ;;
+    server:test)
+        start_server_test
         ;;
     db:check)
         db_check "$2"

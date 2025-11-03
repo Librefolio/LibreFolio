@@ -26,6 +26,7 @@ Welcome to LibreFolio documentation!
 
 ### Testing
 - **[Testing Guide for New Developers](testing-guide.md)** - ⭐ Hands-on introduction to the test suite (start here!)
+- **[Testing Environment](testing-environment.md)** - Test vs production database isolation
 
 ### Configuration
 - **[Environment Variables](environment-variables.md)** - Configuration options and Docker deployment
@@ -40,6 +41,7 @@ todo: add more links when more docs are added
 |----------|---------|----------|
 | [environment-variables.md](environment-variables.md) | Configuration & deployment | Developers, DevOps |
 | [testing-guide.md](testing-guide.md) | ⭐ Learn the system via testing (new devs start here!) | New Developers |
+| [testing-environment.md](testing-environment.md) | Test vs production database isolation | Developers |
 | [api-development-guide.md](api-development-guide.md) | 🚀 ⭐ Complete guide to add REST API endpoints | Contributors |
 | [alembic-guide.md](alembic-guide.md) | Learn database migrations | Everyone |
 | [database-schema.md](database-schema.md) | Database tables & relationships | Everyone |

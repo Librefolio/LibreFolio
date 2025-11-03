@@ -124,11 +124,19 @@ class TestServerManager:
             print_port_occupied_help(TEST_SERVER_PORT, process_info)
             return False
 
-        # Prepare environment with test port
+        # Prepare environment with test mode enabled
         env = os.environ.copy()
-        # Ensure TEST_PORT is used (already set in config, but can be overridden)
+
+        # Enable test mode via environment variable
+        # This will be picked up by config.py before app initialization
+        env["LIBREFOLIO_TEST_MODE"] = "1"
+
+        from backend.test_scripts.test_db_config import TEST_DATABASE_URL
+        print(f"[TestServerManager] Starting server in TEST MODE")
+        print(f"[TestServerManager] Test database: {TEST_DATABASE_URL}")
 
         # Start server in background
+        # Test mode is enabled via LIBREFOLIO_TEST_MODE environment variable
         self.server_process = subprocess.Popen(
             [
                 "pipenv", "run", "uvicorn", "backend.app.main:app",

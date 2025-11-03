@@ -12,12 +12,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.v1.router import router as api_v1_router
-from backend.app.config import get_settings
+from backend.app.config import get_settings, set_test_mode, is_test_mode
 from backend.app.logging_config import configure_logging, get_logger
 
+# Check for --test flag in command line arguments
+# This must be done before any imports that might use settings
+if "--test" in sys.argv:
+    set_test_mode(True)
+    print("[LibreFolio] 🧪 Test mode enabled (--test flag detected)")
+    sys.argv.remove("--test")  # Remove flag so uvicorn doesn't complain
+
+# Get settings after test mode is set
 settings = get_settings()
 
-# Configure logging
+# Configure logging with settings
 configure_logging(settings.LOG_LEVEL)
 logger = get_logger(__name__)
 
@@ -31,6 +39,9 @@ def ensure_database_exists():
     - Backend server on startup (via lifespan)
     - Test scripts (db_schema_validate, populate_db)
     """
+    # Get settings at call time to respect test mode
+    settings = get_settings()
+
     # Extract database path from DATABASE_URL
     db_url = settings.DATABASE_URL
     if db_url.startswith("sqlite:///"):
@@ -90,6 +101,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         "Starting LibreFolio",
         version=settings.VERSION,
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
+        test_mode=is_test_mode(),
         )
 
     # Ensure database exists and is migrated

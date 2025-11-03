@@ -284,7 +284,7 @@ def db_all(verbose: bool = False) -> bool:
     print_header("LibreFolio Database Tests")
     print_info("Testing the database layer (SQLite file)")
     print_info("Backend server is NOT required for these tests")
-    print_info("Target: backend/data/sqlite/app.db")
+    print_info("Target: backend/data/sqlite/test_app.db")
 
     # Test order matters!
     # Note: populate comes before fx-rates because:
