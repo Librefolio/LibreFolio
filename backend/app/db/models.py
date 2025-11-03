@@ -498,7 +498,7 @@ class FxRate(SQLModel, table=True):
     date: date_type = Field(nullable=False)
     base: str = Field(nullable=False)  # ISO 4217
     quote: str = Field(nullable=False)  # ISO 4217
-    rate: Decimal = Field(sa_column=Column(Numeric(18, 6), nullable=False))
+    rate: Decimal = Field(sa_column=Column(Numeric(24, 10), nullable=False))  # 14 integer digits, 10 decimal places
 
     source: str = Field(default="ECB")
     fetched_at: datetime = Field(default_factory=utcnow)

@@ -16,6 +16,53 @@ from backend.app.db.models import FxRate
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def get_rate_decimal_precision() -> tuple[int, int]:
+    """
+    Get the decimal precision (total, scale) from FxRate.rate column definition.
+
+    Returns:
+        tuple: (precision, scale) e.g. (24, 10) means 24 total digits, 10 after decimal
+
+    Example:
+        precision, scale = get_rate_decimal_precision()
+        # Returns (24, 10) from Numeric(24, 10)
+    """
+    # Get the SQLAlchemy column from SQLModel
+    rate_column = FxRate.__table__.columns['rate']
+    # Extract precision and scale from Numeric type
+    return rate_column.type.precision, rate_column.type.scale
+
+
+def truncate_rate_to_db_precision(rate: Decimal) -> Decimal:
+    """
+    Truncate a rate value to match database column precision.
+
+    This prevents false "update" detections when comparing fetched rates
+    with stored rates that have been truncated by the database.
+
+    Args:
+        rate: Rate value to truncate
+
+    Returns:
+        Decimal: Rate truncated to database precision
+
+    Example:
+        >>> rate = Decimal("1.065757220505168922519450069")
+        >>> truncate_rate_to_db_precision(rate)
+        Decimal("1.0657572205")  # Truncated to 10 decimals
+    """
+    from decimal import ROUND_DOWN
+
+    _, scale = get_rate_decimal_precision()
+    # Create quantization string: "0.0000000001" for scale=10
+    quantize_str = "0." + "0" * scale
+    return rate.quantize(Decimal(quantize_str), rounding=ROUND_DOWN)
+
+
 # Import providers to auto-register them
 # This must be at the end of imports to avoid circular dependencies
 # Providers will call FXProviderFactory.register() on import
@@ -477,7 +524,10 @@ async def ensure_rates_multi_source(
 
     start_date, end_date = date_range
 
-    # Process each currency
+    # OPTIMIZATION: First, normalize all observations and collect unique pairs
+    all_normalized = []  # [(currency, obs_date, base, quote, rate), ...]
+    unique_pairs = set()  # {(base, quote), ...}
+
     for currency, observations in rates_by_currency.items():
         if not observations:
             logger.info(f"No rates available for {currency} in date range")
@@ -487,42 +537,78 @@ async def ensure_rates_multi_source(
         total_fetched += len(observations)
 
         # Normalize for storage (alphabetical ordering)
-        # Observations now come as (date, base, quote, rate)
+        for obs_date, base, quote, rate in observations:
+            norm_base, norm_quote, norm_rate = normalize_rate_for_storage(base, quote, rate)
+            all_normalized.append((currency, obs_date, norm_base, norm_quote, norm_rate))
+            unique_pairs.add((norm_base, norm_quote))
+
+    # OPTIMIZATION: Single batch query for ALL existing rates (all pairs, all dates)
+    if unique_pairs:
+        pair_conditions = []
+        for base, quote in unique_pairs:
+            pair_conditions.append(
+                and_(
+                    FxRate.base == base,
+                    FxRate.quote == quote,
+                    FxRate.date >= start_date,
+                    FxRate.date <= end_date
+                )
+            )
+
+        existing_stmt = select(FxRate).where(or_(*pair_conditions))
+        result = await session.execute(existing_stmt)
+        existing_rates = result.scalars().all()
+
+        # Build lookup: {(base, quote, date): rate_value}
+        existing_lookup = {
+            (rate.base, rate.quote, rate.date): rate.rate
+            for rate in existing_rates
+        }
+    else:
+        existing_lookup = {}
+
+    # Track changes per currency (for logging)
+    changes_by_currency = {}
+
+    # Process each normalized observation
+    for currency, obs_date, base, quote, rate_value in all_normalized:
+        key = (base, quote, obs_date)
+        old_rate = existing_lookup.get(key)
+
+        # Truncate new rate to DB precision for comparison
+        # This prevents false "updates" when values are identical after truncation
+        rate_truncated = truncate_rate_to_db_precision(rate_value)
+
+        if old_rate is None:
+            # New insert
+            if currency not in changes_by_currency:
+                changes_by_currency[currency] = 0
+            changes_by_currency[currency] += 1
+            logger.debug(f"New rate: {base}/{quote} on {obs_date} = {rate_truncated}")
+        elif old_rate != rate_truncated:
+            # Updated value (only if different after truncation)
+            if currency not in changes_by_currency:
+                changes_by_currency[currency] = 0
+            changes_by_currency[currency] += 1
+            logger.info(f"Updated rate: {base}/{quote} on {obs_date}: {old_rate} → {rate_truncated}")
+        # else: Same value after truncation, no change to log
+
+    total_changed = sum(changes_by_currency.values())
+
+    # Process each currency for batch insert
+    for currency, observations in rates_by_currency.items():
+        if not observations:
+            continue
+
+        # Normalize for storage
         normalized_observations = []
         for obs_date, base, quote, rate in observations:
-            # Apply alphabetical normalization
             norm_base, norm_quote, norm_rate = normalize_rate_for_storage(base, quote, rate)
             normalized_observations.append((obs_date, norm_base, norm_quote, norm_rate))
 
-        # Get base/quote from first observation (all same for this currency after normalization)
         if normalized_observations:
             _, base, quote, _ = normalized_observations[0]
-
-            # Query existing rates for tracking changes
-            existing_stmt = select(FxRate).where(
-                FxRate.base == base,
-                FxRate.quote == quote,
-                FxRate.date >= start_date,
-                FxRate.date <= end_date
-                )
-            result = await session.execute(existing_stmt)
-            existing_rates = result.scalars().all()
-            existing_by_date = {rate.date: rate.rate for rate in existing_rates}
-
-            # Track changes for logging
-            changed_count = 0
-            for obs_date, _, _, rate_value in normalized_observations:
-                old_rate = existing_by_date.get(obs_date)
-                if old_rate is None:
-                    # New insert
-                    changed_count += 1
-                    logger.debug(f"New rate: {base}/{quote} on {obs_date} = {rate_value}")
-                elif old_rate != rate_value:
-                    # Updated value
-                    changed_count += 1
-                    logger.info(f"Updated rate: {base}/{quote} on {obs_date}: {old_rate} → {rate_value}")
-
-            total_changed += changed_count
+            changed_count = changes_by_currency.get(currency, 0)
 
             # Batch INSERT/UPDATE
             values_list = [
