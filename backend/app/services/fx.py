@@ -1,8 +1,9 @@
 """
 FX (Foreign Exchange) service.
-Handles currency conversion and FX rate fetching from ECB (European Central Bank).
+Handles currency conversion and FX rate management with support for multiple providers.
 """
 import logging
+from abc import ABC, abstractmethod
 from datetime import date
 from decimal import Decimal
 
@@ -13,6 +14,274 @@ from backend.app.db.models import FxRate
 
 logger = logging.getLogger(__name__)
 
+# Import providers to auto-register them
+# This must be at the end of imports to avoid circular dependencies
+# Providers will call FXProviderFactory.register() on import
+
+
+# ============================================================================
+# ABSTRACT BASE CLASS FOR FX PROVIDERS
+# ============================================================================
+
+class FXRateProvider(ABC):
+    """
+    Abstract base class for FX rate providers.
+
+    Each provider represents a central bank or financial data source that
+    provides authoritative exchange rates.
+
+    Example providers:
+    - ECBProvider: European Central Bank (EUR as base)
+    - FEDProvider: Federal Reserve (USD as base)
+    - BOEProvider: Bank of England (GBP as base)
+
+    To add a new provider:
+    1. Create a new class inheriting from FXRateProvider
+    2. Implement all abstract methods
+    3. Register in FXProviderFactory
+    4. See docs/fx-provider-development-guide.md for details
+    """
+
+    @property
+    @abstractmethod
+    def code(self) -> str:
+        """
+        Provider code (e.g., 'ECB', 'FED', 'BOE').
+        Used as identifier in database and configuration.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Human-readable provider name (e.g., 'European Central Bank')."""
+        pass
+
+    @property
+    @abstractmethod
+    def base_currency(self) -> str:
+        """
+        Base currency for this provider (e.g., 'EUR' for ECB, 'USD' for FED).
+
+        Provider APIs typically return rates as:
+        1 base_currency = X quote_currency
+        """
+        pass
+
+    @property
+    def description(self) -> str:
+        """
+        Provider description.
+        Override if you want custom description.
+        """
+        return f"Official exchange rates from {self.name}"
+
+    @property
+    def test_currencies(self) -> list[str]:
+        """
+        List of common currencies that should be available for testing.
+
+        Override this to specify currencies that MUST be present for tests to pass.
+        These are typically major currencies that the provider should always support.
+
+        Default: Common major currencies
+        """
+        return ["USD", "EUR", "GBP", "JPY", "CHF"]
+
+    @abstractmethod
+    async def get_supported_currencies(self) -> list[str]:
+        """
+        Get list of supported currencies for this provider.
+
+        Implementation can be:
+        - Static: return hardcoded list (if API doesn't provide list)
+        - Dynamic: fetch from API (like ECB)
+        - Cached: fetch once, cache in memory
+
+        Returns:
+            List of ISO 4217 currency codes (e.g., ['USD', 'GBP', 'JPY'])
+
+        Raises:
+            FXServiceError: If API request fails (for dynamic fetching)
+        """
+        pass
+
+    @abstractmethod
+    async def fetch_rates(
+        self,
+        date_range: tuple[date, date],
+        currencies: list[str]
+    ) -> dict[str, list[tuple[date, Decimal]]]:
+        """
+        Fetch FX rates from provider API for given date range and currencies.
+
+        IMPORTANT: Rates MUST be normalized to provider's base currency.
+        Example: ECB provides "1 EUR = X USD", so return rate X for USD.
+
+        Args:
+            date_range: (start_date, end_date) inclusive
+            currencies: List of currency codes (excluding base_currency)
+
+        Returns:
+            Dictionary mapping currency -> [(date, rate), ...]
+            Each rate represents: 1 base_currency = rate * currency
+
+        Example:
+            ECB.fetch_rates((2025-01-01, 2025-01-03), ['USD', 'GBP'])
+            Returns:
+            {
+                'USD': [(2025-01-01, 1.08), (2025-01-02, 1.09), ...],
+                'GBP': [(2025-01-01, 0.85), (2025-01-02, 0.86), ...]
+            }
+
+        Raises:
+            FXServiceError: If API request fails
+        """
+        pass
+
+    def normalize_for_storage(
+        self,
+        currency: str,
+        rate: Decimal
+    ) -> tuple[str, str, Decimal]:
+        """
+        Normalize rate for alphabetical storage in database.
+
+        Database stores rates with: base < quote (alphabetically)
+        This method handles the conversion if needed.
+
+        Args:
+            currency: Quote currency
+            rate: Rate as provided by API (1 base_currency = rate * currency)
+
+        Returns:
+            Tuple of (base, quote, normalized_rate)
+
+        Example:
+            ECB (base=EUR), currency=USD, rate=1.08
+            → Returns ('EUR', 'USD', 1.08) because EUR < USD
+
+            ECB (base=EUR), currency=CHF, rate=0.95
+            → Returns ('CHF', 'EUR', 1.0526...) because CHF < EUR (inverted)
+        """
+        base = self.base_currency
+
+        if base < currency:
+            # Store as base/currency (e.g., EUR/USD)
+            return base, currency, rate
+        else:
+            # Store as currency/base (e.g., CHF/EUR) with inverted rate
+            return currency, base, Decimal("1") / rate
+
+
+# ============================================================================
+# PROVIDER FACTORY
+# ============================================================================
+
+class FXProviderFactory:
+    """
+    Factory for creating FX rate provider instances.
+
+    Usage:
+        provider = FXProviderFactory.get_provider('ECB')
+        currencies = await provider.get_supported_currencies()
+        rates = await provider.fetch_rates(date_range, currencies)
+    """
+
+    _providers: dict[str, type[FXRateProvider]] = {}
+
+    @classmethod
+    def register(cls, provider_class: type[FXRateProvider]) -> None:
+        """
+        Register a provider class.
+
+        This is typically called automatically when a provider module is imported.
+
+        Args:
+            provider_class: Class inheriting from FXRateProvider
+
+        Example:
+            class ECBProvider(FXRateProvider):
+                ...
+
+            # Register automatically
+            FXProviderFactory.register(ECBProvider)
+        """
+        instance = provider_class()
+        code = instance.code.upper()
+        cls._providers[code] = provider_class
+        logger.info(f"Registered FX provider: {code} ({instance.name})")
+
+    @classmethod
+    def get_provider(cls, code: str) -> FXRateProvider:
+        """
+        Get provider instance by code.
+
+        Args:
+            code: Provider code (case-insensitive, e.g., 'ECB', 'ecb', 'Ecb')
+
+        Returns:
+            Provider instance
+
+        Raises:
+            ValueError: If provider not found
+
+        Example:
+            provider = FXProviderFactory.get_provider('ECB')
+        """
+        code_upper = code.upper()
+        provider_class = cls._providers.get(code_upper)
+
+        if not provider_class:
+            available = ', '.join(sorted(cls._providers.keys()))
+            raise ValueError(
+                f"Unknown FX provider: {code}. "
+                f"Available providers: {available or 'none registered'}"
+            )
+
+        return provider_class()
+
+    @classmethod
+    def get_all_providers(cls) -> list[dict]:
+        """
+        Get metadata for all registered providers.
+
+        Returns:
+            List of provider metadata dictionaries
+
+        Example:
+                [
+                    {
+                        'code': 'ECB',
+                        'name': 'European Central Bank',
+                        'base_currency': 'EUR',
+                        'description': 'Official rates from ECB'
+                    },
+                    ...
+                ]
+        """
+        providers = []
+        for code in sorted(cls._providers.keys()):
+            provider_class = cls._providers[code]
+            instance = provider_class()
+            providers.append({
+                'code': instance.code,
+                'name': instance.name,
+                'base_currency': instance.base_currency,
+                'description': instance.description
+            })
+        return providers
+
+    @classmethod
+    def is_registered(cls, code: str) -> bool:
+        """Check if a provider is registered."""
+        return code.upper() in cls._providers
+
+
+# ============================================================================
+# LEGACY ECB CONSTANTS (TO BE MOVED TO ECBProvider)
+# ============================================================================
+
 # ECB API endpoints
 # For detailed explanation of these parameters, see: docs/fx-implementation.md (ECB API Parameters section)
 ECB_BASE_URL = "https://data-api.ecb.europa.eu/service/data"
@@ -22,281 +291,228 @@ ECB_REFERENCE_AREA = "EUR"  # Base currency
 ECB_SERIES = "SP00"  # Series variation (spot rate)
 
 
+# ============================================================================
+# EXCEPTIONS
+# ============================================================================
+
 class FXServiceError(Exception):
     """Base exception for FX service errors."""
     pass
 
 
 class RateNotFoundError(FXServiceError):
-    """Raised when no FX rate is found for a given currency and date."""
+    """Raised when no FX rate is found for a conversion."""
     pass
 
 
-async def get_available_currencies() -> list[str]:
+# ============================================================================
+# MULTI-PROVIDER ORCHESTRATOR
+# ============================================================================
+
+async def ensure_rates_multi_source(
+    session,  # AsyncSession
+    date_range: tuple[date, date],
+    currencies: list[str],
+    provider_code: str = "ECB"  # Default to ECB for backward compatibility
+) -> dict[str, int]:
     """
-    Fetch the list of available currencies from ECB.
+    Synchronize FX rates using configured provider.
+
+    This is the new orchestrator that replaces the old ensure_rates().
+    It uses the provider system to fetch rates from the appropriate source.
+
+    Algorithm:
+    1. Get provider instance from factory
+    2. Fetch rates from provider API
+    3. Normalize rates for storage (alphabetical ordering)
+    4. Batch upsert to database
+
+    Args:
+        session: Database session
+        date_range: (start_date, end_date) inclusive
+        currencies: List of currency codes to sync
+        provider_code: Provider to use (default: 'ECB')
 
     Returns:
-        List of ISO 4217 currency codes supported by ECB
-
-    Raises:
-        FXServiceError: If API request fails
-    """
-    # ECB API endpoint for all available currency pairs against EUR
-    url = f"{ECB_BASE_URL}/{ECB_DATASET}/{ECB_FREQUENCY}..{ECB_REFERENCE_AREA}.{ECB_SERIES}.A"
-    params = {
-        "format": "jsondata",
-        "detail": "dataonly",
-        "lastNObservations": 1  # We only need structure, not all data
+        Dict with sync statistics:
+        {
+            'provider': 'ECB',
+            'total_fetched': 100,
+            'total_changed': 50,
+            'currencies_synced': ['USD', 'GBP', ...]
         }
 
+    Raises:
+        FXServiceError: If provider not found or API request fails
+    """
+    from sqlalchemy.dialects.sqlite import insert
+    from sqlalchemy import func
+
+    # Get provider instance
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
+        provider = FXProviderFactory.get_provider(provider_code)
+    except ValueError as e:
+        raise FXServiceError(str(e)) from e
 
-            # Parse structure to get currency codes
-            currencies = set()
-            eur_found = False
+    logger.info(
+        f"Syncing FX rates using {provider.name} ({provider.code}) "
+        f"for {len(currencies)} currencies from {date_range[0]} to {date_range[1]}"
+    )
 
-            if "structure" in data:
-                dimensions = data["structure"].get("dimensions", {}).get("series", [])
-                for dim in dimensions:
-                    dim_id = dim.get("id")
-                    values = dim.get("values", [])
+    # Fetch rates from provider
+    rates_by_currency = await provider.fetch_rates(date_range, currencies)
 
-                    match dim_id:
-                        case "CURRENCY":
-                            # Get quote currencies (USD, GBP, etc.)
-                            currencies = {v["id"] for v in values if v.get("id")}
+    # Statistics
+    total_fetched = 0
+    total_changed = 0
+    currencies_synced = []
 
-                        case "CURRENCY_DENOM":
-                            # Check for EUR in base currency dimension
-                            for v in values:
-                                if v.get("id") == "EUR":
-                                    eur_found = True
-                                    currencies.add("EUR")
-                                    break
+    start_date, end_date = date_range
 
-            # Verify EUR is present
-            if not eur_found:
-                logger.error("EUR not found in ECB API response (CURRENCY_DENOM dimension), API may be malformed or changed")
-                raise FXServiceError("EUR not found in ECB API - base currency missing")
+    # Process each currency
+    for currency, observations in rates_by_currency.items():
+        if not observations:
+            logger.info(f"No rates available for {currency} in date range")
+            continue
 
-            return sorted(list(currencies))
+        currencies_synced.append(currency)
+        total_fetched += len(observations)
 
-    except httpx.HTTPError as e:
-        logger.error(f"Failed to fetch available currencies from ECB: {e}")
-        raise FXServiceError(f"ECB API error: {e}") from e
-    except (KeyError, ValueError) as e:
-        logger.error(f"Failed to parse ECB response: {e}")
-        raise FXServiceError(f"Invalid ECB response format: {e}") from e
+        # Normalize for storage (alphabetical ordering)
+        normalized_observations = []
+        for obs_date, rate in observations:
+            base, quote, normalized_rate = provider.normalize_for_storage(currency, rate)
+            normalized_observations.append((obs_date, base, quote, normalized_rate))
+
+        # Get base/quote from first observation (all same for this currency)
+        if normalized_observations:
+            _, base, quote, _ = normalized_observations[0]
+
+            # Query existing rates for tracking changes
+            existing_stmt = select(FxRate).where(
+                FxRate.base == base,
+                FxRate.quote == quote,
+                FxRate.date >= start_date,
+                FxRate.date <= end_date
+            )
+            result = await session.execute(existing_stmt)
+            existing_rates = result.scalars().all()
+            existing_by_date = {rate.date: rate.rate for rate in existing_rates}
+
+            # Track changes for logging
+            changed_count = 0
+            for obs_date, _, _, rate_value in normalized_observations:
+                old_rate = existing_by_date.get(obs_date)
+                if old_rate is None:
+                    # New insert
+                    changed_count += 1
+                    logger.debug(f"New rate: {base}/{quote} on {obs_date} = {rate_value}")
+                elif old_rate != rate_value:
+                    # Updated value
+                    changed_count += 1
+                    logger.info(f"Updated rate: {base}/{quote} on {obs_date}: {old_rate} → {rate_value}")
+
+            total_changed += changed_count
+
+            # Batch INSERT/UPDATE
+            values_list = [
+                {
+                    'date': obs_date,
+                    'base': base,
+                    'quote': quote,
+                    'rate': rate_value,
+                    'source': provider.code,
+                    'fetched_at': func.current_timestamp()
+                }
+                for obs_date, base, quote, rate_value in normalized_observations
+            ]
+
+            batch_stmt = insert(FxRate).values(values_list)
+            batch_stmt = batch_stmt.on_conflict_do_update(
+                index_elements=['date', 'base', 'quote'],
+                set_={
+                    'rate': batch_stmt.excluded.rate,
+                    'source': batch_stmt.excluded.source,
+                    'fetched_at': func.current_timestamp()
+                }
+            )
+
+            await session.execute(batch_stmt)
+
+            logger.info(
+                f"Synced {currency}: {len(observations)} fetched, "
+                f"{changed_count} changed"
+            )
+
+    await session.commit()
+
+    logger.info(
+        f"Sync complete: {total_fetched} rates fetched, {total_changed} changed "
+        f"from {provider.name}"
+    )
+
+    return {
+        'provider': provider.code,
+        'total_fetched': total_fetched,
+        'total_changed': total_changed,
+        'currencies_synced': currencies_synced
+    }
+
+
+# ============================================================================
+# LEGACY FUNCTION STUBS (WILL BE REMOVED IN PHASE 4)
+# ============================================================================
+
+async def get_available_currencies() -> list[str]:
+    """
+    DEPRECATED: Use provider.get_supported_currencies() instead.
+
+    This function is kept for backward compatibility with existing code.
+    It defaults to ECB provider.
+
+    Returns:
+        List of ISO 4217 currency codes
+
+    Raises:
+        FXServiceError: If provider not available or API request fails
+    """
+    logger.warning(
+        "get_available_currencies() is deprecated. "
+        "Use FXProviderFactory.get_provider('ECB').get_supported_currencies() instead."
+    )
+    provider = FXProviderFactory.get_provider('ECB')
+    return await provider.get_supported_currencies()
 
 
 async def ensure_rates(
     session,  # AsyncSession
     date_range: tuple[date, date],
     currencies: list[str]
-    ) -> int:
+) -> int:
     """
-    Synchronize FX rates from ECB API to the database.
+    DEPRECATED: Use ensure_rates_multi_source() instead.
 
-    This function fetches rates from ECB and UPSERTS them into the database:
-    - If a rate doesn't exist → INSERT new rate
-    - If a rate already exists → UPDATE with fresh data from ECB
-
-    This ensures that:
-    - All rates are present (no gaps)
-    - All rates are up-to-date (corrections from ECB are applied)
-    - Manual data is replaced with authoritative ECB data when they are finally available
-
-    ECB provides rates as: 1 EUR = X currency
-    We store them alphabetically ordered (base < quote).
+    This function is kept for backward compatibility with existing code.
+    It defaults to ECB provider and returns only the count of changed rates.
 
     Args:
         session: Database session
-        date_range: Tuple of (start_date, end_date) inclusive
-        currencies: List of currency codes to sync (e.g., ["USD", "GBP"])
+        date_range: (start_date, end_date) inclusive
+        currencies: List of currency codes to sync
 
     Returns:
-        Number of rates with changes (new inserts + updates with value changes, excludes refreshes with no change)
+        Number of rates changed (for backward compatibility)
 
     Raises:
-        FXServiceError: If API request fails
+        FXServiceError: If sync fails
     """
-    start_date, end_date = date_range
-    inserted_count = 0
-    total_changed_count = 0  # Total changes across all currencies (new + updated with value change)
-
-    for currency in currencies:
-        # Skip EUR as it's the reference currency
-        if currency == "EUR":
-            continue
-
-        # Determine alphabetical ordering for storage
-        # ECB gives us: 1 EUR = X currency
-        if "EUR" < currency:
-            # Store as EUR/currency (e.g., EUR/USD)
-            base, quote = "EUR", currency
-            needs_inversion = False
-        else:
-            # Store as currency/EUR (e.g., CHF/EUR) - invert the rate
-            base, quote = currency, "EUR"
-            needs_inversion = True
-
-        # Query existing rates for this pair in the date range
-        existing_stmt = select(FxRate).where(
-            FxRate.base == base,
-            FxRate.quote == quote,
-            FxRate.date >= start_date,
-            FxRate.date <= end_date
-            )
-        result = await session.execute(existing_stmt)
-        existing_rates = result.scalars().all()
-        existing_dates = {rate.date for rate in existing_rates}
-
-        # Fetch from ECB API: D.{CURRENCY}.EUR.SP00.A
-        # Returns: 1 EUR = X {CURRENCY}
-        url = f"{ECB_BASE_URL}/{ECB_DATASET}/{ECB_FREQUENCY}.{currency}.{ECB_REFERENCE_AREA}.{ECB_SERIES}.A"
-        params = {
-            "format": "jsondata",
-            "startPeriod": start_date.isoformat(),
-            "endPeriod": end_date.isoformat()
-            }
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-
-                # ECB returns empty body (Content-Length: 0) when no data available
-                # This is normal for weekends/holidays - not an error
-                if not response.text:
-                    logger.info(
-                        f"No FX rates available for {currency} ({start_date} to {end_date}). "
-                        f"This is normal for weekends/holidays when ECB doesn't publish rates."
-                    )
-                    continue  # Skip this currency, move to next one
-
-                # Parse JSON (at this point we know body is not empty)
-                data = response.json()
-
-                # Parse observations
-                observations = []
-                if "dataSets" in data and len(data["dataSets"]) > 0:
-                    series = data["dataSets"][0].get("series", {})
-                    if series:
-                        # Get first (and should be only) series
-                        first_series = next(iter(series.values()))
-                        obs_data = first_series.get("observations", {})
-
-                        # Get time period dimension
-                        dimensions = data["structure"]["dimensions"]["observation"]
-                        time_periods = next(d["values"] for d in dimensions if d["id"] == "TIME_PERIOD")
-
-                        for obs_idx, obs_value in obs_data.items():
-                            idx = int(obs_idx)
-                            rate_date_str = time_periods[idx]["id"]
-                            # ECB gives: 1 EUR = rate_value CURRENCY
-                            ecb_rate = Decimal(str(obs_value[0]))
-
-                            # Convert to our storage format (alphabetical base < quote)
-                            stored_rate = ecb_rate if not needs_inversion else (Decimal("1") / ecb_rate)
-
-                            observations.append((date.fromisoformat(rate_date_str), stored_rate))
-
-                # OPTIMIZATION: Batch UPSERT all observations for this currency
-                from sqlalchemy.dialects.sqlite import insert
-                from sqlalchemy import func
-
-                changed_count = 0  # Count only actual changes (new inserts + updates with value change)
-                refreshed_count = 0  # Count updates with no value change
-
-                # Track changes before batch insert (for logging)
-                for rate_date, rate_value in observations:
-                    old_rate = None
-                    if rate_date in existing_dates:
-                        existing_rate = next(r for r in existing_rates if r.date == rate_date)
-                        old_rate = existing_rate.rate
-
-
-                    # Track changes for logging
-                    if old_rate is not None:
-                        # This was an UPDATE
-                        if old_rate != rate_value:
-                            changed_count += 1  # Count as change
-                            logger.info(f"Updated FX rate: {base}/{quote} on {rate_date}: {old_rate} → {rate_value}")
-                        else:
-                            refreshed_count += 1  # Count as refresh (no change)
-                            logger.debug(f"Refreshed FX rate: {base}/{quote} on {rate_date} (unchanged: {rate_value})")
-                    else:
-                        # This was an INSERT
-                        inserted_count += 1
-                        changed_count += 1  # Count as change
-                        logger.debug(f"Inserted FX rate: {base}/{quote} = {rate_value} on {rate_date}")
-
-                # OPTIMIZATION: Single batch INSERT for all observations of this currency
-                if observations:
-                    values_list = [
-                        {
-                            'date': rate_date,
-                            'base': base,
-                            'quote': quote,
-                            'rate': rate_value,
-                            'source': 'ECB',
-                            'fetched_at': func.current_timestamp()
-                        }
-                        for rate_date, rate_value in observations
-                    ]
-
-                    # Single batch INSERT statement
-                    batch_stmt = insert(FxRate).values(values_list)
-
-                    # On conflict: update all fields
-                    batch_stmt = batch_stmt.on_conflict_do_update(
-                        index_elements=['date', 'base', 'quote'],
-                        set_={
-                            'rate': batch_stmt.excluded.rate,
-                            'source': batch_stmt.excluded.source,
-                            'fetched_at': func.current_timestamp()
-                        }
-                    )
-
-                    # Execute single batch statement (replaces N individual executes)
-                    await session.execute(batch_stmt)
-
-                await session.commit()
-
-                # Add to total changed count
-                total_changed_count += changed_count
-
-                # Log summary with details
-                updated_with_change = changed_count - inserted_count  # Updates that had value changes
-
-                if inserted_count > 0 and updated_with_change > 0:
-                    logger.info(f"Synced {currency}: {len(observations)} fetched, {inserted_count} new + {updated_with_change} changed ({refreshed_count} unchanged)")
-                elif updated_with_change > 0:
-                    logger.info(f"Synced {currency}: {len(observations)} fetched, {updated_with_change} changed ({refreshed_count} unchanged)")
-                elif inserted_count > 0:
-                    logger.info(f"Synced {currency}: {len(observations)} fetched, {inserted_count} new ({refreshed_count} unchanged)")
-                else:
-                    logger.info(f"Synced {currency}: {len(observations)} fetched, all unchanged")
-
-        except httpx.HTTPError as e:
-            logger.error(f"Failed to fetch FX rates for {currency}: {e}")
-            raise FXServiceError(f"ECB API error for {currency}: {e}") from e
-        except ValueError as e:
-            # This catches json.JSONDecodeError (which is a subclass of ValueError)
-            # Should not happen now that we check for empty body, but kept as safety net
-            logger.error(f"Failed to parse ECB JSON response for {currency}: {e}")
-            logger.error(f"Response body preview: {response.text[:500] if 'response' in locals() else 'N/A'}")
-            raise FXServiceError(f"Invalid JSON response from ECB for {currency}: {e}") from e
-        except (KeyError, IndexError) as e:
-            logger.error(f"Failed to parse ECB response structure for {currency}: {e}")
-            raise FXServiceError(f"Unexpected ECB response format for {currency}: {e}") from e
-
-    return total_changed_count
+    logger.warning(
+        "ensure_rates() is deprecated. "
+        "Use ensure_rates_multi_source() instead for multi-provider support."
+    )
+    # TODO: remove this function in Phase 4
+    result = await ensure_rates_multi_source(session, date_range, currencies, provider_code='ECB')
+    return result['total_changed']
 
 
 async def convert(
@@ -630,4 +846,12 @@ async def upsert_rates_bulk(
     await session.commit()
     return results
 
+
+
+# ============================================================================
+# AUTO-REGISTER PROVIDERS
+# ============================================================================
+# Import providers to register them automatically in the factory
+# This happens when the fx module is imported
+from backend.app.services.fx_providers.ecb import ECBProvider  # noqa: F401
 

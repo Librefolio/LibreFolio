@@ -67,18 +67,18 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
 # EXTERNAL SERVICES TESTS
 # ============================================================================
 
-def external_ecb(verbose: bool = False) -> bool:
+def external_fx_source(verbose: bool = False) -> bool:
     """
-    Test ECB API connection and currency list.
-    Tests external integration with European Central Bank API.
+    Test all registered FX providers (ECB, FED, BOE, etc.).
+    Tests external integration with central bank APIs.
     """
-    print_section("External: ECB API")
-    print_info("External service: European Central Bank (ECB)")
-    print_info("Testing: Connection, Currency list availability")
+    print_section("External: FX Providers")
+    print_info("Testing all registered FX rate providers")
+    print_info("Tests: Metadata, API connection, rate fetching, normalization")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_external.test_ecb_api"],
-        "ECB API connection tests",
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_external.test_fx_providers"],
+        "FX providers tests",
         verbose=verbose
         )
 
@@ -92,7 +92,7 @@ def external_all(verbose: bool = False) -> bool:
     print_info("No backend server required")
 
     tests = [
-        ("ECB API", lambda: external_ecb(verbose)),
+        ("External Forex data import API", lambda: external_fx_source(verbose)),
         # Future: yfinance, other data sources
         ]
 
@@ -505,7 +505,7 @@ Test Categories:
 
 Examples:
   # External services tests
-  python test_runner.py external ecb        # Test ECB API connection
+  python test_runner.py external fx-source  # Test all Forex API connection
   python test_runner.py external all        # All external tests
   
   # Database tests
@@ -573,7 +573,7 @@ Future: yfinance, other data sources will be added here
 
     external_parser.add_argument(
         "action",
-        choices=["ecb", "all"],
+        choices=["fx-source", "all"],
         help="External service test to run"
         )
 
@@ -733,8 +733,8 @@ def main():
 
     elif args.category == "external":
         # External services tests
-        if args.action == "ecb":
-            success = external_ecb(verbose=verbose)
+        if args.action == "fx-source":
+            success = external_fx_source(verbose=verbose)
         elif args.action == "all":
             success = external_all(verbose=verbose)
 

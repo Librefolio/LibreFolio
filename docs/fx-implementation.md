@@ -200,13 +200,15 @@ Tests are organized into **4 logical categories**: External Services → Databas
 
 ### External Services Tests (No server required)
 
-**1. ECB API Connection** (`test_external/test_ecb_api.py`)
+**1. FX Providers Tests** (`test_external/test_fx_providers.py`)
 ```bash
 python test_runner.py external ecb
 ```
-- Verifies connection to ECB API
-- Checks availability of common currencies (USD, GBP, CHF, JPY, etc.)
-- Tests data format and API response
+- Tests all registered FX providers (ECB, FED, BOE, etc.)
+- Verifies provider registration and metadata
+- Checks API connection and currency list
+- Tests rate fetching and normalization logic
+- Generic test suite works for any provider
 
 **Run all external tests:**
 ```bash
