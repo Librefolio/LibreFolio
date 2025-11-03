@@ -7,12 +7,14 @@ from abc import ABC, abstractmethod
 from datetime import date
 from decimal import Decimal
 
-import httpx
+from sqlalchemy import func, select as sql_select, or_, and_
+from sqlalchemy.dialects.sqlite import insert
 from sqlmodel import select
 
 from backend.app.db.models import FxRate
 
 logger = logging.getLogger(__name__)
+
 
 # Import providers to auto-register them
 # This must be at the end of imports to avoid circular dependencies
@@ -61,12 +63,34 @@ class FXRateProvider(ABC):
     @abstractmethod
     def base_currency(self) -> str:
         """
-        Base currency for this provider (e.g., 'EUR' for ECB, 'USD' for FED).
+        Primary/default base currency for this provider (e.g., 'EUR' for ECB, 'USD' for FED).
+
+        For single-base providers, this is the only base currency.
+        For multi-base providers, this is the preferred/default base currency.
 
         Provider APIs typically return rates as:
         1 base_currency = X quote_currency
         """
         pass
+
+    @property
+    def base_currencies(self) -> list[str]:
+        """
+        List of base currencies supported by this provider.
+
+        Single-base providers (ECB, FED, BOE, SNB) return a list with one element.
+        Multi-base providers (e.g., commercial APIs) can return multiple currencies.
+
+        Default implementation returns [self.base_currency] for backward compatibility.
+
+        Returns:
+            List of ISO 4217 currency codes that can be used as base
+
+        Example:
+            ECBProvider.base_currencies → ["EUR"]  # Single-base
+            HypotheticalAPI.base_currencies → ["EUR", "GBP", "USD"]  # Multi-base
+        """
+        return [self.base_currency]
 
     @property
     def description(self) -> str:
@@ -136,8 +160,9 @@ class FXRateProvider(ABC):
     async def fetch_rates(
         self,
         date_range: tuple[date, date],
-        currencies: list[str]
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        currencies: list[str],
+        base_currency: str | None = None
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from provider API for given date range and currencies.
 
@@ -147,20 +172,23 @@ class FXRateProvider(ABC):
 
         Args:
             date_range: (start_date, end_date) inclusive
-            currencies: List of currency codes to fetch (excluding base_currency)
+            currencies: List of quote currency codes to fetch
+            base_currency: Base currency to use. If None, use provider's default base_currency.
+                          Must be one of base_currencies. Single-base providers should
+                          validate and raise ValueError if a different base is requested.
 
         Returns:
             Dictionary mapping currency -> [(date, base, quote, rate), ...]
             Where:
             - date: Rate date
-            - base: Base currency (provider's base_currency)
+            - base: Base currency used (specified base_currency or provider's default)
             - quote: Quote currency (from currencies list)
             - rate: Raw rate as provided by API (after multi-unit adjustment)
 
             Rate semantics: 1 base = rate * quote
             Example: (2025-01-01, 'EUR', 'USD', 1.08) means 1 EUR = 1.08 USD
 
-        Example:
+        Example (single-base):
             ECB.fetch_rates((2025-01-01, 2025-01-03), ['USD', 'GBP'])
             Returns:
             {
@@ -174,7 +202,18 @@ class FXRateProvider(ABC):
                 ]
             }
 
+        Example (multi-base with explicit base):
+            HypAPI.fetch_rates((2025-01-01, 2025-01-03), ['JPY'], base_currency='USD')
+            Returns:
+            {
+                'JPY': [
+                    (date(2025-01-01), 'USD', 'JPY', Decimal('149.25')),
+                    (date(2025-01-02), 'USD', 'JPY', Decimal('150.10')),
+                ]
+            }
+
         Raises:
+            ValueError: If base_currency is not in base_currencies
             FXServiceError: If API request fails
         """
         pass
@@ -188,7 +227,7 @@ def normalize_rate_for_storage(
     base: str,
     quote: str,
     rate: Decimal
-) -> tuple[str, str, Decimal]:
+    ) -> tuple[str, str, Decimal]:
     """
     Normalize FX rate for alphabetical storage in database.
 
@@ -281,7 +320,7 @@ class FXProviderFactory:
             raise ValueError(
                 f"Unknown FX provider: {code}. "
                 f"Available providers: {available or 'none registered'}"
-            )
+                )
 
         return provider_class()
 
@@ -299,7 +338,15 @@ class FXProviderFactory:
                         'code': 'ECB',
                         'name': 'European Central Bank',
                         'base_currency': 'EUR',
+                        'base_currencies': ['EUR'],
                         'description': 'Official rates from ECB'
+                    },
+                    {
+                        'code': 'HYPAPI',
+                        'name': 'Hypothetical Multi-Base API',
+                        'base_currency': 'USD',
+                        'base_currencies': ['EUR', 'GBP', 'USD'],
+                        'description': 'Multi-base provider example'
                     },
                     ...
                 ]
@@ -312,8 +359,9 @@ class FXProviderFactory:
                 'code': instance.code,
                 'name': instance.name,
                 'base_currency': instance.base_currency,
+                'base_currencies': instance.base_currencies,
                 'description': instance.description
-            })
+                })
         return providers
 
     @classmethod
@@ -357,40 +405,45 @@ async def ensure_rates_multi_source(
     session,  # AsyncSession
     date_range: tuple[date, date],
     currencies: list[str],
-    provider_code: str = "ECB"  # Default to ECB for backward compatibility
-) -> dict[str, int]:
+    provider_code: str = "ECB",
+    base_currency: str | None = None
+    ) -> dict[str, int]:
     """
     Synchronize FX rates using configured provider.
 
-    This is the new orchestrator that replaces the old ensure_rates().
-    It uses the provider system to fetch rates from the appropriate source.
+    This orchestrator uses the provider system to fetch rates from the appropriate source.
+    It supports both single-base and multi-base providers.
 
     Algorithm:
     1. Get provider instance from factory
-    2. Fetch rates from provider API
-    3. Normalize rates for storage (alphabetical ordering)
-    4. Batch upsert to database
+    2. Validate base_currency (if specified) against provider's supported bases
+    3. Fetch rates from provider API with specified base
+    4. Normalize rates for storage (alphabetical ordering)
+    5. Batch upsert to database
 
     Args:
         session: Database session
         date_range: (start_date, end_date) inclusive
         currencies: List of currency codes to sync
         provider_code: Provider to use (default: 'ECB')
+        base_currency: Base currency to use for multi-base providers.
+                      If None, uses provider's default base_currency.
+                      Must be one of provider's base_currencies.
 
     Returns:
         Dict with sync statistics:
         {
             'provider': 'ECB',
+            'base_currency': 'EUR',
             'total_fetched': 100,
             'total_changed': 50,
             'currencies_synced': ['USD', 'GBP', ...]
         }
 
     Raises:
+        ValueError: If base_currency is not supported by provider
         FXServiceError: If provider not found or API request fails
     """
-    from sqlalchemy.dialects.sqlite import insert
-    from sqlalchemy import func
 
     # Get provider instance
     try:
@@ -398,13 +451,24 @@ async def ensure_rates_multi_source(
     except ValueError as e:
         raise FXServiceError(str(e)) from e
 
+    # Validate base_currency if specified
+    if base_currency is not None:
+        if base_currency not in provider.base_currencies:
+            raise ValueError(
+                f"Provider {provider.code} does not support {base_currency} as base. "
+                f"Supported bases: {', '.join(provider.base_currencies)}"
+                )
+
+    actual_base = base_currency if base_currency else provider.base_currency
+
     logger.info(
         f"Syncing FX rates using {provider.name} ({provider.code}) "
+        f"with base {actual_base} "
         f"for {len(currencies)} currencies from {date_range[0]} to {date_range[1]}"
-    )
+        )
 
-    # Fetch rates from provider
-    rates_by_currency = await provider.fetch_rates(date_range, currencies)
+    # Fetch rates from provider with specified base
+    rates_by_currency = await provider.fetch_rates(date_range, currencies, base_currency=base_currency)
 
     # Statistics
     total_fetched = 0
@@ -440,7 +504,7 @@ async def ensure_rates_multi_source(
                 FxRate.quote == quote,
                 FxRate.date >= start_date,
                 FxRate.date <= end_date
-            )
+                )
             result = await session.execute(existing_stmt)
             existing_rates = result.scalars().all()
             existing_by_date = {rate.date: rate.rate for rate in existing_rates}
@@ -469,9 +533,9 @@ async def ensure_rates_multi_source(
                     'rate': rate_value,
                     'source': provider.code,
                     'fetched_at': func.current_timestamp()
-                }
+                    }
                 for obs_date, base, quote, rate_value in normalized_observations
-            ]
+                ]
 
             batch_stmt = insert(FxRate).values(values_list)
             batch_stmt = batch_stmt.on_conflict_do_update(
@@ -480,85 +544,35 @@ async def ensure_rates_multi_source(
                     'rate': batch_stmt.excluded.rate,
                     'source': batch_stmt.excluded.source,
                     'fetched_at': func.current_timestamp()
-                }
-            )
+                    }
+                )
 
             await session.execute(batch_stmt)
 
             logger.info(
                 f"Synced {currency}: {len(observations)} fetched, "
                 f"{changed_count} changed"
-            )
+                )
 
     await session.commit()
 
     logger.info(
         f"Sync complete: {total_fetched} rates fetched, {total_changed} changed "
-        f"from {provider.name}"
-    )
+        f"from {provider.name} using base {actual_base}"
+        )
 
     return {
         'provider': provider.code,
+        'base_currency': actual_base,
         'total_fetched': total_fetched,
         'total_changed': total_changed,
         'currencies_synced': currencies_synced
-    }
+        }
 
 
 # ============================================================================
-# LEGACY FUNCTION STUBS (WILL BE REMOVED IN PHASE 4)
+# CURRENCY CONVERSION FUNCTIONS
 # ============================================================================
-
-async def get_available_currencies() -> list[str]:
-    """
-    DEPRECATED: Use provider.get_supported_currencies() instead.
-
-    This function is kept for backward compatibility with existing code.
-    It defaults to ECB provider.
-
-    Returns:
-        List of ISO 4217 currency codes
-
-    Raises:
-        FXServiceError: If provider not available or API request fails
-    """
-    logger.warning(
-        "get_available_currencies() is deprecated. "
-        "Use FXProviderFactory.get_provider('ECB').get_supported_currencies() instead."
-    )
-    provider = FXProviderFactory.get_provider('ECB')
-    return await provider.get_supported_currencies()
-
-
-async def ensure_rates(
-    session,  # AsyncSession
-    date_range: tuple[date, date],
-    currencies: list[str]
-) -> int:
-    """
-    DEPRECATED: Use ensure_rates_multi_source() instead.
-
-    This function is kept for backward compatibility with existing code.
-    It defaults to ECB provider and returns only the count of changed rates.
-
-    Args:
-        session: Database session
-        date_range: (start_date, end_date) inclusive
-        currencies: List of currency codes to sync
-
-    Returns:
-        Number of rates changed (for backward compatibility)
-
-    Raises:
-        FXServiceError: If sync fails
-    """
-    logger.warning(
-        "ensure_rates() is deprecated. "
-        "Use ensure_rates_multi_source() instead for multi-provider support."
-    )
-    # TODO: remove this function in Phase 4
-    result = await ensure_rates_multi_source(session, date_range, currencies, provider_code='ECB')
-    return result['total_changed']
 
 
 async def convert(
@@ -593,7 +607,7 @@ async def convert(
         session,
         [(amount, from_currency, to_currency, as_of_date)],
         raise_on_error=True
-    )
+        )
 
     converted_amount, rate_date, backward_fill_applied = results[0]
 
@@ -646,7 +660,7 @@ async def convert_bulk(
                 'to': to_currency,
                 'date': as_of_date,
                 'identity': True
-            })
+                })
             continue
 
         # Determine alphabetical ordering
@@ -667,7 +681,7 @@ async def convert_bulk(
             'base': base,
             'quote': quote,
             'direct': direct
-        })
+            })
 
         # Group conversions by pair and max date needed
         # We'll fetch the most recent rate for each pair that satisfies all dates
@@ -684,7 +698,6 @@ async def convert_bulk(
     # OPTIMIZATION: Single batch query for all needed rates
     # Build OR clauses for all pairs
     if pairs_needed:
-        from sqlalchemy import or_, and_
 
         conditions = []
         for (base, quote), info in pairs_needed.items():
@@ -694,13 +707,13 @@ async def convert_bulk(
                     FxRate.base == base,
                     FxRate.quote == quote,
                     FxRate.date <= info['max_date']
+                    )
                 )
-            )
 
         # Single query fetching all rates needed
         stmt = select(FxRate).where(or_(*conditions)).order_by(
             FxRate.base, FxRate.quote, FxRate.date.desc()
-        )
+            )
 
         result = await session.execute(stmt)
         all_rates = result.scalars().all()
@@ -761,7 +774,7 @@ async def convert_bulk(
                 logger.info(
                     f"Using backward-fill: rate for {meta['base']}/{meta['quote']} from {rate_record.date} "
                     f"({days_back} days back, requested: {meta['date']})"
-                )
+                    )
 
             # Apply conversion
             if meta['direct']:
@@ -804,8 +817,6 @@ async def upsert_rates_bulk(
     Raises:
         ValueError: If validation fails for any rate
     """
-    from sqlalchemy.dialects.sqlite import insert
-    from sqlalchemy import func, select as sql_select, or_, and_
 
     if not rates:
         return []
@@ -837,8 +848,8 @@ async def upsert_rates_bulk(
                 FxRate.date == rate_date,
                 FxRate.base == base,
                 FxRate.quote == quote
+                )
             )
-        )
 
     # Fetch all existing rates in one query
     stmt = sql_select(FxRate).where(or_(*conditions))
@@ -849,7 +860,7 @@ async def upsert_rates_bulk(
     existing_keys = {
         (rate.date, rate.base, rate.quote)
         for rate in existing_rates
-    }
+        }
 
     # OPTIMIZATION: Prepare results tracking (before batch insert)
     results = []
@@ -868,9 +879,9 @@ async def upsert_rates_bulk(
             'rate': rate_value,
             'source': source,
             'fetched_at': func.current_timestamp()
-        }
+            }
         for rate_date, base, quote, rate_value, source in normalized_rates
-    ]
+        ]
 
     # Single batch INSERT statement (all rates at once)
     batch_insert = insert(FxRate).values(values_list)
@@ -882,8 +893,8 @@ async def upsert_rates_bulk(
             'rate': batch_insert.excluded.rate,
             'source': batch_insert.excluded.source,
             'fetched_at': func.current_timestamp()
-        }
-    )
+            }
+        )
 
     # Execute single batch statement (replaces N individual executes)
     await session.execute(batch_insert)
@@ -891,7 +902,6 @@ async def upsert_rates_bulk(
     # Single commit for all upserts
     await session.commit()
     return results
-
 
 
 # ============================================================================
@@ -903,4 +913,3 @@ from backend.app.services.fx_providers.ecb import ECBProvider  # noqa: F401
 from backend.app.services.fx_providers.fed import FEDProvider  # noqa: F401
 from backend.app.services.fx_providers.boe import BOEProvider  # noqa: F401
 from backend.app.services.fx_providers.snb import SNBProvider  # noqa: F401
-

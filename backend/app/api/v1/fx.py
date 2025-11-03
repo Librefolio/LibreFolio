@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.session import get_session
 from backend.app.services.fx import (
     FXServiceError,
+    FXProviderFactory,
     convert_bulk,
-    ensure_rates,
-    get_available_currencies,
+    ensure_rates_multi_source,
     upsert_rates_bulk,
     )
 
@@ -110,16 +110,24 @@ class CurrenciesResponse(BaseModel):
 
 
 @router.get("/currencies", response_model=CurrenciesResponse)
-async def list_currencies():
+async def list_currencies(
+    provider: str = Query("ECB", description="Provider code (ECB, FED, BOE, SNB)")
+):
     """
-    Get the list of available currencies from ECB.
+    Get the list of available currencies from specified provider.
+
+    Args:
+        provider: Provider code (default: ECB)
 
     Returns:
         List of ISO 4217 currency codes
     """
     try:
-        currencies = await get_available_currencies()
+        provider_instance = FXProviderFactory.get_provider(provider)
+        currencies = await provider_instance.get_supported_currencies()
         return CurrenciesResponse(currencies=currencies, count=len(currencies))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FXServiceError as e:
         raise HTTPException(status_code=502, detail=f"Failed to fetch currencies: {str(e)}")
 
@@ -129,15 +137,19 @@ async def sync_rates(
     start: date = Query(..., description="Start date (inclusive)"),
     end: date = Query(..., description="End date (inclusive)"),
     currencies: str = Query("USD,GBP,CHF,JPY", description="Comma-separated currency codes"),
+    provider: str = Query("ECB", description="Provider code (ECB, FED, BOE, SNB)"),
+    base_currency: str | None = Query(None, description="Base currency (for multi-base providers)"),
     session: AsyncSession = Depends(get_session)
     ):
     """
-    Synchronize FX rates from ECB for the specified date range and currencies.
+    Synchronize FX rates from specified provider for the specified date range and currencies.
 
     Args:
         start: Start date
         end: End date
         currencies: Comma-separated list of currency codes (e.g., "USD,GBP,CHF")
+        provider: Provider code (default: ECB)
+        base_currency: Base currency to use (for multi-base providers). If not specified, uses provider's default.
         session: Database session
 
     Returns:
@@ -153,12 +165,20 @@ async def sync_rates(
         raise HTTPException(status_code=400, detail="At least one currency must be specified")
 
     try:
-        synced_count = await ensure_rates(session, (start, end), currency_list)
+        result = await ensure_rates_multi_source(
+            session,
+            (start, end),
+            currency_list,
+            provider_code=provider,
+            base_currency=base_currency
+        )
         return SyncResponse(
-            synced=synced_count,
+            synced=result['total_changed'],
             date_range=(start.isoformat(), end.isoformat()),
-            currencies=currency_list
+            currencies=result['currencies_synced']
             )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FXServiceError as e:
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
 

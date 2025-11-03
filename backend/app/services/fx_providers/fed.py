@@ -119,8 +119,9 @@ class FEDProvider(FXRateProvider):
     async def fetch_rates(
         self,
         date_range: tuple[date, date],
-        currencies: list[str]
-    ) -> dict[str, list[tuple[date, Decimal]]]:
+        currencies: list[str],
+        base_currency: str | None = None
+    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from FRED API for given date range and currencies.
 
@@ -130,13 +131,21 @@ class FEDProvider(FXRateProvider):
         Args:
             date_range: (start_date, end_date) inclusive
             currencies: List of currency codes (excluding USD)
+            base_currency: Must be None or "USD" (FED only supports USD as base)
 
         Returns:
-            Dictionary mapping currency -> [(date, rate), ...]
+            Dictionary mapping currency -> [(date, base, quote, rate), ...]
 
         Raises:
+            ValueError: If base_currency is not None and not "USD"
             FXServiceError: If API request fails
         """
+        # Validate base_currency for single-base provider
+        if base_currency is not None and base_currency != "USD":
+            raise ValueError(
+                f"FED provider only supports USD as base currency, got {base_currency}"
+            )
+
         start_date, end_date = date_range
         results = {}
 

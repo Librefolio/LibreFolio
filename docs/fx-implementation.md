@@ -1,368 +1,191 @@
-# FX (Foreign Exchange) Implementation
+# FX (Foreign Exchange) System
 
-This document describes the FX rate system implementation for LibreFolio.
+Complete guide to the LibreFolio FX rate system.
 
-> 💡 **Want to understand how async/await works in this module?** Read the [Async Architecture Guide](async-architecture.md) first!
+> 🎯 **Quick Start**: [API Reference](./fx/api-reference.md) | [Available Providers](./fx/providers.md) | [Add New Provider](./fx/provider-development.md)
 
 ---
 
-## 📋 Overview
+## 📋 What is the FX System?
 
-The FX system provides:
-- **Currency rate fetching** from ECB (European Central Bank) API (async with httpx)
-- **Persistent storage** in SQLite database with alphabetical base/quote ordering (async with AsyncSession)
-- **Currency conversion** with forward-fill logic (async database queries)
-- **REST API endpoints** for frontend integration (async FastAPI endpoints)
+The **FX (Foreign Exchange) system** in LibreFolio handles everything related to currency exchange rates:
+
+- 💱 **Fetching rates** from multiple central banks (ECB, FED, BOE, SNB)
+- 💾 **Storing rates** in database with smart deduplication
+- 🔄 **Converting amounts** between any currencies
+- 🌐 **REST API** for frontend/external integrations
+- 🔌 **Plugin architecture** to add new data sources
+
+---
+
+## ✨ Key Features
+
+### 🏦 Multi-Provider Support
+
+Access rates from **4 central banks**:
+
+| Provider | Base Currency | Coverage | Multi-Unit |
+|----------|---------------|----------|------------|
+| **ECB** (European Central Bank) | EUR | 45+ currencies | No |
+| **FED** (Federal Reserve) | USD | 20+ currencies | No |
+| **BOE** (Bank of England) | GBP | 15+ currencies | No |
+| **SNB** (Swiss National Bank) | CHF | 10+ currencies | ✅ Yes |
+
+📖 **[See all providers →](./fx/providers.md)**
+
+---
+
+### 🔄 Smart Currency Conversion
+
+Automatically handles multiple conversion strategies:
+
+- **Identity**: USD → USD (instant)
+- **Direct**: EUR → USD (single lookup)
+- **Inverse**: USD → EUR (inverts EUR/USD)
+- **Cross-currency**: USD → GBP (via EUR pivot)
+
+**Backward-fill**: Missing rates? Uses most recent available from past dates.
+
+---
+
+### 🎯 Multi-Base Currency Ready
+
+Current providers are **single-base** (ECB=EUR, FED=USD, etc.).
+
+Future providers can support **multiple base currencies**:
+```python
+# Example: commercial API with EUR, GBP, USD bases
+await sync_rates(
+    currencies=['JPY', 'CHF'],
+    provider='COMMERCIAL_API',
+    base_currency='EUR'  # Choose which base to use
+)
+```
+
+---
+
+### 📊 Storage Optimization
+
+**Alphabetical ordering**: `base < quote` alphabetically
+- Prevents duplicates (EUR/USD vs USD/EUR)
+- One record per pair
+- Inverse computed on-fly: `1/rate`
+
+**Example**:
+```sql
+-- Stored as EUR/USD (E < U)
+INSERT INTO fx_rates (date, base, quote, rate)
+VALUES ('2025-01-15', 'EUR', 'USD', 1.0850);
+-- Means: 1 EUR = 1.0850 USD
+
+-- To get USD → EUR: 1 / 1.0850 = 0.9217 EUR
+```
+
+---
+
+## 🚀 Quick Start
+
+Ready to start using the FX system?
+
+📖 **[Go to API Reference →](./fx/api-reference.md)**
+
+The API Reference includes:
+- ✅ Complete endpoint documentation
+- ✅ Step-by-step examples with `curl`
+- ✅ Request/response formats
+- ✅ Error handling
+- ✅ Best practices
+
+**Or use interactive Swagger UI**: Start the server and visit `http://localhost:8000/docs` to try API calls directly in your browser!
+
+---
+
+## 📚 Documentation Structure
+
+### 🎓 Getting Started
+
+- **[API Reference](./fx/api-reference.md)** - REST endpoints, examples, best practices
+- **[Available Providers](./fx/providers.md)** - ECB, FED, BOE, SNB details
+
+### 🔧 Technical
+
+- **[Architecture](./fx/architecture.md)** - System design, data flow, components
+- **[Provider Development](./fx/provider-development.md)** - How to add new providers
+
+### 🧪 Testing
+
+- **[Testing Guide](./testing-guide.md)** - How to run FX tests
+- **[Async Architecture](./async-architecture.md)** - Understanding async patterns
 
 ---
 
 ## 🗄️ Database Schema
 
-### `fx_rates` Table
+### `fx_rates` - Exchange Rates
+
+Stores daily exchange rates from providers.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | INTEGER | Primary key |
-| `date` | DATE | Rate date (no intraday data) |
+| `date` | DATE | Rate date |
 | `base` | VARCHAR | Base currency (ISO 4217) |
 | `quote` | VARCHAR | Quote currency (ISO 4217) |
-| `rate` | DECIMAL(18,6) | Exchange rate: **1 base = rate × quote** |
-| `source` | VARCHAR | Data source (default: "ECB") |
-| `fetched_at` | DATETIME | Timestamp of fetch |
+| `rate` | DECIMAL | 1 base = rate × quote |
+| `source` | VARCHAR | Provider code (ECB, FED, BOE, SNB) |
 
-**Constraints:**
-- **UNIQUE** (`date`, `base`, `quote`) - One rate per day per pair
-- **CHECK** (`base` < `quote`) - Alphabetical ordering to prevent duplicates
+**Constraints**:
+- `UNIQUE (date, base, quote)` - One rate per day per pair
+- `CHECK (base < quote)` - Alphabetical ordering
 
-**Example:**
+---
+
+### `fx_currency_pair_sources` - Provider Configuration
+
+Configure which provider to use for each currency pair.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `base` | VARCHAR | Base currency |
+| `quote` | VARCHAR | Quote currency |
+| `provider` | VARCHAR | Preferred provider |
+
+**Example**:
 ```sql
--- Stored as EUR/USD (alphabetically: EUR < USD)
-date: 2025-01-15, base: EUR, quote: USD, rate: 1.0850
--- Meaning: 1 EUR = 1.0850 USD
-
--- Stored as CHF/EUR (alphabetically: CHF < EUR)
-date: 2025-01-15, base: CHF, quote: EUR, rate: 1.0650
--- Meaning: 1 CHF = 1.0650 EUR
+-- Use FED for USD/EUR
+INSERT INTO fx_currency_pair_sources (base, quote, provider)
+VALUES ('EUR', 'USD', 'FED');
 ```
 
-**Why alphabetical ordering?**
-- Prevents duplicate pairs (EUR/USD and USD/EUR)
-- Reduces storage (only one record per pair)
-- Inverse rate computed on-the-fly: `1/rate`
+📖 **[Full Schema Documentation →](./database-schema.md)**
+
+
 
 ---
 
-## 🔧 Backend Components
+## 🧪 Testing
 
-> 💡 **All functions are `async`**: See [Async Architecture Guide](async-architecture.md) for implementation details.
+The FX system has comprehensive test coverage across all layers:
 
-### 1. Service Layer: `backend/app/services/fx.py`
+- **External Services** - Test real API calls to providers
+- **Database Layer** - Test persistence and constraints  
+- **Service Layer** - Test conversion algorithms
+- **API Layer** - Test REST endpoints
 
-**`async def get_available_currencies() -> list[str]`**
-- Fetches list of available currencies from ECB API (async httpx call)
-- Returns ISO 4217 currency codes
+📖 **[Full Testing Guide →](./testing-guide.md)**
 
-**`async def ensure_rates(session: AsyncSession, date_range, currencies) -> int`**
-- Fetches missing rates from ECB for specified date range and currencies
-- ECB provides: 1 EUR = X {currency}
-- Converts to alphabetical storage format
-- Returns number of new rates inserted
-- Idempotent: safe to call multiple times
-- **Note**: Uses sequential loop (intentional) - see [Async Architecture Guide](async-architecture.md#service-layer) for reasoning
-
-**`async def convert(session: AsyncSession, amount, from_currency, to_currency, as_of_date) -> Decimal`**
-- Converts amount between currencies (async database query)
-- Handles:
-  - **Identity**: Same currency → return amount unchanged
-  - **Direct**: Stored pair → apply rate
-  - **Inverse**: Reverse pair → apply `1/rate`
-  - **Cross-currency**: Convert via intermediate (typically EUR)
-- **Forward-fill**: Uses most recent rate if exact date unavailable (with warning log)
-
-### 2. API Layer: `backend/app/api/v1/fx.py`
-
-**`GET /api/v1/fx/currencies`**
-- Returns list of available currencies from ECB
-- Response: `{ currencies: [...], count: N }`
-
-**`POST /api/v1/fx/sync`**
-- Syncs FX rates for specified date range and currencies
-- Query params: `start`, `end`, `currencies` (comma-separated)
-- Response: `{ synced: N, date_range: [...], currencies: [...] }`
-
-**`GET /api/v1/fx/convert`**
-- Converts amount between currencies
-- Query params: `amount`, `from`, `to`, `date` (optional, defaults to today)
-- Response: `{ amount, from_currency, to_currency, converted_amount, rate, rate_date }`
-
----
-
-## 🌐 ECB API Parameters
-
-LibreFolio fetches currency exchange rates from the **European Central Bank (ECB) Statistical Data Warehouse** API.
-
-### Official Documentation
-
-- **ECB SDW Web Services**: https://data.ecb.europa.eu/help/api/overview
-- **Data Navigation Tree**: https://data.ecb.europa.eu/data/datasets (explore available datasets)
-- **SDMX 2.1 RESTful API**: https://github.com/sdmx-twg/sdmx-rest
-
-### URL Structure
-
-```
-/data/{dataset}/{frequency}.{currency}.{reference_area}.{series}.{exr_type}
-```
-
-**Example:**
-```
-https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A
-```
-
-This fetches daily spot rates for USD against EUR (1 EUR = X USD).
-
-### Parameter Explanation
-
-| Parameter | Value in LibreFolio | Description | Other Options |
-|-----------|---------------------|-------------|---------------|
-| **dataset** | `EXR` | Exchange Rates dataset | `ICP` (prices), `MNA` (national accounts), etc. |
-| **frequency** | `D` | Daily frequency | `M` (monthly), `Q` (quarterly), `A` (annual) |
-| **currency** | `USD`, `GBP`, etc. | Target currency code (ISO 4217) | Any ECB-supported currency (~45 available) |
-| **reference_area** | `EUR` | Base/reference currency | Typically EUR for exchange rates |
-| **series** | `SP00` | Series variation - Spot rate | `SP00` (spot), other variations for averages |
-| **exr_type** | `A` | Exchange rate type - Average | `A` (average), `E` (end of period) |
-
-### Query Parameters
-
-When fetching data, we use these query parameters:
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `format` | Response format | `jsondata` (JSON), `csvdata` (CSV) |
-| `startPeriod` | Start date (ISO 8601) | `2025-01-01` |
-| `endPeriod` | End date (ISO 8601) | `2025-01-31` |
-| `detail` | Detail level | `dataonly` (data only), `full` (with metadata) |
-| `lastNObservations` | Last N observations | `1` (latest only), `30` (last 30 days) |
-
-### Example API Call
-
-**Fetch USD/EUR rates for January 2025:**
-```
-GET https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A
-    ?format=jsondata
-    &startPeriod=2025-01-01
-    &endPeriod=2025-01-31
-```
-
-**Response structure:**
-```json
-{
-  "dataSets": [{
-    "series": {
-      "0:0:0:0:0": {
-        "observations": {
-          "0": [1.0850],  // 2025-01-01: 1 EUR = 1.0850 USD
-          "1": [1.0875],  // 2025-01-02: 1 EUR = 1.0875 USD
-          ...
-        }
-      }
-    }
-  }],
-  "structure": {
-    "dimensions": {
-      "observation": [{
-        "id": "TIME_PERIOD",
-        "values": [
-          {"id": "2025-01-01"},
-          {"id": "2025-01-02"},
-          ...
-        ]
-      }]
-    }
-  }
-}
-```
-
-### How LibreFolio Uses ECB API
-
-1. **Fetch available currencies**: Query all series to get list of supported currencies
-2. **Fetch rates**: For each currency, fetch daily rates for specified date range
-3. **Parse response**: Extract date and rate from observations
-4. **Transform**: Convert ECB format (1 EUR = X currency) to alphabetical storage format
-5. **Persist**: Store in database with deduplication
-
-**Code reference:** See `backend/app/services/fx.py` for implementation details.
-
----
-
-## 🧪 Testing Structure
-
-Tests are organized into **4 logical categories**: External Services → Database → Backend Services → API Endpoints
-
-### External Services Tests (No server required)
-
-**1. FX Providers Tests** (`test_external/test_fx_providers.py`)
+**Quick test commands:**
 ```bash
-python test_runner.py external ecb
-```
-- Tests all registered FX providers (ECB, FED, BOE, etc.)
-- Verifies provider registration and metadata
-- Checks API connection and currency list
-- Tests rate fetching and normalization logic
-- Generic test suite works for any provider
+# Test all FX providers
+./test_runner.py external all
 
-**Run all external tests:**
-```bash
-python test_runner.py external all
-```
+# Test FX database persistence
+./test_runner.py db fx-rates
 
-### Database Tests (No server required)
+# Test conversion logic
+./test_runner.py services fx
 
-**2. FX Rates Persistence** (`test_db/test_fx_rates_persistence.py`)
-```bash
-python test_runner.py db fx-rates
-```
-- Fetches rates from ECB API
-- Persists to database
-- Verifies idempotency (no duplicates on re-sync)
-- Tests database constraints (unique, check)
-
-**Mock Data Population** (`test_db/populate_mock_data.py`)
-```bash
-python test_runner.py db populate
-```
-- Populates database with comprehensive MOCK DATA
-- Useful for frontend development and testing
-- Includes: brokers, assets, transactions, FX rates (30 days)
-
-**Run all DB tests:**
-```bash
-python test_runner.py db all         # All DB tests (create → validate → fx-rates → populate)
-```
-
-### Backend Services Tests (No server required)
-
-**3. FX Conversion Logic** (`test_services/test_fx_conversion.py`)
-```bash
-python test_runner.py services fx
-```
-- Identity conversion (EUR→EUR)
-- Direct conversion (EUR→USD using stored rate)
-- Inverse conversion (USD→EUR using 1/rate)
-- Roundtrip verification (EUR→USD→EUR ≈ original)
-- Cross-currency (USD→GBP via EUR)
-- Forward-fill (future date uses latest available rate)
-- Error handling (missing rate raises exception)
-
-**Run all services tests:**
-```bash
-python test_runner.py services all
-```
-
-### API Tests (Requires running server)
-
-**4. FX API Endpoints** (`test_api/test_fx_api.py`)
-```bash
-# Start server first
-./dev.sh server
-
-# In another terminal
-python test_runner.py api fx
-```
-
-Tests:
-- `GET /fx/currencies` - List available currencies
-- `POST /fx/sync` - Sync rates (with idempotency check)
-- `GET /fx/convert` - Convert amounts (identity, roundtrip)
-- Error handling (missing rates, invalid inputs)
-- Validation (negative amounts, invalid date ranges)
-
-**Run all API tests:**
-```bash
-python test_runner.py api all
-```
-
-### Run ALL Tests (Optimal Order)
-
-```bash
-python test_runner.py all
-```
-
-Executes all test categories in optimal order:
-1. External Services (ECB API)
-2. Database Layer (schema, persistence, mock data)
-3. Backend Services (conversion logic)
-4. API Endpoints (skipped if server not running)
-
----
-
-## 🌐 ECB API Integration
-
-**Data Source:** European Central Bank (ECB)  
-**Base URL:** `https://data-api.ecb.europa.eu/service/data`  
-**Dataset:** `EXR` (Exchange Rates)  
-**Frequency:** Daily (`D`)  
-**Reference:** EUR (all rates vs EUR)
-
-**Example API Call:**
-```
-GET https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A
-  ?format=jsondata
-  &startPeriod=2025-01-01
-  &endPeriod=2025-01-31
-```
-
-Returns: Daily USD/EUR rates (1 EUR = X USD)
-
-**No API Key Required** ✅
-
----
-
-## 📊 Usage Examples
-
-### Backend Service Usage
-
-```python
-from backend.app.services.fx import ensure_rates, convert, get_available_currencies
-from datetime import date
-
-# 1. Get available currencies
-currencies = await get_available_currencies()
-print(currencies)  # ['AUD', 'BGN', 'BRL', ..., 'USD', 'ZAR']
-
-# 2. Fetch rates for last 30 days
-await ensure_rates(
-    session,
-    date_range=(date(2025, 1, 1), date(2025, 1, 31)),
-    currencies=["USD", "GBP", "CHF"]
-)
-
-# 3. Convert 100 USD to EUR
-eur_amount = convert(
-    session,
-    amount=Decimal("100.00"),
-    from_currency="USD",
-    to_currency="EUR",
-    as_of_date=date(2025, 1, 15)
-)
-print(f"100 USD = {eur_amount} EUR")  # ~92.17 EUR
-```
-
-### API Usage (Frontend)
-
-```javascript
-// 1. Get available currencies
-const response = await fetch('/api/v1/fx/currencies');
-const { currencies } = await response.json();
-
-// 2. Sync rates
-await fetch('/api/v1/fx/sync?start=2025-01-01&end=2025-01-31&currencies=USD,GBP', {
-  method: 'POST'
-});
-
-// 3. Convert currency
-const response = await fetch('/api/v1/fx/convert?amount=100&from=USD&to=EUR&date=2025-01-15');
-const { converted_amount } = await response.json();
-console.log(`100 USD = ${converted_amount} EUR`);
+# Test API endpoints (requires server)
+./test_runner.py api fx
 ```
 
 ---
@@ -375,38 +198,63 @@ console.log(`100 USD = ${converted_amount} EUR`);
 |----------|-------------|---------|
 | `PORTFOLIO_BASE_CURRENCY` | Base currency for portfolio calculations | `EUR` |
 
-See [Environment Variables](./environment-variables.md) for more details.
+📖 **[Full Configuration Guide →](./environment-variables.md)**
 
 ---
 
 ## 🔍 Troubleshooting
 
 **Problem:** No rates found for conversion  
-**Solution:** Run sync first: `POST /api/v1/fx/sync?start=...&end=...&currencies=...`
+**Solution:** Sync rates first: `POST /api/v1/fx/sync?start=...&end=...&currencies=...`
 
-**Problem:** ECB API timeout  
-**Solution:** Check internet connection. ECB API is public and doesn't require authentication.
+**Problem:** "Unknown FX provider"  
+**Solution:** Valid providers: ECB, FED, BOE, SNB. Check [Available Providers](./fx/providers.md)
 
-**Problem:** Forward-fill warnings in logs  
-**Explanation:** This is expected behavior when requesting rates for future dates or weekends. The system uses the most recent available rate.
+**Problem:** "Provider does not support base currency"  
+**Solution:** Current providers are single-base. Check [Architecture](./fx/architecture.md#multi-base-currency-support)
 
-**Problem:** "base < quote" constraint violation  
-**Explanation:** Always store pairs alphabetically. The conversion service handles this automatically.
+**Problem:** Forward-fill applied unexpectedly  
+**Explanation:** Normal for weekends/holidays. System uses most recent available rate.
+
+**Problem:** Multi-unit currency rates incorrect (JPY)  
+**Solution:** Use SNB provider for correct multi-unit handling. See [Providers](./fx/providers.md#-snb---swiss-national-bank)
+
+📖 **[More troubleshooting →](./fx/architecture.md)**
+
+---
+
+## 🛠️ Developing New Providers
+
+Want to add support for a new central bank or data source?
+
+📘 **[Provider Development Guide →](./fx/provider-development.md)**
+
+**Problem:** Backward-fill applied unexpectedly  
+**Explanation:** Normal for weekends/holidays. System uses most recent available rate from past dates.
+- ✅ Copy-paste ready template
+- ✅ Required methods explanation
+- ✅ Multi-base provider examples
+- ✅ Testing instructions
+
+**Quick reference examples:**
+- Simple: `backend/app/services/fx_providers/boe.py`
+- Dynamic list: `backend/app/services/fx_providers/ecb.py`
+- Multi-unit: `backend/app/services/fx_providers/snb.py`
 
 ---
 
 ## 📚 Related Documentation
 
-- 🚀 **[API Development Guide](./api-development-guide.md)** - Learn how FX endpoints are built (reference implementation)
-- [Async Architecture Guide](./async-architecture.md) - Understand async patterns used in FX module
-- [Database Schema](./database-schema.md) - Full database documentation
-- [Environment Variables](./environment-variables.md) - Configuration options
-- [Alembic Guide](./alembic-guide.md) - Database migrations
+### Core Documentation
+- **[Architecture](./fx/architecture.md)** - System design and data flow
+- **[API Reference](./fx/api-reference.md)** - Complete REST API docs
+- **[Providers](./fx/providers.md)** - ECB, FED, BOE, SNB details
+- **[Provider Development](./fx/provider-development.md)** - Add new providers
 
----
-
-**Next Steps:**
-- Implement scheduler for automatic nightly rate sync (Step 08)
-- Add caching layer for frequently used conversions (future optimization)
-- Support additional data sources beyond ECB (future enhancement)
+### General Documentation
+- **[Testing Guide](./testing-guide.md)** - How to run and write tests
+- **[Async Architecture](./async-architecture.md)** - Understanding async patterns
+- **[Database Schema](./database-schema.md)** - Full database documentation
+- **[API Development Guide](./api-development-guide.md)** - How endpoints are built
+- **[Environment Variables](./environment-variables.md)** - Configuration options
 

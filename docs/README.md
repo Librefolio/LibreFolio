@@ -18,7 +18,11 @@ Welcome to LibreFolio documentation!
 - 🚀 **[API Development Guide](api-development-guide.md)** - ⭐ Complete guide for adding new REST API endpoints (bulk-first pattern, Pydantic, FastAPI)
 
 ### Features
-- **[FX Implementation](fx-implementation.md)** - Foreign exchange rates system (ECB API, conversion, testing)
+- **[FX System Overview](fx-implementation.md)** - Foreign exchange rates system introduction
+  - **[FX Architecture](fx/architecture.md)** - Technical design and data flow
+  - **[FX API Reference](fx/api-reference.md)** - REST API endpoints for FX operations
+  - **[FX Providers](fx/providers.md)** - ECB, FED, BOE, SNB details
+  - **[FX Provider Development](fx/provider-development.md)** - ⭐ How to add new providers
 
 ### Testing
 - **[Testing Guide for New Developers](testing-guide.md)** - ⭐ Hands-on introduction to the test suite (start here!)
@@ -40,7 +44,11 @@ todo: add more links when more docs are added
 | [alembic-guide.md](alembic-guide.md) | Learn database migrations | Everyone |
 | [database-schema.md](database-schema.md) | Database tables & relationships | Everyone |
 | [async-architecture.md](async-architecture.md) | ⭐ Async/concurrent architecture explained | Contributors |
-| [fx-implementation.md](fx-implementation.md) | FX rates system implementation | Developers |
+| [fx-implementation.md](fx-implementation.md) | FX rates system overview | Everyone |
+| [fx/architecture.md](fx/architecture.md) | FX system technical architecture | Developers |
+| [fx/api-reference.md](fx/api-reference.md) | FX REST API endpoints | Developers, Frontend |
+| [fx/providers.md](fx/providers.md) | Available FX providers details | Developers |
+| [fx/provider-development.md](fx/provider-development.md) | ⭐ How to add FX providers | Contributors |
 | [README.md](../README.md) | Project overview | Everyone |
 
 
@@ -64,6 +72,9 @@ todo: add more links when more docs are added
 → Read [Alembic Guide](alembic-guide.md)
 
 **...understand how FX rates work**
+**...develop a new FX data provider (central bank integration)**
+→ Read [FX Provider Development Guide](fx/provider-development.md) - Quick start template
+
 → Read [FX Implementation](fx-implementation.md)
 
 **...configure the application or deploy to Docker**

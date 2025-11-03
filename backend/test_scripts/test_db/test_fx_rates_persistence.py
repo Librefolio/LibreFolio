@@ -36,7 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
-from backend.app.services.fx import FXServiceError, ensure_rates
+from backend.app.services.fx import FXServiceError, ensure_rates_multi_source
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,
@@ -77,7 +77,8 @@ async def test_fetch_and_persist_single_currency():
 
         try:
             # Fetch rates from ECB
-            synced_count = await ensure_rates(session, (start_date, end_date), ["USD"])
+            result = await ensure_rates_multi_source(session, (start_date, end_date), ["USD"], provider_code="ECB")
+            synced_count = result['total_changed']
             print_success(f"Synced {synced_count} new rates")
 
             # Verify rates were persisted
@@ -139,7 +140,8 @@ async def test_fetch_multiple_currencies():
 
         try:
             # Fetch rates
-            synced_count = await ensure_rates(session, (start_date, end_date), test_currencies)
+            result = await ensure_rates_multi_source(session, (start_date, end_date), test_currencies, provider_code="ECB")
+            synced_count = result['total_changed']
             print_success(f"Synced {synced_count} new rates")
 
             # Verify each currency
@@ -193,7 +195,8 @@ async def test_data_overwrite():
         try:
             # Step 1: Fetch real rates first to find a business day with data
             print_step(1, "Fetch real rates from ECB to identify business days")
-            synced_count = await ensure_rates(session, (start_date, end_date), ["USD"])
+            result = await ensure_rates_multi_source(session, (start_date, end_date), ["USD"], provider_code="ECB")
+            synced_count = result['total_changed']
 
             if synced_count == 0:
                 print_warning(f"No rates available for {start_date} to {end_date} (all weekends/holidays)")
@@ -248,7 +251,8 @@ async def test_data_overwrite():
 
             # Step 3: Fetch from ECB again (should restore real rate)
             print_step(3, "Fetch from ECB again to restore real rate")
-            refetch_count = await ensure_rates(session, (test_date, test_date), ["USD"])
+            result = await ensure_rates_multi_source(session, (test_date, test_date), ["USD"], provider_code="ECB")
+            refetch_count = result['total_changed']
 
             # Step 4: Verify rate was restored
             print_step(4, "Verify rate was restored")
@@ -318,7 +322,8 @@ async def test_idempotent_sync():
 
         try:
             # First sync
-            synced_1 = await ensure_rates(session, (start_date, end_date), ["USD"])
+            result = await ensure_rates_multi_source(session, (start_date, end_date), ["USD"], provider_code="ECB")
+            synced_1 = result['total_changed']
             print_info(f"First sync: {synced_1} new rates")
 
             # Count rates after first sync
@@ -327,12 +332,13 @@ async def test_idempotent_sync():
                 FxRate.quote == "USD",
                 FxRate.date >= start_date,
                 FxRate.date <= end_date
-                )
-            result = await session.execute(stmt)
-            count_1 = len(result.scalars().all())
+            )
+            result_db = await session.execute(stmt)
+            count_1 = len(result_db.scalars().all())
 
             # Second sync (should insert 0 new rates)
-            synced_2 = await ensure_rates(session, (start_date, end_date), ["USD"])
+            result = await ensure_rates_multi_source(session, (start_date, end_date), ["USD"], provider_code="ECB")
+            synced_2 = result['total_changed']
             print_info(f"Second sync: {synced_2} new rates")
 
             # Count rates after second sync
@@ -376,7 +382,7 @@ async def test_rate_inversion_for_alphabetical_ordering():
 
         try:
             # Fetch CHF rate (ECB gives: 1 EUR = X CHF)
-            await ensure_rates(session, (test_date, test_date), ["CHF"])
+            await ensure_rates_multi_source(session, (test_date, test_date), ["CHF"], provider_code="ECB")
 
             # Query stored rate (should be CHF/EUR with inverted rate)
             stmt = select(FxRate).where(
@@ -412,7 +418,7 @@ async def test_rate_inversion_for_alphabetical_ordering():
             # Now test a currency that doesn't need inversion (e.g., USD)
             print_info("\nFetching USD rate from ECB (EUR < USD alphabetically, no inversion)...")
 
-            await ensure_rates(session, (test_date, test_date), ["USD"])
+            await ensure_rates_multi_source(session, (test_date, test_date), ["USD"], provider_code="ECB")
 
             stmt = select(FxRate).where(
                 FxRate.base == "EUR",
@@ -468,7 +474,7 @@ async def test_database_constraints():
 
         try:
             # First, ensure we have a rate
-            await ensure_rates(session, (test_date, test_date), ["USD"])
+            await ensure_rates_multi_source(session, (test_date, test_date), ["USD"], provider_code="ECB")
 
             # Query the rate
             stmt = select(FxRate).where(
