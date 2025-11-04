@@ -45,7 +45,7 @@ def check_port_available(port: int = TEST_SERVER_PORT) -> tuple[bool, str | None
             ["lsof", "-i", f":{port}"],
             capture_output=True,
             text=True
-        )
+            )
 
         if result.returncode == 0 and result.stdout.strip():
             # Port is occupied
@@ -67,9 +67,9 @@ def check_port_available(port: int = TEST_SERVER_PORT) -> tuple[bool, str | None
 
 def print_port_occupied_help(port: int, process_info: str):
     """Print helpful instructions when port is occupied."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"⚠️  ERROR: Port {port} is already in use")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print("\n📋 Process using the port:")
     print(process_info)
     print("\n💡 How to fix this:")
@@ -85,7 +85,7 @@ def print_port_occupied_help(port: int, process_info: str):
     print(f"\n5. Or kill all Python processes (⚠️  use with caution):")
     print(f"   pkill -f python")
     print(f"\n6. Then run the test again")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
 class TestServerManager:
@@ -131,10 +131,6 @@ class TestServerManager:
         # This will be picked up by config.py before app initialization
         env["LIBREFOLIO_TEST_MODE"] = "1"
 
-        from backend.test_scripts.test_db_config import TEST_DATABASE_URL
-        print(f"[TestServerManager] Starting server in TEST MODE")
-        print(f"[TestServerManager] Test database: {TEST_DATABASE_URL}")
-
         # Start server in background
         # Test mode is enabled via LIBREFOLIO_TEST_MODE environment variable
         self.server_process = subprocess.Popen(
@@ -154,34 +150,34 @@ class TestServerManager:
         while time.time() - start_time < SERVER_START_TIMEOUT:
             if self.is_server_running():
                 return True
-            
+
             # Check if process crashed
             if self.server_process.poll() is not None:
                 # Process exited
                 stdout, stderr = self.server_process.communicate()
-                print(f"\n{'='*60}")
+                print(f"\n{'=' * 60}")
                 print("⚠️  Server process exited unexpectedly")
-                print(f"{'='*60}")
+                print(f"{'=' * 60}")
                 print("\n📋 Server STDOUT:")
                 print(stdout[-500:] if stdout else "(empty)")
                 print("\n📋 Server STDERR:")
                 print(stderr[-500:] if stderr else "(empty)")
-                print(f"{'='*60}\n")
+                print(f"{'=' * 60}\n")
                 return False
-            
+
             time.sleep(0.5)
 
         # Server didn't start in time - show logs
         stdout, stderr = self.server_process.communicate(timeout=1)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"⚠️  Server didn't start within {SERVER_START_TIMEOUT} seconds")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print("\n📋 Server STDOUT:")
         print(stdout[-500:] if stdout else "(empty)")
         print("\n📋 Server STDERR:")
         print(stderr[-500:] if stderr else "(empty)")
-        print(f"{'='*60}\n")
-        
+        print(f"{'=' * 60}\n")
+
         self.stop_server()
         return False
 
