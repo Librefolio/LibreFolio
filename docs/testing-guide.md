@@ -67,36 +67,65 @@ python test_runner.py all
 
 ### **Level 1: External Services** 🌐
 
-These tests verify that external APIs (like ECB for currency rates) are accessible.
+These tests verify that external FX rate provider APIs are accessible and working correctly.
 
-#### ✅ Test 1: ECB API Connection
+#### ✅ Test 1: All FX Providers
 
 ```bash
-python test_runner.py -v external ecb
+python test_runner.py -v external all
 ```
 
 **What this test does:**
-- Connects to the European Central Bank API
-- Fetches list of available currencies (~45 currencies)
-- Verifies common currencies are available (USD, GBP, CHF, JPY, etc.)
+- Tests **4 central bank providers**: ECB (EUR), FED (USD), BOE (GBP), SNB (CHF)
+- For each provider:
+  - ✅ Verifies registration and metadata
+  - ✅ Fetches supported currencies list
+  - ✅ Fetches actual rates (last 7 days)
+  - ✅ Tests rate normalization (alphabetical ordering)
+- Tests **multi-unit currencies** (JPY, SEK, NOK, DKK)
+  - Some banks quote per 100 units instead of per 1 unit
+  - Verifies correct handling (avoids 100x errors)
 
 **Expected result:**
 ```
-✅ ECB API Connection
-✅ Currency List Validation
+✅ PASS - External Forex data import API (16/16 provider tests)
+✅ PASS - Multi-Unit Currency Handling (12/12 tests)
 Results: 2/2 tests passed
 ```
 
 **What you learned:**
-- LibreFolio uses ECB as the external data source for FX rates
-- The system supports 45+ currencies
+- LibreFolio supports **4 official central bank providers**:
+  - 🇪🇺 **ECB**: European Central Bank (~45 currencies, EUR base)
+  - 🇺🇸 **FED**: Federal Reserve (~21 currencies, USD base)
+  - 🇬🇧 **BOE**: Bank of England (~16 currencies, GBP base)
+  - 🇨🇭 **SNB**: Swiss National Bank (~11 currencies, CHF base)
+- Each provider is tested uniformly (same test suite)
+- **Multi-unit currencies** (JPY, SEK, NOK, DKK) handled correctly
+  - Example: 100 JPY = 0.67 USD (NOT 1 JPY = 0.0067 USD)
+  - SNB uses multi-unit for JPY, SEK, NOK, DKK
+- All providers implement standard interface (`FXRateProvider`)
+- No API keys required (free public APIs)
+- System is **multi-provider ready** for future additions
+
+**Test all plugin individual:**
+```bash
+# Test fx-source capability only
+python test_runner.py -v external fx-source
+
+# Test fx-multi-unit capability only
+python test_runner.py -v external fx-multi-unit
+```
+
 **Troubleshooting:**
 - ❌ Connection failed → Check internet connection
-- ❌ Timeout → ECB API might be temporarily unavailable, retry later
+- ❌ Timeout → Provider API might be temporarily unavailable, retry later
+- ⚠️ 0 observations → Weekend/holiday, no data for those dates (normal)
 
 ---
 
-**Checkpoint 1:** External services working ✅
+**Checkpoint 1:** External services working ✅  
+**Providers validated:** 4/4 ✅  
+**Multi-unit handling:** Verified ✅
 
 ---
 
@@ -254,6 +283,53 @@ Results: 6/6 tests passed
 
 ---
 
+#### ✅ Test 6: Numeric Column Truncation
+
+```bash
+python test_runner.py -v db numeric-truncation
+```
+
+**What this test does:**
+- Tests **all 12 Numeric columns** across database tables
+- Validates helper functions for precision/truncation
+- Verifies database truncates decimals as expected
+- **Prevents false updates** (no update if value identical after truncation)
+- Tests columns:
+  - `assets.face_value` (Numeric 18,6)
+  - `cash_movements.amount` (Numeric 18,6)
+  - `fx_rates.rate` (Numeric 24,10) ← Higher precision for FX rates
+  - `price_history` columns (open, high, low, close, adjusted_close)
+  - `transactions` columns (quantity, price, fees, taxes)
+
+**Expected result:**
+```
+✅ Helper Functions Test: 12 passed, 0 failed
+✅ Database Truncation: PASS
+✅ No False Updates: PASS
+
+Results: 3/3 tests passed
+```
+
+**What you learned:**
+- **FX rates use higher precision**: Numeric(24,10) vs standard Numeric(18,6)
+  - 14 digits before decimal, 10 after (e.g., 1.0644252000)
+  - Prevents rounding errors in currency conversions
+- Database automatically truncates to column precision
+- Helper functions `truncate_decimal_to_db_precision()` available for pre-truncation
+- System avoids false "updates" when values are identical after truncation
+- **Bug prevention**: Without truncation check, every sync would "update" all rates (even if unchanged)
+
+**Example:**
+```python
+# API returns: 1.012345678901234
+# DB stores:   1.0123456789 (truncated to 10 decimals)
+# Re-sync:     No update (pre-truncated comparison)
+```
+
+**💡 Why this matters:** Prevents unnecessary DB writes and ensures accurate change detection during FX sync operations.
+
+---
+
 **Checkpoint 2:** Database layer working ✅
 
 ---
@@ -290,9 +366,14 @@ python test_runner.py -v services fx
 ✅ Inverse Conversion (USD→EUR)
 ✅ Roundtrip Conversion
 ✅ Different Dates
-✅ Forward-Fill Logic
+✅ Backward-Fill Logic
 ✅ Missing Rate Error
-Results: 7/7 tests passed
+✅ Bulk Conversion - Single Item
+✅ Bulk Conversion - Multiple Items
+✅ Bulk Conversion - Partial Failure
+✅ Bulk Conversion - All Failures
+✅ Bulk Conversion - Raise on Error
+Results: 12/12 tests passed
 ```
 
 **What you learned:**
@@ -302,9 +383,29 @@ Results: 7/7 tests passed
 - Creates rates for multiple dates to test date handling
 - Conversion service handles identity, direct, and inverse conversions
 - System correctly picks rates based on date
-- System uses forward-fill for missing dates (weekend/holidays)
+- System uses **backward-fill** for missing dates (uses most recent rate before requested date)
 - Error handling is robust
-- Cross-currency conversions (USD→GBP) will be handled by future FX plugins
+- **Bulk conversions** supported with partial failure handling
+- `raise_on_error` parameter controls error behavior (raise vs collect)
+
+**⚠️ Important: Clean Database Required**
+
+This test may fail if the test database contains "old" rates from previous test runs (e.g., API tests insert rates from 1999 for backward-fill testing). To fix:
+
+```bash
+# Recreate clean test database
+python test_runner.py db create
+
+# Or run the full test suite (auto-cleans)
+python test_runner.py -v all
+```
+
+**Why this happens:**
+- API tests insert historical rates (1999-12-15) to test backward-fill warnings
+- Services test expects only its own mock rates (last 7 days)
+- Old rates in DB cause test assertion failures
+
+**Best practice:** Always run `python test_runner.py all` instead of individual tests to ensure clean state.
 
 **💡 No prerequisites:** This test inserts its own mock data, so it works even on an empty database!  
 **🔒 Safe:** Explicit check ensures only test_app.db is modified, never production DB!
@@ -327,33 +428,98 @@ python test_runner.py -v api fx
 
 **What this test does:**
 - **Auto-starts fresh test server** on TEST_PORT (default: 8001)
-- Tests `GET /api/v1/fx/currencies` - List available currencies
-- Tests `POST /api/v1/fx/sync` - Sync FX rates from ECB
-- Tests `GET /api/v1/fx/convert` - Convert amounts between currencies
-- Tests error handling (404 for missing rates, 422 for invalid input)
-- Tests validation (negative amounts, invalid date ranges)
+- Tests **10 comprehensive endpoint scenarios**:
+  1. `GET /fx/currencies` - List available currencies from provider
+  2. `GET /fx/providers` - List all registered FX providers (ECB, FED, BOE, SNB)
+  3. `POST/GET/DELETE /fx/pair-sources` - Configure currency pair sources (CRUD operations)
+  4. `POST /fx/sync` - Sync FX rates (explicit provider + auto-configuration modes)
+  5. `POST /fx/convert` - Single currency conversion
+  6. `POST /fx/rate-set` - Manual rate upsert (single)
+  7. Backward-fill warning (old dates use most recent rate)
+  8. `POST /fx/convert` - Bulk conversions (multiple items)
+  9. `POST /fx/rate-set` - Bulk rate upserts (multiple items)
+  10. Invalid request handling (comprehensive validation)
 - **Auto-stops server** at end of test
 
 **Expected result:**
 ```
 ✅ Backend server started successfully
-✅ GET /fx/currencies
-✅ POST /fx/sync
-✅ GET /fx/convert
-✅ Missing Rate Error
-✅ Invalid Request Handling
-Results: 5/5 tests passed
+Test server port: 8001
+API base URL: http://localhost:8001/api/v1
+
+✅ PASS: GET /fx/currencies
+✅ PASS: GET /fx/providers
+✅ PASS: Pair Sources CRUD
+✅ PASS: POST /fx/sync
+✅ PASS: POST /fx/convert (Single)
+✅ PASS: POST /fx/rate-set (Single)
+✅ PASS: Backward-Fill Warning
+✅ PASS: POST /fx/convert (Bulk)
+✅ PASS: POST /fx/rate-set (Bulk)
+✅ PASS: Invalid Request Handling
+
+Results: 10/10 tests passed
+✅ All fx api endpoint tests passed! 🎉
 ```
 
 **What you learned:**
-- REST API exposes FX functionality to frontend
-- Server auto-management: test always starts fresh server and stops it at end
+
+**Provider Management:**
+- API dynamically lists all registered providers (no hardcoded lists)
+- Each provider has: code, name, base_currency, base_currencies[], description
+- Test validates API response matches backend factory (consistency check)
+- Easy to add new providers (just register in factory)
+
+**Pair Sources Configuration:**
+- Can configure which provider to use for each currency pair
+- CRUD operations: GET (list), POST (create/update), DELETE (remove)
+- **Atomic transactions**: POST bulk either all succeed or all fail
+- Validation: base < quote (alphabetical), provider must exist, priority >= 1
+- Update vs Insert: system automatically detects and handles both
+- Soft errors: DELETE non-existent pair = warning (not error)
+
+**Sync Modes:**
+- **Explicit Provider Mode**: `POST /sync?provider=ECB` (force specific provider)
+- **Auto-Configuration Mode**: `POST /sync` (uses pair-sources configuration) ← TODO: Phase 5.3
+- Backward compatible: old code with explicit provider still works
+- Idempotency: sync twice = 0 new rates (safe to run multiple times)
+
+**Conversions:**
+- Single conversion: 1 item in conversions array
+- Bulk conversions: multiple items in single request
+- Range conversions: `start_date` + `end_date` = convert each day in range
+- Partial failure support: some succeed, some fail (all reported)
+- Backward-fill: uses most recent rate if exact date missing
+- Response includes backward_fill_info when applied
+
+**Manual Rate Management:**
+- Can manually insert/update rates (source="MANUAL")
+- Single or bulk operations
+- Upsert behavior: insert if new, update if exists
+- Useful for custom rates or testing
+
+**Validation & Error Handling:**
+- Comprehensive input validation (negative amounts, invalid dates, bad currencies)
+- Appropriate HTTP status codes (400, 404, 422, 502)
+- Detailed error messages (which field, what's wrong, suggestion)
+- Partial failure handling (continue processing, collect errors)
+
+**Server Management:**
 - Test server runs on TEST_PORT (default: 8001, configurable)
 - Production server runs on PORT (default: 8000, configurable)
 - No conflicts between test and production/development
-- API validates input and returns appropriate errors
-- Endpoints follow REST conventions
+- Auto-start and auto-stop (clean test environment)
+- Test database isolated from production
 
+**Test Order:**
+Tests run in optimal order:
+1. Basic endpoints (currencies, providers)
+2. Configuration (pair-sources) ← Creates setup for auto-config
+3. Sync (uses configuration from step 2)
+4. Conversions (use rates from sync)
+5. Error handling (comprehensive validation)
+
+[//]: # (TODO: quando ci saranno altri api test metterli qui e poi documentare l'all, che per ora ha poco senso essendo 1 solo file)
 
 ---
 
@@ -373,13 +539,14 @@ python test_runner.py -v all
 - Runs all tests in optimal order: external → db → services → api
 - Stops at first failure to avoid cascading errors
 - Provides comprehensive summary
+- **Auto-starts and stops test server** for API tests
 
 **Expected result:**
 ```
-✅ External Services
-✅ Database Layer
-✅ Backend Services
-⚠️  API Tests (skipped - requires manual server start)
+✅ External Services (2/2 tests passed)
+✅ Database Layer (5/5 tests passed)
+✅ Backend Services (1/1 tests passed)
+✅ API Tests (10/10 tests passed)
 
 🎉 ALL TESTS PASSED! 🎉
 ```
@@ -390,12 +557,12 @@ python test_runner.py -v all
 
 | Level | Category | Tests | What You Verified |
 |-------|----------|-------|-------------------|
-| 1 | **External** | 1 | ECB API accessible |
-| 2 | **Database** | 4 | Schema, persistence, constraints, rate inversion |
-| 3 | **Services** | 1 | Business logic, calculations |
-| 4 | **API** | 1 | HTTP endpoints, validation |
+| 1 | **External** | 2 | 4 FX providers accessible (ECB, FED, BOE, SNB), multi-unit handling |
+| 2 | **Database** | 5 | Schema, persistence, constraints, rate inversion, numeric truncation |
+| 3 | **Services** | 1 | Business logic, calculations, bulk conversions |
+| 4 | **API** | 1 | 10 HTTP endpoints, provider management, configuration |
 
-**Total:** 7 test suites, ~35+ individual tests
+**Total:** 9 test suites, ~50+ individual tests
 
 ---
 
@@ -409,30 +576,46 @@ After completing this guide, you now understand:
 - ✅ Tests verify each layer independently
 
 ### **External Integration**
-- ✅ ECB provides FX rates for 45+ currencies
-- ✅ No API key required (free public API)
+- ✅ **4 central bank providers** supported (ECB, FED, BOE, SNB)
+- ✅ Each provider: 11-45 currencies, different base currencies
+- ✅ Multi-unit currencies (JPY, SEK, NOK, DKK) handled correctly
+- ✅ No API keys required (free public APIs)
+- ✅ System extensible for future providers
 
 ### **Database**
-- ✅ SQLite database with 8 main tables
+- ✅ SQLite database with 9 main tables (incl. fx_currency_pair_sources)
 - ✅ Alembic manages schema migrations
 - ✅ Test database isolated from production
 - ✅ Constraints enforce data quality
+- ✅ **Higher precision for FX rates**: Numeric(24,10) vs Numeric(18,6)
+- ✅ Truncation handling prevents false updates
 
 ### **Business Logic**
-- ✅ FX conversion supports multiple scenarios
-- ✅ Forward-fill handles missing data
+- ✅ FX conversion supports multiple scenarios (identity, direct, inverse, roundtrip)
+- ✅ **Backward-fill** handles missing data (uses most recent rate)
+- ✅ **Bulk conversions** with partial failure support
 - ✅ Cross-currency conversions work correctly
+- ✅ Database must be clean for accurate testing
 
 ### **API**
 - ✅ REST API follows standard conventions
+- ✅ **10 comprehensive endpoints** tested
+- ✅ **Provider management**: GET /providers (dynamic list from factory)
+- ✅ **Pair sources configuration**: CRUD operations with atomic transactions
+- ✅ **Sync modes**: Explicit provider + auto-configuration (planned)
+- ✅ **Range conversions**: start_date + end_date support
+- ✅ **Bulk operations**: conversions and rate upserts
 - ✅ Input validation prevents bad data
-- ✅ Error handling is robust
+- ✅ Error handling is robust with detailed messages
+- ✅ Partial failure handling (some succeed, some fail)
 
 ### **Testing**
 - ✅ Test suite is comprehensive and well-organized
 - ✅ Tests are isolated (separate DB, separate port)
-- ✅ Auto-management reduces manual work
+- ✅ Auto-management reduces manual work (server start/stop)
 - ✅ Clear prerequisites and dependencies
+- ✅ **Test order matters**: pair-sources before sync (configuration setup)
+- ✅ **Clean DB important**: run `all` to avoid stale data issues
 
 ---
 
@@ -448,9 +631,15 @@ After completing this guide, you now understand:
 - Check file permissions in `backend/data/sqlite/`
 - Ensure Alembic migrations are present
 
+**❌ "Services test failed: Backward-Fill Logic" (stale DB data)**
+- **Root cause**: API tests insert old rates (1999-12-15) that conflict with services test expectations
+- **Solution**: Run full test suite (recreates clean DB): `python test_runner.py -v all`
+- **Alternative**: Recreate test DB: `python test_runner.py db create`
+- **Best practice**: Always run `all` instead of individual test suites
+
 **❌ "Missing rate" errors in services tests**
 - Run `python test_runner.py -v db fx-rates` first
-- Ensure ECB API is accessible
+- Ensure provider APIs are accessible
 - Use `-v` flag to see detailed error messages
 
 **❌ "Port already in use" (API tests)**

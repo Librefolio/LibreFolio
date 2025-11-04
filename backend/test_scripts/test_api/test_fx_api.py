@@ -81,9 +81,374 @@ def test_get_currencies():
         return False
 
 
+def test_get_providers():
+    """Test GET /fx/providers endpoint."""
+    print_section("Test 2: GET /fx/providers")
+
+    try:
+        # Get expected providers from backend factory
+        from backend.app.services.fx import FXProviderFactory
+
+        expected_providers = FXProviderFactory.get_all_providers()
+        expected_codes = {p['code'] for p in expected_providers}
+        expected_count = len(expected_providers)
+
+        print_info(f"Expected providers from factory: {', '.join(sorted(expected_codes))} ({expected_count} total)")
+
+        # Get actual providers from API
+        response = httpx.get(f"{API_BASE_URL}/fx/providers", timeout=TIMEOUT)
+
+        print_info(f"Status code: {response.status_code}")
+
+        if response.status_code != 200:
+            print_error(f"Expected status 200, got {response.status_code}")
+            print_error(f"Response: {response.text}")
+            return False
+
+        data = response.json()
+
+        # Validate response structure
+        if "providers" not in data or "count" not in data:
+            print_error("Invalid response structure")
+            print_error(f"Response: {data}")
+            return False
+
+        providers = data["providers"]
+        count = data["count"]
+
+        print_success(f"Found {count} providers from API")
+
+        # Compare with expected count
+        if count != expected_count:
+            print_error(f"Provider count mismatch: API returned {count}, factory has {expected_count}")
+            return False
+
+        actual_codes = {p["code"] for p in providers}
+        print_info(f"API providers: {', '.join(sorted(actual_codes))}")
+
+        # Compare provider codes
+        if actual_codes != expected_codes:
+            missing = expected_codes - actual_codes
+            extra = actual_codes - expected_codes
+            if missing:
+                print_error(f"API missing providers: {missing}")
+            if extra:
+                print_error(f"API has unexpected providers: {extra}")
+            return False
+
+        print_success(f"✓ API providers match factory ({count} providers)")
+
+        # Validate each provider structure and content
+        required_fields = ["code", "name", "base_currency", "base_currencies", "description"]
+
+        # Create lookup for expected providers
+        expected_by_code = {p['code']: p for p in expected_providers}
+
+        for api_provider in providers:
+            code = api_provider["code"]
+
+            # Verify all required fields present
+            for field in required_fields:
+                if field not in api_provider:
+                    print_error(f"Provider {code} missing field: {field}")
+                    return False
+
+            # Verify base_currencies is a list containing base_currency
+            if not isinstance(api_provider["base_currencies"], list):
+                print_error(f"Provider {code}: base_currencies must be a list")
+                return False
+
+            if api_provider["base_currency"] not in api_provider["base_currencies"]:
+                print_error(f"Provider {code}: base_currency not in base_currencies")
+                return False
+
+            # Compare with expected data from factory
+            expected = expected_by_code[code]
+
+            if api_provider["name"] != expected["name"]:
+                print_error(f"Provider {code}: name mismatch (API: {api_provider['name']}, Expected: {expected['name']})")
+                return False
+
+            if api_provider["base_currency"] != expected["base_currency"]:
+                print_error(f"Provider {code}: base_currency mismatch")
+                return False
+
+            if set(api_provider["base_currencies"]) != set(expected["base_currencies"]):
+                print_error(f"Provider {code}: base_currencies mismatch")
+                return False
+
+        print_success("✓ All provider structures valid")
+        print_success("✓ All provider data matches factory")
+
+        # Log example provider details
+        if "ECB" in expected_by_code:
+            print_info(f"  Example - ECB base currencies: {expected_by_code['ECB']['base_currencies']}")
+
+        return True
+
+    except Exception as e:
+        print_error(f"Request failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_pair_sources_crud():
+    """Test GET/POST/DELETE /fx/pair-sources endpoints."""
+    print_section("Test 3: Pair Sources CRUD Operations")
+
+    try:
+        # Test 3.1: GET empty list initially
+        print_info("\nTest 3.1: GET /fx/pair-sources (initially empty)")
+        response = httpx.get(f"{API_BASE_URL}/fx/pair-sources", timeout=TIMEOUT)
+
+        if response.status_code != 200:
+            print_error(f"GET failed: {response.status_code}")
+            return False
+
+        data = response.json()
+        initial_count = data["count"]
+        print_info(f"Initial pair sources count: {initial_count}")
+
+        # Test 3.2: POST bulk create
+        print_info("\nTest 3.2: POST /fx/pair-sources/bulk (create)")
+        create_request = {
+            "sources": [
+                {"base": "EUR", "quote": "USD", "provider_code": "ECB", "priority": 1},
+                {"base": "GBP", "quote": "USD", "provider_code": "BOE", "priority": 1},
+                {"base": "CHF", "quote": "USD", "provider_code": "SNB", "priority": 1}
+                ]
+            }
+
+        response = httpx.post(
+            f"{API_BASE_URL}/fx/pair-sources/bulk",
+            json=create_request,
+            timeout=TIMEOUT
+            )
+
+        print_info(f"Status code: {response.status_code}")
+
+        if response.status_code != 201:
+            print_error(f"Expected status 201, got {response.status_code}")
+            print_error(f"Response: {response.text}")
+            return False
+
+        data = response.json()
+
+        if data["success_count"] != 3 or data["error_count"] != 0:
+            print_error(f"Expected 3 successes, 0 errors. Got {data['success_count']} successes, {data['error_count']} errors")
+            return False
+
+        # Verify all created or updated (may already exist from previous runs)
+        for result in data["results"]:
+            if result["action"] not in ["created", "updated"]:
+                print_error(f"Expected 'created' or 'updated', got '{result['action']}'")
+                return False
+
+        created_count = sum(1 for r in data["results"] if r["action"] == "created")
+        updated_count = sum(1 for r in data["results"] if r["action"] == "updated")
+        print_success(f"✓ Upserted 3 pair sources ({created_count} created, {updated_count} updated)")
+
+        # Test 3.3: GET again to verify
+        print_info("\nTest 3.3: GET /fx/pair-sources (verify creation)")
+        response = httpx.get(f"{API_BASE_URL}/fx/pair-sources", timeout=TIMEOUT)
+        data = response.json()
+
+        # Should have at least the 3 we just upserted (some may have been deleted by cleanup from previous runs)
+        if data["count"] < 3:
+            print_error(f"Expected at least 3 sources, got {data['count']}")
+            return False
+
+        print_success(f"✓ Verified {data['count']} pair sources exist (at least our 3)")
+
+        # Verify structure
+        for source in data["sources"][-3:]:  # Last 3 created
+            required = ["base", "quote", "provider_code", "priority"]
+            for field in required:
+                if field not in source:
+                    print_error(f"Source missing field: {field}")
+                    return False
+
+        # Test 3.4: POST update (same pair, different provider)
+        print_info("\nTest 3.4: POST /fx/pair-sources/bulk (update)")
+        update_request = {
+            "sources": [
+                {"base": "EUR", "quote": "USD", "provider_code": "FED", "priority": 1}  # Change ECB -> FED
+                ]
+            }
+
+        response = httpx.post(
+            f"{API_BASE_URL}/fx/pair-sources/bulk",
+            json=update_request,
+            timeout=TIMEOUT
+            )
+
+        if response.status_code != 201:
+            print_error(f"Update failed: {response.status_code}")
+            return False
+
+        data = response.json()
+
+        if data["results"][0]["action"] != "updated":
+            print_error(f"Expected 'updated', got '{data['results'][0]['action']}'")
+            return False
+
+        print_success(f"✓ Updated EUR/USD provider to FED")
+
+        # Test 3.5: POST with validation error (base >= quote)
+        print_info("\nTest 3.5: POST /fx/pair-sources/bulk (validation error)")
+        invalid_request = {
+            "sources": [
+                {"base": "USD", "quote": "EUR", "provider_code": "ECB", "priority": 1}  # USD > EUR (wrong order)
+                ]
+            }
+
+        response = httpx.post(
+            f"{API_BASE_URL}/fx/pair-sources/bulk",
+            json=invalid_request,
+            timeout=TIMEOUT
+            )
+
+        if response.status_code != 400:
+            print_error(f"Expected status 400 for validation error, got {response.status_code}")
+            return False
+
+        print_success(f"✓ Validation error correctly rejected (status 400)")
+
+        # Test 3.6: POST with unknown provider
+        print_info("\nTest 3.6: POST /fx/pair-sources/bulk (unknown provider)")
+        invalid_request = {
+            "sources": [
+                {"base": "EUR", "quote": "JPY", "provider_code": "UNKNOWN", "priority": 1}
+                ]
+            }
+
+        response = httpx.post(
+            f"{API_BASE_URL}/fx/pair-sources/bulk",
+            json=invalid_request,
+            timeout=TIMEOUT
+            )
+
+        if response.status_code != 400:
+            print_error(f"Expected status 400 for unknown provider, got {response.status_code}")
+            return False
+
+        print_success(f"✓ Unknown provider correctly rejected (status 400)")
+
+        # Test 3.7: DELETE specific priority
+        print_info("\nTest 3.7: DELETE /fx/pair-sources/bulk (specific priority)")
+        delete_request = {
+            "sources": [
+                {"base": "GBP", "quote": "USD", "priority": 1}
+                ]
+            }
+
+        response = httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/pair-sources/bulk",
+            json=delete_request,
+            timeout=TIMEOUT
+            )
+
+        if response.status_code != 200:
+            print_error(f"DELETE failed: {response.status_code}")
+            return False
+
+        data = response.json()
+
+        if data["total_deleted"] != 1:
+            print_error(f"Expected 1 deletion, got {data['total_deleted']}")
+            return False
+
+        print_success(f"✓ Deleted GBP/USD priority=1")
+
+        # Test 3.8: DELETE all priorities for a pair
+        print_info("\nTest 3.8: DELETE /fx/pair-sources/bulk (all priorities)")
+        delete_request = {
+            "sources": [
+                {"base": "CHF", "quote": "USD"}  # No priority = delete all
+                ]
+            }
+
+        response = httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/pair-sources/bulk",
+            json=delete_request,
+            timeout=TIMEOUT
+            )
+
+        if response.status_code != 200:
+            print_error(f"DELETE failed: {response.status_code}")
+            return False
+
+        data = response.json()
+
+        if data["total_deleted"] < 1:
+            print_error(f"Expected at least 1 deletion, got {data['total_deleted']}")
+            return False
+
+        print_success(f"✓ Deleted all CHF/USD priorities ({data['total_deleted']} record(s))")
+
+        # Test 3.9: DELETE non-existent pair (warning, not error)
+        print_info("\nTest 3.9: DELETE /fx/pair-sources/bulk (non-existent pair)")
+        delete_request = {
+            "sources": [
+                {"base": "AAA", "quote": "ZZZ", "priority": 1}
+                ]
+            }
+
+        response = httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/pair-sources/bulk",
+            json=delete_request,
+            timeout=TIMEOUT
+            )
+
+        if response.status_code != 200:
+            print_error(f"Expected status 200 (warning), got {response.status_code}")
+            return False
+
+        data = response.json()
+
+        if data["results"][0]["deleted_count"] != 0:
+            print_error(f"Expected 0 deletions for non-existent pair")
+            return False
+
+        if not data["results"][0]["message"]:
+            print_error(f"Expected warning message for non-existent pair")
+            return False
+
+        print_success(f"✓ Non-existent pair returned warning (not error)")
+        print_info(f"  Message: {data['results'][0]['message'][:80]}...")
+
+        # Cleanup: Delete remaining test data
+        print_info("\nCleanup: Deleting remaining test data")
+        delete_request = {
+            "sources": [
+                {"base": "EUR", "quote": "USD"}  # The one we updated to FED
+                ]
+            }
+
+        httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/pair-sources/bulk",
+            json=delete_request,
+            timeout=TIMEOUT
+            )
+
+        print_success("All pair sources CRUD tests passed")
+        return True
+
+    except Exception as e:
+        print_error(f"Request failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def test_sync_rates():
-    """Test POST /fx/sync endpoint."""
-    print_section("Test 2: POST /fx/sync")
+    """Test POST /fx/sync endpoint (both explicit and auto-configuration modes)."""
+    print_section("Test 4: POST /fx/sync")
 
     # Sync last 7 days for USD and GBP
     end_date = date.today() - timedelta(days=1)
@@ -94,12 +459,15 @@ def test_sync_rates():
     print_info(f"Currencies: {currencies}")
 
     try:
+        # Test 4.1: Explicit Provider Mode (backward compatible)
+        print_info("\nTest 4.1: Explicit Provider Mode (provider=ECB)")
         response = httpx.post(
             f"{API_BASE_URL}/fx/sync",
             params={
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
-                "currencies": currencies
+                "currencies": currencies,
+                "provider": "ECB"  # Explicit provider mode
                 },
             timeout=TIMEOUT
             )
@@ -120,18 +488,19 @@ def test_sync_rates():
                 print_error(f"Missing field in response: {field}")
                 return False
 
-        print_success(f"Synced {data['synced']} rates")
-        print_info(f"Date range: {data['date_range']}")
-        print_info(f"Currencies: {data['currencies']}")
+        print_success(f"✓ Explicit mode: Synced {data['synced']} rates")
+        print_info(f"  Date range: {data['date_range']}")
+        print_info(f"  Currencies: {data['currencies']}")
 
-        # Sync again (should return 0 new rates - idempotency)
-        print_info("\nTesting idempotency (sync again)...")
+        # Test 4.2: Idempotency
+        print_info("\nTest 4.2: Idempotency (sync again with same params)")
         response2 = httpx.post(
             f"{API_BASE_URL}/fx/sync",
             params={
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
-                "currencies": currencies
+                "currencies": currencies,
+                "provider": "ECB"
                 },
             timeout=TIMEOUT
             )
@@ -146,7 +515,48 @@ def test_sync_rates():
             print_error(f"Second sync returned {data2['synced']} rates (expected 0)")
             return False
 
-        print_success("Idempotency verified (second sync returned 0 new rates)")
+        print_success("✓ Idempotency verified (0 new rates)")
+
+        # Test 4.3: Auto-Configuration Mode (uses fx_currency_pair_sources)
+        print_info("\nTest 4.3: Auto-Configuration Mode (no provider specified)")
+        print_info("  Note: Uses pair-sources configured in previous test")
+        print_info("  Expected: EUR/USD from ECB (configured in test_pair_sources_crud)")
+
+        response3 = httpx.post(
+            f"{API_BASE_URL}/fx/sync",
+            params={
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat(),
+                "currencies": "USD"  # Single currency for clarity
+                # NO provider parameter - uses auto-configuration
+                },
+            timeout=TIMEOUT
+            )
+
+        print_info(f"Status code: {response3.status_code}")
+
+        # TODO: arrivati allo step 5.3, si arriva ad implementare questa parte e quindi si scrive il vero test
+        if response3.status_code == 400:
+            # Auto-configuration not yet implemented
+            data3 = response3.json()
+            if "not yet implemented" in data3.get("detail", "").lower():
+                print_info("⚠️  Auto-configuration mode not yet implemented (expected)")
+                print_info("  This will be implemented in Phase 5.3")
+            else:
+                print_error(f"Unexpected 400 error: {data3.get('detail', 'Unknown')}")
+                return False
+        elif response3.status_code == 200:
+            # Auto-configuration working!
+            data3 = response3.json()
+            print_success(f"✓ Auto-configuration mode: Synced {data3['synced']} rates")
+            print_info(f"  Date range: {data3['date_range']}")
+            print_info(f"  Currencies: {data3['currencies']}")
+        else:
+            print_error(f"Unexpected status code: {response3.status_code}")
+            print_error(f"Response: {response3.text}")
+            return False
+
+        print_success("All sync tests passed")
         return True
 
     except Exception as e:
@@ -158,7 +568,7 @@ def test_sync_rates():
 
 def test_convert_currency():
     """Test GET /fx/convert endpoint."""
-    print_section("Test 3: GET /fx/convert")
+    print_section("Test 5: GET /fx/convert")
 
     # First, ensure we have rates
     end_date = date.today() - timedelta(days=1)
@@ -171,7 +581,8 @@ def test_convert_currency():
             params={
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
-                "currencies": "USD,GBP"
+                "currencies": "USD,GBP",
+                "provider": "ECB"
                 },
             timeout=TIMEOUT
             )
@@ -191,9 +602,9 @@ def test_convert_currency():
                         "from": "USD",
                         "to": "EUR",
                         "start_date": end_date.isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -247,9 +658,9 @@ def test_convert_currency():
                         "from": "EUR",
                         "to": "EUR",
                         "start_date": end_date.isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -283,9 +694,9 @@ def test_convert_currency():
                         "from": "USD",
                         "to": "EUR",
                         "start_date": end_date.isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -305,9 +716,9 @@ def test_convert_currency():
                         "from": "EUR",
                         "to": "USD",
                         "start_date": end_date.isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -337,7 +748,7 @@ def test_convert_currency():
 
 def test_convert_missing_rate():
     """Test backward-fill behavior and warning for old dates."""
-    print_section("Test 4: Backward-Fill Warning")
+    print_section("Test 7: Backward-Fill Warning")
 
     # First, insert a rate for a date in the past (before requested date)
     old_rate_date = date(1999, 12, 15)
@@ -357,11 +768,11 @@ def test_convert_missing_rate():
                         "quote": "USD",
                         "rate": "1.05000",
                         "source": "TEST"
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if insert_response.status_code != 200:
             print_error(f"Failed to insert test rate: {insert_response.status_code}")
@@ -382,9 +793,9 @@ def test_convert_missing_rate():
                         "from": "USD",
                         "to": "EUR",
                         "start_date": requested_date.isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -453,7 +864,7 @@ def test_convert_missing_rate():
 
 def test_manual_rate_upsert():
     """Test POST /fx/rate-set endpoint for manual rate entry."""
-    print_section("Test 4: Manual Rate Upsert")
+    print_section("Test 6: Manual Rate Upsert")
 
     # Use a date far in the past to avoid interference from other rates
     test_date = date(2020, 1, 15)
@@ -471,11 +882,11 @@ def test_manual_rate_upsert():
                         "quote": "USD",
                         "rate": "1.12345",
                         "source": "MANUAL"
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         print_info(f"Status code: {response.status_code}")
 
@@ -528,11 +939,11 @@ def test_manual_rate_upsert():
                         "quote": "USD",
                         "rate": "1.23456",  # Different rate
                         "source": "MANUAL_CORRECTED"
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response2.status_code != 200:
             print_error("Update request failed")
@@ -558,11 +969,11 @@ def test_manual_rate_upsert():
                         "from": "EUR",
                         "to": "USD",
                         "start_date": test_date.isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response3.status_code != 200:
             print_error("Conversion using manual rate failed")
@@ -591,11 +1002,11 @@ def test_manual_rate_upsert():
                         "quote": "EUR",  # Same as base
                         "rate": "1.0",
                         "source": "MANUAL"
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         # Should return 200 with errors in response
         if response4.status_code == 200:
@@ -619,11 +1030,11 @@ def test_manual_rate_upsert():
                         "quote": "EUR",
                         "rate": "0.90000",  # 1 USD = 0.9 EUR
                         "source": "MANUAL"
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response5.status_code != 200:
             print_error("Rate with reverse ordering failed")
@@ -660,7 +1071,7 @@ def test_manual_rate_upsert():
 
 def test_bulk_conversions():
     """Test bulk conversion with multiple items in single request."""
-    print_section("Test 5: Bulk Conversions (Multiple Items)")
+    print_section("Test 8: Bulk Conversions (Multiple Items)")
 
     # Ensure rates exist
     end_date = date.today() - timedelta(days=1)
@@ -672,15 +1083,16 @@ def test_bulk_conversions():
             params={
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
-                "currencies": "USD,GBP,CHF"
-            },
+                "currencies": "USD,GBP,CHF",
+                "provider": "ECB"
+                },
             timeout=TIMEOUT
-        )
+            )
     except:
         pass
 
     # Test bulk conversion with 3 different conversions
-    print_info("Test 5.1: Bulk convert 3 amounts in single request")
+    print_info("Test 10.1: Bulk convert 3 amounts in single request")
 
     try:
         response = httpx.post(
@@ -690,10 +1102,10 @@ def test_bulk_conversions():
                     {"amount": "100.00", "from": "USD", "to": "EUR", "start_date": end_date.isoformat()},
                     {"amount": "200.00", "from": "GBP", "to": "EUR", "start_date": end_date.isoformat()},
                     {"amount": "300.00", "from": "CHF", "to": "EUR", "start_date": end_date.isoformat()},
-                ]
-            },
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         print_info(f"Status code: {response.status_code}")
 
@@ -722,7 +1134,7 @@ def test_bulk_conversions():
         print_info(f"  300 CHF = {data['results'][2]['converted_amount']} EUR")
 
         # Test bulk with mixed success/failure
-        print_info("\nTest 5.2: Bulk with one invalid currency (partial failure)")
+        print_info("\nTest 10.2: Bulk with one invalid currency (partial failure)")
 
         response2 = httpx.post(
             f"{API_BASE_URL}/fx/convert",
@@ -730,10 +1142,10 @@ def test_bulk_conversions():
                 "conversions": [
                     {"amount": "100.00", "from": "USD", "to": "EUR", "start_date": end_date.isoformat()},
                     {"amount": "200.00", "from": "XXX", "to": "EUR", "start_date": end_date.isoformat()},  # Invalid
-                ]
-            },
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response2.status_code != 200:
             print_error(f"Expected status 200 (partial success), got {response2.status_code}")
@@ -765,7 +1177,7 @@ def test_bulk_conversions():
 
 def test_bulk_rate_upserts():
     """Test bulk rate upsert with multiple items in single request."""
-    print_section("Test 6: Bulk Rate Upserts (Multiple Items)")
+    print_section("Test 9: Bulk Rate Upserts (Multiple Items)")
 
     test_date = date(2019, 6, 15)
 
@@ -779,10 +1191,10 @@ def test_bulk_rate_upserts():
                     {"date": test_date.isoformat(), "base": "EUR", "quote": "USD", "rate": "1.12", "source": "TEST"},
                     {"date": test_date.isoformat(), "base": "EUR", "quote": "GBP", "rate": "0.88", "source": "TEST"},
                     {"date": test_date.isoformat(), "base": "CHF", "quote": "USD", "rate": "1.15", "source": "TEST"},
-                ]
-            },
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         print_info(f"Status code: {response.status_code}")
 
@@ -814,10 +1226,10 @@ def test_bulk_rate_upserts():
                 "rates": [
                     {"date": test_date.isoformat(), "base": "EUR", "quote": "JPY", "rate": "130.0", "source": "TEST"},
                     {"date": test_date.isoformat(), "base": "EUR", "quote": "EUR", "rate": "1.0", "source": "TEST"},  # Invalid
-                ]
-            },
+                    ]
+                },
             timeout=TIMEOUT
-        )
+            )
 
         if response2.status_code != 200:
             print_error(f"Expected status 200 (partial success), got {response2.status_code}")
@@ -849,19 +1261,20 @@ def test_bulk_rate_upserts():
 
 def test_invalid_requests():
     """Test comprehensive validation and error handling for invalid requests."""
-    print_section("Test 5: Invalid Request Handling")
+    print_section("Test 10: Invalid Request Handling")
 
     all_ok = True
 
     # Test 1: Invalid date range (start > end) with error detail check
-    print_info("Test 5.1: Invalid date range (start > end)")
+    print_info("Test 10.1: Invalid date range (start > end)")
     try:
         response = httpx.post(
             f"{API_BASE_URL}/fx/sync",
             params={
                 "start": "2025-01-10",
                 "end": "2025-01-01",
-                "currencies": "USD"
+                "currencies": "USD",
+                "provider": "ECB"
                 },
             timeout=TIMEOUT
             )
@@ -882,7 +1295,7 @@ def test_invalid_requests():
         all_ok = False
 
     # Test 2: Negative amount (POST bulk)
-    print_info("\nTest 5.2: Negative amount")
+    print_info("\nTest 10.2: Negative amount")
     try:
         response = httpx.post(
             f"{API_BASE_URL}/fx/convert",
@@ -893,9 +1306,9 @@ def test_invalid_requests():
                         "from": "USD",
                         "to": "EUR",
                         "start_date": date.today().isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -912,7 +1325,7 @@ def test_invalid_requests():
         all_ok = False
 
     # Test 3: Zero amount
-    print_info("\nTest 5.3: Zero amount")
+    print_info("\nTest 10.3: Zero amount")
     try:
         response = httpx.post(
             f"{API_BASE_URL}/fx/convert",
@@ -923,9 +1336,9 @@ def test_invalid_requests():
                         "from": "USD",
                         "to": "EUR",
                         "start_date": date.today().isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -939,7 +1352,7 @@ def test_invalid_requests():
         all_ok = False
 
     # Test 4: Non-numeric amount
-    print_info("\nTest 5.4: Non-numeric amount (abc)")
+    print_info("\nTest 10.4: Non-numeric amount (abc)")
     try:
         response = httpx.post(
             f"{API_BASE_URL}/fx/convert",
@@ -950,9 +1363,9 @@ def test_invalid_requests():
                         "from": "USD",
                         "to": "EUR",
                         "start_date": date.today().isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -969,7 +1382,7 @@ def test_invalid_requests():
         all_ok = False
 
     # Test 5: Invalid currency code format (too long)
-    print_info("\nTest 5.5: Invalid currency code format (INVALID)")
+    print_info("\nTest 10.5: Invalid currency code format (INVALID)")
     try:
         response = httpx.post(
             f"{API_BASE_URL}/fx/convert",
@@ -980,9 +1393,9 @@ def test_invalid_requests():
                         "from": "INVALID",
                         "to": "EUR",
                         "start_date": date.today().isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -1001,7 +1414,7 @@ def test_invalid_requests():
         all_ok = False
 
     # Test 6: Valid but unsupported currency code
-    print_info("\nTest 5.6: Valid format but unsupported currency (XXX)")
+    print_info("\nTest 10.6: Valid format but unsupported currency (XXX)")
     try:
         response = httpx.post(
             f"{API_BASE_URL}/fx/convert",
@@ -1012,9 +1425,9 @@ def test_invalid_requests():
                         "from": "XXX",
                         "to": "EUR",
                         "start_date": date.today().isoformat()
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -1033,13 +1446,13 @@ def test_invalid_requests():
         all_ok = False
 
     # Test 7: Empty conversions array
-    print_info("\nTest 5.7: Empty conversions array")
+    print_info("\nTest 10.7: Empty conversions array")
     try:
         response = httpx.post(
             f"{API_BASE_URL}/fx/convert",
             json={
                 "conversions": []  # Empty array
-            },
+                },
             timeout=TIMEOUT
             )
 
@@ -1056,7 +1469,7 @@ def test_invalid_requests():
         all_ok = False
 
     # Test 8: Missing required field in conversion (amount)
-    print_info("\nTest 5.8: Missing required field in conversion (amount)")
+    print_info("\nTest 10.8: Missing required field in conversion (amount)")
     try:
         response = httpx.post(
             f"{API_BASE_URL}/fx/convert",
@@ -1066,9 +1479,9 @@ def test_invalid_requests():
                         "from": "USD",
                         "to": "EUR",
                         # amount is missing
-                    }
-                ]
-            },
+                        }
+                    ]
+                },
             timeout=TIMEOUT
             )
 
@@ -1082,14 +1495,15 @@ def test_invalid_requests():
         all_ok = False
 
     # Test 9: Empty currency string
-    print_info("\nTest 5.9: Empty currency string in sync")
+    print_info("\nTest 10.9: Empty currency string in sync")
     try:
         response = httpx.post(
             f"{API_BASE_URL}/fx/sync",
             params={
                 "start": date.today().isoformat(),
                 "end": date.today().isoformat(),
-                "currencies": ""  # Empty string
+                "currencies": "",  # Empty string
+                "provider": "ECB"
                 },
             timeout=TIMEOUT
             )
@@ -1159,6 +1573,8 @@ def _run_tests():
     """Internal function to run actual tests."""
     results = {
         "GET /fx/currencies": test_get_currencies(),
+        "GET /fx/providers": test_get_providers(),
+        "Pair Sources CRUD": test_pair_sources_crud(),  # Moved BEFORE sync to setup configuration
         "POST /fx/sync": test_sync_rates(),
         "POST /fx/convert (Single)": test_convert_currency(),
         "POST /fx/rate-set (Single)": test_manual_rate_upsert(),

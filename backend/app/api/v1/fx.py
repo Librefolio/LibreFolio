@@ -9,7 +9,9 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select, delete as sql_delete
 
+from backend.app.db.models import FxCurrencyPairSource
 from backend.app.db.session import get_session
 from backend.app.services.fx import (
     FXServiceError,
@@ -100,6 +102,87 @@ class RateUpsertResult(BaseModel):
     quote: str = Field(..., description="Quote currency")
 
 
+# ============================================================================
+# PROVIDER CONFIGURATION MODELS
+# ============================================================================
+
+class ProviderInfo(BaseModel):
+    """Information about a single FX rate provider."""
+    code: str = Field(..., description="Provider code (e.g., ECB, FED, BOE, SNB)")
+    name: str = Field(..., description="Provider full name")
+    base_currency: str = Field(..., description="Default base currency")
+    base_currencies: list[str] = Field(..., description="All supported base currencies")
+    description: str = Field(..., description="Provider description")
+
+
+class ProvidersResponse(BaseModel):
+    """Response model for GET /providers."""
+    providers: list[ProviderInfo] = Field(..., description="List of available providers")
+    count: int = Field(..., description="Number of providers")
+
+
+class PairSourceItem(BaseModel):
+    """Currency pair source configuration."""
+    base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217, alphabetically first)")
+    quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217, alphabetically second)")
+    provider_code: str = Field(..., description="Provider to use for this pair (ECB, FED, BOE, SNB)")
+    priority: int = Field(default=1, ge=1, description="Priority level (1=primary, 2+=fallback)")
+
+
+class PairSourcesResponse(BaseModel):
+    """Response model for GET /pair-sources."""
+    sources: list[PairSourceItem] = Field(..., description="Configured currency pair sources")
+    count: int = Field(..., description="Number of configured pairs")
+
+
+class CreatePairSourcesRequest(BaseModel):
+    """Request model for POST /pair-sources/bulk."""
+    sources: list[PairSourceItem] = Field(..., min_length=1, description="Pair sources to create/update")
+
+
+class PairSourceResult(BaseModel):
+    """Result of a single pair source operation."""
+    success: bool = Field(..., description="Whether the operation succeeded")
+    action: str = Field(..., description="Action taken: 'created', 'updated', or 'error'")
+    base: str = Field(..., description="Base currency")
+    quote: str = Field(..., description="Quote currency")
+    provider_code: str = Field(..., description="Provider code")
+    priority: int = Field(..., description="Priority level")
+    message: str | None = Field(None, description="Error message if action='error'")
+
+
+class CreatePairSourcesResponse(BaseModel):
+    """Response model for POST /pair-sources/bulk."""
+    results: list[PairSourceResult] = Field(..., description="Results for each pair source")
+    success_count: int = Field(..., description="Number of successful operations")
+    error_count: int = Field(..., description="Number of failed operations")
+
+
+class DeletePairSourcesRequest(BaseModel):
+    """Request model for DELETE /pair-sources/bulk."""
+    sources: list[dict] = Field(
+        ...,
+        min_length=1,
+        description="Pair sources to delete: [{base, quote, priority?}, ...]"
+    )
+
+
+class DeletePairSourceResult(BaseModel):
+    """Result of a single pair source deletion."""
+    success: bool = Field(..., description="Whether the operation succeeded")
+    base: str = Field(..., description="Base currency")
+    quote: str = Field(..., description="Quote currency")
+    priority: int | None = Field(None, description="Priority level (if specified)")
+    deleted_count: int = Field(..., description="Number of records deleted")
+    message: str | None = Field(None, description="Warning/error message if any")
+
+
+class DeletePairSourcesResponse(BaseModel):
+    """Response model for DELETE /pair-sources/bulk."""
+    results: list[DeletePairSourceResult] = Field(..., description="Results for each deletion")
+    total_deleted: int = Field(..., description="Total number of records deleted")
+
+
 class UpsertRatesResponse(BaseModel):
     """Response model for bulk rate upsert."""
     results: list[RateUpsertResult] = Field(..., description="Upsert results in order")
@@ -111,6 +194,28 @@ class CurrenciesResponse(BaseModel):
     """Response model for available currencies list."""
     currencies: list[str] = Field(..., description="List of available currency codes")
     count: int = Field(..., description="Number of available currencies")
+
+
+@router.get("/providers", response_model=ProvidersResponse)
+async def list_providers():
+    """
+    Get the list of all available FX rate providers.
+
+    Returns information about each provider including:
+    - Provider code and name
+    - Default base currency
+    - All supported base currencies (for multi-base providers)
+    - Description
+
+    Returns:
+        List of provider information
+    """
+    try:
+        providers_data = FXProviderFactory.get_all_providers()
+        providers = [ProviderInfo(**p) for p in providers_data]
+        return ProvidersResponse(providers=providers, count=len(providers))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}")
 
 
 @router.get("/currencies", response_model=CurrenciesResponse)
@@ -141,19 +246,31 @@ async def sync_rates(
     start: date = Query(..., description="Start date (inclusive)"),
     end: date = Query(..., description="End date (inclusive)"),
     currencies: str = Query("USD,GBP,CHF,JPY", description="Comma-separated currency codes"),
-    provider: str = Query("ECB", description="Provider code (ECB, FED, BOE, SNB)"),
+    provider: str | None = Query(None, description="Provider code (ECB, FED, BOE, SNB). If NULL, uses fx_currency_pair_sources configuration."),
     base_currency: str | None = Query(None, description="Base currency (for multi-base providers)"),
     session: AsyncSession = Depends(get_session)
     ):
     """
-    Synchronize FX rates from specified provider for the specified date range and currencies.
+    Synchronize FX rates for the specified date range and currencies.
+
+    **Two modes of operation**:
+
+    1. **Explicit Provider Mode** (provider parameter specified):
+       - Forces the specified provider for all currencies
+       - Ignores fx_currency_pair_sources configuration
+       - Backward compatible with previous API
+
+    2. **Auto-Configuration Mode** (provider=NULL):
+       - Consults fx_currency_pair_sources table
+       - Uses priority=1 provider for each currency pair
+       - Fails with explicit error if configuration missing
 
     Args:
-        start: Start date
-        end: End date
-        currencies: Comma-separated list of currency codes (e.g., "USD,GBP,CHF")
-        provider: Provider code (default: ECB)
-        base_currency: Base currency to use (for multi-base providers). If not specified, uses provider's default.
+        start: Start date (inclusive)
+        end: End date (inclusive)
+        currencies: Comma-separated currency codes (e.g., "USD,GBP,CHF")
+        provider: (Optional) Force specific provider. If NULL, uses configuration.
+        base_currency: (Optional) Base currency for multi-base providers
         session: Database session
 
     Returns:
@@ -164,24 +281,37 @@ async def sync_rates(
         raise HTTPException(status_code=400, detail="Start date must be before or equal to end date")
     if end > date.today():
         raise HTTPException(status_code=400, detail="End date cannot be in the future")
+
     # Parse currencies
     currency_list = [c.strip().upper() for c in currencies.split(",") if c.strip()]
     if not currency_list:
         raise HTTPException(status_code=400, detail="At least one currency must be specified")
 
     try:
-        result = await ensure_rates_multi_source(
-            session,
-            (start, end),
-            currency_list,
-            provider_code=provider,
-            base_currency=base_currency
+        if provider:
+            # EXPLICIT PROVIDER MODE: Force specified provider
+            result = await ensure_rates_multi_source(
+                session,
+                (start, end),
+                currency_list,
+                provider_code=provider,
+                base_currency=base_currency
             )
-        return SyncResponse(
-            synced=result['total_changed'],
-            date_range=(start.isoformat(), end.isoformat()),
-            currencies=result['currencies_synced']
+            return SyncResponse(
+                synced=result['total_changed'],
+                date_range=(start.isoformat(), end.isoformat()),
+                currencies=result['currencies_synced']
             )
+
+        else:
+            # AUTO-CONFIGURATION MODE: Use fx_currency_pair_sources
+            # TODO: Implement in next step
+            # For now, return error asking for explicit provider
+            raise HTTPException(
+                status_code=400,
+                detail="Auto-configuration mode not yet implemented. Please specify 'provider' parameter explicitly."
+            )
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FXServiceError as e:
@@ -383,3 +513,259 @@ async def convert_currency_bulk(
         results=results,
         errors=bulk_errors
         )
+
+
+# ============================================================================
+# PROVIDER CONFIGURATION ENDPOINTS
+# ============================================================================
+
+@router.get("/pair-sources", response_model=PairSourcesResponse)
+async def list_pair_sources(session: AsyncSession = Depends(get_session)):
+    """
+    Get the list of configured currency pair sources.
+
+    Returns all configured mappings of currency pairs to providers,
+    ordered by base, quote, and priority.
+
+    Returns:
+        List of pair source configurations
+    """
+    try:
+        stmt = select(FxCurrencyPairSource).order_by(
+            FxCurrencyPairSource.base,
+            FxCurrencyPairSource.quote,
+            FxCurrencyPairSource.priority
+        )
+        result = await session.execute(stmt)
+        sources = result.scalars().all()
+
+        sources_list = [
+            PairSourceItem(
+                base=s.base,
+                quote=s.quote,
+                provider_code=s.provider_code,
+                priority=s.priority
+            )
+            for s in sources
+        ]
+
+        return PairSourcesResponse(sources=sources_list, count=len(sources_list))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch pair sources: {str(e)}")
+
+
+@router.post("/pair-sources/bulk", response_model=CreatePairSourcesResponse, status_code=201)
+async def create_pair_sources_bulk(
+    request: CreatePairSourcesRequest,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Create or update multiple currency pair sources in a single atomic transaction.
+
+    All operations succeed or all fail together. If any validation error occurs,
+    the entire transaction is rolled back.
+
+    Validations:
+    - base < quote (alphabetical ordering)
+    - Provider code must be registered in FXProviderFactory
+    - Priority must be >= 1
+
+    Args:
+        request: List of pair sources to create/update
+        session: Database session
+
+    Returns:
+        Results for each pair source operation
+    """
+    results = []
+    success_count = 0
+    error_count = 0
+
+    try:
+        # Validate all providers exist
+        available_providers = {p['code'] for p in FXProviderFactory.get_all_providers()}
+
+        for source in request.sources:
+            # Validate base < quote
+            if source.base >= source.quote:
+                results.append(PairSourceResult(
+                    success=False,
+                    action="error",
+                    base=source.base,
+                    quote=source.quote,
+                    provider_code=source.provider_code,
+                    priority=source.priority,
+                    message=f"Invalid pair: base ({source.base}) must be < quote ({source.quote}) alphabetically"
+                ))
+                error_count += 1
+                continue
+
+            # Validate provider exists
+            if source.provider_code.upper() not in available_providers:
+                results.append(PairSourceResult(
+                    success=False,
+                    action="error",
+                    base=source.base,
+                    quote=source.quote,
+                    provider_code=source.provider_code,
+                    priority=source.priority,
+                    message=f"Unknown provider: {source.provider_code}"
+                ))
+                error_count += 1
+                continue
+
+            # Check if already exists
+            stmt = select(FxCurrencyPairSource).where(
+                FxCurrencyPairSource.base == source.base.upper(),
+                FxCurrencyPairSource.quote == source.quote.upper(),
+                FxCurrencyPairSource.priority == source.priority
+            )
+            result = await session.execute(stmt)
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                # Update
+                existing.provider_code = source.provider_code.upper()
+                session.add(existing)
+                action = "updated"
+            else:
+                # Insert
+                new_source = FxCurrencyPairSource(
+                    base=source.base.upper(),
+                    quote=source.quote.upper(),
+                    provider_code=source.provider_code.upper(),
+                    priority=source.priority
+                )
+                session.add(new_source)
+                action = "created"
+
+            results.append(PairSourceResult(
+                success=True,
+                action=action,
+                base=source.base.upper(),
+                quote=source.quote.upper(),
+                provider_code=source.provider_code.upper(),
+                priority=source.priority,
+                message=None
+            ))
+            success_count += 1
+
+        # Commit only if all validations passed
+        if error_count > 0:
+            await session.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": f"Validation failed for {error_count} source(s). Transaction rolled back.",
+                    "results": [r.dict() for r in results]
+                }
+            )
+
+        await session.commit()
+
+        return CreatePairSourcesResponse(
+            results=results,
+            success_count=success_count,
+            error_count=error_count
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create pair sources: {str(e)}")
+
+
+@router.delete("/pair-sources/bulk", response_model=DeletePairSourcesResponse)
+async def delete_pair_sources_bulk(
+    request: DeletePairSourcesRequest,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Delete multiple currency pair sources.
+
+    If priority is specified, deletes only that specific priority level.
+    If priority is omitted, deletes ALL priorities for that pair.
+
+    Warnings (not errors):
+    - If a pair doesn't exist, logs a warning but continues
+
+    Args:
+        request: List of pair sources to delete: [{base, quote, priority?}, ...]
+        session: Database session
+
+    Returns:
+        Results for each deletion operation
+    """
+    results = []
+    total_deleted = 0
+
+    try:
+        for source_dict in request.sources:
+            base = source_dict.get("base", "").upper()
+            quote = source_dict.get("quote", "").upper()
+            priority = source_dict.get("priority")
+
+            if not base or not quote:
+                results.append(DeletePairSourceResult(
+                    success=False,
+                    base=base or "MISSING",
+                    quote=quote or "MISSING",
+                    priority=priority,
+                    deleted_count=0,
+                    message="Missing base or quote currency"
+                ))
+                continue
+
+            # Build delete query
+            if priority is not None:
+                # Delete specific priority
+                stmt = sql_delete(FxCurrencyPairSource).where(
+                    FxCurrencyPairSource.base == base,
+                    FxCurrencyPairSource.quote == quote,
+                    FxCurrencyPairSource.priority == priority
+                )
+            else:
+                # Delete all priorities for this pair
+                stmt = sql_delete(FxCurrencyPairSource).where(
+                    FxCurrencyPairSource.base == base,
+                    FxCurrencyPairSource.quote == quote
+                )
+
+            result = await session.execute(stmt)
+            deleted_count = result.rowcount
+
+            if deleted_count == 0:
+                # Warning: pair not found
+                priority_str = f" with priority={priority}" if priority else ""
+                results.append(DeletePairSourceResult(
+                    success=True,  # Not an error, just a warning
+                    base=base,
+                    quote=quote,
+                    priority=priority,
+                    deleted_count=0,
+                    message=f"Pair {base}/{quote}{priority_str} not found (nothing to delete)"
+                ))
+            else:
+                results.append(DeletePairSourceResult(
+                    success=True,
+                    base=base,
+                    quote=quote,
+                    priority=priority,
+                    deleted_count=deleted_count,
+                    message=None
+                ))
+                total_deleted += deleted_count
+
+        await session.commit()
+
+        return DeletePairSourcesResponse(
+            results=results,
+            total_deleted=total_deleted
+        )
+
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete pair sources: {str(e)}")
+
+
