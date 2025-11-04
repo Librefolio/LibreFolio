@@ -190,7 +190,7 @@ def test_convert_currency():
                         "amount": "100.00",
                         "from": "USD",
                         "to": "EUR",
-                        "date": end_date.isoformat()
+                        "start_date": end_date.isoformat()
                     }
                 ]
             },
@@ -218,7 +218,7 @@ def test_convert_currency():
         result = data["results"][0]
 
         # Validate result structure
-        required_fields = ["amount", "from_currency", "to_currency", "converted_amount", "rate", "rate_date"]
+        required_fields = ["amount", "from_currency", "to_currency", "conversion_date", "converted_amount", "rate"]
         for field in required_fields:
             if field not in result:
                 print_error(f"Missing field in result: {field}")
@@ -227,7 +227,13 @@ def test_convert_currency():
         print_success(f"Conversion successful")
         print_info(f"  {result['amount']} {result['from_currency']} = {result['converted_amount']} {result['to_currency']}")
         print_info(f"  Rate: {result['rate']}")
-        print_info(f"  Rate date: {result['rate_date']}")
+        print_info(f"  Conversion date: {result['conversion_date']}")
+
+        # Log rate_date info (from backward_fill_info if present, else same as conversion_date)
+        if result.get('backward_fill_info'):
+            print_info(f"  Actual rate date: {result['backward_fill_info']['actual_rate_date']} (backward-filled)")
+        else:
+            print_info(f"  Rate date: {result['conversion_date']} (exact match)")
 
         # Test identity conversion (EUR → EUR)
         print_info("\nTesting identity conversion: 100 EUR → EUR")
@@ -240,7 +246,7 @@ def test_convert_currency():
                         "amount": "100.00",
                         "from": "EUR",
                         "to": "EUR",
-                        "date": end_date.isoformat()
+                        "start_date": end_date.isoformat()
                     }
                 ]
             },
@@ -276,7 +282,7 @@ def test_convert_currency():
                         "amount": "100.00",
                         "from": "USD",
                         "to": "EUR",
-                        "date": end_date.isoformat()
+                        "start_date": end_date.isoformat()
                     }
                 ]
             },
@@ -298,7 +304,7 @@ def test_convert_currency():
                         "amount": str(eur_amount),
                         "from": "EUR",
                         "to": "USD",
-                        "date": end_date.isoformat()
+                        "start_date": end_date.isoformat()
                     }
                 ]
             },
@@ -342,7 +348,7 @@ def test_convert_missing_rate():
     try:
         # Insert a manual rate (using bulk with single item)
         insert_response = httpx.post(
-            f"{API_BASE_URL}/fx/rate",
+            f"{API_BASE_URL}/fx/rate-set",
             json={
                 "rates": [
                     {
@@ -375,7 +381,7 @@ def test_convert_missing_rate():
                         "amount": "100.00",
                         "from": "USD",
                         "to": "EUR",
-                        "date": requested_date.isoformat()
+                        "start_date": requested_date.isoformat()
                     }
                 ]
             },
@@ -409,39 +415,30 @@ def test_convert_missing_rate():
             print_error("backward_fill_info should not be null for old date")
             return False
 
-        # Verify structure
-        required_fields = ["applied", "requested_date", "actual_rate_date", "days_back"]
+        # Verify structure (simplified: no more 'applied' and 'requested_date')
+        required_fields = ["actual_rate_date", "days_back"]
         for field in required_fields:
             if field not in fill_info:
                 print_error(f"backward_fill_info missing field: {field}")
                 return False
 
-        if not fill_info["applied"]:
-            print_error("backward_fill_info.applied should be true")
-            return False
-
-        # Verify requested_date matches what we sent
-        if fill_info["requested_date"] != requested_date.isoformat():
-            print_error(f"requested_date mismatch: expected {requested_date.isoformat()}, got {fill_info['requested_date']}")
-            return False
-
-        # Verify actual_rate_date is <= requested_date
+        # Verify actual_rate_date is <= requested_date (conversion_date)
         from datetime import date as date_type
         actual_date = date_type.fromisoformat(fill_info["actual_rate_date"])
-        requested_date_parsed = date_type.fromisoformat(fill_info["requested_date"])
+        conversion_date = date_type.fromisoformat(result["conversion_date"])
 
-        if actual_date > requested_date_parsed:
-            print_error(f"actual_rate_date ({actual_date}) should be <= requested_date ({requested_date_parsed})")
+        if actual_date > conversion_date:
+            print_error(f"actual_rate_date ({actual_date}) should be <= conversion_date ({conversion_date})")
             return False
 
         # Verify days_back calculation is correct
-        expected_days_back = (requested_date_parsed - actual_date).days
+        expected_days_back = (conversion_date - actual_date).days
         if fill_info["days_back"] != expected_days_back:
             print_error(f"days_back incorrect: expected {expected_days_back}, got {fill_info['days_back']}")
             return False
 
         print_success(f"✓ Backward-fill applied: {fill_info['days_back']} days back")
-        print_info(f"  Requested: {fill_info['requested_date']} ✓")
+        print_info(f"  Conversion date: {result['conversion_date']} ✓")
         print_info(f"  Actual rate from: {fill_info['actual_rate_date']} ✓")
         print_info(f"  Days back calculation: correct ✓")
         print_success("Backward-fill warning works correctly with all validations passing")
@@ -455,7 +452,7 @@ def test_convert_missing_rate():
 
 
 def test_manual_rate_upsert():
-    """Test POST /fx/rate endpoint for manual rate entry."""
+    """Test POST /fx/rate-set endpoint for manual rate entry."""
     print_section("Test 4: Manual Rate Upsert")
 
     # Use a date far in the past to avoid interference from other rates
@@ -465,7 +462,7 @@ def test_manual_rate_upsert():
     print_info("Test 4.1: Insert new manual rate")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/rate",
+            f"{API_BASE_URL}/fx/rate-set",
             json={
                 "rates": [
                     {
@@ -522,7 +519,7 @@ def test_manual_rate_upsert():
         # Test 2: Update existing rate (upsert)
         print_info("\nTest 4.2: Update existing rate (upsert)")
         response2 = httpx.post(
-            f"{API_BASE_URL}/fx/rate",
+            f"{API_BASE_URL}/fx/rate-set",
             json={
                 "rates": [
                     {
@@ -560,7 +557,7 @@ def test_manual_rate_upsert():
                         "amount": "100.00",
                         "from": "EUR",
                         "to": "USD",
-                        "date": test_date.isoformat()
+                        "start_date": test_date.isoformat()
                     }
                 ]
             },
@@ -585,7 +582,7 @@ def test_manual_rate_upsert():
         # Test 4: Invalid request (same base and quote)
         print_info("\nTest 4.4: Invalid request (base == quote)")
         response4 = httpx.post(
-            f"{API_BASE_URL}/fx/rate",
+            f"{API_BASE_URL}/fx/rate-set",
             json={
                 "rates": [
                     {
@@ -613,7 +610,7 @@ def test_manual_rate_upsert():
         # Test 5: Automatic alphabetical ordering and rate inversion
         print_info("\nTest 4.5: Automatic ordering (USD/EUR → EUR/USD with rate inversion)")
         response5 = httpx.post(
-            f"{API_BASE_URL}/fx/rate",
+            f"{API_BASE_URL}/fx/rate-set",
             json={
                 "rates": [
                     {
@@ -690,9 +687,9 @@ def test_bulk_conversions():
             f"{API_BASE_URL}/fx/convert",
             json={
                 "conversions": [
-                    {"amount": "100.00", "from": "USD", "to": "EUR", "date": end_date.isoformat()},
-                    {"amount": "200.00", "from": "GBP", "to": "EUR", "date": end_date.isoformat()},
-                    {"amount": "300.00", "from": "CHF", "to": "EUR", "date": end_date.isoformat()},
+                    {"amount": "100.00", "from": "USD", "to": "EUR", "start_date": end_date.isoformat()},
+                    {"amount": "200.00", "from": "GBP", "to": "EUR", "start_date": end_date.isoformat()},
+                    {"amount": "300.00", "from": "CHF", "to": "EUR", "start_date": end_date.isoformat()},
                 ]
             },
             timeout=TIMEOUT
@@ -731,8 +728,8 @@ def test_bulk_conversions():
             f"{API_BASE_URL}/fx/convert",
             json={
                 "conversions": [
-                    {"amount": "100.00", "from": "USD", "to": "EUR", "date": end_date.isoformat()},
-                    {"amount": "200.00", "from": "XXX", "to": "EUR", "date": end_date.isoformat()},  # Invalid
+                    {"amount": "100.00", "from": "USD", "to": "EUR", "start_date": end_date.isoformat()},
+                    {"amount": "200.00", "from": "XXX", "to": "EUR", "start_date": end_date.isoformat()},  # Invalid
                 ]
             },
             timeout=TIMEOUT
@@ -776,7 +773,7 @@ def test_bulk_rate_upserts():
 
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/rate",
+            f"{API_BASE_URL}/fx/rate-set",
             json={
                 "rates": [
                     {"date": test_date.isoformat(), "base": "EUR", "quote": "USD", "rate": "1.12", "source": "TEST"},
@@ -812,7 +809,7 @@ def test_bulk_rate_upserts():
         print_info("\nTest 6.2: Bulk with one invalid rate (partial failure)")
 
         response2 = httpx.post(
-            f"{API_BASE_URL}/fx/rate",
+            f"{API_BASE_URL}/fx/rate-set",
             json={
                 "rates": [
                     {"date": test_date.isoformat(), "base": "EUR", "quote": "JPY", "rate": "130.0", "source": "TEST"},
@@ -895,7 +892,7 @@ def test_invalid_requests():
                         "amount": "-100.00",
                         "from": "USD",
                         "to": "EUR",
-                        "date": date.today().isoformat()
+                        "start_date": date.today().isoformat()
                     }
                 ]
             },
@@ -925,7 +922,7 @@ def test_invalid_requests():
                         "amount": "0",
                         "from": "USD",
                         "to": "EUR",
-                        "date": date.today().isoformat()
+                        "start_date": date.today().isoformat()
                     }
                 ]
             },
@@ -952,7 +949,7 @@ def test_invalid_requests():
                         "amount": "abc",
                         "from": "USD",
                         "to": "EUR",
-                        "date": date.today().isoformat()
+                        "start_date": date.today().isoformat()
                     }
                 ]
             },
@@ -982,7 +979,7 @@ def test_invalid_requests():
                         "amount": "100.00",
                         "from": "INVALID",
                         "to": "EUR",
-                        "date": date.today().isoformat()
+                        "start_date": date.today().isoformat()
                     }
                 ]
             },
@@ -1014,7 +1011,7 @@ def test_invalid_requests():
                         "amount": "100.00",
                         "from": "XXX",
                         "to": "EUR",
-                        "date": date.today().isoformat()
+                        "start_date": date.today().isoformat()
                     }
                 ]
             },
@@ -1117,7 +1114,7 @@ def run_all_tests():
   • GET /fx/currencies - List available currencies
   • POST /fx/sync - Sync FX rates from ECB
   • POST /fx/convert - Convert currencies (bulk-only, single = 1 item array)
-  • POST /fx/rate - Manually insert/update rates (bulk-only, single = 1 item array)
+  • POST /fx/rate-set - Manually insert/update rates (bulk-only, single = 1 item array)
   • Backward-fill warnings for old dates
   • Bulk operations with multiple items
   • Partial failure handling
@@ -1164,10 +1161,10 @@ def _run_tests():
         "GET /fx/currencies": test_get_currencies(),
         "POST /fx/sync": test_sync_rates(),
         "POST /fx/convert (Single)": test_convert_currency(),
-        "POST /fx/rate (Single)": test_manual_rate_upsert(),
+        "POST /fx/rate-set (Single)": test_manual_rate_upsert(),
         "Backward-Fill Warning": test_convert_missing_rate(),
         "POST /fx/convert (Bulk)": test_bulk_conversions(),
-        "POST /fx/rate (Bulk)": test_bulk_rate_upserts(),
+        "POST /fx/rate-set (Bulk)": test_bulk_rate_upserts(),
         "Invalid Request Handling": test_invalid_requests(),
         }
 

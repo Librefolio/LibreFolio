@@ -3,6 +3,7 @@ FX (Foreign Exchange) API endpoints.
 Handles currency conversion and FX rate synchronization.
 """
 from datetime import date
+from datetime import timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -30,21 +31,20 @@ class SyncResponse(BaseModel):
 
 class BackwardFillInfo(BaseModel):
     """Information about backward-fill applied during conversion."""
-    applied: bool = Field(..., description="Whether backward-fill was applied")
-    requested_date: str = Field(..., description="Date requested for conversion")
     actual_rate_date: str = Field(..., description="Date of the rate actually used")
     days_back: int = Field(..., description="Number of days back from requested date")
 
 
 class ConversionRequest(BaseModel):
-    """Single conversion request."""
+    """Single conversion request with optional date range."""
     amount: Decimal = Field(..., gt=0, description="Amount to convert (must be positive)")
     from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
-    conversion_date: date | None = Field(None, alias="date", description="Conversion date (defaults to today if not provided)")
+    start_date: date = Field(..., description="Start date (required). If end_date is not provided, only this date is used")
+    end_date: date | None = Field(None, description="End date (optional). If provided, converts for all dates from start_date to end_date (inclusive)")
 
     class Config:
-        populate_by_name = True  # Allow using both 'date' and 'conversion_date'
+        populate_by_name = True
 
 
 class ConvertRequest(BaseModel):
@@ -57,10 +57,14 @@ class ConversionResult(BaseModel):
     amount: Decimal = Field(..., description="Original amount")
     from_currency: str = Field(..., description="Source currency code")
     to_currency: str = Field(..., description="Target currency code")
+    conversion_date: str = Field(..., description="Date requested for conversion (ISO format)")
     converted_amount: Decimal = Field(..., description="Converted amount")
     rate: Decimal | None = Field(None, description="Exchange rate used (if not identity)")
-    rate_date: str = Field(..., description="Date of the rate used (ISO format)")
-    backward_fill_info: BackwardFillInfo | None = Field(None, description="Info about backward-fill if applied")
+    backward_fill_info: BackwardFillInfo | None = Field(
+        None,
+        description="Backward-fill info (only present if rate from a different date was used). "
+                    "If null, rate_date = conversion_date"
+    )
 
 
 class ConvertResponse(BaseModel):
@@ -112,7 +116,7 @@ class CurrenciesResponse(BaseModel):
 @router.get("/currencies", response_model=CurrenciesResponse)
 async def list_currencies(
     provider: str = Query("ECB", description="Provider code (ECB, FED, BOE, SNB)")
-):
+    ):
     """
     Get the list of available currencies from specified provider.
 
@@ -158,7 +162,8 @@ async def sync_rates(
     # Validate date range
     if start > end:
         raise HTTPException(status_code=400, detail="Start date must be before or equal to end date")
-
+    if end > date.today():
+        raise HTTPException(status_code=400, detail="End date cannot be in the future")
     # Parse currencies
     currency_list = [c.strip().upper() for c in currencies.split(",") if c.strip()]
     if not currency_list:
@@ -171,7 +176,7 @@ async def sync_rates(
             currency_list,
             provider_code=provider,
             base_currency=base_currency
-        )
+            )
         return SyncResponse(
             synced=result['total_changed'],
             date_range=(start.isoformat(), end.isoformat()),
@@ -183,7 +188,7 @@ async def sync_rates(
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
 
 
-@router.post("/rate", response_model=UpsertRatesResponse, status_code=200)
+@router.post("/rate-set", response_model=UpsertRatesResponse, status_code=200)
 async def upsert_rates_endpoint(
     request: UpsertRatesRequest,
     session: AsyncSession = Depends(get_session)
@@ -230,7 +235,7 @@ async def upsert_rates_endpoint(
             rate_results = await upsert_rates_bulk(
                 session,
                 [(rate_item.rate_date, base, quote, rate_value, rate_item.source)]
-            )
+                )
 
             success, action = rate_results[0]
 
@@ -241,7 +246,7 @@ async def upsert_rates_endpoint(
                 date=rate_item.rate_date.isoformat(),
                 base=base,
                 quote=quote
-            ))
+                ))
 
         except ValueError as e:
             error_msg = f"Rate {idx}: Validation error: {str(e)}"
@@ -255,13 +260,13 @@ async def upsert_rates_endpoint(
         raise HTTPException(
             status_code=400,
             detail=f"All rates failed: {'; '.join(errors)}"
-        )
+            )
 
     return UpsertRatesResponse(
         results=results,
         success_count=len(results),
         errors=errors
-    )
+        )
 
 
 @router.post("/convert", response_model=ConvertResponse)
@@ -272,8 +277,12 @@ async def convert_currency_bulk(
     """
     Convert one or more amounts between currencies (bulk operation).
 
-    This endpoint accepts a list of conversions to perform. Even single conversions
-    should be sent as a list with one element.
+    This endpoint accepts a list of conversions to perform. Each conversion can specify:
+    - A single date (start_date only) for single-day conversion
+    - A date range (start_date + end_date) for multi-day conversion
+
+    When a date range is specified, the conversion is automatically expanded to process
+    each day in the range individually (both start_date and end_date are inclusive).
 
     Uses unlimited backward-fill logic: if rate for exact date is not available,
     uses the most recent rate before the requested date.
@@ -283,15 +292,44 @@ async def convert_currency_bulk(
         session: Database session
 
     Returns:
-        Conversion results with rate information for each conversion
+        Conversion results with rate information for each conversion (one result per day)
     """
-    # Prepare bulk conversions
+
+    # Prepare bulk conversions, expanding date ranges
     bulk_conversions = []
-    for conversion in request.conversions:
+    conversion_metadata = []  # Track which original conversion each bulk conversion belongs to
+
+    for conv_idx, conversion in enumerate(request.conversions):
         from_cur = conversion.from_currency.upper()
         to_cur = conversion.to_currency.upper()
-        on_date = conversion.conversion_date if conversion.conversion_date else date.today()
-        bulk_conversions.append((conversion.amount, from_cur, to_cur, on_date))
+
+        # Validate date range
+        if conversion.end_date and conversion.start_date > conversion.end_date:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Conversion {conv_idx}: start_date must be before or equal to end_date"
+                )
+
+        # Expand date range into individual days
+        if conversion.end_date:
+            # Multi-day conversion: process each day in range
+            current_date = conversion.start_date
+            while current_date <= conversion.end_date:
+                bulk_conversions.append((conversion.amount, from_cur, to_cur, current_date))
+                conversion_metadata.append({
+                    'original_idx': conv_idx,
+                    'conversion': conversion,
+                    'date': current_date
+                    })
+                current_date += timedelta(days=1)
+        else:
+            # Single-day conversion
+            bulk_conversions.append((conversion.amount, from_cur, to_cur, conversion.start_date))
+            conversion_metadata.append({
+                'original_idx': conv_idx,
+                'conversion': conversion,
+                'date': conversion.start_date
+                })
 
     # Call convert_bulk with raise_on_error=False to get partial results
     bulk_results, bulk_errors = await convert_bulk(session, bulk_conversions, raise_on_error=False)
@@ -299,15 +337,16 @@ async def convert_currency_bulk(
     results = []
 
     # Process results
-    for idx, (conversion, bulk_result) in enumerate(zip(request.conversions, bulk_results)):
+    for idx, (metadata, bulk_result) in enumerate(zip(conversion_metadata, bulk_results)):
         if bulk_result is None:
             # This conversion failed (error already in bulk_errors)
             continue
 
         converted_amount, actual_rate_date, backward_fill_applied = bulk_result
+        conversion = metadata['conversion']
+        on_date = metadata['date']
         from_cur = conversion.from_currency.upper()
         to_cur = conversion.to_currency.upper()
-        on_date = conversion.conversion_date if conversion.conversion_date else date.today()
 
         # Calculate effective rate (for display purposes)
         rate = None
@@ -319,8 +358,6 @@ async def convert_currency_bulk(
         if backward_fill_applied:
             days_back = (on_date - actual_rate_date).days
             backward_fill_info = BackwardFillInfo(
-                applied=True,
-                requested_date=on_date.isoformat(),
                 actual_rate_date=actual_rate_date.isoformat(),
                 days_back=days_back
             )
@@ -329,21 +366,20 @@ async def convert_currency_bulk(
             amount=conversion.amount,
             from_currency=from_cur,
             to_currency=to_cur,
+            conversion_date=on_date.isoformat(),
             converted_amount=converted_amount,
             rate=rate,
-            rate_date=actual_rate_date.isoformat(),
             backward_fill_info=backward_fill_info
         ))
-
 
     # If all conversions failed, return 404
     if bulk_errors and not results:
         raise HTTPException(
             status_code=404,
             detail=f"All conversions failed: {'; '.join(bulk_errors)}"
-        )
+            )
 
     return ConvertResponse(
         results=results,
         errors=bulk_errors
-    )
+        )

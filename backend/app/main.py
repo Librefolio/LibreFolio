@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 def ensure_database_exists():
     """
     Ensure database exists and is migrated.
-    If database file doesn't exist, run migrations automatically.
+    If database file doesn't exist OR is empty, run migrations automatically.
 
     This function is used by:
     - Backend server on startup (via lifespan)
@@ -55,12 +55,50 @@ def ensure_database_exists():
         else:
             db_path = Path(db_path_str)
 
+        needs_migration = False
+
         if not db_path.exists():
             logger.warning(
                 "Database file not found, running migrations",
                 db_path=str(db_path)
-                )
+            )
+            needs_migration = True
+        elif db_path.stat().st_size == 0:
+            logger.warning(
+                "Database file is empty (0 bytes), running migrations",
+                db_path=str(db_path)
+            )
+            needs_migration = True
+        else:
+            # Check if database has tables using SQLite directly
+            # This is faster than importing SQLAlchemy
+            import sqlite3
+            try:
+                conn = sqlite3.connect(str(db_path))
+                cursor = conn.cursor()
+                cursor.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+                table_count = cursor.fetchone()[0]
+                conn.close()
 
+                if table_count == 0:
+                    logger.warning(
+                        "Database has no tables, running migrations",
+                        db_path=str(db_path)
+                    )
+                    needs_migration = True
+                else:
+                    logger.info(
+                        f"Database initialized with {table_count} tables",
+                        db_path=str(db_path)
+                    )
+            except sqlite3.DatabaseError as e:
+                logger.warning(
+                    f"Database appears corrupted, running migrations: {e}",
+                    db_path=str(db_path)
+                )
+                needs_migration = True
+
+        if needs_migration:
             # Ensure directory exists
             db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -69,12 +107,13 @@ def ensure_database_exists():
                 project_root = Path(__file__).parent.parent.parent
                 alembic_ini = project_root / "backend" / "alembic.ini"
 
+                logger.info("Running Alembic migrations...")
                 result = subprocess.run(
                     ["alembic", "-c", str(alembic_ini), "upgrade", "head"],
                     cwd=project_root,
                     capture_output=True,
                     text=True,
-                    )
+                )
 
                 if result.returncode == 0:
                     logger.info("Database created and migrated successfully")
@@ -82,7 +121,7 @@ def ensure_database_exists():
                     logger.error(
                         "Failed to create database",
                         stderr=result.stderr
-                        )
+                    )
                     sys.exit(1)
 
             except Exception as e:

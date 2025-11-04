@@ -59,7 +59,7 @@ def get_column_decimal_precision(model_class, column_name: str) -> tuple[int, in
         raise ValueError(
             f"Column '{column_name}' in {model_class.__name__} is not a Numeric type "
             f"(found: {type(column.type).__name__})"
-        )
+            )
 
     # Extract precision and scale from Numeric type
     return column.type.precision, column.type.scale
@@ -69,7 +69,7 @@ def truncate_decimal_to_db_precision(
     value: Decimal,
     model_class,
     column_name: str
-) -> Decimal:
+    ) -> Decimal:
     """
     Truncate a Decimal value to match database column precision.
 
@@ -582,7 +582,7 @@ async def ensure_rates_multi_source(
 
     # Pairs between requested currencies
     for i, curr1 in enumerate(currencies):
-        for curr2 in currencies[i+1:]:  # Avoid duplicates, only pairs
+        for curr2 in currencies[i + 1:]:  # Avoid duplicates, only pairs
             # Store alphabetically: smaller currency as base
             if curr1 < curr2:
                 base, quote = curr1, curr2
@@ -595,8 +595,8 @@ async def ensure_rates_multi_source(
                     FxRate.quote == quote,
                     FxRate.date >= start_date,
                     FxRate.date <= end_date
+                    )
                 )
-            )
 
     # Also include pairs with the base currency (if different from requested currencies)
     if actual_base not in currencies:
@@ -612,13 +612,13 @@ async def ensure_rates_multi_source(
                     FxRate.quote == quote,
                     FxRate.date >= start_date,
                     FxRate.date <= end_date
+                    )
                 )
-            )
 
     # Create tasks for parallel execution
     fetch_task = asyncio.create_task(
         provider.fetch_rates(date_range, currencies, base_currency=base_currency)
-    )
+        )
 
     if all_pairs_conditions:
         existing_stmt = select(FxRate).where(or_(*all_pairs_conditions))
@@ -628,13 +628,21 @@ async def ensure_rates_multi_source(
         db_task = None
 
     # Wait for both operations to complete
+    # Handle case where fx_rates table doesn't exist yet (fresh database)
     if db_task:
-        rates_by_currency, db_result = await asyncio.gather(fetch_task, db_task)
-        existing_rates = db_result.scalars().all()
-        existing_lookup = {
-            (rate.base, rate.quote, rate.date): rate.rate
-            for rate in existing_rates
-        }
+        try:
+            rates_by_currency, db_result = await asyncio.gather(fetch_task, db_task)
+            existing_rates = db_result.scalars().all()
+            existing_lookup = {(rate.base, rate.quote, rate.date): rate.rate for rate in existing_rates}
+        except Exception as e:
+            # If table doesn't exist or other DB error, proceed with empty lookup
+            # All rates will be considered new inserts
+            logger.warning(
+                f"Could not query existing rates (table may not exist yet): {e}. "
+                f"Proceeding with fresh sync - all rates will be inserted."
+                )
+            rates_by_currency = await fetch_task
+            existing_lookup = {}
     else:
         rates_by_currency = await fetch_task
         existing_lookup = {}
@@ -675,7 +683,7 @@ async def ensure_rates_multi_source(
         logger.info(
             f"Found {len(db_only_pairs)} rate(s) in database not returned by API "
             f"(this is normal if API doesn't provide historical data for some pairs)"
-        )
+            )
         # Optional: Log first few examples at debug level
         for base, quote, rate_date in list(db_only_pairs)[:5]:
             logger.debug(f"  DB-only rate: {base}/{quote} on {rate_date}")
@@ -826,7 +834,7 @@ async def convert_bulk(
     raise_on_error: bool = True
     ) -> tuple[list[tuple[Decimal, date, bool] | None], list[str]]:
     """
-    Convert multiple amounts in a single batch operation.
+    Convert multiple amounts in a single batch operation. Use date in fx_rates table already cached.
     Uses unlimited backward-fill: if rate for exact date is not found,
     uses the most recent rate available (no time limit).
 
