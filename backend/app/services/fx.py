@@ -2,13 +2,16 @@
 FX (Foreign Exchange) service.
 Handles currency conversion and FX rate management with support for multiple providers.
 """
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from datetime import date
 from decimal import Decimal
+from decimal import ROUND_DOWN
 
 from sqlalchemy import func, select as sql_select, or_, and_
 from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.types import Numeric
 from sqlmodel import select
 
 from backend.app.db.models import FxRate
@@ -20,47 +23,99 @@ logger = logging.getLogger(__name__)
 # HELPER FUNCTIONS
 # ============================================================================
 
-def get_rate_decimal_precision() -> tuple[int, int]:
+def get_column_decimal_precision(model_class, column_name: str) -> tuple[int, int]:
     """
-    Get the decimal precision (total, scale) from FxRate.rate column definition.
+    Get the decimal precision (total, scale) from a Numeric column definition.
+
+    This is a generic helper that works with any SQLModel table and Numeric column.
+
+    Args:
+        model_class: SQLModel class (e.g., FxRate, PriceHistory, Transaction)
+        column_name: Name of the Numeric column
 
     Returns:
         tuple: (precision, scale) e.g. (24, 10) means 24 total digits, 10 after decimal
 
+    Raises:
+        AttributeError: If column doesn't exist
+        ValueError: If column is not a Numeric type
+
     Example:
-        precision, scale = get_rate_decimal_precision()
+        precision, scale = get_column_decimal_precision(FxRate, 'rate')
         # Returns (24, 10) from Numeric(24, 10)
     """
+
     # Get the SQLAlchemy column from SQLModel
-    rate_column = FxRate.__table__.columns['rate']
+    if not hasattr(model_class, '__table__'):
+        raise ValueError(f"{model_class.__name__} is not a SQLModel table")
+
+    if column_name not in model_class.__table__.columns:
+        raise AttributeError(f"Column '{column_name}' not found in {model_class.__name__}")
+
+    column = model_class.__table__.columns[column_name]
+
+    # Check if column is Numeric type
+    if not isinstance(column.type, Numeric):
+        raise ValueError(
+            f"Column '{column_name}' in {model_class.__name__} is not a Numeric type "
+            f"(found: {type(column.type).__name__})"
+        )
+
     # Extract precision and scale from Numeric type
-    return rate_column.type.precision, rate_column.type.scale
+    return column.type.precision, column.type.scale
+
+
+def truncate_decimal_to_db_precision(
+    value: Decimal,
+    model_class,
+    column_name: str
+) -> Decimal:
+    """
+    Truncate a Decimal value to match database column precision.
+
+    This is a generic helper that prevents false "update" detections when comparing
+    fetched values with stored values that have been truncated by the database.
+
+    Args:
+        value: Decimal value to truncate
+        model_class: SQLModel class (e.g., FxRate, PriceHistory, Transaction)
+        column_name: Name of the Numeric column
+
+    Returns:
+        Decimal: Value truncated to database precision
+
+    Example:
+        >>> from backend.app.db.models import FxRate
+        >>> rate = Decimal("1.065757220505168922519450069")
+        >>> truncate_decimal_to_db_precision(rate, FxRate, 'rate')
+        Decimal("1.0657572205")  # Truncated to 10 decimals (Numeric(24, 10))
+    """
+
+    _, scale = get_column_decimal_precision(model_class, column_name)
+    # Create quantization string: "0.0000000001" for scale=10
+    quantize_str = "0." + "0" * scale
+    return value.quantize(Decimal(quantize_str), rounding=ROUND_DOWN)
+
+
+# Backward compatibility helpers for FxRate.rate column
+def get_rate_decimal_precision() -> tuple[int, int]:
+    """
+    Get the decimal precision from FxRate.rate column.
+
+    This is a convenience wrapper for backward compatibility.
+    For new code, prefer get_column_decimal_precision(FxRate, 'rate').
+    """
+    return get_column_decimal_precision(FxRate, 'rate')
 
 
 def truncate_rate_to_db_precision(rate: Decimal) -> Decimal:
     """
-    Truncate a rate value to match database column precision.
+    Truncate a rate value to match FxRate.rate column precision.
 
-    This prevents false "update" detections when comparing fetched rates
-    with stored rates that have been truncated by the database.
-
-    Args:
-        rate: Rate value to truncate
-
-    Returns:
-        Decimal: Rate truncated to database precision
-
-    Example:
-        >>> rate = Decimal("1.065757220505168922519450069")
-        >>> truncate_rate_to_db_precision(rate)
-        Decimal("1.0657572205")  # Truncated to 10 decimals
+    This is a convenience wrapper for backward compatibility.
+    For new code, prefer truncate_decimal_to_db_precision(rate, FxRate, 'rate').
     """
-    from decimal import ROUND_DOWN
-
-    _, scale = get_rate_decimal_precision()
-    # Create quantization string: "0.0000000001" for scale=10
-    quantize_str = "0." + "0" * scale
-    return rate.quantize(Decimal(quantize_str), rounding=ROUND_DOWN)
+    return truncate_decimal_to_db_precision(rate, FxRate, 'rate')
 
 
 # Import providers to auto-register them
@@ -514,19 +569,88 @@ async def ensure_rates_multi_source(
         f"for {len(currencies)} currencies from {date_range[0]} to {date_range[1]}"
         )
 
-    # Fetch rates from provider with specified base
-    rates_by_currency = await provider.fetch_rates(date_range, currencies, base_currency=base_currency)
+    start_date, end_date = date_range
+
+    # ========================================================================
+    # PARALLEL EXECUTION: API fetch + DB query
+    # ========================================================================
+
+    # Build DB query for all possible pairs in the requested currencies and date range
+    # This query fetches ALL rates between any of the requested currencies
+    # (e.g., if currencies=['USD', 'GBP'], fetch USD/GBP, GBP/USD, etc.)
+    all_pairs_conditions = []
+
+    # Pairs between requested currencies
+    for i, curr1 in enumerate(currencies):
+        for curr2 in currencies[i+1:]:  # Avoid duplicates, only pairs
+            # Store alphabetically: smaller currency as base
+            if curr1 < curr2:
+                base, quote = curr1, curr2
+            else:
+                base, quote = curr2, curr1
+
+            all_pairs_conditions.append(
+                and_(
+                    FxRate.base == base,
+                    FxRate.quote == quote,
+                    FxRate.date >= start_date,
+                    FxRate.date <= end_date
+                )
+            )
+
+    # Also include pairs with the base currency (if different from requested currencies)
+    if actual_base not in currencies:
+        for currency in currencies:
+            if actual_base < currency:
+                base, quote = actual_base, currency
+            else:
+                base, quote = currency, actual_base
+
+            all_pairs_conditions.append(
+                and_(
+                    FxRate.base == base,
+                    FxRate.quote == quote,
+                    FxRate.date >= start_date,
+                    FxRate.date <= end_date
+                )
+            )
+
+    # Create tasks for parallel execution
+    fetch_task = asyncio.create_task(
+        provider.fetch_rates(date_range, currencies, base_currency=base_currency)
+    )
+
+    if all_pairs_conditions:
+        existing_stmt = select(FxRate).where(or_(*all_pairs_conditions))
+        db_task = asyncio.create_task(session.execute(existing_stmt))
+    else:
+        # No pairs to query (shouldn't happen, but handle gracefully)
+        db_task = None
+
+    # Wait for both operations to complete
+    if db_task:
+        rates_by_currency, db_result = await asyncio.gather(fetch_task, db_task)
+        existing_rates = db_result.scalars().all()
+        existing_lookup = {
+            (rate.base, rate.quote, rate.date): rate.rate
+            for rate in existing_rates
+        }
+    else:
+        rates_by_currency = await fetch_task
+        existing_lookup = {}
+
+    # ========================================================================
+    # Process API results and normalize for storage
+    # ========================================================================
 
     # Statistics
     total_fetched = 0
     total_changed = 0
     currencies_synced = []
 
-    start_date, end_date = date_range
-
-    # OPTIMIZATION: First, normalize all observations and collect unique pairs
+    # Normalize all observations and collect unique pairs from API
     all_normalized = []  # [(currency, obs_date, base, quote, rate), ...]
-    unique_pairs = set()  # {(base, quote), ...}
+    api_pairs = set()  # {(base, quote, date), ...}
 
     for currency, observations in rates_by_currency.items():
         if not observations:
@@ -540,32 +664,21 @@ async def ensure_rates_multi_source(
         for obs_date, base, quote, rate in observations:
             norm_base, norm_quote, norm_rate = normalize_rate_for_storage(base, quote, rate)
             all_normalized.append((currency, obs_date, norm_base, norm_quote, norm_rate))
-            unique_pairs.add((norm_base, norm_quote))
+            api_pairs.add((norm_base, norm_quote, obs_date))
 
-    # OPTIMIZATION: Single batch query for ALL existing rates (all pairs, all dates)
-    if unique_pairs:
-        pair_conditions = []
-        for base, quote in unique_pairs:
-            pair_conditions.append(
-                and_(
-                    FxRate.base == base,
-                    FxRate.quote == quote,
-                    FxRate.date >= start_date,
-                    FxRate.date <= end_date
-                )
-            )
+    # ========================================================================
+    # Compare DB vs API: Log rates in DB but not in API
+    # ========================================================================
 
-        existing_stmt = select(FxRate).where(or_(*pair_conditions))
-        result = await session.execute(existing_stmt)
-        existing_rates = result.scalars().all()
-
-        # Build lookup: {(base, quote, date): rate_value}
-        existing_lookup = {
-            (rate.base, rate.quote, rate.date): rate.rate
-            for rate in existing_rates
-        }
-    else:
-        existing_lookup = {}
+    db_only_pairs = set(existing_lookup.keys()) - api_pairs
+    if db_only_pairs:
+        logger.info(
+            f"Found {len(db_only_pairs)} rate(s) in database not returned by API "
+            f"(this is normal if API doesn't provide historical data for some pairs)"
+        )
+        # Optional: Log first few examples at debug level
+        for base, quote, rate_date in list(db_only_pairs)[:5]:
+            logger.debug(f"  DB-only rate: {base}/{quote} on {rate_date}")
 
     # Track changes per currency (for logging)
     changes_by_currency = {}
@@ -585,12 +698,15 @@ async def ensure_rates_multi_source(
                 changes_by_currency[currency] = 0
             changes_by_currency[currency] += 1
             logger.debug(f"New rate: {base}/{quote} on {obs_date} = {rate_truncated}")
-        elif old_rate != rate_truncated:
-            # Updated value (only if different after truncation)
-            if currency not in changes_by_currency:
-                changes_by_currency[currency] = 0
-            changes_by_currency[currency] += 1
-            logger.info(f"Updated rate: {base}/{quote} on {obs_date}: {old_rate} → {rate_truncated}")
+        else:
+            # Truncate old rate too for proper comparison
+            old_rate_truncated = truncate_rate_to_db_precision(old_rate)
+            if old_rate_truncated != rate_truncated:
+                # Updated value (only if different after truncation)
+                if currency not in changes_by_currency:
+                    changes_by_currency[currency] = 0
+                changes_by_currency[currency] += 1
+                logger.info(f"Updated rate: {base}/{quote} on {obs_date}: {old_rate_truncated} → {rate_truncated}")
         # else: Same value after truncation, no change to log
 
     total_changed = sum(changes_by_currency.values())
@@ -600,17 +716,19 @@ async def ensure_rates_multi_source(
         if not observations:
             continue
 
-        # Normalize for storage
+        # Normalize for storage and truncate to DB precision
         normalized_observations = []
         for obs_date, base, quote, rate in observations:
             norm_base, norm_quote, norm_rate = normalize_rate_for_storage(base, quote, rate)
-            normalized_observations.append((obs_date, norm_base, norm_quote, norm_rate))
+            # Truncate to DB precision to match what will actually be stored
+            norm_rate_truncated = truncate_rate_to_db_precision(norm_rate)
+            normalized_observations.append((obs_date, norm_base, norm_quote, norm_rate_truncated))
 
         if normalized_observations:
             _, base, quote, _ = normalized_observations[0]
             changed_count = changes_by_currency.get(currency, 0)
 
-            # Batch INSERT/UPDATE
+            # Batch INSERT/UPDATE with truncated rates
             values_list = [
                 {
                     'date': obs_date,

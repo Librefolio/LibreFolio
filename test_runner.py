@@ -24,6 +24,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Setup test database configuration and get test database path
+from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH
 # Import test utilities (avoid code duplication)
 from backend.test_scripts.test_utils import (Colors, print_header, print_section, print_success, print_error, print_warning, print_info)
 
@@ -153,9 +155,6 @@ def db_create(verbose: bool = False) -> bool:
     """
     print_section("Database Creation")
 
-    # Setup test database configuration
-    from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH
-
     setup_test_database()
 
     print_info(f"This test operates on: {TEST_DB_PATH}")
@@ -177,7 +176,7 @@ def db_create(verbose: bool = False) -> bool:
         ["./dev.sh", "db:upgrade", str(TEST_DB_PATH)],
         "Create database via Alembic migrations",
         verbose=verbose
-    )
+        )
 
     if success:
         # Verify database file exists
@@ -201,9 +200,6 @@ def db_validate(verbose: bool = False) -> bool:
     """
     print_section("Database Schema Validation")
 
-    # Get test database path
-    from backend.test_scripts.test_db_config import TEST_DB_PATH
-
     print_info(f"This test operates on: {TEST_DB_PATH}")
     print_info("The backend server is NOT used in this test")
     print_info("Testing: Tables, Foreign Keys, Constraints, Indexes, Enums")
@@ -225,9 +221,6 @@ def db_populate(verbose: bool = False, force: bool = False) -> bool:
         force: Delete existing database and recreate from scratch
     """
     print_section("Database Mock Data Population")
-
-    # Get test database path
-    from backend.test_scripts.test_db_config import TEST_DB_PATH
 
     print_info(f"This test operates on: {TEST_DB_PATH}")
     print_info("The backend server is NOT used in this test")
@@ -264,15 +257,28 @@ def db_fx_rates(verbose: bool = False) -> bool:
     """
     print_section("DB Test: FX Rates Persistence")
 
-    # Get test database path
-    from backend.test_scripts.test_db_config import TEST_DB_PATH
-
     print_info(f"This test operates on: {TEST_DB_PATH} (test database)")
     print_info("Testing: Fetch rates, Persist to DB, Overwrite, Idempotency, Constraints")
 
     return run_command(
         ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_fx_rates_persistence"],
         "FX rates persistence tests",
+        verbose=verbose
+        )
+
+
+def db_numeric_truncation(verbose: bool = False) -> bool:
+    """
+    Test Numeric column truncation behavior across all tables.
+    Validates helper functions and database precision handling.
+    """
+    print_section("DB Test: Numeric Column Truncation")
+    print_info("Testing all Numeric columns in database")
+    print_info("Tests: Helper functions, DB truncation, No false updates")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_numeric_truncation"],
+        "Numeric truncation tests",
         verbose=verbose
         )
 
@@ -293,6 +299,7 @@ def db_all(verbose: bool = False) -> bool:
     tests = [
         ("Create Fresh Database", lambda: db_create(verbose)),
         ("Validate Schema", lambda: db_validate(verbose)),
+        ("Numeric Truncation", lambda: db_numeric_truncation(verbose)),
         ("Populate Mock Data", lambda: db_populate(verbose, force=True)),  # Use force in 'all' mode
         ("FX Rates Persistence", lambda: db_fx_rates(verbose)),
         ]
@@ -467,7 +474,6 @@ def run_all_tests(verbose: bool = False) -> bool:
             print_info("Fix the failing tests before continuing")
             break
 
-
     # Global Summary
     print_section("Complete Test Suite Summary")
     passed = sum(1 for _, success in results if success)
@@ -614,28 +620,32 @@ These tests operate directly on the SQLite database file:
   • Tests schema, constraints, data persistence
 
 Test commands:
-  create    - Delete existing DB and create fresh from migrations
-              📋 Prerequisites: None - this is the first test to run
+  create            - Delete existing DB and create fresh from migrations
+                      📋 Prerequisites: None - this is the first test to run
               
-  validate  - Verify all tables, constraints, indexes, foreign keys
-              📋 Prerequisites: Database created (run: db create)
+  validate          - Verify all tables, constraints, indexes, foreign keys
+                      📋 Prerequisites: Database created (run: db create)
               
-  populate  - Populate database with MOCK DATA for testing/frontend dev
-              📋 Prerequisites: Database created (run: db create)
-              💡 Use --force to delete existing data and recreate
+  numeric-truncation - Test Numeric column truncation for ALL tables
+                      📋 Prerequisites: Database created (run: db create)
+                      💡 Tests helper functions and database precision handling
               
-  fx-rates  - Test FX rates persistence (fetch from ECB & persist)
-              📋 Prerequisites: External ECB API working (run: external ecb)
-              💡 Can run on database with existing data (uses UPSERT)
+  populate          - Populate database with MOCK DATA for testing/frontend dev
+                      📋 Prerequisites: Database created (run: db create)
+                      💡 Use --force to delete existing data and recreate
               
-  all       - Run all DB tests (create → validate → populate → fx-rates)
+  fx-rates          - Test FX rates persistence (fetch from ECB & persist)
+                      📋 Prerequisites: External ECB API working (run: external ecb)
+                      💡 Can run on database with existing data (uses UPSERT)
+              
+  all               - Run all DB tests (create → validate → numeric-truncation → populate → fx-rates)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
     db_parser.add_argument(
         "action",
-        choices=["create", "validate", "fx-rates", "populate", "all"],
+        choices=["create", "validate", "numeric-truncation", "fx-rates", "populate", "all"],
         help="Database test to run"
         )
 
@@ -768,6 +778,8 @@ def main():
             success = db_create(verbose=verbose)
         elif args.action == "validate":
             success = db_validate(verbose=verbose)
+        elif args.action == "numeric-truncation":
+            success = db_numeric_truncation(verbose=verbose)
         elif args.action == "fx-rates":
             success = db_fx_rates(verbose=verbose)
         elif args.action == "populate":
