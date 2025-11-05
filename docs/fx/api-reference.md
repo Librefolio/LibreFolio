@@ -30,7 +30,7 @@ curl "http://localhost:8000/api/v1/fx/currencies?provider=ECB"
 Fetch and store exchange rates for specific currencies and date range:
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-01&end=2025-01-31&currencies=USD,GBP,JPY"
+curl -X POST "http://localhost:8000/api/v1/fx/sync/bulk?start=2025-01-01&end=2025-01-31&currencies=USD,GBP,JPY"
 ```
 
 **What this does**: 
@@ -49,7 +49,7 @@ curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-01&end=2025-01-
 Convert an amount from one currency to another:
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/fx/convert" \
+curl -X POST "http://localhost:8000/api/v1/fx/convert/bulk" \
   -H "Content-Type: application/json" \
   -d '{
     "conversions": [{
@@ -75,7 +75,7 @@ curl -X POST "http://localhost:8000/api/v1/fx/convert" \
 Fetch rates using USD as base instead of EUR:
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-01&end=2025-01-31&currencies=EUR,GBP&provider=FED"
+curl -X POST "http://localhost:8000/api/v1/fx/sync/bulk?start=2025-01-01&end=2025-01-31&currencies=EUR,GBP&provider=FED"
 ```
 
 **What this does**: Same as Step 2, but uses Federal Reserve (USD base) instead of ECB (EUR base).
@@ -185,16 +185,16 @@ Synchronize FX rates from a provider for specified date range and currencies.
 
 ```bash
 # Sync USD and GBP rates from ECB for January 2025
-curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-01&end=2025-01-31&currencies=USD,GBP"
+curl -X POST "http://localhost:8000/api/v1/fx/sync/bulk?start=2025-01-01&end=2025-01-31&currencies=USD,GBP"
 
 # Sync from Federal Reserve (USD base)
-curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-01&end=2025-01-31&currencies=EUR,GBP&provider=FED"
+curl -X POST "http://localhost:8000/api/v1/fx/sync/bulk?start=2025-01-01&end=2025-01-31&currencies=EUR,GBP&provider=FED"
 
 # Sync from Swiss National Bank (includes multi-unit currencies)
-curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-01&end=2025-01-31&currencies=USD,EUR,JPY&provider=SNB"
+curl -X POST "http://localhost:8000/api/v1/fx/sync/bulk?start=2025-01-01&end=2025-01-31&currencies=USD,EUR,JPY&provider=SNB"
 
 # Multi-base provider with explicit base (future)
-curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-01&end=2025-01-31&currencies=JPY,CHF&provider=MULTI&base_currency=EUR"
+curl -X POST "http://localhost:8000/api/v1/fx/sync/bulk?start=2025-01-01&end=2025-01-31&currencies=JPY,CHF&provider=MULTI&base_currency=EUR"
 ```
 
 #### Behavior
@@ -321,7 +321,7 @@ Convert amount between currencies using stored rates.
 
 ```bash
 # Single conversion
-curl -X POST "http://localhost:8000/api/v1/fx/convert" \
+curl -X POST "http://localhost:8000/api/v1/fx/convert/bulk" \
   -H "Content-Type: application/json" \
   -d '{
     "conversions": [{
@@ -333,7 +333,7 @@ curl -X POST "http://localhost:8000/api/v1/fx/convert" \
   }'
 
 # Multiple conversions (batch)
-curl -X POST "http://localhost:8000/api/v1/fx/convert" \
+curl -X POST "http://localhost:8000/api/v1/fx/convert/bulk" \
   -H "Content-Type: application/json" \
   -d '{
     "conversions": [
@@ -344,7 +344,7 @@ curl -X POST "http://localhost:8000/api/v1/fx/convert" \
   }'
 
 # Conversion without date (uses today)
-curl -X POST "http://localhost:8000/api/v1/fx/convert" \
+curl -X POST "http://localhost:8000/api/v1/fx/convert/bulk" \
   -H "Content-Type: application/json" \
   -d '{
     "conversions": [{
@@ -535,13 +535,13 @@ However, be aware of provider API limits:
 **Daily Sync** (recommended):
 ```bash
 # Every day at 9 AM UTC, sync yesterday's rates
-curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-14&end=2025-01-14&currencies=USD,GBP,JPY,CHF"
+curl -X POST "http://localhost:8000/api/v1/fx/sync/bulk?start=2025-01-14&end=2025-01-14&currencies=USD,GBP,JPY,CHF"
 ```
 
 **Initial Backfill**:
 ```bash
 # Sync last 30 days for all major currencies
-curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-01&end=2025-01-30&currencies=USD,GBP,JPY,CHF,CAD,AUD"
+curl -X POST "http://localhost:8000/api/v1/fx/sync/bulk?start=2025-01-01&end=2025-01-30&currencies=USD,GBP,JPY,CHF,CAD,AUD"
 ```
 
 ### 2. Currency Selection
@@ -559,7 +559,7 @@ curl -X POST "http://localhost:8000/api/v1/fx/sync?start=2025-01-01&end=2025-01-
 Always check for errors in batch operations:
 
 ```javascript
-const response = await fetch('/api/v1/fx/convert', {
+const response = await fetch('/api/v1/fx/convert/bulk', {
   method: 'POST',
   body: JSON.stringify({ conversions: [...] })
 });
