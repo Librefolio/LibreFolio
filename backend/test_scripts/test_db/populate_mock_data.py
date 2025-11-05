@@ -29,6 +29,9 @@ from backend.test_scripts.test_db_config import setup_test_database, initialize_
 
 setup_test_database()
 
+# Get database path from config
+from backend.app.config import get_settings
+
 import argparse
 import json
 import sys
@@ -36,7 +39,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 
 from backend.app.db import (
     sync_engine as engine,  # Use sync engine for this script
@@ -55,6 +58,45 @@ from backend.app.db import (
     CashMovementType,
     )
 from backend.app.services.fx import FXProviderFactory
+
+
+def cleanup_all_tables(session: Session):
+    """Delete all existing data from all tables (in correct order for FK constraints)."""
+    print("\n🗑️  Cleaning up existing data...")
+    print("-" * 60)
+
+    try:
+        # Delete in order: child tables first, then parent tables
+        # This respects foreign key constraints
+        tables_to_clean = [
+            CashMovement,
+            Transaction,
+            PriceHistory,
+            FxRate,
+            FxCurrencyPairSource,
+            CashAccount,
+            Asset,
+            Broker,
+        ]
+
+        for model in tables_to_clean:
+            # Count existing rows
+            count_before = len(session.exec(select(model)).all())
+
+            if count_before > 0:
+                # Delete all rows from this table
+                session.exec(delete(model))
+                print(f"  ✅ Cleared {model.__tablename__} ({count_before} rows)")
+            else:
+                print(f"  ℹ️  {model.__tablename__} already empty")
+
+        session.commit()
+        print("  ✅ Cleanup completed\n")
+
+    except Exception as e:
+        print(f"  ⚠️  Cleanup error: {e}")
+        session.rollback()
+        raise
 
 
 def populate_brokers(session: Session):
@@ -606,7 +648,7 @@ def populate_fx_currency_pair_sources(session: Session):
     """
     print("\n🔧 Creating FX Provider Configuration...")
     print("-" * 60)
-    
+
     # Get all registered providers
     try:
         available_providers = FXProviderFactory.get_all_providers()
@@ -635,7 +677,7 @@ def populate_fx_currency_pair_sources(session: Session):
         ("EUR", "JPY"),  # Euro / Japanese Yen
         ("CAD", "EUR"),  # Canadian Dollar / Euro (inverted)
         ("AUD", "EUR"),  # Australian Dollar / Euro (inverted)
-    ]
+        ]
 
     for base, quote in eur_pairs:
         pair_source = FxCurrencyPairSource(
@@ -643,7 +685,7 @@ def populate_fx_currency_pair_sources(session: Session):
             quote=quote,
             provider_code="ECB",
             priority=1  # Primary source
-        )
+            )
         session.add(pair_source)
         print(f"  ✅ {base}/{quote} → ECB (priority=1)")
 
@@ -666,7 +708,7 @@ def check_existing_data(session: Session) -> tuple[bool, dict]:
         'price_history': len(session.exec(select(PriceHistory)).all()),
         'fx_rates': len(session.exec(select(FxRate)).all()),
         'fx_pair_sources': len(session.exec(select(FxCurrencyPairSource)).all()),
-    }
+        }
 
     has_data = any(count > 0 for count in counts.values())
     return has_data, counts
@@ -677,7 +719,7 @@ def main():
     # Parse arguments
     parser = argparse.ArgumentParser(description='Populate database with mock data')
     parser.add_argument('--force', action='store_true',
-                       help='Delete existing database and create fresh one')
+                        help='Delete existing database and create fresh one')
     args = parser.parse_args()
 
     print("=" * 60)
@@ -686,8 +728,6 @@ def main():
     print("\n⚠️  Populating database with MOCK DATA for testing...")
     print("This data is for development/testing purposes only.\n")
 
-    # Get database path from config
-    from backend.app.config import get_settings
     settings = get_settings()
     # Extract path from sqlite URL
     db_url = settings.TEST_DATABASE_URL if 'test' in sys.argv[0] or 'TEST' in str(Path.cwd()) else settings.DATABASE_URL
@@ -731,6 +771,9 @@ def main():
 
     with Session(engine) as session:
         try:
+            # Clean up any existing data (migrations might have created some)
+            cleanup_all_tables(session)
+
             populate_brokers(session)
             populate_assets(session)
             populate_cash_accounts(session)

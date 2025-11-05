@@ -29,17 +29,16 @@ from backend.test_scripts.test_utils import (
     print_test_header,
     print_warning,
     exit_with_result,
-)
-
+    )
 
 # Expected reasonable ranges for multi-unit currencies
 # Format: {currency: (min, max)} where values are per 1 USD
 REASONABLE_RANGES = {
-    'JPY': (Decimal("100"), Decimal("200")),   # 1 USD = 100-200 JPY (typical)
-    'SEK': (Decimal("8"), Decimal("15")),      # 1 USD = 8-15 SEK (typical)
-    'NOK': (Decimal("8"), Decimal("15")),      # 1 USD = 8-15 NOK (typical)
-    'DKK': (Decimal("6"), Decimal("10")),      # 1 USD = 6-10 DKK (typical)
-}
+    'JPY': (Decimal("100"), Decimal("200")),  # 1 USD = 100-200 JPY (typical)
+    'SEK': (Decimal("8"), Decimal("15")),  # 1 USD = 8-15 SEK (typical)
+    'NOK': (Decimal("8"), Decimal("15")),  # 1 USD = 8-15 NOK (typical)
+    'DKK': (Decimal("6"), Decimal("10")),  # 1 USD = 6-10 DKK (typical)
+    }
 
 
 def is_rate_reasonable(currency: str, rate: Decimal, base_currency: str) -> tuple[bool, str]:
@@ -164,7 +163,7 @@ async def test_multi_unit_rates(provider_code: str) -> bool:
 
             is_reasonable, explanation = is_rate_reasonable(
                 currency, rate, provider.base_currency
-            )
+                )
 
             if is_reasonable:
                 print_success(f"  ✓ {currency}: {rate:.2f} per {provider.base_currency} - {explanation}")
@@ -318,4 +317,3 @@ The code must handle this correctly:
 
 if __name__ == "__main__":
     asyncio.run(main())
-

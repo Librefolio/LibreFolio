@@ -5,6 +5,7 @@ Handles SQLite connection and session lifecycle with async support.
 from pathlib import Path
 from typing import AsyncGenerator
 
+from sqlalchemy import create_engine
 from sqlalchemy import event, Engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.pool import NullPool
@@ -46,8 +47,7 @@ def get_sync_engine():
         if not db_path.startswith("/"):  # relative path
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import NullPool
+
 
     engine = create_engine(
         db_url,

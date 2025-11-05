@@ -53,14 +53,14 @@ async def setup_mock_fx_rates(session):
         ("EUR", "GBP", Decimal("0.8392")),  # 1 EUR = 0.8392 GBP
         ("CHF", "EUR", Decimal("1.0650")),  # 1 CHF = 1.0650 EUR
         ("EUR", "JPY", Decimal("163.45")),  # 1 EUR = 163.45 JPY
-    ]
+        ]
 
     # Create rates for multiple dates to test date handling
     dates_to_create = [
         date.today(),
         date.today() - timedelta(days=1),  # Yesterday
         date.today() - timedelta(days=7),  # 7 days ago
-    ]
+        ]
 
     inserted_count = 0
 
@@ -78,7 +78,7 @@ async def setup_mock_fx_rates(session):
                 rate=adjusted_rate,
                 source="MOCK",
                 fetched_at=func.current_timestamp()
-            )
+                )
 
             # UPSERT: update if exists, insert if not
             upsert_stmt = stmt.on_conflict_do_update(
@@ -87,8 +87,8 @@ async def setup_mock_fx_rates(session):
                     'rate': stmt.excluded.rate,
                     'source': stmt.excluded.source,
                     'fetched_at': func.current_timestamp()
-                }
-            )
+                    }
+                )
 
             await session.execute(upsert_stmt)
             inserted_count += 1
@@ -310,7 +310,7 @@ async def test_backward_fill():
 
         converted, actual_date, backward_filled = await convert(
             session, amount, "EUR", "USD", rate_record.date, return_rate_info=True
-        )
+            )
 
         if backward_filled:
             print_error("Backward-fill should not be applied for exact date match")
@@ -325,7 +325,7 @@ async def test_backward_fill():
 
         converted, actual_date, backward_filled = await convert(
             session, amount, "EUR", "USD", future_date, return_rate_info=True
-        )
+            )
 
         if not backward_filled:
             print_error("Backward-fill should be applied for future date")
@@ -366,7 +366,7 @@ async def test_missing_rate_error():
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
-        ).order_by(FxRate.date.asc()).limit(1)
+            ).order_by(FxRate.date.asc()).limit(1)
 
         result = await session.execute(stmt)
         oldest_rate = result.scalars().first()
@@ -401,7 +401,7 @@ async def test_missing_rate_error():
         try:
             converted, actual_date, backward_filled = await convert(
                 session, amount, "EUR", "USD", old_but_valid_date, return_rate_info=True
-            )
+                )
 
             if not backward_filled:
                 print_error("Should use backward-fill for old date")
@@ -429,7 +429,7 @@ async def test_bulk_conversions_single():
         stmt = select(FxRate).where(
             FxRate.base == "EUR",
             FxRate.quote == "USD"
-        ).order_by(FxRate.date.desc()).limit(1)
+            ).order_by(FxRate.date.desc()).limit(1)
 
         result = await session.execute(stmt)
         rate_record = result.scalars().first()
@@ -446,7 +446,7 @@ async def test_bulk_conversions_single():
             session,
             [(amount, "EUR", "USD", rate_record.date)],
             raise_on_error=True
-        )
+            )
 
         if len(results) != 1:
             print_error(f"Expected 1 result, got {len(results)}")
@@ -482,7 +482,7 @@ async def test_bulk_conversions_multiple():
             (amount, "EUR", "USD", test_date),
             (amount, "EUR", "GBP", test_date),
             (amount, "CHF", "EUR", test_date),
-        ]
+            ]
 
         print_info("Testing 3 conversions in single bulk call")
 
@@ -520,7 +520,7 @@ async def test_bulk_partial_failure():
             (amount, "EUR", "USD", test_date),  # Valid
             (amount, "XXX", "EUR", test_date),  # Invalid currency
             (amount, "EUR", "GBP", test_date),  # Valid
-        ]
+            ]
 
         print_info("Testing 3 conversions: 2 valid, 1 invalid")
 
@@ -570,7 +570,7 @@ async def test_bulk_all_failures():
             (amount, "XXX", "EUR", test_date),
             (amount, "YYY", "USD", test_date),
             (amount, "ZZZ", "GBP", test_date),
-        ]
+            ]
 
         print_info("Testing 3 conversions: all invalid")
 
@@ -612,7 +612,7 @@ async def test_bulk_raise_on_error():
             (amount, "EUR", "USD", test_date),  # Valid
             (amount, "XXX", "EUR", test_date),  # Invalid - should raise here
             (amount, "EUR", "GBP", test_date),  # Valid but should not be reached
-        ]
+            ]
 
         print_info("Testing raise_on_error=True with invalid second item")
 
@@ -624,7 +624,7 @@ async def test_bulk_raise_on_error():
             error_msg = str(e)
             print_success("✓ Correctly raised RateNotFoundError")
             print_info(f"  Error: {error_msg[:80]}...")
-            
+
             # Verify it mentions index
             if "index 1" in error_msg.lower() or "conversion 1" in error_msg.lower():
                 print_success("✓ Error message includes failing index")
@@ -659,7 +659,6 @@ Note: Mock FX rates are automatically inserted for testing.""",
     print_info("Initializing test database...")
     if not initialize_test_database(print_info):
         return False
-
 
     # Setup mock FX rates
     engine = get_async_engine()

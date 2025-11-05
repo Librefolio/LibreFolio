@@ -98,7 +98,7 @@ def discover_numeric_columns():
                         'column_name': column_name,
                         'precision': column.type.precision,
                         'scale': column.type.scale
-                    })
+                        })
 
     return numeric_columns
 
@@ -208,7 +208,7 @@ async def test_database_truncation():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote
-            )
+                )
             result = await session.execute(cleanup_stmt)
             existing = result.scalar_one_or_none()
             if existing:
@@ -223,7 +223,7 @@ async def test_database_truncation():
                 rate=test_value,  # Insert with extra precision
                 source=source,
                 fetched_at=datetime.now(timezone.utc)
-            )
+                )
             session.add(test_rate)
             await session.commit()
 
@@ -232,7 +232,7 @@ async def test_database_truncation():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote
-            )
+                )
             result = await session.execute(stmt)
             stored_rate = result.scalar_one()
 
@@ -255,7 +255,7 @@ async def test_database_truncation():
                     models.FxRate.date == test_date,
                     models.FxRate.base == test_base,
                     models.FxRate.quote == test_quote
-                )
+                    )
                 result = await session.execute(cleanup_stmt)
                 stored_rate = result.scalar_one_or_none()
                 if stored_rate:
@@ -297,7 +297,7 @@ async def test_no_false_updates():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote
-            )
+                )
             result = await session.execute(cleanup_stmt)
             existing = result.scalar_one_or_none()
             if existing:
@@ -312,7 +312,7 @@ async def test_no_false_updates():
                 rate=test_value,
                 source=source,
                 fetched_at=datetime.now(timezone.utc)
-            )
+                )
             session.add(test_rate)
             await session.commit()
 
@@ -321,7 +321,7 @@ async def test_no_false_updates():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote
-            )
+                )
             result = await session.execute(stmt)
             stored_rate_1 = result.scalar_one()
             stored_value_1 = stored_rate_1.rate
@@ -380,7 +380,7 @@ async def test_no_false_updates():
                     models.FxRate.date == test_date,
                     models.FxRate.base == test_base,
                     models.FxRate.quote == test_quote
-                )
+                    )
                 result = await session.execute(cleanup_stmt)
                 stored_rate = result.scalar_one_or_none()
                 if stored_rate:
@@ -434,7 +434,7 @@ async def run_all_tests():
         "Helper Functions",
         "Database Truncation",
         "No False Updates"
-    ]
+        ]
 
     all_passed = all(results)
 
@@ -454,4 +454,3 @@ async def run_all_tests():
 if __name__ == "__main__":
     exit_code = asyncio.run(run_all_tests())
     sys.exit(exit_code)
-

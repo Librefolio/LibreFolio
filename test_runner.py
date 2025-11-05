@@ -22,6 +22,7 @@ Author: LibreFolio Contributors
 import argparse
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 
 # Setup test database configuration and get test database path
@@ -814,7 +815,6 @@ if __name__ == "__main__":
         sys.exit(130)
     except Exception as e:
         print(f"\n{Colors.RED}❌ Unexpected error: {e}{Colors.NC}")
-        import traceback
 
         traceback.print_exc()
         sys.exit(1)
