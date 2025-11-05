@@ -638,6 +638,302 @@ async with httpx.AsyncClient() as client:
 
 ---
 
+## 🔧 Advanced: Multi-Base Currency Providers
+
+### Overview
+
+Most providers support a **single base currency** (ECB=EUR, FED=USD, etc.). However, the system is ready for **multi-base providers** (e.g., commercial APIs that let you choose the base).
+
+### Single-Base vs Multi-Base
+
+**Single-Base Provider** (current):
+```python
+class ECBProvider(FXRateProvider):
+    @property
+    def base_currency(self) -> str:
+        return "EUR"  # Only EUR supported
+    
+    @property
+    def base_currencies(self) -> list[str]:
+        return ["EUR"]  # Default: single item
+```
+
+**Multi-Base Provider** (future):
+```python
+class HypotheticalMultiProvider(FXRateProvider):
+    @property
+    def base_currency(self) -> str:
+        return "EUR"  # Primary/default base
+    
+    @property
+    def base_currencies(self) -> list[str]:
+        return ["EUR", "USD", "GBP"]  # Multiple bases supported!
+```
+
+### Implementation Template
+
+```python
+class MultiBaseProvider(FXRateProvider):
+    """Example multi-base provider (hypothetical commercial API)."""
+    
+    BASE_URL = "https://api.example.com/rates"
+    API_KEY_REQUIRED = True
+    
+    @property
+    def code(self) -> str:
+        return "MULTI"
+    
+    @property
+    def name(self) -> str:
+        return "Multi-Base Commercial API"
+    
+    @property
+    def base_currency(self) -> str:
+        return "EUR"  # Default base
+    
+    @property
+    def base_currencies(self) -> list[str]:
+        return ["EUR", "USD", "GBP"]  # All supported bases
+    
+    @property
+    def multi_unit_currencies(self) -> set[str]:
+        return set()  # Usually not needed for commercial APIs
+    
+    async def get_supported_currencies(self) -> list[str]:
+        """Return all supported currencies (independent of base)."""
+        return ['EUR', 'USD', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD']
+    
+    async def fetch_rates(
+        self,
+        date_range: tuple[date, date],
+        currencies: list[str],
+        base_currency: str | None = None
+    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        """
+        Fetch rates with optional base selection.
+        
+        Args:
+            date_range: (start_date, end_date) inclusive
+            currencies: List of quote currencies to fetch
+            base_currency: Which base to use (EUR, USD, or GBP)
+                          If None, uses self.base_currency (EUR)
+        
+        Returns:
+            Dict mapping currency to list of (date, base, quote, rate) tuples
+        """
+        # Step 1: Determine which base to use
+        selected_base = base_currency or self.base_currency
+        
+        # Step 2: Validate base is supported
+        if selected_base not in self.base_currencies:
+            raise ValueError(
+                f"{self.name} does not support {selected_base} as base. "
+                f"Supported bases: {', '.join(self.base_currencies)}"
+            )
+        
+        logger.info(
+            f"Fetching rates from {self.name} with base={selected_base} "
+            f"for {len(currencies)} currencies"
+        )
+        
+        # Step 3: Build API request with base parameter
+        start_date, end_date = date_range
+        results = {}
+        
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                # API call with base parameter
+                response = await client.get(
+                    self.BASE_URL,
+                    params={
+                        "base": selected_base,
+                        "symbols": ",".join(currencies),
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                        "apikey": os.getenv("MULTI_API_KEY")  # From environment
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+            
+            # Step 4: Parse response and normalize to (date, base, quote, rate)
+            for currency in currencies:
+                if currency == selected_base:
+                    continue  # Skip identity pair
+                
+                rates_list = []
+                for date_str, rates in data.get("rates", {}).items():
+                    if currency in rates:
+                        obs_date = date.fromisoformat(date_str)
+                        rate = Decimal(str(rates[currency]))
+                        
+                        # Normalize to alphabetical order
+                        base, quote, normalized_rate = normalize_for_storage(
+                            selected_base, currency, rate
+                        )
+                        
+                        rates_list.append((obs_date, base, quote, normalized_rate))
+                
+                if rates_list:
+                    results[currency] = rates_list
+            
+            logger.info(f"Fetched {sum(len(v) for v in results.values())} rates")
+            return results
+            
+        except httpx.HTTPError as e:
+            raise FXServiceError(f"{self.name} API error: {e}")
+```
+
+### How Multi-Base Works
+
+**API call with base selection**:
+```bash
+# Fetch EUR-based rates
+curl ".../sync/bulk?currencies=JPY,CHF&provider=MULTI&base_currency=EUR"
+# Fetches: EUR/JPY, EUR/CHF
+
+# Fetch USD-based rates (different values!)
+curl ".../sync/bulk?currencies=JPY,CHF&provider=MULTI&base_currency=USD"
+# Fetches: USD/JPY, USD/CHF
+```
+
+**Backend behavior**:
+```python
+# User requests USD base
+provider = FXProviderFactory.get_provider('MULTI')
+rates = await provider.fetch_rates(
+    (date(2025, 1, 1), date(2025, 1, 31)),
+    ['JPY', 'CHF'],
+    base_currency='USD'  # ← Passed to fetch_rates()
+)
+
+# Provider validates USD is in base_currencies
+# Then calls API with base=USD parameter
+# Returns USD/JPY and USD/CHF rates
+```
+
+### Best Practices
+
+**1. Validate base_currency early**:
+```python
+if base_currency and base_currency not in self.base_currencies:
+    raise ValueError(f"Unsupported base: {base_currency}")
+```
+
+**2. Use default base if not specified**:
+```python
+selected_base = base_currency or self.base_currency
+```
+
+**3. Document API requirements**:
+```python
+class MyProvider(FXRateProvider):
+    """
+    Multi-base provider requiring API key.
+    
+    Environment Variables:
+        MY_PROVIDER_API_KEY: API key (required)
+    
+    Supported Bases:
+        EUR, USD, GBP
+    """
+```
+
+**4. Handle API base parameter variations**:
+```python
+# Some APIs use 'base', others 'from' or 'source'
+params = {
+    "base": selected_base,  # or "from", "source", etc.
+    "symbols": ",".join(currencies)
+}
+```
+
+### Testing Multi-Base Providers
+
+```bash
+# Test with default base
+./test_runner.py -v external your-provider
+
+# Test with explicit base (requires manual test script)
+# backend/test_scripts/test_external/test_your_provider.py
+```
+
+**Manual test**:
+```python
+from backend.app.services.fx import FXProviderFactory
+from datetime import date
+
+provider = FXProviderFactory.get_provider('MULTI')
+
+# Test each supported base
+for base in provider.base_currencies:
+    print(f"\nTesting base={base}")
+    rates = await provider.fetch_rates(
+        (date(2025, 1, 1), date(2025, 1, 3)),
+        ['JPY', 'CHF'],
+        base_currency=base
+    )
+    print(f"  Fetched {sum(len(v) for v in rates.values())} rates")
+```
+
+### Use Cases
+
+**1. Portfolio optimization**: Choose base closest to your holdings
+```bash
+# European portfolio
+curl ".../sync/bulk?currencies=USD,GBP,CHF&provider=MULTI&base_currency=EUR"
+
+# US portfolio
+curl ".../sync/bulk?currencies=EUR,GBP,CHF&provider=MULTI&base_currency=USD"
+```
+
+**2. Historical analysis**: Compare rates from different perspectives
+```python
+# EUR perspective
+eur_based = await fetch_rates(..., base_currency='EUR')
+
+# USD perspective (different values!)
+usd_based = await fetch_rates(..., base_currency='USD')
+```
+
+**3. API cost optimization**: Some APIs charge per base currency
+```bash
+# Fetch all EUR-based pairs in one call
+curl ".../sync/bulk?currencies=USD,GBP,JPY,CHF&base_currency=EUR"
+# More efficient than separate calls per base
+```
+
+### Common Pitfalls
+
+❌ **Don't** forget to validate base:
+```python
+# BAD: No validation
+async def fetch_rates(self, ..., base_currency=None):
+    # API call with base_currency (could be invalid!)
+```
+
+✅ **Do** validate early:
+```python
+# GOOD: Validate first
+if base_currency and base_currency not in self.base_currencies:
+    raise ValueError(...)
+```
+
+❌ **Don't** assume base is always provided:
+```python
+# BAD: Assumes base_currency is always set
+url = f"{BASE_URL}?base={base_currency}"  # Could be None!
+```
+
+✅ **Do** use default:
+```python
+# GOOD: Fallback to default
+selected_base = base_currency or self.base_currency
+url = f"{BASE_URL}?base={selected_base}"
+```
+
+---
+
 ## 💡 Need Help?
 
 1. Check existing provider implementations in `backend/app/services/fx_providers/`

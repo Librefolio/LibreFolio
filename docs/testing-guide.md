@@ -511,15 +511,46 @@ Results: 10/10 tests passed
 - Auto-start and auto-stop (clean test environment)
 - Test database isolated from production
 
+**Test Coverage (11 comprehensive tests):**
+
+1. ✅ **GET /currencies** - List currencies from provider
+2. ✅ **GET /providers** - List available providers (ECB, FED, BOE, SNB)
+3. ✅ **Pair Sources CRUD** - Configure currency pairs with providers
+   - GET /pair-sources (list configurations)
+   - POST /pair-sources/bulk (create/update)
+   - DELETE /pair-sources/bulk (remove configurations)
+4. ✅ **POST /sync/bulk** - Sync rates with provider parameter
+   - Test 4.1: Explicit provider mode
+   - Test 4.2: Idempotency verification
+   - Test 4.3: **Auto-configuration mode** (no provider specified)
+   - Test 4.4: **Fallback logic** (multiple priorities)
+   - Test 4.5: **Inverse pairs** (EUR/USD vs USD/EUR)
+5. ✅ **POST /convert/bulk** - Single date conversions
+6. ✅ **POST /rate-set/bulk** - Manual rate insert/update
+7. ✅ **Backward-fill warning** - Uses past rates when needed
+8. ✅ **POST /convert/bulk** - Bulk/range conversions
+9. ✅ **POST /rate-set/bulk** - Bulk rate upserts
+10. ✅ **DELETE /rate-set/bulk** - Delete rates by pair and date range
+11. ✅ **Invalid request handling** - Comprehensive validation
+
 **Test Order:**
 Tests run in optimal order:
 1. Basic endpoints (currencies, providers)
 2. Configuration (pair-sources) ← Creates setup for auto-config
-3. Sync (uses configuration from step 2)
-4. Conversions (use rates from sync)
-5. Error handling (comprehensive validation)
+3. Sync (explicit + auto-config + fallback + inverse pairs)
+4. Conversions (single + bulk + range)
+5. Rate management (manual insert + delete)
+6. Error handling (comprehensive validation)
 
-[//]: # (TODO: quando ci saranno altri api test metterli qui e poi documentare l'all, che per ora ha poco senso essendo 1 solo file)
+**What Test 4 Validates:**
+- **4.3 Auto-Config**: System selects provider from fx_currency_pair_sources table
+- **4.4 Fallback**: Retries with priority=2 if priority=1 fails
+- **4.5 Inverse Pairs**: EUR/USD (ECB) + USD/EUR (FED) can coexist
+
+**Prerequisites for Test 4.3-4.5:**
+- Requires fx_currency_pair_sources table (created in migrations)
+- Test automatically configures pairs before testing
+- Isolated from other tests (self-contained setup/cleanup)
 
 ---
 
@@ -546,7 +577,7 @@ python test_runner.py -v all
 ✅ External Services (2/2 tests passed)
 ✅ Database Layer (5/5 tests passed)
 ✅ Backend Services (1/1 tests passed)
-✅ API Tests (10/10 tests passed)
+✅ API Tests (11/11 tests passed)
 
 🎉 ALL TESTS PASSED! 🎉
 ```
@@ -558,11 +589,33 @@ python test_runner.py -v all
 | Level | Category | Tests | What You Verified |
 |-------|----------|-------|-------------------|
 | 1 | **External** | 2 | 4 FX providers accessible (ECB, FED, BOE, SNB), multi-unit handling |
-| 2 | **Database** | 5 | Schema, persistence, constraints, rate inversion, numeric truncation |
-| 3 | **Services** | 1 | Business logic, calculations, bulk conversions |
-| 4 | **API** | 1 | 10 HTTP endpoints, provider management, configuration |
+| 2 | **Database** | 5 | Schema, persistence, constraints, truncation, mock population |
+| 3 | **Services** | 1 | Business logic, calculations, bulk conversions, backward-fill |
+| 4 | **API** | 1 | 11 HTTP endpoints (incl. auto-config, fallback, inverse pairs, delete) |
 
-**Total:** 9 test suites, ~50+ individual tests
+**Total:** 9 test suites, ~60+ individual tests
+
+### Detailed Test Breakdown
+
+**Database (5 test suites, 5/5 passing)**:
+1. Create - Fresh database from migrations
+2. Validate - Schema, FKs, constraints (9 sub-tests)
+3. Numeric Truncation - 12 columns validated (3 sub-tests)
+4. Populate - Mock data insertion (with cleanup)
+5. FX Rates - Persistence and normalization (6 sub-tests)
+
+**API (1 test suite, 11/11 passing)**:
+1. GET /currencies
+2. GET /providers
+3. Pair Sources CRUD (GET, POST, DELETE)
+4. POST /sync/bulk (explicit provider)
+5. POST /sync/bulk (auto-config) ← **NEW**
+6. POST /sync/bulk (fallback logic) ← **NEW**
+7. POST /sync/bulk (inverse pairs) ← **NEW**
+8. POST /convert/bulk (single + range)
+9. POST /rate-set/bulk (manual rates)
+10. DELETE /rate-set/bulk (delete rates) ← **NEW**
+11. Invalid request handling (9 sub-tests)
 
 ---
 
