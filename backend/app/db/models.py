@@ -512,22 +512,36 @@ class FxCurrencyPairSource(SQLModel, table=True):
     When syncing rates, the system queries this table to determine
     which provider (ECB, FED, BOE, etc.) should be used for each pair.
 
+    Important: Pair direction is semantically significant!
+    - EUR/USD (ECB base) ≠ USD/EUR (FED base)
+    - Both directions can coexist with DIFFERENT priorities
+
     Examples:
-    - EUR/USD → ECB (European Central Bank provides EUR rates)
-    - USD/JPY → FED (Federal Reserve provides USD rates)
-    - GBP/CHF → BOE (Bank of England provides GBP rates)
+    - EUR/USD priority=1 → ECB (European Central Bank, EUR base)
+    - USD/EUR priority=2 → FED (Federal Reserve, USD base, fallback)
+    - GBP/USD priority=1 → BOE (Bank of England, GBP base)
+    - USD/GBP priority=2 → FED (Federal Reserve, USD base, fallback)
 
     Priority field allows fallback providers:
     - priority=1: Primary source (used by default)
     - priority=2: Fallback source (if primary fails)
+    - priority=3+: Additional fallbacks
 
-    Important: Currency pairs are stored alphabetically (base < quote)
-    to match the fx_rates table convention.
+    Validation Constraint (enforced in API, not DB):
+    Inverse pairs (e.g., EUR/USD and USD/EUR) MUST have different priorities.
+    - ✅ OK: EUR/USD priority=1 + USD/EUR priority=2
+    - ❌ CONFLICT: EUR/USD priority=1 + USD/EUR priority=1
+
+    This constraint is validated in POST /fx/pair-sources/bulk endpoint
+    to provide better error messages than a DB constraint would.
+
+    Note: Unlike fx_rates table, this table does NOT enforce alphabetical ordering.
+    The pair direction matters for selecting the correct provider's base currency.
     """
     __tablename__ = "fx_currency_pair_sources"
     __table_args__ = (
         UniqueConstraint("base", "quote", "priority", name="uq_pair_source_base_quote_priority"),
-        CheckConstraint("base < quote", name="ck_pair_source_base_less_than_quote"),
+        # Note: NO CHECK constraint for "base < quote" - direction is semantically significant
         Index("idx_pair_source_base_quote", "base", "quote"),
         )
 

@@ -32,7 +32,7 @@ from backend.app.db.models import (
     ValuationModel,
     TransactionType,
     CashMovementType,
-)
+    )
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints
 
 
@@ -48,7 +48,7 @@ def test_tables_exist():
 
     # Get expected tables from SQLModel metadata (dynamically from models)
     expected_tables = set(SQLModel.metadata.tables.keys())
-    
+
     # Add alembic_version (created by Alembic, not in models)
     expected_tables.add('alembic_version')
 
@@ -81,7 +81,7 @@ def test_unique_constraints():
     they exist in the database.
     """
     inspector = inspect(engine)
-    
+
     # Get tables with unique constraints from models
     tables_with_unique = []
     for table_name, table in SQLModel.metadata.tables.items():
@@ -89,7 +89,7 @@ def test_unique_constraints():
         if unique_constraints:
             tables_with_unique.append((table_name, len(unique_constraints)))
             print(f"  {table_name}: {len(unique_constraints)} unique constraint(s) expected")
-    
+
     # Verify in database
     all_ok = True
     for table_name, expected_count in tables_with_unique:
@@ -112,19 +112,19 @@ def test_foreign_keys():
     they exist in the database.
     """
     inspector = inspect(engine)
-    
+
     # Get tables with foreign keys from models
     tables_with_fks = []
     for table_name, table in SQLModel.metadata.tables.items():
         fk_constraints = [c for c in table.constraints if isinstance(c, ForeignKeyConstraint)]
         fk_count = len(fk_constraints)
         tables_with_fks.append((table_name, fk_count))
-    
+
     all_ok = True
     for table_name, expected_count in sorted(tables_with_fks):
         fks = inspector.get_foreign_keys(table_name)
         actual_count = len(fks)
-        
+
         if actual_count != expected_count:
             print(f"  ⚠️  {table_name}: expected {expected_count} FK(s), found {actual_count}")
             all_ok = False
@@ -143,7 +143,7 @@ def test_indexes():
     in the database.
     """
     inspector = inspect(engine)
-    
+
     # Get tables with indexes from models
     tables_with_indexes = []
     for table_name, table in SQLModel.metadata.tables.items():
@@ -151,14 +151,14 @@ def test_indexes():
         index_count = len(table.indexes)
         if index_count > 0:
             tables_with_indexes.append((table_name, index_count, [idx.name for idx in table.indexes]))
-    
+
     all_ok = True
     for table_name, expected_count, expected_names in sorted(tables_with_indexes):
         db_indexes = inspector.get_indexes(table_name)
         db_index_names = [idx['name'] for idx in db_indexes if idx.get('name')]
-        
+
         print(f"  {table_name}: {len(db_indexes)} index(es)")
-        
+
         # Check if expected indexes are present
         for expected_name in expected_names:
             if expected_name and expected_name not in db_index_names:

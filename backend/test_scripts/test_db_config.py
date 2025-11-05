@@ -12,6 +12,7 @@ from pathlib import Path
 
 # Import settings to get TEST_DATABASE_URL
 from backend.app.config import Settings
+from backend.app.main import ensure_database_exists
 
 # Get settings
 _settings = Settings()
@@ -38,10 +39,10 @@ def setup_test_database():
     """
     # Ensure database directory exists
     DB_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     # Set environment variable for test database (use URL from config)
     os.environ["DATABASE_URL"] = TEST_DATABASE_URL
-    
+
     return TEST_DB_PATH
 
 
@@ -120,9 +121,6 @@ def initialize_test_database(print_func=None):
     print_func(f"✅ Using test database: {db_url}")
 
     # Ensure database exists and is migrated
-    from backend.app.main import ensure_database_exists
     ensure_database_exists()
 
     return True
-
-

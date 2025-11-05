@@ -2,14 +2,17 @@
 FX (Foreign Exchange) API endpoints.
 Handles currency conversion and FX rate synchronization.
 """
+import logging
 from datetime import date
 from datetime import timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, delete as sql_delete
+from sqlmodel import select, delete as sql_delete, and_, or_
 
 from backend.app.db.models import FxCurrencyPairSource
 from backend.app.db.session import get_session
@@ -340,17 +343,17 @@ async def sync_rates(
             )
 
         else:
-            # AUTO-CONFIGURATION MODE: Use fx_currency_pair_sources
-            # Query configuration for each currency pair
-
-            # Get all configured pair sources (priority=1 only for now)
-            stmt = select(FxCurrencyPairSource).where(
-                FxCurrencyPairSource.priority == 1
+            # AUTO-CONFIGURATION MODE: Use fx_currency_pair_sources with fallback logic
+            # Query ALL configured pair sources (all priorities), ordered by priority ASC
+            stmt = select(FxCurrencyPairSource).order_by(
+                FxCurrencyPairSource.base,
+                FxCurrencyPairSource.quote,
+                FxCurrencyPairSource.priority
             )
             result = await session.execute(stmt)
-            pair_sources = result.scalars().all()
+            all_pair_sources = result.scalars().all()
 
-            if not pair_sources:
+            if not all_pair_sources:
                 raise HTTPException(
                     status_code=400,
                     detail="No currency pair sources configured. Please either: "
@@ -358,82 +361,118 @@ async def sync_rates(
                            "(2) configure pair sources via POST /fx/pair-sources/bulk"
                 )
 
-            # Build lookup: (base, quote) -> provider_code
-            # Note: pairs are stored alphabetically (base < quote)
-            config_lookup = {
-                (ps.base, ps.quote): ps.provider_code
-                for ps in pair_sources
-            }
+            # Build lookup: (base, quote) -> list of (provider_code, priority) ordered by priority
+            config_lookup = {}
+            for ps in all_pair_sources:
+                key = (ps.base, ps.quote)
+                if key not in config_lookup:
+                    config_lookup[key] = []
+                config_lookup[key].append((ps.provider_code, ps.priority))
 
-            # Determine which provider to use for each requested currency
-            # We need to find pairs that involve the requested currencies
-            # For simplicity, we'll group by provider and collect currencies
+            # For each configured pair, assign to its primary provider
+            # This handles inverse pairs correctly (EUR/USD → ECB, USD/EUR → FED)
+            provider_pairs = {}  # provider_code -> set of (base, quote) tuples
 
-            # For each requested currency, find which pairs involve it
-            # and check if we have configuration for those pairs
+            for (base, quote), providers_list in config_lookup.items():
+                # Use primary provider (priority=1 or lowest)
+                primary_provider = providers_list[0][0]
+
+                if primary_provider not in provider_pairs:
+                    provider_pairs[primary_provider] = set()
+
+                provider_pairs[primary_provider].add((base, quote))
+
+            # Convert pairs to currencies for each provider
+            provider_currencies = {}
+            for provider_code, pairs in provider_pairs.items():
+                currencies = set()
+                for base, quote in pairs:
+                    currencies.add(base)
+                    currencies.add(quote)
+                provider_currencies[provider_code] = currencies
+
+            # Check if ALL requested currencies are covered
+            all_configured_currencies = set()
+            for currencies in provider_currencies.values():
+                all_configured_currencies.update(currencies)
+
             missing_pairs = []
-            provider_currencies = {}  # provider_code -> set of currencies to fetch
-            
             for curr in currency_list:
-                # For simplicity, we look for any pair that involves this currency
-                # The provider will use its own base, and normalization will handle the rest
-                
-                # Find all configured pairs that involve this currency
-                found_config = False
-                for (base, quote), prov_code in config_lookup.items():
-                    if curr in (base, quote):
-                        # This pair involves our currency
-                        if prov_code not in provider_currencies:
-                            provider_currencies[prov_code] = set()
-                        
-                        # Add both currencies from the pair (provider will handle them)
-                        provider_currencies[prov_code].add(base)
-                        provider_currencies[prov_code].add(quote)
-                        found_config = True
-                        break  # Found a config for this currency
-                
-                if not found_config:
-                    # No configuration found for any pair involving this currency
+                if curr not in all_configured_currencies:
                     missing_pairs.append(curr)
             
-            # Error if some currencies have no configuration
             if missing_pairs:
                 raise HTTPException(
                     status_code=400,
                     detail=f"No configuration found for currencies: {', '.join(missing_pairs)}. "
-                           f"Please configure pair sources involving these currencies via POST /fx/pair-sources/bulk "
+                           f"Please configure pair sources via POST /fx/pair-sources/bulk "
                            f"or use explicit 'provider' parameter."
                 )
             
-            # Now call each provider for its currencies
-            # Each provider will use its own base_currency
+            # Execute sync with fallback logic
             total_changed = 0
             total_fetched = 0
             all_currencies_synced = set()
-            errors = []
-            
+            final_errors = []
+
+            # Group by provider and try each one (with fallbacks if configured)
             for provider_code, currencies_set in provider_currencies.items():
+                currencies_list = list(currencies_set)
+
+                # Try primary provider first
                 try:
-                    # Let provider use its own base_currency
-                    # The normalization will handle alphabetical ordering
                     result = await ensure_rates_multi_source(
                         session,
                         (start, end),
-                        list(currencies_set),
+                        currencies_list,
                         provider_code=provider_code,
-                        base_currency=None  # Let provider use its default base
+                        base_currency=None
                     )
                     total_changed += result['total_changed']
                     total_fetched += result['total_fetched']
                     all_currencies_synced.update(result['currencies_synced'])
-                except Exception as e:
-                    errors.append(f"Provider {provider_code} failed: {str(e)}")
 
-            # If all providers failed, raise error
-            if errors and not all_currencies_synced:
+                except FXServiceError as e:
+                    # Provider failed - try fallback providers if configured
+                    logger.warning(f"Provider {provider_code} (priority=1) failed: {str(e)}")
+
+                    # Find fallback providers for any pair in this currency set
+                    fallback_attempted = False
+                    for base, quote in [(c1, c2) for c1 in currencies_list for c2 in currencies_list if c1 < c2]:
+                        pair_key = (base, quote)
+                        if pair_key in config_lookup and len(config_lookup[pair_key]) > 1:
+                            # Has fallback providers (priority > 1)
+                            for fallback_provider, fallback_priority in config_lookup[pair_key][1:]:
+                                logger.info(f"Trying fallback provider {fallback_provider} (priority={fallback_priority}) for {base}/{quote}")
+                                fallback_attempted = True
+
+                                try:
+                                    result = await ensure_rates_multi_source(
+                                        session,
+                                        (start, end),
+                                        [base, quote],
+                                        provider_code=fallback_provider,
+                                        base_currency=None
+                                    )
+                                    total_changed += result['total_changed']
+                                    total_fetched += result['total_fetched']
+                                    all_currencies_synced.update(result['currencies_synced'])
+                                    logger.info(f"Fallback successful: {fallback_provider} provided {base}/{quote}")
+                                    break  # Success, no need to try more fallbacks for this pair
+
+                                except FXServiceError as fallback_e:
+                                    logger.warning(f"Fallback provider {fallback_provider} (priority={fallback_priority}) also failed: {str(fallback_e)}")
+                                    continue  # Try next fallback
+
+                    if not fallback_attempted:
+                        # No fallbacks configured, record error
+                        final_errors.append(f"Provider {provider_code} failed: {str(e)}")
+
+            # If all providers failed and no currencies synced, raise error
+            if final_errors and not all_currencies_synced:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"All providers failed: {'; '.join(errors)}"
+                    detail=f"All providers failed: {'; '.join(final_errors)}"
                 )
 
             return SyncResponse(
@@ -847,21 +886,41 @@ async def create_pair_sources_bulk(
         # Validate all providers exist
         available_providers = {p['code'] for p in FXProviderFactory.get_all_providers()}
 
+        # OPTIMIZATION: Batch query for inverse pairs conflict detection
+        # Build list of all inverse pairs to check in ONE query
+        inverse_checks = []
         for source in request.sources:
-            # Validate base < quote
-            if source.base >= source.quote:
-                results.append(PairSourceResult(
-                    success=False,
-                    action="error",
-                    base=source.base,
-                    quote=source.quote,
-                    provider_code=source.provider_code,
-                    priority=source.priority,
-                    message=f"Invalid pair: base ({source.base}) must be < quote ({source.quote}) alphabetically"
-                ))
-                error_count += 1
-                continue
+            # Inverse pair: swap base/quote
+            inverse_checks.append((source.quote.upper(), source.base.upper(), source.priority))
 
+        # Single batch query: check if ANY inverse pairs exist with SAME priority
+        if inverse_checks:
+            inverse_conditions = []
+            for inv_base, inv_quote, inv_priority in inverse_checks:
+                inverse_conditions.append(
+                    and_(
+                        FxCurrencyPairSource.base == inv_base,
+                        FxCurrencyPairSource.quote == inv_quote,
+                        FxCurrencyPairSource.priority == inv_priority
+                    )
+                )
+
+            inverse_stmt = select(
+                FxCurrencyPairSource.base,
+                FxCurrencyPairSource.quote,
+                FxCurrencyPairSource.priority
+            ).where(or_(*inverse_conditions))
+
+            inverse_result = await session.execute(inverse_stmt)
+            existing_inverses = {
+                (row.base, row.quote, row.priority)
+                for row in inverse_result.all()
+            }
+        else:
+            existing_inverses = set()
+
+        # Validate each source
+        for source in request.sources:
             # Validate provider exists
             if source.provider_code.upper() not in available_providers:
                 results.append(PairSourceResult(
@@ -872,6 +931,21 @@ async def create_pair_sources_bulk(
                     provider_code=source.provider_code,
                     priority=source.priority,
                     message=f"Unknown provider: {source.provider_code}"
+                ))
+                error_count += 1
+                continue
+
+            # Check for inverse pair conflict (same priority)
+            inverse_key = (source.quote.upper(), source.base.upper(), source.priority)
+            if inverse_key in existing_inverses:
+                results.append(PairSourceResult(
+                    success=False,
+                    action="error",
+                    base=source.base,
+                    quote=source.quote,
+                    provider_code=source.provider_code,
+                    priority=source.priority,
+                    message=f"Conflict: Inverse pair {source.quote}/{source.base} with priority={source.priority} already exists. Use different priority."
                 ))
                 error_count += 1
                 continue

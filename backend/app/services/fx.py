@@ -9,6 +9,7 @@ from datetime import date
 from decimal import Decimal
 from decimal import ROUND_DOWN
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select as sql_select, or_, and_
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.types import Numeric
@@ -1149,7 +1150,6 @@ async def delete_rates_bulk(
         ]
         results = await delete_rates_bulk(session, deletions)
     """
-    from sqlalchemy import delete as sql_delete, func as sql_func
 
     if not deletions:
         return []
@@ -1179,20 +1179,20 @@ async def delete_rates_bulk(
                 FxRate.quote == quote,
                 FxRate.date >= start_date,
                 FxRate.date <= end_date
-            )
+                )
         else:
             # Single date
             condition = and_(
                 FxRate.base == base,
                 FxRate.quote == quote,
                 FxRate.date == start_date
-            )
+                )
         all_conditions.append(condition)
 
     # SINGLE QUERY: Fetch all matching rates (id, base, quote, date)
     stmt = sql_select(FxRate.id, FxRate.base, FxRate.quote, FxRate.date).where(
         or_(*all_conditions)
-    )
+        )
     result = await session.execute(stmt)
     all_matching_rates = result.all()
 

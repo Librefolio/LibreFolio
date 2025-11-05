@@ -61,7 +61,7 @@ class ECBProvider(FXRateProvider):
             "CAD",  # Canadian Dollar
             "AUD",  # Australian Dollar
             "EUR",  # Euro (base currency)
-        ]
+            ]
 
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -79,7 +79,7 @@ class ECBProvider(FXRateProvider):
             "format": "jsondata",
             "detail": "dataonly",
             "lastNObservations": 1  # We only need structure, not all data
-        }
+            }
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -129,7 +129,7 @@ class ECBProvider(FXRateProvider):
         date_range: tuple[date, date],
         currencies: list[str],
         base_currency: str | None = None
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from ECB API for given date range and currencies.
 
@@ -151,7 +151,7 @@ class ECBProvider(FXRateProvider):
         if base_currency is not None and base_currency != "EUR":
             raise ValueError(
                 f"ECB provider only supports EUR as base currency, got {base_currency}"
-            )
+                )
 
         start_date, end_date = date_range
         results = {}
@@ -168,7 +168,7 @@ class ECBProvider(FXRateProvider):
                 "format": "jsondata",
                 "startPeriod": start_date.isoformat(),
                 "endPeriod": end_date.isoformat()
-            }
+                }
 
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
@@ -185,7 +185,7 @@ class ECBProvider(FXRateProvider):
                         logger.info(
                             f"No FX rates available for {currency} ({start_date} to {end_date}). "
                             f"This is normal for weekends/holidays when ECB doesn't publish rates."
-                        )
+                            )
                         results[currency] = []
                         continue
 
@@ -216,7 +216,7 @@ class ECBProvider(FXRateProvider):
                             for obs_idx, obs_value in obs_data.items():
                                 idx = int(obs_idx)
                                 rate_date_str = time_periods[idx]["id"]  # Format: "2025-01-01"
-                                
+
                                 # ECB gives: 1 EUR = X foreign currency
                                 # obs_value is array, first element is the rate
                                 # Return as (date, base, quote, rate)
@@ -239,4 +239,3 @@ class ECBProvider(FXRateProvider):
 
 # Auto-register provider on module import
 FXProviderFactory.register(ECBProvider)
-

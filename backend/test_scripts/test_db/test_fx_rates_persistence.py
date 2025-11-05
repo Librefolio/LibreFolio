@@ -48,6 +48,8 @@ from backend.test_scripts.test_utils import (
     print_warning,
     exit_with_result,
     )
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy import func
 
 
 async def test_fetch_and_persist_single_currency():
@@ -210,7 +212,7 @@ async def test_data_overwrite():
                 FxRate.date >= start_date,
                 FxRate.date <= end_date,
                 FxRate.source == "ECB"
-            ).order_by(FxRate.date.desc()).limit(1)
+                ).order_by(FxRate.date.desc()).limit(1)
             result = await session.execute(stmt)
             real_rate = result.scalars().first()
 
@@ -224,8 +226,6 @@ async def test_data_overwrite():
 
             # Step 2: Overwrite with fake rate
             print_step(2, "Overwrite with fake rate")
-            from sqlalchemy.dialects.sqlite import insert
-            from sqlalchemy import func
 
             stmt = insert(FxRate).values(
                 date=test_date,
@@ -234,7 +234,7 @@ async def test_data_overwrite():
                 rate=Decimal("9.9999"),
                 source="TEST",
                 fetched_at=func.current_timestamp()
-            )
+                )
 
             upsert_stmt = stmt.on_conflict_do_update(
                 index_elements=['date', 'base', 'quote'],
@@ -242,8 +242,8 @@ async def test_data_overwrite():
                     'rate': stmt.excluded.rate,
                     'source': stmt.excluded.source,
                     'fetched_at': func.current_timestamp()
-                }
-            )
+                    }
+                )
 
             await session.execute(upsert_stmt)
             await session.commit()
@@ -260,7 +260,7 @@ async def test_data_overwrite():
                 FxRate.base == "EUR",
                 FxRate.quote == "USD",
                 FxRate.date == test_date
-            )
+                )
             result = await session.execute(stmt)
             restored_rate = result.scalars().first()
 
@@ -332,7 +332,7 @@ async def test_idempotent_sync():
                 FxRate.quote == "USD",
                 FxRate.date >= start_date,
                 FxRate.date <= end_date
-            )
+                )
             result_db = await session.execute(stmt)
             count_1 = len(result_db.scalars().all())
 
@@ -389,7 +389,7 @@ async def test_rate_inversion_for_alphabetical_ordering():
                 FxRate.base == "CHF",
                 FxRate.quote == "EUR",
                 FxRate.date == test_date
-            )
+                )
             result = await session.execute(stmt)
             stored_rate = result.scalars().first()
 
@@ -424,7 +424,7 @@ async def test_rate_inversion_for_alphabetical_ordering():
                 FxRate.base == "EUR",
                 FxRate.quote == "USD",
                 FxRate.date == test_date
-            )
+                )
             result = await session.execute(stmt)
             usd_rate = result.scalars().first()
 

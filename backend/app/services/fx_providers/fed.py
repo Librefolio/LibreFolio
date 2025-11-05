@@ -41,27 +41,27 @@ class FEDProvider(FXRateProvider):
     # These rates are quoted as: USD per 1 foreign currency
     # Example: DEXUSEU = USD per 1 EUR
     CURRENCY_SERIES = {
-        'EUR': 'DEXUSEU',    # Euro (USD per EUR)
-        'GBP': 'DEXUSUK',    # British Pound (USD per GBP)
-        'JPY': 'DEXJPUS',    # Japanese Yen (USD per JPY)
-        'CAD': 'DEXCAUS',    # Canadian Dollar (USD per CAD)
-        'CHF': 'DEXSZUS',    # Swiss Franc (USD per CHF)
-        'AUD': 'DEXUSAL',    # Australian Dollar (USD per AUD)
-        'SEK': 'DEXSDUS',    # Swedish Krona (USD per SEK)
-        'DKK': 'DEXDNUS',    # Danish Krone (USD per DKK)
-        'NOK': 'DEXNOUS',    # Norwegian Krone (USD per NOK)
-        'CNY': 'DEXCHUS',    # Chinese Yuan (USD per CNY)
-        'INR': 'DEXINUS',    # Indian Rupee (USD per INR)
-        'BRL': 'DEXBZUS',    # Brazilian Real (USD per BRL)
-        'MXN': 'DEXMXUS',    # Mexican Peso (USD per MXN)
-        'ZAR': 'DEXSFUS',    # South African Rand (USD per ZAR)
-        'SGD': 'DEXSIUS',    # Singapore Dollar (USD per SGD)
-        'HKD': 'DEXHKUS',    # Hong Kong Dollar (USD per HKD)
-        'KRW': 'DEXKOUS',    # South Korean Won (USD per KRW)
-        'TWD': 'DEXTAUS',    # Taiwan Dollar (USD per TWD)
-        'NZD': 'DEXUSNZ',    # New Zealand Dollar (USD per NZD)
-        'THB': 'DEXTHUS',    # Thai Baht (USD per THB)
-    }
+        'EUR': 'DEXUSEU',  # Euro (USD per EUR)
+        'GBP': 'DEXUSUK',  # British Pound (USD per GBP)
+        'JPY': 'DEXJPUS',  # Japanese Yen (USD per JPY)
+        'CAD': 'DEXCAUS',  # Canadian Dollar (USD per CAD)
+        'CHF': 'DEXSZUS',  # Swiss Franc (USD per CHF)
+        'AUD': 'DEXUSAL',  # Australian Dollar (USD per AUD)
+        'SEK': 'DEXSDUS',  # Swedish Krona (USD per SEK)
+        'DKK': 'DEXDNUS',  # Danish Krone (USD per DKK)
+        'NOK': 'DEXNOUS',  # Norwegian Krone (USD per NOK)
+        'CNY': 'DEXCHUS',  # Chinese Yuan (USD per CNY)
+        'INR': 'DEXINUS',  # Indian Rupee (USD per INR)
+        'BRL': 'DEXBZUS',  # Brazilian Real (USD per BRL)
+        'MXN': 'DEXMXUS',  # Mexican Peso (USD per MXN)
+        'ZAR': 'DEXSFUS',  # South African Rand (USD per ZAR)
+        'SGD': 'DEXSIUS',  # Singapore Dollar (USD per SGD)
+        'HKD': 'DEXHKUS',  # Hong Kong Dollar (USD per HKD)
+        'KRW': 'DEXKOUS',  # South Korean Won (USD per KRW)
+        'TWD': 'DEXTAUS',  # Taiwan Dollar (USD per TWD)
+        'NZD': 'DEXUSNZ',  # New Zealand Dollar (USD per NZD)
+        'THB': 'DEXTHUS',  # Thai Baht (USD per THB)
+        }
 
     @property
     def code(self) -> str:
@@ -93,7 +93,7 @@ class FEDProvider(FXRateProvider):
             "CAD",  # Canadian Dollar
             "CHF",  # Swiss Franc
             "AUD",  # Australian Dollar
-        ]
+            ]
 
     @property
     def multi_unit_currencies(self) -> set[str]:
@@ -121,7 +121,7 @@ class FEDProvider(FXRateProvider):
         date_range: tuple[date, date],
         currencies: list[str],
         base_currency: str | None = None
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from FRED API for given date range and currencies.
 
@@ -144,7 +144,7 @@ class FEDProvider(FXRateProvider):
         if base_currency is not None and base_currency != "USD":
             raise ValueError(
                 f"FED provider only supports USD as base currency, got {base_currency}"
-            )
+                )
 
         start_date, end_date = date_range
         results = {}
@@ -168,7 +168,7 @@ class FEDProvider(FXRateProvider):
                 'id': series_id,
                 'cosd': start_date.isoformat(),
                 'coed': end_date.isoformat(),
-            }
+                }
 
             try:
                 async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -210,7 +210,7 @@ class FEDProvider(FXRateProvider):
         observations = []
 
         lines = csv_text.strip().split('\n')
-        
+
         # Skip header
         if len(lines) < 2:
             logger.warning(f"FRED CSV response too short for {currency}")
@@ -251,14 +251,14 @@ class FEDProvider(FXRateProvider):
                 # Return as provided: (date, quote_currency, base_currency, rate)
                 # Note: FRED quotes backwards (foreign/USD not USD/foreign)
                 fred_rate = Decimal(value_str)
-                
+
                 # Skip zero rates to avoid division by zero
                 # Zero rates are invalid and should never occur in real data
                 # This is a safety check to prevent crashes on malformed API responses
                 if fred_rate == 0:
                     logger.warning(f"Skipping zero rate for {currency} on {rate_date}")
                     continue
-                
+
                 # FRED quotes as: 1 foreign_currency = fred_rate USD
                 # Return tuple: (date, base=foreign, quote=USD, rate)
                 # Example: 1 EUR = 1.08 USD → (date, 'EUR', 'USD', 1.08)
@@ -275,4 +275,3 @@ class FEDProvider(FXRateProvider):
 
 # Auto-register provider on module import
 FXProviderFactory.register(FEDProvider)
-

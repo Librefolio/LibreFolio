@@ -45,7 +45,7 @@ class SNBProvider(FXRateProvider):
         'NOK': 'NOK',  # Norwegian Krone (100 units)
         'DKK': 'DKK',  # Danish Krone (100 units)
         'CNY': 'CNY',  # Chinese Yuan
-    }
+        }
 
     @property
     def code(self) -> str:
@@ -75,7 +75,7 @@ class SNBProvider(FXRateProvider):
             "EUR",  # Euro
             "GBP",  # British Pound
             "JPY",  # Japanese Yen
-        ]
+            ]
 
     @property
     def multi_unit_currencies(self) -> set[str]:
@@ -105,7 +105,7 @@ class SNBProvider(FXRateProvider):
         date_range: tuple[date, date],
         currencies: list[str],
         base_currency: str | None = None
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from SNB API for given date range and currencies.
 
@@ -128,7 +128,7 @@ class SNBProvider(FXRateProvider):
         if base_currency is not None and base_currency != "CHF":
             raise ValueError(
                 f"SNB provider only supports CHF as base currency, got {base_currency}"
-            )
+                )
 
         start_date, end_date = date_range
         results = {}
@@ -157,7 +157,7 @@ class SNBProvider(FXRateProvider):
                 # Series: D (daily), M (monthly average), currency code
                 # We want: D.M.{currency} = daily, monthly average for currency
                 # Example: D.M.USD for USD/CHF exchange rate
-            }
+                }
 
             # Add series parameter - SNB uses dimension:value format
             # The series structure is: D (daily) . M (monthly avg) . {currency}
@@ -272,4 +272,3 @@ class SNBProvider(FXRateProvider):
 
 # Auto-register provider on module import
 FXProviderFactory.register(SNBProvider)
-
