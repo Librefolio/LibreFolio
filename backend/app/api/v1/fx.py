@@ -19,6 +19,7 @@ from backend.app.services.fx import (
     convert_bulk,
     ensure_rates_multi_source,
     upsert_rates_bulk,
+    delete_rates_bulk,
     )
 
 router = APIRouter(prefix="/fx", tags=["FX"])
@@ -100,6 +101,41 @@ class RateUpsertResult(BaseModel):
     date: str = Field(..., description="Date of the rate (ISO format)")
     base: str = Field(..., description="Base currency")
     quote: str = Field(..., description="Quote currency")
+
+
+class RateDeleteRequest(BaseModel):
+    """Single rate deletion request."""
+    from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
+    to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
+    start_date: date = Field(..., description="Start date (required). If end_date is not provided, only this date is deleted")
+    end_date: date | None = Field(None, description="End date (optional). If provided, deletes all dates from start_date to end_date (inclusive)")
+
+    class Config:
+        populate_by_name = True
+
+
+class DeleteRatesRequest(BaseModel):
+    """Request model for bulk rate deletion."""
+    deletions: list[RateDeleteRequest] = Field(..., min_length=1, description="List of rates to delete")
+
+
+class RateDeleteResult(BaseModel):
+    """Single rate deletion result."""
+    success: bool = Field(..., description="Whether the operation succeeded (always True, errors are graceful)")
+    base: str = Field(..., description="Base currency (normalized)")
+    quote: str = Field(..., description="Quote currency (normalized)")
+    start_date: str = Field(..., description="Start date (ISO format)")
+    end_date: str | None = Field(None, description="End date (ISO format) if range deletion")
+    existing_count: int = Field(..., description="Number of rates present before deletion")
+    deleted_count: int = Field(..., description="Number of rates actually deleted")
+    message: str | None = Field(None, description="Warning/info message (e.g., 'no rates found')")
+
+
+class DeleteRatesResponse(BaseModel):
+    """Response model for bulk rate deletion."""
+    results: list[RateDeleteResult] = Field(..., description="Deletion results in order")
+    total_deleted: int = Field(..., description="Total number of rates deleted across all requests")
+    errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
 
 
 # ============================================================================
@@ -491,6 +527,138 @@ async def upsert_rates_endpoint(
         success_count=len(results),
         errors=errors
         )
+
+
+@router.delete("/rate-set/bulk", response_model=DeleteRatesResponse)
+async def delete_rates_endpoint(
+    request: DeleteRatesRequest,
+    session: AsyncSession = Depends(get_session)
+    ):
+    """
+    Delete one or more FX rates (bulk operation).
+
+    This endpoint accepts a list of deletion requests. Each request can specify:
+    - A single date (start_date only) to delete one specific day
+    - A date range (start_date + end_date) to delete all rates in that range
+
+    Currency pairs are automatically normalized to alphabetical order in the backend,
+    so deleting USD/EUR will delete the stored EUR/USD rate.
+
+    Args:
+        request: List of deletion requests
+        session: Database session
+
+    Returns:
+        Deletion results with counts (existing vs deleted) for each request
+
+    Example:
+        DELETE /fx/rate-set/bulk
+        {
+            "deletions": [
+                {
+                    "from": "EUR",
+                    "to": "USD",
+                    "start_date": "2025-01-01"
+                },
+                {
+                    "from": "GBP",
+                    "to": "USD",
+                    "start_date": "2025-01-01",
+                    "end_date": "2025-01-05"
+                }
+            ]
+        }
+    """
+    results = []
+    errors = []
+    total_deleted = 0
+
+    # Prepare deletions for bulk service call
+    bulk_deletions = []
+    deletion_metadata = []  # Track original request info for response
+
+    for idx, delete_req in enumerate(request.deletions):
+        from_cur = delete_req.from_currency.upper()
+        to_cur = delete_req.to_currency.upper()
+
+        # Validate currencies are different
+        if from_cur == to_cur:
+            error_msg = f"Deletion {idx}: from and to currencies must be different (got {from_cur})"
+            errors.append(error_msg)
+            continue
+
+        # Validate date range
+        if delete_req.end_date and delete_req.start_date > delete_req.end_date:
+            error_msg = f"Deletion {idx}: start_date must be before or equal to end_date"
+            errors.append(error_msg)
+            continue
+
+        # Add to bulk deletions (backend will normalize)
+        bulk_deletions.append((
+            from_cur,
+            to_cur,
+            delete_req.start_date,
+            delete_req.end_date
+        ))
+
+        deletion_metadata.append({
+            'original_idx': idx,
+            'from_currency': from_cur,
+            'to_currency': to_cur,
+            'start_date': delete_req.start_date,
+            'end_date': delete_req.end_date
+        })
+
+    # Execute bulk deletions if any valid
+    if bulk_deletions:
+        try:
+            # Call backend service (normalizes and executes)
+            delete_results = await delete_rates_bulk(session, bulk_deletions)
+
+            # Process results
+            for metadata, (success, existing_count, deleted_count, message) in zip(deletion_metadata, delete_results):
+                # Backend normalized the pair, we need to figure out what it became
+                # For display, we'll show the normalized version
+                from_cur = metadata['from_currency']
+                to_cur = metadata['to_currency']
+
+                # Normalize for display (same logic as backend)
+                if from_cur > to_cur:
+                    base, quote = to_cur, from_cur
+                else:
+                    base, quote = from_cur, to_cur
+
+                results.append(RateDeleteResult(
+                    success=success,
+                    base=base,
+                    quote=quote,
+                    start_date=metadata['start_date'].isoformat(),
+                    end_date=metadata['end_date'].isoformat() if metadata['end_date'] else None,
+                    existing_count=existing_count,
+                    deleted_count=deleted_count,
+                    message=message
+                ))
+
+                total_deleted += deleted_count
+
+        except Exception as e:
+            error_msg = f"Bulk deletion failed: {str(e)}"
+            errors.append(error_msg)
+            # If entire bulk operation failed, return 500
+            raise HTTPException(status_code=500, detail=error_msg)
+
+    # If all deletions failed validation, return 400
+    if errors and not results:
+        raise HTTPException(
+            status_code=400,
+            detail=f"All deletions failed validation: {'; '.join(errors)}"
+        )
+
+    return DeleteRatesResponse(
+        results=results,
+        total_deleted=total_deleted,
+        errors=errors
+    )
 
 
 @router.post("/convert/bulk", response_model=ConvertResponse)

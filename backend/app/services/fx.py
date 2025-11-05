@@ -1116,6 +1116,149 @@ async def upsert_rates_bulk(
     return results
 
 
+async def delete_rates_bulk(
+    session,  # AsyncSession
+    deletions: list[tuple[str, str, date, date | None]]  # [(from_currency, to_currency, start_date, end_date?), ...]
+    ) -> list[tuple[bool, int, int, str | None]]:  # [(success, existing_count, deleted_count, message), ...]
+    """
+    Delete multiple FX rates in a single batch operation.
+
+    This function efficiently handles bulk deletions by:
+    1. Normalizing all currency pairs (alphabetical ordering)
+    2. Fetching existing counts in a single batch query (optimization)
+    3. Executing deletions in a single batch (optimization)
+
+    Args:
+        session: Database session
+        deletions: List of (from_currency, to_currency, start_date, end_date?) tuples
+                  - from_currency, to_currency: Will be normalized to alphabetical order
+                  - start_date: Start date (inclusive)
+                  - end_date: End date (inclusive), optional. If None, only start_date is deleted
+
+    Returns:
+        List of (success, existing_count, deleted_count, message) tuples
+        - success: Always True (errors handled gracefully)
+        - existing_count: Number of rates present before deletion
+        - deleted_count: Number of rates actually deleted
+        - message: Warning/error message if any (e.g., "no rates found")
+
+    Example:
+        deletions = [
+            ("USD", "EUR", date(2025, 1, 1), None),  # Single day
+            ("GBP", "USD", date(2025, 1, 1), date(2025, 1, 5))  # Range
+        ]
+        results = await delete_rates_bulk(session, deletions)
+    """
+    from sqlalchemy import delete as sql_delete, func as sql_func
+
+    if not deletions:
+        return []
+
+    # Normalize all deletions (alphabetical ordering)
+    normalized_deletions = []
+    for from_cur, to_cur, start_date, end_date in deletions:
+        from_cur = from_cur.upper()
+        to_cur = to_cur.upper()
+
+        # Normalize to alphabetical order (base < quote)
+        if from_cur > to_cur:
+            base, quote = to_cur, from_cur
+        else:
+            base, quote = from_cur, to_cur
+
+        normalized_deletions.append((base, quote, start_date, end_date))
+
+    # OPTIMIZATION: Single batch query to fetch ALL matching rates across all deletions
+    # Build OR conditions for all deletions
+    all_conditions = []
+    for base, quote, start_date, end_date in normalized_deletions:
+        if end_date:
+            # Date range
+            condition = and_(
+                FxRate.base == base,
+                FxRate.quote == quote,
+                FxRate.date >= start_date,
+                FxRate.date <= end_date
+            )
+        else:
+            # Single date
+            condition = and_(
+                FxRate.base == base,
+                FxRate.quote == quote,
+                FxRate.date == start_date
+            )
+        all_conditions.append(condition)
+
+    # SINGLE QUERY: Fetch all matching rates (id, base, quote, date)
+    stmt = sql_select(FxRate.id, FxRate.base, FxRate.quote, FxRate.date).where(
+        or_(*all_conditions)
+    )
+    result = await session.execute(stmt)
+    all_matching_rates = result.all()
+
+    # Build lookup: {(base, quote, date): id}
+    rate_lookup = {(r.base, r.quote, r.date): r.id for r in all_matching_rates}
+
+    # Count existing rates per deletion request
+    existing_counts = {}
+    ids_to_delete = set()
+
+    for idx, (base, quote, start_date, end_date) in enumerate(normalized_deletions):
+        count = 0
+        for (r_base, r_quote, r_date), r_id in rate_lookup.items():
+            if r_base == base and r_quote == quote:
+                if end_date:
+                    # Check if date is in range
+                    if start_date <= r_date <= end_date:
+                        count += 1
+                        ids_to_delete.add(r_id)
+                else:
+                    # Check if date matches exactly
+                    if r_date == start_date:
+                        count += 1
+                        ids_to_delete.add(r_id)
+
+        existing_counts[idx] = count
+
+    # CHUNKED DELETE: Remove all matched IDs in batches to avoid SQLite limits
+    # SQLite has SQLITE_MAX_VARIABLE_NUMBER = 999 by default
+    # We use chunks of 500 to be safe and improve performance with large datasets
+    deleted_count_total = 0
+    if ids_to_delete:
+        ids_list = list(ids_to_delete)
+        chunk_size = 500  # Safe for SQLite (max 999) and optimal for performance
+
+        # Process in chunks within same transaction
+        for i in range(0, len(ids_list), chunk_size):
+            chunk = ids_list[i:i + chunk_size]
+            delete_stmt = sql_delete(FxRate).where(FxRate.id.in_(chunk))
+            delete_result = await session.execute(delete_stmt)
+            deleted_count_total += delete_result.rowcount
+
+        logger.info(f"Deleted {deleted_count_total} rate(s) in {(len(ids_list) + chunk_size - 1) // chunk_size} batch(es)")
+
+    # Build results per deletion request
+    results = []
+    for idx, (base, quote, start_date, end_date) in enumerate(normalized_deletions):
+        existing_count = existing_counts[idx]
+        deleted_count = existing_count  # All existing were deleted
+
+        # Prepare result message
+        message = None
+        if deleted_count == 0:
+            if end_date:
+                message = f"No rates found for {base}/{quote} from {start_date} to {end_date}"
+            else:
+                message = f"No rates found for {base}/{quote} on {start_date}"
+
+        results.append((True, existing_count, deleted_count, message))
+
+    # Single commit for all deletions
+    await session.commit()
+
+    return results
+
+
 # ============================================================================
 # AUTO-REGISTER PROVIDERS
 # ============================================================================

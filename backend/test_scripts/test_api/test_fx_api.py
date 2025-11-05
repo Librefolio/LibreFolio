@@ -1294,9 +1294,746 @@ def test_bulk_rate_upserts():
         return False
 
 
+def test_delete_rates():
+    """Test DELETE /fx/rate-set/bulk endpoint for rate deletion."""
+    print_section("Test 10: Rate Deletion (DELETE /rate-set/bulk)")
+
+    all_ok = True
+
+    # Test 1: Delete single day
+    print_info("Test 10.1: Delete single day (start_date only)")
+    try:
+        # Cleanup: Remove any existing EUR/USD rates in our test range
+        setup_dates = [date(2025, 1, 1), date(2025, 1, 2), date(2025, 1, 3)]
+        httpx.request("DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={"deletions": [{"from": "EUR", "to": "USD", "start_date": setup_dates[0].isoformat(), "end_date": setup_dates[-1].isoformat()}]},
+            timeout=TIMEOUT
+        )
+
+        # Setup: Insert 3 rates for EUR/USD
+        for test_date in setup_dates:
+            response = httpx.post(
+                f"{API_BASE_URL}/fx/rate-set/bulk",
+                json={
+                    "rates": [
+                        {
+                            "date": test_date.isoformat(),
+                            "base": "EUR",
+                            "quote": "USD",
+                            "rate": "1.1",
+                            "source": "TEST"
+                        }
+                    ]
+                },
+                timeout=TIMEOUT
+            )
+            if response.status_code != 200:
+                print_error(f"Setup failed for {test_date}")
+                all_ok = False
+                return all_ok
+
+        # Delete: EUR/USD 2025-01-02
+        import json
+        response = httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "USD",
+                        "start_date": "2025-01-02"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response.status_code != 200:
+            print_error(f"Expected status 200, got {response.status_code}")
+            print_error(f"Response: {response.text}")
+            all_ok = False
+        else:
+            data = response.json()
+
+            # Verify response structure
+            if "results" not in data or "total_deleted" not in data:
+                print_error("Invalid response structure")
+                all_ok = False
+            else:
+                result = data["results"][0]
+
+                # existing_count counts rates for THIS SPECIFIC REQUEST (date=2025-01-02)
+                # We inserted 3 rates (01, 02, 03) but we're deleting only 02
+                if result["existing_count"] != 1:
+                    print_error(f"Expected existing_count=1 (for date 2025-01-02), got {result['existing_count']}")
+                    all_ok = False
+                elif result["deleted_count"] != 1:
+                    print_error(f"Expected deleted_count=1, got {result['deleted_count']}")
+                    all_ok = False
+                else:
+                    print_success(f"✓ Deleted 1 rate (existing: 1 for that date, deleted: 1)")
+
+        # Cleanup
+        for test_date in setup_dates:
+            httpx.request("DELETE",
+                f"{API_BASE_URL}/fx/rate-set/bulk",
+                json={"deletions": [{"from": "EUR", "to": "USD", "start_date": test_date.isoformat()}]},
+                timeout=TIMEOUT
+            )
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        all_ok = False
+
+    # Test 2: Delete range (start_date + end_date)
+    print_info("\nTest 10.2: Delete range (start_date + end_date)")
+    try:
+        # Cleanup: Remove any existing GBP/USD rates in our test range
+        httpx.request("DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={"deletions": [{"from": "GBP", "to": "USD", "start_date": "2025-01-01", "end_date": "2025-01-07"}]},
+            timeout=TIMEOUT
+        )
+
+        # Setup: Insert 7 rates for GBP/USD (2025-01-01 to 07)
+        for day in range(1, 8):
+            test_date = date(2025, 1, day)
+            response = httpx.post(
+                f"{API_BASE_URL}/fx/rate-set/bulk",
+                json={
+                    "rates": [
+                        {
+                            "date": test_date.isoformat(),
+                            "base": "GBP",
+                            "quote": "USD",
+                            "rate": "1.25",
+                            "source": "TEST"
+                        }
+                    ]
+                },
+                timeout=TIMEOUT
+            )
+
+        # Delete: GBP/USD 2025-01-02 to 2025-01-05
+        response = httpx.request("DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "GBP",
+                        "to": "USD",
+                        "start_date": "2025-01-02",
+                        "end_date": "2025-01-05"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response.status_code != 200:
+            print_error(f"Expected status 200, got {response.status_code}")
+            all_ok = False
+        else:
+            data = response.json()
+            result = data["results"][0]
+
+            # existing_count counts rates for THIS SPECIFIC RANGE (2025-01-02 to 05)
+            # We inserted 7 rates (01-07) but range covers only 02-05 = 4 rates
+            if result["existing_count"] != 4:
+                print_error(f"Expected existing_count=4 (for range 02-05), got {result['existing_count']}")
+                all_ok = False
+            elif result["deleted_count"] != 4:
+                print_error(f"Expected deleted_count=4, got {result['deleted_count']}")
+                all_ok = False
+            else:
+                print_success(f"✓ Deleted range: 4 rates (02-05 from the range)")
+
+        # Cleanup
+        httpx.request("DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={"deletions": [{"from": "GBP", "to": "USD", "start_date": "2025-01-01", "end_date": "2025-01-07"}]},
+            timeout=TIMEOUT
+        )
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        all_ok = False
+
+    # Test 3: Delete inverted pair (USD/EUR → EUR/USD in DB)
+    print_info("\nTest 10.3: Delete inverted pair (normalization)")
+    try:
+        # Setup: Insert EUR/USD
+        test_date = date(2025, 1, 1)
+        response = httpx.post(
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "rates": [
+                    {
+                        "date": test_date.isoformat(),
+                        "base": "EUR",
+                        "quote": "USD",
+                        "rate": "1.1",
+                        "source": "TEST"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # Delete: USD/EUR (should delete EUR/USD via normalization)
+        response = httpx.request("DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "USD",
+                        "to": "EUR",
+                        "start_date": test_date.isoformat()
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response.status_code != 200:
+            print_error(f"Expected status 200, got {response.status_code}")
+            all_ok = False
+        else:
+            data = response.json()
+            result = data["results"][0]
+
+            if result["deleted_count"] != 1:
+                print_error(f"Expected deleted_count=1, got {result['deleted_count']}")
+                all_ok = False
+            else:
+                print_success(f"✓ Inverted pair deleted via normalization")
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        all_ok = False
+
+    # Test 4: Bulk delete (3 pairs)
+    print_info("\nTest 10.4: Bulk delete (3 different pairs)")
+    try:
+        # Setup: Insert EUR/USD, GBP/USD, CHF/USD
+        test_date = date(2025, 1, 10)
+        pairs = [("EUR", "USD", "1.1"), ("GBP", "USD", "1.25"), ("CHF", "USD", "1.05")]
+
+        for base, quote, rate in pairs:
+            response = httpx.post(
+                f"{API_BASE_URL}/fx/rate-set/bulk",
+                json={
+                    "rates": [
+                        {
+                            "date": test_date.isoformat(),
+                            "base": base,
+                            "quote": quote,
+                            "rate": rate,
+                            "source": "TEST"
+                        }
+                    ]
+                },
+                timeout=TIMEOUT
+            )
+
+        # Delete all 3 in single request
+        response = httpx.request("DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {"from": "EUR", "to": "USD", "start_date": test_date.isoformat()},
+                    {"from": "GBP", "to": "USD", "start_date": test_date.isoformat()},
+                    {"from": "CHF", "to": "USD", "start_date": test_date.isoformat()}
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response.status_code != 200:
+            print_error(f"Expected status 200, got {response.status_code}")
+            all_ok = False
+        else:
+            data = response.json()
+
+            if data["total_deleted"] != 3:
+                print_error(f"Expected total_deleted=3, got {data['total_deleted']}")
+                all_ok = False
+            else:
+                print_success(f"✓ Bulk delete: 3 pairs deleted in single request")
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        all_ok = False
+
+    # Test 5: Delete non-existent rate
+    print_info("\nTest 10.5: Delete non-existent rate (graceful handling)")
+    try:
+        response = httpx.request("DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "ZZZ",  # Non-existent currency
+                        "start_date": "2025-01-01"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response.status_code != 200:
+            print_error(f"Expected status 200, got {response.status_code}")
+            all_ok = False
+        else:
+            data = response.json()
+            result = data["results"][0]
+
+            if not result["success"]:
+                print_error("Operation reported as unsuccessful")
+                all_ok = False
+            elif result["existing_count"] != 0 or result["deleted_count"] != 0:
+                print_error(f"Expected counts=0, got existing={result['existing_count']}, deleted={result['deleted_count']}")
+                all_ok = False
+            elif result["message"] is None:
+                print_error("Expected warning message for non-existent rate")
+                all_ok = False
+            else:
+                print_success(f"✓ Non-existent rate handled gracefully with message")
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        all_ok = False
+
+    # Test 6: Partial failure (validation error)
+    print_info("\nTest 10.6: Partial failure (same from/to currency)")
+    try:
+        # Setup valid pair
+        test_date = date(2025, 1, 15)
+        httpx.post(
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "rates": [
+                    {
+                        "date": test_date.isoformat(),
+                        "base": "EUR",
+                        "quote": "USD",
+                        "rate": "1.1",
+                        "source": "TEST"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # Try to delete: one valid, one invalid (EUR/EUR)
+        response = httpx.request("DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {"from": "EUR", "to": "USD", "start_date": test_date.isoformat()},
+                    {"from": "EUR", "to": "EUR", "start_date": test_date.isoformat()}  # Invalid
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response.status_code != 200:
+            print_error(f"Expected status 200, got {response.status_code}")
+            all_ok = False
+        else:
+            data = response.json()
+
+            if len(data["results"]) != 1:
+                print_error(f"Expected 1 result (valid deletion), got {len(data['results'])}")
+                all_ok = False
+            elif len(data["errors"]) != 1:
+                print_error(f"Expected 1 error (invalid deletion), got {len(data['errors'])}")
+                all_ok = False
+            else:
+                print_success(f"✓ Partial failure handled: 1 deleted, 1 error")
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        all_ok = False
+
+    # Test 7: Invalid date range (start > end)
+    print_info("\nTest 10.7: Invalid date range (start > end)")
+    try:
+        response = httpx.request("DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "USD",
+                        "start_date": "2025-01-05",
+                        "end_date": "2025-01-01"  # Before start_date
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response.status_code == 200:
+            print_error("Invalid date range was accepted (should return 400)")
+            all_ok = False
+        else:
+            print_success(f"✓ Invalid date range rejected (status {response.status_code})")
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        all_ok = False
+
+    # Test 8: Invalid date format (FastAPI/Pydantic validation)
+    print_info("\nTest 10.8: Invalid date format")
+    try:
+        response = httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "USD",
+                        "start_date": "2025-13-45"  # Invalid date
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response.status_code == 200:
+            print_error("Invalid date format was accepted (should return 422)")
+            all_ok = False
+        else:
+            print_success(f"✓ Invalid date format rejected (status {response.status_code})")
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        all_ok = False
+
+    # Test 9: Idempotency (delete already deleted rates)
+    print_info("\nTest 10.9: Idempotency (delete already deleted rates)")
+    try:
+        # Setup: Insert and then delete
+        test_date = date(2025, 1, 20)
+        httpx.post(
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "rates": [
+                    {
+                        "date": test_date.isoformat(),
+                        "base": "EUR",
+                        "quote": "USD",
+                        "rate": "1.1",
+                        "source": "TEST"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # First delete
+        response1 = httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "USD",
+                        "start_date": test_date.isoformat()
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response1.status_code != 200:
+            print_error(f"First delete failed: {response1.status_code}")
+            all_ok = False
+        else:
+            data1 = response1.json()
+            if data1["results"][0]["deleted_count"] != 1:
+                print_error(f"First delete should delete 1, got {data1['results'][0]['deleted_count']}")
+                all_ok = False
+
+        # Second delete (idempotency test)
+        response2 = httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "USD",
+                        "start_date": test_date.isoformat()
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response2.status_code != 200:
+            print_error(f"Second delete (idempotent) failed: {response2.status_code}")
+            all_ok = False
+        else:
+            data2 = response2.json()
+            result2 = data2["results"][0]
+
+            if result2["deleted_count"] != 0:
+                print_error(f"Second delete should delete 0 (already deleted), got {result2['deleted_count']}")
+                all_ok = False
+            elif result2["message"] is None:
+                print_error("Expected warning message for already deleted rate")
+                all_ok = False
+            else:
+                print_success(f"✓ Idempotency verified: second delete returns 0 with message")
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        all_ok = False
+
+    # Test 10: Verify conversions fail after rate deletion + backward-fill behavior
+    print_info("\nTest 10.10: Verify conversions and backward-fill after rate deletion")
+    try:
+        # Part A: Delete only rate (no backward-fill possible)
+        # Use a date far in the past (older than any possible rate in DB)
+        test_date_old = date(1990, 1, 1)
+
+        # Cleanup any existing EUR/JPY rates in 1990
+        httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "JPY",
+                        "start_date": "1990-01-01",
+                        "end_date": "1990-12-31"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # Insert single rate for 1990-01-01
+        httpx.post(
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "rates": [
+                    {
+                        "date": test_date_old.isoformat(),
+                        "base": "EUR",
+                        "quote": "JPY",
+                        "rate": "160.5",
+                        "source": "TEST"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # Verify conversion works BEFORE deletion
+        response_before = httpx.post(
+            f"{API_BASE_URL}/fx/convert/bulk",
+            json={
+                "conversions": [
+                    {
+                        "amount": "100",
+                        "from": "EUR",
+                        "to": "JPY",
+                        "start_date": test_date_old.isoformat()
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response_before.status_code != 200:
+            print_error("Conversion before delete failed (should work)")
+            all_ok = False
+        else:
+            print_success("✓ Part A: Conversion works before deletion")
+
+        # Delete the only rate
+        httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "JPY",
+                        "start_date": test_date_old.isoformat()
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # Verify conversion FAILS after deletion (no backward-fill possible)
+        response_after = httpx.post(
+            f"{API_BASE_URL}/fx/convert/bulk",
+            json={
+                "conversions": [
+                    {
+                        "amount": "100",
+                        "from": "EUR",
+                        "to": "JPY",
+                        "start_date": test_date_old.isoformat()
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # Should have errors (no rate available)
+        if response_after.status_code == 200:
+            data_after = response_after.json()
+            if len(data_after["errors"]) == 0:
+                print_error("Conversion after delete succeeded (should fail - no rates)")
+                all_ok = False
+            else:
+                print_success(f"✓ Part A: Conversion fails after deletion (no backward-fill)")
+        else:
+            print_success(f"✓ Part A: Conversion fails after deletion (status {response_after.status_code})")
+
+        # Part B: Delete recent rate but older rate exists (backward-fill should work)
+        test_date_base = date(1991, 6, 1)
+        test_date_future = date(1991, 6, 15)
+
+        # Cleanup 1991 range
+        httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "JPY",
+                        "start_date": "1991-01-01",
+                        "end_date": "1991-12-31"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # Insert two rates: 1991-06-01 and 1991-06-15
+        httpx.post(
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "rates": [
+                    {
+                        "date": test_date_base.isoformat(),
+                        "base": "EUR",
+                        "quote": "JPY",
+                        "rate": "155.0",
+                        "source": "TEST"
+                    },
+                    {
+                        "date": test_date_future.isoformat(),
+                        "base": "EUR",
+                        "quote": "JPY",
+                        "rate": "158.0",
+                        "source": "TEST"
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # Verify conversion for 1991-06-15 works (exact match)
+        response_exact = httpx.post(
+            f"{API_BASE_URL}/fx/convert/bulk",
+            json={
+                "conversions": [
+                    {
+                        "amount": "100",
+                        "from": "EUR",
+                        "to": "JPY",
+                        "start_date": test_date_future.isoformat()
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response_exact.status_code != 200:
+            print_error("Conversion for exact date failed")
+            all_ok = False
+
+        # Delete the 1991-06-15 rate (but keep 1991-06-01)
+        httpx.request(
+            "DELETE",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
+            json={
+                "deletions": [
+                    {
+                        "from": "EUR",
+                        "to": "JPY",
+                        "start_date": test_date_future.isoformat()
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        # Verify conversion for 1991-06-15 still works via BACKWARD-FILL (uses 1991-06-01)
+        response_backfill = httpx.post(
+            f"{API_BASE_URL}/fx/convert/bulk",
+            json={
+                "conversions": [
+                    {
+                        "amount": "100",
+                        "from": "EUR",
+                        "to": "JPY",
+                        "start_date": test_date_future.isoformat()
+                    }
+                ]
+            },
+            timeout=TIMEOUT
+        )
+
+        if response_backfill.status_code != 200:
+            print_error("Backward-fill conversion failed (should work using older rate)")
+            all_ok = False
+        else:
+            data_backfill = response_backfill.json()
+            if len(data_backfill["errors"]) > 0:
+                print_error(f"Backward-fill had errors: {data_backfill['errors']}")
+                all_ok = False
+            else:
+                result = data_backfill["results"][0]
+                # Should have backward_fill_info present
+                if result.get("backward_fill_info") is None:
+                    print_error("Expected backward_fill_info but got None")
+                    all_ok = False
+                elif result["backward_fill_info"]["days_back"] != 14:
+                    print_error(f"Expected 14 days back, got {result['backward_fill_info']['days_back']}")
+                    all_ok = False
+                else:
+                    print_success(f"✓ Part B: Backward-fill works correctly (14 days back from {test_date_future} to {test_date_base})")
+
+    except Exception as e:
+        print_error(f"Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        all_ok = False
+
+    return all_ok
+
+
 def test_invalid_requests():
     """Test comprehensive validation and error handling for invalid requests."""
-    print_section("Test 10: Invalid Request Handling")
+    print_section("Test 11: Invalid Request Handling")
 
     all_ok = True
 
@@ -1616,6 +2353,7 @@ def _run_tests():
         "Backward-Fill Warning": test_convert_missing_rate(),
         "POST /fx/convert/bulk (Bulk)": test_bulk_conversions(),
         "POST /fx/rate-set/bulk (Bulk)": test_bulk_rate_upserts(),
+        "DELETE /fx/rate-set/bulk": test_delete_rates(),
         "Invalid Request Handling": test_invalid_requests(),
         }
 
