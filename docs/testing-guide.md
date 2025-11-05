@@ -432,12 +432,12 @@ python test_runner.py -v api fx
   1. `GET /fx/currencies` - List available currencies from provider
   2. `GET /fx/providers` - List all registered FX providers (ECB, FED, BOE, SNB)
   3. `POST/GET/DELETE /fx/pair-sources` - Configure currency pair sources (CRUD operations)
-  4. `POST /fx/sync` - Sync FX rates (explicit provider + auto-configuration modes)
-  5. `POST /fx/convert` - Single currency conversion
-  6. `POST /fx/rate-set` - Manual rate upsert (single)
+  4. `POST /fx/sync/bulk` - Sync FX rates (explicit provider + auto-configuration modes)
+  5. `POST /fx/convert/bulk` - Single currency conversion
+  6. `POST /fx/rate-set/bulk` - Manual rate upsert (single)
   7. Backward-fill warning (old dates use most recent rate)
-  8. `POST /fx/convert` - Bulk conversions (multiple items)
-  9. `POST /fx/rate-set` - Bulk rate upserts (multiple items)
+  8. `POST /fx/convert/bulk` - Bulk conversions (multiple items)
+  9. `POST /fx/rate-set/bulk` - Bulk rate upserts (multiple items)
   10. Invalid request handling (comprehensive validation)
 - **Auto-stops server** at end of test
 
@@ -450,12 +450,12 @@ API base URL: http://localhost:8001/api/v1
 ✅ PASS: GET /fx/currencies
 ✅ PASS: GET /fx/providers
 ✅ PASS: Pair Sources CRUD
-✅ PASS: POST /fx/sync
-✅ PASS: POST /fx/convert (Single)
-✅ PASS: POST /fx/rate-set (Single)
+✅ PASS: POST /fx/sync/bulk
+✅ PASS: POST /fx/convert/bulk (Single)
+✅ PASS: POST /fx/rate-set/bulk (Single)
 ✅ PASS: Backward-Fill Warning
-✅ PASS: POST /fx/convert (Bulk)
-✅ PASS: POST /fx/rate-set (Bulk)
+✅ PASS: POST /fx/convert/bulk (Bulk)
+✅ PASS: POST /fx/rate-set/bulk (Bulk)
 ✅ PASS: Invalid Request Handling
 
 Results: 10/10 tests passed

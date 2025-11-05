@@ -565,7 +565,7 @@ await ensure_rates_multi_source(
 
 ```bash
 # Sync rates
-POST /api/v1/fx/sync?start=2025-01-01&end=2025-01-31&currencies=USD,EUR&provider=YCB
+POST /api/v1/fx/sync/bulk?start=2025-01-01&end=2025-01-31&currencies=USD,EUR&provider=YCB
 
 # Response
 {

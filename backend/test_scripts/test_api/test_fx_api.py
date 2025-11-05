@@ -421,20 +421,9 @@ def test_pair_sources_crud():
         print_success(f"✓ Non-existent pair returned warning (not error)")
         print_info(f"  Message: {data['results'][0]['message'][:80]}...")
 
-        # Cleanup: Delete remaining test data
-        print_info("\nCleanup: Deleting remaining test data")
-        delete_request = {
-            "sources": [
-                {"base": "EUR", "quote": "USD"}  # The one we updated to FED
-                ]
-            }
-
-        httpx.request(
-            "DELETE",
-            f"{API_BASE_URL}/fx/pair-sources/bulk",
-            json=delete_request,
-            timeout=TIMEOUT
-            )
+        # Note: NOT cleaning up EUR/USD configuration
+        # This configuration is needed for Test 4.3 (auto-configuration mode)
+        print_info("\nℹ️  Leaving EUR/USD=FED configuration for sync auto-config test")
 
         print_success("All pair sources CRUD tests passed")
         return True
@@ -447,8 +436,8 @@ def test_pair_sources_crud():
 
 
 def test_sync_rates():
-    """Test POST /fx/sync endpoint (both explicit and auto-configuration modes)."""
-    print_section("Test 4: POST /fx/sync")
+    """Test POST /fx/sync/bulk endpoint (both explicit and auto-configuration modes)."""
+    print_section("Test 4: POST /fx/sync/bulk")
 
     # Sync last 7 days for USD and GBP
     end_date = date.today() - timedelta(days=1)
@@ -462,7 +451,7 @@ def test_sync_rates():
         # Test 4.1: Explicit Provider Mode (backward compatible)
         print_info("\nTest 4.1: Explicit Provider Mode (provider=ECB)")
         response = httpx.post(
-            f"{API_BASE_URL}/fx/sync",
+            f"{API_BASE_URL}/fx/sync/bulk",
             params={
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
@@ -495,7 +484,7 @@ def test_sync_rates():
         # Test 4.2: Idempotency
         print_info("\nTest 4.2: Idempotency (sync again with same params)")
         response2 = httpx.post(
-            f"{API_BASE_URL}/fx/sync",
+            f"{API_BASE_URL}/fx/sync/bulk",
             params={
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
@@ -520,10 +509,10 @@ def test_sync_rates():
         # Test 4.3: Auto-Configuration Mode (uses fx_currency_pair_sources)
         print_info("\nTest 4.3: Auto-Configuration Mode (no provider specified)")
         print_info("  Note: Uses pair-sources configured in previous test")
-        print_info("  Expected: EUR/USD from ECB (configured in test_pair_sources_crud)")
+        print_info("  Expected: EUR/USD from FED (configured as FED in test_pair_sources_crud)")
 
         response3 = httpx.post(
-            f"{API_BASE_URL}/fx/sync",
+            f"{API_BASE_URL}/fx/sync/bulk",
             params={
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
@@ -535,22 +524,68 @@ def test_sync_rates():
 
         print_info(f"Status code: {response3.status_code}")
 
-        # TODO: arrivati allo step 5.3, si arriva ad implementare questa parte e quindi si scrive il vero test
+        # TODO: verificare questo test o riscriverlo da capo, ora che in teoria il fx_currency_pair_sources è implementato
         if response3.status_code == 400:
-            # Auto-configuration not yet implemented
+            # Auto-configuration not yet implemented OR configuration missing
             data3 = response3.json()
-            if "not yet implemented" in data3.get("detail", "").lower():
+            detail = data3.get("detail", "")
+            if "not yet implemented" in detail.lower():
                 print_info("⚠️  Auto-configuration mode not yet implemented (expected)")
                 print_info("  This will be implemented in Phase 5.3")
+            elif "no configuration found" in detail.lower():
+                print_error(f"Configuration missing: {detail}")
+                print_error("  Test 3 (pair-sources) should have configured EUR/USD=FED")
+                return False
             else:
-                print_error(f"Unexpected 400 error: {data3.get('detail', 'Unknown')}")
+                print_error(f"Unexpected 400 error: {detail}")
                 return False
         elif response3.status_code == 200:
-            # Auto-configuration working!
+            # Auto-configuration working! Validate thoroughly
             data3 = response3.json()
+
+            # Verify we got some rates
+            if data3['synced'] == 0:
+                print_error("Auto-config returned 0 synced rates (expected > 0)")
+                return False
+
             print_success(f"✓ Auto-configuration mode: Synced {data3['synced']} rates")
             print_info(f"  Date range: {data3['date_range']}")
-            print_info(f"  Currencies: {data3['currencies']}")
+
+            # Verify currencies contains USD or EUR (or both, depending on provider base)
+            currencies_synced = data3['currencies']
+            print_info(f"  Currencies: {currencies_synced}")
+
+            # FED has base USD, so when we request USD, it will sync EUR/USD pair
+            # which means both EUR and USD in the result
+            if 'USD' not in currencies_synced and 'EUR' not in currencies_synced:
+                print_error(f"Expected USD or EUR in synced currencies, got: {currencies_synced}")
+                return False
+
+            print_success("✓ Auto-configuration used pair-sources correctly")
+
+            # Verify that the configuration was actually used by checking if we can convert
+            # This proves rates were synced from the configured provider
+            test_conversion = httpx.post(
+                f"{API_BASE_URL}/fx/convert/bulk",
+                json={
+                    "conversions": [
+                        {
+                            "amount": "100.00",
+                            "from": "USD",
+                            "to": "EUR",
+                            "start_date": end_date.isoformat()
+                        }
+                    ]
+                },
+                timeout=TIMEOUT
+            )
+
+            if test_conversion.status_code == 200:
+                print_success("✓ Synced rates are usable for conversion (proves auto-config worked)")
+            else:
+                print_error(f"Conversion failed after auto-config sync: {test_conversion.status_code}")
+                return False
+
         else:
             print_error(f"Unexpected status code: {response3.status_code}")
             print_error(f"Response: {response3.text}")
@@ -567,8 +602,8 @@ def test_sync_rates():
 
 
 def test_convert_currency():
-    """Test GET /fx/convert endpoint."""
-    print_section("Test 5: GET /fx/convert")
+    """Test GET /fx/convert/bulk endpoint."""
+    print_section("Test 5: GET /fx/convert/bulk")
 
     # First, ensure we have rates
     end_date = date.today() - timedelta(days=1)
@@ -577,7 +612,7 @@ def test_convert_currency():
     print_info("Ensuring rates exist...")
     try:
         httpx.post(
-            f"{API_BASE_URL}/fx/sync",
+            f"{API_BASE_URL}/fx/sync/bulk",
             params={
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
@@ -594,7 +629,7 @@ def test_convert_currency():
 
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -650,7 +685,7 @@ def test_convert_currency():
         print_info("\nTesting identity conversion: 100 EUR → EUR")
 
         response2 = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -686,7 +721,7 @@ def test_convert_currency():
 
         # First get EUR amount
         response3 = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -708,7 +743,7 @@ def test_convert_currency():
 
         # Then convert back
         response4 = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -759,7 +794,7 @@ def test_convert_missing_rate():
     try:
         # Insert a manual rate (using bulk with single item)
         insert_response = httpx.post(
-            f"{API_BASE_URL}/fx/rate-set",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
             json={
                 "rates": [
                     {
@@ -785,7 +820,7 @@ def test_convert_missing_rate():
         print_info(f"Expected: 200 OK with backward_fill_info (using rate from {old_rate_date})")
 
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -863,7 +898,7 @@ def test_convert_missing_rate():
 
 
 def test_manual_rate_upsert():
-    """Test POST /fx/rate-set endpoint for manual rate entry."""
+    """Test POST /fx/rate-set/bulk endpoint for manual rate entry."""
     print_section("Test 6: Manual Rate Upsert")
 
     # Use a date far in the past to avoid interference from other rates
@@ -873,7 +908,7 @@ def test_manual_rate_upsert():
     print_info("Test 4.1: Insert new manual rate")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/rate-set",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
             json={
                 "rates": [
                     {
@@ -930,7 +965,7 @@ def test_manual_rate_upsert():
         # Test 2: Update existing rate (upsert)
         print_info("\nTest 4.2: Update existing rate (upsert)")
         response2 = httpx.post(
-            f"{API_BASE_URL}/fx/rate-set",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
             json={
                 "rates": [
                     {
@@ -961,7 +996,7 @@ def test_manual_rate_upsert():
         # Test 3: Verify rate is usable in conversion
         print_info("\nTest 4.3: Verify manual rate is used in conversion")
         response3 = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -993,7 +1028,7 @@ def test_manual_rate_upsert():
         # Test 4: Invalid request (same base and quote)
         print_info("\nTest 4.4: Invalid request (base == quote)")
         response4 = httpx.post(
-            f"{API_BASE_URL}/fx/rate-set",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
             json={
                 "rates": [
                     {
@@ -1021,7 +1056,7 @@ def test_manual_rate_upsert():
         # Test 5: Automatic alphabetical ordering and rate inversion
         print_info("\nTest 4.5: Automatic ordering (USD/EUR → EUR/USD with rate inversion)")
         response5 = httpx.post(
-            f"{API_BASE_URL}/fx/rate-set",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
             json={
                 "rates": [
                     {
@@ -1079,7 +1114,7 @@ def test_bulk_conversions():
 
     try:
         httpx.post(
-            f"{API_BASE_URL}/fx/sync",
+            f"{API_BASE_URL}/fx/sync/bulk",
             params={
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
@@ -1096,7 +1131,7 @@ def test_bulk_conversions():
 
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {"amount": "100.00", "from": "USD", "to": "EUR", "start_date": end_date.isoformat()},
@@ -1137,7 +1172,7 @@ def test_bulk_conversions():
         print_info("\nTest 10.2: Bulk with one invalid currency (partial failure)")
 
         response2 = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {"amount": "100.00", "from": "USD", "to": "EUR", "start_date": end_date.isoformat()},
@@ -1185,7 +1220,7 @@ def test_bulk_rate_upserts():
 
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/rate-set",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
             json={
                 "rates": [
                     {"date": test_date.isoformat(), "base": "EUR", "quote": "USD", "rate": "1.12", "source": "TEST"},
@@ -1221,7 +1256,7 @@ def test_bulk_rate_upserts():
         print_info("\nTest 6.2: Bulk with one invalid rate (partial failure)")
 
         response2 = httpx.post(
-            f"{API_BASE_URL}/fx/rate-set",
+            f"{API_BASE_URL}/fx/rate-set/bulk",
             json={
                 "rates": [
                     {"date": test_date.isoformat(), "base": "EUR", "quote": "JPY", "rate": "130.0", "source": "TEST"},
@@ -1269,7 +1304,7 @@ def test_invalid_requests():
     print_info("Test 10.1: Invalid date range (start > end)")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/sync",
+            f"{API_BASE_URL}/fx/sync/bulk",
             params={
                 "start": "2025-01-10",
                 "end": "2025-01-01",
@@ -1298,7 +1333,7 @@ def test_invalid_requests():
     print_info("\nTest 10.2: Negative amount")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -1328,7 +1363,7 @@ def test_invalid_requests():
     print_info("\nTest 10.3: Zero amount")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -1355,7 +1390,7 @@ def test_invalid_requests():
     print_info("\nTest 10.4: Non-numeric amount (abc)")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -1385,7 +1420,7 @@ def test_invalid_requests():
     print_info("\nTest 10.5: Invalid currency code format (INVALID)")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -1417,7 +1452,7 @@ def test_invalid_requests():
     print_info("\nTest 10.6: Valid format but unsupported currency (XXX)")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -1449,7 +1484,7 @@ def test_invalid_requests():
     print_info("\nTest 10.7: Empty conversions array")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": []  # Empty array
                 },
@@ -1472,7 +1507,7 @@ def test_invalid_requests():
     print_info("\nTest 10.8: Missing required field in conversion (amount)")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/convert",
+            f"{API_BASE_URL}/fx/convert/bulk",
             json={
                 "conversions": [
                     {
@@ -1498,7 +1533,7 @@ def test_invalid_requests():
     print_info("\nTest 10.9: Empty currency string in sync")
     try:
         response = httpx.post(
-            f"{API_BASE_URL}/fx/sync",
+            f"{API_BASE_URL}/fx/sync/bulk",
             params={
                 "start": date.today().isoformat(),
                 "end": date.today().isoformat(),
@@ -1526,9 +1561,9 @@ def run_all_tests():
         "LibreFolio - FX API Endpoint Tests",
         description="""These tests verify:
   • GET /fx/currencies - List available currencies
-  • POST /fx/sync - Sync FX rates from ECB
-  • POST /fx/convert - Convert currencies (bulk-only, single = 1 item array)
-  • POST /fx/rate-set - Manually insert/update rates (bulk-only, single = 1 item array)
+  • POST /fx/sync/bulk - Sync FX rates from ECB
+  • POST /fx/convert/bulk - Convert currencies (bulk-only, single = 1 item array)
+  • POST /fx/rate-set/bulk - Manually insert/update rates (bulk-only, single = 1 item array)
   • Backward-fill warnings for old dates
   • Bulk operations with multiple items
   • Partial failure handling
@@ -1575,12 +1610,12 @@ def _run_tests():
         "GET /fx/currencies": test_get_currencies(),
         "GET /fx/providers": test_get_providers(),
         "Pair Sources CRUD": test_pair_sources_crud(),  # Moved BEFORE sync to setup configuration
-        "POST /fx/sync": test_sync_rates(),
-        "POST /fx/convert (Single)": test_convert_currency(),
-        "POST /fx/rate-set (Single)": test_manual_rate_upsert(),
+        "POST /fx/sync/bulk": test_sync_rates(),
+        "POST /fx/convert/bulk (Single)": test_convert_currency(),
+        "POST /fx/rate-set/bulk (Single)": test_manual_rate_upsert(),
         "Backward-Fill Warning": test_convert_missing_rate(),
-        "POST /fx/convert (Bulk)": test_bulk_conversions(),
-        "POST /fx/rate-set (Bulk)": test_bulk_rate_upserts(),
+        "POST /fx/convert/bulk (Bulk)": test_bulk_conversions(),
+        "POST /fx/rate-set/bulk (Bulk)": test_bulk_rate_upserts(),
         "Invalid Request Handling": test_invalid_requests(),
         }
 

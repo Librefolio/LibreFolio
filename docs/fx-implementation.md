@@ -205,7 +205,7 @@ The FX system has comprehensive test coverage across all layers:
 ## 🔍 Troubleshooting
 
 **Problem:** No rates found for conversion  
-**Solution:** Sync rates first: `POST /api/v1/fx/sync?start=...&end=...&currencies=...`
+**Solution:** Sync rates first: `POST /api/v1/fx/sync/bulk?start=...&end=...&currencies=...`
 
 **Problem:** "Unknown FX provider"  
 **Solution:** Valid providers: ECB, FED, BOE, SNB. Check [Available Providers](./fx/providers.md)

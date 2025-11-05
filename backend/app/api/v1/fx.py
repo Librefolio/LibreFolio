@@ -241,7 +241,7 @@ async def list_currencies(
         raise HTTPException(status_code=502, detail=f"Failed to fetch currencies: {str(e)}")
 
 
-@router.post("/sync", response_model=SyncResponse)
+@router.post("/sync/bulk", response_model=SyncResponse)
 async def sync_rates(
     start: date = Query(..., description="Start date (inclusive)"),
     end: date = Query(..., description="End date (inclusive)"),
@@ -305,11 +305,105 @@ async def sync_rates(
 
         else:
             # AUTO-CONFIGURATION MODE: Use fx_currency_pair_sources
-            # TODO: Implement in next step
-            # For now, return error asking for explicit provider
-            raise HTTPException(
-                status_code=400,
-                detail="Auto-configuration mode not yet implemented. Please specify 'provider' parameter explicitly."
+            # Query configuration for each currency pair
+
+            # Get all configured pair sources (priority=1 only for now)
+            stmt = select(FxCurrencyPairSource).where(
+                FxCurrencyPairSource.priority == 1
+            )
+            result = await session.execute(stmt)
+            pair_sources = result.scalars().all()
+
+            if not pair_sources:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No currency pair sources configured. Please either: "
+                           "(1) specify 'provider' parameter explicitly, or "
+                           "(2) configure pair sources via POST /fx/pair-sources/bulk"
+                )
+
+            # Build lookup: (base, quote) -> provider_code
+            # Note: pairs are stored alphabetically (base < quote)
+            config_lookup = {
+                (ps.base, ps.quote): ps.provider_code
+                for ps in pair_sources
+            }
+
+            # Determine which provider to use for each requested currency
+            # We need to find pairs that involve the requested currencies
+            # For simplicity, we'll group by provider and collect currencies
+
+            # For each requested currency, find which pairs involve it
+            # and check if we have configuration for those pairs
+            missing_pairs = []
+            provider_currencies = {}  # provider_code -> set of currencies to fetch
+            
+            for curr in currency_list:
+                # For simplicity, we look for any pair that involves this currency
+                # The provider will use its own base, and normalization will handle the rest
+                
+                # Find all configured pairs that involve this currency
+                found_config = False
+                for (base, quote), prov_code in config_lookup.items():
+                    if curr in (base, quote):
+                        # This pair involves our currency
+                        if prov_code not in provider_currencies:
+                            provider_currencies[prov_code] = set()
+                        
+                        # Add both currencies from the pair (provider will handle them)
+                        provider_currencies[prov_code].add(base)
+                        provider_currencies[prov_code].add(quote)
+                        found_config = True
+                        break  # Found a config for this currency
+                
+                if not found_config:
+                    # No configuration found for any pair involving this currency
+                    missing_pairs.append(curr)
+            
+            # Error if some currencies have no configuration
+            if missing_pairs:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No configuration found for currencies: {', '.join(missing_pairs)}. "
+                           f"Please configure pair sources involving these currencies via POST /fx/pair-sources/bulk "
+                           f"or use explicit 'provider' parameter."
+                )
+            
+            # Now call each provider for its currencies
+            # Each provider will use its own base_currency
+            total_changed = 0
+            total_fetched = 0
+            all_currencies_synced = set()
+            errors = []
+            
+            for provider_code, currencies_set in provider_currencies.items():
+                try:
+                    # Let provider use its own base_currency
+                    # The normalization will handle alphabetical ordering
+                    result = await ensure_rates_multi_source(
+                        session,
+                        (start, end),
+                        list(currencies_set),
+                        provider_code=provider_code,
+                        base_currency=None  # Let provider use its default base
+                    )
+                    total_changed += result['total_changed']
+                    total_fetched += result['total_fetched']
+                    all_currencies_synced.update(result['currencies_synced'])
+                except Exception as e:
+                    errors.append(f"Provider {provider_code} failed: {str(e)}")
+
+            # If all providers failed, raise error
+            if errors and not all_currencies_synced:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"All providers failed: {'; '.join(errors)}"
+                )
+
+            return SyncResponse(
+                synced=total_changed,
+                date_range=(start.isoformat(), end.isoformat()),
+                currencies=sorted(list(all_currencies_synced))
             )
 
     except ValueError as e:
@@ -318,7 +412,7 @@ async def sync_rates(
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
 
 
-@router.post("/rate-set", response_model=UpsertRatesResponse, status_code=200)
+@router.post("/rate-set/bulk", response_model=UpsertRatesResponse, status_code=200)
 async def upsert_rates_endpoint(
     request: UpsertRatesRequest,
     session: AsyncSession = Depends(get_session)
@@ -399,7 +493,7 @@ async def upsert_rates_endpoint(
         )
 
 
-@router.post("/convert", response_model=ConvertResponse)
+@router.post("/convert/bulk", response_model=ConvertResponse)
 async def convert_currency_bulk(
     request: ConvertRequest,
     session: AsyncSession = Depends(get_session)

@@ -621,7 +621,7 @@ router.include_router(your_module.router)  # Add this line
 > # In backend/app/api/v1/fx.py:
 > router = APIRouter(prefix="/fx", tags=["FX"])
 > 
-> @router.post("/convert")  # Actual path: /api/v1/fx/convert
+> @router.post("/convert")  # Actual path: /api/v1/fx/convert/bulk
 > async def convert(): pass
 > 
 > # In backend/app/api/v1/router.py:
@@ -631,7 +631,7 @@ router.include_router(your_module.router)  # Add this line
 > # In backend/app/main.py:
 > app.include_router(router, prefix="/api/v1")  # Final path prefix
 > 
-> # Result: POST /api/v1/fx/convert
+> # Result: POST /api/v1/fx/convert/bulk
 > ```
 > 
 > **Dependency Injection (`Depends`)**:
@@ -1369,9 +1369,9 @@ See the FX API implementation as reference:
 - **Documentation**: `docs/fx-implementation.md`
 
 **Key endpoints to study**:
-1. `POST /fx/convert` - Bulk conversion (single query for N conversions)
+1. `POST /fx/convert/bulk` - Bulk conversion (single query for N conversions)
 2. `POST /fx/rate` - Bulk upsert (single INSERT for N rates)
-3. `POST /fx/sync` - Bulk fetch from external API
+3. `POST /fx/sync/bulk` - Bulk fetch from external API
 
 ---
 
