@@ -372,16 +372,16 @@ async def sync_rates(
             # For each configured pair, assign to its primary provider
             # This handles inverse pairs correctly (EUR/USD → ECB, USD/EUR → FED)
             provider_pairs = {}  # provider_code -> set of (base, quote) tuples
-
+            
             for (base, quote), providers_list in config_lookup.items():
                 # Use primary provider (priority=1 or lowest)
                 primary_provider = providers_list[0][0]
-
+                
                 if primary_provider not in provider_pairs:
                     provider_pairs[primary_provider] = set()
-
+                
                 provider_pairs[primary_provider].add((base, quote))
-
+            
             # Convert pairs to currencies for each provider
             provider_currencies = {}
             for provider_code, pairs in provider_pairs.items():
@@ -390,12 +390,12 @@ async def sync_rates(
                     currencies.add(base)
                     currencies.add(quote)
                 provider_currencies[provider_code] = currencies
-
+            
             # Check if ALL requested currencies are covered
             all_configured_currencies = set()
             for currencies in provider_currencies.values():
                 all_configured_currencies.update(currencies)
-
+            
             missing_pairs = []
             for curr in currency_list:
                 if curr not in all_configured_currencies:
