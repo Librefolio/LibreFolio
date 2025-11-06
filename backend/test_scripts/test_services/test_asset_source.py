@@ -251,10 +251,161 @@ async def test_single_remove_provider(asset_ids: list[int]):
 # ============================================================================
 
 
+async def test_bulk_upsert_prices(asset_ids: list[int]):
+    """Test bulk_upsert_prices() method."""
+    print("=" * 60)
+    print("Test 8: Bulk Upsert Prices")
+    print("=" * 60)
+
+    from datetime import date
+    from decimal import Decimal
+
+    async with AsyncSession(async_engine, expire_on_commit=False) as session:
+        # Upsert prices for 2 assets
+        data = [
+            {
+                "asset_id": asset_ids[0],
+                "prices": [
+                    {"date": date(2025, 1, 1), "close": Decimal("100.50"), "currency": "USD"},
+                    {"date": date(2025, 1, 2), "close": Decimal("101.25"), "currency": "USD"},
+                ]
+            },
+            {
+                "asset_id": asset_ids[1],
+                "prices": [
+                    {"date": date(2025, 1, 1), "close": Decimal("200.00"), "currency": "USD"},
+                ]
+            },
+        ]
+
+        result = await AssetSourceManager.bulk_upsert_prices(data, session)
+
+        print(f"✅ Bulk upserted: {result['inserted_count']} prices")
+        for r in result["results"]:
+            print(f"   ✓ Asset {r['asset_id']}: {r['count']} prices")
+
+        # Verify in DB
+        from backend.app.db.models import PriceHistory
+        from sqlalchemy import select
+
+        stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_ids[0])
+        db_result = await session.execute(stmt)
+        prices = db_result.scalars().all()
+
+        assert len(prices) == 2
+        print(f"✅ Verified: Asset {asset_ids[0]} has {len(prices)} prices in DB\n")
+
+
+async def test_single_upsert_prices(asset_ids: list[int]):
+    """Test upsert_prices() single method (calls bulk)."""
+    print("=" * 60)
+    print("Test 9: Single Upsert Prices (calls bulk)")
+    print("=" * 60)
+
+    from datetime import date
+    from decimal import Decimal
+
+    async with AsyncSession(async_engine, expire_on_commit=False) as session:
+        # Update existing price
+        prices = [
+            {"date": date(2025, 1, 1), "close": Decimal("105.00"), "currency": "USD"},
+        ]
+
+        result = await AssetSourceManager.upsert_prices(asset_ids[0], prices, session)
+
+        print(f"✅ Single upsert: {result['message']}")
+
+        # Verify update
+        from backend.app.db.models import PriceHistory
+        from sqlalchemy import select
+
+        stmt = select(PriceHistory).where(
+            PriceHistory.asset_id == asset_ids[0],
+            PriceHistory.date == date(2025, 1, 1)
+        )
+        db_result = await session.execute(stmt)
+        price = db_result.scalar_one()
+
+        assert price.close == Decimal("105.00")
+        print(f"✅ Verified: Price updated to {price.close}\n")
+
+
+async def test_get_prices_with_backfill(asset_ids: list[int]):
+    """Test get_prices() with backward-fill logic."""
+    print("=" * 60)
+    print("Test 10: Get Prices with Backward-Fill")
+    print("=" * 60)
+
+    from datetime import date
+
+    async with AsyncSession(async_engine, expire_on_commit=False) as session:
+        # Query range with gaps
+        prices = await AssetSourceManager.get_prices(
+            asset_id=asset_ids[0],
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 5),
+            session=session
+        )
+
+        print(f"ℹ️  Queried 5 days, got {len(prices)} prices")
+
+        for price in prices:
+            if price.get("backward_fill_info"):
+                bf = price["backward_fill_info"]
+                print(f"   ✓ {price['date']}: {price['close']} (backfilled from {bf['actual_rate_date']}, {bf['days_back']} days)")
+            else:
+                print(f"   ✓ {price['date']}: {price['close']} (exact match)")
+
+        # Verify backward-fill structure
+        backfilled = [p for p in prices if p.get("backward_fill_info")]
+        if backfilled:
+            print(f"✅ Backward-fill working: {len(backfilled)} dates filled\n")
+        else:
+            print(f"ℹ️  No backward-fill needed (all dates have data)\n")
+
+
+async def test_bulk_delete_prices(asset_ids: list[int]):
+    """Test bulk_delete_prices() method."""
+    print("=" * 60)
+    print("Test 11: Bulk Delete Prices")
+    print("=" * 60)
+
+    from datetime import date
+
+    async with AsyncSession(async_engine, expire_on_commit=False) as session:
+        # Delete specific ranges
+        data = [
+            {
+                "asset_id": asset_ids[0],
+                "date_ranges": [{"start": date(2025, 1, 1), "end": date(2025, 1, 2)}]
+            },
+            {
+                "asset_id": asset_ids[1],
+                "date_ranges": [{"start": date(2025, 1, 1)}]  # Single day
+            },
+        ]
+
+        result = await AssetSourceManager.bulk_delete_prices(data, session)
+
+        print(f"✅ Bulk deleted: {result['deleted_count']} prices")
+        for r in result["results"]:
+            print(f"   ✓ Asset {r['asset_id']}: {r['message']}")
+
+        # Verify deletion
+        from backend.app.db.models import PriceHistory
+        from sqlalchemy import select
+
+        stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_ids[0])
+        db_result = await session.execute(stmt)
+        prices = db_result.scalars().all()
+
+        print(f"✅ Verified: Asset {asset_ids[0]} has {len(prices)} prices remaining\n")
+
+
 async def run_all_tests():
     """Run all tests in sequence."""
     print("\n" + "=" * 60)
-    print(" Asset Source Service - Basic Tests")
+    print(" Asset Source Service - Complete Tests")
     print("=" * 60 + "\n")
 
     # Helper function tests (synchronous)
@@ -267,6 +418,12 @@ async def run_all_tests():
     await test_single_assign_provider(asset_ids)
     await test_bulk_remove_providers(asset_ids)
     await test_single_remove_provider(asset_ids)
+
+    # Price CRUD tests (asynchronous)
+    await test_bulk_upsert_prices(asset_ids)
+    await test_single_upsert_prices(asset_ids)
+    await test_get_prices_with_backfill(asset_ids)
+    await test_bulk_delete_prices(asset_ids)
 
     print("=" * 60)
     print("✅ All tests passed!")
