@@ -1,0 +1,38 @@
+Goal: Implement transaction endpoints with oversell guard and automatic cash posting.
+
+Policies:
+- Inventory (per asset, per broker) must never go negative in time.
+- Oversell guard applies to: SELL, REMOVE_HOLDING, TRANSFER_OUT (asset). Block the insert if (held_qty_before < decrement_qty).
+- Cash non-negative policy: controlled by setting enforce_cash_non_negative (default false). If true, prevent BUY or WITHDRAWAL that would create negative cash balance on (broker,currency) at that date.
+
+Endpoints:
+- POST /api/v1/transactions/buy
+  - Insert transaction; within same DB txn:
+    - Auto-create/get cash_account (broker_id, currency).
+    - Create cash_movement BUY_SPEND amount = qty*price + fees + taxes (outflow).
+- POST /api/v1/transactions/sell[?dry_run=true]
+  - Compute held_qty_before up to trade_date. If sell_qty > held_qty_before → HTTP 400 with message "Attempting to sell more than held. Please check prior BUY transactions or the SELL quantity.", no writes.
+  - If dry_run=true: return preview {held_qty_before, requested_qty} 200, no writes.
+  - Else: insert SELL; create cash_movement SALE_PROCEEDS amount = qty*price - fees - taxes (inflow).
+- POST /api/v1/transactions/dividend → insert + cash_movement DIVIDEND_INCOME (amount=price).
+- POST /api/v1/transactions/interest → insert + cash_movement INTEREST_INCOME (amount=price).
+- POST /api/v1/transactions/add_holding → insert (qty increases, no cash).
+- POST /api/v1/transactions/remove_holding → oversell guard on quantity, insert (qty decreases, no cash).
+- POST /api/v1/transactions/transfer_asset
+  - body: {asset_id, from_broker_id, to_broker_id, quantity, trade_date, note?}
+  - Create two asset transactions: TRANSFER_OUT on from_broker (oversell guard) and TRANSFER_IN on to_broker. No cash movements.
+- Cash endpoints:
+  - POST /api/v1/cash/deposit → create DEPOSIT movement (inflow)
+  - POST /api/v1/cash/withdraw → create WITHDRAWAL movement (outflow; if enforce_cash_non_negative and would go <0, 400)
+  - POST /api/v1/cash/transfer → create TRANSFER_OUT on source and TRANSFER_IN on destination cash accounts (both movements)
+- FEE/TAX standalone:
+  - POST /api/v1/cash/fee and /tax → cash movements (outflows), optionally linked_transaction_id if tied to an asset transaction.
+
+Deliverables:
+- Endpoints + services implemented (transactions and cash posting).
+- Curl examples or unit-style scripts.
+
+Checklist:
+- Oversell on SELL/REMOVE_HOLDING/TRANSFER_OUT (asset) returns 400 and no DB mutations.
+- BUY creates BUY_SPEND cash outflow; SELL/DIVIDEND/INTEREST create inflows.
+- DEPOSIT/WITHDRAW/TRANSFER cash endpoints work; non-negative policy enforced if enabled.

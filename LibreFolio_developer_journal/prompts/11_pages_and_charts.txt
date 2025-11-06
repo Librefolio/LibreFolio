@@ -1,0 +1,13 @@
+Goal: Implement core pages wired to backend; computations must come from backend.
+
+Requirements:
+- Overview: fetch /portfolio/overview; render dual-line (Invested vs Market) with ECharts; KPI cards; filters (date/broker/type).
+- Brokers: list; broker detail shows assets metrics and cash accounts with balances; DEPOSIT/WITHDRAW/TRANSFER modals wired to API.
+- Assets: list; detail shows dual-line series, price history table, transactions table; “Analyze (FIFO)” calls /analysis/asset and displays matches & KPIs.
+- Transactions: forms for BUY, SELL (with optional dry_run), DIVIDEND, INTEREST, ADD/REMOVE, TRANSFER (asset), and cash DEPOSIT/WITHDRAW/TRANSFER.
+- ❗All calculations must be returned by backend; frontend focuses on presentation; backend may cache results if needed.
+
+Checklist:
+- SELL oversell error surfaced nicely.
+- Cash ops update balances via query invalidation.
+- Charts display server-provided series as-is.

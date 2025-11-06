@@ -1,0 +1,19 @@
+Goal: Implement import/export and a backend function to ingest a JSON list of transactions for a given broker, plus asset creation including scheduled-yield metadata.
+
+Requirements:
+- Asset creation API must accept valuation_model and optional interest_schedule, maturity_date, face_value, late_interest.
+- Backend function: import_transactions_json(broker_id: int, items: List[TransactionIn], autocreate: bool=False)
+  - Validates items; enforces oversell and cash policies; autocreate assets if requested.
+  - Automatically creates corresponding cash movements for asset transactions.
+  - Returns per-row results {ok|error, message, created_ids}.
+- API:
+  - POST /import/transactions/json (body: {broker_id, autocreate?, items:[...]})
+  - POST /import/transactions/csv (CSV header:
+    type,broker,asset_identifier,identifier_type,quantity,price,currency,fees,taxes,trade_date,settlement_date,note)
+- Export: /export/transactions?format=csv|json, /export/assets, /export/cash
+- TODO: Doc section for a future "Broker Report Converter" project to normalize broker statements.
+
+Checklist:
+- JSON import can create a loan asset with schedule when autocreate=true.
+- Oversell rows are rejected with clear per-row messages.
+- Export endpoints return coherent data.

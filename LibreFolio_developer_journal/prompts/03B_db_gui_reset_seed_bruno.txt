@@ -1,0 +1,48 @@
+Goal: Provide DB GUI guidance, reset/seed scripts including a loan asset with tiered interest and late policy, and Bruno API tests.
+
+Tasks:
+1) DB GUI Guidance (README section “Debugging SQLite”):
+   - Explain how to open ./data/sqlite/app.db with DB Browser for SQLite / SQLiteStudio / DBeaver (prefer read-only or file copy while container runs).
+
+2) Scripts:
+   - scripts/reset_db.py: either delete DB file + `alembic upgrade head`, or full downgrade/upgrade cycle.
+   - scripts/seed_demo.py: create demo dataset:
+     - Brokers: "Directa", "BrokerX"
+     - Assets:
+       - VWCE.DE (ETF, MARKET_PRICE, plugin yfinance)
+       - AAPL (STOCK, MARKET_PRICE, plugin yfinance)
+       - RECROWD-LOAN-001 (CROWDFUND_LOAN, valuation_model=SCHEDULED_YIELD)
+         interest_schedule:
+           [
+             {"start_date":"2025-01-01","end_date":"2025-06-30","annual_rate":0.08,"compounding":"SIMPLE","day_count":"ACT/365"},
+             {"start_date":"2025-07-01","end_date":"2025-12-31","annual_rate":0.085,"compounding":"SIMPLE","day_count":"ACT/365"}
+           ]
+         maturity_date: "2025-12-31"
+         late_interest: {"annual_rate":0.12,"grace_days":0}
+         face_value per unit: 1.00
+     - Cash: DEPOSIT EUR 10,000 into Directa.
+     - Transactions:
+       - BUY 5,000 EUR of RECROWD-LOAN-001 on 2025-01-02 (quantity = 5000 units @ price 1.0)
+       - INTEREST payments as explicit transactions on selected dates (e.g., monthly or bullet at maturity) for testing,
+         and one SELL at maturity (principal repayment) if desired.
+       - Also a BUY/SELL for VWCE.DE to test FIFO runtime.
+   - Scripts runnable via Pipenv.
+
+3) Bruno (tests/bruno/):
+   - Collection with env/baseUrl var: http://localhost:8000/api/v1
+   - Requests:
+     * health
+     * create brokers/assets (or rely on seed)
+     * cash deposit
+     * BUY loan units; verify cash decreased
+     * GET analysis/asset for RECROWD-LOAN-001 range: confirm daily accrued market value rises in line with schedule
+     * SELL oversell negative case: should return 400
+     * yfinance refresh for VWCE.DE
+     * Optional: INTEREST payment transaction and check cash increased
+
+Deliverables:
+- scripts, Bruno collection, README updates (how to run/reset/seed and run Bruno).
+
+Checklist:
+- reset + seed OK; DB opens in GUI; loan asset exists with schedule JSON.
+- Bruno analysis on loan shows increasing market curve per schedule.

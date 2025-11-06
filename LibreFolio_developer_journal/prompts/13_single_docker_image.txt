@@ -1,0 +1,11 @@
+Goal: Build a single Docker image for the whole app.
+
+Requirements:
+- Multi-stage Dockerfile: Node 20 to build frontend; python:3.11-slim for backend with Pipenv (`pipenv install --system --deploy --ignore-pipfile`).
+- Copy frontend/dist into backend static; FastAPI StaticFiles serves SPA; history fallback to index.html.
+- Expose 8000; CMD uvicorn app.main:app --host 0.0.0.0 --port 8000.
+- Optional docker-compose.yml mounting ./data:/app/data.
+
+Checklist:
+- `docker build` OK; `docker run -p 8000:8000` serves API + SPA.
+- DB and settings persist with volume.

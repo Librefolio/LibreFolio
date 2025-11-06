@@ -1,0 +1,12 @@
+Goal: Start APScheduler to run periodic jobs.
+
+Requirements:
+- jobs/scheduler.py: start on app startup; graceful shutdown.
+- jobs/tasks.py:
+  - refresh_recent_prices every settings.scheduler_interval_min minutes (active assets).
+  - daily_history_sync nightly for last 30 days.
+  - daily_fx_sync nightly for last 7 days.
+- API manual trigger: POST /tasks/run?name=refresh_recent_prices (or other job names)
+
+Checklist:
+- Jobs log start/end; manual trigger works.
