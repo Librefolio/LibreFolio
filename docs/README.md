@@ -23,6 +23,7 @@ Welcome to LibreFolio documentation!
   - **[FX API Reference](fx/api-reference.md)** - REST API endpoints for FX operations
   - **[FX Providers](fx/providers.md)** - ECB, FED, BOE, SNB details
   - **[FX Provider Development](fx/provider-development.md)** - ⭐ How to add new providers
+- **[Financial Calculations](financial-calculations.md)** - Mathematical reasoning and precision handling
 
 ### Testing
 - **[Testing Guide for New Developers](testing-guide.md)** - ⭐ Hands-on introduction to the test suite (start here!)
@@ -51,6 +52,7 @@ todo: add more links when more docs are added
 | [fx/api-reference.md](fx/api-reference.md) | FX REST API endpoints | Developers, Frontend |
 | [fx/providers.md](fx/providers.md) | Available FX providers details | Developers |
 | [fx/provider-development.md](fx/provider-development.md) | ⭐ How to add FX providers | Contributors |
+| [financial-calculations.md](financial-calculations.md) | Mathematical reasoning & precision | Developers, Contributors |
 | [README.md](../README.md) | Project overview | Everyone |
 
 
@@ -74,10 +76,13 @@ todo: add more links when more docs are added
 → Read [Alembic Guide](alembic-guide.md)
 
 **...understand how FX rates work**
+→ Read [FX Implementation](fx-implementation.md)
+
 **...develop a new FX data provider (central bank integration)**
 → Read [FX Provider Development Guide](fx/provider-development.md) - Quick start template
 
-→ Read [FX Implementation](fx-implementation.md)
+**...understand financial calculations (interest, ROI, precision)**
+→ Read [Financial Calculations Guide](financial-calculations.md) - Day-count conventions, accrued interest, metrics
 
 **...configure the application or deploy to Docker**
 → Read [Environment Variables](environment-variables.md)

@@ -16,6 +16,7 @@ from backend.app.db.base import (
     PriceHistory,
     FxRate,
     FxCurrencyPairSource,
+    AssetProviderAssignment,
     CashAccount,
     CashMovement,
     )
@@ -39,6 +40,7 @@ __all__ = [
     "PriceHistory",
     "FxRate",
     "FxCurrencyPairSource",
+    "AssetProviderAssignment",
     "CashAccount",
     "CashMovement",
     ]
