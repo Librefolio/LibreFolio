@@ -27,12 +27,13 @@ from datetime import date as date_type, timedelta
 from decimal import Decimal, ROUND_DOWN
 from typing import TypedDict, Optional
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset,
     AssetProviderAssignment,
+    PriceHistory,
     ValuationModel,
 )
 
@@ -57,7 +58,6 @@ class PricePoint(TypedDict):
     high: Optional[Decimal]
     low: Optional[Decimal]
     close: Decimal  # Required
-    volume: Optional[Decimal]
     currency: str
 
 
@@ -402,7 +402,6 @@ async def calculate_synthetic_value(
         high=None,
         low=None,
         close=truncate_price_to_db_precision(synthetic_value),
-        volume=None,
         currency=asset.currency,
     )
 
@@ -584,12 +583,337 @@ class AssetSourceManager:
         )
         return result.scalar_one_or_none()
 
-    # TODO: Implement remaining methods in next iteration
-    # - bulk_refresh_prices()
-    # - refresh_price()
-    # - bulk_upsert_prices()
-    # - upsert_prices()
-    # - bulk_delete_prices()
-    # - delete_prices()
-    # - get_prices() with backward-fill + synthetic yield
+    # ========================================================================
+    # MANUAL PRICE CRUD METHODS
+    # ========================================================================
+
+    @staticmethod
+    async def bulk_upsert_prices(
+        data: list[dict],
+        session: AsyncSession,
+    ) -> dict:
+        """
+        Bulk upsert prices manually (PRIMARY bulk method).
+
+        Args:
+            data: List of {asset_id, prices: [{date, open?, high?, low?, close, volume?}, ...]}
+            session: Database session
+
+        Returns:
+            {inserted_count, updated_count, results: [{asset_id, count, message}, ...]}
+
+        Optimized: Batch operations per asset, minimize DB roundtrips
+        """
+        if not data:
+            return {"inserted_count": 0, "updated_count": 0, "results": []}
+
+        total_inserted = 0
+        total_updated = 0
+        results = []
+
+        for item in data:
+            asset_id = item["asset_id"]
+            prices = item.get("prices", [])
+
+            if not prices:
+                results.append({
+                    "asset_id": asset_id,
+                    "count": 0,
+                    "message": "No prices to upsert"
+                })
+                continue
+
+            # Build PriceHistory objects for upsert
+            # Strategy: DELETE existing dates + INSERT new (avoids SQLite ON CONFLICT issues)
+            price_objects = []
+            dates_to_upsert = []
+
+            for price in prices:
+                dates_to_upsert.append(price["date"])
+
+                price_obj = PriceHistory(
+                    asset_id=asset_id,
+                    date=price["date"],
+                    open=truncate_price_to_db_precision(price["open"], "open") if price.get("open") is not None else None,
+                    high=truncate_price_to_db_precision(price["high"], "high") if price.get("high") is not None else None,
+                    low=truncate_price_to_db_precision(price["low"], "low") if price.get("low") is not None else None,
+                    close=truncate_price_to_db_precision(price["close"], "close"),
+                    volume=price.get("volume"),
+                    currency=price.get("currency", "USD"),  # TODO: Get from asset
+                    source_plugin_key="MANUAL",  # Manual price insert
+                    fetched_at=None,  # Not fetched from external source
+                )
+                price_objects.append(price_obj)
+
+            # Delete existing prices for these dates (upsert = delete + insert)
+            if dates_to_upsert:
+                delete_stmt = delete(PriceHistory).where(
+                    and_(
+                        PriceHistory.asset_id == asset_id,
+                        PriceHistory.date.in_(dates_to_upsert)
+                    )
+                )
+                await session.execute(delete_stmt)
+
+            # Bulk insert new prices
+            session.add_all(price_objects)
+            await session.commit()
+
+            # Count as inserted
+            total_inserted += len(price_objects)
+
+            results.append({
+                "asset_id": asset_id,
+                "count": len(price_objects),
+                "message": f"Upserted {len(price_objects)} prices"
+            })
+
+        return {
+            "inserted_count": total_inserted,
+            "updated_count": 0,  # SQLite doesn't distinguish
+            "results": results
+        }
+
+    @staticmethod
+    async def upsert_prices(
+        asset_id: int,
+        prices: list[dict],
+        session: AsyncSession,
+    ) -> dict:
+        """
+        Upsert prices for single asset (calls bulk with 1 element).
+
+        Args:
+            asset_id: Asset ID
+            prices: List of price dicts
+            session: Database session
+
+        Returns:
+            Single result dict
+        """
+        result = await AssetSourceManager.bulk_upsert_prices(
+            [{"asset_id": asset_id, "prices": prices}],
+            session
+        )
+        return result["results"][0]
+
+    @staticmethod
+    async def bulk_delete_prices(
+        data: list[dict],
+        session: AsyncSession,
+    ) -> dict:
+        """
+        Bulk delete price ranges (PRIMARY bulk method).
+
+        Args:
+            data: List of {asset_id, date_ranges: [{start, end?}, ...]}
+                  end is optional (single day if omitted)
+            session: Database session
+
+        Returns:
+            {deleted_count, results: [{asset_id, deleted, message}, ...]}
+
+        Optimized: 1 DELETE query with complex WHERE
+        """
+        if not data:
+            return {"deleted_count": 0, "results": []}
+
+        # Build complex OR conditions for all ranges
+        conditions = []
+        for item in data:
+            asset_id = item["asset_id"]
+            ranges = item.get("date_ranges", [])
+
+            for date_range in ranges:
+                start = date_range["start"]
+                end = date_range.get("end", start)  # Single day if no end
+
+                conditions.append(
+                    and_(
+                        PriceHistory.asset_id == asset_id,
+                        PriceHistory.date >= start,
+                        PriceHistory.date <= end
+                    )
+                )
+
+        if not conditions:
+            return {"deleted_count": 0, "results": []}
+
+        # Execute single DELETE with OR of all conditions
+        stmt = delete(PriceHistory).where(or_(*conditions))
+        result = await session.execute(stmt)
+        await session.commit()
+
+        deleted_count = result.rowcount
+
+        # Build results per asset (approximate - we don't track per-asset deletes)
+        results = [
+            {
+                "asset_id": item["asset_id"],
+                "deleted": deleted_count // len(data),  # Approximate
+                "message": f"Deleted prices in {len(item.get('date_ranges', []))} range(s)"
+            }
+            for item in data
+        ]
+
+        return {
+            "deleted_count": deleted_count,
+            "results": results
+        }
+
+    @staticmethod
+    async def delete_prices(
+        asset_id: int,
+        date_ranges: list[dict],
+        session: AsyncSession,
+    ) -> dict:
+        """
+        Delete price ranges for single asset (calls bulk with 1 element).
+
+        Args:
+            asset_id: Asset ID
+            date_ranges: List of {start, end?}
+            session: Database session
+
+        Returns:
+            Single result dict
+        """
+        result = await AssetSourceManager.bulk_delete_prices(
+            [{"asset_id": asset_id, "date_ranges": date_ranges}],
+            session
+        )
+        return result["results"][0]
+
+    # ========================================================================
+    # PRICE QUERY WITH BACKWARD-FILL + SYNTHETIC YIELD
+    # ========================================================================
+
+    @staticmethod
+    async def get_prices(
+        asset_id: int,
+        start_date: date_type,
+        end_date: date_type,
+        session: AsyncSession,
+    ) -> list[dict]:
+        """
+        Get prices for asset with backward-fill and synthetic yield support.
+
+        Logic:
+        1. Fetch asset to check valuation_model
+        2. If SCHEDULED_YIELD: Calculate synthetic values (no DB query for prices)
+        3. If other types: Query price_history with backward-fill
+
+        Args:
+            asset_id: Asset ID
+            start_date: Start date (inclusive)
+            end_date: End date (inclusive)
+            session: Database session
+
+        Returns:
+            List of price dicts with backward_fill_info:
+            [{
+                date, open, high, low, close, volume, currency,
+                backward_fill_info: {actual_rate_date, days_back} or None
+            }, ...]
+
+        Raises:
+            ValueError: If asset not found or date range invalid
+        """
+        # Validate date range
+        if start_date > end_date:
+            raise ValueError(f"Start date {start_date} is after end date {end_date}")
+
+        # Fetch asset
+        asset = await session.get(Asset, asset_id)
+        if not asset:
+            raise ValueError(f"Asset {asset_id} not found")
+
+        # ====================================================================
+        # SPECIAL CASE: Synthetic Yield (calculated at runtime, no DB query)
+        # ====================================================================
+        if asset.valuation_model == ValuationModel.SCHEDULED_YIELD:
+            results = []
+            current_date = start_date
+
+            while current_date <= end_date:
+                try:
+                    synthetic_price = await calculate_synthetic_value(asset, current_date, session)
+                    results.append({
+                        "date": current_date,
+                        "open": None,
+                        "high": None,
+                        "low": None,
+                        "close": synthetic_price["close"],
+                        "volume": None,
+                        "currency": synthetic_price["currency"],
+                        "backward_fill_info": None  # Always exact calculation
+                    })
+                except Exception as e:
+                    # Skip dates with calculation errors
+                    pass
+
+                current_date += timedelta(days=1)
+
+            return results
+
+        # ====================================================================
+        # NORMAL CASE: Query price_history with backward-fill
+        # ====================================================================
+
+        # Query all available prices in range
+        stmt = select(PriceHistory).where(
+            and_(
+                PriceHistory.asset_id == asset_id,
+                PriceHistory.date >= start_date,
+                PriceHistory.date <= end_date
+            )
+        ).order_by(PriceHistory.date)
+
+        db_result = await session.execute(stmt)
+        db_prices = {p.date: p for p in db_result.scalars().all()}
+
+        # Build results with backward-fill
+        results = []
+        current_date = start_date
+        last_known_price = None
+
+        while current_date <= end_date:
+            if current_date in db_prices:
+                # Exact match
+                price = db_prices[current_date]
+                last_known_price = price
+
+                results.append({
+                    "date": current_date,
+                    "open": price.open,
+                    "high": price.high,
+                    "low": price.low,
+                    "close": price.close,
+                    "currency": price.currency,
+                    "backward_fill_info": None
+                })
+            elif last_known_price:
+                # Backward-fill
+                days_back = (current_date - last_known_price.date).days
+
+                results.append({
+                    "date": current_date,
+                    "open": last_known_price.open,
+                    "high": last_known_price.high,
+                    "low": last_known_price.low,
+                    "close": last_known_price.close,
+                    "currency": last_known_price.currency,
+                    "backward_fill_info": {
+                        "actual_rate_date": str(last_known_price.date),
+                        "days_back": days_back
+                    }
+                })
+            else:
+                # No data available (TODO Step 03: fallback to last BUY transaction)
+                # For now, skip this date
+                pass
+
+            current_date += timedelta(days=1)
+
+        return results
 
