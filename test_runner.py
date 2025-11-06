@@ -357,6 +357,23 @@ def services_fx_conversion(verbose: bool = False) -> bool:
         )
 
 
+def services_asset_source(verbose: bool = False) -> bool:
+    """
+    Test Asset Source service logic.
+    Tests provider assignment (bulk/single), helper functions, and synthetic yield calculation.
+    """
+    print_section("Services: Asset Source Logic")
+    print_info("Testing: backend/app/services/asset_source.py")
+    print_info("Tests: Helper functions, Provider assignment, Synthetic yield")
+    print_info("Note: Test assets automatically created and cleaned up")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_asset_source"],
+        "Asset source service tests",
+        verbose=verbose
+        )
+
+
 def services_all(verbose: bool = False) -> bool:
     """
     Run all backend service tests.
@@ -367,6 +384,7 @@ def services_all(verbose: bool = False) -> bool:
 
     tests = [
         ("FX Conversion Logic", lambda: services_fx_conversion(verbose)),
+        ("Asset Source Logic", lambda: services_asset_source(verbose)),
         # Future: FIFO calculations, portfolio aggregations, etc.
         ]
 
@@ -671,10 +689,14 @@ These tests verify business logic and service layer:
   • Uses data from database
 
 Test commands:
-  fx   - Test FX conversion service logic (identity, direct, inverse, cross-currency, forward-fill)
-         📋 Prerequisites: DB FX rates subsystem (run: db fx-rates)
+  fx           - Test FX conversion service logic (identity, direct, inverse, cross-currency, forward-fill)
+                 📋 Prerequisites: DB FX rates subsystem (run: db fx-rates)
+  
+  asset-source - Test Asset Source service logic (provider assignment, helpers, synthetic yield)
+                 📋 Prerequisites: Database created (run: db create)
+                 💡 Tests: Helper functions (truncation, ACT/365), Provider assignment (bulk/single), Synthetic yield
          
-  all  - Run all backend service tests
+  all          - Run all backend service tests
   
 Future: FIFO calculations, portfolio aggregations, loan schedules will be added here
         """,
@@ -683,7 +705,7 @@ Future: FIFO calculations, portfolio aggregations, loan schedules will be added 
 
     services_parser.add_argument(
         "action",
-        choices=["fx", "all"],
+        choices=["fx", "asset-source", "all"],
         help="Service test to run"
         )
 
@@ -793,6 +815,8 @@ def main():
         # Backend services tests
         if args.action == "fx":
             success = services_fx_conversion(verbose=verbose)
+        elif args.action == "asset-source":
+            success = services_asset_source(verbose=verbose)
         elif args.action == "all":
             success = services_all(verbose=verbose)
 

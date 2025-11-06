@@ -1,20 +1,20 @@
 """
 Common schemas shared across subsystems.
 
-This module contains TypedDicts and schemas used by multiple services
+This module contains Pydantic models and TypedDicts used by multiple services
 (e.g., both FX and Asset pricing systems).
 """
-from typing import TypedDict
+from pydantic import BaseModel, Field
 
 
-class BackwardFillInfo(TypedDict):
+class BackwardFillInfo(BaseModel):
     """
     Backward-fill information when requested date has no data.
 
     Used by both FX (fx.py) and Asset pricing (asset_source.py) systems
     to indicate when historical data was used instead of exact date match.
 
-    Structure:
+    Attributes:
         actual_rate_date: ISO date string of the actual data used (YYYY-MM-DD)
         days_back: Number of days back from requested date
 
@@ -36,6 +36,6 @@ class BackwardFillInfo(TypedDict):
             }
         }
     """
-    actual_rate_date: str  # ISO date (YYYY-MM-DD)
-    days_back: int  # Number of days back from requested date
+    actual_rate_date: str = Field(..., description="ISO date of actual data used (YYYY-MM-DD)")
+    days_back: int = Field(..., description="Number of days back from requested date")
 

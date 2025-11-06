@@ -16,6 +16,7 @@ from sqlmodel import select, delete as sql_delete, and_, or_
 
 from backend.app.db.models import FxCurrencyPairSource
 from backend.app.db.session import get_session
+from backend.app.schemas.common import BackwardFillInfo
 from backend.app.services.fx import (
     FXServiceError,
     FXProviderFactory,
@@ -34,11 +35,6 @@ class SyncResponse(BaseModel):
     date_range: tuple[str, str] = Field(..., description="Date range synced (ISO format)")
     currencies: list[str] = Field(..., description="Currencies synced")
 
-
-class BackwardFillInfo(BaseModel):
-    """Information about backward-fill applied during conversion."""
-    actual_rate_date: str = Field(..., description="Date of the rate actually used")
-    days_back: int = Field(..., description="Number of days back from requested date")
 
 
 class ConversionRequest(BaseModel):

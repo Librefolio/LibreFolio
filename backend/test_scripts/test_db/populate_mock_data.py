@@ -40,11 +40,14 @@ from decimal import Decimal
 from pathlib import Path
 
 from sqlmodel import Session, select, delete
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 from backend.app.db import (
-    sync_engine as engine,  # Use sync engine for this script
+    # DON'T import sync_engine - it was created before setup_test_database()!
     Broker,
     Asset,
+    AssetProviderAssignment,
     Transaction,
     PriceHistory,
     FxRate,
@@ -59,6 +62,15 @@ from backend.app.db import (
     )
 from backend.app.services.fx import FXProviderFactory
 
+# Create engine AFTER setup_test_database() has set DATABASE_URL
+# This ensures we use the test database, not the production one
+_settings = get_settings()
+engine = create_engine(
+    _settings.DATABASE_URL,
+    echo=False,
+    poolclass=NullPool,
+)
+
 
 def cleanup_all_tables(session: Session):
     """Delete all existing data from all tables (in correct order for FK constraints)."""
@@ -72,6 +84,7 @@ def cleanup_all_tables(session: Session):
             CashMovement,
             Transaction,
             PriceHistory,
+            AssetProviderAssignment,
             FxRate,
             FxCurrencyPairSource,
             CashAccount,
@@ -144,10 +157,6 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.STOCK,
             "valuation_model": ValuationModel.MARKET_PRICE,
-            "current_data_plugin_key": "yfinance",
-            "current_data_plugin_params": json.dumps({"symbol": "AAPL"}),
-            "history_data_plugin_key": "yfinance",
-            "history_data_plugin_params": json.dumps({"symbol": "AAPL"}),
             },
         {
             "display_name": "Microsoft Corporation",
@@ -156,10 +165,6 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.STOCK,
             "valuation_model": ValuationModel.MARKET_PRICE,
-            "current_data_plugin_key": "yfinance",
-            "current_data_plugin_params": json.dumps({"symbol": "MSFT"}),
-            "history_data_plugin_key": "yfinance",
-            "history_data_plugin_params": json.dumps({"symbol": "MSFT"}),
             },
         {
             "display_name": "Tesla, Inc.",
@@ -168,10 +173,6 @@ def populate_assets(session: Session):
             "currency": "USD",
             "asset_type": AssetType.STOCK,
             "valuation_model": ValuationModel.MARKET_PRICE,
-            "current_data_plugin_key": "yfinance",
-            "current_data_plugin_params": json.dumps({"symbol": "TSLA"}),
-            "history_data_plugin_key": "yfinance",
-            "history_data_plugin_params": json.dumps({"symbol": "TSLA"}),
             },
         # ETFs
         {
@@ -181,10 +182,6 @@ def populate_assets(session: Session):
             "currency": "EUR",
             "asset_type": AssetType.ETF,
             "valuation_model": ValuationModel.MARKET_PRICE,
-            "current_data_plugin_key": "yfinance",
-            "current_data_plugin_params": json.dumps({"symbol": "VWCE.MI"}),
-            "history_data_plugin_key": "yfinance",
-            "history_data_plugin_params": json.dumps({"symbol": "VWCE.MI"}),
             },
         {
             "display_name": "iShares Core S&P 500 UCITS ETF",
@@ -193,10 +190,6 @@ def populate_assets(session: Session):
             "currency": "EUR",
             "asset_type": AssetType.ETF,
             "valuation_model": ValuationModel.MARKET_PRICE,
-            "current_data_plugin_key": "yfinance",
-            "current_data_plugin_params": json.dumps({"symbol": "CSPX.L"}),
-            "history_data_plugin_key": "yfinance",
-            "history_data_plugin_params": json.dumps({"symbol": "CSPX.L"}),
             },
         # HOLD assets (manual valuation)
         {
@@ -268,6 +261,46 @@ def populate_assets(session: Session):
         print(f"  ✅ {asset_desc}")
 
     session.commit()
+
+
+def populate_asset_provider_assignments(session: Session):
+    """
+    Assign pricing providers to market-priced assets.
+
+    This demonstrates the asset_provider_assignments table functionality.
+    Assets with MARKET_PRICE valuation get automatic pricing providers.
+    """
+    print("\n🔧 Creating Asset Provider Assignments...")
+    print("-" * 60)
+
+    # Map: identifier → (provider_code, provider_params)
+    # provider_params is JSON configuration for the provider
+    assignments = [
+        ("AAPL", "yfinance", json.dumps({"symbol": "AAPL"})),
+        ("MSFT", "yfinance", json.dumps({"symbol": "MSFT"})),
+        ("TSLA", "yfinance", json.dumps({"symbol": "TSLA"})),
+        ("VWCE", "yfinance", json.dumps({"symbol": "VWCE.MI"})),
+        ("CSPX", "yfinance", json.dumps({"symbol": "CSPX.L"})),
+        # Note: HOLD assets and SCHEDULED_YIELD loans don't need providers
+    ]
+
+    for identifier, provider_code, provider_params in assignments:
+        asset = session.exec(select(Asset).where(Asset.identifier == identifier)).first()
+        if not asset:
+            print(f"  ⚠️  Asset {identifier} not found, skipping assignment")
+            continue
+
+        assignment = AssetProviderAssignment(
+            asset_id=asset.id,
+            provider_code=provider_code,
+            provider_params=provider_params,
+            last_fetch_at=None,  # Never fetched yet
+        )
+        session.add(assignment)
+        print(f"  ✅ {identifier} → {provider_code}")
+
+    session.commit()
+    print(f"\n  📊 Assigned providers to {len(assignments)} assets")
 
 
 def populate_cash_accounts(session: Session):
@@ -702,6 +735,7 @@ def check_existing_data(session: Session) -> tuple[bool, dict]:
     counts = {
         'brokers': len(session.exec(select(Broker)).all()),
         'assets': len(session.exec(select(Asset)).all()),
+        'asset_providers': len(session.exec(select(AssetProviderAssignment)).all()),
         'transactions': len(session.exec(select(Transaction)).all()),
         'cash_accounts': len(session.exec(select(CashAccount)).all()),
         'cash_movements': len(session.exec(select(CashMovement)).all()),
@@ -730,7 +764,8 @@ def main():
 
     settings = get_settings()
     # Extract path from sqlite URL
-    db_url = settings.TEST_DATABASE_URL if 'test' in sys.argv[0] or 'TEST' in str(Path.cwd()) else settings.DATABASE_URL
+    # Note: setup_test_database() already set DATABASE_URL to TEST_DATABASE_URL
+    db_url = settings.DATABASE_URL
     if db_url.startswith('sqlite:///'):
         db_path = Path(db_url.replace('sqlite:///', ''))
         if not db_path.is_absolute():
@@ -776,6 +811,7 @@ def main():
 
             populate_brokers(session)
             populate_assets(session)
+            populate_asset_provider_assignments(session)
             populate_cash_accounts(session)
             populate_deposits(session)
             populate_transactions_and_cash(session)
@@ -783,29 +819,84 @@ def main():
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
 
+            # ✅ CRITICAL: Final commit to persist all data
+            print("\n💾 Committing all data to database...")
+            session.commit()
+            print("✅ Data committed successfully")
+
             print("\n" + "=" * 60)
             print("✅ Mock data population completed successfully!")
             print("=" * 60)
 
+            # Verify data persistence by re-querying
+            print("\n🔍 Verifying data persistence...")
+            counts = {
+                'brokers': len(session.exec(select(Broker)).all()),
+                'assets': len(session.exec(select(Asset)).all()),
+                'asset_providers': len(session.exec(select(AssetProviderAssignment)).all()),
+                'cash_accounts': len(session.exec(select(CashAccount)).all()),
+                'cash_movements': len(session.exec(select(CashMovement)).all()),
+                'transactions': len(session.exec(select(Transaction)).all()),
+                'price_history': len(session.exec(select(PriceHistory)).all()),
+                'fx_rates': len(session.exec(select(FxRate)).all()),
+                'fx_pair_sources': len(session.exec(select(FxCurrencyPairSource)).all()),
+            }
+
             # Print summary
             print("\n📊 Summary:")
-            brokers = session.exec(select(Broker)).all()
-            assets = session.exec(select(Asset)).all()
-            transactions = session.exec(select(Transaction)).all()
-            cash_accounts = session.exec(select(CashAccount)).all()
-            cash_movements = session.exec(select(CashMovement)).all()
+            print(f"  • {counts['brokers']} brokers")
+            print(f"  • {counts['assets']} assets")
+            print(f"  • {counts['asset_providers']} asset provider assignments")
+            print(f"  • {counts['cash_accounts']} cash accounts")
+            print(f"  • {counts['transactions']} transactions")
+            print(f"  • {counts['cash_movements']} cash movements")
+            print(f"  • {counts['price_history']} price history records")
+            print(f"  • {counts['fx_rates']} FX rates")
+            print(f"  • {counts['fx_pair_sources']} FX pair sources")
 
-            print(f"  • {len(brokers)} brokers")
-            print(f"  • {len(assets)} assets")
-            print(f"  • {len(cash_accounts)} cash accounts")
-            print(f"  • {len(transactions)} transactions")
-            print(f"  • {len(cash_movements)} cash movements")
+            # Verify at least some data was created
+            total_records = sum(counts.values())
+            if total_records == 0:
+                print("\n❌ WARNING: No data found in database after population!")
+                print("   This indicates a commit issue or data creation problem.")
+                return 1
 
-            print(f"\n💡 Explore the data:")
-            print(f"  sqlite3 {db_path}")
-            print(f"\n📚 See database-schema.md for explanation of all tables!")
+            print(f"\n✅ Total records: {total_records}")
 
-            return 0
+            # Print sample queries for manual verification
+            print(f"\n💡 Verify data in database ({db_path}):")
+            print("\n" + "=" * 60)
+            print("Sample SQL Queries for Manual Verification")
+            print("=" * 60)
+            print("\n# View brokers")
+            print("SELECT * FROM brokers LIMIT 5;")
+            print("\n# View assets")
+            print("SELECT id, display_name, identifier, currency, asset_type, valuation_model FROM assets LIMIT 5;")
+            print("\n# View asset provider assignments")
+            print("SELECT a.identifier, apa.provider_code, apa.provider_params")
+            print("FROM asset_provider_assignments apa")
+            print("JOIN assets a ON apa.asset_id = a.id;")
+            print("\n# View cash accounts")
+            print("SELECT ca.id, b.name as broker, ca.currency, ca.display_name")
+            print("FROM cash_accounts ca JOIN brokers b ON ca.broker_id = b.id;")
+            print("\n# View transactions")
+            print("SELECT t.id, t.transaction_type, a.identifier, t.quantity, t.price, t.transaction_date")
+            print("FROM transactions t JOIN assets a ON t.asset_id = a.id")
+            print("LIMIT 5;")
+            print("\n# View cash movements")
+            print("SELECT cm.id, cm.movement_type, cm.amount, cm.currency, cm.movement_date")
+            print("FROM cash_movements cm LIMIT 5;")
+            print("\n# View price history")
+            print("SELECT ph.date, a.identifier, ph.close, ph.currency")
+            print("FROM price_history ph JOIN assets a ON ph.asset_id = a.id")
+            print("LIMIT 5;")
+            print("\n# View FX rates")
+            print("SELECT date, base, quote, rate, source FROM fx_rates")
+            print("ORDER BY date DESC LIMIT 5;")
+            print("\n# View FX pair sources")
+            print("SELECT base, quote, provider_code, priority, fetch_interval FROM fx_currency_pair_sources;")
+            print("\n" + "=" * 60)
+            print("\n📚 See database-schema.md for explanation of all tables!")
 
         except Exception as e:
             print(f"\n❌ Error: {e}")
@@ -813,6 +904,102 @@ def main():
             traceback.print_exc()
             session.rollback()
             return 1
+
+    # ========================================================================
+    # FINAL VERIFICATION: Independent connection to verify data persistence
+    # ========================================================================
+    print("\n" + "=" * 60)
+    print("🔍 FINAL VERIFICATION: Data Persistence Check")
+    print("=" * 60)
+    print("ℹ️  Creating independent SQLite connection to verify data was saved...")
+
+    import sqlite3
+    try:
+        # Get database path from settings
+        # Note: setup_test_database() already set DATABASE_URL to TEST_DATABASE_URL at script start
+        verification_settings = get_settings()
+        verification_db_url = verification_settings.DATABASE_URL
+
+        if not verification_db_url.startswith('sqlite:///'):
+            print(f"❌ ERROR: Only SQLite databases are supported for verification")
+            return 1
+
+        test_db_path = Path(verification_db_url.replace('sqlite:///', ''))
+        if not test_db_path.is_absolute():
+            test_db_path = Path.cwd() / test_db_path
+
+        if not test_db_path.exists():
+            print(f"❌ ERROR: Test database file not found: {test_db_path}")
+            return 1
+
+        print(f"ℹ️  Database path: {test_db_path}")
+        print(f"ℹ️  Database size: {test_db_path.stat().st_size} bytes")
+
+        # Create independent connection
+        conn = sqlite3.connect(str(test_db_path))
+        cursor = conn.cursor()
+
+        # Verify each table has data
+        tables_to_check = [
+            ('brokers', 'name'),
+            ('assets', 'identifier'),
+            ('asset_provider_assignments', 'provider_code'),
+            ('cash_accounts', 'display_name'),
+            ('transactions', 'type'),  # Column is 'type' not 'transaction_type'
+            ('cash_movements', 'type'),  # Column is 'type' not 'movement_type'
+            ('price_history', 'close'),
+            ('fx_rates', 'rate'),
+            ('fx_currency_pair_sources', 'provider_code'),
+        ]
+
+        print("\n📊 Verifying data in each table:")
+        verification_failed = False
+
+        for table_name, sample_column in tables_to_check:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                count = cursor.fetchone()[0]
+
+                if count > 0:
+                    # Get sample data
+                    cursor.execute(f"SELECT {sample_column} FROM {table_name} LIMIT 3")
+                    samples = [row[0] for row in cursor.fetchall()]
+                    samples_str = ", ".join(str(s)[:30] for s in samples)
+                    print(f"  ✅ {table_name}: {count} records (sample: {samples_str})")
+                else:
+                    print(f"  ❌ {table_name}: 0 records - DATA NOT SAVED!")
+                    verification_failed = True
+
+            except sqlite3.Error as e:
+                print(f"  ❌ {table_name}: Query failed - {e}")
+                verification_failed = True
+
+        conn.close()
+
+        if verification_failed:
+            print("\n" + "=" * 60)
+            print("❌ VERIFICATION FAILED: Some tables have no data!")
+            print("=" * 60)
+            print("\n💡 Possible causes:")
+            print("  1. Session.commit() not called properly")
+            print("  2. Database file path mismatch")
+            print("  3. Transaction rolled back due to error")
+            print("  4. Using wrong database (prod instead of test)")
+            return 1
+
+        print("\n" + "=" * 60)
+        print("✅ VERIFICATION PASSED: All tables have data!")
+        print("=" * 60)
+        print("\n🎉 Mock data population completed and verified successfully!")
+
+        return 0
+
+    except Exception as e:
+        print(f"\n❌ Verification error: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+
 
 
 if __name__ == "__main__":
