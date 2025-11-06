@@ -1,0 +1,239 @@
+## 🔧 STEP 2 — DB Models & Migration (with loan schedule and per-function data source bindings)
+
+**Goal**
+Implement the core **database schema** (SQLModel + Alembic + SQLite) for OFPF focusing on:
+1) Core entities (brokers, assets, transactions, price history, fx rates, cash)
+2) **Loan-style assets** with **scheduled yield** metadata
+3) **Per-function plugin bindings** (separate “current” vs “history” data sources)
+4) **Daily-point policy**: one record per day (prices & FX), upsertable, no intraday
+
+> All source code, comments, and docstrings **must be in English**.
+> Only the frontend UI will be multilingual (not part of this step).
+
+---
+
+### Requirements
+
+#### 1) Tech / Environment
+- **Python**: FastAPI + SQLModel (SQLAlchemy 2.x) + Alembic
+- **DB**: SQLite (file path: `./backend/data/sqlite/app.db`)
+- **Decimal columns**: use `sqlalchemy.Numeric(18, 6)` for money/quantities
+- **Timestamps**: UTC now defaults (created_at / updated_at / fetched_at)
+- **SQLite FK enforcement**: ensure `PRAGMA foreign_keys=ON` on connection/session init
+
+#### 2) Tables & Constraints
+
+**brokers**
+- `id` (PK), `name` (unique, text, required), `description` (text, nullable), portal_url (text, nullable)
+- `created_at`, `updated_at`
+
+**assets**
+- `id` (PK)
+- `display_name` (text, required)
+- `identifier` (text, required)
+- `identifier_type` (enum: ISIN, TICKER, CUSIP, SEDOL, FIGI, UUID, OTHER)
+- `currency` (ISO 4217, text, required)
+- `asset_type` (text; e.g., STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND_LOAN, OTHER)
+- **valuation_model** (enum: `"MARKET_PRICE"` | `"SCHEDULED_YIELD"`, default `"MARKET_PRICE"`)
+- **Per-function data source bindings**:
+  - `current_data_plugin_key` (text, nullable)
+  - `current_data_plugin_params` (JSON text, nullable)
+  - `history_data_plugin_key` (text, nullable)
+  - `history_data_plugin_params` (JSON text, nullable)
+  - **do not** store allow flags; they will be **derived** in code:
+    - `allow_manual_current := (current_data_plugin_key is NULL)`
+    - `allow_manual_history := (history_data_plugin_key is NULL)`
+- **Loan / scheduled-yield fields** (optional for assets that need it):
+  - `face_value` (Decimal, nullable)
+  - `maturity_date` (date, nullable)
+  - `interest_schedule` (JSON text, nullable)
+    _Schema for each segment:_
+    ```json
+    {
+      "start_date": "YYYY-MM-DD",
+      "end_date": "YYYY-MM-DD",     // inclusive, or null for open-ended
+      "annual_rate": 0.085,         // decimal APR, e.g., 8.5%
+      "compounding": "SIMPLE|COMPOUND",
+      "compound_frequency": "DAILY|MONTHLY|ANNUAL",
+      "day_count": "ACT/365|ACT/360|30/360"
+    }
+    ```
+  - `late_interest` (JSON text, nullable)
+    _Schema:_
+    ```json
+    { "annual_rate": 0.12, "grace_days": 0 }
+    ```
+- `active` (bool)
+- `created_at`, `updated_at`
+
+**transactions**  *(unified asset transactions)*
+- `id` (PK)
+- `asset_id` (FK → assets.id, required)
+- `broker_id` (FK → brokers.id, required)
+- `type` (enum: BUY, SELL, DIVIDEND, INTEREST, TRANSFER_IN, TRANSFER_OUT, ADD_HOLDING, REMOVE_HOLDING, FEE, TAX)
+- `quantity` (Decimal; > 0 for BUY/SELL/ADD/REMOVE/TRANSFER_* asset; 0 for DIVIDEND/INTEREST/FEE/TAX)
+- `price` (Decimal; unit price for BUY/SELL; amount for DIVIDEND/INTEREST; optional for ADD/REMOVE)
+- `currency` (ISO 4217, required for the transaction)
+- `fees` (Decimal, nullable)
+- `taxes` (Decimal, nullable)
+- `trade_date` (date, required)
+- `settlement_date` (date, nullable)
+- `note` (text, nullable)
+- `created_at`, `updated_at`
+
+**price_history**  *(daily points only)*
+- `id` (PK)
+- `asset_id` (FK → assets.id, indexed, required)
+- `date` (date, required)
+- `open`, `high`, `low`, `close`, `adjusted_close` (Decimal, nullable)
+- `currency` (ISO 4217, required)
+- `source_plugin_key` (text, required)
+- `fetched_at` (datetime UTC)
+- **Unique constraint**: `(asset_id, date)`
+- **Policy**: one record per day; **upsert** replaces the row for that day; no intraday rows
+
+**price_raw_payloads** (optional, for raw JSON payloads)
+- `id` (PK), `asset_id` (FK), `payload_type` (`current` | `history`), `raw_json` (text), `source_plugin_key`, `fetched_at`
+
+**fx_rates**  *(daily points only)*
+- `id` (PK)
+- `date` (date, required)
+- `base` (ISO 4217, text, required)
+- `quote` (ISO 4217, text, required)
+- `rate` (Decimal, required)  // interpret as: 1 base = rate quote
+- `source` (text, default "ECB")
+- `fetched_at` (datetime UTC)
+- **Unique constraint**: `(date, base, quote)`
+- **Policy**: one record per day; **upsert** replaces the row for that day; reversible logic (`inverse = 1/rate`) will be used in services if needed
+
+**cash_accounts**
+- `id` (PK)
+- `broker_id` (FK → brokers.id, required)
+- `currency` (ISO 4217, text, required)
+- `display_name` (text, required)
+- **Unique**: `(broker_id, currency)`
+- `created_at`, `updated_at`
+
+**cash_movements**
+- `id` (PK)
+- `cash_account_id` (FK → cash_accounts.id, required)
+- `type` (enum: DEPOSIT, WITHDRAWAL, BUY_SPEND, SALE_PROCEEDS, DIVIDEND_INCOME, INTEREST_INCOME, FEE, TAX, TRANSFER_IN, TRANSFER_OUT)
+- `amount` (Decimal > 0, required)
+- `trade_date` (date, required)
+- `note` (text, nullable)
+- `linked_transaction_id` (FK → transactions.id, nullable)
+- `created_at`, `updated_at`
+
+#### 3) Indexes
+- `transactions(asset_id, broker_id, trade_date, id)`
+- `price_history(asset_id, date)`
+- `fx_rates(base, quote, date)`
+- `cash_movements(cash_account_id, trade_date, id)`
+
+#### 4) Daily-Point Policy (important)
+- **No intraday records** for prices or FX.
+- **Exactly one record per day** enforced by unique constraints.
+- **UPSERT** behavior:
+  - For **today (UTC date)**: services may update the daily point multiple times (upsert replaces the row).
+  - For **past dates**: services should **insert if missing**; generally avoid overwrites unless a future setting allows corrections.
+
+#### 5) Alembic
+- Initialize (if not already) and create a **single migration** that generates all the tables and enums above.
+- Ensure **SQLite-friendly** migrations (batch mode if needed).
+- After the migration, `alembic upgrade head` should create the schema without errors.
+
+---
+
+### Deliverables
+- SQLModel models for all listed tables and enums.
+- DB session and base setup with **FK pragma enabled**.
+- Alembic migration that creates the schema above.
+- Minimal docstring/comments explaining:
+  - Daily-point policy
+  - Per-function plugin bindings on `assets`
+  - Loan schedule JSON shapes
+
+---
+
+### Checklist (must pass)
+- [ ] `alembic upgrade head` runs clean and creates all tables with constraints.
+- [ ] Unique constraints verified: `price_history(asset_id, date)`, `fx_rates(date, base, quote)`, `cash_accounts(broker_id, currency)`.
+- [ ] All Decimal columns use `Numeric(18,6)`.
+- [ ] PRAGMA foreign_keys is ON during runtime (enforced in DB/session code).
+- [ ] Models include `valuation_model` and the **loan schedule fields** (`interest_schedule`, `late_interest`, `maturity_date`, `face_value`).
+- [ ] `assets` contains **separate** bindings: `current_data_plugin_key/params` and `history_data_plugin_key/params` (no allow flags stored; they are derived).
+
+---
+
+### Notes to keep in mind (do not implement beyond this step)
+- Do **not** implement any services, endpoints, or schedulers yet (those belong to later steps).
+- Do **not** implement import/export or analysis in this step.
+- Keep code **clean and typed**, comments in **English** only.
+
+---
+
+If you have any ambiguity, default to the **strict daily-point** approach (one row/day, upsert by day, no intraday), and keep everything **SQLite-friendly**.
+
+---
+
+## 📊 Tipi di transazioni
+Le transizioni descritte sopra, sono da intendere con queste logiche di funzionamento:
+
+### 🔹 Tabella `transactions` (asset)
+
+| Tipo            | Descrizione                                      | Effetto su asset | Effetto su cash |
+|-----------------|--------------------------------------------------|------------------|-----------------|
+| `BUY`           | Acquisto asset                                   | ↑ quantità       | ↓ cash (BUY_SPEND)
+| `SELL`          | Vendita asset                                    | ↓ quantità       | ↑ cash (SALE_PROCEEDS)
+| `DIVIDEND`      | Dividendo ricevuto                               | —                | ↑ cash (DIVIDEND_INCOME)
+| `INTEREST`      | Interesse ricevuto (prestiti)                    | —                | ↑ cash (INTEREST_INCOME)
+| `TRANSFER_IN`   | Ricezione asset da altro broker                  | ↑ quantità       | —
+| `TRANSFER_OUT`  | Spostamento asset verso altro broker             | ↓ quantità       | —
+| `ADD_HOLDING`   | Aggiunta asset senza acquisto (es. regalo)       | ↑ quantità       | —
+| `REMOVE_HOLDING`| Rimozione asset senza vendita (es. perdita)      | ↓ quantità       | —
+| `FEE`           | Commissione standalone                           | —                | ↓ cash (FEE)
+| `TAX`           | Tassa standalone                                 | —                | ↓ cash (TAX)
+
+> ⚠️ Le transazioni che **modificano la quantità** (BUY, SELL, ADD, REMOVE, TRANSFER) sono soggette a **oversell guard**: non puoi vendere più di quanto possiedi.
+
+---
+
+### 🔹 Tabella `cash_movements` (cassa)
+
+| Tipo             | Descrizione                                      | Effetto su cash |
+|------------------|--------------------------------------------------|-----------------|
+| `DEPOSIT`        | Deposito fondi nel broker                        | ↑ cash
+| `WITHDRAWAL`     | Prelievo fondi dal broker                        | ↓ cash
+| `BUY_SPEND`      | Spesa per acquisto asset                         | ↓ cash
+| `SALE_PROCEEDS`  | Incasso da vendita asset                         | ↑ cash
+| `DIVIDEND_INCOME`| Incasso dividendi                                | ↑ cash
+| `INTEREST_INCOME`| Incasso interessi                                | ↑ cash
+| `FEE`            | Commissione standalone                           | ↓ cash
+| `TAX`            | Tassa standalone                                 | ↓ cash
+| `TRANSFER_IN`    | Ricezione fondi da altro broker                  | ↑ cash
+| `TRANSFER_OUT`   | Spostamento fondi verso altro broker             | ↓ cash
+
+> Ogni transazione asset che impatta il cash genera **automaticamente** un movimento cassa corrispondente.
+
+---
+
+## 🧩 Mapping eventi → transazioni
+
+| Evento reale                          | Transazione asset | Movimento cassa |
+|--------------------------------------|-------------------|------------------|
+| Acquisto ETF                         | `BUY`             | `BUY_SPEND`
+| Vendita ETF                          | `SELL`            | `SALE_PROCEEDS`
+| Ricezione dividendo                  | `DIVIDEND`        | `DIVIDEND_INCOME`
+| Ricezione interesse prestito         | `INTEREST`        | `INTEREST_INCOME`
+| Rimborso prestito                    | `SELL`            | `SALE_PROCEEDS`
+| Spostamento asset tra broker         | `TRANSFER_OUT` + `TRANSFER_IN` | —
+| Spostamento fondi tra broker         | —                 | `TRANSFER_OUT` + `TRANSFER_IN`
+| Airdrop / regalo                     | `ADD_HOLDING`     | —
+| Perdita tecnica / delisting          | `REMOVE_HOLDING`  | —
+| Canone mensile broker                | —                 | `FEE`
+| Imposta di bollo                     | —                 | `TAX`
+| Deposito iniziale                    | —                 | `DEPOSIT`
+| Prelievo fondi                       | —                 | `WITHDRAWAL`
+
+
+Imposta di conseguenza dei vincoli che permettano il rispetto di queste logiche.

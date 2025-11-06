@@ -1,0 +1,24 @@
+Goal: Create the minimal backend skeleton for LibreFolio using FastAPI, SQLModel, Pipenv, and Alembic.
+
+Global constraints:
+- All source code, comments, docstrings, README, and doc/ MUST be in English.
+- Only the frontend UI will be multilingual.
+
+Tasks:
+- Project structure under `LibreFolio/backend/app`: db (base, session), api (v1/router.py), main.py, logging.py, config.py.
+- Pipenv: create Pipfile and lock with deps:
+  fastapi, uvicorn[standard], sqlmodel, sqlalchemy, alembic, pydantic,
+  pandas, numpy, httpx, beautifulsoup4, yfinance, python-dotenv,
+  apscheduler, structlog, python-dateutil, forex-python.
+  Dev: pytest, pytest-asyncio, black, ruff, mypy.
+- `.env.example`: DATABASE_URL=sqlite:///./data/sqlite/app.db, LOG_LEVEL=INFO
+- `app/main.py`: mount /api/v1 with health endpoint `/api/v1/health` → {"status":"ok"}.
+- Initialize Alembic for SQLModel and SQLite with `render_as_batch=True`.
+
+Deliverables:
+- Directory scaffold, Pipfile + Pipfile.lock, Alembic initialized.
+
+Checklist:
+- `pipenv run uvicorn app.main:app --reload` → `/api/v1/health` returns 200 {"status":"ok"}.
+- `alembic current` works.
+- Logging via structlog prints JSON-like lines.

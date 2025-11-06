@@ -1,0 +1,16 @@
+Goal: Implement JSON settings persistence with atomic writes.
+
+Requirements:
+- settings_store.py: get_settings() defaults; set_settings(new) with Pydantic validation; atomic write (temp file + os.replace) and process lock.
+- Schema fields:
+  - portfolio_base_currency (default "EUR")
+  - scheduler_interval_min (default 30)
+  - prices_backfill_years (default 5)
+  - ui_language (default "en")
+  - invested_line_include_sells (default false)
+  - enforce_cash_non_negative (default false)
+- API: GET /api/v1/settings, PUT /api/v1/settings
+- Store at ./data/config/settings.json (create dir on startup).
+
+Checklist:
+- PUT persists; concurrent writes safe; survives restart.

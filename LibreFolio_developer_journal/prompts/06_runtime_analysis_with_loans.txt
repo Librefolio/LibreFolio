@@ -1,0 +1,31 @@
+Goal: Compute FIFO matching at runtime (no persisted splits), produce Invested vs Market series and KPIs (Simple ROI, DW-ROI), and support scheduled-yield valuation for loans/crowdfunding.
+
+Requirements:
+- services/analysis.py:
+  - Load transactions for an asset (optionally for a given broker) ordered by (trade_date, id).
+  - Build BUY lots queue; pro-rate BUY fees/taxes into unit cost.
+  - For SELL / REMOVE_HOLDING / TRANSFER_OUT (asset): consume FIFO lots, compute realized P/L (virtual matches list).
+  - Remaining lots = open inventory.
+  - Price / valuation:
+    * If asset.valuation_model == "MARKET_PRICE": use price_history with FFill; before first price, fallback to unit purchase price.
+    * If asset.valuation_model == "SCHEDULED_YIELD": get synthetic unit value per day (principal + accrued interest per unit) and compute MV(d) = qty(d) * unit_value(d).
+  - FX per day to base currency using fx_rates (date or last <= date).
+  - Build daily series [start..end]:
+    - Invested: cumulative BUY cash outflows (fees/taxes included). Do NOT subtract SELL inflows by default (setting later).
+    - Market: valuation as above (FFill for market price assets).
+  - KPIs:
+    - Simple ROI = (MV(end) + Realized Cashflows − Total Invested) / Total Invested
+    - Duration-Weighted ROI (DW-ROI): time-weighted average of per-lot ROI
+  - Output optional `matches` for transparency.
+
+API:
+- GET /api/v1/analysis/asset/{asset_id}?broker_id=&start=&end=&use_cache=false
+- (Optional) GET /api/v1/analysis/asset/{asset_id}/synthetic-preview?start=&end=
+
+Optional caching:
+- analysis_cache(scope, params_hash, payload_json, computed_at, ttl_sec)
+
+Checklist:
+- Loan asset shows increasing Market curve per schedule; after maturity+grace (if no repayment), late rate applies.
+- ETF/stock asset uses price_history with FFill.
+- ROI metrics returned.

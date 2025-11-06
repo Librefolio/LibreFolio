@@ -322,17 +322,12 @@ class Broker(SQLModel, table=True):
 
 class Asset(SQLModel, table=True):
     """
-    Asset definition with plugin bindings and loan schedule support.
+    Asset definition with loan schedule support and provider assignments.
 
-    Per-function data source bindings:
-    - current_data_plugin_key: Plugin for fetching current price
-    - current_data_plugin_params: JSON params for current price plugin
-    - history_data_plugin_key: Plugin for fetching price history
-    - history_data_plugin_params: JSON params for history plugin
-
-    Derived flags (computed in code):
-    - allow_manual_current := (current_data_plugin_key is NULL)
-    - allow_manual_history := (history_data_plugin_key is NULL)
+    Provider assignments (Step 05):
+    - Use asset_provider_assignments table (1-to-1 relationship)
+    - Each asset can have at most one provider for pricing data
+    - Provider handles both current and historical data fetching
 
     Loan/scheduled-yield fields (for CROWDFUND_LOAN, BOND, etc.):
     - face_value: Principal amount
@@ -369,11 +364,6 @@ class Asset(SQLModel, table=True):
     # Valuation model
     valuation_model: ValuationModel = Field(default=ValuationModel.MARKET_PRICE)
 
-    # Per-function plugin bindings
-    current_data_plugin_key: Optional[str] = Field(default=None)
-    current_data_plugin_params: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON
-    history_data_plugin_key: Optional[str] = Field(default=None)
-    history_data_plugin_params: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON
 
     # Loan / scheduled-yield fields
     face_value: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
@@ -625,6 +615,59 @@ class CashMovement(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class AssetProviderAssignment(SQLModel, table=True):
+    """
+    Asset provider assignment (1-to-1 relationship).
+
+    This table assigns pricing providers to assets. Each asset can have
+    at most one provider assigned for fetching current and historical prices.
+
+    Provider types:
+    - yfinance: Yahoo Finance for stocks/ETFs/funds
+    - cssscraper: Custom CSS-based web scraper
+    - (future): Alpha Vantage, Polygon.io, custom providers
+
+    Special cases:
+    - Assets with valuation_model=MANUAL: No provider assignment needed
+    - Assets with valuation_model=SCHEDULED_YIELD: No provider assignment needed
+      (values calculated runtime from interest_schedule)
+    - Assets with valuation_model=MARKET_PRICE: Provider assignment recommended
+
+    provider_params: JSON configuration for the provider
+    Example (yfinance): {"identifier": "AAPL", "type": "Stock"}
+    Example (cssscraper): {"url": "https://...", "selector": ".price", "currency": "EUR"}
+    """
+    __tablename__ = "asset_provider_assignments"
+    __table_args__ = (
+        UniqueConstraint("asset_id", name="uq_asset_provider_asset_id"),
+        Index("idx_asset_provider_asset_id", "asset_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    asset_id: int = Field(
+        foreign_key="assets.id",
+        nullable=False,
+        unique=True,
+        description="Asset ID (1-to-1 relationship)"
+    )
+
+    provider_code: str = Field(
+        max_length=50,
+        nullable=False,
+        description="Provider code (yfinance, cssscraper, etc.)"
+    )
+
+    provider_params: Optional[str] = Field(
+        default=None,
+        sa_column=Column(Text),
+        description="JSON configuration for provider"
+    )
+
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 # ============================================================================
 # EVENT LISTENERS
 # ============================================================================
@@ -635,6 +678,7 @@ class CashMovement(SQLModel, table=True):
 @event.listens_for(Transaction, "before_update")
 @event.listens_for(CashAccount, "before_update")
 @event.listens_for(CashMovement, "before_update")
+@event.listens_for(AssetProviderAssignment, "before_update")
 def receive_before_update(mapper, connection, target):
     """Update updated_at timestamp on update."""
     target.updated_at = utcnow()

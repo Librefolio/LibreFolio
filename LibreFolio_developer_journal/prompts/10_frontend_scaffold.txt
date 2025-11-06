@@ -1,0 +1,11 @@
+Goal: Scaffold the frontend; code in English; UI multilingual via i18next (en/it/fr/es).
+
+Requirements:
+- Vite + React + TS + MUI + React Query + React Router + i18next/react-i18next.
+- locales: en.json, it.json, fr.json, es.json with menu labels and basic strings.
+- Layout: top menu (Overview, Brokers, Assets, Transactions, Settings) and left sidebar.
+- Settings page: language selector bound to /settings GET/PUT.
+- API client at /api/v1.
+
+Checklist:
+- Build succeeds; language switch reflects UI (persisted via /settings).

@@ -1,0 +1,14 @@
+Goal: Implement FX fetch/cache and conversion to base currency.
+
+Requirements:
+- Setting: portfolio_base_currency (default from env, and if missing set "EUR").
+- services/fx.py:
+  - ensure_rates(date_range, currencies): fetch missing daily rates from ECB (or exchangerate.host) using httpx; persist in fx_rates.
+  - convert(amount, from_cur, to_cur, date): use rate for date or last <= date (forward-fill); identity if same currency.
+- API:
+  - POST /api/v1/fx/sync/bulk?start=&end=&currencies=USD,GBP
+- Scheduler nightly job: sync last N days.
+
+Checklist:
+- Conversions USD↔EUR on test dates return expected values.
+- Missing-date conversion falls back to previous available rate.

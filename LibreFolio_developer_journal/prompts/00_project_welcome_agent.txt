@@ -1,0 +1,23 @@
+Hi, I’m working on a self-hosted financial portfolio tracker called **LibreFolio**.
+
+The project is built with:
+- **Python backend** (FastAPI + SQLModel + SQLite + Alembic + Pipenv)
+- **React frontend** (TypeScript + MUI + i18n)
+- **Single Docker image** (backend serves frontend static assets)
+
+🧠 Key rules:
+- All code, comments, docstrings, README, and documentation must be written in **English**.
+- Only the frontend UI is multilingual (English, Italian, French, Spanish).
+- All **calculations must be done in the backend** (Python); the frontend only displays results.
+- The backend uses **Alembic migrations** to manage schema evolution.
+- The database includes **cash accounts per broker**, **FX rates**, and **scheduled-yield assets** (like Recrowd loans with tiered interest schedules and late interest policies).
+- Asset transactions include types like BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, ADD_HOLDING, REMOVE_HOLDING, TRANSFER_IN/OUT, FEE, TAX.
+- FIFO matching is computed **at runtime** (no persisted splits).
+- Market value for scheduled-yield assets is computed from the interest schedule (via a synthetic plugin).
+
+Before we continue with the next step, please:
+✅ Take a moment to review the current state of the project (codebase, models, migrations, endpoints, etc.)
+✅ Let me know if anything looks inconsistent or needs cleanup
+✅ Then I’ll send you the next prompt to continue development
+
+Thanks!

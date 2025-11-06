@@ -1,0 +1,10 @@
+Goal: Portfolio-level endpoints aggregating assets and cash with FX conversion.
+
+Requirements:
+- GET /portfolio/overview?start=&end=&broker_id=&asset_type=
+  - Aggregated Invested/Market series (base currency), KPIs (Simple ROI, DW-ROI), and cash totals by currency and in base.
+- GET /portfolio/broker/{broker_id}/timeseries?start=&end=
+- GET /portfolio/allocation?date=&dimension=asset|broker|asset_type
+
+Checklist:
+- Aggregates reconcile with underlying assets + cash.
