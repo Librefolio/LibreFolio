@@ -616,12 +616,16 @@ class BackwardFillInfo(TypedDict):
     days_back: int  # Number of days back from requested date
 ```
 
-**Phase 0.2.2: Asset Source Service (with Synthetic Yield)**
+**Phase 0.2.2: Asset Source Service (Foundation + ACT/365 Only)**
 
 **File**: `backend/app/services/asset_source.py`
 
-Asset pricing service with DB operations for `price_history` table + synthetic yield calculation.
-Pattern identical to `fx.py` but for different table structure
+Asset pricing service with DB operations for `price_history` table.
+Pattern identical to `fx.py` but for different table structure.
+
+**Synthetic Yield - Phase Implementation**:
+- **Phase 0.2.2 (Current)**: Only ACT/365 day count calculation implemented
+- **Phase 4 (Future)**: Full synthetic yield logic (rate schedules, accrued interest, maturity handling)
 
 ```python
 """
@@ -629,6 +633,9 @@ Asset pricing service.
 
 Handles asset price fetching and management with support for multiple providers.
 Similar structure to fx.py but for price_history table.
+
+Note: Full synthetic yield calculation (SCHEDULED_YIELD assets) will be implemented in Phase 4.
+Currently only ACT/365 day count helper is available.
 """
 from abc import ABC, abstractmethod
 from datetime import date
@@ -933,16 +940,16 @@ def calculate_accrued_interest(
 - [ ] Test backward-fill respects SCHEDULED_YIELD special handling
 
 **Synthetic yield calculation** (SCHEDULED_YIELD assets):
-- [ ] Test calculate_days_between_act365 (various date ranges)
-- [ ] Test find_active_rate with simple schedule
-- [ ] Test find_active_rate with maturity + grace period
-- [ ] Test find_active_rate with late interest
-- [ ] Test calculate_accrued_interest SIMPLE (single rate)
-- [ ] Test calculate_accrued_interest with rate changes
-- [ ] Test calculate_synthetic_value (current date)
-- [ ] Test calculate_synthetic_value (historical date)
-- [ ] Test get_prices automatically uses synthetic for SCHEDULED_YIELD assets
-- [ ] Test synthetic values NOT written to DB
+- [x] Test calculate_days_between_act365 (various date ranges) ✅ Phase 0.2.2
+- [ ] Test find_active_rate with simple schedule - **DEFERRED TO PHASE 4**
+- [ ] Test find_active_rate with maturity + grace period - **DEFERRED TO PHASE 4**
+- [ ] Test find_active_rate with late interest - **DEFERRED TO PHASE 4**
+- [ ] Test calculate_accrued_interest SIMPLE (single rate) - **DEFERRED TO PHASE 4**
+- [ ] Test calculate_accrued_interest with rate changes - **DEFERRED TO PHASE 4**
+- [ ] Test calculate_synthetic_value (current date) - **DEFERRED TO PHASE 4**
+- [ ] Test calculate_synthetic_value (historical date) - **DEFERRED TO PHASE 4**
+- [ ] Test get_prices automatically uses synthetic for SCHEDULED_YIELD assets - **DEFERRED TO PHASE 4**
+- [ ] Test synthetic values NOT written to DB - **DEFERRED TO PHASE 4**
 
 **Provider assignment operations**:
 - [ ] Test bulk_assign_providers (3 assets)
@@ -955,14 +962,15 @@ def calculate_accrued_interest(
 - [ ] Test refresh_price single (calls bulk)
 
 **Checklist**:
-- [ ] common.py created with BackwardFillInfo schema
-- [ ] asset_source.py created (similar structure to fx.py)
-- [ ] Synthetic yield module integrated in asset_source.py
-- [ ] get_prices() checks asset.valuation_model for SCHEDULED_YIELD
-- [ ] Helper functions for decimal precision
-- [ ] Backward-fill logic similar to FX but independent implementation
-- [ ] Tests pass with DB optimization verified
-- [ ] FX and Asset systems remain independent
+- [x] common.py created with BackwardFillInfo schema ✅
+- [x] asset_source.py created (similar structure to fx.py) ✅
+- [x] Synthetic yield module (PARTIAL): ACT/365 day count only ✅ Phase 0.2.2
+  - [ ] Full implementation (rate schedules, accrued interest) - **DEFERRED TO PHASE 4**
+- [ ] get_prices() checks asset.valuation_model for SCHEDULED_YIELD - **DEFERRED TO PHASE 4**
+- [x] Helper functions for decimal precision ✅
+- [x] Backward-fill logic similar to FX but independent implementation ✅
+- [x] Tests pass with DB optimization verified ✅ (11/11 tests passing)
+- [x] FX and Asset systems remain independent ✅
 
 ---
 
@@ -2191,11 +2199,27 @@ class CSSScraperProvider(AssetSourceProvider):
 
 ---
 
-### Phase 4: synthetic_yield Plugin (3-4 giorni) ⚠️ PIÙ COMPLESSO
+### Phase 4: Complete Synthetic Yield Implementation (3-4 giorni) ⚠️ MOST COMPLEX
 
-**File**: `backend/app/services/plugins/synthetic_yield_plugin.py`
+**Status**: Deferred from Phase 0.2.2  
+**Current State**: Only ACT/365 day count helper implemented  
+**Remaining Work**: Rate schedules, accrued interest calculation, get_prices() integration
 
-**Implementa**:
+**Note**: Synthetic yield is NOT a separate provider. It's integrated into `asset_source.py` as runtime calculation logic for SCHEDULED_YIELD assets.
+
+**What's Already Done (Phase 0.2.2)**:
+- ✅ `calculate_days_between_act365(start, end)` → ACT/365 day fraction
+
+**What Needs Implementation (Phase 4)**:
+- [ ] `find_active_rate(schedule, target_date, maturity, late_interest)` → rate lookup from schedule
+- [ ] `calculate_accrued_interest(principal, schedule, start, end, maturity, late_interest)` → SIMPLE interest
+- [ ] `calculate_synthetic_value(asset, target_date, session)` → full valuation (face_value + accrued interest)
+- [ ] Integration in `get_prices()` → auto-detect SCHEDULED_YIELD assets and calculate on-demand
+- [ ] Transaction-aware logic → check if loan was repaid/sold
+
+**Implementation Location**: `backend/app/services/asset_source.py` (NOT a separate plugin)
+
+**Code to Add**:
 ```python
 import logging
 from datetime import date, timedelta

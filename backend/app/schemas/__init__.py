@@ -11,4 +11,3 @@ from backend.app.schemas.common import BackwardFillInfo
 __all__ = [
     "BackwardFillInfo",
 ]
-
