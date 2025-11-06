@@ -5,6 +5,11 @@
 **Stima Tempo**: 6-8 giorni  
 **Complessità**: Media
 
+**Schema Update (2025-11-06)**:
+- `asset_provider_assignments.last_fetch_at` → Track last fetch attempt (NULL = never fetched)
+- `fx_currency_pair_sources.fetch_interval` → Refresh frequency in minutes (NULL = 1440 = 24h default)
+- Both columns added to support smart scheduling and monitoring (migration 001_initial updated)
+
 ---
 
 ## 🎯 Goal

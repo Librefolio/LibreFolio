@@ -553,6 +553,12 @@ class FxCurrencyPairSource(SQLModel, table=True):
         description="Priority level (1=primary, 2=fallback, etc.)"
     )
 
+    fetch_interval: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Fetch frequency in minutes (NULL = default 1440 = 24h)"
+    )
+
     # Metadata
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -664,6 +670,11 @@ class AssetProviderAssignment(SQLModel, table=True):
         description="JSON configuration for provider"
     )
 
+    last_fetch_at: Optional[datetime] = Field(
+        default=None,
+        description="Last fetch attempt timestamp (NULL = never fetched, updated on every fetch)"
+    )
+
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -679,6 +690,7 @@ class AssetProviderAssignment(SQLModel, table=True):
 @event.listens_for(CashAccount, "before_update")
 @event.listens_for(CashMovement, "before_update")
 @event.listens_for(AssetProviderAssignment, "before_update")
+@event.listens_for(FxCurrencyPairSource, "before_update")
 def receive_before_update(mapper, connection, target):
     """Update updated_at timestamp on update."""
     target.updated_at = utcnow()

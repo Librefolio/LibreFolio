@@ -1,7 +1,8 @@
 # LibreFolio Database Schema Documentation
 
-**Version**: 1.0  
-**Last Updated**: October 29, 2025
+**Version**: 2.0  
+**Last Updated**: November 6, 2025  
+**Schema Migration**: 001_initial (squashed from 9 migrations)
 
 ---
 
@@ -113,32 +114,31 @@ Financial instruments you can own and trade.
 ```sql
 CREATE TABLE assets (
     id INTEGER PRIMARY KEY,
-    display_name TEXT NOT NULL,          -- "Apple Inc."
-    identifier TEXT NOT NULL,            -- "AAPL"
-    identifier_type TEXT,                -- TICKER, ISIN, UUID, etc.
-    currency TEXT NOT NULL,              -- "USD", "EUR"
-    asset_type TEXT,                     -- STOCK, ETF, BOND, CRYPTO, CROWDFUND_LOAN
+    display_name VARCHAR NOT NULL,       -- "Apple Inc."
+    identifier VARCHAR NOT NULL,         -- "AAPL"
+    identifier_type VARCHAR(6),          -- TICKER, ISIN, UUID, etc.
+    currency VARCHAR NOT NULL,           -- "USD", "EUR"
+    asset_type VARCHAR(14),              -- STOCK, ETF, BOND, CRYPTO, CROWDFUND_LOAN, HOLD
     
     -- Valuation method
-    valuation_model TEXT,                -- MARKET_PRICE or SCHEDULED_YIELD
-    
-    -- Plugin configuration for market data
-    current_data_plugin_key TEXT,        -- "yfinance", NULL for manual
-    current_data_plugin_params TEXT,     -- JSON params
-    history_data_plugin_key TEXT,
-    history_data_plugin_params TEXT,
+    valuation_model VARCHAR(15),         -- MARKET_PRICE, SCHEDULED_YIELD, or MANUAL
     
     -- For loans/bonds with scheduled payments
-    face_value DECIMAL(18,6),            -- Principal amount
+    face_value NUMERIC(18,6),            -- Principal amount
     maturity_date DATE,                  -- When it matures
     interest_schedule TEXT,              -- JSON: [{rate, period, ...}]
     late_interest TEXT,                  -- JSON: {rate, grace_days}
     
-    active BOOLEAN,
-    created_at DATETIME,
-    updated_at DATETIME
+    active BOOLEAN NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
 );
+
+-- Provider configuration moved to separate table (see asset_provider_assignments)
+CREATE INDEX ix_assets_identifier ON assets (identifier);
 ```
+
+**⚠️ Important Change**: Provider configuration (formerly `*_plugin_*` fields) is now in the `asset_provider_assignments` table (1-to-1 relationship).
 
 **Key points:**
 - One record per unique asset
@@ -146,7 +146,9 @@ CREATE TABLE assets (
   - `MARKET_PRICE`: Value based on market prices (stocks, ETFs, crypto)
   - `SCHEDULED_YIELD`: Value based on payment schedule (loans, some bonds)
   - `MANUAL`: User-provided valuations (real estate, art, unlisted companies)
-- Plugin keys: `NULL` = manual entry allowed, value = automatic fetching
+- **Provider configuration**: Moved to `asset_provider_assignments` table (see below)
+  - 1-to-1 optional relationship
+  - Stores provider code and parameters for automatic pricing
 
 **Valuation model details:**
 - **MARKET_PRICE**: Asset price fetched automatically from data sources (yfinance, APIs, plugins developed later by the community)
@@ -435,7 +437,135 @@ CREATE TABLE price_history (
 
 ---
 
-### 7. `fx_rates` - Currency Exchange Rates
+### 7. `asset_provider_assignments` - Asset Pricing Provider Configuration
+
+**What it abstracts:**
+Configuration for automatic price fetching per asset (moved from `assets` table in v2.0).
+
+**Examples:**
+- AAPL → yfinance provider (fetches from Yahoo Finance)
+- BTC → coinbase provider
+- Custom asset → manual (no automatic pricing)
+
+**What it does NOT abstract:**
+- The actual prices (those are in `price_history`)
+- Provider implementations (those are Python plugins)
+
+**Schema:**
+```sql
+CREATE TABLE asset_provider_assignments (
+    id INTEGER PRIMARY KEY,
+    asset_id INTEGER NOT NULL,               -- FK to assets (1-to-1)
+    provider_code VARCHAR(50) NOT NULL,      -- "yfinance", "coinbase", "manual"
+    provider_params TEXT,                    -- JSON params for provider
+    last_fetch_at DATETIME,                  -- Last fetch attempt timestamp (NULL = never fetched)
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+    CONSTRAINT uq_asset_provider_asset_id UNIQUE (asset_id)
+);
+
+CREATE INDEX idx_asset_provider_asset_id ON asset_provider_assignments (asset_id);
+```
+
+**Key points:**
+- **1-to-1 relationship**: One asset can have at most one provider assignment
+- **Optional**: Assets without assignment use manual pricing or scheduled yield
+- **CASCADE DELETE**: Deleting asset removes its provider assignment
+- **Single provider**: One provider handles both current and historical data
+  - No separate current/history configuration (simplified from old design)
+- **Provider params**: JSON configuration specific to provider (e.g., ticker symbol mapping)
+- **last_fetch_at**: Tracks last fetch attempt (for scheduling, monitoring, and debugging)
+  - `NULL` = never attempted
+  - Updated on every fetch attempt (success or failure)
+  - Used by schedulers to determine when to retry
+  - Useful for health monitoring and alerting
+
+**Why separate table?**
+- Cleaner separation of concerns (asset definition vs pricing source)
+- Easier to add/remove providers without touching asset records
+- Better for future plugin system expansion
+
+**Example provider_params:**
+```json
+{
+  "ticker": "AAPL",              // For yfinance
+  "exchange": "NASDAQ"
+}
+```
+
+**Migration note:**
+In database v1.0, this data was stored as `current_data_plugin_key`, `current_data_plugin_params`, etc. in the `assets` table. These fields were removed in v2.0 (migration 001_initial).
+
+---
+
+### 8. `fx_currency_pair_sources` - FX Rate Provider Configuration
+
+**What it abstracts:**
+Which provider to use for fetching FX rates for specific currency pairs, with priority fallback.
+
+**Examples:**
+- EUR/USD → ECB (European Central Bank) priority=1
+- EUR/USD → FED (Federal Reserve) priority=2 (fallback)
+- GBP/USD → BOE (Bank of England) priority=1
+
+**What it does NOT abstract:**
+- The actual FX rates (those are in `fx_rates`)
+- Provider implementations (those are Python plugins)
+
+**Schema:**
+```sql
+CREATE TABLE fx_currency_pair_sources (
+    id INTEGER PRIMARY KEY,
+    base VARCHAR NOT NULL,                   -- "EUR"
+    quote VARCHAR NOT NULL,                  -- "USD"
+    provider_code VARCHAR NOT NULL,          -- "ECB", "FED", "BOE", "SNB"
+    priority INTEGER NOT NULL,               -- Lower = higher priority (1 is highest)
+    fetch_interval INTEGER,                  -- Fetch frequency in minutes (NULL = default 1440)
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT uq_pair_source_base_quote_priority UNIQUE (base, quote, priority)
+);
+
+CREATE INDEX idx_pair_source_base_quote ON fx_currency_pair_sources (base, quote);
+CREATE INDEX ix_fx_currency_pair_sources_base ON fx_currency_pair_sources (base);
+CREATE INDEX ix_fx_currency_pair_sources_quote ON fx_currency_pair_sources (quote);
+```
+
+**Key points:**
+- **Per currency pair**: Different providers for different pairs (EUR/USD vs GBP/USD)
+- **Priority fallback**: If priority=1 fails, try priority=2, then 3, etc.
+- **Multiple providers**: Same pair can have multiple providers with different priorities
+- **No params**: Provider configuration is global (not per-pair), unlike asset providers
+- **Alphabetical ordering**: base/quote follow same rule as fx_rates (base < quote)
+- **fetch_interval**: How often to refresh rates (in minutes)
+  - `NULL` = default to 1440 minutes (24 hours)
+  - Example: 60 = hourly, 240 = every 4 hours, 1440 = daily
+  - Used by automatic sync schedulers to optimize API calls
+  - Different pairs can have different intervals (volatile pairs more frequent)
+
+**Why separate from fx_rates?**
+- Configuration (which provider to use) separate from data (actual rates)
+- Allows dynamic provider switching without touching rate data
+- Supports multi-source strategy (primary + fallback providers)
+
+**Example configuration:**
+```
+EUR/USD → ECB (priority=1), FED (priority=2)
+GBP/USD → BOE (priority=1), ECB (priority=2)
+CHF/USD → SNB (priority=1), ECB (priority=2)
+```
+
+If ECB fails for EUR/USD, system automatically tries FED.
+
+**Auto-configuration vs manual:**
+- API endpoints can specify provider explicitly OR
+- Use auto-configuration to lookup provider from this table
+- Fallback logic: Try each provider in priority order until success
+
+---
+
+### 9. `fx_rates` - Currency Exchange Rates
 
 **What it abstracts:**
 Exchange rates between currencies for multi-currency portfolios.
@@ -454,14 +584,16 @@ Exchange rates between currencies for multi-currency portfolios.
 CREATE TABLE fx_rates (
     id INTEGER PRIMARY KEY,
     date DATE NOT NULL,
-    base TEXT NOT NULL,                  -- "EUR"
-    quote TEXT NOT NULL,                 -- "USD"
-    rate DECIMAL(18,6) NOT NULL,         -- 1 EUR = 1.0850 USD
-    source TEXT,                         -- "ECB", "manual"
-    fetched_at DATETIME,
-    
-    UNIQUE(date, base, quote)            -- One rate per day per pair
+    base VARCHAR NOT NULL,                   -- "EUR"
+    quote VARCHAR NOT NULL,                  -- "USD"
+    rate NUMERIC(24, 10) NOT NULL,           -- 1 EUR = 1.0850 USD (high precision)
+    source VARCHAR NOT NULL,                 -- "ECB", "FED", "BOE", "SNB", "manual"
+    fetched_at DATETIME NOT NULL,
+    CONSTRAINT ck_fx_rates_base_less_than_quote CHECK (base < quote),
+    CONSTRAINT uq_fx_rates_date_base_quote UNIQUE (date, base, quote)
 );
+
+CREATE INDEX idx_fx_rates_base_quote_date ON fx_rates (base, quote, date);
 ```
 
 **Key points:**
@@ -491,22 +623,6 @@ date='2025-10-29', base='EUR', quote='USD', rate=1.0850
 
 ---
 
-### 8. `price_raw_payloads` - Plugin Response Cache (REMOVED)
-
-**Status:** ⚠️ This table has been removed from the schema.
-
-**Why removed:**
-Storing full API responses daily is unnecessarily heavy for the database. Raw payloads can be logged and analyzed in Python when needed, but don't need to be persisted.
-
-**Alternative approach:**
-- Log API responses to files or external logging system
-- Keep only last N responses in memory/cache
-- No database storage needed
-
-**Note:** If you need to debug API responses, use Python logging with rotation (e.g., keep last 1000 responses in log files, auto-delete older ones).
-
----
-
 ## Relationships
 
 ### Entity Relationship Diagram
@@ -532,12 +648,21 @@ Storing full API responses daily is unnecessarily heavy for the database. Raw pa
 │cash_movements│   │   assets    │
 └──────────────┘   └──────┬──────┘
                           │
-                          │ 1:N
-                          │
-                          ▼
-                   ┌──────────────┐
-                   │price_history │
-                   └──────────────┘
+                          ├────────────────────┐
+                          │ 1:N                │ 1:1 (optional)
+                          │                    │
+                          ▼                    ▼
+                   ┌──────────────┐   ┌───────────────────────────┐
+                   │price_history │   │asset_provider_assignments │
+                   └──────────────┘   └───────────────────────────┘
+
+┌──────────────────────────┐
+│fx_currency_pair_sources  │  (Configuration for FX providers)
+└──────────────────────────┘
+
+┌──────────────┐
+│   fx_rates   │  (FX exchange rates)
+└──────────────┘
 ```
 
 ### Relationship Rules
@@ -557,10 +682,21 @@ Storing full API responses daily is unnecessarily heavy for the database. Raw pa
 5. **asset → price_history**: 1:N (one asset, many prices)
    - Daily prices over time
 
-6. **transaction → cash_movement**: 1:1 optional (some transactions auto-generate movements)
+6. **asset → asset_provider_assignments**: 1:1 optional (one asset, at most one provider)
+   - Configures automatic price fetching
+   - CASCADE DELETE when asset is deleted
+
+7. **transaction → cash_movement**: 1:1 optional (some transactions auto-generate movements)
    - BUY → BUY_SPEND
    - SELL → SALE_PROCEEDS
    - DIVIDEND → DIVIDEND_INCOME
+
+8. **fx_currency_pair_sources**: Standalone configuration table
+   - No foreign keys (references currency codes as strings)
+   - Configures which provider to use per currency pair
+
+9. **fx_rates**: Standalone data table
+   - No foreign keys (stores rates by date and currency pair)
 
 ---
 
@@ -786,6 +922,10 @@ GROUP BY ca.id;
 - Balances are **computed**, never stored directly
 - One price per day (daily-point policy)
 - Transactions auto-generate cash movements
+
+**Smart scheduling features:**
+- `asset_provider_assignments.last_fetch_at`: Tracks when each asset was last fetched (for scheduling and monitoring)
+- `fx_currency_pair_sources.fetch_interval`: Defines refresh frequency per currency pair (optimizes API usage)
 
 ---
 

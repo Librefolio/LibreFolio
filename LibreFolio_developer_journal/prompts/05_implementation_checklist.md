@@ -162,7 +162,17 @@ This checklist tracks the implementation of a modular asset pricing system with:
 
 # Design note
 - Single provider model: 1 asset = 1 provider for both current and history
-- asset_provider_assignments: only 2 columns (provider_code, provider_params)
+- asset_provider_assignments: 3 columns (provider_code, provider_params, last_fetch_at)
+  - last_fetch_at: Added 2025-11-06 for scheduling/monitoring
+- fx_currency_pair_sources: Added fetch_interval column (2025-11-06)
+  - fetch_interval: Minutes between fetches (NULL = 1440 = 24h default)
+
+# Migration 001_initial updates (2025-11-06)
+- Added last_fetch_at to asset_provider_assignments (NULL = never fetched)
+- Added fetch_interval to fx_currency_pair_sources (NULL = default 24h)
+- Databases recreated from scratch (DEV environment)
+- Schema validation: PASSED ✅
+- Models updated to match migration
 ```
 
 ---
@@ -188,24 +198,24 @@ This checklist tracks the implementation of a modular asset pricing system with:
 
 #### 0.2.2 Asset Source Service (with Synthetic Yield)
 
-- [ ] **Create asset_source.py**
-  - File: `backend/app/services/asset_source.py`
-  - Pattern: Similar to `fx.py` but for `price_history` table
+- [x] **Create asset_source.py**
+  - File: `backend/app/services/asset_source.py` ✅
+  - Pattern: Similar to `fx.py` but for `price_history` table ✅
 
-- [ ] **Define TypedDicts**
-  - `CurrentValue` → {value, currency, as_of_date, source}
-  - `PricePoint` → {date, open?, high?, low?, close, volume?, currency}
-  - `HistoricalData` → {prices, currency, source}
-  - Import `BackwardFillInfo` from `schemas.common`
+- [x] **Define TypedDicts**
+  - `CurrentValue` → {value, currency, as_of_date, source} ✅
+  - `PricePoint` → {date, open?, high?, low?, close, volume?, currency} ✅
+  - `HistoricalData` → {prices, currency, source} ✅
+  - Import `BackwardFillInfo` from `schemas.common` ✅
 
-- [ ] **Define ProviderError exception**
-  - Class: `ProviderError(Exception)`
-  - Fields: `message`, `error_code`, `details`
+- [x] **Define ProviderError exception**
+  - Class: `AssetSourceError(Exception)` ✅
+  - Fields: `message`, `error_code`, `details` ✅
 
-- [ ] **Create abstract base class**
-  - Class: `AssetSourceProvider(ABC)`
-  - Properties: `provider_code`, `provider_name`
-  - Methods: `get_current_value()`, `get_history_value()`, `search()`
+- [x] **Create abstract base class**
+  - Class: `AssetSourceProvider(ABC)` ✅
+  - Properties: `provider_code`, `provider_name` ✅
+  - Methods: `get_current_value()`, `get_history_value()`, `search()`, `validate_params()` ✅
 
 - [ ] **Implement AssetSourceManager**
   - **Provider Assignment**: `bulk_assign_providers()`, `bulk_remove_providers()`, singles
@@ -266,14 +276,44 @@ This checklist tracks the implementation of a modular asset pricing system with:
 # - backend/app/schemas/assets.py
 # - backend/app/schemas/common.py
 
-# Implementation notes
+# Implementation notes (2025-11-06 17:00 CET)
+- Created asset_source.py with TypedDicts, abstract base, manager (partial)
+- Implemented provider assignment methods (bulk + singles)
+- Implemented helper functions (truncation, ACT/365)
+- Implemented synthetic yield calculation module
+- All tests passing (7/7) ✅
 
+# Completed (Phase 0.2.2 - Part 1):
+- TypedDicts: CurrentValue, PricePoint, HistoricalData ✅
+- AssetSourceError exception ✅
+- AssetSourceProvider abstract base class ✅
+- Helper functions: get_price_column_precision, truncate_price_to_db_precision ✅
+- Synthetic yield: calculate_days_between_act365, find_active_rate, calculate_accrued_interest, calculate_synthetic_value ✅
+- AssetSourceManager: bulk_assign_providers, assign_provider, bulk_remove_providers, remove_provider, get_asset_provider ✅
+- Tests: 7 tests (helper functions + provider assignment) ✅
+
+# TODO (Phase 0.2.2 - Part 2):
+- Price refresh methods (bulk_refresh_prices, refresh_price)
+- Manual price CRUD (bulk_upsert_prices, upsert_prices, bulk_delete_prices, delete_prices)
+- Price query with backward-fill (get_prices + apply_backward_fill_logic)
+- Integration with synthetic yield in get_prices()
 
 # Issues encountered
+- Initial import error: get_db_session → fixed to use AsyncSession directly
+- Session generator usage → fixed by creating session from async_engine
 
+# Additional work (2025-11-06 17:21 CET):
+- Refactored BackwardFillInfo: TypedDict → Pydantic BaseModel in schemas/common.py ✅
+- Removed duplicate BackwardFillInfo from api/v1/fx.py ✅
+- Updated FX API to import BackwardFillInfo from schemas.common ✅
+- Added populate_asset_provider_assignments() to mock data script ✅
+- Removed obsolete *_plugin_* fields from asset data ✅
+- Updated cleanup and check functions with AssetProviderAssignment ✅
+- Mock data now creates 5 asset provider assignments ✅
 
-# Completion date
-
+# Partial completion date
+2025-11-06 17:00 CET (provider assignment + helpers + synthetic yield)
+2025-11-06 17:21 CET (BackwardFillInfo refactoring + mock data)
 ```
 
 ---
