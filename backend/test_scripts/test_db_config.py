@@ -10,19 +10,24 @@ Can be customized via environment variable.
 import os
 from pathlib import Path
 
-# Import settings to get TEST_DATABASE_URL
-from backend.app.config import Settings
-from backend.app.main import ensure_database_exists
+# Avoid importing app config at module import time to prevent early evaluation
+# of settings (which can pick up production DATABASE_URL). Instead read TEST
+# database URL from environment if provided, otherwise fall back to the default.
 
-# Get settings
-_settings = Settings()
+# Default test database URL (relative to project root)
+DEFAULT_TEST_DATABASE_URL = "sqlite:///./backend/data/sqlite/test_app.db"
 
-# Test database URL (from config, e.g., "sqlite:///./backend/data/sqlite/test_app.db")
-TEST_DATABASE_URL = _settings.TEST_DATABASE_URL
+# Use environment override if present (allows CI or user to change path)
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
 
 # Extract path from URL for file operations
-# sqlite:///./backend/data/sqlite/test_app.db -> backend/data/sqlite/test_app.db
-TEST_DB_PATH = Path(_settings.TEST_DATABASE_URL.replace("sqlite:///./", "").replace("sqlite:///", "/"))
+# Handle both sqlite:///./path and sqlite:////absolute/path
+if TEST_DATABASE_URL.startswith("sqlite:///"):
+    db_path_str = TEST_DATABASE_URL.replace("sqlite:///./", "").replace("sqlite:///", "/")
+else:
+    db_path_str = TEST_DATABASE_URL
+
+TEST_DB_PATH = Path(db_path_str)
 
 # Project root and database directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -40,7 +45,12 @@ def setup_test_database():
     # Ensure database directory exists
     DB_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Set environment variable for test database (use URL from config)
+    # Enable explicit test mode for the application BEFORE any app modules are imported.
+    # This mirrors the --test flag behavior and ensures get_settings() will return
+    # DATABASE_URL pointing at the test database.
+    os.environ["LIBREFOLIO_TEST_MODE"] = "1"
+
+    # Set environment variable for database to the test database URL
     os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
     return TEST_DB_PATH
@@ -72,11 +82,12 @@ def verify_test_database() -> tuple[bool, str]:
     Returns:
         tuple: (is_test_db, database_url)
     """
+    # Import settings at call time so that LIBREFOLIO_TEST_MODE env var has effect
     from backend.app.config import get_settings
     settings = get_settings()
     db_url = settings.DATABASE_URL
 
-    is_test = "test_app.db" in db_url
+    is_test = "test_app.db" in db_url or "test_app" in db_url
     return is_test, db_url
 
 
@@ -121,6 +132,8 @@ def initialize_test_database(print_func=None):
     print_func(f"✅ Using test database: {db_url}")
 
     # Ensure database exists and is migrated
+    # Import ensure_database_exists at call time to pick up test mode
+    from backend.app.main import ensure_database_exists
     ensure_database_exists()
 
     return True

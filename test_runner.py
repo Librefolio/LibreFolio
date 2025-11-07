@@ -26,7 +26,7 @@ import traceback
 from pathlib import Path
 
 # Setup test database configuration and get test database path
-from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH
+from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH, TEST_DATABASE_URL
 # Import test utilities (avoid code duplication)
 from backend.test_scripts.test_utils import (Colors, print_header, print_section, print_success, print_error, print_warning, print_info)
 
@@ -47,11 +47,23 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
     print(f"Command: {' '.join(cmd)}")
 
     try:
+        # Ensure test subprocesses run in test mode when invoking test scripts
+        env = None
+        try:
+            # If the command invokes our test scripts via pipenv/python module, force test env
+            if any('backend.test_scripts' in c or c.endswith('.py') and 'backend/test_scripts' in c for c in cmd):
+                env = os.environ.copy()
+                env['LIBREFOLIO_TEST_MODE'] = '1'
+                env['DATABASE_URL'] = TEST_DATABASE_URL
+        except Exception:
+            env = None
+
         result = subprocess.run(
             cmd,
             cwd=Path(__file__).parent,
             capture_output=not verbose,  # Capture only if not verbose
             text=True,
+            env=env,
             )
 
         if result.returncode == 0:
@@ -374,6 +386,20 @@ def services_asset_source(verbose: bool = False) -> bool:
         )
 
 
+def services_asset_source_refresh(verbose: bool = False) -> bool:
+    """
+    Smoke test: Asset Source refresh orchestration.
+    Runs the lightweight refresh orchestration smoke test which uses a mock provider.
+    """
+    print_section("Services: Asset Source Refresh (smoke)")
+    print_info("Testing: backend/app/services/asset_source bulk refresh orchestration (smoke)")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_asset_source_refresh"],
+        "Asset source refresh smoke test",
+        verbose=verbose
+        )
+
+
 def services_all(verbose: bool = False) -> bool:
     """
     Run all backend service tests.
@@ -689,14 +715,18 @@ These tests verify business logic and service layer:
   • Uses data from database
 
 Test commands:
-  fx           - Test FX conversion service logic (identity, direct, inverse, cross-currency, forward-fill)
-                 📋 Prerequisites: DB FX rates subsystem (run: db fx-rates)
+  fx                   - Test FX conversion service logic (identity, direct, inverse, cross-currency, forward-fill)
+                         📋 Prerequisites: DB FX rates subsystem (run: db fx-rates)
+
+  asset-source         - Test Asset Source service logic (provider assignment, helpers, synthetic yield)
+                         📋 Prerequisites: Database created (run: db create)
+                         💡 Tests: Helper functions (truncation, ACT/365), Provider assignment (bulk/single), Synthetic yield
   
-  asset-source - Test Asset Source service logic (provider assignment, helpers, synthetic yield)
-                 📋 Prerequisites: Database created (run: db create)
-                 💡 Tests: Helper functions (truncation, ACT/365), Provider assignment (bulk/single), Synthetic yield
-         
-  all          - Run all backend service tests
+  asset-source-refresh - Smoke test: Asset Source refresh orchestration
+                         📋 Prerequisites: Database created (run: db create)
+                         💡 Runs lightweight refresh orchestration smoke test using a mock provider
+  
+  all                   - Run all backend service tests
   
 Future: FIFO calculations, portfolio aggregations, loan schedules will be added here
         """,
@@ -705,7 +735,7 @@ Future: FIFO calculations, portfolio aggregations, loan schedules will be added 
 
     services_parser.add_argument(
         "action",
-        choices=["fx", "asset-source", "all"],
+        choices=["fx", "asset-source", "asset-source-refresh", "all"],
         help="Service test to run"
         )
 
@@ -725,7 +755,7 @@ These tests verify REST API endpoints:
 
 Test commands:
   fx   - Test FX endpoints (GET /currencies, POST /sync, GET /convert)
-         📋 Prerequisites: Services FX conversion subsystem (run: services fx)
+         📋 Prerequisites: Services FX conversion subsystem (run: db fx-rates)
          Note: Server will be automatically started and stopped by test
          
   all  - Run all API tests (currently only FX)
@@ -817,6 +847,8 @@ def main():
             success = services_fx_conversion(verbose=verbose)
         elif args.action == "asset-source":
             success = services_asset_source(verbose=verbose)
+        elif args.action == "asset-source-refresh":
+            success = services_asset_source_refresh(verbose=verbose)
         elif args.action == "all":
             success = services_all(verbose=verbose)
 

@@ -1,27 +1,35 @@
 from __future__ import annotations
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
+from typing import Optional, List
+from pydantic import BaseModel, ConfigDict, field_validator
 
-from pydantic import BaseModel, Field, field_validator
 
-from backend.app.schemas.common import BackwardFillInfo
+class CommonConfig:
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": []})
+
+
+class BackwardFillInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    actual_rate_date: date
+    days_back: int
 
 
 class CurrentValueModel(BaseModel):
-    value: Decimal = Field(..., description="Numeric price or value")
+    model_config = ConfigDict(extra="forbid")
+    value: Decimal
     currency: str
     as_of_date: date
     source: Optional[str] = None
 
-    # Pydantic v2 style config
-    model_config = {
-        "from_attributes": True,
-        "json_encoders": {Decimal: lambda v: format(v, 'f')},
-    }
+    @field_validator("value", mode="before")
+    @classmethod
+    def parse_decimal(cls, v):
+        return Decimal(str(v))
 
 
 class PricePointModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     date: date
     open: Optional[Decimal] = None
     high: Optional[Decimal] = None
@@ -29,29 +37,37 @@ class PricePointModel(BaseModel):
     close: Decimal
     volume: Optional[Decimal] = None
     currency: Optional[str] = None
-    backfill_info: Optional[BackwardFillInfo] = None
-
-    # Pydantic v2 style config
-    model_config = {
-        "from_attributes": True,
-        "json_encoders": {Decimal: lambda v: format(v, 'f')},
-    }
+    backward_fill_info: Optional[BackwardFillInfo] = None
 
     @field_validator("open", "high", "low", "close", "volume", mode="before")
-    def coerce_decimal(cls, v):
+    @classmethod
+    def parse_optional_decimal(cls, v):
         if v is None:
-            return v
-        if isinstance(v, Decimal):
-            return v
+            return None
         return Decimal(str(v))
 
 
 class HistoricalDataModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     prices: List[PricePointModel]
     currency: Optional[str] = None
     source: Optional[str] = None
 
-    model_config = {"from_attributes": True}
 
-    # keep JSON encoders consistent if serialized directly
-    model_config.update({"json_encoders": {Decimal: lambda v: format(v, 'f')}})
+class AssetProviderAssignmentModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    asset_id: int
+    provider_code: str
+    provider_params: Optional[dict] = None
+    last_fetch_at: Optional[str] = None
+
+
+# Export convenience
+__all__ = [
+    "BackwardFillInfo",
+    "CurrentValueModel",
+    "PricePointModel",
+    "HistoricalDataModel",
+    "AssetProviderAssignmentModel",
+]
+

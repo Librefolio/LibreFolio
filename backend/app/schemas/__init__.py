@@ -7,7 +7,17 @@ Organized by domain:
 - assets.py: Asset-related schemas (TODO - future factorization)
 """
 from backend.app.schemas.common import BackwardFillInfo
+from backend.app.schemas.assets import (
+    CurrentValueModel,
+    PricePointModel,
+    HistoricalDataModel,
+    AssetProviderAssignmentModel,
+)
 
 __all__ = [
     "BackwardFillInfo",
+    "CurrentValueModel",
+    "PricePointModel",
+    "HistoricalDataModel",
+    "AssetProviderAssignmentModel",
 ]
