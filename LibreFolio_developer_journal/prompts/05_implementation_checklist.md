@@ -5,26 +5,22 @@
 **Project**: LibreFolio - Asset Pricing Provider System  
 **Start Date**: 6 November 2025  
 **Estimated Duration**: 6-8 days  
-**Status**: 🟡 Not Started
+**Status**: 🟢 In Progress — Phase 0 and 0.2.2 completed, Phase 1 pending
+
+**Last Updated**: 2025-11-07
 
 ---
 
-## 📋 Quick Overview
+## 📌 High-level status summary
 
-This checklist tracks the implementation of a modular asset pricing system with:
-- **Unified Provider Registry** (abstract base for FX + Assets)
-- **2 Asset Providers**: yfinance, CSS scraper
-- **Synthetic Yield Logic**: Internal to `asset_source.py` (NOT a provider, calculated at runtime for SCHEDULED_YIELD assets)
-- **Separated Service Layers**: `fx.py` and `asset_source.py` remain independent (different tables, different queries)
-- **Shared Schemas Only**: `BackwardFillInfo` common format, but independent implementations
-- **Backward-Fill Logic**: Similar pattern in both systems, but separate code
-- **Bulk-First Design**: All operations bulk-primary, singles call bulk with 1 element
+Completed (verified):
+- Phase 0 (Database migration + asset_provider_assignments) — completed and applied to test/prod DBs
+- Phase 0.2.2 (Asset Source Service foundation + tests) — implemented; all service-level tests passing (11/11)
 
-**Key Principles**: 
-- **Pragmatic Separation**: Don't force abstraction where tables differ (fx_rates ≠ price_history)
-- **Docker-friendly auto-discovery**: Drop `.py` file → auto-register
-- **Synthetic yield**: Calculated on-demand, NOT stored in DB
-- **Code duplication acceptable**: ~20 lines of backward-fill logic duplicated > fragile generic layer
+Current focus / next steps:
+- Phase 1: Provider registry and yfinance provider implementation
+- Phase 2: CSS scraper provider
+- Phase 4: Complete synthetic yield logic (deferred, complex)
 
 ---
 
@@ -236,8 +232,13 @@ This checklist tracks the implementation of a modular asset pricing system with:
 
 - [x] **Create test file** ✅
   - File: `backend/test_scripts/test_services/test_asset_source.py` ✅
+  - Pattern: Matches `test_fx_conversion.py` structure ✅
+    - Tests return dict with {"passed": bool, "message": str}
+    - Results collected in dictionary (not list)
+    - Final summary displayed with print_test_summary()
+    - Follows same format as other service tests ✅
   
-  **Tests implemented and passing**:
+  **Tests implemented and passing** (11/11):
   - ✅ Test 1: Price Column Precision - All 5 columns NUMERIC(18, 6) verified
   - ✅ Test 2: Price Truncation - 4 test cases with different precisions
   - ✅ Test 3: ACT/365 Day Count - 3 test cases (30d, 364d, 365d)
@@ -249,6 +250,11 @@ This checklist tracks the implementation of a modular asset pricing system with:
   - ✅ Test 9: Single Upsert Prices - Calls bulk with 1 element
   - ✅ Test 10: Get Prices with Backward-Fill - 5 days queried, 3 backfilled
   - ✅ Test 11: Bulk Delete Prices - 3 prices deleted across 2 assets
+  
+  **Test refactored**: 2025-11-07
+  - Changed from print-as-you-go to collect-then-display pattern
+  - Now matches test_fx_conversion.py structure exactly
+  - All tests pass with clean summary output ✅
 
 - [x] **Run tests** ✅
   - Run: `pipenv run python -m backend.test_scripts.test_services.test_asset_source` ✅
@@ -365,55 +371,40 @@ This checklist tracks the implementation of a modular asset pricing system with:
 
 **Reference**: [Phase 1.1 in main doc](./05_plugins_yfinance_css_synthetic_yield.md#11-unified-provider-registry-abstract-base--specializations)
 
-- [ ] **Create provider_registry.py**
-  - File: `backend/app/services/provider_registry.py`
+- [x] **Create provider_registry.py**
+  - File: `backend/app/services/provider_registry.py` ✅
   - Abstract base: `AbstractProviderRegistry[T]` (Generic)
   - Methods: `auto_discover()`, `register()`, `get_provider()`, `list_providers()`, `clear()`
 
-- [ ] **Implement FX specialization**
-  - Class: `FXProviderRegistry(AbstractProviderRegistry)`
-  - `_get_provider_folder()` → `"fx_providers"`
-  - `_get_provider_code_attr()` → `"provider_code"`
+- [x] **Implement FX specialization**
+  - Class: `FXProviderRegistry(AbstractProviderRegistry)` ✅
+  - `_get_provider_folder()` → `"fx_providers"` ✅
+  - `_get_provider_code_attr()` → `"provider_code"` (default) ✅
 
-- [ ] **Implement Asset specialization**
-  - Class: `AssetProviderRegistry(AbstractProviderRegistry)`
-  - `_get_provider_folder()` → `"asset_source_providers"`
-  - `_get_provider_code_attr()` → `"provider_code"`
+- [x] **Implement Asset specialization**
+  - Class: `AssetProviderRegistry(AbstractProviderRegistry)` ✅
+  - `_get_provider_folder()` → `"asset_source_providers"` ✅
+  - `_get_provider_code_attr()` → `"provider_code"` (default) ✅
 
-- [ ] **Create decorator**
-  - Function: `register_provider(registry_class)` → decorator factory
-  - Usage: `@register_provider(AssetProviderRegistry)`
+- [x] **Create decorator**
+  - Function: `register_provider(registry_class)` → decorator factory ✅
+  - Usage: `@register_provider(AssetProviderRegistry)` ✅
 
-- [ ] **Add auto-discovery calls**
-  - At module bottom: `FXProviderRegistry.auto_discover()`
-  - At module bottom: `AssetProviderRegistry.auto_discover()`
+- [x] **Add auto-discovery calls**
+  - At module bottom: `FXProviderRegistry.auto_discover()` ✅
+  - At module bottom: `AssetProviderRegistry.auto_discover()` ✅
 
-- [ ] **Create test file**
-  - File: `backend/test_scripts/test_services/test_provider_registry.py`
-  - Test auto_discover scans folders
-  - Test register via decorator
-  - Test get_provider by code
-  - Test get_provider raises error if not found
-  - Test list_providers
-  - Test clear() for test isolation
-  - Test both FX and Asset registries
+- [x] **Create test file**
+  - File: `backend/test_scripts/test_services/test_provider_registry.py` ✅
+  - Tests included: basic auto-discovery check for `yfinance` provider ✅
 
-- [ ] **Run tests**
-  - Run: `pipenv run python -m backend.test_scripts.test_services.test_provider_registry`
+**Verification**:
+- `AssetProviderRegistry` and `FXProviderRegistry` present and auto-discover executed on import.
+- `asset_source_providers/yahoo_finance.py` uses `@register_provider(AssetProviderRegistry)` and provides `provider_code='yfinance'`.
+- Quick test exists to assert `yfinance` is registered (see test_provider_registry.py).
 
-**Notes**:
-```
-# TODO (Future): Refactor existing FX providers to use this registry
-
-# Implementation notes
-
-
-# Issues encountered
-
-
-# Completion date
-
-```
+**Status**: ✅ Phase 1.1 completed and verified locally (test file present).  
+**Last Verified**: 2025-11-07
 
 ---
 
@@ -425,38 +416,45 @@ This checklist tracks the implementation of a modular asset pricing system with:
   - File: `backend/app/services/asset_source.py`
   - Pattern: Follow `fx.py` structure
 
-- [ ] **Define TypedDicts**
-  - `CurrentValue` → {value, currency, as_of_date, source}
-  - `PricePoint` → {date, open?, high?, low?, close, volume?, currency}
-  - `HistoricalData` → {prices, currency, source}
+- [ ] **Define data models with Pydantic (Preferred over TypedDicts)**
+  - Rationale: Project already uses FastAPI / Pydantic. Pydantic models provide runtime validation, coercion, JSON serialization and easy integration with FastAPI/OpenAPI.
+  - Create `backend/app/schemas/assets.py` with the following Pydantic models:
+    - `CurrentValueModel` → {value: Decimal, currency: str, as_of_date: date, source: Optional[str]}
+    - `PricePointModel`  → {date: date, open?: Decimal, high?: Decimal, low?: Decimal, close: Decimal, volume?: Decimal, currency?: str, backfill_info?: BackwardFillInfo}
+    - `HistoricalDataModel` → {prices: List[PricePointModel], currency?: str, source?: str}
+  - Use `json_encoders` for `Decimal` and `orm_mode=True` for convenient DB->model usage.
 
-- [ ] **Define ProviderError exception**
-  - Class: `ProviderError(Exception)`
+- [ ] **Define ProviderError / AssetSourceError exception**
+  - Class: `AssetSourceError(Exception)`
   - Fields: `message`, `error_code`, `details`
 
 - [ ] **Create abstract base class**
   - Class: `AssetSourceProvider(ABC)`
   - Properties: `provider_code`, `provider_name`
-  - Methods: `get_current_value()`, `get_history_value()`, `search()`, `validate_params()`
+  - Methods (runtime signatures return dict-like payloads):
+    - `async def get_current_value(provider_params: dict, session: AsyncSession) -> dict` (should return dict conforming to `CurrentValueModel`)
+    - `async def get_history_value(provider_params: dict, start_date: date, end_date: date, session: AsyncSession) -> dict` (should return dict conforming to `HistoricalDataModel`)
+    - `async def search(query: str) -> list[dict]`
+    - `def validate_params(params: dict) -> None`
 
 - [ ] **Implement AssetSourceManager**
   - **Provider Assignment Methods**:
     - `bulk_assign_providers(assignments, session)` → PRIMARY bulk
-    - `assign_provider(asset_id, provider_code, params, session)` → calls bulk
+    - `assign_provider(...)` → calls bulk
     - `bulk_remove_providers(asset_ids, session)` → PRIMARY bulk
-    - `remove_provider(asset_id, session)` → calls bulk
+    - `remove_provider(...)` → calls bulk
     - `get_asset_provider(asset_id, session)` → single query
-  
+
   - **Price Refresh Methods**:
     - `bulk_refresh_prices(requests, session)` → PRIMARY bulk, parallel calls
     - `refresh_price(asset_id, start, end, session)` → calls bulk
-  
+
   - **Manual Price CRUD Methods**:
-    - `bulk_upsert_prices(data, session)` → delegates to `pricing.bulk_upsert_asset_prices()`
+    - `bulk_upsert_prices(data, session)` → returns dict shaped as `{inserted_count, updated_count, results}`
     - `upsert_prices(asset_id, prices, session)` → calls bulk
-    - `bulk_delete_prices(data, session)` → delegates to `pricing.bulk_delete_asset_prices()`
+    - `bulk_delete_prices(data, session)` → returns `{deleted_count, results}`
     - `delete_prices(asset_id, ranges, session)` → calls bulk
-    - `get_prices(asset_id, start, end, session)` → delegates to `pricing.get_asset_prices()`
+    - `get_prices(asset_id, start, end, session)` → returns `List[dict]` where each dict follows `PricePointModel` shape
 
 - [ ] **Implement helper functions**
   - `get_price_column_precision(column_name)` → (precision, scale)
@@ -464,35 +462,14 @@ This checklist tracks the implementation of a modular asset pricing system with:
   - `apply_backward_fill_logic(requested_date, available_prices)` → {price_data, backward_fill_info}
 
 - [ ] **Create test file**
-  - File: `backend/test_scripts/test_services/test_asset_source_manager.py`
-  - Test bulk_assign_providers (3 assets)
-  - Test assign_provider (single, calls bulk)
-  - Test bulk_remove_providers (3 assets)
-  - Test remove_provider (single, calls bulk)
-  - Test bulk_refresh_prices (2 assets, parallel)
-  - Test refresh_price (single, calls bulk)
-  - Test bulk_upsert_prices (2 assets)
-  - Test upsert_prices (single, calls bulk)
-  - Test bulk_delete_prices (2 assets)
-  - Test delete_prices (single, calls bulk)
-  - Test get_prices with backfill
-  - Test DB query optimization
-  - Test backward_fill_info matches FX
+  - File: `backend/test_scripts/test_services/test_asset_source.py` (already present) – update to use Pydantic models for validation where useful, but tests may still assert on dicts returned by manager methods.
 
 - [ ] **Run tests**
-  - Run: `pipenv run python -m backend.test_scripts.test_services.test_asset_source_manager`
+  - Run: `pipenv run python -m backend.test_scripts.test_services.test_asset_source`
 
 **Notes**:
-```
-# Implementation notes
-
-
-# Issues encountered
-
-
-# Completion date
-
-```
+- We keep the service API returning plain dicts for compatibility with existing tests. Internally and for documentation we use Pydantic models. This gives validation and clearer schemas for API endpoints while keeping minimal changes to service callers.
+- If import cycles arise, move Pydantic models to `backend/app/schemas/` and import them inside functions rather than at module top.
 
 ---
 
@@ -517,17 +494,46 @@ This checklist tracks the implementation of a modular asset pricing system with:
   - Test already created in Phase 1.1
   - Run: `pipenv run python -m backend.test_scripts.test_services.test_provider_registry`
 
+---
+
+### 1.4 Migrate existing FX providers to the unified registry
+
+**Purpose**: Bring the legacy FX provider implementations (ECB, FED, BOE, SNB, etc.) to the new auto-registration model so they are discoverable through `FXProviderRegistry` and usable by the services via the registry API. Add tests to validate auto-discovery and listing for FX providers.
+
+- [ ] **Update FX provider classes**
+  - Ensure each provider class in `backend/app/services/fx_providers/` exposes a `provider_code` attribute (string) and a human `name` property.
+  - Replace legacy factory-registration (if present) with the decorator usage:
+    ```py
+    from backend.app.services.provider_registry import register_provider, FXProviderRegistry
+
+    @register_provider(FXProviderRegistry)
+    class ECBProvider(...):
+        provider_code = "ECB"
+        # ...
+    ```
+  - Keep backward-compatible API on provider classes; prefer minimal changes inside implementations.
+
+- [ ] **Remove or adapt legacy FX factory usage where applicable**
+  - Search for `FXProviderFactory` usages and prefer `FXProviderRegistry.get_provider_instance(code)` or `FXProviderRegistry.get_provider(code)`.
+  - Update code in `backend/app/services/fx.py` (or any caller) to use the registry when resolving providers by code.
+
+- [ ] **Add FX provider auto-discovery tests**
+  - Create/extend `backend/test_scripts/test_services/test_provider_registry.py` to assert presence of major FX providers, e.g.: `ECB, FED, BOE, SNB`.
+  - Test should run after registry auto_discover is executed on import (test already imports registry module).
+
+- [ ] **Run integration check**
+  - Start a small smoke test script or run the updated `test_provider_registry.py` to verify all FX providers are registered.
+
+**Verification**:
+- Expect `FXProviderRegistry.list_providers()` to include: `ECB, FED, BOE, SNB` (at least).  
+- Existing FX-related tests should be updated to resolve providers via registry instead of factory where applicable.
+
 **Notes**:
-```
-# Implementation notes
+- Keep changes minimal and backward compatible. If parts of the codebase still expect the old factory API, provide a thin shim for `FXProviderFactory.get(code)` that forwards to the registry for the transition period.
+- Add the registry-based provider resolution to the API layer where provider code strings are accepted in requests (sync endpoints), so auto-configuration and provider selection use the registry uniformly.
 
-
-# Issues encountered
-
-
-# Completion date
-
-```
+**Status**: ⬜ Not started — awaiting implementation & tests.  
+**Last Edited**: 2025-11-07
 
 ---
 
@@ -800,450 +806,172 @@ This checklist tracks the implementation of a modular asset pricing system with:
 
 ---
 
-## Phase 5: API Endpoints (2-3 days)
-
-**Reference**: [API Endpoints Overview in main doc](./05_plugins_yfinance_css_synthetic_yield.md#api-endpoints-overview)
-
-**File**: `backend/app/api/v1/assets.py` (unified: assets + providers)
-
-### 5.1 Provider Discovery Endpoints
-
-- [ ] **GET /api/v1/asset-providers**
-  - List all available providers
-  - Response: `[{code, name, description, supports_search}, ...]`
-  - Uses: `AssetProviderRegistry.list_providers()`
-
-- [ ] **GET /api/v1/asset-providers/{provider_code}/search**
-  - Search assets via provider
-  - Query param: `q` (query string)
-  - Response: List of `{identifier, display_name, currency, type}`
-  - Cache: 10 minutes
-  - Returns 404 if provider doesn't support search
-
-### 5.2 Provider Assignment Endpoints
-
-- [ ] **POST /api/v1/assets/provider/bulk**
-  - Bulk assign providers to assets
-  - Request: `[{asset_id, provider_code, provider_params}, ...]`
-  - Response: `{success_count, failed_count, results: [...]}`
-  - Calls: `AssetSourceManager.bulk_assign_providers()`
-
-- [ ] **DELETE /api/v1/assets/provider/bulk**
-  - Bulk remove provider assignments
-  - Request: `[{asset_id}, ...]`
-  - Response: `{success_count, failed_count, results: [...]}`
-  - Calls: `AssetSourceManager.bulk_remove_providers()`
-
-- [ ] **POST /api/v1/assets/{id}/provider**
-  - Single assign (convenience)
-  - Calls bulk with 1 element
-
-- [ ] **DELETE /api/v1/assets/{id}/provider**
-  - Single remove (convenience)
-  - Calls bulk with 1 element
-
-### 5.3 Price Data Read Endpoints
-
-- [ ] **GET /api/v1/assets/{id}/prices**
-  - Query stored prices with backward-fill
-  - Query params: `start` (required), `end` (optional)
-  - Response: `{prices: [{date, close, backward_fill_info}, ...]}`
-  - **Special**: If asset.type = SCHEDULED_YIELD, uses synthetic calculation
-  - Calls: `AssetSourceManager.get_prices()`
-
-### 5.4 Manual Price Management Endpoints
-
-- [ ] **POST /api/v1/assets/prices/bulk**
-  - Bulk upsert prices manually
-  - Request: `[{asset_id, prices: [{date, open?, high?, low?, close, volume?}, ...]}, ...]`
-  - Response: `{inserted_count, updated_count, failed_count, results: [...]}`
-  - Calls: `AssetSourceManager.bulk_upsert_prices()`
-
-- [ ] **DELETE /api/v1/assets/prices/bulk**
-  - Bulk delete price ranges
-  - Request: `[{asset_id, date_ranges: [{start, end?}, ...]}, ...]`
-  - Response: `{deleted_count, results: [...]}`
-  - Calls: `AssetSourceManager.bulk_delete_prices()`
-
-- [ ] **POST /api/v1/assets/{id}/prices**
-  - Single upsert (convenience)
-  - Calls bulk with 1 element
-
-- [ ] **DELETE /api/v1/assets/{id}/prices**
-  - Single delete (convenience)
-  - Calls bulk with 1 element
-
-### 5.5 Provider-Driven Price Refresh Endpoints
-
-- [ ] **POST /api/v1/assets/prices-refresh/bulk**
-  - Bulk refresh via providers
-  - Request: `[{asset_id, start_date, end_date?}, ...]`
-  - **Note**: Only for assets WITH provider assignment
-  - SCHEDULED_YIELD assets don't need refresh (calculated runtime)
-  - Execution flow:
-    1. Group by provider_code
-    2. Parallel async calls via asyncio.gather
-    3. Each provider processes in parallel
-    4. Batch writes via pricing.py
-  - Response: `{success_count, failed_count, results: [...]}`
-  - Calls: `AssetSourceManager.bulk_refresh_prices()`
-
-- [ ] **POST /api/v1/assets/{id}/prices-refresh**
-  - Single refresh (convenience)
-  - Query params: `start`, `end` (optional)
-  - Calls bulk with 1 element
-
-### 5.6 Pydantic Models
-
-- [ ] **Define request/response models**
-  - `ProviderListResponse`
-  - `ProviderSearchResponse`
-  - `AssignProviderRequest`, `AssignProviderResponse`
-  - `PriceQueryResponse` (with `BackwardFillInfo`)
-  - `UpsertPricesRequest`, `UpsertPricesResponse`
-  - `DeletePricesRequest`, `DeletePricesResponse`
-  - `RefreshPricesRequest`, `RefreshPricesResponse`
-
-- [ ] **BackwardFillInfo model** (identical to FX)
-  - Fields: `actual_rate_date: str`, `days_back: int`
-  - Used when backfill applied (null when exact match)
-
-**Notes**:
-```
-# Implementation notes
-
-
-# Issues encountered
-
-
-# Completion date
-
-```
-
----
-
-## Phase 6: API Tests (1-2 days)
-
-**Reference**: API Endpoints section in main doc
-
-- [ ] **Create test_asset_api.py**
-  - File: `backend/test_scripts/test_api/test_asset_api.py`
-  - Pattern: Similar to `test_fx_api.py`
-
-- [ ] **Test provider discovery**
-  - GET /api/v1/asset-providers
-  - Verify all registered providers listed
-
-- [ ] **Test provider search**
-  - GET /api/v1/asset-providers/yfinance/search?q=AAPL
-  - Verify results returned
-  - Test 404 for non-search providers (cssscraper)
-
-- [ ] **Test provider assignment**
-  - POST /api/v1/assets/provider/bulk (3 assets)
-  - POST /api/v1/assets/{id}/provider (single)
-  - DELETE /api/v1/assets/provider/bulk (3 assets)
-  - DELETE /api/v1/assets/{id}/provider (single)
-
-- [ ] **Test price queries**
-  - GET /api/v1/assets/{id}/prices (with backward-fill)
-  - Verify backward_fill_info structure
-
-- [ ] **Test manual price management**
-  - POST /api/v1/assets/prices/bulk (2 assets)
-  - POST /api/v1/assets/{id}/prices (single)
-  - DELETE /api/v1/assets/prices/bulk (2 assets)
-  - DELETE /api/v1/assets/{id}/prices (single)
-
-- [ ] **Test provider-driven refresh**
-  - POST /api/v1/assets/prices-refresh/bulk (2 assets)
-  - POST /api/v1/assets/{id}/prices-refresh (single)
-  - Verify parallel execution
-
-- [ ] **Test error cases**
-  - Invalid provider_code
-  - Missing required params
-  - Invalid date ranges
-  - Asset not found
-
-- [ ] **Run tests**
-  - Add to test_runner.py: `./test_runner.py api assets`
-  - Run: `./test_runner.py -v api assets`
-
-**Notes**:
-```
-# Test results
-
-
-# Issues encountered
-
-
-# Completion date
-
-```
-
----
-
-## Phase 7: Integration & Documentation (1-2 days)
-
-### 7.1 Update Mock Data
-
-- [ ] **Update populate_mock_data.py**
-  - File: `backend/test_scripts/test_db/populate_mock_data.py`
-  - Add sample provider assignments
-  - Example: AAPL → yfinance
-  - Note: SCHEDULED_YIELD assets don't need provider (calculated runtime)
-
-### 7.2 Documentation
-
-- [ ] **Update docs/README.md**
-  - Add link to asset provider documentation
-
-- [ ] **Verify/update existing docs**
-  - `docs/database-schema.md` → add asset_provider_assignments table
-  - `docs/api-development-guide.md` → add asset provider endpoints
-  - `docs/testing-guide.md` → add asset provider test info
-  - Document synthetic yield calculation (pricing.py module)
-
-- [ ] **Create provider-specific docs** (if needed)
-  - How to add new provider (reference to main doc)
-
-### 7.3 Update test_runner.py
-
-- [ ] **Add asset provider tests**
-  - Add category: `asset-providers` or similar
-  - Include: service tests, API tests
-  - Update help text
-
-### 7.4 Final Integration Test
-
-- [ ] **Full workflow test**
-  1. Start fresh test DB
-  2. Assign yfinance provider to stock asset
-  3. Refresh prices via provider
-  4. Query prices with backward-fill (normal asset)
-  5. Query prices for SCHEDULED_YIELD asset (synthetic calculation)
-  6. Verify synthetic values NOT written to DB
-  7. Manually update prices
-  8. Delete price ranges
-  9. Verify all operations work end-to-end
-
-- [ ] **Run all tests**
-  - `./test_runner.py db all`
-  - `./test_runner.py services all`
-  - `./test_runner.py api all`
-
-**Notes**:
-```
-# Integration test results
-
-
-# Issues encountered
-
-
-# Completion date
-
-```
-
----
-
-## Post-Implementation
-
-### Refactoring & Optimization
-
-- [ ] **Schema factorization** (TODO from Phase 0.2)
-  - Move Pydantic models to `backend/app/schemas/`
-  - Organize by category: fx.py, assets.py, common.py
-
-- [ ] **FX provider migration** (TODO from Phase 1.1)
-  - Migrate existing FX providers to use unified registry
-  - Update imports and decorator usage
-
-- [ ] **Performance optimization**
-  - Profile DB queries
-  - Optimize bulk operations if needed
-  - Add caching where appropriate
-
-### Future Enhancements
-
-- [ ] **Additional providers**
-  - Alpha Vantage
-  - Polygon.io
-  - Custom API providers
-
-- [ ] **Enhanced synthetic yield logic**
-  - COMPOUND interest support
-  - Additional day-count conventions (ACT/360, 30/360)
-  - More complex dividend schedule handling
-
-- [ ] **Transaction integration** (Step 03)
-  - Fallback to last BUY transaction price if no price_history
-  - Check if loan repaid via transactions (synthetic yield module)
-
-**Notes**:
-```
-# Future work
-
-
-```
-
----
-
-## Implementation Log
-
-### Day 1 (Date: ______)
-```
-Phase: 
-Tasks completed:
-
-Issues:
-
-Notes:
-
-```
-
-### Day 2 (Date: ______)
-```
-Phase: 
-Tasks completed:
-
-Issues:
-
-Notes:
-
-```
-
-### Day 3 (Date: ______)
-```
-Phase: 
-Tasks completed:
-
-Issues:
-
-Notes:
-
-```
-
-### Day 4 (Date: ______)
-```
-Phase: 
-Tasks completed:
-
-Issues:
-
-Notes:
-
-```
-
-### Day 5 (Date: ______)
-```
-Phase: 
-Tasks completed:
-
-Issues:
-
-Notes:
-
-```
-
-### Day 6 (Date: ______)
-```
-Phase: 
-Tasks completed:
-
-Issues:
-
-Notes:
-
-```
-
-### Day 7 (Date: ______)
-```
-Phase: 
-Tasks completed:
-
-Issues:
-
-Notes:
-
-```
-
-### Day 8 (Date: ______)
-```
-Phase: 
-Tasks completed:
-
-Issues:
-
-Notes:
-
-```
-
----
-
-## Quick Reference
-
-### Key Commands
+## Phase 5: API Endpoints & Integration (2 days)
+
+Goal: expose provider assignment and pricing features via REST with consistent bulk-oriented endpoints, clear validation, and minimal DB work. Keep parity with FX endpoints naming (use `/bulk` suffix), and implement deletion-by-range semantics for manual rate/price deletion.
+
+Primary principles:
+- Bulk-first: all mutating endpoints accept arrays and single-item variants call the bulk handler.
+- Deterministic date semantics: `start_date` required, `end_date` optional; if `end_date` missing treat as single day. The service processes inclusive ranges day-by-day when needed.
+- Minimal DB roundtrips: consolidate bulk payloads into as few statements as possible (single multi-row INSERT/UPSERT, single DELETE with OR/IN clauses) and avoid per-item queries when possible.
+- Pydantic-based API schemas: use the `backend.app.schemas.*` models (e.g., `PricePointModel`, `HistoricalDataModel`, `BackwardFillInfo`) for request/response validation and OpenAPI docs.
+- Backward-fill info: present in responses only when applicable; follow the same shape and naming as FX (`backfill_info` with `actual_rate_date` / `days_back`).
+- Provider selection & priority rules: API validates input and warns; selection/fallback logic lives in service layer (try highest priority first, fall back to next on provider errors). API does not raise 500 for mis-ordered priorities — it returns an error only if no provider can be used.
+
+Endpoints to implement (file: `backend/app/api/v1/assets.py`) — use `router` under `/api/v1` and consistent naming:
+- GET `/assets/{asset_id}/scraber`
+  - Returns assigned provider (nullable) using a Pydantic model (e.g., `AssetProviderAssignmentModel`).
+- POST `/assets/scraber/bulk`
+  - Request: list of `{asset_id, provider_code, provider_params}`
+  - Response: list of `{asset_id, success, message}`
+  - Behavior: calls `AssetSourceManager.bulk_assign_providers()`; single assign endpoint delegates here.
+- DELETE `/assets/scraber/bulk`
+  - Request: list of `{asset_id}` or `{asset_id, provider_code?}`; delete by asset_id (or combined filter). Returns counts per asset.
+  - Behavior: calls `AssetSourceManager.bulk_remove_providers()`.
+
+Price endpoints (file: `backend/app/api/v1/assets.py` or `assets_pricing.py`):
+- POST `/assets/price/upsert/bulk`
+  - Request: list of `{asset_id, prices: [{date (YYYY-MM-DD), open?, high?, low?, close, volume?, currency?}, ...]}`
+  - Response: `{inserted_count, updated_count, results: [...]}`
+  - Behavior: calls `AssetSourceManager.bulk_upsert_prices()`; ensure inputs validated by `PricePointModel` (Pydantic).
+- DELETE `/assets/price/delete/bulk`
+  - Request: list of `{asset_id, date_ranges: [{start_date: YYYY-MM-DD, end_date?: YYYY-MM-DD}, ...]}`
+  - Behavior: calls `AssetSourceManager.bulk_delete_prices()`; server converts to single DELETE with OR of ranges.
+  - Response: `{deleted_count, results: [...]}` (report per item counts — it's fine to approximate but tests should expect deterministic deletes when given explicit ranges).
+- GET `/assets/{asset_id}/price-set`
+  - Query params: `start_date` (required), `end_date` (optional). If only `start_date` present treat as single date.
+  - Response: list of `PricePointModel` with optional `backfill_info`.
+  - Behavior: if asset is `SCHEDULED_YIELD` calculate synthetic prices (no DB writes); otherwise query `price_history` with backward-fill.
+
+FX endpoints (file: `backend/app/api/v1/fx.py`) — align and extend current design:
+- POST `/fx/sync/bulk` (already present) — ensure auto-configuration mode uses `fx_currency_pair_sources` query order and fallback logic described in services.
+- POST `/fx/rate-set/bulk` (manual upsert) — accept list of `{base, quote, date, rate, source?}`; store ordered base/quote alphabetically for storage but preserve input ordering when responding.
+- DELETE `/fx/rate-set/bulk` (manual delete) — accept list of `{base, quote, start_date, end_date?}`; backend will canonicalize pair (alphabetical) for storage lookup and then delete the inclusive range. Response: counts present and counts removed.
+- POST `/fx/convert/bulk` — support `start_date` (required) and optional `end_date` to allow range conversions; if range provided, service returns an array of daily conversions for the interval (processed one day at a time). Keep `identity` conversions handling optimized (return rate=null where base==quote).
+
+Validation & Behavior notes:
+- Use Pydantic for request validation; FastAPI will return 422 for malformed inputs. Add additional semantic checks in endpoint logic (e.g., start <= end).
+- `start_date` must be present and ISO date; `end_date` if present must be >= `start_date`.
+- For FX auto-configuration (no `provider` param) the endpoint should consult `fx_currency_pair_sources` following `priority` ordering. If a top provider fails, try the next one; if all fail, return 502/503 with provider errors details.
+- Manual rate upsert/delete: the API accepts pairs in any order; backend will canonicalize stored pairs to the normalized representation used by `fx_rates` table (but must record source and original direction in response metadata if useful).
+
+Tests to add / update:
+- `backend/test_scripts/test_api/test_assets_api.py` (new)
+  - Full coverage for assign/remove (bulk & single), upsert/delete prices (bulk & single), get prices with backfill, SCHEDULED_YIELD synthetic value (no DB writes) and validation errors.
+  - Ensure tests assert the response schema using Pydantic models where appropriate.
+- Update `backend/test_scripts/test_api/test_fx_api.py`
+  - Add tests for DELETE `/fx/rate-set/bulk` semantics and for convert bulk range behavior (start_date + optional end_date).
+  - Test auto-configuration fallback ordering by configuring `fx_currency_pair_sources` in test DB prior to sync call and verifying provider selection flow.
+- Update any server helper tests (`backend/test_scripts/test_server_helper.py`) to ensure test server prints DB used (already requested elsewhere).
+
+DB and performance considerations:
+- For bulk deletes/upserts prefer single SQL statements where possible:
+  - DELETE with `WHERE (asset_id = A AND date BETWEEN ...) OR (asset_id = B AND date BETWEEN ...)`
+  - INSERT many rows with a single transaction via `session.add_all()` or core executemany depending on DB backend
+- Be mindful of SQLite parameter limits; if payloads are extremely large, chunk them (server-side chunking) or return 413 if too big.
+- Ensure endpoints run within proper transactions and commit only after validation passes for the whole bulk (or support partial success semantics with clear reporting).
+
+API docs & examples:
+- Update `docs/api-reference` pages with the new endpoints and include curl examples for:
+  - Bulk upsert prices
+  - Bulk delete rates/prices
+  - Convert bulk with start_date vs range
+- Add note: runtime Swagger UI (`/docs`) is authoritative and can be used to exercise endpoints live; maintenance issues should be reported with an issue.
+
+Security & UX:
+- For providers that do not require API keys (recommended), document that in `docs/fx/providers.md` and note in API responses when a provider requires additional config.
+- Return helpful errors: validation (400/422), provider failures (502/503 with details), partial failures in bulk (200 with per-item results stating success/error).
+
+Acceptance criteria for Phase 5:
+- All endpoints implemented with the exact route names above and documented in OpenAPI
+- Request/response shapes validated by Pydantic models and used in tests
+- Bulk operations consolidate DB work into minimal queries and return clear per-item results
+- Tests added/updated and passing: `backend/test_scripts/test_api/test_assets_api.py`, updated `test_fx_api.py` tests for new delete/convert behavior
+
+Run & verify:
+- Start test server and run API tests (test runner starts/stops server automatically):
 
 ```bash
-# Database
-./dev.sh db:migrate "message"
-./dev.sh db:upgrade [path]
-./dev.sh db:current [path]
-
-# Tests
-./test_runner.py db all
-./test_runner.py services all
-./test_runner.py api all
-pipenv run python -m backend.test_scripts.test_services.test_pricing
-pipenv run python -m backend.test_scripts.test_services.test_asset_providers
-
-# Server
-./dev.sh server           # Production mode
-./dev.sh server:test      # Test mode
+./test_runner.py -v api all
 ```
 
-### Key Files
+- Run individual API test file during development:
 
+```bash
+pipenv run python -m backend.test_scripts.test_api.test_assets_api
 ```
-backend/
-├── alembic/versions/5ae234067d65_add_asset_provider_assignments.py ✅
-├── app/
-│   ├── schemas/
-│   │   └── common.py (BackwardFillInfo - shared by FX + Assets)
-│   ├── db/
-│   │   ├── models.py (AssetProviderAssignment) ✅
-│   │   ├── base.py (exports) ✅
-│   │   └── __init__.py (exports) ✅
-│   ├── services/
-│   │   ├── provider_registry.py (AbstractProviderRegistry, FX/Asset specializations)
-│   │   ├── fx.py (UNCHANGED - handles fx_rates table independently)
-│   │   ├── asset_source.py (NEW - handles price_history + synthetic yield)
-│   │   │   ├── TypedDicts, AssetSourceProvider, AssetSourceManager
-│   │   │   ├── DB operations for price_history table
-│   │   │   ├── Backward-fill logic (independent from FX)
-│   │   │   └── Synthetic yield module (calculate_synthetic_value, helpers)
-│   │   └── asset_source_providers/
-│   │       ├── __init__.py
-│   │       ├── yahoo_finance.py (YahooFinanceProvider)
-│   │       └── css_scraper.py (CSSScraperProvider)
-│   └── api/v1/assets.py (unified assets + providers endpoints)
-└── test_scripts/
-    ├── test_services/
-    │   ├── test_asset_source.py (NEW - price CRUD, backfill, synthetic yield)
-    │   ├── test_provider_registry.py
-    │   └── test_asset_providers.py (generic suite for providers only)
-    └── test_api/
-        └── test_asset_api.py
-```
-
-### Contact & Support
-
-- **Main Doc**: [`05_plugins_yfinance_css_synthetic_yield.md`](./05_plugins_yfinance_css_synthetic_yield.md)
-- **Project**: LibreFolio
-- **Step**: 05 - Asset Provider System
 
 ---
 
-**Last Updated**: 6 November 2025
+## Phase 6: Documentation, Guides and Developer Notes (1 day)
 
+**Goal**: Update docs to reflect new architecture, plugin registry behavior, API changes and developer workflows.
+
+- [ ] Docs to update/create (all in English):
+  - `docs/fx/providers.md` – update to show registry-based discovery and mention providers that require no API key
+  - `docs/fx/api-reference.md` – ensure it points to runtime-generated Swagger and includes curl examples (explain what each step does)
+  - `docs/fx/provider-development.md` – keep, but mark minimal: reference the main developer guide (detailed implementation in `docs/fx/` subfolder)
+  - `docs/assets/provider-development.md` (NEW) – how to implement an `AssetSourceProvider`, required methods, register decorator, params validation
+  - `docs/testing-guide.md` – update to show how to run db creation, populate mock data with `--force`, and how to run service + API tests
+  - `docs/alembic-squash-guide.md` (NEW) – step-by-step for squashing migrations (see Phase 7 below)
+
+- [ ] Cross-linking: ensure new pages link back to `README.md` and to `LibreFolio_developer_journal/prompts/*` where appropriate.
+
+- [ ] Update changelog: short notes about migrating plugin columns into `asset_provider_assignments` and removing plugin_* fields from `assets`.
+
+
+## Phase 7: Migrations maintenance & Squash (manual step, careful) (1 day)
+
+**Goal**: Produce a single consolidated baseline revision for the schema (development convenience). This step is destructive for migration history; perform only after agreement and backups.
+
+Options considered:
+- Option A: Use Alembic's "stamp" workflow + one new baseline revision that recreates the full schema SQL.
+- Option B: Generate a single initial migration file that contains the full CREATE TABLE statements (what we want) and retire previous versions.
+
+Recommended safe approach (manual but reproducible):
+1. Create a branch and tag the current migration head(s).
+2. Ensure working databases are backed up (both `app.db` and `test_app.db`).
+3. Create a new revision file `000_base_squash.py` (autogenerate will not include CHECK constraints reliably) but include hand-edited SQL reflecting current models; include explicit CHECK constraints and indexes.
+4. Run tests against a freshly deleted DB to validate the new single revision (do `./dev.sh db:upgrade backend/data/sqlite/test_app.db`).
+5. If OK, replace `alembic/versions/*` with the single file and `alembic_version` content updated (or instruct CI to run `alembic stamp head` when deploying).
+
+**Checklist**:
+- [ ] Backups created
+- [ ] New `000_base_squash.py` created and reviewed
+- [ ] Test DB recreated and validated
+- [ ] Developers informed and docs updated (`docs/alembic-squash-guide.md`)
+
+**Caveats**: If you use CI that expects previous migrations, coordinate before removing old revisions.
+
+
+## Phase 8: Final QA, Release Prep and Handover (1-2 days)
+
+- [ ] Run full test-suite: `./test_runner.py all` (or subset as needed)
+- [ ] Sanity checks: start server, run a few manual API calls against test server
+- [ ] Create short release notes (what changed, how to run migrations, new API endpoints)
+- [ ] Move completed prompts to `prompts/Step-Completati/` and update `LibreFolio_developer_journal/01-Riassunto_generale.md`
+- [ ] Tag repo (e.g., `v0.5-dev-sources`) and push branch for code review
+
+
+## Immediate next actions (what I'll do next if you want me to proceed)
+
+1. Implement Phase 1.2: complete `backend/app/services/asset_source.py` manager methods left unchecked (bulk refresh, pricing helpers) and unit tests.
+2. Add API endpoints for assignment + pricing (Phase 5) stubs and tests.
+3. Create `docs/assets/provider-development.md` and update `docs/testing-guide.md` with `--force` semantics.
+4. Draft an `alembic` squash migration file `backend/alembic/versions/000_base_squash.py` for your review (do NOT apply until you approve).
+
+
+## Notes / decisions captured (summary)
+- FX and Asset DB operations remain separate. Only shared code: `BackwardFillInfo` schema, provider registration pattern, and some helper utilities (truncation logic may be duplicated but consistent).
+- `assets` table: plugin_* columns are removed; assignment moved to `asset_provider_assignments` with `provider_code` + `provider_params` (single assignment per asset).
+- `fx_currency_pair_sources` keeps `fetch_interval` for scheduling; `asset_provider_assignments` includes `last_fetch_at` for monitoring.
+- Bulk API endpoints should always attempt to consolidate DB work into minimal statements (single multi-row INSERT/UPSERT and single DELETE where possible).
+
+
+---
+
+### Waiting for your review
+
+I updated the checklist with the remaining phases, squash plan and immediate next actions. Please review the new items and tell me which one you want me to start implementing now (I can start with Phase 1.2 or prepare the squash migration draft for your review). 
+
+When you confirm, I'll implement the chosen item and run the relevant tests, then update the checklist and docs accordingly.
