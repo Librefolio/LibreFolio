@@ -25,7 +25,7 @@ Design principles:
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta
 from decimal import Decimal, ROUND_DOWN
-from typing import TypedDict, Optional
+from typing import Optional
 
 from sqlalchemy import select, delete, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,35 +37,17 @@ from backend.app.db.models import (
     ValuationModel,
 )
 
+# Import Pydantic models for public data shapes
+from backend.app.schemas.assets import (
+    CurrentValueModel,
+    PricePointModel,
+    HistoricalDataModel,
+)
+
 
 # ============================================================================
-# TYPE DEFINITIONS
+# EXCEPTIONS
 # ============================================================================
-
-
-class CurrentValue(TypedDict):
-    """Current value of an asset."""
-    value: Decimal
-    currency: str
-    as_of_date: date_type
-    source: str
-
-
-class PricePoint(TypedDict):
-    """Single price data point (OHLC)."""
-    date: date_type
-    open: Optional[Decimal]
-    high: Optional[Decimal]
-    low: Optional[Decimal]
-    close: Decimal  # Required
-    currency: str
-
-
-class HistoricalData(TypedDict):
-    """Historical price data."""
-    prices: list[PricePoint]
-    currency: str
-    source: str
 
 
 class AssetSourceError(Exception):
@@ -112,7 +94,7 @@ class AssetSourceProvider(ABC):
         self,
         provider_params: dict,
         session: AsyncSession,
-    ) -> CurrentValue:
+    ) -> dict:
         """
         Fetch current price for asset.
 
@@ -135,7 +117,7 @@ class AssetSourceProvider(ABC):
         start_date: date_type,
         end_date: date_type,
         session: AsyncSession,
-    ) -> HistoricalData:
+    ) -> dict:
         """
         Fetch historical prices for date range.
 
@@ -344,7 +326,7 @@ async def calculate_synthetic_value(
     asset: Asset,
     target_date: date_type,
     session: AsyncSession,
-) -> PricePoint:
+) -> dict:
     """
     Calculate synthetic valuation for SCHEDULED_YIELD asset.
 
@@ -396,14 +378,14 @@ async def calculate_synthetic_value(
     # Calculate value (TODO: Subtract dividends in Step 03)
     synthetic_value = asset.face_value + accrued_interest
 
-    return PricePoint(
-        date=target_date,
-        open=None,
-        high=None,
-        low=None,
-        close=truncate_price_to_db_precision(synthetic_value),
-        currency=asset.currency,
-    )
+    return {
+        "date": target_date,
+        "open": None,
+        "high": None,
+        "low": None,
+        "close": truncate_price_to_db_precision(synthetic_value),
+        "currency": asset.currency,
+    }
 
 
 # ============================================================================
@@ -639,7 +621,7 @@ class AssetSourceManager:
                     low=truncate_price_to_db_precision(price["low"], "low") if price.get("low") is not None else None,
                     close=truncate_price_to_db_precision(price["close"], "close"),
                     volume=price.get("volume"),
-                    currency=price.get("currency", "USD"),  # TODO: Get from asset
+                    currency=price.get("currency", "USD"),  # TODO: Get from asset when system will be ready for do this query, for now default to USD
                     source_plugin_key="MANUAL",  # Manual price insert
                     fetched_at=None,  # Not fetched from external source
                 )

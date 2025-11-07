@@ -5,6 +5,9 @@
 **Stima Tempo**: 6-8 giorni  
 **Complessità**: Media
 
+**Status**: 🟢 In Progress — Phase 0 and 0.2.2 completed
+**Last Updated**: 2025-11-07
+
 **Schema Update (2025-11-06)**:
 - `asset_provider_assignments.last_fetch_at` → Track last fetch attempt (NULL = never fetched)
 - `fx_currency_pair_sources.fetch_interval` → Refresh frequency in minutes (NULL = 1440 = 24h default)
@@ -589,7 +592,7 @@ SELECT COUNT(*) FROM asset_provider_assignments;
 
 **What we share**:
 - `BackwardFillInfo` TypedDict (common response format)
-- Provider registry pattern (abstract base for FX + Assets)
+- Provider registry pattern (abstract base for FX, Assets)
 - Common utility functions (if genuinely reusable)
 
 ---
@@ -760,6 +763,15 @@ class AssetSourceManager:
         pass
     
     @staticmethod
+    async def upsert_prices(
+        asset_id: int,
+        prices: list[dict],
+        session: AsyncSession
+    ) -> dict:
+        """Single upsert (calls bulk with 1 element)."""
+        pass
+    
+    @staticmethod
     async def bulk_delete_prices(
         data: list[dict],
         session: AsyncSession
@@ -768,10 +780,19 @@ class AssetSourceManager:
         pass
     
     @staticmethod
+    async def delete_prices(
+        asset_id: int,
+        date_ranges: list[dict],
+        session: AsyncSession
+    ) -> dict:
+        """Single delete (calls bulk with 1 element)."""
+        pass
+    
+    @staticmethod
     async def get_prices(
         asset_id: int,
-        start_date: date,
-        end_date: date | None,
+        start: date,
+        end: date | None,
         session: AsyncSession
     ) -> list[dict]:
         """
@@ -1078,7 +1099,7 @@ class AbstractProviderRegistry(ABC, Generic[T]):
         return provider_class()
     
     @classmethod
-    def list_providers(cls) -> list[dict]:
+    def list_providers(cls) -> list:
         """List all registered providers."""
         providers = []
         code_attr = cls._get_provider_code_attr()
@@ -1392,7 +1413,7 @@ class AssetSourceManager:
         Returns:
             [{asset_id, success, message}, ...]
             
-        Optimization: 1 DELETE with WHERE IN
+        Optimization: 1 DELETE query with WHERE IN
         """
         pass
     
@@ -1489,7 +1510,7 @@ class AssetSourceManager:
         session: AsyncSession
     ) -> dict:
         """
-        PRIMARY bulk method: Delete price ranges.
+        PRIMARY: Bulk delete price ranges from price_history table.
         
         Args:
             data: [{asset_id, date_ranges: [{start, end?}, ...]}, ...]
@@ -1602,61 +1623,78 @@ import logging
 
 from backend.app.services.plugins.base import DataPlugin, PluginError
 
-**Note**: Registry system is now in Phase 1.1 (unified `provider_registry.py`).
+logger = logging.getLogger(__name__)
 
-This phase focuses on folder setup for auto-discovery:
+# Decorator for auto-registration
+def register_provider(registry_class: Type[AbstractProviderRegistry]):
+    """
+    Decorator factory for provider registration.
+    
+    Usage:
+        @register_provider(AssetProviderRegistry)
+        class YahooFinanceProvider:
+            ...
+    """
+    def decorator(provider_class):
+        registry_class.register(provider_class)
+        return provider_class
+    return decorator
 
-**Folder**: `backend/app/services/asset_source_providers/`
 
-Create folder structure:
-```
-backend/app/services/asset_source_providers/
-├── __init__.py          # Empty (auto-discovery via registry)
-├── yahoo_finance.py     # Will be implemented in Phase 2
-├── css_scraper.py       # Will be implemented in Phase 3
-└── synthetic_yield.py   # Will be implemented in Phase 4
-```
-
-**File**: `backend/app/services/asset_source_providers/__init__.py`
-```python
-"""
-Asset pricing providers.
-
-Providers are auto-discovered by AssetProviderRegistry.
-No manual imports needed.
-"""
-# Empty - auto-discovery handles registration
+# Auto-discover all providers on module import
+FXProviderRegistry.auto_discover()
+AssetProviderRegistry.auto_discover()
 ```
 
-**How it works**:
-1. `AssetProviderRegistry.auto_discover()` scans this folder
-2. Imports all `.py` files (except `__init__.py`)
-3. Providers use `@register_provider(AssetProviderRegistry)` decorator
-4. **Docker-friendly**: Drop new provider file → auto-registered on startup
+**Note**: 
+- Docker-friendly: Just drop `.py` file in provider folder, auto-discovered on startup
+- Decorator registers provider: `@register_provider(AssetProviderRegistry)`
+- Each provider type has its own registry (FX, Assets)
+- **TODO**: Refactor existing FX providers to use this system
 
-**Test**: Verify auto-discovery in `test_provider_registry.py` (from Phase 1.1)
-- [ ] Create dummy provider file in folder
-- [ ] Verify auto-discovery finds it
-- [ ] Verify decorator registration works
-- [ ] Remove dummy provider
+**Test**: `backend/test_scripts/test_services/test_provider_registry.py`
+- [ ] Test auto_discover scans folder correctly
+- [ ] Test register provider via decorator
+- [ ] Test get_provider by code
+- [ ] Test get_provider raises error if not found
+- [ ] Test list_providers returns all registered
+- [ ] Test clear() for test isolation
+- [ ] Test FXProviderRegistry specialization
+- [ ] Test AssetProviderRegistry specialization
 
 **Checklist**:
-- [ ] Folder `asset_source_providers/` created
-- [ ] `__init__.py` created (empty with docstring)
-- [ ] Auto-discovery tested with dummy provider
-- [ ] Ready for Phase 2 (yfinance implementation)
-- [ ] Test get_plugin raises PluginError if not found
-- [ ] Test list_plugins returns all registered
-- [ ] Test decorator @register_plugin auto-registers
-- [ ] Test clear() for testing isolation
+- [ ] provider_registry.py created with abstract base
+- [ ] FXProviderRegistry and AssetProviderRegistry implemented
+- [ ] Auto-discovery via folder scanning works
+- [ ] Decorator @register_provider works
+- [ ] Tests pass for both registry types
+- [ ] Docker-compatible (file drop in folder = auto-register)
 
-**Checklist**:
-- [ ] Registry implementato come singleton
-- [ ] Auto-discovery via decorator
-- [ ] Error handling con PluginError
-- [ ] list_plugins per debugging
-- [ ] clear() per test isolation
-- [ ] Test registry passa
+---
+
+#### 1.4: Migrate existing FX providers to the unified registry
+
+**Purpose**: Align legacy FX providers with the new `FXProviderRegistry` auto-registration pattern so FX providers are discovered the same way as asset providers. This centralizes provider resolution via the registry and simplifies provider lookup across the codebase.
+
+Tasks:
+- Ensure each provider in `backend/app/services/fx_providers/` exposes a `provider_code` attribute and `name` property (or equivalent).
+- Add decorator registration to each provider implementation:
+  ```py
+  from backend.app.services.provider_registry import register_provider, FXProviderRegistry
+
+  @register_provider(FXProviderRegistry)
+  class ECBProvider(FXRateProvider):
+      provider_code = "ECB"
+      # existing implementation
+  ```
+- Update any legacy factory usage (`FXProviderFactory` or similar) to use `FXProviderRegistry.get_provider_instance(code)` during transition. Provide a thin shim `FXProviderFactory` that forwards to registry if needed.
+- Add/extend tests in `backend/test_scripts/test_services/test_provider_registry.py` to assert FX providers are present: `ECB`, `FED`, `BOE`, `SNB`.
+
+Verification:
+- Running the provider registry tests should list FX providers in `FXProviderRegistry.list_providers()`.
+- Any code that resolves providers by code (e.g., sync endpoints) should use the registry API.
+
+Status: Not started — waiting for migration work.
 
 ---
 
@@ -1937,9 +1975,9 @@ All providers tested by same generic suite.
 - [ ] Error handling robusto
 - [ ] OHLC conversion a PricePoint (where applicable)
 - [ ] Search implementation (where supported)
-- [ ] Test suite discovers provider automatically
-- [ ] All uniform tests pass
-- [ ] Auto-discovery works (provider found by registry)
+- [ ] Test suite discovers provider automaticamente
+- [ ] Tutti i test uniformi passano
+- [ ] Auto-discovery funziona (provider trovato da registry)
 
 ---
 
@@ -2189,8 +2227,8 @@ class CSSScraperProvider(AssetSourceProvider):
 
 **Checklist**:
 - [ ] @register_plugin decorator
-- [ ] validate_params checks required fields
-- [ ] parse_float handles multiple formats
+- [ ] validate_params controlla campi richiesti
+- [ ] parse_float gestisce più formati
 - [ ] httpx async client con timeout
 - [ ] BeautifulSoup4 parsing
 - [ ] CSS selector error handling
@@ -2445,16 +2483,6 @@ class SyntheticYieldPlugin(DataPlugin):
 - [ ] Test full series generation con schedule complesso
 - [ ] Test edge case: maturity + grace + late rate
 
-**Checklist**:
-- [ ] @register_plugin decorator
-- [ ] Day-count conventions: ACT/365, ACT/360, 30/360
-- [ ] Interest rate schedule parsing
-- [ ] Maturity + grace period handling
-- [ ] Late interest rate application
-- [ ] SIMPLE interest calculation
-- [ ] COMPOUND interest (TODO or implement)
-- [ ] Test con schedule complesso passa
-
 ---
 
 ### Phase 5: Service Layer (1-2 giorni)
@@ -2596,264 +2624,6 @@ async def bulk_assign_plugins(
 
 ---
 
-#### 5.2 Pricing Service
-
-**File**: `backend/app/services/pricing.py`
-
-**Implementa**:
-```python
-import logging
-import json
-from datetime import date, datetime
-from decimal import Decimal
-from sqlmodel import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from backend.app.db import Asset, PriceHistory
-from backend.app.services.plugins import PluginRegistry, PluginError
-from backend.app.services.plugins.manager import get_asset_plugin
-
-logger = logging.getLogger(__name__)
-
-async def refresh_current_price(
-    asset_id: int,
-    session: AsyncSession
-) -> dict:
-    """
-    Refresh current price using assigned plugin.
-    
-    Returns:
-        Dict with updated price info
-        
-    Raises:
-        ValueError: If asset not found or no plugin assigned
-        PluginError: If plugin fails
-    """
-    # Fetch asset
-    asset = await session.get(Asset, asset_id)
-    if not asset:
-        raise ValueError(f"Asset {asset_id} not found")
-    
-    # Get plugin assignment
-    assignment = await get_asset_plugin(asset_id, session)
-    if not assignment:
-        raise ValueError(f"No plugin assigned to asset {asset_id}")
-    
-    # Get plugin instance
-    plugin = PluginRegistry.get_plugin(assignment.plugin_key)
-    
-    # Parse params
-    plugin_params = json.loads(assignment.plugin_params) if assignment.plugin_params else None
-    
-    # Fetch current value
-    current_value = await plugin.get_current_value(
-        identifier=asset.identifier,
-        plugin_params=plugin_params
-    )
-    
-    # UPSERT price_history
-    stmt = select(PriceHistory).where(
-        PriceHistory.asset_id == asset_id,
-        PriceHistory.date == current_value['as_of_date']
-    )
-    result = await session.exec(stmt)
-    price_record = result.first()
-    
-    if price_record:
-        price_record.close = current_value['value']
-        price_record.updated_at = datetime.utcnow()
-    else:
-        price_record = PriceHistory(
-            asset_id=asset_id,
-            date=current_value['as_of_date'],
-            close=current_value['value']
-        )
-        session.add(price_record)
-    
-    await session.commit()
-    await session.refresh(price_record)
-    
-    return {
-        "asset_id": asset_id,
-        "date": current_value['as_of_date'],
-        "value": current_value['value'],
-        "currency": current_value['currency'],
-        "source": current_value['source']
-    }
-
-async def refresh_history(
-    asset_id: int,
-    start_date: date,
-    end_date: date,
-    session: AsyncSession
-) -> dict:
-    """
-    Refresh historical prices using assigned plugin.
-    
-    Returns:
-        Dict with statistics (fetched, inserted, updated)
-    """
-    asset = await session.get(Asset, asset_id)
-    if not asset:
-        raise ValueError(f"Asset {asset_id} not found")
-    
-    assignment = await get_asset_plugin(asset_id, session)
-    if not assignment:
-        raise ValueError(f"No plugin assigned to asset {asset_id}")
-    
-    plugin = PluginRegistry.get_plugin(assignment.plugin_key)
-    plugin_params = json.loads(assignment.plugin_params) if assignment.plugin_params else None
-    
-    # Fetch history
-    history = await plugin.get_history_value(
-        identifier=asset.identifier,
-        start_date=start_date,
-        end_date=end_date,
-        plugin_params=plugin_params
-    )
-    
-    # UPSERT each price
-    inserted, updated = 0, 0
-    for price_point in history['prices']:
-        stmt = select(PriceHistory).where(
-            PriceHistory.asset_id == asset_id,
-            PriceHistory.date == price_point['date']
-        )
-        result = await session.exec(stmt)
-        existing = result.first()
-        
-        if existing:
-            # Update
-            existing.open = price_point.get('open')
-            existing.high = price_point.get('high')
-            existing.low = price_point.get('low')
-            existing.close = price_point['close']
-            existing.updated_at = datetime.utcnow()
-            updated += 1
-        else:
-            # Insert
-            new_price = PriceHistory(
-                asset_id=asset_id,
-                date=price_point['date'],
-                open=price_point.get('open'),
-                high=price_point.get('high'),
-                low=price_point.get('low'),
-                close=price_point['close']
-            )
-            session.add(new_price)
-            inserted += 1
-    
-    await session.commit()
-    
-    return {
-        "asset_id": asset_id,
-        "fetched": len(history['prices']),
-        "inserted": inserted,
-        "updated": updated,
-        "source": history['source']
-    }
-
-async def upsert_prices(
-    asset_id: int,
-    prices: list[dict],
-    session: AsyncSession
-) -> dict:
-    """
-    Manual price insert/update (no plugin).
-    
-    Args:
-        prices: [{"date": "2025-01-01", "close": 100.50, "open": 99.0, ...}, ...]
-    
-    Returns:
-        {"inserted": 5, "updated": 3}
-    """
-    asset = await session.get(Asset, asset_id)
-    if not asset:
-        raise ValueError(f"Asset {asset_id} not found")
-    
-    inserted, updated = 0, 0
-    
-    for price_data in prices:
-        price_date = date.fromisoformat(price_data['date'])
-        
-        stmt = select(PriceHistory).where(
-            PriceHistory.asset_id == asset_id,
-            PriceHistory.date == price_date
-        )
-        result = await session.exec(stmt)
-        existing = result.first()
-        
-        if existing:
-            # Update
-            for field in ['open', 'high', 'low', 'close']:
-                if field in price_data:
-                    setattr(existing, field, Decimal(str(price_data[field])))
-            existing.updated_at = datetime.utcnow()
-            updated += 1
-        else:
-            # Insert
-            new_price = PriceHistory(
-                asset_id=asset_id,
-                date=price_date,
-                open=Decimal(str(price_data['open'])) if 'open' in price_data else None,
-                high=Decimal(str(price_data['high'])) if 'high' in price_data else None,
-                low=Decimal(str(price_data['low'])) if 'low' in price_data else None,
-                close=Decimal(str(price_data['close']))
-            )
-            session.add(new_price)
-            inserted += 1
-    
-    await session.commit()
-    
-    return {"inserted": inserted, "updated": updated}
-
-async def delete_prices(
-    asset_id: int,
-    start_date: date,
-    end_date: date,
-    session: AsyncSession
-) -> int:
-    """
-    Delete price range.
-    
-    Returns:
-        Number of records deleted
-    """
-    stmt = select(PriceHistory).where(
-        and_(
-            PriceHistory.asset_id == asset_id,
-            PriceHistory.date >= start_date,
-            PriceHistory.date <= end_date
-        )
-    )
-    result = await session.exec(stmt)
-    records = result.all()
-    
-    for record in records:
-        await session.delete(record)
-    
-    await session.commit()
-    return len(records)
-```
-
-**Test**: `backend/test_scripts/test_services/test_pricing_service.py`
-- [ ] Test refresh_current_price con plugin mock
-- [ ] Test refresh_current_price raises se no plugin assigned
-- [ ] Test refresh_history inserts nuovi record
-- [ ] Test refresh_history updates record esistenti
-- [ ] Test upsert_prices manual insert
-- [ ] Test upsert_prices manual update
-- [ ] Test delete_prices range completo
-- [ ] Test delete_prices single date
-
-**Checklist**:
-- [ ] Plugin manager completo e testato
-- [ ] Pricing service completo e testato
-- [ ] Error handling robusto
-- [ ] Tutti i test passano
-
----
-
 ### Phase 6: API Endpoints (1-2 giorni)
 
 #### 6.1 Plugin Discovery Endpoint
@@ -2872,7 +2642,7 @@ router = APIRouter(prefix="/plugins", tags=["plugins"])
 async def list_plugins():
     """
     List available plugins.
-    
+
     Returns:
         {"plugins": [{"key": "yfinance", "name": "Yahoo Finance"}, ...]}
     """
@@ -2921,7 +2691,7 @@ async def get_asset_plugin(
     assignment = await plugin_manager.get_asset_plugin(asset_id, session)
     if not assignment:
         raise HTTPException(status_code=404, detail="No plugin assigned")
-    
+
     return {
         "asset_id": assignment.asset_id,
         "plugin_key": assignment.plugin_key,
@@ -2961,7 +2731,7 @@ async def remove_asset_plugin(
     removed = await plugin_manager.remove_plugin(asset_id, session)
     if not removed:
         raise HTTPException(status_code=404, detail="No plugin assigned")
-    
+
     return {"message": "Plugin removed successfully"}
 
 @router.post("/plugin/bulk")
@@ -2980,14 +2750,14 @@ async def bulk_remove_plugins(
 ):
     """Bulk remove plugin assignments."""
     results = {"removed": [], "not_found": []}
-    
+
     for asset_id in asset_ids:
         removed = await plugin_manager.remove_plugin(asset_id, session)
         if removed:
             results['removed'].append(asset_id)
         else:
             results['not_found'].append(asset_id)
-    
+
     return results
 
 # ========== Price Refresh (via Plugin) ==========
@@ -2999,7 +2769,7 @@ async def refresh_current_price(
 ):
     """
     Refresh current price using assigned plugin.
-    
+
     Requires plugin assignment.
     """
     try:
@@ -3048,7 +2818,7 @@ async def get_asset_prices(
     """Query existing prices for asset."""
     from sqlmodel import select, and_
     from backend.app.db import PriceHistory
-    
+
     stmt = select(PriceHistory).where(
         and_(
             PriceHistory.asset_id == asset_id,
@@ -3056,10 +2826,10 @@ async def get_asset_prices(
             PriceHistory.date <= end
         )
     ).order_by(PriceHistory.date)
-    
+
     result = await session.exec(stmt)
     prices = result.all()
-    
+
     return {
         "asset_id": asset_id,
         "prices": [
@@ -3156,6 +2926,7 @@ async def delete_prices(
 - [ ] Per ogni plugin: usage, config, examples
 - [ ] API reference aggiornato
 - [ ] Testing guide aggiornato
+- [ ] Database schema docs update
 
 ---
 
@@ -3343,7 +3114,7 @@ pipenv install yfinance beautifulsoup4
 
 **Buon lavoro su Step 05! 🎉**
 
-**Stima realistica**: 11-17 giorni (synthetic_yield è il pezzo più complesso)  
-**Test coverage target**: 70+ test (100% coverage obiettivo)  
+**Stima realistica**: 11-17 giorni (synthetic_yield è il pezzo più complesso)
+**Test coverage target**: 70+ test (100% coverage obiettivo)
 **Endpoint totali**: ~15 endpoint nuovi
 
