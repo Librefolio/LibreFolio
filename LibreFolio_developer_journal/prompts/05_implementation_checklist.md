@@ -5,7 +5,7 @@
 **Project**: LibreFolio - Asset Pricing Provider System  
 **Start Date**: 6 November 2025  
 **Estimated Duration**: 6-8 days  
-**Status**: 🟢 In Progress — Phase 0 and 0.2.2 completed, Phase 1 pending
+**Status**: 🟢 Ready to commit — Phase 0 and 0.2.2 completed, test-runner & test DB safety fixes applied, Phase 1 partially implemented
 
 **Last Updated**: 2025-11-07
 
@@ -14,11 +14,12 @@
 ## 📌 High-level status summary
 
 Completed (verified):
-- Phase 0 (Database migration + asset_provider_assignments) — completed and applied to test/prod DBs
+- Phase 0 (Database migration + `asset_provider_assignments`) — completed and applied to test/prod DBs
 - Phase 0.2.2 (Asset Source Service foundation + tests) — implemented; all service-level tests passing (11/11)
+- Test environment safety fixes: `backend/test_scripts/test_db_config.py` and `test_runner.py` updated so tests use `TEST_DATABASE_URL` and never touch prod DB
 
 Current focus / next steps:
-- Phase 1: Provider registry and yfinance provider implementation
+- Phase 1: Provider registry and yfinance provider implementation (in progress)
 - Phase 2: CSS scraper provider
 - Phase 4: Complete synthetic yield logic (deferred, complex)
 
@@ -410,70 +411,59 @@ Current focus / next steps:
 
 ### 1.2 Asset Source Base Class, TypedDicts & Manager
 
-**Reference**: [Phase 1.2 in main doc](./05_plugins_yfinance_css_synthetic_yield.md#12-asset-source-base-class-typeddicts--manager)
+Scopo: descrivere lo stato di implementazione del layer di pricing per asset (provider base, manager, tipi dati interni) e indicare chiaramente cosa è completo e cosa resta da fare.
 
-- [ ] **Create asset_source.py**
-  - File: `backend/app/services/asset_source.py`
-  - Pattern: Follow `fx.py` structure
+Stato attuale (sintesi)
+- ✅ Implementato: `AssetSourceProvider` (abstract base) e `AssetSourceManager` con i metodi bulk-first per assignment, CRUD prezzi, query con backward-fill.
+- ✅ Helper implementati: `parse_decimal_value()`, `truncate_price_to_db_precision()`, `calculate_days_between_act365()`.
+- ✅ Synthetic yield: helper base implementati (find_active_rate, calculate_accrued_interest, calculate_synthetic_value parziale).
+- ✅ Refresh orchestration: `bulk_refresh_prices()` + `refresh_price()` implementati (prefetch DB + fetch remoto in parallelo, asyncio.Semaphore per concurrency, per-item reporting).
+- ✅ Test service: `backend/test_scripts/test_services/test_asset_source.py` (11/11 passati).
 
-- [ ] **Define data models with Pydantic (Preferred over TypedDicts)**
-  - Rationale: Project already uses FastAPI / Pydantic. Pydantic models provide runtime validation, coercion, JSON serialization and easy integration with FastAPI/OpenAPI.
-  - Create `backend/app/schemas/assets.py` with the following Pydantic models:
-    - `CurrentValueModel` → {value: Decimal, currency: str, as_of_date: date, source: Optional[str]}
-    - `PricePointModel`  → {date: date, open?: Decimal, high?: Decimal, low?: Decimal, close: Decimal, volume?: Decimal, currency?: str, backfill_info?: BackwardFillInfo}
-    - `HistoricalDataModel` → {prices: List[PricePointModel], currency?: str, source?: str}
-  - Use `json_encoders` for `Decimal` and `orm_mode=True` for convenient DB->model usage.
+Dettagli tecnici
+- Tipi interni: `PricePoint`, `CurrentValue`, `HistoricalData` sono definiti internamente come TypedDict-like (evitano dipendenze circolari). Gli schemi Pydantic per le API saranno creati in `backend/app/schemas/assets.py` (Pydantic v2).
+- Strategia DB: per compatibilità SQLite l'upsert manuale usa pattern delete+insert; su Postgres si raccomanda `INSERT ... ON CONFLICT` per efficienza.
+- Provider params: salvati come JSON string in SQLite; se si migra a Postgres usare JSONB e rimuovere serializzazione esplicita.
+- Timezone: `last_fetch_at` viene popolato con UTC (naive). Valutare conversione a datetime timezone-aware come attività di refactor.
 
-- [ ] **Define ProviderError / AssetSourceError exception**
-  - Class: `AssetSourceError(Exception)`
-  - Fields: `message`, `error_code`, `details`
+API & comportamenti implementati
+- Provider assignment: bulk assign/remove e varianti single→bulk.
+- Price CRUD: `bulk_upsert_prices()` e `bulk_delete_prices()` ottimizzati per batch (minimo numero di query possibile).
+- Price query: `get_prices(asset_id, start, end)` con backward-fill e supporto SCHEDULED_YIELD (synthetic, calcolato on-demand — non scritto in DB).
+- Refresh: `bulk_refresh_prices()` esegue in parallelo fetch remoto e prefetch DB, invoca `bulk_upsert_prices()` per la persistenza e aggiorna `last_fetch_at`.
 
-- [ ] **Create abstract base class**
-  - Class: `AssetSourceProvider(ABC)`
-  - Properties: `provider_code`, `provider_name`
-  - Methods (runtime signatures return dict-like payloads):
-    - `async def get_current_value(provider_params: dict, session: AsyncSession) -> dict` (should return dict conforming to `CurrentValueModel`)
-    - `async def get_history_value(provider_params: dict, start_date: date, end_date: date, session: AsyncSession) -> dict` (should return dict conforming to `HistoricalDataModel`)
-    - `async def search(query: str) -> list[dict]`
-    - `def validate_params(params: dict) -> None`
+Decisioni architetturali importanti
+- Pattern "bulk-first": i metodi bulk sono primari; le API singole chiamano quelli bulk con un solo elemento.
+- Separazione FX vs Asset: rimane, condividiamo solo `BackwardFillInfo` e il pattern di provider/registry.
+- Test safety: i test forzano `LIBREFOLIO_TEST_MODE` e `DATABASE_URL` per usare `test_app.db`; il runner imposta le variabili d'ambiente per i subprocess.
 
-- [ ] **Implement AssetSourceManager**
-  - **Provider Assignment Methods**:
-    - `bulk_assign_providers(assignments, session)` → PRIMARY bulk
-    - `assign_provider(...)` → calls bulk
-    - `bulk_remove_providers(asset_ids, session)` → PRIMARY bulk
-    - `remove_provider(...)` → calls bulk
-    - `get_asset_provider(asset_id, session)` → single query
+Task pendenti (priorità e note)
+1. (ALTA) API Pydantic & Endpoints
+   - Creare `backend/app/schemas/assets.py` (Pydantic v2) e integrare in `backend/app/api/v1/assets.py` endpoint: assign/remove (bulk), price upsert/delete (bulk), get price-set (start_date obbligatorio, end_date opzionale range).
+2. (ALTA) Test di refresh avanzati
+   - Aggiungere casi su fallback provider, errori per-item, e limiti di concurrency.
+3. (MEDIA) Factor utilities
+   - Spostare `parse_decimal_value()` e troncamento in `backend/app/utils/number.py` per riuso con FX.
+4. (BASSA) Timezone e Postgres readiness
+   - Rendere `last_fetch_at` timezone-aware; preparare `provider_params` per JSONB quando si migra.
 
-  - **Price Refresh Methods**:
-    - `bulk_refresh_prices(requests, session)` → PRIMARY bulk, parallel calls
-    - `refresh_price(asset_id, start, end, session)` → calls bulk
+Criteri di accettazione per 1.2
+- Service tests verdi (11/11) — già soddisfatto.
+- `bulk_refresh_prices()` funzionante con provider mock e risultati per-item — già soddisfatto.
+- Schemi Pydantic per API creati e testati (task ancora aperto).
 
-  - **Manual Price CRUD Methods**:
-    - `bulk_upsert_prices(data, session)` → returns dict shaped as `{inserted_count, updated_count, results}`
-    - `upsert_prices(asset_id, prices, session)` → calls bulk
-    - `bulk_delete_prices(data, session)` → returns `{deleted_count, results}`
-    - `delete_prices(asset_id, ranges, session)` → calls bulk
-    - `get_prices(asset_id, start, end, session)` → returns `List[dict]` where each dict follows `PricePointModel` shape
+Esempi rapidi di comandi utili (per testing locale)
+```bash
+# Smoke refresh
+./test_runner.py -v services asset-source-refresh
 
-- [ ] **Implement helper functions**
-  - `get_price_column_precision(column_name)` → (precision, scale)
-  - `truncate_price_to_db_precision(value, column_name)` → Decimal
-  - `apply_backward_fill_logic(requested_date, available_prices)` → {price_data, backward_fill_info}
-
-- [ ] **Create test file**
-  - File: `backend/test_scripts/test_services/test_asset_source.py` (already present) – update to use Pydantic models for validation where useful, but tests may still assert on dicts returned by manager methods.
-
-- [ ] **Run tests**
-  - Run: `pipenv run python -m backend.test_scripts.test_services.test_asset_source`
-
-**Notes**:
-- We keep the service API returning plain dicts for compatibility with existing tests. Internally and for documentation we use Pydantic models. This gives validation and clearer schemas for API endpoints while keeping minimal changes to service callers.
-- If import cycles arise, move Pydantic models to `backend/app/schemas/` and import them inside functions rather than at module top.
+# Suite completa asset-source
+pipenv run python -m backend.test_scripts.test_services.test_asset_source
+```
 
 ---
 
-### 1.3 Provider Folder Setup (Auto-Discovery)
+## Phase 1.3 Provider Folder Setup (Auto-Discovery)
 
 **Reference**: [Phase 1.3 in main doc](./05_plugins_yfinance_css_synthetic_yield.md#13-provider-folder-setup-was-plugin-registry--factory)
 
@@ -534,6 +524,69 @@ Current focus / next steps:
 
 **Status**: ⬜ Not started — awaiting implementation & tests.  
 **Last Edited**: 2025-11-07
+
+
+## Phase 1.5: FX Pydantic Schemas Migration (Pydantic v2)
+
+**Goal**: centralize FX request/response shapes into a single Pydantic v2 module `backend/app/schemas/fx.py`, migrate any V1 validators to v2 (`@validator` -> `@field_validator`), use `Decimal` consistently, and update imports + tests to use the new schemas.
+
+Why now
+- Improves clarity and reusability across `api`, `services`, and `tests`.
+- Removes duplicated shapes and keeps serialization rules (Decimal handling) consistent.
+- Prepares base for OpenAPI docs and runtime validation.
+
+Checklist (do these in order)
+- [ ] Identify current FX-shaped DTOs used across the codebase (search for Pydantic models / TypedDicts used by FX endpoints and services).
+  - Targets: `backend/app/api/v1/fx.py`, `backend/app/services/fx.py`, tests in `backend/test_scripts/*`.
+- [ ] Create `backend/app/schemas/fx.py` with Pydantic v2 models (examples below):
+  - `BackwardFillInfo` (if not already in `schemas/common.py` reuse it)
+  - `RatePointModel` (date: date, rate: Decimal)
+  - `FXProviderMetadataModel` (code, name, base_currency, description?)
+  - `FXCurrenciesListResponseModel` (List[str] / metadata)
+  - `FXSyncRequestModel` / `FXSyncResponseModel` (bulk sync payload shapes)
+  - `FXRateSetItemModel` / `FXRateSetBulkRequest` / `FXRateSetBulkResponse`
+  - `FXConvertRequestItem` / `FXConvertResponseItem` / `FXConvertBulkRequest`
+  - `model_config` entries for Decimal serialization (prefer string output) and extra policy
+  - Field validators with `@field_validator(..., mode="before")` for Decimal coercion and currency uppercasing
+- [ ] Add `backend/app/schemas/__init__.py` exports if needed (export `fx` models for convenience)
+- [ ] Replace imports in code to reference the new models (minimal-change approach):
+  - `backend/app/api/v1/fx.py` → request/response models
+  - `backend/app/services/fx.py` → internal validation/response shaping
+  - tests under `backend/test_scripts/test_api` and `backend/test_scripts/test_services` → use the new models for assertions where appropriate
+- [ ] Update tests to assert on model-validated output when relevant (use `.model_dump()` for comparisons)
+- [ ] Run the targeted tests and fix issues:
+  - `pipenv run python -m backend.test_scripts.test_external.test_fx_providers` (providers connectivity / normalization)
+  - `pipenv run python -m backend.test_scripts.test_api.test_fx_api` (API request/response shapes)
+  - `pipenv run python -m backend.test_scripts.test_services.test_fx_conversion` (conversion logic)
+- [ ] Document serialization choice (Decimal -> string) in `docs/fx/api-reference.md` and mention that runtime Swagger is authoritative
+- [ ] Commit changes with clear message: "Add Pydantic v2 FX schemas (backend/app/schemas/fx.py); migrate validators and Decimal handling; update imports and tests."
+
+Example skeleton for `backend/app/schemas/fx.py` (to implement)
+
+- Use Pydantic v2 style: `model_config = ConfigDict(...)` and `@field_validator` validators.
+- Use `Decimal` for monetary/rate fields and configure JSON encoder to return string (to preserve precision).
+
+Minimal structure (for the actual file implementation):
+
+- RatePointModel(date: date, rate: Decimal)
+- BackwardFillInfo (reuse from `schemas.common` if present)
+- FXConvertRequestItem(amount: Decimal, from_currency: str, to_currency: str, start_date: date, end_date: Optional[date] = None)
+- FXConvertResponseItem(converted_amount: Decimal, rate: Optional[Decimal], actual_rate_date: Optional[date], backfill_info: Optional[BackwardFillInfo])
+
+Notes & choices
+- Decimal representation in JSON: prefer string to avoid precision loss in JS/clients. Document this choice.
+- Pydantic v2: use `@field_validator(..., mode='before')` to coerce string inputs into `Decimal`.
+- BackwardFillInfo reuse: avoid duplication, import from `schemas.common`.
+
+Risks & mitigation
+- If project still contains Pydantic v1-only code, migration may raise deprecation warnings. Run full test-suite and fix validators incrementally.
+- Tests that previously compared floats/strings may need updates to compare normalized strings/Decimals. Use `.model_dump()` or `.model_dump_json()` with consistent settings in tests.
+
+Acceptance criteria for Phase 1.5
+- `backend/app/schemas/fx.py` created and exported
+- All FX-related code imports the new models where appropriate
+- Provider & API tests pass that validate request/response shapes
+- Documentation updated to reflect JSON Decimal serialization policy
 
 ---
 
@@ -786,7 +839,7 @@ Current focus / next steps:
   - CSS scraper: Metadata, errors (skip current/history without URL)
 
 - [ ] **Run tests**
-  - Run: `pipenv run python -m backend.test_scripts.test_services.test_asset_providers`
+  - Run: `pipenv run python -m backend/test_scripts.test_services.test_asset_providers`
 
 **Notes**:
 ```
@@ -969,9 +1022,3 @@ Recommended safe approach (manual but reproducible):
 
 
 ---
-
-### Waiting for your review
-
-I updated the checklist with the remaining phases, squash plan and immediate next actions. Please review the new items and tell me which one you want me to start implementing now (I can start with Phase 1.2 or prepare the squash migration draft for your review). 
-
-When you confirm, I'll implement the chosen item and run the relevant tests, then update the checklist and docs accordingly.

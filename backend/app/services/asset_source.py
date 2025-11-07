@@ -23,7 +23,7 @@ Design principles:
 - Parallel provider calls where possible
 """
 from abc import ABC, abstractmethod
-from datetime import date as date_type, timedelta
+from datetime import date as date_type, timedelta, datetime
 from decimal import Decimal, ROUND_DOWN
 from typing import Optional
 
@@ -37,12 +37,8 @@ from backend.app.db.models import (
     ValuationModel,
 )
 
-# Import Pydantic models for public data shapes
-from backend.app.schemas.assets import (
-    CurrentValueModel,
-    PricePointModel,
-    HistoricalDataModel,
-)
+# (Pydantic models for API request/response live in backend.app.schemas.assets)
+# They are imported by API modules when needed
 
 
 # ============================================================================
@@ -228,6 +224,19 @@ def calculate_days_between_act365(start: date_type, end: date_type) -> Decimal:
     """
     actual_days = (end - start).days
     return Decimal(actual_days) / Decimal(365)
+
+
+def parse_decimal_value(v):
+    """Convert input to Decimal safely. Accepts Decimal, int, float, str, or None."""
+    from decimal import Decimal
+    if v is None:
+        return None
+    if isinstance(v, Decimal):
+        return v
+    try:
+        return Decimal(str(v))
+    except Exception:
+        return None
 
 
 # ============================================================================
@@ -445,15 +454,23 @@ class AssetSourceManager:
         )
 
         # Bulk insert new assignments
-        new_assignments = [
-            AssetProviderAssignment(
-                asset_id=a["asset_id"],
-                provider_code=a["provider_code"],
-                provider_params=a.get("provider_params"),
-                last_fetch_at=None,  # Never fetched yet
+        new_assignments = []
+        import json
+        for a in assignments:
+            raw_params = a.get("provider_params")
+            if isinstance(raw_params, dict):
+                params_to_store = json.dumps(raw_params)
+            else:
+                params_to_store = raw_params
+
+            new_assignments.append(
+                AssetProviderAssignment(
+                    asset_id=a["asset_id"],
+                    provider_code=a["provider_code"],
+                    provider_params=params_to_store,
+                    last_fetch_at=None,  # Never fetched yet
+                )
             )
-            for a in assignments
-        ]
 
         session.add_all(new_assignments)
         await session.commit()
@@ -613,14 +630,21 @@ class AssetSourceManager:
             for price in prices:
                 dates_to_upsert.append(price["date"])
 
+                # Normalize numeric inputs to Decimal
+                open_v = parse_decimal_value(price.get("open"))
+                high_v = parse_decimal_value(price.get("high"))
+                low_v = parse_decimal_value(price.get("low"))
+                close_v = parse_decimal_value(price.get("close"))
+                volume_v = parse_decimal_value(price.get("volume"))
+
                 price_obj = PriceHistory(
                     asset_id=asset_id,
                     date=price["date"],
-                    open=truncate_price_to_db_precision(price["open"], "open") if price.get("open") is not None else None,
-                    high=truncate_price_to_db_precision(price["high"], "high") if price.get("high") is not None else None,
-                    low=truncate_price_to_db_precision(price["low"], "low") if price.get("low") is not None else None,
-                    close=truncate_price_to_db_precision(price["close"], "close"),
-                    volume=price.get("volume"),
+                    open=truncate_price_to_db_precision(open_v, "open") if open_v is not None else None,
+                    high=truncate_price_to_db_precision(high_v, "high") if high_v is not None else None,
+                    low=truncate_price_to_db_precision(low_v, "low") if low_v is not None else None,
+                    close=truncate_price_to_db_precision(close_v, "close") if close_v is not None else None,
+                    volume=volume_v,
                     currency=price.get("currency", "USD"),  # TODO: Get from asset when system will be ready for do this query, for now default to USD
                     source_plugin_key="MANUAL",  # Manual price insert
                     fetched_at=None,  # Not fetched from external source
@@ -899,3 +923,174 @@ class AssetSourceManager:
 
         return results
 
+    # ========================================================================
+    # PRICE REFRESH (PROVIDER) METHODS - NEW
+    # ========================================================================
+
+    @staticmethod
+    async def bulk_refresh_prices(
+        requests: list[dict],
+        session: AsyncSession,
+        concurrency: int = 5,
+        semaphore_timeout: int = 60,
+    ) -> list[dict]:
+        """
+        Refresh prices for multiple assets using their configured providers.
+
+        Args:
+            requests: List of {asset_id, start_date, end_date, force: bool=false}
+            session: Database session
+            concurrency: Max concurrent provider calls
+            semaphore_timeout: Timeout for acquiring semaphore (seconds)
+
+        Returns:
+            List of per-item results: {asset_id, fetched_count, inserted_count, updated_count, errors}
+        """
+        from backend.app.services.provider_registry import AssetProviderRegistry
+        import asyncio
+
+        if not requests:
+            return []
+
+        results = []
+        sem = asyncio.Semaphore(concurrency)
+
+        async def _process_single(item: dict) -> dict:
+            asset_id = item.get("asset_id")
+            start = item.get("start_date")
+            end = item.get("end_date")
+            force = item.get("force", False)
+
+            result = {
+                "asset_id": asset_id,
+                "fetched_count": 0,
+                "inserted_count": 0,
+                "updated_count": 0,
+                "errors": []
+            }
+
+            # Resolve provider assignment
+            try:
+                assignment = await AssetSourceManager.get_asset_provider(asset_id, session)
+                if not assignment:
+                    result["errors"].append("No provider assigned for asset")
+                    return result
+
+                provider_code = assignment.provider_code
+                provider_params = assignment.provider_params or {}
+            except Exception as e:
+                result["errors"].append(f"Failed to resolve provider: {str(e)}")
+                return result
+
+            # Instantiate provider from registry
+            prov = AssetProviderRegistry.get_provider_instance(provider_code)
+            if not prov:
+                result["errors"].append(f"Provider not found: {provider_code}")
+                return result
+
+            # Parse provider_params if stored as JSON string
+            try:
+                import json
+                if isinstance(provider_params, str):
+                    provider_params = json.loads(provider_params)
+            except Exception:
+                # keep as-is if parsing fails
+                pass
+
+            # Validate params if provider supports it
+            try:
+                prov.validate_params(provider_params)
+            except Exception as e:
+                result["errors"].append(f"Invalid provider params: {str(e)}")
+                return result
+
+            # Fetch existing DB entries (prefetch) while calling remote
+            async def _fetch_db_existing():
+                # Query all existing price dates in range for this asset
+                stmt = select(PriceHistory).where(
+                    and_(
+                        PriceHistory.asset_id == asset_id,
+                        PriceHistory.date >= start,
+                        PriceHistory.date <= end,
+                    )
+                )
+                db_res = await session.execute(stmt)
+                return {p.date: p for p in db_res.scalars().all()}
+
+            # Provider fetch coroutine
+            async def _fetch_remote():
+                try:
+                    return await prov.get_history_value(provider_params, start, end, session)
+                except Exception as e:
+                    raise AssetSourceError(f"Provider fetch failed: {str(e)}", "PROVIDER_FETCH_ERROR", {})
+
+            # Run both in parallel with semaphore
+            try:
+                async with asyncio.timeout(semaphore_timeout):
+                    async with sem:
+                        db_task = asyncio.create_task(_fetch_db_existing())
+                        fetch_task = asyncio.create_task(_fetch_remote())
+
+                        db_existing, remote_data = await asyncio.gather(db_task, fetch_task)
+            except Exception as e:
+                result["errors"].append(str(e))
+                return result
+
+            # remote_data expected shape: {"prices": [ {date, open?, high?, low?, close, volume?, currency}, ... ], "source": "..."}
+            prices = remote_data.get("prices", []) if isinstance(remote_data, dict) else []
+            if not prices:
+                result["errors"].append("No prices returned from provider")
+                return result
+
+            # Build upsert payload for DB: we reuse bulk_upsert_prices() which performs delete+insert per asset
+            upsert_payload = [
+                {"asset_id": asset_id, "prices": prices}
+            ]
+
+            try:
+                upsert_res = await AssetSourceManager.bulk_upsert_prices(upsert_payload, session)
+                result["fetched_count"] = len(prices)
+                result["inserted_count"] = upsert_res.get("inserted_count", 0)
+            except Exception as e:
+                result["errors"].append(f"DB upsert failed: {str(e)}")
+
+            # Update last_fetch_at on assignment
+            try:
+                assignment.last_fetch_at = datetime.utcnow()
+                session.add(assignment)
+                await session.commit()
+            except Exception:
+                # Not critical, skip
+                pass
+
+            return result
+
+        # Create tasks for all items
+        import asyncio as _asyncio
+        tasks = [_asyncio.create_task(_process_single(item)) for item in requests]
+
+        # Wait for all to complete
+        completed = await _asyncio.gather(*tasks)
+
+        return completed
+
+    @staticmethod
+    async def refresh_price(
+        asset_id: int,
+        start_date: date_type,
+        end_date: date_type,
+        session: AsyncSession,
+        force: bool = False,
+        concurrency: int = 5,
+    ) -> dict:
+        """
+        Refresh prices for single asset (calls bulk with 1 element).
+
+        Returns single result dict as produced by bulk_refresh_prices for one item.
+        """
+        res = await AssetSourceManager.bulk_refresh_prices(
+            [{"asset_id": asset_id, "start_date": start_date, "end_date": end_date, "force": force}],
+            session,
+            concurrency=concurrency,
+        )
+        return res[0] if res else {"asset_id": asset_id, "fetched_count": 0, "inserted_count": 0, "updated_count": 0, "errors": ["no-op"]}
