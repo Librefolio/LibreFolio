@@ -3,4 +3,3 @@
 """
 # Package marker for asset source providers
 __all__ = []
-

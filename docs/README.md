@@ -23,6 +23,12 @@ Welcome to LibreFolio documentation!
   - **[FX API Reference](fx/api-reference.md)** - REST API endpoints for FX operations
   - **[FX Providers](fx/providers.md)** - ECB, FED, BOE, SNB details
   - **[FX Provider Development](fx/provider-development.md)** - ⭐ How to add new providers
+- **[Asset Pricing System](assets/README.md)** - Asset pricing system documentation index
+  - **[Asset Pricing Architecture](assets/architecture.md)** - Technical design, data flow, and patterns
+  - **[Asset Provider Development](assets/provider-development.md)** - ⭐ How to create new asset pricing providers
+- **[Asset Pricing System](assets/README.md)** - Asset pricing system documentation index
+  - **[Asset Pricing Architecture](assets/architecture.md)** - Technical design, data flow, and patterns
+  - **[Asset Provider Development](assets/provider-development.md)** - ⭐ How to create new asset pricing providers
 - **[Financial Calculations](financial-calculations.md)** - Mathematical reasoning and precision handling
 
 ### Testing
@@ -49,6 +55,9 @@ todo: add more links when more docs are added
 | [async-architecture.md](async-architecture.md) | ⭐ Async/concurrent architecture explained | Contributors |
 | [fx-implementation.md](fx-implementation.md) | FX rates system overview | Everyone |
 | [fx/architecture.md](fx/architecture.md) | FX system technical architecture | Developers |
+| [assets/README.md](assets/README.md) | Asset pricing system documentation index | Everyone |
+| [assets/architecture.md](assets/architecture.md) | Asset pricing technical architecture | Developers |
+| [assets/provider-development.md](assets/provider-development.md) | ⭐ How to add asset pricing providers | Contributors |
 | [fx/api-reference.md](fx/api-reference.md) | FX REST API endpoints | Developers, Frontend |
 | [fx/providers.md](fx/providers.md) | Available FX providers details | Developers |
 | [fx/provider-development.md](fx/provider-development.md) | ⭐ How to add FX providers | Contributors |
@@ -74,6 +83,12 @@ todo: add more links when more docs are added
 
 **...understand database migrations**
 → Read [Alembic Guide](alembic-guide.md)
+
+**...develop a new asset pricing provider (yfinance, web scraper, etc.)**
+→ Read [Asset Provider Development Guide](assets/provider-development.md) - Step-by-step guide with templates
+
+**...understand how asset pricing works**
+→ Read [Asset Pricing Architecture](assets/architecture.md) - System design, data flow, and patterns
 
 **...understand how FX rates work**
 → Read [FX Implementation](fx-implementation.md)
