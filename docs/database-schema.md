@@ -459,6 +459,7 @@ CREATE TABLE asset_provider_assignments (
     provider_code VARCHAR(50) NOT NULL,      -- "yfinance", "coinbase", "manual"
     provider_params TEXT,                    -- JSON params for provider
     last_fetch_at DATETIME,                  -- Last fetch attempt timestamp (NULL = never fetched)
+    fetch_interval INTEGER,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE,
@@ -474,6 +475,8 @@ CREATE INDEX idx_asset_provider_asset_id ON asset_provider_assignments (asset_id
 - **CASCADE DELETE**: Deleting asset removes its provider assignment
 - **Single provider**: One provider handles both current and historical data
   - No separate current/history configuration (simplified from old design)
+- **fetch_interval**: How often to refresh prices (in minutes)
+  - `NULL` = default to 1440 minutes (24 hours)
 - **Provider params**: JSON configuration specific to provider (e.g., ticker symbol mapping)
 - **last_fetch_at**: Tracks last fetch attempt (for scheduling, monitoring, and debugging)
   - `NULL` = never attempted

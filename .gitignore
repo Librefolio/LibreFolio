@@ -18,13 +18,6 @@ backend/data/sqlite/*.db
 backend/data/sqlite/*.db-shm
 backend/data/sqlite/*.db-wal
 
-# Alembic Migrations
-# Uncomment the line below ONLY during initial development
-# when the database schema is still unstable and changing frequently.
-# Remove this exclusion once the schema is stable!
-# See docs/alembic-guide.md for more information.
-backend/alembic/versions/*.py
-
 # IDE
 .vscode/
 .idea/

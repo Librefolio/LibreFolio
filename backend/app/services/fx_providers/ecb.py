@@ -242,4 +242,3 @@ class ECBProvider(FXRateProvider):
                 raise FXServiceError(f"Unexpected ECB response format for {currency}: {e}") from e
 
         return results
-
