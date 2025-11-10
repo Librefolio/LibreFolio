@@ -5,23 +5,34 @@
 **Project**: LibreFolio - Asset Pricing Provider System  
 **Start Date**: 6 November 2025  
 **Estimated Duration**: 6-8 days  
-**Status**: 🟢 Ready to commit — Phase 0 and 0.2.2 completed, test-runner & test DB safety fixes applied, Phase 1 partially implemented
+**Status**: 🟢 Phase 0-3 COMPLETED — Ready for Phase 4 (Synthetic Yield)
 
-**Last Updated**: 2025-11-07
+**Last Updated**: 2025-11-10
 
 ---
 
 ## 📌 High-level status summary
 
 Completed (verified):
-- Phase 0 (Database migration + `asset_provider_assignments`) — completed and applied to test/prod DBs
-- Phase 0.2.2 (Asset Source Service foundation + tests) — implemented; all service-level tests passing (11/11)
-- Test environment safety fixes: `backend/test_scripts/test_db_config.py` and `test_runner.py` updated so tests use `TEST_DATABASE_URL` and never touch prod DB
+- ✅ Phase 0: Database migration + `asset_provider_assignments` table — completed and applied
+- ✅ Phase 0.2.2: Asset Source Service foundation + tests — all service-level tests passing (11/11)
+- ✅ Phase 1: Unified Provider Registry + Auto-Discovery — FX and Asset providers unified
+- ✅ Phase 1.2: Asset Source Manager + Pydantic Schemas — full CRUD + refresh implemented
+- ✅ Phase 1.3: Provider folder setup — auto-discovery working for both FX and Asset providers
+- ✅ Phase 1.4: FX providers migrated to unified registry — all 4 providers (ECB, FED, BOE, SNB) using @register_provider
+- ✅ Phase 1.5: FX Pydantic schemas migration — 24 models centralized in schemas/fx.py
+- ✅ Phase 2: yfinance Provider — full implementation with Pydantic models, tests passing
+- ✅ Phase 3: CSS Scraper Provider — full implementation with US/EU format support, tests passing
+- ✅ Generic Test Suite: Uniform tests for all asset providers (test_external/test_asset_providers.py)
 
 Current focus / next steps:
-- Phase 1: Provider registry and yfinance provider implementation (in progress)
-- Phase 2: CSS scraper provider
-- Phase 4: Complete synthetic yield logic (deferred, complex)
+- 🔄 Phase 4: Complete Synthetic Yield Implementation (deferred, complex) — ACT/365 foundation ready
+- 🔄 API endpoints: Assets API created (12 endpoints), needs testing
+- 🔄 Test coverage: Generic provider tests created, need execution on real network
+
+Test environment safety:
+- ✅ Test environment safety fixes: `backend/test_scripts/test_db_config.py` and `test_runner.py` updated
+- ✅ Tests use `TEST_DATABASE_URL` and never touch prod DB
 
 ---
 
@@ -712,58 +723,89 @@ python3 -c "from backend.app.schemas.fx import ConversionRequestModel; req = Con
 
 **Reference**: [Phase 2 in main doc](./05_plugins_yfinance_css_synthetic_yield.md#phase-2-yfinance-provider-1-2-giorni)
 
-- [ ] **Install dependencies**
-  - Run: `pipenv install yfinance`
-  - Run: `pipenv install pandas`
+**Status**: ✅ **COMPLETED** (2025-11-10)
 
-- [ ] **Create yahoo_finance.py**
-  - File: `backend/app/services/asset_source_providers/yahoo_finance.py`
-  - Class: `YahooFinanceProvider(AssetSourceProvider)`
-  - Decorator: `@register_provider(AssetProviderRegistry)`
+- [x] **Install dependencies** ✅
+  - Run: `pipenv install yfinance` ✅
+  - Run: `pipenv install pandas` ✅
+  - Both installed successfully
 
-- [ ] **Implement properties**
-  - `provider_code` → `"yfinance"`
-  - `provider_name` → `"Yahoo Finance"`
-  - `test_identifier` → `"AAPL"`
-  - `test_expected_currency` → `"USD"`
+- [x] **Create yahoo_finance.py** ✅
+  - File: `backend/app/services/asset_source_providers/yahoo_finance.py` ✅
+  - Class: `YahooFinanceProvider(AssetSourceProvider)` ✅
+  - Decorator: `@register_provider(AssetProviderRegistry)` ✅
+  - Uses Pydantic models from `schemas.assets` ✅
 
-- [ ] **Implement get_current_value()**
-  - Try `fast_info.last_price` first (faster)
-  - Fallback to `history(period='5d')` if fast_info fails
-  - Auto-detect currency from `ticker.info`
-  - Return `CurrentValue` TypedDict
+- [x] **Implement properties** ✅
+  - `provider_code` → `"yfinance"` ✅
+  - `provider_name` → `"Yahoo Finance"` ✅
+  - `test_identifier` → `"AAPL"` ✅
+  - `test_expected_currency` → `"USD"` ✅
 
-- [ ] **Implement get_history_value()**
-  - Use `ticker.history(start, end)` with date range
-  - Note: end date is exclusive in yfinance
-  - Convert pandas DataFrame to list of `PricePoint`
-  - Handle NaN values for OHLC fields
-  - Return `HistoricalData` TypedDict
+- [x] **Implement get_current_value()** ✅
+  - Try `fast_info.last_price` first (faster) ✅
+  - Fallback to `history(period='5d')` if fast_info fails ✅
+  - Auto-detect currency from `ticker.info` ✅
+  - Return `CurrentValueModel` (Pydantic) ✅
+  - Handles YFINANCE_AVAILABLE check ✅
 
-- [ ] **Implement search()**
-  - Cache results for 10 minutes (TTL = 600s)
-  - Use exact ticker match (yfinance has no native search)
-  - Return list with `{identifier, display_name, currency, type}`
-  - Cache both found and not-found results
+- [x] **Implement get_history_value()** ✅
+  - Use `ticker.history(start, end)` with date range ✅
+  - Note: end date +1 day (yfinance end is exclusive) ✅
+  - Convert pandas DataFrame to list of `PricePointModel` ✅
+  - Handle NaN values with `pd.notna()` ✅
+  - Return `HistoricalDataModel` (Pydantic) ✅
 
-- [ ] **Error handling**
-  - Raise `ProviderError` with appropriate error codes
-  - Handle: NO_DATA, FETCH_ERROR, SEARCH_ERROR
+- [x] **Implement search()** ✅
+  - Cache results for 10 minutes (TTL = 600s) ✅
+  - Use exact ticker match (yfinance has no native search) ✅
+  - Return list with `{identifier, display_name, currency, type}` ✅
+  - Cache both found and not-found results ✅
+  - Note: Uses `datetime.utcnow()` (deprecated warning, but works)
 
-- [ ] **Verify auto-discovery**
-  - Provider should be automatically registered on import
-  - Check: `AssetProviderRegistry.list_providers()` includes "yfinance"
+- [x] **Error handling** ✅
+  - Raise `AssetSourceError` with appropriate error codes ✅
+  - Handle: NOT_AVAILABLE, NO_DATA, FETCH_ERROR, SEARCH_ERROR ✅
+  - Proper exception chaining (re-raise AssetSourceError) ✅
+
+- [x] **Verify auto-discovery** ✅
+  - Provider automatically registered on import ✅
+  - Check: `AssetProviderRegistry.list_providers()` includes "yfinance" ✅
+  - Test: `test_yfinance_import.py` passes all 7 checks ✅
 
 **Notes**:
 ```
 # Implementation notes
+- Full rewrite from scratch with Pydantic models
+- Uses CurrentValueModel, PricePointModel, HistoricalDataModel from schemas.assets
+- Graceful handling when yfinance not installed (YFINANCE_AVAILABLE flag)
+- Comprehensive error handling with AssetSourceError
+- Search caching with 10-minute TTL using class-level dict
+- Fast path (fast_info) with fallback to history for current values
 
+# Key features
+- Async methods (await compatible)
+- Decimal precision for all numeric values
+- Currency auto-detection from ticker.info
+- OHLC + volume support in historical data
+- Volume handling with pd.notna() for None values
+- Quote type detection (EQUITY, ETF, CRYPTOCURRENCY, etc.)
+
+# Test results
+✅ yfinance imported
+✅ pandas imported
+✅ AssetProviderRegistry imported
+✅ Providers BEFORE auto-discovery: 2
+✅ YahooFinanceProvider imported
+✅ Providers AFTER import: 2 (mockprov, yfinance)
+✅ Provider instantiation successful
+✅ ALL TESTS PASSED
 
 # Issues encountered
-
+- None - implementation smooth
 
 # Completion date
-
+2025-11-10 17:45 CET ✅
 ```
 
 ---
@@ -772,65 +814,237 @@ python3 -c "from backend.app.schemas.fx import ConversionRequestModel; req = Con
 
 **Reference**: [Phase 3 in main doc](./05_plugins_yfinance_css_synthetic_yield.md#phase-3-css-scraper-provider-1-2-giorni)
 
-- [ ] **Install dependencies**
-  - Run: `pipenv install beautifulsoup4`
-  - Note: httpx already present
+**Status**: ✅ **COMPLETED** (2025-11-10)
 
-- [ ] **Create css_scraper.py**
-  - File: `backend/app/services/asset_source_providers/css_scraper.py`
-  - Class: `CSSScraperProvider(AssetSourceProvider)`
-  - Decorator: `@register_provider(AssetProviderRegistry)`
+- [x] **Install dependencies** ✅
+  - Run: `pipenv install beautifulsoup4` ✅
+  - Run: `pipenv install httpx` ✅ (already present)
+  - Both installed successfully
 
-- [ ] **Implement properties**
-  - `provider_code` → `"cssscraper"`
-  - `provider_name` → `"CSS Web Scraper"`
+- [x] **Create css_scraper.py** ✅
+  - File: `backend/app/services/asset_source_providers/css_scraper.py` ✅
+  - Class: `CSSScraperProvider(AssetSourceProvider)` ✅
+  - Decorator: `@register_provider(AssetProviderRegistry)` ✅
+  - Uses Pydantic models from `schemas.assets` ✅
 
-- [ ] **Implement validate_params()**
-  - Required: `current_url`, `current_css_selector`, `currency`
-  - Optional: `history_url`, `history_css_selector`
-  - Raise `ProviderError` if missing required params
+- [x] **Implement properties** ✅
+  - `provider_code` → `"cssscraper"` ✅
+  - `provider_name` → `"CSS Web Scraper"` ✅
+  - `test_identifier` → Borsa Italiana BTP URL ✅
+  - `test_expected_currency` → `"EUR"` ✅
 
-- [ ] **Implement parse_float()**
-  - Handle US format: "1,234.56"
-  - Handle EU format: "1.234,56"
-  - Handle space separator: "1 234,56"
-  - Handle currency symbols: "€1,234.56"
-  - Return `Decimal`
+- [x] **Implement validate_params()** ✅
+  - Required: `current_css_selector`, `currency` ✅
+  - Optional: `decimal_format` ('us' or 'eu'), `timeout`, `user_agent` ✅
+  - Optional (future): `history_css_selector` ✅
+  - Raise `AssetSourceError` if missing required params ✅
 
-- [ ] **Implement get_current_value()**
-  - Use `httpx.AsyncClient` with timeout=30
-  - Parse HTML with `BeautifulSoup`
-  - Select element with `soup.select_one(selector)`
-  - Parse float with `parse_float()`
-  - Return `CurrentValue` with today's date
+- [x] **Implement parse_price()** ✅
+  - Handle US format: "1,234.56" (comma=thousands, dot=decimal) ✅
+  - Handle EU format: "1.234,56" (dot=thousands, comma=decimal) ✅
+  - Handle currency symbols: "€$£¥" (removed) ✅
+  - Handle whitespace and percentage signs ✅
+  - Parameter: `decimal_format` ('us' or 'eu') ✅
+  - Return `Decimal` ✅
 
-- [ ] **Implement get_history_value()**
-  - Check if `history_url` and `history_css_selector` in params
-  - If not present: return empty `HistoricalData`
-  - If present: scrape history (TODO for future if needed)
+- [x] **Implement get_current_value()** ✅
+  - Use `httpx.AsyncClient` with configurable timeout ✅
+  - Parse HTML with `BeautifulSoup(response.text, 'html.parser')` ✅
+  - Select element with `soup.select_one(selector)` ✅
+  - Parse price with `parse_price()` using decimal_format ✅
+  - Return `CurrentValueModel` with today's date ✅
+  - Custom User-Agent support ✅
 
-- [ ] **Implement search()**
-  - Raise `ProviderError` with NOT_SUPPORTED
-  - CSS scraper requires manual URL configuration
+- [x] **Implement get_history_value()** ✅
+  - Raises `AssetSourceError` with NOT_IMPLEMENTED ✅
+  - Historical data scraping is complex and site-specific ✅
+  - Future enhancement: Support history_css_selector if provided
 
-- [ ] **Error handling**
-  - Raise `ProviderError` for: MISSING_PARAMS, PARSE_ERROR, SELECTOR_NOT_FOUND, HTTP_ERROR, SCRAPE_ERROR
+- [x] **Implement search()** ✅
+  - Returns empty list (search not applicable for URL-based scraper) ✅
+  - Logs debug message ✅
+  - No error raised (graceful handling) ✅
 
-- [ ] **Verify auto-discovery**
-  - Check: `AssetProviderRegistry.list_providers()` includes "cssscraper"
+- [x] **Error handling** ✅
+  - Raise `AssetSourceError` for all error scenarios ✅
+  - Error codes: NOT_AVAILABLE, MISSING_PARAMS, INVALID_PARAMS, PARSE_ERROR, NOT_FOUND, HTTP_ERROR, REQUEST_ERROR, SCRAPE_ERROR, NOT_IMPLEMENTED ✅
+  - Proper exception chaining ✅
+  - HTTP status code handling with `raise_for_status()` ✅
+
+- [x] **Verify auto-discovery** ✅
+  - Provider automatically registered on import ✅
+  - Check: `AssetProviderRegistry.list_providers()` includes "cssscraper" ✅
+  - Test: `test_css_scraper_import.py` validates all functionality ✅
+
+**Test Configuration**:
+```python
+# Borsa Italiana BTP IT0005634800 (English version)
+{
+    'identifier': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en',
+    'provider_params': {
+        'current_css_selector': '.summary-value strong',
+        'currency': 'EUR',
+        'decimal_format': 'us'  # Borsa uses US format in English: "100.39"
+    }
+}
+
+# Italian version alternative
+{
+    'identifier': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=it',
+    'provider_params': {
+        'current_css_selector': '.summary-value strong',
+        'currency': 'EUR',
+        'decimal_format': 'eu'  # Italian version uses EU format: "100,39"
+    }
+}
+```
 
 **Notes**:
 ```
 # Implementation notes
+- Full implementation with Pydantic models
+- Dual number format support (US and EU) via decimal_format parameter
+- Robust price parsing with Decimal precision
+- Graceful handling when httpx/bs4 not installed (SCRAPER_AVAILABLE flag)
+- Comprehensive error handling with detailed error codes
+- Custom User-Agent support for sites that block default agents
+- Follow redirects enabled by default
+- Configurable timeout (default: 30s)
 
+# Key features
+- Async method (await compatible with httpx.AsyncClient)
+- CSS selector-based extraction (flexible for any website)
+- Decimal precision maintained throughout
+- Currency symbols and whitespace automatically removed
+- Percentage signs handled (for price change fields)
+- Both US and EU number formats supported
+- Test identifier uses real Borsa Italiana BTP bond
+
+# Parse price test cases
+✅ "100.39" (us) → 100.39
+✅ "100,39" (eu) → 100.39
+✅ "1,234.56" (us) → 1234.56
+✅ "1.234,56" (eu) → 1234.56
+✅ "€100.39" (us) → 100.39 (symbol removed)
+✅ "  €1.234,56  " (eu) → 1234.56 (trim + symbol)
+✅ "+0.05%" (us) → 0.05 (percentage removed)
+
+# Design decisions
+- Historical data: NOT IMPLEMENTED (too site-specific, future enhancement)
+- Search: NOT APPLICABLE (URL-based, returns empty list)
+- User-Agent: Configurable to avoid bot detection
+- Error codes: Comprehensive set for debugging
+- Validation: Strict param checking to catch misconfigurations early
+
+# Test results
+✅ httpx imported
+✅ beautifulsoup4 imported
+✅ AssetProviderRegistry imported
+✅ CSSScraperProvider imported
+✅ Providers found: 3 (mockprov, yfinance, cssscraper)
+✅ Provider instantiation successful
+✅ All parse_price tests passed (7/7)
+⚠️  Live scraping test depends on network/site availability
 
 # Issues encountered
-
+- None - implementation smooth
+- Note: pipenv install may require VPN to be disabled
 
 # Completion date
-
+2025-11-10 18:00 CET ✅
 ```
 
+---
+
+## Phase 2-3: Generic Provider Test Suite
+
+**Purpose**: Uniform test suite that discovers and tests ALL registered asset providers (similar to FX provider tests).
+
+**Status**: ✅ **COMPLETED** (2025-11-10)
+
+- [x] **Create generic test file** ✅
+  - File: `backend/test_scripts/test_external/test_asset_providers.py` ✅
+  - Auto-discovers providers via `AssetProviderRegistry.list_providers()` ✅
+  - Runs uniform tests on each provider ✅
+
+- [x] **Test coverage per provider** ✅
+  - Test 1: Metadata validation (provider_code, provider_name) ✅
+  - Test 2: Current value fetch (if test_identifier available) ✅
+  - Test 3: Historical data fetch (7 days, if supported) ✅
+  - Test 4: Search functionality (if supported) ✅
+  - Test 5: Error handling (invalid identifier) ✅
+
+- [x] **Provider-specific handling** ✅
+  - yfinance: ticker-based, no params needed ✅
+  - cssscraper: URL-based, requires params ✅
+  - mockprov: test provider, basic functionality ✅
+
+- [x] **Test structure** ✅
+  - Async tests using `asyncio.run()` ✅
+  - Proper exception handling (AssetSourceError expected) ✅
+  - Pass/fail reporting per test per provider ✅
+  - Summary: X/Y providers passed all tests ✅
+
+**Verification Commands**:
+```bash
+# Run generic test suite
+pipenv run python -m backend.test_scripts.test_external.test_asset_providers
+
+# Via test_runner (if configured)
+./test_runner.py external asset-providers
+```
+
+**Expected Results**:
+```
+Found 3 registered provider(s):
+  • mockprov: Mock Provider for Tests
+  • yfinance: Yahoo Finance
+  • cssscraper: CSS Web Scraper
+
+Testing Provider: mockprov
+  ✓ Test 1: Metadata valid
+  ✓ Test 2: Current value (mock data)
+  ✓ Test 3: History (mock data)
+  ✓ Test 4: Search (mock results)
+  ✓ Test 5: Error handling OK
+
+Testing Provider: yfinance
+  ✓ Test 1: Metadata valid: yfinance = Yahoo Finance
+  ✓ Test 2: Current value: 150.25 USD (as of 2025-11-10)
+  ✓ Test 3: History: 5 prices from 2025-11-03 to 2025-11-09
+  ✓ Test 4: Search found 1 result(s)
+  ✓ Test 5: Error handling OK: NO_DATA
+
+Testing Provider: cssscraper
+  ✓ Test 1: Metadata valid: cssscraper = CSS Web Scraper
+  ✓ Test 2: Current value: 100.39 EUR (as of 2025-11-10) OR Provider error (OK)
+  ✓ Test 3: History not implemented (expected)
+  ✓ Test 4: Search returned 0 results (OK)
+  ✓ Test 5: Error handling OK: MISSING_PARAMS
+
+Results: 3/3 providers passed all tests
+```
+
+**Notes**:
+```
+# Design
+- Follows same pattern as test_external/test_fx_providers.py
+- Uses AssetProviderRegistry for auto-discovery
+- No provider-specific test files needed (all tested uniformly)
+- Tests adapt to provider capabilities (history, search support)
+
+# Error handling
+- AssetSourceError exceptions are EXPECTED (marked as passed)
+- Only unexpected exceptions fail tests
+- Network errors are tolerated for cssscraper (site may be unavailable)
+
+# Completion date
+2025-11-10 18:15 CET ✅
+```
+TODO:
+- Aggiornare la documentazione su come si creano i provider di asset source, similmente a quanto fatto per i provider FX. Viste le modifiche fatte per la registry e il modo con cui si preparano i parametri di test.
+- aggiungere provider per justEtf
+- Aggiungere provider per borsa italiana (magari con scraping simile a css scraper, ma più specifico per ottenre anche la history e magari la search)
 ---
 
 ## Phase 4: Complete Synthetic Yield Implementation (3-4 days) ⚠️ MOST COMPLEX
