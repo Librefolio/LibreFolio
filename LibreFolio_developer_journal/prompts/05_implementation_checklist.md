@@ -568,63 +568,84 @@ pipenv run python -m backend.test_scripts.test_services.test_asset_source_refres
 
 **Reference**: [Phase 1.3 in main doc](./05_plugins_yfinance_css_synthetic_yield.md#13-provider-folder-setup-was-plugin-registry--factory)
 
-- [ ] **Create provider folder**
-  - Folder: `backend/app/services/asset_source_providers/`
+**Status**: ✅ **COMPLETED** (2025-11-10) - Folder exists, auto-discovery working, tests passing
 
-- [ ] **Create __init__.py**
-  - File: `backend/app/services/asset_source_providers/__init__.py`
-  - Content: Empty with docstring (auto-discovery via registry)
+- [x] **Create provider folder**
+  - Folder: `backend/app/services/asset_source_providers/` ✅
 
-- [ ] **Test auto-discovery**
-  - Create dummy provider in folder
-  - Verify `AssetProviderRegistry.auto_discover()` finds it
-  - Verify `@register_provider(AssetProviderRegistry)` works
-  - Remove dummy provider
+- [x] **Create __init__.py**
+  - File: `backend/app/services/asset_source_providers/__init__.py` ✅
+  - Content: Empty with docstring (auto-discovery via registry) ✅
 
-- [ ] **Verify in test_provider_registry.py**
-  - Test already created in Phase 1.1
-  - Run: `pipenv run python -m backend.test_scripts.test_services.test_provider_registry`
+- [x] **Test auto-discovery**
+  - Providers found: `mockprov`, `yfinance` ✅
+  - `AssetProviderRegistry.auto_discover()` works correctly ✅
+  - `@register_provider(AssetProviderRegistry)` decorator working ✅
+
+- [x] **Verify in test_provider_registry.py**
+  - Test: `backend/test_scripts/test_services/test_provider_registry.py` ✅
+  - Result: **2/2 tests PASSING** ✅
+  - Asset providers: 2 found (mockprov, yfinance)
+  - FX providers smoke test: 2 found
+
+**Verification Commands**:
+```bash
+# List providers
+pipenv run python -c "from backend.app.services.provider_registry import AssetProviderRegistry; AssetProviderRegistry.auto_discover(); print(AssetProviderRegistry.list_providers())"
+
+# Run tests
+pipenv run python -m backend.test_scripts.test_services.test_provider_registry
+```
+
+**Last Verified**: 2025-11-10
 
 ---
 
 ### 1.4 Migrate existing FX providers to the unified registry
 
-**Purpose**: Bring the legacy FX provider implementations (ECB, FED, BOE, SNB, etc.) to the new auto-registration model so they are discoverable through `FXProviderRegistry` and usable by the services via the registry API. Add tests to validate auto-discovery and listing for FX providers.
+**Purpose**: Bring the legacy FX provider implementations (ECB, FED, BOE, SNB) to the new auto-registration model so they are discoverable through `FXProviderRegistry`.
 
-- [ ] **Update FX provider classes**
-  - Ensure each provider class in `backend/app/services/fx_providers/` exposes a `provider_code` attribute (string) and a human `name` property.
-  - Replace legacy factory-registration (if present) with the decorator usage:
-    ```py
-    from backend.app.services.provider_registry import register_provider, FXProviderRegistry
+**Status**: ✅ **COMPLETED** (2025-11-10) - All FX providers migrated to unified registry
 
-    @register_provider(FXProviderRegistry)
-    class ECBProvider(...):
-        provider_code = "ECB"
-        # ...
-    ```
-  - Keep backward-compatible API on provider classes; prefer minimal changes inside implementations.
+- [x] **Update FX provider classes** ✅
+  - Added `@register_provider(FXProviderRegistry)` decorator to ECB, FED, BOE, SNB
+  - Added `provider_code` property (alias for `code`) to all providers
+  - Removed legacy `FXProviderFactory.register()` calls
 
-- [ ] **Remove or adapt legacy FX factory usage where applicable**
-  - Search for `FXProviderFactory` usages and prefer `FXProviderRegistry.get_provider_instance(code)` or `FXProviderRegistry.get_provider(code)`.
-  - Update code in `backend/app/services/fx.py` (or any caller) to use the registry when resolving providers by code.
+- [x] **Fixed circular import issue** ✅
+  - Removed explicit imports from `fx_providers/__init__.py`
+  - Auto-discovery loads modules directly from filesystem
 
-- [ ] **Add FX provider auto-discovery tests**
-  - Create/extend `backend/test_scripts/test_services/test_provider_registry.py` to assert presence of major FX providers, e.g.: `ECB, FED, BOE, SNB`.
-  - Test should run after registry auto_discover is executed on import (test already imports registry module).
+- [x] **Fixed registry bugs** ✅
+  - Each subclass now has separate `_providers` dict via `__init_subclass__`
+  - `register()` instantiates provider to read property values correctly
+  - `list_providers()` returns dicts with `{code, name}` instead of property objects
 
-- [ ] **Run integration check**
-  - Start a small smoke test script or run the updated `test_provider_registry.py` to verify all FX providers are registered.
+- [x] **Add FX provider tests** ✅
+  - Updated `test_provider_registry.py` to validate all 4 FX providers
+  - Replaced smoke test with proper assertion: `{ECB, FED, BOE, SNB}`
+  - Status: **2/2 tests PASSING** ✅
 
-**Verification**:
-- Expect `FXProviderRegistry.list_providers()` to include: `ECB, FED, BOE, SNB` (at least).  
-- Existing FX-related tests should be updated to resolve providers via registry instead of factory where applicable.
+- [x] **Migrate external FX provider tests** ✅
+  - Updated `test_external/test_fx_providers.py` to use `FXProviderRegistry` instead of `FXProviderFactory`
+  - Replaced all 7 occurrences of factory usage with registry
+  - Status: **ALL EXTERNAL TESTS PASSING** ✅
 
-**Notes**:
-- Keep changes minimal and backward compatible. If parts of the codebase still expect the old factory API, provide a thin shim for `FXProviderFactory.get(code)` that forwards to the registry for the transition period.
-- Add the registry-based provider resolution to the API layer where provider code strings are accepted in requests (sync endpoints), so auto-configuration and provider selection use the registry uniformly.
+**Verification**: 
+```bash
+# Unit tests
+pipenv run python -m backend.test_scripts.test_services.test_provider_registry
 
-**Status**: ⬜ Not started — awaiting implementation & tests.  
-**Last Edited**: 2025-11-07
+# External tests
+./test_runner.py external fx-source
+
+# Full suite
+./test_runner.py -v all
+```
+
+**Last Verified**: 2025-11-10
+
+---
 
 
 ## Phase 1.5: FX Pydantic Schemas Migration (Pydantic v2)

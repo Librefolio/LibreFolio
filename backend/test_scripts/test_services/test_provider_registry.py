@@ -45,33 +45,38 @@ def test_asset_provider_discovery() -> Dict:
         print_error(f"Asset provider discovery failed: {e}")
         return {"passed": False, "message": str(e)}
 
-# TODO: In migration step 1.4, enhance this test to assert specific FX providers.
 def test_fx_provider_discovery() -> Dict:
-    """Smoke test for FX provider registry auto-discovery (non-blocking placeholder).
+    """Test that FX providers are auto-discovered and registered correctly.
 
-    This test is intentionally permissive to allow incremental migration: it will
-    return pass if the registry API is callable and returns a list. Later we will
-    assert specific FX providers (ECB, FED, BOE, SNB) once migration is completed.
+    After Phase 1.4 migration, we expect all 4 central bank providers to be registered.
     """
-    print_section("Test 2: FX Provider Auto-Discovery (smoke test)")
+    print_section("Test 2: FX Provider Auto-Discovery")
 
     try:
         from backend.app.services.provider_registry import FXProviderRegistry
 
         providers = FXProviderRegistry.list_providers()
+
+        # Extract codes from provider dicts
         if providers and isinstance(providers[0], dict):
             provider_codes = [p.get("code") or p.get("provider_code") for p in providers]
         else:
             provider_codes = list(providers)
 
-        print_info(f"Registered FX providers (smoke): {provider_codes}")
+        print_info(f"Registered FX providers: {provider_codes}")
 
-        # Do not assert presence yet; migration step 1.4 will add strict checks.
-        print_success(f"✓ FX registry reachable ({len(provider_codes)} providers)")
+        # After Phase 1.4 migration, assert all 4 providers are present
+        expected_providers = {'ECB', 'FED', 'BOE', 'SNB'}
+        missing = expected_providers - set(provider_codes)
+
+        if missing:
+            raise AssertionError(f"Missing expected FX providers: {missing}. Found: {provider_codes}")
+
+        print_success(f"✓ All {len(expected_providers)} FX providers discovered ({', '.join(sorted(provider_codes))})")
         return {"passed": True, "message": f"Found {len(provider_codes)} FX provider(s)", "providers": provider_codes}
 
     except Exception as e:
-        print_error(f"FX provider discovery smoke test failed: {e}")
+        print_error(f"FX provider discovery failed: {e}")
         return {"passed": False, "message": str(e)}
 
 
@@ -90,7 +95,7 @@ def run_all_tests() -> bool:
     results["Asset Provider Discovery"] = bool(res1.get("passed", False))
 
     res2 = test_fx_provider_discovery()
-    results["FX Provider Discovery (smoke)"] = bool(res2.get("passed", False))
+    results["FX Provider Discovery"] = bool(res2.get("passed", False))
 
     # Print detailed info for each
     def print_result_detail(name: str, data: Dict):
@@ -105,7 +110,7 @@ def run_all_tests() -> bool:
             print_info(f"  details: {extra}")
 
     print_result_detail("Asset Provider Discovery", res1)
-    print_result_detail("FX Provider Discovery (smoke)", res2)
+    print_result_detail("FX Provider Discovery", res2)
 
     # Summary
     success = print_test_summary(results, "Provider Registry")
