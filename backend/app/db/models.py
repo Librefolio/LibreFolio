@@ -364,7 +364,6 @@ class Asset(SQLModel, table=True):
     # Valuation model
     valuation_model: ValuationModel = Field(default=ValuationModel.MARKET_PRICE)
 
-
     # Loan / scheduled-yield fields
     face_value: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
     maturity_date: Optional[date_type] = Field(default=None)
@@ -545,19 +544,19 @@ class FxCurrencyPairSource(SQLModel, table=True):
     provider_code: str = Field(
         nullable=False,
         description="Provider code (ECB, FED, BOE, etc.)"
-    )
+        )
 
     priority: int = Field(
         default=1,
         ge=1,
         description="Priority level (1=primary, 2=fallback, etc.)"
-    )
+        )
 
     fetch_interval: Optional[int] = Field(
         default=None,
         ge=1,
         description="Fetch frequency in minutes (NULL = default 1440 = 24h)"
-    )
+        )
 
     # Metadata
     created_at: datetime = Field(default_factory=utcnow)
@@ -647,7 +646,7 @@ class AssetProviderAssignment(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("asset_id", name="uq_asset_provider_asset_id"),
         Index("idx_asset_provider_asset_id", "asset_id"),
-    )
+        )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -656,29 +655,29 @@ class AssetProviderAssignment(SQLModel, table=True):
         nullable=False,
         unique=True,
         description="Asset ID (1-to-1 relationship)"
-    )
+        )
 
     provider_code: str = Field(
         max_length=50,
         nullable=False,
         description="Provider code (yfinance, cssscraper, etc.)"
-    )
+        )
 
     provider_params: Optional[str] = Field(
         default=None,
         sa_column=Column(Text),
         description="JSON configuration for provider"
-    )
+        )
 
     last_fetch_at: Optional[datetime] = Field(
         default=None,
         description="Last fetch attempt timestamp (NULL = never fetched, updated on every fetch)"
-    )
+        )
 
     fetch_interval: Optional[int] = Field(
         default=None,
         description="Refresh frequency in minutes (NULL = default 1440 = 24h). Used by scheduled refresh system."
-    )
+        )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

@@ -39,7 +39,7 @@ for route in app.routes:
             'methods': methods,
             'path': route.path,
             'description': description
-        })
+            })
 
 # Print routes grouped by tag
 for tag in sorted(routes_by_tag.keys()):
@@ -58,4 +58,3 @@ for tag in sorted(routes_by_tag.keys()):
 print('=' * 80)
 print(f'Total endpoints: {sum(len(routes) for routes in routes_by_tag.values())}')
 print('=' * 80)
-

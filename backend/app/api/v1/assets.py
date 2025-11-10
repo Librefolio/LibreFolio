@@ -4,18 +4,14 @@ Handles provider assignment, price management, and price refresh operations.
 """
 import logging
 from datetime import date
-from typing import List, Optional
 from decimal import Decimal
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_session
-from backend.app.schemas.assets import (
-    AssetProviderAssignmentModel,
-    PricePointModel,
-)
 from backend.app.schemas.common import BackwardFillInfo
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.provider_registry import AssetProviderRegistry
@@ -214,7 +210,7 @@ async def list_providers():
                     name=instance.provider_name,
                     description=f"{instance.provider_name} pricing provider",
                     supports_search=supports_search
-                ))
+                    ))
 
     return providers
 
@@ -223,7 +219,7 @@ async def list_providers():
 async def assign_providers_bulk(
     request: BulkAssignProvidersRequest,
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Bulk assign providers to assets (PRIMARY bulk endpoint)."""
     try:
         assignments = [item.model_dump() for item in request.assignments]
@@ -236,7 +232,7 @@ async def assign_providers_bulk(
             results=[ProviderAssignmentResult(**r) for r in results],
             success_count=success_count,
             failed_count=failed_count
-        )
+            )
     except Exception as e:
         logger.error(f"Error in bulk assign providers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -247,7 +243,7 @@ async def assign_provider_single(
     asset_id: int,
     assignment: ProviderAssignmentItem,
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Assign provider to single asset (convenience endpoint, calls bulk internally)."""
     try:
         # Ensure asset_id from path matches body
@@ -259,7 +255,7 @@ async def assign_provider_single(
             assignment.provider_code,
             assignment.provider_params,
             session
-        )
+            )
         return result
     except HTTPException:
         raise
@@ -272,7 +268,7 @@ async def assign_provider_single(
 async def remove_providers_bulk(
     request: BulkRemoveProvidersRequest,
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Bulk remove provider assignments (PRIMARY bulk endpoint)."""
     try:
         results = await AssetSourceManager.bulk_remove_providers(request.asset_ids, session)
@@ -280,7 +276,7 @@ async def remove_providers_bulk(
         return BulkRemoveProvidersResponse(
             results=[ProviderAssignmentResult(**r) for r in results],
             success_count=len(results)
-        )
+            )
     except Exception as e:
         logger.error(f"Error in bulk remove providers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -290,7 +286,7 @@ async def remove_providers_bulk(
 async def remove_provider_single(
     asset_id: int,
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Remove provider from single asset (convenience endpoint, calls bulk internally)."""
     try:
         result = await AssetSourceManager.remove_provider(asset_id, session)
@@ -308,16 +304,16 @@ async def remove_provider_single(
 async def upsert_prices_bulk(
     request: BulkUpsertPricesRequest,
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Bulk upsert prices manually (PRIMARY bulk endpoint)."""
     try:
         data = [
             {
                 "asset_id": item.asset_id,
                 "prices": [p.model_dump() for p in item.prices]
-            }
+                }
             for item in request.data
-        ]
+            ]
 
         result = await AssetSourceManager.bulk_upsert_prices(data, session)
 
@@ -325,7 +321,7 @@ async def upsert_prices_bulk(
             inserted_count=result["inserted_count"],
             updated_count=result["updated_count"],
             results=[AssetPricesUpsertResult(**r) for r in result["results"]]
-        )
+            )
     except Exception as e:
         logger.error(f"Error in bulk upsert prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -336,7 +332,7 @@ async def upsert_prices_single(
     asset_id: int,
     prices: List[PriceUpsertItem],
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Upsert prices for single asset (convenience endpoint, calls bulk internally)."""
     try:
         prices_dict = [p.model_dump() for p in prices]
@@ -351,23 +347,23 @@ async def upsert_prices_single(
 async def delete_prices_bulk(
     request: BulkDeletePricesRequest,
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Bulk delete price ranges (PRIMARY bulk endpoint)."""
     try:
         data = [
             {
                 "asset_id": item.asset_id,
                 "date_ranges": [r.model_dump() for r in item.date_ranges]
-            }
+                }
             for item in request.data
-        ]
+            ]
 
         result = await AssetSourceManager.bulk_delete_prices(data, session)
 
         return BulkDeletePricesResponse(
             deleted_count=result["deleted_count"],
             results=[AssetPricesDeleteResult(**r) for r in result["results"]]
-        )
+            )
     except Exception as e:
         logger.error(f"Error in bulk delete prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -378,7 +374,7 @@ async def delete_prices_single(
     asset_id: int,
     date_ranges: List[DateRange],
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Delete price ranges for single asset (convenience endpoint, calls bulk internally)."""
     try:
         ranges_dict = [r.model_dump() for r in date_ranges]
@@ -399,7 +395,7 @@ async def get_prices(
     start_date: date = Query(..., description="Start date (required)"),
     end_date: Optional[date] = Query(None, description="End date (optional, defaults to start_date)"),
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Get prices for asset with backward-fill support."""
     try:
         if end_date is None:
@@ -409,7 +405,7 @@ async def get_prices(
 
         return GetPricesResponse(
             prices=[PriceQueryResult(**p) for p in prices]
-        )
+            )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -425,7 +421,7 @@ async def get_prices(
 async def refresh_prices_bulk(
     request: BulkRefreshRequest,
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Bulk refresh prices via providers (PRIMARY bulk endpoint)."""
     try:
         payload = [r.model_dump() for r in request.requests]
@@ -433,7 +429,7 @@ async def refresh_prices_bulk(
 
         return BulkRefreshResponse(
             results=[RefreshResult(**r) for r in results]
-        )
+            )
     except Exception as e:
         logger.error(f"Error in bulk refresh prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -446,16 +442,13 @@ async def refresh_prices_single(
     end_date: date = Query(..., description="End date"),
     force: bool = Query(False, description="Force refresh"),
     session: AsyncSession = Depends(get_session)
-):
+    ):
     """Refresh prices for single asset (convenience endpoint, calls bulk internally)."""
     try:
         result = await AssetSourceManager.refresh_price(
             asset_id, start_date, end_date, session, force=force
-        )
+            )
         return result
     except Exception as e:
         logger.error(f"Error refreshing prices for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-

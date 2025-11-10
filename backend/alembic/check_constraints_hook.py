@@ -15,9 +15,9 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from sqlalchemy import CheckConstraint, inspect, text
-from sqlmodel import Session
+from sqlalchemy import CheckConstraint, text
 from sqlalchemy import create_engine
+from sqlmodel import Session
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -34,7 +34,6 @@ def get_engine_for_check():
     """
     import os
     from sqlalchemy import event
-    from sqlalchemy.engine import Engine
     from pathlib import Path
 
     # Check for custom override first (won't be overridden by .env loading)
@@ -44,7 +43,6 @@ def get_engine_for_check():
     if not database_url:
         # Fall back to DATABASE_URL from environment
         database_url = os.environ.get('DATABASE_URL')
-
 
     if not database_url:
         # Load from .env file manually to avoid importing Settings
@@ -118,7 +116,6 @@ def get_db_check_constraints(table_name: str) -> List[str]:
 
     # Check if database file exists (for SQLite)
     # If it doesn't exist, return empty list (no constraints to check)
-    import os
     from pathlib import Path
 
     db_url = str(engine.url)
@@ -137,13 +134,12 @@ def get_db_check_constraints(table_name: str) -> List[str]:
         result = session.execute(
             text("SELECT sql FROM sqlite_master WHERE type='table' AND name=:table_name"),
             {"table_name": table_name}
-        ).first()
+            ).first()
 
         if not result or not result[0]:
             return []
 
         create_sql = result[0]
-
 
         # Parse CHECK constraints from CREATE TABLE
         # Look for "CHECK (...)" or "CONSTRAINT name CHECK (...)"
@@ -304,7 +300,7 @@ def main():
         all_present, missing = check_and_add_missing_constraints(
             auto_fix=args.fix,
             verbose=not args.quiet
-        )
+            )
 
         if not all_present:
             sys.exit(1)
@@ -320,4 +316,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

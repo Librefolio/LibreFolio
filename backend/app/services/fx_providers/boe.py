@@ -250,5 +250,3 @@ class BOEProvider(FXRateProvider):
         Format: "DD Mon YYYY" (e.g., "01 Jan 2025")
         """
         return datetime.strptime(date_str, '%d %b %Y').date()
-
-

@@ -547,12 +547,19 @@ async def ensure_rates_multi_source(
         ValueError: If base_currency is not supported by provider
         FXServiceError: If provider not found or API request fails
     """
+    from backend.app.services.provider_registry import FXProviderRegistry
 
-    # Get provider instance
-    try:
-        provider = FXProviderFactory.get_provider(provider_code)
-    except ValueError as e:
-        raise FXServiceError(str(e)) from e
+    if not provider_code:
+        raise FXServiceError("Provider code is required")
+
+    # Get provider instance from registry
+    provider = FXProviderRegistry.get_provider_instance(provider_code)
+    if not provider:
+        available = [p['code'] for p in FXProviderRegistry.list_providers()]
+        raise FXServiceError(
+            f"Unknown FX provider: {provider_code}. "
+            f"Available providers: {', '.join(available) if available else 'none registered'}"
+            )
 
     # Validate base_currency if specified
     if base_currency is not None:
