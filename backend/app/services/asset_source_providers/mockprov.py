@@ -1,6 +1,8 @@
-from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
-from backend.app.services.asset_source import AssetSourceProvider
 from datetime import timedelta
+
+from backend.app.services.asset_source import AssetSourceProvider
+from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
+
 
 @register_provider(AssetProviderRegistry)
 class MockProv(AssetSourceProvider):
@@ -19,7 +21,7 @@ class MockProv(AssetSourceProvider):
                 "date": current,
                 "close": 100.0,
                 "currency": provider_params.get("currency", "USD")
-            })
+                })
             current = current + timedelta(days=1)
         return {"prices": prices, "source": "mockprov"}
 

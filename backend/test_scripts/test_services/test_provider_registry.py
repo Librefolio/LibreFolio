@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Dict
 
 from backend.app.services.provider_registry import AssetProviderRegistry
@@ -12,7 +11,7 @@ from backend.test_scripts.test_utils import (
     print_error,
     print_test_summary,
     exit_with_result,
-)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +43,7 @@ def test_asset_provider_discovery() -> Dict:
     except Exception as e:
         print_error(f"Asset provider discovery failed: {e}")
         return {"passed": False, "message": str(e)}
+
 
 def test_fx_provider_discovery() -> Dict:
     """Test that FX providers are auto-discovered and registered correctly.

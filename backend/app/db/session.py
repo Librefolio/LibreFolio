@@ -47,8 +47,6 @@ def get_sync_engine():
         if not db_path.startswith("/"):  # relative path
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-
-
     engine = create_engine(
         db_url,
         echo=False,

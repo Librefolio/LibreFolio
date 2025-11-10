@@ -6,13 +6,13 @@ Organized by domain:
 - fx.py: FX-related schemas (TODO - future factorization)
 - assets.py: Asset-related schemas (TODO - future factorization)
 """
-from backend.app.schemas.common import BackwardFillInfo
 from backend.app.schemas.assets import (
     CurrentValueModel,
     PricePointModel,
     HistoricalDataModel,
     AssetProviderAssignmentModel,
-)
+    )
+from backend.app.schemas.common import BackwardFillInfo
 
 __all__ = [
     "BackwardFillInfo",
@@ -20,4 +20,4 @@ __all__ = [
     "PricePointModel",
     "HistoricalDataModel",
     "AssetProviderAssignmentModel",
-]
+    ]

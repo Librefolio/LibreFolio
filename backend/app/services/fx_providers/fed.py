@@ -278,4 +278,3 @@ class FEDProvider(FXRateProvider):
 
         logger.info(f"Parsed {len(observations)} rates for {currency} from FRED")
         return observations
-

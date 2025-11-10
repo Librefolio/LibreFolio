@@ -34,7 +34,6 @@ from backend.app.config import get_settings
 
 import argparse
 import json
-import sys
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -60,7 +59,7 @@ from backend.app.db import (
     TransactionType,
     CashMovementType,
     )
-from backend.app.services.fx import FXProviderFactory
+from backend.app.services.provider_registry import FXProviderRegistry
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
 # This ensures we use the test database, not the production one
@@ -69,7 +68,7 @@ engine = create_engine(
     _settings.DATABASE_URL,
     echo=False,
     poolclass=NullPool,
-)
+    )
 
 
 def cleanup_all_tables(session: Session):
@@ -90,7 +89,7 @@ def cleanup_all_tables(session: Session):
             CashAccount,
             Asset,
             Broker,
-        ]
+            ]
 
         for model in tables_to_clean:
             # Count existing rows
@@ -282,7 +281,7 @@ def populate_asset_provider_assignments(session: Session):
         ("VWCE", "yfinance", json.dumps({"symbol": "VWCE.MI"})),
         ("CSPX", "yfinance", json.dumps({"symbol": "CSPX.L"})),
         # Note: HOLD assets and SCHEDULED_YIELD loans don't need providers
-    ]
+        ]
 
     for identifier, provider_code, provider_params in assignments:
         asset = session.exec(select(Asset).where(Asset.identifier == identifier)).first()
@@ -295,7 +294,7 @@ def populate_asset_provider_assignments(session: Session):
             provider_code=provider_code,
             provider_params=provider_params,
             last_fetch_at=None,  # Never fetched yet
-        )
+            )
         session.add(assignment)
         print(f"  ✅ {identifier} → {provider_code}")
 
@@ -684,7 +683,7 @@ def populate_fx_currency_pair_sources(session: Session):
 
     # Get all registered providers
     try:
-        available_providers = FXProviderFactory.get_all_providers()
+        available_providers = FXProviderRegistry.list_providers()
         if not available_providers:
             print("  ⚠️  No FX providers registered - skipping configuration")
             return
@@ -840,7 +839,7 @@ def main():
                 'price_history': len(session.exec(select(PriceHistory)).all()),
                 'fx_rates': len(session.exec(select(FxRate)).all()),
                 'fx_pair_sources': len(session.exec(select(FxCurrencyPairSource)).all()),
-            }
+                }
 
             # Print summary
             print("\n📊 Summary:")
@@ -945,12 +944,12 @@ def main():
             ('assets', 'identifier'),
             ('asset_provider_assignments', 'provider_code'),
             ('cash_accounts', 'display_name'),
-            ('transactions', 'type'),  # Column is 'type' not 'transaction_type'
-            ('cash_movements', 'type'),  # Column is 'type' not 'movement_type'
+            ('transactions', 'type'),
+            ('cash_movements', 'type'),
             ('price_history', 'close'),
             ('fx_rates', 'rate'),
             ('fx_currency_pair_sources', 'provider_code'),
-        ]
+            ]
 
         print("\n📊 Verifying data in each table:")
         verification_failed = False
@@ -999,7 +998,6 @@ def main():
         import traceback
         traceback.print_exc()
         return 1
-
 
 
 if __name__ == "__main__":

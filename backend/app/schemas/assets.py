@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 from datetime import date
 from decimal import Decimal
 from typing import Optional, List
+
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
@@ -70,5 +72,4 @@ __all__ = [
     "PricePointModel",
     "HistoricalDataModel",
     "AssetProviderAssignmentModel",
-]
-
+    ]

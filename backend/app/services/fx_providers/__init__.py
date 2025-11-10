@@ -15,4 +15,3 @@ Available providers:
 """
 
 # No imports needed - providers are auto-discovered by FXProviderRegistry
-

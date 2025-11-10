@@ -275,5 +275,3 @@ class SNBProvider(FXRateProvider):
 
         logger.info(f"Parsed {len(observations)} rates for {currency} from SNB")
         return observations
-
-

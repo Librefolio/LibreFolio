@@ -61,13 +61,13 @@ def ensure_database_exists():
             logger.warning(
                 "Database file not found, running migrations",
                 db_path=str(db_path)
-            )
+                )
             needs_migration = True
         elif db_path.stat().st_size == 0:
             logger.warning(
                 "Database file is empty (0 bytes), running migrations",
                 db_path=str(db_path)
-            )
+                )
             needs_migration = True
         else:
             # Check if database has tables using SQLite directly
@@ -84,18 +84,18 @@ def ensure_database_exists():
                     logger.warning(
                         "Database has no tables, running migrations",
                         db_path=str(db_path)
-                    )
+                        )
                     needs_migration = True
                 else:
                     logger.info(
                         f"Database initialized with {table_count} tables",
                         db_path=str(db_path)
-                    )
+                        )
             except sqlite3.DatabaseError as e:
                 logger.warning(
                     f"Database appears corrupted, running migrations: {e}",
                     db_path=str(db_path)
-                )
+                    )
                 needs_migration = True
 
         if needs_migration:
@@ -113,7 +113,7 @@ def ensure_database_exists():
                     cwd=project_root,
                     capture_output=True,
                     text=True,
-                )
+                    )
 
                 if result.returncode == 0:
                     logger.info("Database created and migrated successfully")
@@ -121,7 +121,7 @@ def ensure_database_exists():
                     logger.error(
                         "Failed to create database",
                         stderr=result.stderr
-                    )
+                        )
                     sys.exit(1)
 
             except Exception as e:

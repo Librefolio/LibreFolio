@@ -35,7 +35,8 @@ from backend.app.db.models import (
     AssetProviderAssignment,
     PriceHistory,
     ValuationModel,
-)
+    )
+
 
 # (Pydantic models for API request/response live in backend.app.schemas.assets)
 # They are imported by API modules when needed
@@ -48,6 +49,7 @@ from backend.app.db.models import (
 
 class AssetSourceError(Exception):
     """Base exception for asset source errors."""
+
     def __init__(self, message: str, error_code: str, details: Optional[dict] = None):
         super().__init__(message)
         self.message = message
@@ -90,7 +92,7 @@ class AssetSourceProvider(ABC):
         self,
         provider_params: dict,
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Fetch current price for asset.
 
@@ -113,7 +115,7 @@ class AssetSourceProvider(ABC):
         start_date: date_type,
         end_date: date_type,
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Fetch historical prices for date range.
 
@@ -148,7 +150,7 @@ class AssetSourceProvider(ABC):
             f"Search not supported by {self.provider_name}",
             "NOT_SUPPORTED",
             {"provider": self.provider_code}
-        )
+            )
 
     def validate_params(self, params: dict) -> None:
         """
@@ -249,7 +251,7 @@ def find_active_rate(
     target_date: date_type,
     maturity_date: date_type,
     late_interest: Optional[dict],
-) -> Decimal:
+    ) -> Decimal:
     """
     Find applicable interest rate for target date.
 
@@ -293,7 +295,7 @@ def calculate_accrued_interest(
     schedule: list[dict],
     maturity_date: date_type,
     late_interest: Optional[dict],
-) -> Decimal:
+    ) -> Decimal:
     """
     Calculate accrued SIMPLE interest from start to end.
 
@@ -335,7 +337,7 @@ async def calculate_synthetic_value(
     asset: Asset,
     target_date: date_type,
     session: AsyncSession,
-) -> dict:
+    ) -> dict:
     """
     Calculate synthetic valuation for SCHEDULED_YIELD asset.
 
@@ -382,7 +384,7 @@ async def calculate_synthetic_value(
         schedule=interest_schedule,
         maturity_date=asset.maturity_date,
         late_interest=late_interest,
-    )
+        )
 
     # Calculate value (TODO: Subtract dividends in Step 03)
     synthetic_value = asset.face_value + accrued_interest
@@ -394,7 +396,7 @@ async def calculate_synthetic_value(
         "low": None,
         "close": truncate_price_to_db_precision(synthetic_value),
         "currency": asset.currency,
-    }
+        }
 
 
 # ============================================================================
@@ -427,7 +429,7 @@ class AssetSourceManager:
     async def bulk_assign_providers(
         assignments: list[dict],
         session: AsyncSession,
-    ) -> list[dict]:
+        ) -> list[dict]:
         """
         Bulk assign/update providers to assets (PRIMARY bulk method).
 
@@ -450,8 +452,8 @@ class AssetSourceManager:
         await session.execute(
             delete(AssetProviderAssignment).where(
                 AssetProviderAssignment.asset_id.in_(asset_ids)
+                )
             )
-        )
 
         # Bulk insert new assignments
         new_assignments = []
@@ -469,8 +471,8 @@ class AssetSourceManager:
                     provider_code=a["provider_code"],
                     provider_params=params_to_store,
                     last_fetch_at=None,  # Never fetched yet
+                    )
                 )
-            )
 
         session.add_all(new_assignments)
         await session.commit()
@@ -481,7 +483,7 @@ class AssetSourceManager:
                 "asset_id": assignment["asset_id"],
                 "success": True,
                 "message": f"Provider {assignment['provider_code']} assigned"
-            })
+                })
 
         return results
 
@@ -491,7 +493,7 @@ class AssetSourceManager:
         provider_code: str,
         provider_params: Optional[str],
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Assign provider to single asset (calls bulk with 1 element).
 
@@ -507,14 +509,14 @@ class AssetSourceManager:
         results = await AssetSourceManager.bulk_assign_providers(
             [{"asset_id": asset_id, "provider_code": provider_code, "provider_params": provider_params}],
             session
-        )
+            )
         return results[0]
 
     @staticmethod
     async def bulk_remove_providers(
         asset_ids: list[int],
         session: AsyncSession,
-    ) -> list[dict]:
+        ) -> list[dict]:
         """
         Bulk remove provider assignments (PRIMARY bulk method).
 
@@ -533,20 +535,20 @@ class AssetSourceManager:
         await session.execute(
             delete(AssetProviderAssignment).where(
                 AssetProviderAssignment.asset_id.in_(asset_ids)
+                )
             )
-        )
         await session.commit()
 
         return [
             {"asset_id": aid, "success": True, "message": "Provider removed"}
             for aid in asset_ids
-        ]
+            ]
 
     @staticmethod
     async def remove_provider(
         asset_id: int,
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Remove provider from single asset (calls bulk with 1 element).
 
@@ -564,7 +566,7 @@ class AssetSourceManager:
     async def get_asset_provider(
         asset_id: int,
         session: AsyncSession,
-    ) -> Optional[AssetProviderAssignment]:
+        ) -> Optional[AssetProviderAssignment]:
         """
         Fetch provider assignment for asset.
 
@@ -578,8 +580,8 @@ class AssetSourceManager:
         result = await session.execute(
             select(AssetProviderAssignment).where(
                 AssetProviderAssignment.asset_id == asset_id
+                )
             )
-        )
         return result.scalar_one_or_none()
 
     # ========================================================================
@@ -590,7 +592,7 @@ class AssetSourceManager:
     async def bulk_upsert_prices(
         data: list[dict],
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Bulk upsert prices manually (PRIMARY bulk method).
 
@@ -619,7 +621,7 @@ class AssetSourceManager:
                     "asset_id": asset_id,
                     "count": 0,
                     "message": "No prices to upsert"
-                })
+                    })
                 continue
 
             # Build PriceHistory objects for upsert
@@ -648,7 +650,7 @@ class AssetSourceManager:
                     currency=price.get("currency", "USD"),  # TODO: Get from asset when system will be ready for do this query, for now default to USD
                     source_plugin_key="MANUAL",  # Manual price insert
                     fetched_at=None,  # Not fetched from external source
-                )
+                    )
                 price_objects.append(price_obj)
 
             # Delete existing prices for these dates (upsert = delete + insert)
@@ -657,8 +659,8 @@ class AssetSourceManager:
                     and_(
                         PriceHistory.asset_id == asset_id,
                         PriceHistory.date.in_(dates_to_upsert)
+                        )
                     )
-                )
                 await session.execute(delete_stmt)
 
             # Bulk insert new prices
@@ -672,20 +674,20 @@ class AssetSourceManager:
                 "asset_id": asset_id,
                 "count": len(price_objects),
                 "message": f"Upserted {len(price_objects)} prices"
-            })
+                })
 
         return {
             "inserted_count": total_inserted,
             "updated_count": 0,  # SQLite doesn't distinguish
             "results": results
-        }
+            }
 
     @staticmethod
     async def upsert_prices(
         asset_id: int,
         prices: list[dict],
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Upsert prices for single asset (calls bulk with 1 element).
 
@@ -700,14 +702,14 @@ class AssetSourceManager:
         result = await AssetSourceManager.bulk_upsert_prices(
             [{"asset_id": asset_id, "prices": prices}],
             session
-        )
+            )
         return result["results"][0]
 
     @staticmethod
     async def bulk_delete_prices(
         data: list[dict],
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Bulk delete price ranges (PRIMARY bulk method).
 
@@ -739,8 +741,8 @@ class AssetSourceManager:
                         PriceHistory.asset_id == asset_id,
                         PriceHistory.date >= start,
                         PriceHistory.date <= end
+                        )
                     )
-                )
 
         if not conditions:
             return {"deleted_count": 0, "results": []}
@@ -758,21 +760,21 @@ class AssetSourceManager:
                 "asset_id": item["asset_id"],
                 "deleted": deleted_count // len(data),  # Approximate
                 "message": f"Deleted prices in {len(item.get('date_ranges', []))} range(s)"
-            }
+                }
             for item in data
-        ]
+            ]
 
         return {
             "deleted_count": deleted_count,
             "results": results
-        }
+            }
 
     @staticmethod
     async def delete_prices(
         asset_id: int,
         date_ranges: list[dict],
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Delete price ranges for single asset (calls bulk with 1 element).
 
@@ -787,7 +789,7 @@ class AssetSourceManager:
         result = await AssetSourceManager.bulk_delete_prices(
             [{"asset_id": asset_id, "date_ranges": date_ranges}],
             session
-        )
+            )
         return result["results"][0]
 
     # ========================================================================
@@ -800,7 +802,7 @@ class AssetSourceManager:
         start_date: date_type,
         end_date: date_type,
         session: AsyncSession,
-    ) -> list[dict]:
+        ) -> list[dict]:
         """
         Get prices for asset with backward-fill and synthetic yield support.
 
@@ -853,7 +855,7 @@ class AssetSourceManager:
                         "volume": None,
                         "currency": synthetic_price["currency"],
                         "backward_fill_info": None  # Always exact calculation
-                    })
+                        })
                 except Exception as e:
                     # Skip dates with calculation errors
                     pass
@@ -872,8 +874,8 @@ class AssetSourceManager:
                 PriceHistory.asset_id == asset_id,
                 PriceHistory.date >= start_date,
                 PriceHistory.date <= end_date
-            )
-        ).order_by(PriceHistory.date)
+                )
+            ).order_by(PriceHistory.date)
 
         db_result = await session.execute(stmt)
         db_prices = {p.date: p for p in db_result.scalars().all()}
@@ -897,7 +899,7 @@ class AssetSourceManager:
                     "close": price.close,
                     "currency": price.currency,
                     "backward_fill_info": None
-                })
+                    })
             elif last_known_price:
                 # Backward-fill
                 days_back = (current_date - last_known_price.date).days
@@ -912,8 +914,8 @@ class AssetSourceManager:
                     "backward_fill_info": {
                         "actual_rate_date": str(last_known_price.date),
                         "days_back": days_back
-                    }
-                })
+                        }
+                    })
             else:
                 # No data available (TODO Step 03: fallback to last BUY transaction)
                 # For now, skip this date
@@ -933,7 +935,7 @@ class AssetSourceManager:
         session: AsyncSession,
         concurrency: int = 5,
         semaphore_timeout: int = 60,
-    ) -> list[dict]:
+        ) -> list[dict]:
         """
         Refresh prices for multiple assets using their configured providers.
 
@@ -967,7 +969,7 @@ class AssetSourceManager:
                 "inserted_count": 0,
                 "updated_count": 0,
                 "errors": []
-            }
+                }
 
             # Resolve provider assignment
             try:
@@ -1012,8 +1014,8 @@ class AssetSourceManager:
                         PriceHistory.asset_id == asset_id,
                         PriceHistory.date >= start,
                         PriceHistory.date <= end,
+                        )
                     )
-                )
                 db_res = await session.execute(stmt)
                 return {p.date: p for p in db_res.scalars().all()}
 
@@ -1045,7 +1047,7 @@ class AssetSourceManager:
             # Build upsert payload for DB: we reuse bulk_upsert_prices() which performs delete+insert per asset
             upsert_payload = [
                 {"asset_id": asset_id, "prices": prices}
-            ]
+                ]
 
             try:
                 upsert_res = await AssetSourceManager.bulk_upsert_prices(upsert_payload, session)
@@ -1082,7 +1084,7 @@ class AssetSourceManager:
         session: AsyncSession,
         force: bool = False,
         concurrency: int = 5,
-    ) -> dict:
+        ) -> dict:
         """
         Refresh prices for single asset (calls bulk with 1 element).
 
@@ -1092,5 +1094,5 @@ class AssetSourceManager:
             [{"asset_id": asset_id, "start_date": start_date, "end_date": end_date, "force": force}],
             session,
             concurrency=concurrency,
-        )
+            )
         return res[0] if res else {"asset_id": asset_id, "fetched_count": 0, "inserted_count": 0, "updated_count": 0, "errors": ["no-op"]}

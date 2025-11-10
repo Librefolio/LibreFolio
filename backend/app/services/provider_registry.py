@@ -1,10 +1,9 @@
 from __future__ import annotations
-from typing import Type, Dict, List
+
 import importlib
-import pkgutil
-import inspect
-from pathlib import Path
 import importlib.util
+from pathlib import Path
+from typing import Type, Dict, List
 
 
 class AbstractProviderRegistry:
@@ -72,13 +71,13 @@ class AbstractProviderRegistry:
                 providers.append({
                     'code': code,
                     'name': name
-                })
+                    })
             except Exception:
                 # Fallback if instantiation fails
                 providers.append({
                     'code': code,
                     'name': code
-                })
+                    })
         return providers
 
     @classmethod
@@ -149,9 +148,11 @@ def register_provider(registry_class: Type[AbstractProviderRegistry]):
     class MyAssetProvider(AssetSourceProvider):
         ...
     """
+
     def decorator(provider_class: Type):
         registry_class.register(provider_class)
         return provider_class
+
     return decorator
 
 
