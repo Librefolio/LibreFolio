@@ -675,6 +675,11 @@ class AssetProviderAssignment(SQLModel, table=True):
         description="Last fetch attempt timestamp (NULL = never fetched, updated on every fetch)"
     )
 
+    fetch_interval: Optional[int] = Field(
+        default=None,
+        description="Refresh frequency in minutes (NULL = default 1440 = 24h). Used by scheduled refresh system."
+    )
+
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

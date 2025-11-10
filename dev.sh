@@ -157,6 +157,11 @@ function print_help() {
     echo "  format           Format code with black"
     echo "  lint             Lint code with ruff"
     echo "  shell            Open a shell in the virtualenv"
+    echo ""
+    echo "Information:"
+    echo "  info:api         List all API endpoints with descriptions"
+    echo ""
+    echo "Help:"
     echo "  help             Show this help message"
     echo ""
 }
@@ -529,12 +534,20 @@ function lint_code() {
 }
 
 function open_shell() {
-    echo -e "${GREEN}Opening pipenv shell...${NC}"
+    echo -e "${GREEN}Opening shell in virtualenv...${NC}"
     pipenv shell
 }
 
+function list_api_endpoints() {
+    echo -e "${GREEN}Listing all API endpoints...${NC}"
+    echo ""
+    pipenv run python backend/test_scripts/list_api_endpoints.py
+}
+
 # Main command dispatcher
-case "${1:-help}" in
+COMMAND="${1:-help}"
+
+case "$COMMAND" in
     install)
         install_deps
         ;;
@@ -572,6 +585,9 @@ case "${1:-help}" in
         ;;
     shell)
         open_shell
+        ;;
+    info:api)
+        list_api_endpoints
         ;;
     help|--help|-h)
         print_help
