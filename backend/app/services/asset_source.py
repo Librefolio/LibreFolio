@@ -87,6 +87,19 @@ class AssetSourceProvider(ABC):
         """Human-readable provider name."""
         pass
 
+    @property
+    @abstractmethod
+    def test_cases(self) -> list[dict]:
+        """
+        List of test cases with 'identifier' and 'provider_params' for testing.
+        """
+        pass
+
+    @property
+    def supports_history(self) -> bool:
+        """Whether this provider supports historical data."""
+        return True  # In theory except special case, all plugin should support this feature
+
     @abstractmethod
     async def get_current_value(
         self,
@@ -133,6 +146,12 @@ class AssetSourceProvider(ABC):
         """
         pass
 
+    @property
+    @abstractmethod
+    def test_search_query(self) -> str | None:
+        """Search query to use in tests, return None if query feature is not supported"""
+        pass
+
     async def search(self, query: str) -> list[dict]:
         """
         Search for assets via provider (if supported).
@@ -163,6 +182,8 @@ class AssetSourceProvider(ABC):
             AssetSourceError: If params invalid
         """
         pass  # Default: no validation
+
+    # TODO: definire metodo da far chiamare periodicamente ad un job garbage collector, per ripulire eventuali cache
 
 
 # ============================================================================

@@ -114,6 +114,22 @@ def external_fx_multi_unit(verbose: bool = False) -> bool:
         )
 
 
+def external_asset_providers(verbose: bool = False) -> bool:
+    """
+    Test all registered asset pricing providers (yfinance, cssscraper, etc.).
+    Tests external integration with data sources.
+    """
+    print_section("External: Asset Providers")
+    print_info("Testing all registered asset pricing providers")
+    print_info("Tests: Metadata, API connection, current/historical data fetching, search")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_external.test_asset_providers"],
+        "Asset providers tests",
+        verbose=verbose
+        )
+
+
 def external_all(verbose: bool = False) -> bool:
     """
     Run all external service tests.
@@ -125,6 +141,7 @@ def external_all(verbose: bool = False) -> bool:
     tests = [
         ("External Forex data import API", lambda: external_fx_source(verbose)),
         ("Multi-Unit Currency Handling", lambda: external_fx_multi_unit(verbose)),
+        ("Asset Pricing Providers", lambda: external_asset_providers(verbose)),
         # Future: yfinance, other data sources
         ]
 
@@ -574,6 +591,7 @@ Test Categories:
 Examples:
   # External services tests
   python test_runner.py external fx-source  # Test all Forex API connection
+  python test_runner.py external asset-providers  # Test all asset pricing providers
   python test_runner.py external all        # All external tests
   
   # Database tests
@@ -625,7 +643,8 @@ External Services Tests
 
 These tests verify external API integrations:
   • No backend server required
-  • Tests connections to ECB, FED, BOE, SNB and other data sources
+  • Tests connections for Forex data source like ECB, FED, BOE, SNB and other
+  • Tests connections for Asset data source like YahooFinance, CssScraper and other
   • Verifies data availability and format
 
 Test commands:
@@ -637,6 +656,10 @@ Test commands:
                    Tests: Identification, rate reasonableness, 100x logic
                    📋 Prerequisites: Internet connection
          
+  asset-providers - Test all asset pricing providers (yfinance, cssscraper)
+                    Tests: Metadata, API connection, current/historical data fetching, search
+                    📋 Prerequisites: Internet connection
+         
   all            - Run all external service tests
   
 Future: yfinance, other data sources will be added here
@@ -646,7 +669,7 @@ Future: yfinance, other data sources will be added here
 
     external_parser.add_argument(
         "action",
-        choices=["fx-source", "fx-multi-unit", "all"],
+        choices=["fx-source", "fx-multi-unit", "asset-providers", "all"],
         help="External service test to run"
         )
 
@@ -822,6 +845,8 @@ def main():
             success = external_fx_source(verbose=verbose)
         elif args.action == "fx-multi-unit":
             success = external_fx_multi_unit(verbose=verbose)
+        elif args.action == "asset-providers":
+            success = external_asset_providers(verbose=verbose)
         elif args.action == "all":
             success = external_all(verbose=verbose)
 

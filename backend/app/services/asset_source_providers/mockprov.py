@@ -1,30 +1,127 @@
-from datetime import timedelta
+"""
+Mock provider for testing purposes only.
 
-from backend.app.services.asset_source import AssetSourceProvider
+This provider returns fixed dummy data and should NEVER be used in production.
+It's registered in the provider registry for testing the asset source framework
+without external dependencies.
+
+WARNING: This provider is for TESTING ONLY. Do not use in production code.
+"""
+from datetime import date, timedelta
+from decimal import Decimal
+from typing import Dict
+
+from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
+from backend.app.schemas.assets import CurrentValueModel, HistoricalDataModel, PricePointModel
 
 
 @register_provider(AssetProviderRegistry)
-class MockProv(AssetSourceProvider):
-    provider_code = "mockprov"
-    provider_name = "Mock Provider for Tests"
+class MockProvider(AssetSourceProvider):
+    """
+    Mock provider for testing - returns fixed dummy data.
 
-    async def get_current_value(self, provider_params: dict, session=None):
-        from datetime import date
-        return {"value": 100.0, "currency": "USD", "as_of_date": date.today(), "source": "mockprov"}
+    WARNING: FOR TESTING ONLY - DO NOT USE IN PRODUCTION
+    """
 
-    async def get_history_value(self, provider_params: dict, start_date=None, end_date=None, session=None):
+    @property
+    def provider_code(self) -> str:
+        return "mockprov"
+
+    @property
+    def provider_name(self) -> str:
+        return "Mock Provider (TESTING ONLY)"
+
+    @property
+    def test_cases(self) -> list[dict]:
+        """Test cases with identifier and provider_params."""
+        return [
+            {
+                'identifier': 'MOCK',
+                'provider_params': None
+            }
+        ]
+
+    @property
+    def supports_history(self) -> bool:
+        """Whether this provider supports historical data."""
+        return True
+
+    @property
+    def test_search_query(self) -> str | None:
+        """Search query to use in tests."""
+        return 'TEST'
+
+    def validate_params(self, params: Dict | None) -> None:
+        """
+        Mock provider accepts any parameters.
+
+        In a real provider, this would validate required params.
+        """
+        # Accept any params for testing flexibility
+        pass
+
+    async def get_current_value(
+        self,
+        identifier: str,
+        provider_params: Dict | None = None,
+        session=None
+    ) -> CurrentValueModel:
+        """
+        Return fixed mock current value.
+
+        Always returns: 100.0 USD as of today
+        """
+        if identifier == "INVALID_TICKER_12345":
+            raise AssetSourceError("Invalid identifier for mock provider.", error_code="NOT_FOUND")
+        return CurrentValueModel(
+            value=Decimal('100.00'),
+            currency='USD',
+            as_of_date=date.today(),
+            source=self.provider_name
+        )
+
+    async def get_history_value(
+        self,
+        identifier: str,
+        start_date: date,
+        end_date: date,
+        provider_params: Dict | None = None,
+        session=None
+    ) -> HistoricalDataModel:
+        """
+        Generate mock historical data.
+
+        Returns daily prices of 100.0 for the entire date range.
+        """
         prices = []
         current = start_date
-        while current <= end_date:
-            prices.append({
-                "date": current,
-                "close": 100.0,
-                "currency": provider_params.get("currency", "USD")
-                })
-            current = current + timedelta(days=1)
-        return {"prices": prices, "source": "mockprov"}
 
-    def validate_params(self, params: dict) -> None:
-        # Accept any params for tests
-        return
+        while current <= end_date:
+            prices.append(PricePointModel(
+                date=current,
+                open=Decimal('100.00'),
+                high=Decimal('100.00'),
+                low=Decimal('100.00'),
+                close=Decimal('100.00'),
+                volume=None,  # Mock doesn't provide volume
+                currency='USD'
+            ))
+            current += timedelta(days=1)
+
+        return HistoricalDataModel(
+            prices=prices,
+            currency='USD',
+            source=self.provider_name
+        )
+
+    async def search(self, query: str) -> list[dict]:
+        """
+        Mock search - returns dummy result for any query.
+        """
+        return [{
+            "identifier": f"MOCK_{query.upper()}",
+            "display_name": f"Mock Asset: {query}",
+            "currency": "USD",
+            "type": "MOCK"
+        }]
