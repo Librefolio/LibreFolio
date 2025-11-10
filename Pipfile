@@ -13,16 +13,16 @@ aiosqlite = "*"
 greenlet = "*"
 pydantic = "*"
 pydantic-settings = "*"
-pandas = "*"
 numpy = "*"
-httpx = "*"
-beautifulsoup4 = "*"
-yfinance = "*"
 python-dotenv = "*"
 apscheduler = "*"
 structlog = "*"
 python-dateutil = "*"
 forex-python = "*"
+yfinance = "*"
+pandas = "*"
+httpx = "*"
+beautifulsoup4 = "*"
 
 [dev-packages]
 pytest = "*"
@@ -33,4 +33,3 @@ mypy = "*"
 
 [requires]
 python_version = "3.13"
-
