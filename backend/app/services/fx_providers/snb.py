@@ -12,11 +12,13 @@ from decimal import Decimal
 
 import httpx
 
-from backend.app.services.fx import FXRateProvider, FXProviderFactory, FXServiceError
+from backend.app.services.fx import FXRateProvider, FXServiceError
+from backend.app.services.provider_registry import register_provider, FXProviderRegistry
 
 logger = logging.getLogger(__name__)
 
 
+@register_provider(FXProviderRegistry)
 class SNBProvider(FXRateProvider):
     """
     Swiss National Bank FX rate provider.
@@ -50,6 +52,11 @@ class SNBProvider(FXRateProvider):
     @property
     def code(self) -> str:
         return "SNB"
+
+    @property
+    def provider_code(self) -> str:
+        """Alias for code (required by unified registry)."""
+        return self.code
 
     @property
     def name(self) -> str:
@@ -270,5 +277,3 @@ class SNBProvider(FXRateProvider):
         return observations
 
 
-# Auto-register provider on module import
-FXProviderFactory.register(SNBProvider)

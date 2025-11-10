@@ -8,15 +8,31 @@ import importlib.util
 
 
 class AbstractProviderRegistry:
-    _providers: Dict[str, Type] = {}
+    """Abstract base class for provider registries.
+
+    Each subclass automatically gets its own _providers dictionary.
+    """
+
+    def __init_subclass__(cls, **kwargs):
+        """Ensure each subclass has its own _providers dict."""
+        super().__init_subclass__(**kwargs)
+        cls._providers = {}
 
     @classmethod
     def register(cls, provider_class: Type) -> None:
         """Register a provider class.
 
         The provider_class must expose a `provider_code` attribute.
+        We instantiate the class to read the provider_code (handles properties).
         """
-        code = getattr(provider_class, cls._get_provider_code_attr(), None)
+        try:
+            # Instantiate to read properties correctly
+            instance = provider_class()
+            code = getattr(instance, cls._get_provider_code_attr(), None)
+        except Exception:
+            # Fallback: try reading as class attribute
+            code = getattr(provider_class, cls._get_provider_code_attr(), None)
+
         if not code:
             raise ValueError("Provider class must define a provider_code attribute")
         cls._providers[code] = provider_class
@@ -42,8 +58,28 @@ class AbstractProviderRegistry:
             return prov_cls()
 
     @classmethod
-    def list_providers(cls) -> List[str]:
-        return list(cls._providers.keys())
+    def list_providers(cls) -> List[Dict[str, str]]:
+        """List all registered providers with their metadata.
+
+        Returns:
+            List of dicts with 'code' and 'name' keys
+        """
+        providers = []
+        for code, provider_class in cls._providers.items():
+            try:
+                instance = provider_class()
+                name = getattr(instance, 'provider_name', None) or getattr(instance, 'name', code)
+                providers.append({
+                    'code': code,
+                    'name': name
+                })
+            except Exception:
+                # Fallback if instantiation fails
+                providers.append({
+                    'code': code,
+                    'name': code
+                })
+        return providers
 
     @classmethod
     def clear(cls) -> None:

@@ -564,6 +564,7 @@ def test_sync_rates():
         print_success("✓ Idempotency verified (0 new rates)")
 
         # Test 4.3: Auto-Configuration Mode (uses fx_currency_pair_sources)
+        # TODO: Investigate why FED provider returns 0 rates in auto-config mode, as describe in 05_implementation_checklist.md
         print_info("\nTest 4.3: Auto-Configuration Mode (no provider specified)")
 
         # SETUP: Explicit configuration for this test (isolated from Test 3)

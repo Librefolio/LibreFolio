@@ -21,7 +21,8 @@ from backend.test_scripts.test_utils import (
     print_test_summary,
     exit_with_result,
     )
-from backend.app.services.fx import FXServiceError, FXProviderFactory, normalize_rate_for_storage
+from backend.app.services.fx import FXServiceError, normalize_rate_for_storage
+from backend.app.services.provider_registry import FXProviderRegistry
 
 
 async def test_provider_metadata(provider_code: str) -> bool:
@@ -30,14 +31,15 @@ async def test_provider_metadata(provider_code: str) -> bool:
 
     try:
         # Check registration
-        if not FXProviderFactory.is_registered(provider_code):
+        provider_class = FXProviderRegistry.get_provider(provider_code)
+        if not provider_class:
             print_error(f"{provider_code} provider not registered")
             return False
 
-        print_success(f"{provider_code} is registered in factory")
+        print_success(f"{provider_code} is registered in registry")
 
         # Get instance
-        provider = FXProviderFactory.get_provider(provider_code)
+        provider = FXProviderRegistry.get_provider_instance(provider_code)
 
         # Validate metadata
         print_info(f"  Code: {provider.code}")
@@ -65,7 +67,7 @@ async def test_supported_currencies(provider_code: str) -> bool:
     print_section(f"Test 2: {provider_code} - Supported Currencies")
 
     try:
-        provider = FXProviderFactory.get_provider(provider_code)
+        provider = FXProviderRegistry.get_provider_instance(provider_code)
 
         print_info(f"Fetching supported currencies from {provider.name}...")
         currencies = await provider.get_supported_currencies()
@@ -123,7 +125,7 @@ async def test_fetch_rates(provider_code: str) -> bool:
     print_section(f"Test 3: {provider_code} - Fetch Rates")
 
     try:
-        provider = FXProviderFactory.get_provider(provider_code)
+        provider = FXProviderRegistry.get_provider_instance(provider_code)
 
         # Test date range: last 5 business days
         end_date = date.today()
@@ -200,7 +202,7 @@ async def test_normalize_for_storage(provider_code: str) -> bool:
     print_section(f"Test 4: {provider_code} - Rate Normalization")
 
     try:
-        provider = FXProviderFactory.get_provider(provider_code)
+        provider = FXProviderRegistry.get_provider_instance(provider_code)
 
         print_info(f"Testing normalization for {provider.base_currency} base...")
 
@@ -302,21 +304,30 @@ This ensures all providers implement the interface correctly and work as expecte
         )
 
     # Get all registered providers
-    all_providers = FXProviderFactory.get_all_providers()
+    FXProviderRegistry.auto_discover()  # Ensure providers are discovered
+    all_providers = FXProviderRegistry.list_providers()
 
     if not all_providers:
-        print_error("No providers registered in factory!")
+        print_error("❌ No providers registered in registry!")
         return False
 
-    print_info(f"\nFound {len(all_providers)} registered provider(s):")
+    print_info(f"\n📋 Found {len(all_providers)} registered provider(s):")
     for p in all_providers:
-        print_info(f"  • {p['code']}: {p['name']} (base: {p['base_currency']})")
+        code = p['code'] if isinstance(p, dict) else p
+        name = p.get('name', code) if isinstance(p, dict) else code
+        # Get instance to read base_currency
+        try:
+            instance = FXProviderRegistry.get_provider_instance(code)
+            base = instance.base_currency if instance else '?'
+            print_info(f"  • {code}: {name} (base: {base})")
+        except Exception:
+            print_info(f"  • {code}: {name}")
 
     # Run tests for each provider
     all_results = {}
 
     for provider_info in all_providers:
-        provider_code = provider_info['code']
+        provider_code = provider_info['code'] if isinstance(provider_info, dict) else provider_info
         provider_results = await test_single_provider(provider_code)
         all_results.update(provider_results)
 

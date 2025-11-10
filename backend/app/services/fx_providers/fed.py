@@ -14,11 +14,13 @@ from decimal import Decimal
 
 import httpx
 
-from backend.app.services.fx import FXRateProvider, FXProviderFactory, FXServiceError
+from backend.app.services.fx import FXRateProvider, FXServiceError
+from backend.app.services.provider_registry import register_provider, FXProviderRegistry
 
 logger = logging.getLogger(__name__)
 
 
+@register_provider(FXProviderRegistry)
 class FEDProvider(FXRateProvider):
     """
     Federal Reserve FX rate provider via FRED API.
@@ -68,8 +70,13 @@ class FEDProvider(FXRateProvider):
         return "FED"
 
     @property
+    def provider_code(self) -> str:
+        """Alias for code (required by unified registry)."""
+        return self.code
+
+    @property
     def name(self) -> str:
-        return "Federal Reserve"
+        return "Federal Reserve Bank"
 
     @property
     def base_currency(self) -> str:
@@ -272,6 +279,3 @@ class FEDProvider(FXRateProvider):
         logger.info(f"Parsed {len(observations)} rates for {currency} from FRED")
         return observations
 
-
-# Auto-register provider on module import
-FXProviderFactory.register(FEDProvider)
