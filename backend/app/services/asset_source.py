@@ -34,11 +34,10 @@ from backend.app.db.models import (
     Asset,
     AssetProviderAssignment,
     PriceHistory,
-    ValuationModel,
     )
 from backend.app.schemas import CurrentValueModel, HistoricalDataModel
 from backend.app.utils.financial_math import (
-    calculate_accrued_interest,
+    parse_decimal_value,
     )
 
 
@@ -174,6 +173,7 @@ class AssetSourceProvider(ABC):
             {"provider": self.provider_code}
             )
 
+    @abstractmethod
     def validate_params(self, params: dict) -> None:
         """
         Validate provider_params structure.
@@ -184,7 +184,7 @@ class AssetSourceProvider(ABC):
         Raises:
             AssetSourceError: If params invalid
         """
-        pass  # Default: no validation
+        pass  # Default: plugin need to validate params, if is not necessary override with pass
 
     # TODO: definire metodo da far chiamare periodicamente ad un job garbage collector, per ripulire eventuali cache
 
@@ -231,195 +231,6 @@ def truncate_price_to_db_precision(value: Decimal, column_name: str = "close") -
     precision, scale = get_price_column_precision(column_name)
     quantizer = Decimal(10) ** -scale
     return value.quantize(quantizer, rounding=ROUND_DOWN)
-
-
-def calculate_daily_factor_between_act365(start: date_type, end: date_type) -> Decimal:
-    """
-    Calculate day fraction using ACT/365 convention.
-
-    Args:
-        start: Start date
-        end: End date
-
-    Returns:
-        Decimal fraction (actual_days / 365)
-
-    Example:
-        >>> calculate_daily_factor_between_act365(date(2025, 1, 1), date(2025, 1, 31))
-        Decimal("0.082191780821917808")  # 30/365
-    """
-    actual_days = (end - start).days
-    return Decimal(actual_days) / Decimal(365)
-
-
-def parse_decimal_value(v):
-    """Convert input to Decimal safely. Accepts Decimal, int, float, str, or None."""
-    from decimal import Decimal
-    if v is None:
-        return None
-    if isinstance(v, Decimal):
-        return v
-    try:
-        return Decimal(str(v))
-    except Exception:
-        return None
-
-
-# ============================================================================
-# SYNTHETIC YIELD CALCULATION (Internal Module)
-# ============================================================================
-
-
-def find_active_rate(
-    schedule: list[dict],
-    target_date: date_type,
-    maturity_date: date_type,
-    late_interest: Optional[dict],
-    ) -> Decimal:
-    """
-    Find applicable interest rate for target date.
-
-    Logic:
-    1. Search schedule for rate covering target_date
-    2. If past maturity but within grace period: use last schedule rate
-    3. If past maturity + grace period: use late_interest.rate
-    4. If no match: return 0%
-
-    Args:
-        schedule: List of {start_date, end_date, rate}
-            - start_date: str (ISO format "YYYY-MM-DD") or date object
-            - end_date: str (ISO format "YYYY-MM-DD") or date object
-            - rate: str or Decimal (annual rate, e.g., "0.05" for 5%)
-        target_date: Date to find rate for
-        maturity_date: Asset maturity date
-        late_interest: {rate, grace_period_days} or None
-
-    Returns:
-        Applicable annual interest rate (as Decimal, e.g., 0.05 for 5%)
-    """
-    # Check if within schedule
-    for period in schedule:
-        # Convert string dates to date objects if needed
-        start_raw = period["start_date"]
-        end_raw = period["end_date"]
-
-        if isinstance(start_raw, str):
-            start = date_type.fromisoformat(start_raw)
-        else:
-            start = start_raw
-
-        if isinstance(end_raw, str):
-            end = date_type.fromisoformat(end_raw)
-        else:
-            end = end_raw
-
-        if start <= target_date <= end:
-            return Decimal(str(period["rate"]))
-
-    # Check if past maturity
-    if target_date > maturity_date:
-        if late_interest:
-            grace_days = late_interest.get("grace_period_days", 0)
-            grace_end = maturity_date + timedelta(days=grace_days)
-
-            if target_date <= grace_end:
-                # Within grace period: use last schedule rate
-                if schedule:
-                    last_period = schedule[-1]
-                    return Decimal(str(last_period["rate"]))
-            else:
-                # Past grace period: use late interest rate
-                return Decimal(str(late_interest["rate"]))
-
-    # No applicable rate
-    return Decimal("0")
-
-
-async def calculate_synthetic_value(
-    asset: Asset,
-    target_date: date_type,
-    session: AsyncSession = None,
-    ) -> dict:
-    """
-    Calculate synthetic valuation for SCHEDULED_YIELD asset.
-
-    Formula:
-        value = face_value + accrued_interest - dividends_paid
-
-    Args:
-        asset: Asset with valuation_model = SCHEDULED_YIELD
-        target_date: Date to calculate value for
-        session: Database session (for future use with transactions)
-
-    Returns:
-        PricePoint with calculated value
-
-    Raises:
-        ValueError: If asset not SCHEDULED_YIELD or missing required fields
-
-    TODO (Step 03):
-        - Check if loan repaid via transactions
-        - Subtract dividend payments from value
-    """
-    if asset.valuation_model != ValuationModel.SCHEDULED_YIELD:
-        raise ValueError(f"Asset {asset.id} is not SCHEDULED_YIELD type")
-
-    if not asset.face_value or not asset.interest_schedule or not asset.maturity_date:
-        raise ValueError(f"Asset {asset.id} missing required fields for synthetic yield")
-
-    # Parse schedules (stored as JSON strings in DB)
-    import json
-    interest_schedule = json.loads(asset.interest_schedule)
-    late_interest = json.loads(asset.late_interest) if asset.late_interest else None
-
-    # TODO: Parse dividend_schedule when implemented
-    # dividend_schedule = json.loads(asset.dividend_schedule) if asset.dividend_schedule else []
-
-    # Calculate accrued interest from schedule start to target date
-    # Use the start_date of the first period in the schedule
-    if not interest_schedule:
-        raise ValueError(f"Asset {asset.id} has empty interest_schedule")
-
-    first_period = interest_schedule[0]
-    schedule_start_raw = first_period["start_date"]
-
-    if isinstance(schedule_start_raw, str):
-        schedule_start = date_type.fromisoformat(schedule_start_raw)
-    else:
-        schedule_start = schedule_start_raw
-
-    # Don't calculate before schedule starts
-    if target_date < schedule_start:
-        # Before schedule starts, value is just face value
-        return {
-            "date": target_date,
-            "open": None,
-            "high": None,
-            "low": None,
-            "close": truncate_price_to_db_precision(asset.face_value),
-            "currency": asset.currency,
-            }
-
-    accrued_interest = calculate_accrued_interest(
-        face_value=asset.face_value,
-        start_date=schedule_start,
-        end_date=target_date,
-        schedule=interest_schedule,
-        maturity_date=asset.maturity_date,
-        late_interest=late_interest,
-        )
-
-    # Calculate value (TODO: Subtract dividends in Step 03)
-    synthetic_value = asset.face_value + accrued_interest
-
-    return {
-        "date": target_date,
-        "open": None,
-        "high": None,
-        "low": None,
-        "close": truncate_price_to_db_precision(synthetic_value),
-        "currency": asset.currency,
-        }
 
 
 # ============================================================================
@@ -860,35 +671,55 @@ class AssetSourceManager:
             raise ValueError(f"Asset {asset_id} not found")
 
         # ====================================================================
-        # SPECIAL CASE: Synthetic Yield (calculated at runtime, no DB query)
+        # CHECK FOR ASSIGNED PROVIDER FIRST
         # ====================================================================
-        if asset.valuation_model == ValuationModel.SCHEDULED_YIELD:
-            results = []
-            current_date = start_date
+        assignment = await AssetSourceManager.get_asset_provider(asset_id, session)
+        if assignment:
+            # Asset has a provider assigned - delegate to provider
+            from backend.app.services.provider_registry import AssetProviderRegistry
 
-            while current_date <= end_date:
+            provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
+            if provider:
+                # Parse provider params
+                import json
+                provider_params = assignment.provider_params or {}
+                if isinstance(provider_params, str):
+                    try:
+                        provider_params = json.loads(provider_params)
+                    except:
+                        provider_params = {}
+
                 try:
-                    synthetic_price = await calculate_synthetic_value(asset, current_date, session)
-                    results.append({
-                        "date": current_date,
-                        "open": None,
-                        "high": None,
-                        "low": None,
-                        "close": synthetic_price["close"],
-                        "volume": None,
-                        "currency": synthetic_price["currency"],
-                        "backward_fill_info": None  # Always exact calculation
-                        })
+                    # Get historical data from provider
+                    historical_data = await provider.get_history_value(
+                        str(asset_id),  # identifier (not used by most providers)
+                        provider_params,
+                        start_date,
+                        end_date
+                        )
+
+                    # Convert to expected format
+                    results = []
+                    for price_point in historical_data.prices:
+                        results.append({
+                            "date": price_point.date,
+                            "open": price_point.open,
+                            "high": price_point.high,
+                            "low": price_point.low,
+                            "close": price_point.close,
+                            "volume": price_point.volume,
+                            "currency": price_point.currency,
+                            "backward_fill_info": None  # Providers return exact data
+                            })
+
+                    return results
+
                 except Exception as e:
-                    # Skip dates with calculation errors
+                    # Provider failed - fall back to DB query
                     pass
 
-                current_date += timedelta(days=1)
-
-            return results
-
         # ====================================================================
-        # NORMAL CASE: Query price_history with backward-fill
+        # FALLBACK: Query price_history with backward-fill
         # ====================================================================
 
         # Query all available prices in range

@@ -1184,243 +1184,182 @@ Results: 3/3 providers passed all tests
 ### ✅ Edge cases testati
 
 
-## Phase 5: Asset Metadata & Classification System (3-4 days)
+Perfetto ✅ — ottima scelta di design.
+Hai ragione: **non serve una `get_asset_metadata()` separata nel service layer** se i metadati sono già parte del modello `Asset` e vengono restituiti naturalmente via API (`GET /api/v1/assets/{asset_id}` e `/api/v1/assets`).
 
-**Status**: 🔴 **NOT STARTED** - Database schema changes required
-
-**Goal**: Add rich metadata and classification system to assets, with plugin integration for auto-population.
-
-### 5.1 Database Migration: Asset Metadata Columns
-
-- [ ] **Create migration file**
-  - Command: `./dev.sh db:migrate "add asset metadata and classification"`
-  - Table: `assets` (add columns)
-  - New columns:
-    - `investment_type` VARCHAR(50) NULL - e.g., 'stock', 'etf', 'bond', 'crypto', 'commodity'
-    - `short_description` VARCHAR(255) NULL - human-readable short description
-    - `classification_params` TEXT NULL - JSON with classification data
-  - JSON structure for `classification_params`:
-    ```json
-    {
-      "geographic_area": {
-        "USA": 650,    // 65.0% (0-1000 scale)
-        "Europe": 250, // 25.0%
-        "Asia": 100    // 10.0%
-      },
-      "base_currency": "USD",
-      "sector": "Technology",
-      "custom_tags": ["growth", "large-cap"]
-    }
-    ```
-
-- [ ] **Update Asset model**
-  - File: `backend/app/db/models.py`
-  - Add three new columns to `Asset` class
-  - Add SQLAlchemy relationship/hybrid properties if needed
-
-- [ ] **Apply migration**
-  - Test DB: `./dev.sh db:upgrade backend/data/sqlite/test_app.db`
-  - Prod DB: `./dev.sh db:upgrade backend/data/sqlite/app.db`
-
-- [ ] **Verify schema validation**
-  - Run: `./test_runner.py db validate`
-
-### 5.2 API Endpoints for Metadata Management
-
-- [ ] **Create PATCH endpoint for partial updates**
-  - Endpoint: `PATCH /api/v1/assets/{asset_id}/metadata`
-  - Request body: `{"investment_type": "etf", "classification_params": {...}}`
-  - Behavior: Partial update (merge), null/empty string clears field
-  - Response: Updated asset with new metadata
-  - Validation: JSON schema validation for `classification_params`
-
-- [ ] **Update GET endpoint**
-  - Endpoint: `GET /api/v1/assets/{asset_id}`
-  - Response: Include new metadata fields in asset object
-  - Format: `classification_params` as nested JSON (not string)
-
-- [ ] **Update LIST endpoint**
-  - Endpoint: `GET /api/v1/assets`
-  - Response: Include metadata fields in asset list
-  - Optional filters: `?investment_type=etf`, `?base_currency=USD`
-
-### 5.3 Provider Integration: get_asset_metadata()
-
-- [ ] **Add method to AssetSourceProvider interface**
-  - File: `backend/app/services/asset_source.py`
-  - Method: `get_asset_metadata(identifier: str, provider_params: dict) -> Optional[dict]`
-  - Return format:
-    ```python
-    {
-      "investment_type": "stock",
-      "short_description": "Apple Inc. - Technology",
-      "classification_params": {
-        "geographic_area": {"USA": 1000},
-        "base_currency": "USD",
-        "sector": "Technology"
-      }
-    }
-    ```
-  - Optional: Return `None` if provider doesn't support metadata
-
-- [ ] **Implement in YahooFinanceProvider**
-  - Use yfinance `.info` to extract:
-    - `quoteType` → `investment_type`
-    - `longName` / `shortName` → `short_description`
-    - `sector`, `currency` → `classification_params`
-  - Map geographic area if available (country → geographic_area)
-
-- [ ] **Implement in other providers**
-  - CSS Scraper: Return `None` (not supported)
-  - Scheduled Investment: Return metadata from `provider_params` if available
-
-### 5.4 Auto-Population Workflow
-
-- [ ] **Trigger on asset creation**
-  - When: User assigns provider to asset (POST `/assets/{id}/provider`)
-  - Action: Call `provider.get_asset_metadata()` and save to DB
-  - Fallback: If provider returns `None`, leave fields empty
-
-- [ ] **Manual refresh command**
-  - Endpoint: `POST /api/v1/assets/{asset_id}/metadata/refresh`
-  - Action: Re-call `provider.get_asset_metadata()` and update DB
-  - User intention: "I want fresh metadata from provider"
-  - Important: Only triggered manually, NOT in scheduled refresh jobs
-
-- [ ] **User override persistence**
-  - User-edited metadata PERSISTS across refreshes
-  - Manual refresh ONLY triggered by explicit user action
-  - Document workflow in API docs
-
-### 5.5 Tests
-
-- [ ] **Test metadata CRUD**
-  - Test: PATCH endpoint updates fields correctly
-  - Test: Null/empty string clears field
-  - Test: GET returns updated metadata
-  - Test: Invalid JSON in `classification_params` rejected
-
-- [ ] **Test provider metadata extraction**
-  - Test: YahooFinanceProvider returns valid metadata
-  - Test: Providers without metadata return `None`
-  - Test: Metadata saved to DB on provider assignment
-
-- [ ] **Test refresh workflow**
-  - Test: Manual refresh updates metadata from provider
-  - Test: Scheduled refresh does NOT overwrite user changes
-  - Test: User edits persist after refresh
-
-**Notes**:
-```
-# Design Decisions
-- classification_params is JSON TEXT column (flexible, no schema enforcement at DB level)
-- geographic_area uses 0-1000 scale (allows percentages with 1 decimal precision)
-- base_currency separate from classification_params for easier querying
-- investment_type is enum-like VARCHAR (could be foreign key in future)
-
-# Migration Strategy
-- Add columns as nullable (no default values)
-- Existing assets have NULL metadata (to be populated manually or via provider)
-- No data backfill migration (too complex, user-driven instead)
-```
-
-## Phase 5 old: API Endpoints & Integration (2 days) - Da integrare con sopra
-
-Goal: expose provider assignment and pricing features via REST with consistent bulk-oriented endpoints, clear validation, and minimal DB work. Keep parity with FX endpoints naming (use `/bulk` suffix), and implement deletion-by-range semantics for manual rate/price deletion.
-
-Primary principles:
-- Bulk-first: all mutating endpoints accept arrays and single-item variants call the bulk handler.
-- Deterministic date semantics: `start_date` required, `end_date` optional; if `end_date` missing treat as single day. The service processes inclusive ranges day-by-day when needed.
-- Minimal DB roundtrips: consolidate bulk payloads into as few statements as possible (single multi-row INSERT/UPSERT, single DELETE with OR/IN clauses) and avoid per-item queries when possible.
-- Pydantic-based API schemas: use the `backend.app.schemas.*` models (e.g., `PricePointModel`, `HistoricalDataModel`, `BackwardFillInfo`) for request/response validation and OpenAPI docs.
-- Backward-fill info: present in responses only when applicable; follow the same shape and naming as FX (`backfill_info` with `actual_rate_date` / `days_back`).
-- Provider selection & priority rules: API validates input and warns; selection/fallback logic lives in service layer (try highest priority first, fall back to next on provider errors). API does not raise 500 for mis-ordered priorities — it returns an error only if no provider can be used.
-
-Endpoints to implement (file: `backend/app/api/v1/assets.py`) — use `router` under `/api/v1` and consistent naming:
-- GET `/assets/{asset_id}/scraber`
-  - Returns assigned provider (nullable) using a Pydantic model (e.g., `AssetProviderAssignmentModel`).
-- POST `/assets/scraber/bulk`
-  - Request: list of `{asset_id, provider_code, provider_params}`
-  - Response: list of `{asset_id, success, message}`
-  - Behavior: calls `AssetSourceManager.bulk_assign_providers()`; single assign endpoint delegates here.
-- DELETE `/assets/scraber/bulk`
-  - Request: list of `{asset_id}` or `{asset_id, provider_code?}`; delete by asset_id (or combined filter). Returns counts per asset.
-  - Behavior: calls `AssetSourceManager.bulk_remove_providers()`.
-
-Price endpoints (file: `backend/app/api/v1/assets.py` or `assets_pricing.py`):
-- POST `/assets/price/upsert/bulk`
-  - Request: list of `{asset_id, prices: [{date (YYYY-MM-DD), open?, high?, low?, close, volume?, currency?}, ...]}`
-  - Response: `{inserted_count, updated_count, results: [...]}`
-  - Behavior: calls `AssetSourceManager.bulk_upsert_prices()`; ensure inputs validated by `PricePointModel` (Pydantic).
-- DELETE `/assets/price/delete/bulk`
-  - Request: list of `{asset_id, date_ranges: [{start_date: YYYY-MM-DD, end_date?: YYYY-MM-DD}, ...]}`
-  - Behavior: calls `AssetSourceManager.bulk_delete_prices()`; server converts to single DELETE with OR of ranges.
-  - Response: `{deleted_count, results: [...]}` (report per item counts — it's fine to approximate but tests should expect deterministic deletes when given explicit ranges).
-- GET `/assets/{asset_id}/price-set`
-  - Query params: `start_date` (required), `end_date` (optional). If only `start_date` present treat as single date.
-  - Response: list of `PricePointModel` with optional `backfill_info`.
-  - Behavior: if asset is `SCHEDULED_YIELD` calculate synthetic prices (no DB writes); otherwise query `price_history` with backward-fill.
-
-FX endpoints (file: `backend/app/api/v1/fx.py`) — align and extend current design:
-- POST `/fx/sync/bulk` (already present) — ensure auto-configuration mode uses `fx_currency_pair_sources` query order and fallback logic described in services.
-- POST `/fx/rate-set/bulk` (manual upsert) — accept list of `{base, quote, date, rate, source?}`; store ordered base/quote alphabetically for storage but preserve input ordering when responding.
-- DELETE `/fx/rate-set/bulk` (manual delete) — accept list of `{base, quote, start_date, end_date?}`; backend will canonicalize pair (alphabetical) for storage lookup and then delete the inclusive range. Response: counts present and counts removed.
-- POST `/fx/convert/bulk` — support `start_date` (required) and optional `end_date` to allow range conversions; if range provided, service returns an array of daily conversions for the interval (processed one day at a time). Keep `identity` conversions handling optimized (return rate=null where base==quote).
-
-Validation & Behavior notes:
-- Use Pydantic for request validation; FastAPI will return 422 for malformed inputs. Add additional semantic checks in endpoint logic (e.g., start <= end).
-- `start_date` must be present and ISO date; `end_date` if present must be >= `start_date`.
-- For FX auto-configuration (no `provider` param) the endpoint should consult `fx_currency_pair_sources` following `priority` ordering. If a top provider fails, try the next one; if all fail, return 502/503 with provider errors details.
-- Manual rate upsert/delete: the API accepts pairs in any order; backend will canonicalize stored pairs to the normalized representation used by `fx_rates` table (but must record source and original direction in response metadata if useful).
-
-Tests to add / update:
-- `backend/test_scripts/test_api/test_assets_api.py` (new)
-  - Full coverage for assign/remove (bulk & single), upsert/delete prices (bulk & single), get prices with backfill, SCHEDULED_YIELD synthetic value (no DB writes) and validation errors.
-  - Ensure tests assert the response schema using Pydantic models where appropriate.
-- Update `backend/test_scripts/test_api/test_fx_api.py`
-  - Add tests for DELETE `/fx/rate-set/bulk` semantics and for convert bulk range behavior (start_date + optional end_date).
-  - Test auto-configuration fallback ordering by configuring `fx_currency_pair_sources` in test DB prior to sync call and verifying provider selection flow.
-- Update any server helper tests (`backend/test_scripts/test_server_helper.py`) to ensure test server prints DB used (already requested elsewhere).
-
-DB and performance considerations:
-- For bulk deletes/upserts prefer single SQL statements where possible:
-  - DELETE with `WHERE (asset_id = A AND date BETWEEN ...) OR (asset_id = B AND date BETWEEN ...)`
-  - INSERT many rows with a single transaction via `session.add_all()` or core executemany depending on DB backend
-- Be mindful of SQLite parameter limits; if payloads are extremely large, chunk them (server-side chunking) or return 413 if too big.
-- Ensure endpoints run within proper transactions and commit only after validation passes for the whole bulk (or support partial success semantics with clear reporting).
-
-API docs & examples:
-- Update `docs/api-reference` pages with the new endpoints and include curl examples for:
-  - Bulk upsert prices
-  - Bulk delete rates/prices
-  - Convert bulk with start_date vs range
-- Add note: runtime Swagger UI (`/docs`) is authoritative and can be used to exercise endpoints live; maintenance issues should be reported with an issue.
-
-Security & UX:
-- For providers that do not require API keys (recommended), document that in `docs/fx/providers.md` and note in API responses when a provider requires additional config.
-- Return helpful errors: validation (400/422), provider failures (502/503 with details), partial failures in bulk (200 with per-item results stating success/error).
-
-Acceptance criteria for Phase 5:
-- All endpoints implemented with the exact route names above and documented in OpenAPI
-- Request/response shapes validated by Pydantic models and used in tests
-- Bulk operations consolidate DB work into minimal queries and return clear per-item results
-- Tests added/updated and passing: `backend/test_scripts/test_api/test_assets_api.py`, updated `test_fx_api.py` tests for new delete/convert behavior
-
-Run & verify:
-- Start test server and run API tests (test runner starts/stops server automatically):
-
-```bash
-./test_runner.py -v api all
-```
-
-- Run individual API test file during development:
-
-```bash
-pipenv run python -m backend.test_scripts.test_api.test_assets_api
-```
+Ti riscrivo la **versione finale consolidata e coerente** di **Phase 5**, con tutti gli endpoint, provider integration aggiornata (`import_asset_metadata()`), uso dei codici **ISO-3166-A3**, valori **float 0–1.0**, e senza la `get_asset_metadata()` duplicata.
 
 ---
 
+# 🧭 **Phase 5 — Asset Metadata & Classification System + API Integration**
+
+**Durata:** 3–4 giorni 
+**Stato:** 🔴 NOT STARTED
+
+**Obiettivo:**
+Introdurre un sistema avanzato di metadati e classificazione per gli asset, integrato con i provider esterni per l’import automatico e pienamente esposto tramite API REST coerenti con gli altri moduli (design “bulk-first”, validazione Pydantic, query SQL ottimizzate).
+
+---
+
+## **5.1 Database Migration – Asset Metadata Columns**
+
+Aggiungere colonne alla tabella `assets` tramite:
+
+```bash
+./dev.sh db:migrate "add asset metadata and classification"
+```
+
+**Nuove colonne:**
+
+| Campo                   | Tipo              | Descrizione                                       |
+| ----------------------- | ----------------- | ------------------------------------------------- |
+| `investment_type`       | VARCHAR(50) NULL  | Es. `stock`, `etf`, `bond`, `crypto`, `commodity` |
+| `short_description`     | VARCHAR(255) NULL | Breve descrizione leggibile                       |
+| `classification_params` | TEXT NULL (JSON)  | Dati di classificazione estesi                    |
+
+**Struttura JSON consigliata:**
+
+```json
+{
+  "geographic_area": {"USA": 0.65, "DEU": 0.25, "JPN": 0.10},
+  "base_currency": "USD",
+  "sector": "Technology",
+  "custom_tags": ["growth", "large-cap"]
+}
+```
+
+**Regole:**
+
+* `geographic_area` usa **codici ISO-3166-A3** e valori **float 0.0 – 1.0**.
+* Nessuna validazione di schema a livello DB (flessibilità futura).
+* Colonne nullable, nessun backfill iniziale.
+
+---
+
+## **5.2 API Endpoints — Completa**
+
+### **5.2.1 Asset Metadata Management**
+
+| Metodo    | Endpoint                                     | Descrizione                                                                                                            |
+| --------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **PATCH** | `/api/v1/assets/{asset_id}/metadata`         | Aggiorna parzialmente i metadati. Merge dei campi; `null` o `""` azzera. Valida ISO-A3 e float 0–1.0.                  |
+| **GET**   | `/api/v1/assets/{asset_id}`                  | Restituisce asset completo, inclusi `investment_type`, `short_description` e `classification_params` (JSON nativo).    |
+| **GET**   | `/api/v1/assets`                             | Lista asset con campi metadata; filtri opzionali: `?investment_type=etf`, `?base_currency=USD`.                        |
+| **POST**  | `/api/v1/assets/{asset_id}/metadata/refresh` | Re-importa manualmente i metadata dal provider associato (`import_asset_metadata()`). Ignorato nei refresh schedulati. |
+
+---
+
+### **5.2.2 Provider Assignment**
+
+| Metodo     | Endpoint                            | Descrizione                                                                                                                     |
+| ---------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **GET**    | `/api/v1/assets/{asset_id}/scraber` | Ritorna il provider assegnato all’asset.                                                                                        |
+| **POST**   | `/api/v1/assets/scraber/bulk`       | Assegna provider multipli `{asset_id, provider_code, provider_params}`.<br>Chiama `AssetSourceManager.bulk_assign_providers()`. |
+| **DELETE** | `/api/v1/assets/scraber/bulk`       | Rimuove provider assegnati `{asset_id}` o `{asset_id, provider_code}`.<br>Chiama `bulk_remove_providers()`.                     |
+
+**Comportamento:**
+
+* Design **bulk-first** (single = wrapper del bulk).
+* Transazioni uniche per payload.
+* Risposte con risultati per asset: `{asset_id, success, message}`.
+* Dopo un’assegnazione provider riuscita → trigger automatico di `import_asset_metadata()`.
+
+---
+
+### **5.2.3 Asset Price Management**
+
+| Metodo     | Endpoint                              | Descrizione                                                                                       |
+| ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **POST**   | `/api/v1/assets/price/upsert/bulk`    | Upsert multiplo di prezzi giornalieri `{asset_id, prices:[{date, close, ...}]}`. SQL consolidato. |
+| **DELETE** | `/api/v1/assets/price/delete/bulk`    | Cancella prezzi per range `{asset_id, date_ranges:[{start_date, end_date?}]}` (range inclusivo).  |
+| **GET**    | `/api/v1/assets/{asset_id}/price-set` | Restituisce serie storica prezzi o valore sintetico per `SCHEDULED_YIELD`, con `backfill_info`.   |
+
+---
+
+### **5.2.4 FX Management (da Phase 5 old, integrato)**
+
+| Metodo     | Endpoint                   | Descrizione                                                                          |
+| ---------- | -------------------------- | ------------------------------------------------------------------------------------ |
+| **POST**   | `/api/v1/fx/sync/bulk`     | Sincronizzazione automatica; segue `fx_currency_pair_sources` in ordine di priorità. |
+| **POST**   | `/api/v1/fx/rate-set/bulk` | Upsert manuale tassi FX (accetta coppie in qualsiasi ordine).                        |
+| **DELETE** | `/api/v1/fx/rate-set/bulk` | Cancella intervalli di tassi `{base, quote, start_date, end_date?}`.                 |
+| **POST**   | `/api/v1/fx/convert/bulk`  | Conversione valute per data o intervallo (`start_date` obbligatorio).                |
+
+**Regole comuni:**
+
+* Validazione Pydantic + controlli semantici (start ≤ end).
+* Query SQL compatte (multi-row INSERT, DELETE OR/IN).
+* Errori: 400/422 (validazione), 502/503 (provider).
+* Partial success con report per item.
+
+---
+
+## **5.3 Provider Integration — `import_asset_metadata()`**
+
+Interfaccia in `backend/app/services/asset_source.py`:
+
+```python
+def import_asset_metadata(identifier: str, provider_params: dict) -> Optional[dict]:
+    """Importa i metadati dal provider esterno."""
+```
+
+**Implementazioni:**
+
+| Provider                 | Comportamento                                                                                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **YahooFinanceProvider** | Usa `yfinance.info` per estrarre `quoteType` → `investment_type`, `longName` → `short_description`, `sector` + `currency`.<br>Converte `country` in codice **ISO-A3** con `pycountry`. |
+| **CSS Scraper**          | Ritorna `None`.                                                                                                                                                                        |
+| **Scheduled Investment** | Ritorna `None`.                                                                                                                                                                        |
+
+**Nota:** i provider che restituiscono `None` non aggiornano i campi metadata.
+
+---
+
+## **5.4 Auto-Population Workflow**
+
+* Dopo `bulk_assign_providers()` → `provider.import_asset_metadata()`
+
+  * Se ritorna metadati validi → salva in `investment_type`, `short_description`, `classification_params`.
+  * Se `None` → lascia i campi invariati.
+* Endpoint `/metadata/refresh` → eseguito **solo su richiesta utente**.
+* Le modifiche manuali persistono finché l’utente non forza un refresh.
+
+---
+
+## **5.5 Tests**
+
+* ✅ PATCH /metadata — CRUD, merge, clear, validazione ISO-A3 + float.
+* ✅ GET /asset — metadata inclusi nel payload.
+* ✅ Provider import (Yahoo vs CSS/Scheduled).
+* ✅ Auto-populate post-assign.
+* ✅ Refresh manuale ≠ scheduled.
+* ✅ API bulk integration (assign/remove, price upsert/delete, FX range, convert).
+
+---
+
+## **5.6 Documentation**
+
+Aggiornare:
+
+* `docs/api-reference` → nuovi endpoint metadata + refresh.
+* `docs/fx/providers.md` → note su provider senza API key.
+* Swagger (`/docs`) → esempi JSON con ISO-A3 + float 0–1.0.
+* Esempi curl per bulk price/rate/convert.
+
+---
+
+## **🧩 Design & Implementation Notes**
+
+```
+classification_params = JSON TEXT
+geographic_area = ISO-3166-A3 → float 0.0-1.0
+investment_type = VARCHAR (potenziale ENUM futuro)
+base_currency duplicata per query più rapide
+import_asset_metadata() = provider-level
+API = bulk-first, Pydantic, SQL ottimizzate
+CSS/ScheduledInvestment → None
+metadata restituiti direttamente via GET /assets e /assets/{id}
+```
 
 ---
 

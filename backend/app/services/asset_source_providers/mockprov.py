@@ -11,9 +11,9 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
 
+from backend.app.schemas.assets import CurrentValueModel, HistoricalDataModel, PricePointModel
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
-from backend.app.schemas.assets import CurrentValueModel, HistoricalDataModel, PricePointModel
 
 
 @register_provider(AssetProviderRegistry)
@@ -39,8 +39,8 @@ class MockProvider(AssetSourceProvider):
             {
                 'identifier': 'MOCK',
                 'provider_params': None
-            }
-        ]
+                }
+            ]
 
     @property
     def supports_history(self) -> bool:
@@ -65,7 +65,7 @@ class MockProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-    ) -> CurrentValueModel:
+        ) -> CurrentValueModel:
         """
         Return fixed mock current value.
 
@@ -78,7 +78,7 @@ class MockProvider(AssetSourceProvider):
             currency='USD',
             as_of_date=date.today(),
             source=self.provider_name
-        )
+            )
 
     async def get_history_value(
         self,
@@ -86,7 +86,7 @@ class MockProvider(AssetSourceProvider):
         start_date: date,
         end_date: date,
         provider_params: Dict | None = None,
-    ) -> HistoricalDataModel:
+        ) -> HistoricalDataModel:
         """
         Generate mock historical data.
 
@@ -104,22 +104,24 @@ class MockProvider(AssetSourceProvider):
                 close=Decimal('100.00'),
                 volume=None,  # Mock doesn't provide volume
                 currency='USD'
-            ))
+                ))
             current += timedelta(days=1)
 
         return HistoricalDataModel(
             prices=prices,
             currency='USD',
             source=self.provider_name
-        )
+            )
 
     async def search(self, query: str) -> list[dict]:
         """
         Mock search - returns dummy result for any query.
         """
-        return [{
-            "identifier": f"MOCK_{query.upper()}",
-            "display_name": f"Mock Asset: {query}",
-            "currency": "USD",
-            "type": "MOCK"
-        }]
+        return [
+            {
+                "identifier": f"MOCK_{query.upper()}",
+                "display_name": f"Mock Asset: {query}",
+                "currency": "USD",
+                "type": "MOCK"
+                }
+            ]

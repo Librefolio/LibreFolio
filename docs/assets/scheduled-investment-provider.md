@@ -311,7 +311,7 @@ Response:
 
 ### When to Use
 
-If your asset has `valuation_model = SCHEDULED_YIELD` in the database, you **don't need to assign a provider**. The system will automatically use the built-in synthetic yield calculation.
+If your asset has `valuation_model = SCHEDULED_YIELD` in the database, you **don't need to assign a provider manually**. The system will automatically assign the `scheduled_investment` provider with the correct parameters when you first query prices.
 
 ### Asset Model Fields
 
@@ -321,7 +321,7 @@ asset = Asset(
     valuation_model=ValuationModel.SCHEDULED_YIELD,
     face_value=Decimal("10000"),
     currency="EUR",
-    maturity_date=date(2025, 12, 31),
+    maturity_date=date(2026, 12, 31),
     interest_schedule=json.dumps([
         {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
     ]),
@@ -329,9 +329,9 @@ asset = Asset(
 )
 ```
 
-### Automatic Integration
+### Automatic Provider Assignment
 
-When you query prices:
+When you query prices for the first time:
 ```python
 prices = await AssetSourceManager.get_prices(
     asset_id=asset.id,
@@ -343,9 +343,11 @@ prices = await AssetSourceManager.get_prices(
 
 The system automatically:
 1. Detects `valuation_model == SCHEDULED_YIELD`
-2. Calculates values on-demand using `calculate_synthetic_value()`
-3. Returns prices with `backward_fill_info = None` (always exact)
-4. **Does NOT write to database** (ephemeral calculation)
+2. Auto-assigns `scheduled_investment` provider with asset parameters
+3. Delegates to the provider for calculation
+4. Returns prices with `backward_fill_info = None` (always exact)
+
+**Note**: The provider assignment persists in the database for future queries.
 
 ---
 
@@ -578,4 +580,3 @@ For issues, questions, or contributions:
 **Last Updated**: 2025-11-11  
 **Provider Version**: 1.0.0  
 **Status**: ✅ Production Ready
-

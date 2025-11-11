@@ -53,8 +53,8 @@ class YahooFinanceProvider(AssetSourceProvider):
             {
                 'identifier': 'AAPL',
                 'provider_params': None
-            }
-        ]
+                }
+            ]
 
     @property
     def test_search_query(self) -> str | None:
