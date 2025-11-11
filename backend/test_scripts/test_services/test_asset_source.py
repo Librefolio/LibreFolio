@@ -33,9 +33,13 @@ from backend.app.db.models import (
     )
 from backend.app.services.asset_source import (
     AssetSourceManager,
-    calculate_daily_factor_between_act365,
     truncate_price_to_db_precision,
     get_price_column_precision,
+    )
+from backend.app.utils.financial_math import (
+    calculate_daily_factor_between_act365,
+    find_active_rate,
+    calculate_accrued_interest,
     )
 from backend.test_scripts.test_utils import (
     print_error,
@@ -128,6 +132,78 @@ def test_act365_calculation():
         return {"passed": True, "message": f"All {len(test_cases)} ACT/365 test cases passed"}
     except Exception as e:
         print_error(f"Error during ACT/365 test: {e}")
+        return {"passed": False, "message": f"Failed: {str(e)}"}
+
+
+def test_find_active_rate():
+    """Test find_active_rate() for synthetic yield."""
+    print_section("Test 4: Find Active Rate (Synthetic Yield)")
+
+    try:
+        schedule = [
+            {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"},
+            {"start_date": "2026-01-01", "end_date": "2026-12-31", "rate": "0.06"}
+        ]
+        maturity = date(2026, 12, 31)
+        late_interest = {"rate": "0.12", "grace_period_days": 30}
+
+        test_cases = [
+            (date(2025, 6, 15), Decimal("0.05"), "Mid-2025 (first period)"),
+            (date(2026, 6, 15), Decimal("0.06"), "Mid-2026 (second period)"),
+            (date(2026, 12, 31), Decimal("0.06"), "Maturity date"),
+            (date(2027, 1, 15), Decimal("0.06"), "15 days after maturity (grace period)"),
+            (date(2027, 2, 15), Decimal("0.12"), "45 days after maturity (late interest)"),
+        ]
+
+        for target, expected, desc in test_cases:
+            result = find_active_rate(schedule, target, maturity, late_interest)
+            print_info(f"Case: {desc} | expected={expected} | actual={result}")
+            assert result == expected, f"Mismatch for {desc}: {result} != {expected}"
+            print_success(f"✓ {desc} -> {result}")
+
+        return {"passed": True, "message": f"All {len(test_cases)} find_active_rate cases passed"}
+    except Exception as e:
+        print_error(f"Error during find_active_rate test: {e}")
+        return {"passed": False, "message": f"Failed: {str(e)}"}
+
+
+def test_calculate_accrued_interest():
+    """Test calculate_accrued_interest() for synthetic yield."""
+    print_section("Test 5: Calculate Accrued Interest (Synthetic Yield)")
+
+    try:
+        face_value = Decimal("10000")
+        schedule = [
+            {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
+        ]
+        maturity = date(2025, 12, 31)
+        late_interest = None
+
+        # Test: 30 days at 5%
+        start = date(2025, 1, 1)
+        end = date(2025, 1, 30)
+
+        interest = calculate_accrued_interest(
+            face_value=face_value,
+            start_date=start,
+            end_date=end,
+            schedule=schedule,
+            maturity_date=maturity,
+            late_interest=late_interest
+        )
+
+        # Expected: 10000 * 0.05 * (30/365) = 41.0958...
+        expected = Decimal("10000") * Decimal("0.05") * Decimal("30") / Decimal("365")
+        diff = abs(interest - expected)
+
+        print_info(f"Case: 30 days at 5% | expected={expected:.2f} | actual={interest:.2f} | diff={diff:.4f}")
+
+        assert diff < Decimal("0.01"), f"Difference too large: {diff}"
+        print_success(f"✓ Accrued interest calculation OK: {interest:.2f}")
+
+        return {"passed": True, "message": f"Accrued interest calculation passed (diff < 0.01)"}
+    except Exception as e:
+        print_error(f"Error during accrued interest test: {e}")
         return {"passed": False, "message": f"Failed: {str(e)}"}
 
 
@@ -499,6 +575,12 @@ async def run_all_tests():
     helper_act365 = test_act365_calculation()
     print_result_detail("ACT/365 Calculation", helper_act365)
 
+    helper_find_rate = test_find_active_rate()
+    print_result_detail("Find Active Rate", helper_find_rate)
+
+    helper_accrued = test_calculate_accrued_interest()
+    print_result_detail("Calculate Accrued Interest", helper_accrued)
+
     # Run the bulk assign first to retrieve asset_ids for dependent tests
     bulk_assign_result = await test_bulk_assign_providers()
     print_result_detail("Bulk Assign Providers", bulk_assign_result)
@@ -509,6 +591,8 @@ async def run_all_tests():
         "Price Column Precision": helper_price_precision,
         "Price Truncation": helper_truncate,
         "ACT/365 Calculation": helper_act365,
+        "Find Active Rate": helper_find_rate,
+        "Calculate Accrued Interest": helper_accrued,
         "Bulk Assign Providers": bulk_assign_result,
         }
 

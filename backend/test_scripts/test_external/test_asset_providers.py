@@ -99,13 +99,13 @@ async def test_provider_current_value(provider) -> dict:
                 results.append(f"Case {i + 1}: OK - {result.value} {result.currency}")
 
             except AssetSourceError as e:
-                failed.append(f"Case {i + 1}: Provider error - {e.error_code}")
+                failed.append(f"Case {i + 1}: Provider error - {e.message}")
 
         # Check if all cases passed
         if failed:
             return {
                 "passed": False,
-                "message": f"Some cases failed: {', '.join(results)}"
+                "message": f"Some cases failed: {'; '.join(failed)}"
                 }
 
         return {

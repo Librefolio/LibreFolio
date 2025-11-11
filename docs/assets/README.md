@@ -25,6 +25,14 @@ Welcome to the LibreFolio Asset Pricing System documentation.
   - Testing strategies
   - Advanced features (caching, rate limiting, retry logic)
 
+### 🔌 Provider Documentation
+- **[Scheduled Investment Provider](./scheduled-investment-provider.md)** - Synthetic valuation for fixed-income assets
+  - Use cases: crowdfunding loans, bonds, structured products
+  - Parameter configuration (face value, interest schedule, late interest)
+  - Day count convention (ACT/365) and interest calculation (SIMPLE)
+  - API integration examples
+  - Best practices and troubleshooting
+
 ---
 
 ## 🎯 Quick Start

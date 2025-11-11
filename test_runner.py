@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
 """
 LibreFolio Test Runner
 
@@ -20,6 +21,7 @@ Author: LibreFolio Contributors
 """
 
 import argparse
+import argcomplete
 import subprocess
 import sys
 import traceback
@@ -417,6 +419,21 @@ def services_asset_source_refresh(verbose: bool = False) -> bool:
         )
 
 
+def services_synthetic_yield(verbose: bool = False) -> bool:
+    """
+    Test synthetic yield calculation for SCHEDULED_YIELD assets.
+    Tests runtime valuation for crowdfunding loans, bonds, etc.
+    """
+    print_section("Services: Synthetic Yield Calculation")
+    print_info("Testing: SCHEDULED_YIELD asset valuation (ACT/365 SIMPLE interest)")
+    print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_synthetic_yield"],
+        "Synthetic yield tests",
+        verbose=verbose
+        )
+
+
 def services_all(verbose: bool = False) -> bool:
     """
     Run all backend service tests.
@@ -428,6 +445,7 @@ def services_all(verbose: bool = False) -> bool:
     tests = [
         ("FX Conversion Logic", lambda: services_fx_conversion(verbose)),
         ("Asset Source Logic", lambda: services_asset_source(verbose)),
+        ("Synthetic Yield Calculation", lambda: services_synthetic_yield(verbose)),
         # Future: FIFO calculations, portfolio aggregations, etc.
         ]
 
@@ -589,28 +607,9 @@ Test Categories:
   all      - Run ALL tests in optimal order
 
 Examples:
-  # External services tests
-  python test_runner.py external fx-source  # Test all Forex API connection
-  python test_runner.py external asset-providers  # Test all asset pricing providers
-  python test_runner.py external all        # All external tests
-  
-  # Database tests
-  python test_runner.py db create           # Create fresh database
-  python test_runner.py db validate         # Validate schema
-  python test_runner.py db fx-rates         # Test FX rates persistence
-  python test_runner.py db populate         # Populate mock data
-  python test_runner.py db all              # All DB tests
-  
-  # Backend services tests
-  python test_runner.py services fx         # FX conversion logic
-  python test_runner.py services all        # All service tests
-  
-  # API tests (requires server: ./dev.sh server)
-  python test_runner.py api fx              # FX API endpoints
-  python test_runner.py api all             # All API tests
-  
   # Run everything
   python test_runner.py all                 # All tests (optimal order)
+  python test_runner.py -v all              # All tests with all log
   
   # Quick shortcuts via dev.sh
   ./dev.sh test all                         # Run complete test suite
@@ -749,6 +748,10 @@ Test commands:
                          📋 Prerequisites: Database created (run: db create)
                          💡 Runs lightweight refresh orchestration smoke test using a mock provider
   
+  synthetic-yield      - Test synthetic yield calculation for SCHEDULED_YIELD assets
+                         📋 Prerequisites: Database created (run: db create)
+                         💡 Tests: ACT/365 day count, rate lookup, accrued interest, full valuation
+  
   all                   - Run all backend service tests
   
 Future: FIFO calculations, portfolio aggregations, loan schedules will be added here
@@ -758,7 +761,7 @@ Future: FIFO calculations, portfolio aggregations, loan schedules will be added 
 
     services_parser.add_argument(
         "action",
-        choices=["fx", "asset-source", "asset-source-refresh", "all"],
+        choices=["fx", "asset-source", "asset-source-refresh", "synthetic-yield", "all"],
         help="Service test to run"
         )
 
@@ -824,6 +827,8 @@ Expected time: 3-7 minutes (depending on network speed for ECB API)
 def main():
     """Main entry point."""
     parser = create_parser()
+
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
     # If no category provided, show help
@@ -874,6 +879,8 @@ def main():
             success = services_asset_source(verbose=verbose)
         elif args.action == "asset-source-refresh":
             success = services_asset_source_refresh(verbose=verbose)
+        elif args.action == "synthetic-yield":
+            success = services_synthetic_yield(verbose=verbose)
         elif args.action == "all":
             success = services_all(verbose=verbose)
 

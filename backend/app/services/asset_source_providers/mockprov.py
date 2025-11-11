@@ -65,7 +65,6 @@ class MockProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-        session=None
     ) -> CurrentValueModel:
         """
         Return fixed mock current value.
@@ -87,7 +86,6 @@ class MockProvider(AssetSourceProvider):
         start_date: date,
         end_date: date,
         provider_params: Dict | None = None,
-        session=None
     ) -> HistoricalDataModel:
         """
         Generate mock historical data.

@@ -76,7 +76,6 @@ class YahooFinanceProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-        session=None
         ) -> CurrentValueModel:
         """
         Fetch current price from Yahoo Finance.
@@ -86,7 +85,6 @@ class YahooFinanceProvider(AssetSourceProvider):
         Args:
             identifier: Yahoo Finance ticker symbol (e.g., "AAPL", "BTC-USD")
             provider_params: Optional parameters (unused for Yahoo Finance)
-            session: Optional database session (unused - no DB access here)
 
         Returns:
             CurrentValueModel with value, currency, as_of_date, source
@@ -160,7 +158,6 @@ class YahooFinanceProvider(AssetSourceProvider):
         start_date: date,
         end_date: date,
         provider_params: Dict | None = None,
-        session=None
         ) -> HistoricalDataModel:
         """
         Fetch historical OHLC data from Yahoo Finance.
@@ -170,7 +167,6 @@ class YahooFinanceProvider(AssetSourceProvider):
             start_date: Start date (inclusive)
             end_date: End date (inclusive)
             provider_params: Optional parameters (unused)
-            session: Optional database session (unused)
 
         Returns:
             HistoricalDataModel with prices list, currency, source
