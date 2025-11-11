@@ -230,7 +230,7 @@ def truncate_price_to_db_precision(value: Decimal, column_name: str = "close") -
     return value.quantize(quantizer, rounding=ROUND_DOWN)
 
 
-def calculate_days_between_act365(start: date_type, end: date_type) -> Decimal:
+def calculate_daily_factor_between_act365(start: date_type, end: date_type) -> Decimal:
     """
     Calculate day fraction using ACT/365 convention.
 
@@ -242,7 +242,7 @@ def calculate_days_between_act365(start: date_type, end: date_type) -> Decimal:
         Decimal fraction (actual_days / 365)
 
     Example:
-        >>> calculate_days_between_act365(date(2025, 1, 1), date(2025, 1, 31))
+        >>> calculate_daily_factor_between_act365(date(2025, 1, 1), date(2025, 1, 31))
         Decimal("0.082191780821917808")  # 30/365
     """
     actual_days = (end - start).days

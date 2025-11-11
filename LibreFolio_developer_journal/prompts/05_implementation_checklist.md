@@ -1041,13 +1041,135 @@ Results: 3/3 providers passed all tests
 # Completion date
 2025-11-10 18:15 CET ✅
 ```
-TODO:
-- Aggiornare la documentazione su come si creano i provider di asset source, similmente a quanto fatto per i provider FX. Viste le modifiche fatte per la registry e il modo con cui si preparano i parametri di test.
-- aggiungere provider per justEtf
-- Aggiungere provider per borsa italiana (magari con scraping simile a css scraper, ma più specifico per ottenre anche la history e magari la search)
 ---
 
-## Phase 4: Complete Synthetic Yield Implementation (3-4 days) ⚠️ MOST COMPLEX
+## Phase 4: Synthetic Yield Implementation (Refactored as Plugin) (2 days)
+
+**Reference**: [Phase 4 in main doc](./05_plugins_yfinance_css_synthetic_yield.md#phase-4-synthetic-yield-implementation)
+
+**Status**: 🔴 **NOT STARTED** - Pending refactoring decision
+
+**Goal**: Refactor synthetic yield calculation from internal module to standalone plugin following provider interface.
+
+### 4.1 Refactor Synthetic Yield to Plugin Pattern
+
+- [ ] **Move synthetic yield logic to plugin**
+  - Current: Functions in `asset_source.py` (calculate_synthetic_value, ACT/365, etc.)
+  - Target: New plugin `backend/app/services/asset_source_providers/scheduled_investment.py`
+  - Implements: Full `AssetSourceProvider` interface
+  - Use `@register_provider(AssetProviderRegistry)` decorator
+
+- [ ] **Extract common utilities**
+  - Move 'calculate_daily_factor_between_act365' day count to `backend/app/utils/financial_math.py`
+  - Move interest calculations to `backend/app/utils/financial_math.py`
+  - Keep utilities agnostic (no asset-specific logic)
+  - Import in plugin and other providers as needed
+
+- [ ] **Update provider_params structure**
+  - Fields: `principal_value`, `interest_rate`, `start_date`, `day_count_convention`
+  - Optional: `dividends` (list of {date, amount/percentage})
+  - Support: Client-side inverse calculations (UI-driven)
+
+- [ ] **Implement get_current_value()**
+  - Calculate current value based on `principal_value + accrued_interest`
+  - Subtract dividends if configured in `provider_params`
+  - Return `CurrentValueModel` with calculated value
+
+- [ ] **Implement get_history_value()**
+  - Calculate historical values for date range
+  - Apply ACT/365 day count for each date
+  - Return `HistoricalDataModel` with calculated prices
+  - Set `dividend_dates=None` (no dividend support yet)
+
+- [ ] **Remove synthetic yield from asset_source.py**
+  - Delete: `calculate_synthetic_value()`, `find_active_rate()`, `calculate_accrued_interest()`
+  - Keep: Helper functions (`parse_decimal_value`, precision functions)
+  - Update: `get_prices()` to call plugin instead of internal calculation
+
+### 4.2 Update Tests
+
+- [ ] **Update asset_source tests**
+  - Remove: Direct synthetic yield tests (moved to provider tests)
+  - Keep: ACT/365 tests if moved to utils (test in new location)
+  - Verify: `get_prices()` works with scheduled_investment plugin
+
+- [ ] **Create scheduled_investment provider tests**
+  - File: `backend/test_scripts/test_external/test_asset_providers.py`
+  - Test: Current value calculation
+  - Test: Historical value calculation
+  - Test: Dividend handling (if implemented)
+  - Test: Different day count conventions
+
+### 4.3 Update Documentation
+
+- [ ] **Update Phase 4 in main doc**
+  - Document new plugin approach (not internal module)
+  - Add `provider_params` examples
+  - Document utility functions and their location
+
+- [ ] **Update API documentation**
+  - Show how to assign `scheduled_investment` provider
+  - Example `provider_params` for different use cases
+
+**Notes**:
+```
+# Design Decision: Plugin vs Internal Module
+- CURRENT: Synthetic yield is internal module (not a provider)
+- PROPOSED: Refactor to plugin for consistency with other providers
+- BENEFIT: Unified interface, easier testing, better separation of concerns
+- CONSIDERATION: Adds complexity for simple calculation (may not be worth it)
+
+# TODO: Decide if refactoring is necessary
+- Evaluate if current approach (internal module) is sufficient
+- Consider if plugin interface adds value or just complexity
+- Alternative: Keep as internal but improve documentation
+```
+
+## Phase 4 old: Generic Provider Tests (1 day) - Da integrare con sopra
+
+**Reference**: [Phase 2 Test section in main doc](./05_plugins_yfinance_css_synthetic_yield.md#test-backendtest_scriptstest_servicestest_asset_providerspy)
+
+- [ ] **Create test_asset_providers.py**
+  - File: `backend/test_scripts/test_services/test_asset_providers.py`
+  - Pattern: Similar to `test_external/test_fx_providers.py`
+
+- [ ] **Implement test discovery**
+  - Use `AssetProviderRegistry.list_providers()` to get all registered
+  - Iterate over each provider and run uniform tests
+
+- [ ] **Implement uniform test functions**
+  - `test_provider_metadata(provider)` → verify provider_code, provider_name
+  - `test_provider_current_value(provider)` → with test_identifier if available
+  - `test_provider_history(provider)` → 7 days range
+  - `test_provider_search(provider)` → if supports_search
+  - `test_provider_errors(provider)` → error handling
+
+- [ ] **Run for each provider**
+  - yfinance: All tests with AAPL ticker
+  - CSS scraper: Metadata, errors (skip current/history without URL)
+
+- [ ] **Run tests**
+  - Run: `pipenv run python -m backend/test_scripts.test_services.test_asset_providers`
+
+**Notes**:
+```
+# This replaces individual test files per provider
+# All providers tested uniformly
+# Synthetic yield is NOT a provider - tested in test_pricing.py
+
+# Test results
+
+
+# Issues encountered
+
+
+# Completion date
+
+```
+
+---
+
+## Phase 4 old old: Complete Synthetic Yield Implementation (3-4 days) ⚠️ MOST COMPLEX - DA integrare con sopra
 
 **Reference**: [Phase 4 in main doc](./05_plugins_yfinance_css_synthetic_yield.md#phase-4-complete-synthetic-yield-implementation-3-4-giorni--most-complex)
 
@@ -1147,51 +1269,147 @@ TODO:
 
 ---
 
-## Phase 4: Generic Provider Tests (1 day)
+## Phase 5: Asset Metadata & Classification System (3-4 days)
 
-**Reference**: [Phase 2 Test section in main doc](./05_plugins_yfinance_css_synthetic_yield.md#test-backendtest_scriptstest_servicestest_asset_providerspy)
+**Status**: 🔴 **NOT STARTED** - Database schema changes required
 
-- [ ] **Create test_asset_providers.py**
-  - File: `backend/test_scripts/test_services/test_asset_providers.py`
-  - Pattern: Similar to `test_external/test_fx_providers.py`
+**Goal**: Add rich metadata and classification system to assets, with plugin integration for auto-population.
 
-- [ ] **Implement test discovery**
-  - Use `AssetProviderRegistry.list_providers()` to get all registered
-  - Iterate over each provider and run uniform tests
+### 5.1 Database Migration: Asset Metadata Columns
 
-- [ ] **Implement uniform test functions**
-  - `test_provider_metadata(provider)` → verify provider_code, provider_name
-  - `test_provider_current_value(provider)` → with test_identifier if available
-  - `test_provider_history(provider)` → 7 days range
-  - `test_provider_search(provider)` → if supports_search
-  - `test_provider_errors(provider)` → error handling
+- [ ] **Create migration file**
+  - Command: `./dev.sh db:migrate "add asset metadata and classification"`
+  - Table: `assets` (add columns)
+  - New columns:
+    - `investment_type` VARCHAR(50) NULL - e.g., 'stock', 'etf', 'bond', 'crypto', 'commodity'
+    - `short_description` VARCHAR(255) NULL - human-readable short description
+    - `classification_params` TEXT NULL - JSON with classification data
+  - JSON structure for `classification_params`:
+    ```json
+    {
+      "geographic_area": {
+        "USA": 650,    // 65.0% (0-1000 scale)
+        "Europe": 250, // 25.0%
+        "Asia": 100    // 10.0%
+      },
+      "base_currency": "USD",
+      "sector": "Technology",
+      "custom_tags": ["growth", "large-cap"]
+    }
+    ```
 
-- [ ] **Run for each provider**
-  - yfinance: All tests with AAPL ticker
-  - CSS scraper: Metadata, errors (skip current/history without URL)
+- [ ] **Update Asset model**
+  - File: `backend/app/db/models.py`
+  - Add three new columns to `Asset` class
+  - Add SQLAlchemy relationship/hybrid properties if needed
 
-- [ ] **Run tests**
-  - Run: `pipenv run python -m backend/test_scripts.test_services.test_asset_providers`
+- [ ] **Apply migration**
+  - Test DB: `./dev.sh db:upgrade backend/data/sqlite/test_app.db`
+  - Prod DB: `./dev.sh db:upgrade backend/data/sqlite/app.db`
+
+- [ ] **Verify schema validation**
+  - Run: `./test_runner.py db validate`
+
+### 5.2 API Endpoints for Metadata Management
+
+- [ ] **Create PATCH endpoint for partial updates**
+  - Endpoint: `PATCH /api/v1/assets/{asset_id}/metadata`
+  - Request body: `{"investment_type": "etf", "classification_params": {...}}`
+  - Behavior: Partial update (merge), null/empty string clears field
+  - Response: Updated asset with new metadata
+  - Validation: JSON schema validation for `classification_params`
+
+- [ ] **Update GET endpoint**
+  - Endpoint: `GET /api/v1/assets/{asset_id}`
+  - Response: Include new metadata fields in asset object
+  - Format: `classification_params` as nested JSON (not string)
+
+- [ ] **Update LIST endpoint**
+  - Endpoint: `GET /api/v1/assets`
+  - Response: Include metadata fields in asset list
+  - Optional filters: `?investment_type=etf`, `?base_currency=USD`
+
+### 5.3 Provider Integration: get_asset_metadata()
+
+- [ ] **Add method to AssetSourceProvider interface**
+  - File: `backend/app/services/asset_source.py`
+  - Method: `get_asset_metadata(identifier: str, provider_params: dict) -> Optional[dict]`
+  - Return format:
+    ```python
+    {
+      "investment_type": "stock",
+      "short_description": "Apple Inc. - Technology",
+      "classification_params": {
+        "geographic_area": {"USA": 1000},
+        "base_currency": "USD",
+        "sector": "Technology"
+      }
+    }
+    ```
+  - Optional: Return `None` if provider doesn't support metadata
+
+- [ ] **Implement in YahooFinanceProvider**
+  - Use yfinance `.info` to extract:
+    - `quoteType` → `investment_type`
+    - `longName` / `shortName` → `short_description`
+    - `sector`, `currency` → `classification_params`
+  - Map geographic area if available (country → geographic_area)
+
+- [ ] **Implement in other providers**
+  - CSS Scraper: Return `None` (not supported)
+  - Scheduled Investment: Return metadata from `provider_params` if available
+
+### 5.4 Auto-Population Workflow
+
+- [ ] **Trigger on asset creation**
+  - When: User assigns provider to asset (POST `/assets/{id}/provider`)
+  - Action: Call `provider.get_asset_metadata()` and save to DB
+  - Fallback: If provider returns `None`, leave fields empty
+
+- [ ] **Manual refresh command**
+  - Endpoint: `POST /api/v1/assets/{asset_id}/metadata/refresh`
+  - Action: Re-call `provider.get_asset_metadata()` and update DB
+  - User intention: "I want fresh metadata from provider"
+  - Important: Only triggered manually, NOT in scheduled refresh jobs
+
+- [ ] **User override persistence**
+  - User-edited metadata PERSISTS across refreshes
+  - Manual refresh ONLY triggered by explicit user action
+  - Document workflow in API docs
+
+### 5.5 Tests
+
+- [ ] **Test metadata CRUD**
+  - Test: PATCH endpoint updates fields correctly
+  - Test: Null/empty string clears field
+  - Test: GET returns updated metadata
+  - Test: Invalid JSON in `classification_params` rejected
+
+- [ ] **Test provider metadata extraction**
+  - Test: YahooFinanceProvider returns valid metadata
+  - Test: Providers without metadata return `None`
+  - Test: Metadata saved to DB on provider assignment
+
+- [ ] **Test refresh workflow**
+  - Test: Manual refresh updates metadata from provider
+  - Test: Scheduled refresh does NOT overwrite user changes
+  - Test: User edits persist after refresh
 
 **Notes**:
 ```
-# This replaces individual test files per provider
-# All providers tested uniformly
-# Synthetic yield is NOT a provider - tested in test_pricing.py
+# Design Decisions
+- classification_params is JSON TEXT column (flexible, no schema enforcement at DB level)
+- geographic_area uses 0-1000 scale (allows percentages with 1 decimal precision)
+- base_currency separate from classification_params for easier querying
+- investment_type is enum-like VARCHAR (could be foreign key in future)
 
-# Test results
-
-
-# Issues encountered
-
-
-# Completion date
-
+# Migration Strategy
+- Add columns as nullable (no default values)
+- Existing assets have NULL metadata (to be populated manually or via provider)
+- No data backfill migration (too complex, user-driven instead)
 ```
 
----
-
-## Phase 5: API Endpoints & Integration (2 days)
+## Phase 5 old: API Endpoints & Integration (2 days) - Da integrare con sopra
 
 Goal: expose provider assignment and pricing features via REST with consistent bulk-oriented endpoints, clear validation, and minimal DB work. Keep parity with FX endpoints naming (use `/bulk` suffix), and implement deletion-by-range semantics for manual rate/price deletion.
 
@@ -1288,7 +1506,484 @@ pipenv run python -m backend.test_scripts.test_api.test_assets_api
 
 ---
 
-## Phase 6: Documentation, Guides and Developer Notes (1 day)
+
+---
+
+## Phase 6: Advanced Provider Implementations (4-5 days)
+
+**Status**: 🔴 **NOT STARTED** - Requires Phase 3 completion
+
+**Goal**: Implement additional specialized providers with advanced features (dividend history, search, metadata extraction).
+
+### 6.1 JustETF Provider
+
+- [ ] **Create justEtf.py**
+  - File: `backend/app/services/asset_source_providers/just_etf.py`
+  - Base URL: `https://www.justetf.com/en/etf-profile.html?isin=<ISIN>`
+  - Use `@register_provider(AssetProviderRegistry)` decorator
+
+- [ ] **Implement provider_code and metadata**
+  - Code: `justetf`
+  - Name: "JustETF"
+  - Description: "European ETF data from JustETF"
+  - Supports search: `True`
+  - Test identifier: Valid ISIN (e.g., `IE00B4L5Y983` - iShares Core MSCI World)
+
+- [ ] **Implement get_current_value()**
+  - Scrape current NAV (Net Asset Value) from ETF page
+  - CSS selector: Research and document
+  - Parse currency (usually EUR)
+  - Return `CurrentValueModel`
+
+- [ ] **Implement get_history_value()**
+  - Check if historical data available via API/scraping
+  - If not available: Return empty `HistoricalDataModel` with message
+  - Document limitations in provider docstring
+
+- [ ] **Implement search()**
+  - Query: Search ETFs by name or ISIN
+  - Base URL: `https://www.justetf.com/en/find-etf.html?query=<query>`
+  - Parse results and return list of ISINs with metadata
+  - Cache results for 10 minutes
+
+- [ ] **Implement get_asset_metadata()**
+  - Extract: ETF name, region, sector, TER (Total Expense Ratio)
+  - Map to `classification_params`: geographic area, sector
+  - Set `investment_type = "etf"`
+  - Set `base_currency` from NAV currency
+
+- [ ] **Add test configuration**
+  - Property: `test_config` returns list of test cases
+  - Include: Valid ISIN, provider_params, expected results
+  - Example: Borsa Italiana BTP (see below)
+
+### 6.2 Borsa Italiana Provider
+
+- [ ] **Create borsa_italiana.py**
+  - File: `backend/app/services/asset_source_providers/borsa_italiana.py`
+  - Base URL: `https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/<ISIN>.html`
+  - Use `@register_provider(AssetProviderRegistry)` decorator
+
+- [ ] **Implement provider_code and metadata**
+  - Code: `borsa_italiana`
+  - Name: "Borsa Italiana"
+  - Description: "Italian bonds and stocks from Borsa Italiana"
+  - Supports search: `True` (if possible)
+  - Test identifier: `IT0005634800` (BTP bond)
+
+- [ ] **Implement get_current_value()**
+  - Scrape current price from bond/stock page
+  - CSS selector: `.summary-value strong` (first element is price)
+  - Support both English and Italian pages:
+    - English: `?lang=en` - US decimal format (`100.39`)
+    - Italian: `?lang=it` - EU decimal format (`100,39`)
+  - Parse decimal format based on URL lang parameter
+  - Provider params include: `decimal_format` ("us" or "eu")
+  - Return `CurrentValueModel` with EUR currency
+
+- [ ] **Implement get_history_value()**
+  - Research: Check if historical data available on page
+  - Option 1: Scrape table/chart data if present
+  - Option 2: Make additional API call if available
+  - Parse dividend dates if available (for bonds: coupon payment dates)
+  - Return `HistoricalDataModel` with `dividend_dates` list
+
+- [ ] **Implement search()**
+  - Query: Search by ISIN or name
+  - Base URL: Research Borsa Italiana search endpoint
+  - Parse results and return list of ISINs/URLs
+  - Include metadata (name, type, currency)
+
+- [ ] **Implement get_asset_metadata()**
+  - Extract: Bond/stock name, issuer, maturity date (for bonds)
+  - Set `investment_type`: "bond" or "stock"
+  - Set `base_currency`: "EUR"
+  - Set `classification_params`: {"geographic_area": {"Italy": 1000}}
+
+- [ ] **Add test configuration**
+  - Property: `test_config` returns list of test cases
+
+[//]: # (TODO: rifare i 2 test sotto con i nuovi parametri che sarà necessario passare una volta creato il plugin di borsa italiana, probabilemnte solo l'ISIN e non l'url completo)
+  - Test case 1: BTP bond with English URL
+    ```python
+    {
+      'identifier': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en',
+      'provider_params': {
+        'current_css_selector': '.summary-value strong',
+        'currency': 'EUR',
+        'decimal_format': 'us'
+      }
+    }
+    ```
+  - Test case 2: BTP bond with Italian URL
+    ```python
+    {
+      'identifier': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=it',
+      'provider_params': {
+        'current_css_selector': '.summary-value strong',
+        'currency': 'EUR',
+        'decimal_format': 'eu'
+      }
+    }
+    ```
+
+### 6.3 Enhanced get_history() with Dividend Dates
+
+- [ ] **Update AssetSourceProvider interface**
+  - Method: `get_history_value()` returns `HistoricalDataModel`
+  - Add field to `HistoricalDataModel`: `dividend_dates: Optional[List[date]]`
+  - `None` if provider doesn't support dividend tracking
+  - Empty list `[]` if no dividends in period
+  - List of dates if dividends found
+
+- [ ] **Update YahooFinanceProvider**
+  - Use yfinance `.dividends` to get dividend history
+  - Filter dates within requested range
+  - Add to `HistoricalDataModel` response
+  - Test: Verify dividend dates match Yahoo Finance data
+
+- [ ] **Update CSSScraperProvider**
+  - Return `dividend_dates=None` (not supported)
+  - Document in provider docstring
+
+- [ ] **Update BorsaItalianaProvider**
+  - Research: Check if coupon payment dates available
+  - If available: Parse and return in `dividend_dates`
+  - If not: Return `None`
+
+- [ ] **Update API response schema**
+  - File: `backend/app/schemas/assets.py`
+  - Add `dividend_dates` to `HistoricalDataModel`
+  - Document format: List of ISO date strings or `null`
+
+- [ ] **Update tests**
+  - Test: YahooFinanceProvider returns dividend dates
+  - Test: Providers without support return `None`
+  - Test: API endpoint includes `dividend_dates` in response
+
+**Notes**:
+```
+# Borsa Italiana Test Case
+- BTP bond: IT0005634800
+- English URL: https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en
+- Italian URL: https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=it
+- CSS selector: .summary-value strong
+- Expected format (EN): "100.39" (US decimal)
+- Expected format (IT): "100,39" (EU decimal)
+
+# Dividend Dates Feature
+- Purpose: Track dividend/coupon payment dates for portfolio analysis
+- Provider support: Optional (return None if not available)
+- API response: Include in historical data response
+- Future use: Calculate dividend yield, forecast future payments
+```
+
+---
+
+## Phase 7: Search & Cache System (3-4 days)
+
+**Status**: 🔴 **NOT STARTED** - Requires infrastructure planning
+
+**Goal**: Implement unified search and caching system for asset provider queries with fuzzy matching and automatic cache management.
+
+### 7.1 Cache Infrastructure
+
+- [ ] **Create cache utility module**
+  - File: `backend/app/utils/search_cache.py`
+  - Class: `SearchCache` (generic, reusable)
+  - Storage: In-memory dict (or Redis in future)
+  - TTL: Configurable per entry (default: 10 minutes)
+  - Thread-safe: Use asyncio locks for concurrent access
+
+- [ ] **Implement cache methods**
+  - Method: `set(key: str, value: Any, ttl: int)` - Store with TTL
+  - Method: `get(key: str) -> Optional[Any]` - Retrieve if not expired
+  - Method: `fuzzy_search(query: str, max_results: int) -> List[Tuple[str, Any, float]]`
+    - Returns: List of (key, value, similarity_score)
+    - Algorithm: Use `difflib.SequenceMatcher` for fuzzy matching
+  - Method: `cleanup_expired()` - Remove expired entries
+  - Method: `clear()` - Remove all entries
+
+- [ ] **Implement TTL tracking**
+  - Store: `{key: (value, expiry_timestamp)}`
+  - Check: Compare current time with expiry on retrieval
+  - Cleanup: Scheduled task removes expired entries
+
+### 7.2 Search Service Layer
+
+- [ ] **Create search service**
+  - File: `backend/app/services/asset_search.py`
+  - Class: `AssetSearchService`
+  - Uses: `SearchCache` + `AssetProviderRegistry`
+
+- [ ] **Implement unified search method**
+  - Method: `search_assets(query: str, providers: List[str] = None) -> dict`
+  - Flow:
+    1. Fuzzy search in cache (fast, local)
+    2. If no exact match: Query all providers (or specified list)
+    3. Merge results (deduplicate by identifier)
+    4. Add new results to cache
+    5. Return: `{"cached": [...], "remote": [...], "merged": [...]}`
+  - Concurrency: Use `asyncio.gather()` for parallel provider calls
+
+- [ ] **Implement cache management**
+  - Method: `cleanup_expired_entries()` - Manual cleanup
+  - Scheduled: Background task via scheduler (see Phase 8)
+  - Configuration: TTL threshold from config/env variable
+
+- [ ] **Implement search result schema**
+  - Schema: `AssetSearchResult`
+  - Fields: `identifier`, `name`, `provider_code`, `provider_params`, `metadata`, `source` (cached/remote)
+  - Response: List of `AssetSearchResult` objects
+
+### 7.3 Provider Search Interface
+
+- [ ] **Update AssetSourceProvider interface**
+  - Method: `search(query: str) -> List[dict]` (already exists, formalize contract)
+  - Return format:
+    ```python
+    [
+      {
+        "identifier": "AAPL",  # or URL, ISIN, etc.
+        "name": "Apple Inc.",
+        "provider_params": {"ticker": "AAPL"},  # Ready to use in assignment
+        "metadata": {  # Optional extra info
+          "exchange": "NASDAQ",
+          "currency": "USD"
+        }
+      }
+    ]
+    ```
+  - Each provider implements search independently (no shared state)
+
+- [ ] **Verify all providers implement search**
+  - YahooFinanceProvider: Search by ticker/company name ✅
+  - CSSScraperProvider: Not supported (return empty list or raise NotImplementedError)
+  - JustETFProvider: Search by ISIN/name
+  - BorsaItalianaProvider: Search by ISIN/name
+  - ScheduledInvestmentProvider: Not supported
+
+### 7.4 API Endpoint
+
+- [ ] **Create unified search endpoint**
+  - Endpoint: `GET /api/v1/assets/search?q=<query>&providers=<csv>`
+  - Query params:
+    - `q`: Search query (required)
+    - `providers`: Comma-separated provider codes (optional, default: all)
+  - Response:
+    ```json
+    {
+      "query": "Apple",
+      "cached_results": 2,
+      "remote_results": 5,
+      "results": [
+        {
+          "identifier": "AAPL",
+          "name": "Apple Inc.",
+          "provider": "yfinance",
+          "provider_params": {"ticker": "AAPL"},
+          "source": "cached"
+        }
+      ]
+    }
+    ```
+
+- [ ] **Add cache status endpoint**
+  - Endpoint: `GET /api/v1/assets/search/cache/status`
+  - Response: `{"entries": 123, "expired": 5, "total_size_kb": 456}`
+
+- [ ] **Add cache cleanup endpoint**
+  - Endpoint: `POST /api/v1/assets/search/cache/cleanup`
+  - Action: Trigger `cleanup_expired_entries()`
+  - Response: `{"deleted": 5}`
+
+### 7.5 Tests
+
+- [ ] **Test cache functionality**
+  - Test: Store and retrieve with TTL
+  - Test: Expired entries not returned
+  - Test: Fuzzy search matches similar queries
+  - Test: Cleanup removes expired entries
+
+- [ ] **Test search service**
+  - Test: Unified search returns cached + remote results
+  - Test: Results merged and deduplicated
+  - Test: Parallel provider calls work correctly
+  - Test: Cache updated with new results
+
+- [ ] **Test API endpoints**
+  - Test: Search endpoint returns results
+  - Test: Provider filtering works
+  - Test: Cache status accurate
+  - Test: Cleanup endpoint works
+
+**Notes**:
+```
+# Design Decisions
+- In-memory cache: Simple, fast, sufficient for single-instance deployment
+- Fuzzy matching: difflib.SequenceMatcher (no external deps)
+- Provider independence: Each provider implements search, no shared state
+- Cache key: Hash of (query, provider_code) for uniqueness
+
+# Future Enhancements
+- Redis cache: For multi-instance deployments
+- Advanced fuzzy matching: Use libraries like fuzzywuzzy, rapidfuzz
+- Cache persistence: Save to disk on shutdown, reload on startup
+- Cache statistics: Track hit/miss rates, popular queries
+```
+
+---
+
+## Phase 8: Documentation & Developer Guides (2-3 days)
+
+**Status**: 🔴 **NOT STARTED** - Should be done at end
+
+**Goal**: Comprehensive documentation for asset provider system, including developer guides, API reference, and integration examples.
+
+### 8.1 Asset Provider Development Guide
+
+- [ ] **Create provider-development.md**
+  - File: `docs/assets/provider-development.md`
+  - Based on: `docs/fx/provider-development.md` (similar structure)
+  - Sections:
+    1. Overview & Architecture
+    2. Provider Interface Reference
+    3. Step-by-Step Implementation Guide
+    4. Testing Your Provider
+    5. Registration & Auto-Discovery
+    6. Best Practices & Common Pitfalls
+
+- [ ] **Add code examples**
+  - Minimal provider example
+  - Full-featured provider (with search, metadata)
+  - Test configuration examples
+  - `provider_params` structures for different use cases
+
+- [ ] **Document registration system**
+  - Explain `@register_provider(AssetProviderRegistry)` decorator
+  - Show auto-discovery process
+  - Explain how to verify registration
+
+- [ ] **Document test_config property**
+  - Show how to define test cases
+  - Explain structure: `[{"identifier": ..., "provider_params": {...}}, ...]`
+  - Give examples for different provider types
+
+### 8.2 API Reference Documentation
+
+- [ ] **Update API documentation**
+  - File: `docs/api-reference.md` or OpenAPI spec
+  - Document all asset-related endpoints:
+    - Provider discovery (`GET /asset-providers`)
+    - Provider search (`GET /asset-providers/{code}/search`)
+    - Provider assignment (bulk + single)
+    - Price management (bulk CRUD + query)
+    - Metadata management (`PATCH /assets/{id}/metadata`)
+    - Metadata refresh (`POST /assets/{id}/metadata/refresh`)
+    - Search & cache endpoints
+
+- [ ] **Add request/response examples**
+  - Show realistic payloads for each endpoint
+  - Include error responses and validation messages
+  - Show bulk operation examples (3+ items)
+
+- [ ] **Document query parameters**
+  - Date formats, filters, pagination
+  - Provider-specific parameters
+  - Optional vs required fields
+
+### 8.3 Integration & Workflow Guides
+
+- [ ] **Create asset-management-workflow.md**
+  - File: `docs/assets/workflow.md`
+  - Sections:
+    1. Asset Lifecycle (creation → provider assignment → price refresh → metadata)
+    2. Provider Assignment Workflow
+    3. Manual Price Management
+    4. Automatic Price Refresh
+    5. Metadata Population & Override
+    6. Search & Discovery
+
+- [ ] **Add diagrams**
+  - Provider selection flowchart
+  - Price refresh sequence diagram
+  - Metadata population workflow
+  - Search & cache interaction
+
+- [ ] **Document common scenarios**
+  - "How to add a new stock to portfolio"
+  - "How to switch provider for an asset"
+  - "How to manually correct prices"
+  - "How to populate metadata from provider"
+
+### 8.4 Update Existing Documentation
+
+- [ ] **Update README.md**
+  - Add asset provider system to features list
+  - Link to new documentation files
+  - Update architecture overview
+
+- [ ] **Update database-schema.md**
+  - Document `asset_provider_assignments` table
+  - Document new asset metadata columns
+  - Show relationships and constraints
+
+- [ ] **Update testing-guide.md**
+  - Add asset provider tests to test suite
+  - Document how to run provider-specific tests
+  - Show test coverage reporting
+
+### 8.5 Code Documentation
+
+- [ ] **Add comprehensive docstrings**
+  - All public methods in `AssetSourceProvider`
+  - All methods in `AssetSourceManager`
+  - All provider implementations
+  - All API endpoints
+
+- [ ] **Add inline comments**
+  - Complex logic (backward-fill, synthetic yield)
+  - Provider-specific quirks
+  - Performance optimizations
+
+- [ ] **Add type hints**
+  - Verify all methods have proper type annotations
+  - Add missing annotations where needed
+  - Use `Optional`, `List`, `Dict` consistently
+
+### 8.6 Migration & Upgrade Guides
+
+- [ ] **Document migration from old plugin system**
+  - Old: `current_data_plugin_key` in assets table
+  - New: `asset_provider_assignments` table
+  - Show migration SQL if needed
+
+- [ ] **Document breaking changes**
+  - API endpoint changes (if any)
+  - Schema changes
+  - Provider interface changes
+
+**Notes**:
+```
+# Documentation Priorities
+1. Provider development guide (most important for extensibility)
+2. API reference (needed for frontend integration)
+3. Workflow guides (helps users understand system)
+4. Code documentation (helps maintainability)
+
+# Style Guide
+- Use same structure as FX documentation (consistency)
+- Include code examples for all concepts
+- Add diagrams where helpful (mermaid or ASCII)
+- Link between related docs (cross-reference)
+```
+
+---
+
+
+
+
+## Phase 6 old, new phase 8: Documentation, Guides and Developer Notes (1 day) - Da integrare con sopra
 
 **Goal**: Update docs to reflect new architecture, plugin registry behavior, API changes and developer workflows.
 
@@ -1305,29 +2000,9 @@ pipenv run python -m backend.test_scripts.test_api.test_assets_api
 - [ ] Update changelog: short notes about migrating plugin columns into `asset_provider_assignments` and removing plugin_* fields from `assets`.
 
 
-## Phase 7: Migrations maintenance & Squash (manual step, careful) (1 day)
+## Phase 7: Migrations maintenance & Squash (manual step, careful) (0 day)
 
-**Goal**: Produce a single consolidated baseline revision for the schema (development convenience). This step is destructive for migration history; perform only after agreement and backups.
-
-Options considered:
-- Option A: Use Alembic's "stamp" workflow + one new baseline revision that recreates the full schema SQL.
-- Option B: Generate a single initial migration file that contains the full CREATE TABLE statements (what we want) and retire previous versions.
-
-Recommended safe approach (manual but reproducible):
-1. Create a branch and tag the current migration head(s).
-2. Ensure working databases are backed up (both `app.db` and `test_app.db`).
-3. Create a new revision file `000_base_squash.py` (autogenerate will not include CHECK constraints reliably) but include hand-edited SQL reflecting current models; include explicit CHECK constraints and indexes.
-4. Run tests against a freshly deleted DB to validate the new single revision (do `./dev.sh db:upgrade backend/data/sqlite/test_app.db`).
-5. If OK, replace `alembic/versions/*` with the single file and `alembic_version` content updated (or instruct CI to run `alembic stamp head` when deploying).
-
-**Checklist**:
-- [ ] Backups created
-- [ ] New `000_base_squash.py` created and reviewed
-- [ ] Test DB recreated and validated
-- [ ] Developers informed and docs updated (`docs/alembic-squash-guide.md`)
-
-**Caveats**: If you use CI that expects previous migrations, coordinate before removing old revisions.
-
+Non migrare e sqashare ora, verrà fatto più avanti, quando aumenteranno le versioni
 
 ## Phase 8: Final QA, Release Prep and Handover (1-2 days)
 

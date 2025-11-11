@@ -3112,9 +3112,479 @@ pipenv install yfinance beautifulsoup4
 
 ---
 
+## Phase 5: Asset Metadata & Classification System (3-4 giorni)
+
+**Goal**: Add rich metadata and classification system to assets, with plugin integration for auto-population.
+
+### Database Schema Changes
+
+Add to `assets` table:
+- `investment_type` VARCHAR(50) NULL - e.g., 'stock', 'etf', 'bond', 'crypto', 'commodity'
+- `short_description` VARCHAR(255) NULL - human-readable short description
+- `classification_params` TEXT NULL - JSON with classification data
+
+JSON structure for `classification_params`:
+```json
+{
+  "geographic_area": {
+    "USA": 650,    // 65.0% (0-1000 scale)
+    "Europe": 250, // 25.0%
+    "Asia": 100    // 10.0%
+  },
+  "base_currency": "USD",
+  "sector": "Technology",
+  "custom_tags": ["growth", "large-cap"]
+}
+```
+
+### API Endpoints
+
+**PATCH /api/v1/assets/{asset_id}/metadata**
+- Partial update (merge), null/empty string clears field
+- JSON schema validation for `classification_params`
+- Response: Updated asset with new metadata
+
+**GET /api/v1/assets/{asset_id}**
+- Include new metadata fields in response
+- Format `classification_params` as nested JSON (not string)
+
+**GET /api/v1/assets**
+- Include metadata in list
+- Optional filters: `?investment_type=etf`, `?base_currency=USD`
+
+### Provider Integration: get_asset_metadata()
+
+Add method to `AssetSourceProvider` interface:
+```python
+def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional[dict]:
+    """
+    Extract asset metadata from provider.
+    
+    Returns:
+    {
+      "investment_type": "stock",
+      "short_description": "Apple Inc. - Technology",
+      "classification_params": {
+        "geographic_area": {"USA": 1000},
+        "base_currency": "USD",
+        "sector": "Technology"
+      }
+    }
+    
+    Returns None if provider doesn't support metadata extraction.
+    """
+```
+
+### Auto-Population Workflow
+
+**Trigger points**:
+1. **Asset creation**: When user assigns provider (POST `/assets/{id}/provider`)
+   - Automatically call `provider.get_asset_metadata()` and save to DB
+   - Fallback: If provider returns `None`, leave fields empty
+
+2. **Manual refresh**: POST `/api/v1/assets/{asset_id}/metadata/refresh`
+   - User explicitly requests fresh metadata from provider
+   - Re-call `provider.get_asset_metadata()` and update DB
+   - **Important**: Only triggered manually, NOT in scheduled refresh jobs
+
+**User override persistence**:
+- User-edited metadata PERSISTS across refreshes
+- Manual refresh ONLY triggered by explicit user action (not scheduled jobs)
+- Allows users to customize metadata without provider overwriting
+
+### Implementation Examples
+
+**YahooFinanceProvider**:
+```python
+def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional[dict]:
+    """Extract metadata from yfinance .info"""
+    try:
+        ticker = yf.Ticker(identifier)
+        info = ticker.info
+        
+        return {
+            "investment_type": info.get('quoteType', '').lower(),  # equity, etf, etc.
+            "short_description": info.get('longName', info.get('shortName', '')),
+            "classification_params": {
+                "geographic_area": self._extract_geographic_area(info),
+                "base_currency": info.get('currency', 'USD'),
+                "sector": info.get('sector', '')
+            }
+        }
+    except Exception as e:
+        logger.warning(f"Failed to extract metadata for {identifier}: {e}")
+        return None
+```
+
+**CSSScraperProvider**:
+```python
+def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional[dict]:
+    """CSS scraper doesn't support metadata extraction"""
+    return None
+```
+
+### Design Notes
+
+- `classification_params` is JSON TEXT column (flexible schema)
+- `geographic_area` uses 0-1000 scale (allows percentages with 0.1% precision)
+- `base_currency` separate from `classification_params` for easier querying
+- `investment_type` is enum-like VARCHAR (could be foreign key in future)
+- Existing assets have NULL metadata (to be populated manually or via provider)
+
+---
+
+## Phase 6: Advanced Provider Implementations (4-5 giorni)
+
+**Goal**: Implement additional specialized providers with advanced features (dividend history, search, metadata extraction).
+
+### JustETF Provider
+
+**File**: `backend/app/services/asset_source_providers/just_etf.py`
+
+**Features**:
+- Base URL: `https://www.justetf.com/en/etf-profile.html?isin=<ISIN>`
+- Provider code: `justetf`
+- Supports: Current NAV, metadata extraction, search by ISIN/name
+- Test identifier: `IE00B4L5Y983` (iShares Core MSCI World)
+
+**Metadata extraction**:
+- ETF name, region, sector, TER (Total Expense Ratio)
+- Maps to `classification_params`: geographic area, sector
+- Sets `investment_type = "etf"`
+
+### Borsa Italiana Provider
+
+**File**: `backend/app/services/asset_source_providers/borsa_italiana.py`
+
+**Features**:
+- Base URL: `https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/<ISIN>.html`
+- Provider code: `borsa_italiana`
+- Supports: Current price, historical data, dividend/coupon dates, search
+- Test identifier: `IT0005634800` (BTP bond)
+
+**Decimal format support**:
+- English URL (`?lang=en`): US format `100.39` (decimal point)
+- Italian URL (`?lang=it`): EU format `100,39` (decimal comma)
+- Provider params include: `decimal_format` ("us" or "eu")
+
+**Test configuration**:
+```python
+test_config = [
+    {
+        'identifier': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en',
+        'provider_params': {
+            'current_css_selector': '.summary-value strong',
+            'currency': 'EUR',
+            'decimal_format': 'us'
+        }
+    },
+    {
+        'identifier': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=it',
+        'provider_params': {
+            'current_css_selector': '.summary-value strong',
+            'currency': 'EUR',
+            'decimal_format': 'eu'
+        }
+    }
+]
+```
+
+**Historical data**:
+- Research if historical price data available on page or via API
+- Parse dividend/coupon payment dates if available
+- Return `HistoricalDataModel` with `dividend_dates` list
+
+**Metadata extraction**:
+- Bond/stock name, issuer, maturity date (for bonds)
+- `investment_type`: "bond" or "stock"
+- `base_currency`: "EUR"
+- `classification_params`: `{"geographic_area": {"Italy": 1000}}`
+
+### Enhanced get_history() with Dividend Dates
+
+**Update interface**:
+```python
+class HistoricalDataModel(BaseModel):
+    prices: List[PricePointModel]
+    currency: str
+    source: str
+    dividend_dates: Optional[List[date]] = None  # NEW field
+    
+    # None = provider doesn't support dividend tracking
+    # [] = no dividends in period
+    # [date(...)] = list of dividend payment dates
+```
+
+**Provider implementations**:
+- **YahooFinanceProvider**: Use yfinance `.dividends` to get dividend history
+- **CSSScraperProvider**: Return `dividend_dates=None` (not supported)
+- **BorsaItalianaProvider**: Parse coupon payment dates if available
+- **JustETFProvider**: Return `dividend_dates=None` (not typically available)
+
+**API response example**:
+```json
+{
+  "prices": [...],
+  "currency": "USD",
+  "source": "yfinance",
+  "dividend_dates": ["2025-02-15", "2025-05-15", "2025-08-15", "2025-11-15"]
+}
+```
+
+---
+
+## Phase 7: Search & Cache System (3-4 giorni)
+
+**Goal**: Implement unified search and caching system for asset provider queries with fuzzy matching and automatic cache management.
+
+### Cache Infrastructure
+
+**File**: `backend/app/utils/search_cache.py`
+
+**Class**: `SearchCache` (generic, reusable)
+- Storage: In-memory dict (or Redis in future)
+- TTL: Configurable per entry (default: 10 minutes)
+- Thread-safe: Use asyncio locks for concurrent access
+
+**Methods**:
+```python
+class SearchCache:
+    def set(self, key: str, value: Any, ttl: int) -> None:
+        """Store with TTL"""
+        
+    def get(self, key: str) -> Optional[Any]:
+        """Retrieve if not expired"""
+        
+    def fuzzy_search(self, query: str, max_results: int) -> List[Tuple[str, Any, float]]:
+        """
+        Fuzzy match cached entries.
+        
+        Returns: List of (key, value, similarity_score)
+        Algorithm: difflib.SequenceMatcher
+        """
+        
+    def cleanup_expired(self) -> int:
+        """Remove expired entries, return count deleted"""
+        
+    def clear(self) -> None:
+        """Remove all entries"""
+```
+
+### Search Service Layer
+
+**File**: `backend/app/services/asset_search.py`
+
+**Class**: `AssetSearchService`
+
+**Unified search method**:
+```python
+async def search_assets(
+    self,
+    query: str,
+    providers: List[str] = None
+) -> dict:
+    """
+    Unified search across cache and providers.
+    
+    Flow:
+    1. Fuzzy search in cache (fast, local)
+    2. If no exact match: Query all providers (or specified list)
+    3. Merge results (deduplicate by identifier)
+    4. Add new results to cache
+    5. Return: {"cached": [...], "remote": [...], "merged": [...]}
+    
+    Uses asyncio.gather() for parallel provider calls.
+    """
+```
+
+**Provider search interface** (formalized):
+```python
+def search(self, query: str) -> List[dict]:
+    """
+    Search assets via provider.
+    
+    Returns:
+    [
+      {
+        "identifier": "AAPL",  # or URL, ISIN, etc.
+        "name": "Apple Inc.",
+        "provider_params": {"ticker": "AAPL"},  # Ready for assignment
+        "metadata": {  # Optional
+          "exchange": "NASDAQ",
+          "currency": "USD"
+        }
+      }
+    ]
+    
+    Each provider implements independently (no shared state).
+    """
+```
+
+### API Endpoints
+
+**GET /api/v1/assets/search?q=<query>&providers=<csv>**
+- `q`: Search query (required)
+- `providers`: Comma-separated provider codes (optional, default: all)
+- Response:
+```json
+{
+  "query": "Apple",
+  "cached_results": 2,
+  "remote_results": 5,
+  "results": [
+    {
+      "identifier": "AAPL",
+      "name": "Apple Inc.",
+      "provider": "yfinance",
+      "provider_params": {"ticker": "AAPL"},
+      "source": "cached"
+    }
+  ]
+}
+```
+
+**GET /api/v1/assets/search/cache/status**
+- Response: `{"entries": 123, "expired": 5, "total_size_kb": 456}`
+
+**POST /api/v1/assets/search/cache/cleanup**
+- Trigger manual cleanup of expired entries
+- Response: `{"deleted": 5}`
+
+### Design Notes
+
+- **Cache key**: Hash of `(query, provider_code)` for uniqueness
+- **Fuzzy matching**: Use `difflib.SequenceMatcher` (no external deps)
+- **Provider independence**: Each provider implements search, no shared state
+- **Future**: Redis cache for multi-instance deployments
+
+---
+
+## Phase 8: Documentation & Developer Guides (2-3 giorni)
+
+**Goal**: Comprehensive documentation for asset provider system, including developer guides, API reference, and integration examples.
+
+### Asset Provider Development Guide
+
+**File**: `docs/assets/provider-development.md`
+
+**Structure** (based on `docs/fx/provider-development.md`):
+1. Overview & Architecture
+2. Provider Interface Reference
+3. Step-by-Step Implementation Guide
+4. Testing Your Provider
+5. Registration & Auto-Discovery
+6. Best Practices & Common Pitfalls
+
+**Code examples**:
+- Minimal provider example
+- Full-featured provider (with search, metadata, dividends)
+- Test configuration examples
+- `provider_params` structures for different use cases
+
+**Topics to cover**:
+- `@register_provider(AssetProviderRegistry)` decorator
+- Auto-discovery process and verification
+- `test_config` property structure
+- How to define test cases with `identifier` and `provider_params`
+- Error handling patterns
+- Currency handling and decimal precision
+
+### API Reference Documentation
+
+**File**: `docs/api-reference.md` or OpenAPI spec
+
+**Document all endpoints**:
+- Provider discovery (`GET /asset-providers`)
+- Provider search (`GET /asset-providers/{code}/search`)
+- Provider assignment (bulk + single)
+- Price management (bulk CRUD + query)
+- Metadata management (`PATCH /assets/{id}/metadata`)
+- Metadata refresh (`POST /assets/{id}/metadata/refresh`)
+- Search & cache endpoints
+
+**Include**:
+- Request/response examples (realistic payloads)
+- Error responses and validation messages
+- Bulk operation examples (3+ items)
+- Query parameters documentation
+- Date formats, filters, pagination
+
+### Integration & Workflow Guides
+
+**File**: `docs/assets/workflow.md`
+
+**Sections**:
+1. Asset Lifecycle (creation → provider assignment → price refresh → metadata)
+2. Provider Assignment Workflow
+3. Manual Price Management
+4. Automatic Price Refresh
+5. Metadata Population & Override
+6. Search & Discovery
+
+**Diagrams**:
+- Provider selection flowchart
+- Price refresh sequence diagram
+- Metadata population workflow
+- Search & cache interaction
+
+**Common scenarios**:
+- "How to add a new stock to portfolio"
+- "How to switch provider for an asset"
+- "How to manually correct prices"
+- "How to populate metadata from provider"
+
+### Update Existing Documentation
+
+**README.md**:
+- Add asset provider system to features list
+- Link to new documentation files
+- Update architecture overview
+
+**database-schema.md**:
+- Document `asset_provider_assignments` table
+- Document new asset metadata columns
+- Show relationships and constraints
+
+**testing-guide.md**:
+- Add asset provider tests to test suite
+- Document provider-specific test execution
+- Show test coverage reporting
+
+### Code Documentation
+
+**Comprehensive docstrings**:
+- All public methods in `AssetSourceProvider`
+- All methods in `AssetSourceManager`
+- All provider implementations
+- All API endpoints
+
+**Inline comments**:
+- Complex logic (backward-fill, synthetic yield)
+- Provider-specific quirks
+- Performance optimizations
+
+**Type hints**:
+- Verify all methods have proper type annotations
+- Use `Optional`, `List`, `Dict` consistently
+
+### Migration & Upgrade Guides
+
+**Document migration**:
+- Old: `current_data_plugin_key` in assets table
+- New: `asset_provider_assignments` table
+- Migration SQL if needed
+
+**Document breaking changes**:
+- API endpoint changes (if any)
+- Schema changes
+- Provider interface changes
+
+---
+
 **Buon lavoro su Step 05! 🎉**
 
-**Stima realistica**: 11-17 giorni (synthetic_yield è il pezzo più complesso)
-**Test coverage target**: 70+ test (100% coverage obiettivo)
-**Endpoint totali**: ~15 endpoint nuovi
+**Stima aggiornata**: 15-25 giorni (include nuove fasi 5-8)
+**Fasi totali**: 8 fasi ben organizzate
+**Test coverage target**: 100+ test (copertura completa)
+**Endpoint totali**: ~25 endpoint nuovi
 

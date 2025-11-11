@@ -33,7 +33,7 @@ from backend.app.db.models import (
     )
 from backend.app.services.asset_source import (
     AssetSourceManager,
-    calculate_days_between_act365,
+    calculate_daily_factor_between_act365,
     truncate_price_to_db_precision,
     get_price_column_precision,
     )
@@ -117,7 +117,7 @@ def test_act365_calculation():
             ]
 
         for start, end, expected in test_cases:
-            result = calculate_days_between_act365(start, end)
+            result = calculate_daily_factor_between_act365(start, end)
 
             # Detailed logging per case
             print_info(f"Case: start={start} end={end} | expected={expected} | actual={result}")
