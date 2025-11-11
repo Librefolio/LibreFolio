@@ -38,3 +38,4 @@ class BackwardFillInfo(BaseModel):
     """
     actual_rate_date: str = Field(..., description="ISO date of actual data used (YYYY-MM-DD)")
     days_back: int = Field(..., description="Number of days back from requested date")
+
