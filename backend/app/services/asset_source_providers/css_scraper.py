@@ -176,20 +176,19 @@ class CSSScraperProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-        session=None
     ) -> CurrentValueModel:
         """
         Fetch current price by scraping URL with CSS selector.
 
         Args:
             identifier: URL to scrape (e.g., "https://example.com/price")
+            # TODO: documentare i parametri possibili in validate_params
             provider_params: Required params:
                 - current_css_selector: CSS selector for price element
                 - currency: Currency code
                 - decimal_format: 'us' or 'eu' (optional, default: 'us')
                 - timeout: Request timeout (optional, default: 30)
                 - user_agent: Custom User-Agent (optional)
-            session: Optional database session (unused)
 
         Returns:
             CurrentValueModel with value, currency, as_of_date, source
@@ -286,7 +285,6 @@ class CSSScraperProvider(AssetSourceProvider):
         start_date: date,
         end_date: date,
         provider_params: Dict | None = None,
-        session=None
     ) -> HistoricalDataModel:
         """
         Fetch historical prices (NOT IMPLEMENTED for CSS scraper).
@@ -299,8 +297,8 @@ class CSSScraperProvider(AssetSourceProvider):
             start_date: Start date
             end_date: End date
             provider_params: Provider parameters
-            session: Optional database session
-
+        Returns:
+            HistoricalDataModel with prices list, currency, source
         Raises:
             AssetSourceError: Always (not implemented)
         """

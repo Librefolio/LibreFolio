@@ -23,6 +23,7 @@ yfinance = "*"
 pandas = "*"
 httpx = "*"
 beautifulsoup4 = "*"
+argcomplete = "*"
 
 [dev-packages]
 pytest = "*"
