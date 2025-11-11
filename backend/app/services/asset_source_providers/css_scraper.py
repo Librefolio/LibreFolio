@@ -13,6 +13,7 @@ from typing import Dict
 try:
     import httpx
     from bs4 import BeautifulSoup
+
     SCRAPER_AVAILABLE = True
 except ImportError:
     httpx = None
@@ -54,17 +55,17 @@ class CSSScraperProvider(AssetSourceProvider):
                     'current_css_selector': '.summary-value strong',
                     'currency': 'EUR',
                     'decimal_format': 'us'  # English version uses US format
-                }
-            },
+                    }
+                },
             {
                 'identifier': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=it',
                 'provider_params': {
                     'current_css_selector': '.summary-value strong',
                     'currency': 'EUR',
                     'decimal_format': 'eu'  # Italian version uses EU format
+                    }
                 }
-            }
-        ]
+            ]
 
     @property
     def supports_history(self) -> bool:
@@ -97,7 +98,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 "CSS scraper requires provider_params",
                 "MISSING_PARAMS",
                 {"params": params}
-            )
+                )
 
         # Check required params
         required = ['current_css_selector', 'currency']
@@ -107,7 +108,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 f"Missing required params: {', '.join(missing)}",
                 "MISSING_PARAMS",
                 {"missing": missing, "params": params}
-            )
+                )
 
         # Validate decimal_format if present
         if 'decimal_format' in params:
@@ -116,7 +117,7 @@ class CSSScraperProvider(AssetSourceProvider):
                     "decimal_format must be 'us' or 'eu'",
                     "INVALID_PARAMS",
                     {"decimal_format": params['decimal_format']}
-                )
+                    )
 
     def parse_price(self, text: str, decimal_format: str = 'us') -> Decimal:
         """
@@ -148,7 +149,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 "Empty price text",
                 "PARSE_ERROR",
                 {"text": text}
-            )
+                )
 
         # TODO: gestire anche parsing particolari come:
         #       "1 234,56" (francese con spazio)
@@ -170,13 +171,13 @@ class CSSScraperProvider(AssetSourceProvider):
                 f"Failed to parse price: {text}",
                 "PARSE_ERROR",
                 {"text": text, "decimal_format": decimal_format, "error": str(e)}
-            )
+                )
 
     async def get_current_value(
         self,
         identifier: str,
         provider_params: Dict | None = None,
-    ) -> CurrentValueModel:
+        ) -> CurrentValueModel:
         """
         Fetch current price by scraping URL with CSS selector.
 
@@ -201,7 +202,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 "httpx and beautifulsoup4 not available - install with: pipenv install httpx beautifulsoup4",
                 "NOT_AVAILABLE",
                 {"identifier": identifier}
-            )
+                )
 
         self.validate_params(provider_params)
 
@@ -219,7 +220,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 'User-Agent': user_agent,
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
-            }
+                }
 
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.get(url, headers=headers, follow_redirects=True)
@@ -238,8 +239,8 @@ class CSSScraperProvider(AssetSourceProvider):
                         "url": url,
                         "selector": css_selector,
                         "status_code": response.status_code
-                    }
-                )
+                        }
+                    )
 
             # Extract and parse price
             price_text = price_element.get_text(strip=True)
@@ -252,7 +253,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 currency=currency,
                 as_of_date=date.today(),
                 source=self.provider_name
-            )
+                )
 
         except AssetSourceError:
             raise
@@ -264,20 +265,20 @@ class CSSScraperProvider(AssetSourceProvider):
                     "url": url,
                     "status_code": e.response.status_code,
                     "reason": e.response.reason_phrase
-                }
-            )
+                    }
+                )
         except httpx.RequestError as e:
             raise AssetSourceError(
                 f"Request failed: {e}",
                 "REQUEST_ERROR",
                 {"url": url, "error": str(e)}
-            )
+                )
         except Exception as e:
             raise AssetSourceError(
                 f"Scraping failed: {e}",
                 "SCRAPE_ERROR",
                 {"url": url, "error": str(e)}
-            )
+                )
 
     async def get_history_value(
         self,
@@ -285,7 +286,7 @@ class CSSScraperProvider(AssetSourceProvider):
         start_date: date,
         end_date: date,
         provider_params: Dict | None = None,
-    ) -> HistoricalDataModel:
+        ) -> HistoricalDataModel:
         """
         Fetch historical prices (NOT IMPLEMENTED for CSS scraper).
 
@@ -309,8 +310,8 @@ class CSSScraperProvider(AssetSourceProvider):
                 "identifier": identifier,
                 "start_date": str(start_date),
                 "end_date": str(end_date)
-            }
-        )
+                }
+            )
 
     async def search(self, query: str) -> list[dict]:
         """
@@ -326,4 +327,3 @@ class CSSScraperProvider(AssetSourceProvider):
         """
         logger.debug(f"Search not applicable for CSS scraper: {query}")
         return []
-

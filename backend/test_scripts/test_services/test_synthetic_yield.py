@@ -1,18 +1,19 @@
 """
-Test suite for synthetic yield calculation (SCHEDULED_YIELD assets).
+Test suite for synthetic yield calculation using ScheduledInvestmentProvider.
 
 Tests cover:
-- find_active_rate() - rate lookup from schedule
-- calculate_accrued_interest() - SIMPLE interest calculation
-- calculate_synthetic_value() - full valuation
-- Integration with get_prices() - automatic calculation
+- Provider validation (Pydantic schemas)
+- Provider calculation methods (get_current_value, get_history_value)
+- Private calculation method (_calculate_value_for_date)
+- Integration with get_prices() - automatic provider delegation
+- Utility functions (find_active_rate, calculate_accrued_interest)
 """
 import asyncio
+import json
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
-import json
 
 # Force test mode BEFORE any other imports
 os.environ["LIBREFOLIO_TEST_MODE"] = "1"
@@ -22,15 +23,12 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import select
 
-from backend.app.db.models import Asset, ValuationModel, AssetType
-from backend.app.utils.financial_math import (
-    find_active_rate,
-    calculate_accrued_interest,
-)
-from backend.app.services.asset_source import (
-    calculate_synthetic_value,
-    AssetSourceManager,
-)
+from backend.app.db.models import Asset, ValuationModel, AssetType, PriceHistory
+from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.asset_source_providers.scheduled_investment import ScheduledInvestmentProvider
+from backend.app.utils.financial_math import find_active_rate, calculate_accrued_interest
+
+from backend.app.schemas.assets import InterestRatePeriod, LateInterestConfig, ScheduledInvestmentParams
 
 
 # ============================================================================
@@ -63,22 +61,11 @@ async def create_test_asset(session: AsyncSession) -> Asset:
     - Late interest: 12% after 30 days grace
     """
     interest_schedule = [
-        {
-            "start_date": "2025-01-01",
-            "end_date": "2025-12-31",
-            "rate": "0.05"  # 5%
-        },
-        {
-            "start_date": "2026-01-01",
-            "end_date": "2026-12-31",
-            "rate": "0.06"  # 6%
-        }
-    ]
+        {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"},
+        {"start_date": "2026-01-01", "end_date": "2026-12-31", "rate": "0.06"}
+        ]
 
-    late_interest = {
-        "rate": "0.12",  # 12%
-        "grace_period_days": 30
-    }
+    late_interest = {"rate": "0.12", "grace_period_days": 30}
 
     asset = Asset(
         display_name="Test Recrowd Loan",
@@ -90,7 +77,7 @@ async def create_test_asset(session: AsyncSession) -> Asset:
         maturity_date=date(2026, 12, 31),
         interest_schedule=json.dumps(interest_schedule),
         late_interest=json.dumps(late_interest),
-    )
+        )
 
     session.add(asset)
     await session.commit()
@@ -100,28 +87,174 @@ async def create_test_asset(session: AsyncSession) -> Asset:
 
 
 # ============================================================================
-# TEST FUNCTIONS
+# PROVIDER TESTS
 # ============================================================================
 
 
-def test_find_active_rate_simple_schedule():
-    """Test find_active_rate with simple schedule (2 periods)."""
-    schedule = [
-        {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"},
-        {"start_date": "2026-01-01", "end_date": "2026-12-31", "rate": "0.06"}
-    ]
-    maturity = date(2026, 12, 31)
-    late_interest = {"rate": "0.12", "grace_period_days": 30}
+async def test_provider_validate_params():
+    """Test provider parameter validation using Pydantic schemas."""
+    provider = ScheduledInvestmentProvider()
 
-    # Test cases
+    # Test 1: Valid params
+    valid_params = {
+        "face_value": "10000",
+        "currency": "EUR",
+        "interest_schedule": [
+            {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
+            ],
+        "maturity_date": "2025-12-31",
+        "late_interest": {"rate": "0.12", "grace_period_days": 30}
+        }
+
+    try:
+        validated = provider.validate_params(valid_params)
+        passed = isinstance(validated, ScheduledInvestmentParams)
+        passed = passed and validated.face_value == Decimal("10000")
+        passed = passed and validated.currency == "EUR"
+        passed = passed and len(validated.interest_schedule) == 1
+
+        return {
+            "passed": passed,
+            "message": f"Validation successful, validated type: {type(validated).__name__}"
+            }
+    except Exception as e:
+        return {"passed": False, "message": f"Validation failed: {e}"}
+
+
+async def test_provider_get_current_value():
+    """Test provider get_current_value method."""
+    provider = ScheduledInvestmentProvider()
+
+    params = {
+        "face_value": "10000",
+        "currency": "EUR",
+        "interest_schedule": [
+            {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
+            ],
+        "maturity_date": "2025-12-31"
+        }
+
+    try:
+        result = await provider.get_current_value("TEST-LOAN", params)
+
+        # Value should be > face_value (interest accrued since 2025-01-01)
+        passed = result.value > Decimal("10000")
+        passed = passed and result.currency == "EUR"
+        passed = passed and result.source == "Scheduled Investment Calculator"
+
+        return {
+            "passed": passed,
+            "value": str(result.value),
+            "currency": result.currency,
+            "message": f"Current value: {result.value} {result.currency}"
+            }
+    except Exception as e:
+        return {"passed": False, "message": f"Exception: {e}"}
+
+
+async def test_provider_get_history_value():
+    """Test provider get_history_value method."""
+    provider = ScheduledInvestmentProvider()
+
+    params = {
+        "face_value": "10000",
+        "currency": "EUR",
+        "interest_schedule": [
+            {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
+            ],
+        "maturity_date": "2025-12-31"
+        }
+
+    start = date(2025, 1, 1)
+    end = date(2025, 1, 7)
+
+    try:
+        result = await provider.get_history_value("TEST-LOAN", params, start, end)
+
+        # Should have 7 prices
+        passed = len(result.prices) == 7
+
+        # Values should increase daily
+        values = [p.close for p in result.prices]
+        increasing = all(values[i] < values[i + 1] for i in range(len(values) - 1))
+        passed = passed and increasing
+
+        # Currency should match
+        passed = passed and result.currency == "EUR"
+
+        return {
+            "passed": passed,
+            "count": len(result.prices),
+            "first": str(values[0]) if values else "N/A",
+            "last": str(values[-1]) if values else "N/A",
+            "increasing": increasing,
+            "message": f"Generated {len(result.prices)} prices, increasing: {increasing}"
+            }
+    except Exception as e:
+        return {"passed": False, "message": f"Exception: {e}"}
+
+
+async def test_provider_private_calculate_value():
+    """Test provider private _calculate_value_for_date method."""
+
+    provider = ScheduledInvestmentProvider()
+
+    # Create validated params using Pydantic model
+    params_dict = {
+        "face_value": "10000",
+        "currency": "EUR",
+        "interest_schedule": [
+            {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
+            ],
+        "maturity_date": "2025-12-31",
+        "late_interest": {"rate": "0.12", "grace_period_days": 30}
+        }
+    params = ScheduledInvestmentParams(**params_dict)
+
+    try:
+        # Calculate value for Jan 30, 2025 (30 days after start)
+        value = provider._calculate_value_for_date(params, date(2025, 1, 30))
+
+        # Expected: 10000 + (10000 * 0.05 * 30/365) ≈ 10041.10
+        expected_interest = Decimal("10000") * Decimal("0.05") * Decimal("30") / Decimal("365")
+        expected_value = Decimal("10000") + expected_interest
+
+        diff = abs(value - expected_value)
+        passed = diff < Decimal("0.01")
+
+        return {
+            "passed": passed,
+            "value": str(value),
+            "expected": str(expected_value),
+            "diff": str(diff),
+            "message": f"Calculated: {value:.2f}, Expected: {expected_value:.2f}"
+            }
+    except Exception as e:
+        return {"passed": False, "message": f"Exception: {e}"}
+
+
+# ============================================================================
+# UTILITY FUNCTION TESTS
+# ============================================================================
+
+
+def test_find_active_rate_with_pydantic():
+    """Test find_active_rate utility with Pydantic models (only format accepted)."""
+
+    # Use Pydantic models (only way to call the function)
+    schedule = [
+        InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), rate=Decimal("0.05")),
+        InterestRatePeriod(start_date=date(2026, 1, 1), end_date=date(2026, 12, 31), rate=Decimal("0.06"))
+        ]
+    late_interest = LateInterestConfig(rate=Decimal("0.12"), grace_period_days=30)
+    maturity = date(2026, 12, 31)
+
     test_cases = [
-        # (target_date, expected_rate, description)
         (date(2025, 6, 15), Decimal("0.05"), "Mid-2025 (first period)"),
         (date(2026, 6, 15), Decimal("0.06"), "Mid-2026 (second period)"),
-        (date(2026, 12, 31), Decimal("0.06"), "Maturity date (second period)"),
-        (date(2027, 1, 15), Decimal("0.06"), "15 days after maturity (within grace)"),
-        (date(2027, 2, 15), Decimal("0.12"), "45 days after maturity (late interest)"),
-    ]
+        (date(2027, 1, 15), Decimal("0.06"), "15 days after maturity (grace)"),
+        (date(2027, 2, 15), Decimal("0.12"), "45 days after maturity (late)"),
+        ]
 
     results = []
     for target, expected, desc in test_cases:
@@ -132,221 +265,127 @@ def test_find_active_rate_simple_schedule():
             "passed": passed,
             "expected": str(expected),
             "actual": str(actual)
-        })
+            })
 
     return {
         "passed": all(r["passed"] for r in results),
         "details": results
-    }
+        }
 
 
-def test_find_active_rate_no_late_interest():
-    """Test find_active_rate without late interest configuration."""
-    schedule = [
-        {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
-    ]
-    maturity = date(2025, 12, 31)
-    late_interest = None
+def test_calculate_accrued_conversion():
+    """Test calculate_accrued_interest with dict converted to Pydantic models."""
 
-    # After maturity, should return 0 (no late interest configured)
-    target = date(2026, 2, 1)
-    result = find_active_rate(schedule, target, maturity, late_interest)
-
-    passed = result == Decimal("0")
-    return {
-        "passed": passed,
-        "message": f"Expected 0 after maturity (no late interest), got {result}"
-    }
-
-
-def test_calculate_accrued_interest_single_rate():
-    """Test calculate_accrued_interest with single rate (SIMPLE interest)."""
     face_value = Decimal("10000")
-    schedule = [
-        {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
-    ]
-    maturity = date(2025, 12, 31)
-    late_interest = None
 
-    # Calculate interest for 30 days (Jan 1 to Jan 30)
-    start = date(2025, 1, 1)
-    end = date(2025, 1, 30)
-
-    interest = calculate_accrued_interest(
-        face_value=face_value,
-        start_date=start,
-        end_date=end,
-        schedule=schedule,
-        maturity_date=maturity,
-        late_interest=late_interest
-    )
-
-    # Expected: 10000 * 0.05 * (30/365) = 41.0958...
-    expected = Decimal("10000") * Decimal("0.05") * Decimal("30") / Decimal("365")
-
-    # Allow small rounding difference (< 0.01)
-    diff = abs(interest - expected)
-    passed = diff < Decimal("0.01")
-
-    return {
-        "passed": passed,
-        "expected": str(expected),
-        "actual": str(interest),
-        "diff": str(diff),
-        "message": f"30 days at 5%: expected {expected:.2f}, got {interest:.2f}"
-    }
-
-
-def test_calculate_accrued_interest_with_rate_change():
-    """Test calculate_accrued_interest across rate change boundary."""
-    face_value = Decimal("10000")
-    schedule = [
+    # Start with dict (typical use case)
+    schedule_dict = [
         {"start_date": "2025-01-01", "end_date": "2025-06-30", "rate": "0.05"},
         {"start_date": "2025-07-01", "end_date": "2025-12-31", "rate": "0.06"}
-    ]
+        ]
+
+    # Convert to Pydantic models (required by function)
+    schedule = [InterestRatePeriod(**item) for item in schedule_dict]
     maturity = date(2025, 12, 31)
-    late_interest = None
 
-    # Calculate interest for full year (365 days)
-    start = date(2025, 1, 1)
-    end = date(2025, 12, 31)
-
+    # Calculate interest for full year
     interest = calculate_accrued_interest(
         face_value=face_value,
-        start_date=start,
-        end_date=end,
+        start_date=date(2025, 1, 1),
+        end_date=date(2025, 12, 31),
         schedule=schedule,
         maturity_date=maturity,
-        late_interest=late_interest
-    )
+        late_interest=None
+        )
 
-    # Expected:
-    # - 181 days at 5%: 10000 * 0.05 * (181/365) = 248.08
-    # - 184 days at 6%: 10000 * 0.06 * (184/365) = 302.47
-    # - Total: ~550.55
+    # Expected: ~248 (181 days @ 5%) + ~302 (184 days @ 6%) = ~550
     expected_part1 = Decimal("10000") * Decimal("0.05") * Decimal("181") / Decimal("365")
     expected_part2 = Decimal("10000") * Decimal("0.06") * Decimal("184") / Decimal("365")
     expected = expected_part1 + expected_part2
 
-    # Allow small rounding difference (< 1.00)
     diff = abs(interest - expected)
     passed = diff < Decimal("1.00")
 
     return {
         "passed": passed,
+        "interest": str(interest),
         "expected": str(expected),
-        "actual": str(interest),
         "diff": str(diff),
-        "message": f"Full year with rate change: expected {expected:.2f}, got {interest:.2f}"
-    }
+        "message": f"Dict→Pydantic conversion: {interest:.2f} (expected {expected:.2f})"
+        }
 
 
-async def test_calculate_synthetic_value():
-    """Test calculate_synthetic_value for SCHEDULED_YIELD asset."""
+# ============================================================================
+# INTEGRATION TESTS
+# ============================================================================
+
+
+async def test_get_prices_integration():
+    """Test get_prices() integration with scheduled_investment provider."""
     async for session in get_test_session():
-        # Create test asset
         asset = await create_test_asset(session)
 
         try:
-            # Calculate value after 30 days (Jan 30, 2025)
-            target_date = date(2025, 1, 30)
+            # Assign provider
+            provider_params = {
+                "face_value": str(asset.face_value),
+                "currency": asset.currency,
+                "interest_schedule": json.loads(asset.interest_schedule),
+                "maturity_date": str(asset.maturity_date),
+                "late_interest": json.loads(asset.late_interest)
+                }
 
-            result = await calculate_synthetic_value(asset, target_date, session)
+            await AssetSourceManager.assign_provider(
+                asset_id=asset.id,
+                provider_code="scheduled_investment",
+                provider_params=json.dumps(provider_params),
+                session=session
+                )
 
-            # Expected: face_value + accrued_interest
-            # accrued_interest = 10000 * 0.05 * (30/365) ≈ 41.10
-            # Note: calculation starts from asset.created_at.date()
-
-            close_value = result["close"]
-            face_value = asset.face_value
-
-            # Value should be greater than face_value (interest accrued)
-            passed = close_value > face_value
-
-            return {
-                "passed": passed,
-                "face_value": str(face_value),
-                "calculated_value": str(close_value),
-                "accrued_interest": str(close_value - face_value),
-                "message": f"Value after 30 days: {close_value:.2f} (face: {face_value:.2f})"
-            }
-
-        finally:
-            # Cleanup
-            await session.delete(asset)
-            await session.commit()
-
-    return {"passed": False, "message": "Session error"}
-
-
-async def test_get_prices_synthetic_yield_integration():
-    """Test get_prices() automatically uses synthetic calculation for SCHEDULED_YIELD."""
-    async for session in get_test_session():
-        # Create test asset
-        asset = await create_test_asset(session)
-
-        try:
-            # Query prices for 7 days
-            start = date(2025, 1, 1)
-            end = date(2025, 1, 7)
-
+            # Get prices
             prices = await AssetSourceManager.get_prices(
                 asset_id=asset.id,
-                start_date=start,
-                end_date=end,
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 7),
                 session=session
-            )
+                )
 
-            # Should return 7 prices (one per day)
+            # Validate
             passed = len(prices) == 7
-
-            # All prices should have backward_fill_info = None (exact calculation)
             all_exact = all(p.get("backward_fill_info") is None for p in prices)
-            passed = passed and all_exact
-
-            # Values should increase daily (interest accrues)
             values = [p["close"] for p in prices]
-            increasing = all(values[i] < values[i+1] for i in range(len(values)-1))
-            passed = passed and increasing
+            increasing = all(values[i] < values[i + 1] for i in range(len(values) - 1))
+
+            passed = passed and all_exact and increasing
 
             return {
                 "passed": passed,
                 "count": len(prices),
-                "first_value": str(values[0]) if values else "N/A",
-                "last_value": str(values[-1]) if values else "N/A",
-                "all_exact": all_exact,
                 "increasing": increasing,
-                "message": f"Generated {len(prices)} prices, values increasing: {increasing}"
-            }
-
+                "message": f"get_prices() returned {len(prices)} calculated values"
+                }
         finally:
-            # Cleanup
             await session.delete(asset)
             await session.commit()
 
     return {"passed": False, "message": "Session error"}
 
 
-async def test_synthetic_value_not_written_to_db():
-    """Test that synthetic values are NOT written to price_history table."""
+async def test_no_db_storage():
+    """Test that synthetic values are NOT written to database."""
     async for session in get_test_session():
-        # Create test asset
         asset = await create_test_asset(session)
 
         try:
-            # Query prices (triggers synthetic calculation)
-            start = date(2025, 1, 1)
-            end = date(2025, 1, 7)
-
+            # Query prices (should calculate on-demand)
             await AssetSourceManager.get_prices(
                 asset_id=asset.id,
-                start_date=start,
-                end_date=end,
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 7),
                 session=session
-            )
+                )
 
-            # Check DB - should have NO price_history records for this asset
-            from backend.app.db.models import PriceHistory
+            # Check DB - should have NO price_history records
             stmt = select(PriceHistory).where(PriceHistory.asset_id == asset.id)
             result = await session.execute(stmt)
             db_prices = result.scalars().all()
@@ -356,15 +395,37 @@ async def test_synthetic_value_not_written_to_db():
             return {
                 "passed": passed,
                 "db_count": len(db_prices),
-                "message": f"DB has {len(db_prices)} prices (expected 0, calculated on-demand)"
-            }
-
+                "message": f"DB has {len(db_prices)} prices (expected 0)"
+                }
         finally:
-            # Cleanup
             await session.delete(asset)
             await session.commit()
 
     return {"passed": False, "message": "Session error"}
+
+
+async def test_pydantic_schema_validation():
+    """Test Pydantic schema validation with invalid data."""
+    provider = ScheduledInvestmentProvider()
+
+    # Test invalid face_value (negative)
+    invalid_params = {
+        "face_value": "-1000",
+        "currency": "EUR",
+        "interest_schedule": [{"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}],
+        "maturity_date": "2025-12-31"
+        }
+
+    try:
+        provider.validate_params(invalid_params)
+        return {"passed": False, "message": "Should have raised validation error"}
+    except Exception as e:
+        # Should raise AssetSourceError with INVALID_PARAMS
+        passed = "INVALID_PARAMS" in str(e) or "positive" in str(e)
+        return {
+            "passed": passed,
+            "message": f"Correctly rejected invalid params: {e}"
+            }
 
 
 # ============================================================================
@@ -393,18 +454,25 @@ def print_test_result(test_name: str, result: dict):
 async def run_all_tests():
     """Run all synthetic yield tests."""
     print("=" * 80)
-    print("SYNTHETIC YIELD TEST SUITE")
+    print("SYNTHETIC YIELD TEST SUITE (Provider-Based)")
     print("=" * 80)
 
     tests = {
-        "Test 1: find_active_rate - Simple Schedule": test_find_active_rate_simple_schedule,
-        "Test 2: find_active_rate - No Late Interest": test_find_active_rate_no_late_interest,
-        "Test 3: calculate_accrued_interest - Single Rate": test_calculate_accrued_interest_single_rate,
-        "Test 4: calculate_accrued_interest - Rate Change": test_calculate_accrued_interest_with_rate_change,
-        "Test 5: calculate_synthetic_value - Full Calculation": test_calculate_synthetic_value,
-        "Test 6: get_prices - Synthetic Yield Integration": test_get_prices_synthetic_yield_integration,
-        "Test 7: Synthetic Values Not Written to DB": test_synthetic_value_not_written_to_db,
-    }
+        # Provider tests
+        "Test 1: Provider Param Validation (Pydantic)": test_provider_validate_params,
+        "Test 2: Provider get_current_value()": test_provider_get_current_value,
+        "Test 3: Provider get_history_value()": test_provider_get_history_value,
+        "Test 4: Provider _calculate_value_for_date()": test_provider_private_calculate_value,
+
+        # Utility tests (require Pydantic models)
+        "Test 5: find_active_rate() with Pydantic": test_find_active_rate_with_pydantic,
+        "Test 6: calculate_accrued_interest() Dict→Pydantic": test_calculate_accrued_conversion,
+
+        # Integration tests
+        "Test 7: get_prices() Integration": test_get_prices_integration,
+        "Test 8: No DB Storage (On-Demand)": test_no_db_storage,
+        "Test 9: Pydantic Schema Validation Error": test_pydantic_schema_validation,
+        }
 
     results = {}
 
@@ -451,4 +519,3 @@ async def run_all_tests():
 if __name__ == "__main__":
     success = asyncio.run(run_all_tests())
     sys.exit(0 if success else 1)
-

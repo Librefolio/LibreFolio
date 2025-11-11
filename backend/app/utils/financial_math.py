@@ -5,10 +5,22 @@ Provides day count conventions, interest calculations, and other
 financial formulas used across the application.
 
 All functions are pure (no side effects) and reusable.
+
+Key concepts:
+- Day count convention: ACT/365 (Actual/365 Fixed)
+- Interest type: SIMPLE interest (not compound)
+- Rate format: Annual rate as Decimal (0.05 = 5%)
+
+Note:
+    All functions require Pydantic models from backend.app.schemas.assets.
+    To convert from dict/JSON, use: InterestRatePeriod(**dict_data)
+    To get dict/JSON from model: model.dict() or model.json()
 """
 from datetime import date as date_type, timedelta
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List
+
+from backend.app.schemas.assets import InterestRatePeriod, LateInterestConfig
 
 
 # ============================================================================
@@ -42,13 +54,14 @@ def calculate_daily_factor_between_act365(start_date: date_type, end_date: date_
 
 
 def find_active_rate(
-    schedule: list[dict],
+    schedule: List[InterestRatePeriod],
     target_date: date_type,
     maturity_date: date_type,
-    late_interest: Optional[dict],
+    late_interest: Optional[LateInterestConfig] = None,
     ) -> Decimal:
     """
-    Find applicable interest rate for target date from schedule.
+    Find and return the daily interest rate for target date from schedule+late_interest.
+    To have a full calculation in a period, call this function for each day in the period.
 
     Logic:
     1. Search schedule for rate covering target_date
@@ -57,53 +70,58 @@ def find_active_rate(
     4. Otherwise: return 0%
 
     Args:
-        schedule: List of rate periods
-            Format: [{start_date, end_date, rate}, ...]
-            Dates can be strings (ISO "YYYY-MM-DD") or date objects
-            Rate is annual rate as string or Decimal (e.g., "0.05" for 5%)
+        schedule: List of InterestRatePeriod objects
+            Use InterestRatePeriod(start_date, end_date, rate) or
+            InterestRatePeriod(**dict_data) to convert from dict/JSON
+
         target_date: Date to find rate for
         maturity_date: Asset maturity date
-        late_interest: Late interest configuration
-            Format: {rate, grace_period_days}
+        late_interest: Optional LateInterestConfig object
+            Use LateInterestConfig(rate, grace_period_days) or
+            LateInterestConfig(**dict_data) to convert from dict/JSON
 
     Returns:
         Annual interest rate as Decimal (e.g., Decimal("0.05") for 5%)
+
+    Example:
+        >>> from backend.app.schemas.assets import InterestRatePeriod
+        >>> schedule = [InterestRatePeriod(
+        ...     start_date=date(2025, 1, 1),
+        ...     end_date=date(2025, 12, 31),
+        ...     rate=Decimal("0.05")
+        ... )]
+        >>> find_active_rate(schedule, date(2025, 6, 15), date(2025, 12, 31), None)
+        Decimal('0.05')
+
+    Note:
+        To convert from dict: InterestRatePeriod(**dict_data)
+        To convert from JSON: InterestRatePeriod.parse_raw(json_string)
     """
-    # Check if within schedule
+    # Step 1: Check if target_date falls within any scheduled period
+    # This covers the normal case where the asset is still within its defined rate schedule
     for period in schedule:
-        # Convert string dates to date objects if needed
-        start_raw = period["start_date"]
-        end_raw = period["end_date"]
+        if period.start_date <= target_date <= period.end_date:
+            return period.rate
 
-        if isinstance(start_raw, str):
-            start = date_type.fromisoformat(start_raw)
-        else:
-            start = start_raw
-
-        if isinstance(end_raw, str):
-            end = date_type.fromisoformat(end_raw)
-        else:
-            end = end_raw
-
-        if start <= target_date <= end:
-            return Decimal(str(period["rate"]))
-
-    # Check if past maturity
+    # Step 2: Handle dates after maturity
+    # This covers late payments, defaults, or extended holding periods
     if target_date > maturity_date:
         if late_interest:
-            grace_days = late_interest.get("grace_period_days", 0)
-            grace_end = maturity_date + timedelta(days=grace_days)
+            # Calculate when grace period ends
+            grace_end = maturity_date + timedelta(days=late_interest.grace_period_days)
 
             if target_date <= grace_end:
-                # Within grace period: use last schedule rate
+                # Within grace period: continue using last scheduled rate
+                # This gives borrower time to repay without penalty
                 if schedule:
-                    last_period = schedule[-1]
-                    return Decimal(str(last_period["rate"]))
+                    return schedule[-1].rate
             else:
-                # Past grace period: use late interest rate
-                return Decimal(str(late_interest["rate"]))
+                # Past grace period: apply late interest penalty rate
+                # This incentivizes timely repayment
+                return late_interest.rate
 
-    # No applicable rate
+    # Step 3: No applicable rate found
+    # This happens for dates before schedule starts or after maturity with no late interest
     return Decimal("0")
 
 
@@ -111,15 +129,18 @@ def calculate_accrued_interest(
     face_value: Decimal,
     start_date: date_type,
     end_date: date_type,
-    schedule: list[dict],
+    schedule: List[InterestRatePeriod],
     maturity_date: date_type,
-    late_interest: Optional[dict],
-) -> Decimal:
+    late_interest: Optional[LateInterestConfig] = None,
+    ) -> Decimal:
     """
     Calculate accrued SIMPLE interest from start to end date.
 
     Formula (SIMPLE interest):
         interest = principal * sum(rate_i * time_fraction_i)
+
+    Note: principal (face_value) in the SIMPLE interest formula is the principal amount
+          at the beginning of the calculation period.
 
     Where:
         - rate_i: Annual interest rate for period i
@@ -129,28 +150,55 @@ def calculate_accrued_interest(
         face_value: Principal amount
         start_date: Calculation start date
         end_date: Calculation end date (inclusive)
-        schedule: Interest rate schedule (see find_active_rate for format)
+        schedule: List of InterestRatePeriod objects
+            Use [InterestRatePeriod(**item) for item in dict_list] to convert
         maturity_date: Asset maturity date
-        late_interest: Late interest configuration
+        late_interest: Optional LateInterestConfig object
+            Use LateInterestConfig(**dict_data) to convert from dict
 
     Returns:
         Total accrued interest as Decimal
 
+    Example:
+        >>> from backend.app.schemas.assets import InterestRatePeriod
+        >>> face_value = Decimal("10000")
+        >>> schedule = [InterestRatePeriod(
+        ...     start_date=date(2025, 1, 1),
+        ...     end_date=date(2025, 12, 31),
+        ...     rate=Decimal("0.05")
+        ... )]
+        >>> interest = calculate_accrued_interest(
+        ...     face_value, date(2025, 1, 1), date(2025, 1, 30),
+        ...     schedule, date(2025, 12, 31), None
+        ... )
+        >>> # Returns approximately 41.10 (10000 * 0.05 * 30/365)
+
     Note:
         Uses day-by-day iteration to handle rate changes correctly.
         ACT/365 day count convention is used.
+
+        To convert from dict list:
+        schedule = [InterestRatePeriod(**item) for item in dict_list]
     """
     total_interest = Decimal("0")
     current_date = start_date
 
+    # Iterate through each day in the period
+    # This approach handles rate changes mid-calculation correctly
+    # Example: If rate changes from 5% to 6% on July 1st,
+    # days before July 1st use 5%, days after use 6%
     while current_date <= end_date:
-        # Find rate for this day
+        # Find the applicable rate for this specific day
+        # Handles: normal schedule, grace period, late interest
         rate = find_active_rate(schedule, current_date, maturity_date, late_interest)
 
-        # Calculate daily interest: principal * (rate / 365)
+        # Calculate interest for this single day
+        # Formula: principal * (annual_rate / 365)
+        # Using ACT/365: each day is exactly 1/365 of the year
         daily_interest = face_value * rate / Decimal(365)
         total_interest += daily_interest
 
+        # Move to next day
         current_date += timedelta(days=1)
 
     return total_interest

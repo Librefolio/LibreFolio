@@ -16,12 +16,26 @@ Values are NOT stored in the database - they are calculated on-demand.
 
 Day count convention: ACT/365 (actual days / 365)
 Interest type: SIMPLE (not compound)
+
+For detailed parameter structure documentation, see:
+- backend.app.schemas.assets.ScheduledInvestmentParams
+- backend.app.schemas.assets.InterestRatePeriod
+- backend.app.schemas.assets.LateInterestConfig
+
+Note:
+    All methods accept dict/JSON which is automatically converted to Pydantic models.
+    Use ScheduledInvestmentParams(**dict_data) or .parse_raw(json_str) for manual conversion.
 """
 import logging
 from datetime import date as date_type, timedelta
 from decimal import Decimal
 
-from backend.app.schemas.assets import CurrentValueModel, HistoricalDataModel, PricePointModel
+from backend.app.schemas.assets import (
+    CurrentValueModel,
+    HistoricalDataModel,
+    PricePointModel,
+    ScheduledInvestmentParams,
+    )
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 from backend.app.utils.financial_math import (
@@ -85,28 +99,36 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         """Search not applicable for scheduled investments."""
         return None
 
-    def validate_params(self, provider_params: dict | None) -> dict:
+    def validate_params(self, provider_params: dict) -> ScheduledInvestmentParams:
         """
         Validate provider parameters for scheduled investment.
 
-        Required params:
-        - face_value: Starting amount at day 0 (string or number)
-        - currency: ISO 4217 currency code
-        - interest_schedule: List of rate periods
-        - maturity_date: Maturity date (ISO format)
+        Uses Pydantic ScheduledInvestmentParams model for validation.
+        Automatically converts dict/JSON to Pydantic model.
 
-        Optional params:
-        - late_interest: {rate, grace_period_days}
-        - schedule_start_date: Override start date (defaults to first period start)
+        See backend.app.schemas.assets.ScheduledInvestmentParams for full documentation.
 
         Args:
-            provider_params: Parameters dict
+            provider_params: Parameters dict (will be converted to ScheduledInvestmentParams)
 
         Returns:
-            Validated and normalized params
+            Validated ScheduledInvestmentParams instance
 
         Raises:
             AssetSourceError: If validation fails
+
+        Example:
+            params = {
+                "face_value": "10000",
+                "currency": "EUR",
+                "interest_schedule": [
+                    {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
+                ],
+                "maturity_date": "2025-12-31",
+                "late_interest": {"rate": "0.12", "grace_period_days": 30}
+            }
+            validated = provider.validate_params(params)
+            # Returns ScheduledInvestmentParams instance with validated data
         """
         if not provider_params:
             raise AssetSourceError(
@@ -115,52 +137,15 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 details={"required": ["face_value", "currency", "interest_schedule", "maturity_date"]}
                 )
 
-        # Check required fields
-        required = ["face_value", "currency", "interest_schedule", "maturity_date"]
-        missing = [f for f in required if f not in provider_params]
-
-        if missing:
-            raise AssetSourceError(
-                f"Missing required params: {', '.join(missing)}",
-                error_code="MISSING_PARAMS",
-                details={"missing": missing}
-                )
-
-        # Validate face_value
         try:
-            face_value = Decimal(str(provider_params["face_value"]))
-            if face_value <= 0:
-                raise ValueError("face_value must be positive")
-        except Exception as e:
+            # Convert dict to Pydantic model (automatic validation)
+            return ScheduledInvestmentParams(**provider_params)
+        except ValueError as e:
             raise AssetSourceError(
-                f"Invalid face_value: {e}",
+                f"Invalid provider params: {e}",
                 error_code="INVALID_PARAMS",
-                details={"field": "face_value", "value": provider_params.get("face_value")}
+                details={"error": str(e)}
                 )
-
-        # Validate interest_schedule
-        schedule = provider_params["interest_schedule"]
-        if not isinstance(schedule, list) or len(schedule) == 0:
-            raise AssetSourceError(
-                "interest_schedule must be a non-empty list",
-                error_code="INVALID_PARAMS",
-                details={"field": "interest_schedule"}
-                )
-
-        # Validate maturity_date
-        try:
-            if isinstance(provider_params["maturity_date"], str):
-                maturity_date = date_type.fromisoformat(provider_params["maturity_date"])
-            else:
-                maturity_date = provider_params["maturity_date"]
-        except Exception as e:
-            raise AssetSourceError(
-                f"Invalid maturity_date: {e}",
-                error_code="INVALID_PARAMS",
-                details={"field": "maturity_date", "value": provider_params.get("maturity_date")}
-                )
-
-        return provider_params
 
     async def get_current_value(
         self,
@@ -174,7 +159,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
         Args:
             identifier: Asset identifier (for logging), not used in calculation.
-            provider_params: Required parameters (see validate_params)
+            provider_params: Required parameters (see ScheduledInvestmentParams schema)
 
         Returns:
             CurrentValueModel with calculated value
@@ -183,62 +168,19 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             AssetSourceError: If calculation fails
         """
         try:
-            # Validate params
+            # Validate params and convert to Pydantic model
             params = self.validate_params(provider_params)
 
-            # Extract params
-            face_value = Decimal(str(params["face_value"]))
-            currency = params["currency"]
-            schedule = params["interest_schedule"]
-            maturity_date_str = params["maturity_date"]
-            late_interest = params.get("late_interest")
-
-            # Parse maturity date
-            if isinstance(maturity_date_str, str):
-                maturity_date = date_type.fromisoformat(maturity_date_str)
-            else:
-                maturity_date = maturity_date_str
-
-            # Get schedule start date
-            first_period = schedule[0]
-            schedule_start_raw = first_period["start_date"]
-
-            if isinstance(schedule_start_raw, str):
-                schedule_start = date_type.fromisoformat(schedule_start_raw)
-            else:
-                schedule_start = schedule_start_raw
-
-            # Calculate for today
+            # Calculate for today using validated params
             target_date = date_type.today()
+            total_value = self._calculate_value_for_date(params, target_date)
 
-            # Before schedule starts: return face value
-            if target_date < schedule_start:
-                return {
-                    "value": face_value,
-                    "currency": currency,
-                    "as_of_date": target_date,
-                    "source": self.provider_name
-                    }
-
-            # Calculate accrued interest
-            accrued = calculate_accrued_interest(
-                face_value=face_value,
-                start_date=schedule_start,
-                end_date=target_date,
-                schedule=schedule,
-                maturity_date=maturity_date,
-                late_interest=late_interest
-                )
-
-            # Total value
-            total_value = face_value + accrued
             return CurrentValueModel(
                 value=total_value,
-                currency=currency,
+                currency=params.currency,
                 as_of_date=target_date,
                 source=self.provider_name
                 )
-
 
         except AssetSourceError:
             raise
@@ -263,9 +205,10 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
         Args:
             identifier: Asset identifier (for logging)
-            provider_params: Required parameters (see validate_params)
+            provider_params: Required parameters (see ScheduledInvestmentParams schema)
             start_date: Start date (inclusive)
             end_date: End date (inclusive)
+
         Returns:
             HistoricalDataModel with prices list, currency, source
 
@@ -273,54 +216,27 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             AssetSourceError: If calculation fails
         """
         try:
-            # Validate params
+            # Validate params and convert to Pydantic model
             params = self.validate_params(provider_params)
 
-            # Extract params
-            face_value = Decimal(str(params["face_value"]))
-            currency = params["currency"]
-            schedule = params["interest_schedule"]
-            maturity_date_str = params["maturity_date"]
-            late_interest = params.get("late_interest")
-
-            # Parse maturity date
-            if isinstance(maturity_date_str, str):
-                maturity_date = date_type.fromisoformat(maturity_date_str)
-            else:
-                maturity_date = maturity_date_str
-
-            # Get schedule start date
-            first_period = schedule[0]
-            schedule_start_raw = first_period["start_date"]
-
-            if isinstance(schedule_start_raw, str):
-                schedule_start = date_type.fromisoformat(schedule_start_raw)
-            else:
-                schedule_start = schedule_start_raw
-
-            # Calculate for each day in range
+            # Calculate for each day in range using validated params
             prices = []
             current_date = start_date
 
             while current_date <= end_date:
-                # Before schedule starts: use face value
-                if current_date < schedule_start:
-                    value = face_value
-                else:
-                    # Calculate accrued interest
-                    accrued = calculate_accrued_interest(
-                        face_value=face_value,
-                        start_date=schedule_start,
-                        end_date=current_date,
-                        schedule=schedule,
-                        maturity_date=maturity_date,
-                        late_interest=late_interest
-                        )
-                    value = face_value + accrued
-                prices.append(PricePointModel(date=current_date, close=value, currency=currency))
+                value = self._calculate_value_for_date(params, current_date)
+                prices.append(PricePointModel(
+                    date=current_date,
+                    close=value,
+                    currency=params.currency
+                    ))
                 current_date += timedelta(days=1)
 
-            return HistoricalDataModel(prices=prices, currency=currency, source=self.provider_name)
+            return HistoricalDataModel(
+                prices=prices,
+                currency=params.currency,
+                source=self.provider_name
+                )
 
         except AssetSourceError:
             raise
@@ -342,3 +258,64 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             error_code="NOT_SUPPORTED",
             details={"message": "Scheduled investments require manual configuration"}
             )
+
+    def _calculate_value_for_date(
+        self,
+        params: ScheduledInvestmentParams,
+        target_date: date_type,
+        ) -> Decimal:
+        """
+        Calculate synthetic value for a specific date.
+
+        Core calculation method used by both get_current_value() and get_history_value().
+
+        Formula:
+            value = face_value + accrued_interest
+
+        Where accrued_interest is calculated from schedule start to target_date
+        using SIMPLE interest with ACT/365 day count convention.
+
+        Args:
+            params: Validated ScheduledInvestmentParams (contains all needed data)
+            target_date: Date to calculate value for
+
+        Returns:
+            Calculated value as Decimal
+
+        Note:
+            This method delegates to financial_math.calculate_accrued_interest()
+            for the actual interest calculation, ensuring consistency across
+            the application.
+
+        TODO (Step 03):
+            - Check if loan repaid via transactions
+            - Subtract dividend payments from value
+        """
+        # Extract schedule start date from first period
+        # All Pydantic validation is already done, safe to access
+        schedule_start = params.interest_schedule[0].start_date
+
+        # Before investment starts: return only principal (no interest accrued yet)
+        # Example: If schedule starts Jan 1st but we query Dec 15th, return face_value
+        if target_date < schedule_start:
+            return params.face_value
+
+        # Calculate accrued interest from schedule start to target date
+        # This handles:
+        # - Multiple rate periods (e.g., 5% year 1, 6% year 2)
+        # - Rate changes mid-period
+        # - Grace periods after maturity
+        # - Late interest penalties
+        accrued = calculate_accrued_interest(
+            face_value=params.face_value,
+            start_date=schedule_start,
+            end_date=target_date,
+            schedule=params.interest_schedule,
+            maturity_date=params.maturity_date,
+            late_interest=params.late_interest
+            )
+
+        # Total value = principal + accumulated interest
+        # This is an ESTIMATE for portfolio valuation
+        # Actual profit = sale_price - purchase_price (realized via transactions)
+        return params.face_value + accrued

@@ -140,12 +140,15 @@ def test_find_active_rate():
     print_section("Test 4: Find Active Rate (Synthetic Yield)")
 
     try:
+        from backend.app.schemas.assets import InterestRatePeriod, LateInterestConfig
+
+        # Convert dict to Pydantic models (required by function)
         schedule = [
-            {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"},
-            {"start_date": "2026-01-01", "end_date": "2026-12-31", "rate": "0.06"}
-        ]
+            InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), rate=Decimal("0.05")),
+            InterestRatePeriod(start_date=date(2026, 1, 1), end_date=date(2026, 12, 31), rate=Decimal("0.06"))
+            ]
         maturity = date(2026, 12, 31)
-        late_interest = {"rate": "0.12", "grace_period_days": 30}
+        late_interest = LateInterestConfig(rate=Decimal("0.12"), grace_period_days=30)
 
         test_cases = [
             (date(2025, 6, 15), Decimal("0.05"), "Mid-2025 (first period)"),
@@ -153,7 +156,7 @@ def test_find_active_rate():
             (date(2026, 12, 31), Decimal("0.06"), "Maturity date"),
             (date(2027, 1, 15), Decimal("0.06"), "15 days after maturity (grace period)"),
             (date(2027, 2, 15), Decimal("0.12"), "45 days after maturity (late interest)"),
-        ]
+            ]
 
         for target, expected, desc in test_cases:
             result = find_active_rate(schedule, target, maturity, late_interest)
@@ -172,10 +175,13 @@ def test_calculate_accrued_interest():
     print_section("Test 5: Calculate Accrued Interest (Synthetic Yield)")
 
     try:
+        from backend.app.schemas.assets import InterestRatePeriod
+
         face_value = Decimal("10000")
+        # Convert dict to Pydantic model (required by function)
         schedule = [
-            {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
-        ]
+            InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), rate=Decimal("0.05"))
+            ]
         maturity = date(2025, 12, 31)
         late_interest = None
 
@@ -190,7 +196,7 @@ def test_calculate_accrued_interest():
             schedule=schedule,
             maturity_date=maturity,
             late_interest=late_interest
-        )
+            )
 
         # Expected: 10000 * 0.05 * (30/365) = 41.0958...
         expected = Decimal("10000") * Decimal("0.05") * Decimal("30") / Decimal("365")
