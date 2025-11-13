@@ -27,7 +27,7 @@ from backend.app.schemas.assets import InterestRatePeriod, LateInterestConfig
 # DAY COUNT CONVENTIONS
 # ============================================================================
 
-
+# TODO: Aggiungere enum per scegliere diverse day count conventions in futuro ACT/360, 30/360, ecc.
 def calculate_daily_factor_between_act365(start_date: date_type, end_date: date_type) -> Decimal:
     """
     Calculate day fraction using ACT/365 day count convention.
@@ -53,6 +53,7 @@ def calculate_daily_factor_between_act365(start_date: date_type, end_date: date_
     return Decimal(days) / Decimal(365)
 
 
+# TODO: ripensare per prendere direttamente il nuovo pydantic model che prende tutto lo scheduling
 def find_active_rate(
     schedule: List[InterestRatePeriod],
     target_date: date_type,
@@ -125,6 +126,8 @@ def find_active_rate(
     return Decimal("0")
 
 
+# TODO: ripensare per prendere direttamente il nuovo pydantic model che prende tutto lo scheduling e faccia
+#  scegliere il tipo di interesse (semplice, compost, ...) e il metodo di calcolo per l'interesse
 def calculate_accrued_interest(
     face_value: Decimal,
     start_date: date_type,
