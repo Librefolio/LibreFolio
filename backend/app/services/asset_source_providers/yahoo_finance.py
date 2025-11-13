@@ -8,9 +8,11 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Dict
+
+from backend.app.utils.datetime_utils import utcnow
 
 try:
     import yfinance as yf
@@ -256,7 +258,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         # TODO: implementare ricerca fuzzy
         if cache_key in self._search_cache:
             results, timestamp = self._search_cache[cache_key]
-            age = (datetime.now(timezone.utc) - timestamp).total_seconds()
+            age = (utcnow() - timestamp).total_seconds()
             if age < self._CACHE_TTL_SECONDS:
                 logger.debug(f"Cache hit for '{query}' (age: {age:.0f}s)")
                 return results
@@ -269,7 +271,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 info = ticker.info
                 if not info or 'symbol' not in info:
                     # Not found
-                    self._search_cache[cache_key] = ([], datetime.now(timezone.utc))
+                    self._search_cache[cache_key] = ([], utcnow())
                     return []
 
                 result = [
@@ -282,7 +284,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                     ]
 
                 # Cache result
-                self._search_cache[cache_key] = (result, datetime.utcnow())
+                self._search_cache[cache_key] = (result, utcnow())
                 logger.info(f"Search for '{query}': found {info.get('symbol')}")
                 return result
 

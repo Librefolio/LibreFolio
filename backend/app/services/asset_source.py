@@ -25,7 +25,6 @@ Design principles:
 import asyncio
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta, datetime
-from decimal import Decimal, ROUND_DOWN
 from typing import Optional
 
 from sqlalchemy import select, delete, and_, or_
@@ -38,9 +37,8 @@ from backend.app.db.models import (
     )
 from backend.app.schemas import CurrentValueModel, HistoricalDataModel
 from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.app.utils.financial_math import (
-    parse_decimal_value,
-    )
+from backend.app.utils.decimal_utils import truncate_price_to_db_precision
+from backend.app.utils.financial_math import parse_decimal_value
 
 
 # (Pydantic models for API request/response live in backend.app.schemas.assets)
@@ -189,51 +187,6 @@ class AssetSourceProvider(ABC):
         pass  # Default: plugin need to validate params, if is not necessary override with pass
 
     # TODO: definire metodo da far chiamare periodicamente ad un job garbage collector, per ripulire eventuali cache
-
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-# TODO: questa funzione è una MOCK! Deve prendere dal model di una colonna la precisione! guarda get_column_decimal_precision e fattorizza con fx
-def get_price_column_precision(column_name: str) -> tuple[int, int]:
-    """
-    Get (precision, scale) for price_history numeric columns.
-
-    Args:
-        column_name: Column name (open, high, low, close, adjusted_close)
-
-    Returns:
-        (precision, scale) tuple - e.g., (18, 6) means 18 total digits, 6 decimals
-    """
-    # All price columns use NUMERIC(18, 6)
-    if column_name in ("open", "high", "low", "close", "adjusted_close"):
-        return (18, 6)
-    raise ValueError(f"Unknown price column: {column_name}")
-
-
-# TODO: questa funzione è una MOCK! Deve prendere dal model di una colonna la precisione! guarda truncate_decimal_to_db_precision e fattorizza con fx
-def truncate_price_to_db_precision(value: Decimal, column_name: str = "close") -> Decimal:
-    """
-    Truncate price to match database column precision.
-
-    Prevents false update detection when re-syncing identical values.
-    Database truncates on write, so we truncate before comparing.
-
-    Args:
-        value: Price value to truncate
-        column_name: Target column (default: close)
-
-    Returns:
-        Truncated Decimal matching DB precision
-
-    Example:
-        >>> truncate_price_to_db_precision(Decimal("175.123456789"), "close")
-        Decimal("175.123456")  # Truncated to 6 decimals
-    """
-    precision, scale = get_price_column_precision(column_name)
-    quantizer = Decimal(10) ** -scale
-    return value.quantize(quantizer, rounding=ROUND_DOWN)
 
 
 # ============================================================================
@@ -459,6 +412,21 @@ class AssetSourceManager:
                     })
                 continue
 
+            # Get asset currency for prices without explicit currency
+            asset_result = await session.execute(
+                select(Asset).where(Asset.id == asset_id)
+                )
+            asset = asset_result.scalar_one_or_none()
+            if not asset:
+                results.append({
+                    "asset_id": asset_id,
+                    "count": 0,
+                    "message": f"Asset {asset_id} not found"
+                    })
+                continue
+
+            default_currency = asset.currency
+
             # Build PriceHistory objects for upsert
             # Strategy: DELETE existing dates + INSERT new (avoids SQLite ON CONFLICT issues)
             price_objects = []
@@ -482,7 +450,7 @@ class AssetSourceManager:
                     low=truncate_price_to_db_precision(low_v, "low") if low_v is not None else None,
                     close=truncate_price_to_db_precision(close_v, "close") if close_v is not None else None,
                     volume=volume_v,
-                    currency=price.get("currency", "USD"),  # TODO: Get from asset when system will be ready for do this query, for now default to USD
+                    currency=price.get("currency", default_currency),  # Use asset currency as default
                     source_plugin_key="MANUAL",  # Manual price insert
                     fetched_at=None,  # Not fetched from external source
                     )

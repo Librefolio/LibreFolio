@@ -536,8 +536,6 @@ def populate_transactions_and_cash(session: Session):
             quantity=tx_data["quantity"],
             price=tx_data["price"],
             currency=tx_data["currency"],
-            fees=tx_data.get("fees", Decimal("0.00")),
-            taxes=tx_data.get("taxes", Decimal("0.00")),
             trade_date=date.today() - timedelta(days=tx_data["days_ago"]),
             note=tx_data["note"],
             )
@@ -578,6 +576,10 @@ def populate_transactions_and_cash(session: Session):
                     linked_transaction_id=tx.id,
                     )
                 session.add(cash_mov)
+                session.flush()  # Get cash_movement ID
+
+                # Set bidirectional relationship
+                tx.cash_movement_id = cash_mov.id
 
         tx_type_emoji = {
             TransactionType.BUY: "🛒",
