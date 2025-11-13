@@ -8,6 +8,9 @@ and serialization.
 All Decimal fields are configured to serialize as strings in JSON to preserve
 precision for financial calculations.
 """
+# Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
+from __future__ import annotations
+
 from datetime import date
 from decimal import Decimal
 from typing import Optional

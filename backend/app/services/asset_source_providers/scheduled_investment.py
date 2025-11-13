@@ -85,68 +85,12 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             ]
 
     @property
-    def supports_history(self) -> bool:
-        """This provider supports historical data (calculated)."""
-        return True
-
-    @property
     def supports_search(self) -> bool:
         """Search not applicable for scheduled investments."""
         return False
 
-    @property
-    def test_search_query(self) -> str | None:
-        """Search not applicable for scheduled investments."""
-        return None
-
-    def validate_params(self, provider_params: dict) -> ScheduledInvestmentParams:
-        """
-        Validate provider parameters for scheduled investment.
-
-        Uses Pydantic ScheduledInvestmentParams model for validation.
-        Automatically converts dict/JSON to Pydantic model.
-
-        See backend.app.schemas.assets.ScheduledInvestmentParams for full documentation.
-
-        Args:
-            provider_params: Parameters dict (will be converted to ScheduledInvestmentParams)
-
-        Returns:
-            Validated ScheduledInvestmentParams instance
-
-        Raises:
-            AssetSourceError: If validation fails
-
-        Example:
-            params = {
-                "face_value": "10000",
-                "currency": "EUR",
-                "interest_schedule": [
-                    {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
-                ],
-                "maturity_date": "2025-12-31",
-                "late_interest": {"rate": "0.12", "grace_period_days": 30}
-            }
-            validated = provider.validate_params(params)
-            # Returns ScheduledInvestmentParams instance with validated data
-        """
-        if not provider_params:
-            raise AssetSourceError(
-                "Provider params required for scheduled_investment",
-                error_code="MISSING_PARAMS",
-                details={"required": ["face_value", "currency", "interest_schedule", "maturity_date"]}
-                )
-
-        try:
-            # Convert dict to Pydantic model (automatic validation)
-            return ScheduledInvestmentParams(**provider_params)
-        except ValueError as e:
-            raise AssetSourceError(
-                f"Invalid provider params: {e}",
-                error_code="INVALID_PARAMS",
-                details={"error": str(e)}
-                )
-
+    # TODO: seguendo i commenti del interest_schedule scritti nel TODO della tabella Asset in model.py,
+    #  questo metodo dovrebbe prendere come identificareore l'ID dell'asset nel DB e come provider_params nulla, essendo lo ScheduledInvestmentParams da recuperare dal DB
     async def get_current_value(
         self,
         identifier: str,
@@ -191,6 +135,13 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 details={"error": str(e)}
                 )
 
+    @property
+    def supports_history(self) -> bool:
+        """This provider supports historical data (calculated)."""
+        return True
+
+    # TODO: seguendo i commenti del interest_schedule scritti nel TODO della tabella Asset in model.py,
+    #  questo metodo dovrebbe prendere come identificareore l'ID dell'asset nel DB e come provider_params nulla, essendo lo ScheduledInvestmentParams da recuperare dal DB
     async def get_history_value(
         self,
         identifier: str,
@@ -247,6 +198,11 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 details={"error": str(e)}
                 )
 
+    @property
+    def test_search_query(self) -> str | None:
+        """Search not applicable for scheduled investments."""
+        return None
+
     async def search(self, query: str) -> list[dict]:
         """
         Search not applicable for scheduled investments.
@@ -259,6 +215,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             details={"message": "Scheduled investments require manual configuration"}
             )
 
+    # TODO: potrebbe avere senso rendere questo metodo che ritorna una lista con tutti i giorni in mezzo calcolati, per efficienza
     def _calculate_value_for_date(
         self,
         params: ScheduledInvestmentParams,
@@ -319,3 +276,53 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         # This is an ESTIMATE for portfolio valuation
         # Actual profit = sale_price - purchase_price (realized via transactions)
         return params.face_value + accrued
+
+    # TODO: seguendo i commenti del interest_schedule scritti nel TODO della tabella Asset in model.py,
+    #  questa validate_params non dovrebbe esistere perchè i dai arriverebbero direttamente dal DB e sono già stati validati prima di essere inseriti
+    def validate_params(self, provider_params: dict) -> ScheduledInvestmentParams:
+        """
+        Validate provider parameters for scheduled investment.
+
+        Uses Pydantic ScheduledInvestmentParams model for validation.
+        Automatically converts dict/JSON to Pydantic model.
+
+        See backend.app.schemas.assets.ScheduledInvestmentParams for full documentation.
+
+        Args:
+            provider_params: Parameters dict (will be converted to ScheduledInvestmentParams)
+
+        Returns:
+            Validated ScheduledInvestmentParams instance
+
+        Raises:
+            AssetSourceError: If validation fails
+
+        Example:
+            params = {
+                "face_value": "10000",
+                "currency": "EUR",
+                "interest_schedule": [
+                    {"start_date": "2025-01-01", "end_date": "2025-12-31", "rate": "0.05"}
+                ],
+                "maturity_date": "2025-12-31",
+                "late_interest": {"rate": "0.12", "grace_period_days": 30}
+            }
+            validated = provider.validate_params(params)
+            # Returns ScheduledInvestmentParams instance with validated data
+        """
+        if not provider_params:
+            raise AssetSourceError(
+                "Provider params required for scheduled_investment",
+                error_code="MISSING_PARAMS",
+                details={"required": ["face_value", "currency", "interest_schedule", "maturity_date"]}
+                )
+
+        try:
+            # Convert dict to Pydantic model (automatic validation)
+            return ScheduledInvestmentParams(**provider_params)
+        except ValueError as e:
+            raise AssetSourceError(
+                f"Invalid provider params: {e}",
+                error_code="INVALID_PARAMS",
+                details={"error": str(e)}
+                )

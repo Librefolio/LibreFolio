@@ -1,9 +1,12 @@
 """
 Common schemas shared across subsystems.
 
-This module contains Pydantic models and TypedDicts used by multiple services
+This module contains Pydantic models used by multiple services
 (e.g., both FX and Asset pricing systems).
 """
+# Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 
 
@@ -38,4 +41,3 @@ class BackwardFillInfo(BaseModel):
     """
     actual_rate_date: str = Field(..., description="ISO date of actual data used (YYYY-MM-DD)")
     days_back: int = Field(..., description="Number of days back from requested date")
-

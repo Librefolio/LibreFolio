@@ -1,5 +1,7 @@
 """
-Pydantic schemas and TypedDicts for LibreFolio.
+Pydantic schemas for LibreFolio.
+Used across multiple subsystems, DB, API, ...
+Their scope is validate data structures exchanged between components and standardize data sharing.
 
 Organized by domain:
 - common.py: Shared schemas (BackwardFillInfo, etc.)

@@ -55,6 +55,7 @@ def get_sync_engine():
     return engine
 
 
+# TODO: capire se va chiamata tutte le volte che viene chiamata ora a codice, o servirebbe passare una sua istanza singleton.
 def get_async_engine():
     """
     Create and configure the async database engine.
@@ -86,6 +87,7 @@ sync_engine = get_sync_engine()  # For migrations, scripts
 async_engine = get_async_engine()  # For FastAPI app
 
 
+# TODO: capire se serve un sessionmaker singleton o va bene così, collegata alla get_async_engine() che crea un nuovo engine ogni volta.s
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Get an async database session for dependency injection.

@@ -22,6 +22,7 @@ Design principles:
 - DB optimization: Minimize queries (typically 1-3 max)
 - Parallel provider calls where possible
 """
+import asyncio
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta, datetime
 from decimal import Decimal, ROUND_DOWN
@@ -36,6 +37,7 @@ from backend.app.db.models import (
     PriceHistory,
     )
 from backend.app.schemas import CurrentValueModel, HistoricalDataModel
+from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.financial_math import (
     parse_decimal_value,
     )
@@ -98,11 +100,6 @@ class AssetSourceProvider(ABC):
         """
         pass
 
-    @property
-    def supports_history(self) -> bool:
-        """Whether this provider supports historical data."""
-        return True  # In theory except special case, all plugin should support this feature
-
     @abstractmethod
     async def get_current_value(
         self,
@@ -123,6 +120,11 @@ class AssetSourceProvider(ABC):
             AssetSourceError: On fetch failure
         """
         pass
+
+    @property
+    def supports_history(self) -> bool:
+        """Whether this provider supports historical data."""
+        return True  # In theory except special case, all plugin should support this feature
 
     @abstractmethod
     async def get_history_value(
@@ -193,7 +195,7 @@ class AssetSourceProvider(ABC):
 # HELPER FUNCTIONS
 # ============================================================================
 
-
+# TODO: questa funzione è una MOCK! Deve prendere dal model di una colonna la precisione! guarda get_column_decimal_precision e fattorizza con fx
 def get_price_column_precision(column_name: str) -> tuple[int, int]:
     """
     Get (precision, scale) for price_history numeric columns.
@@ -210,6 +212,7 @@ def get_price_column_precision(column_name: str) -> tuple[int, int]:
     raise ValueError(f"Unknown price column: {column_name}")
 
 
+# TODO: questa funzione è una MOCK! Deve prendere dal model di una colonna la precisione! guarda truncate_decimal_to_db_precision e fattorizza con fx
 def truncate_price_to_db_precision(value: Decimal, column_name: str = "close") -> Decimal:
     """
     Truncate price to match database column precision.
@@ -247,7 +250,6 @@ class AssetSourceManager:
     - Price data refresh (via providers)
     - Manual price CRUD
     - Price queries with backward-fill
-    - Synthetic yield integration
 
     All methods follow bulk-first design:
     - Bulk operations are PRIMARY
@@ -443,7 +445,6 @@ class AssetSourceManager:
             return {"inserted_count": 0, "updated_count": 0, "results": []}
 
         total_inserted = 0
-        total_updated = 0
         results = []
 
         for item in data:
@@ -676,8 +677,6 @@ class AssetSourceManager:
         assignment = await AssetSourceManager.get_asset_provider(asset_id, session)
         if assignment:
             # Asset has a provider assigned - delegate to provider
-            from backend.app.services.provider_registry import AssetProviderRegistry
-
             provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
             if provider:
                 # Parse provider params
@@ -718,6 +717,7 @@ class AssetSourceManager:
                     # Provider failed - fall back to DB query
                     pass
 
+        # TODO: capire se questo fallback ha senso farlo o è residuo di una mock precedente
         # ====================================================================
         # FALLBACK: Query price_history with backward-fill
         # ====================================================================
@@ -802,9 +802,6 @@ class AssetSourceManager:
         Returns:
             List of per-item results: {asset_id, fetched_count, inserted_count, updated_count, errors}
         """
-        from backend.app.services.provider_registry import AssetProviderRegistry
-        import asyncio
-
         if not requests:
             return []
 
@@ -922,11 +919,10 @@ class AssetSourceManager:
             return result
 
         # Create tasks for all items
-        import asyncio as _asyncio
-        tasks = [_asyncio.create_task(_process_single(item)) for item in requests]
+        tasks = [asyncio.create_task(_process_single(item)) for item in requests]
 
         # Wait for all to complete
-        completed = await _asyncio.gather(*tasks)
+        completed = await asyncio.gather(*tasks)
 
         return completed
 

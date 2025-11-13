@@ -67,123 +67,17 @@ class CSSScraperProvider(AssetSourceProvider):
                 }
             ]
 
-    @property
-    def supports_history(self) -> bool:
-        """Whether this provider supports historical data."""
-        return False
-
-    @property
-    def test_search_query(self) -> str | None:
-        """Search query to use in tests (not supported for CSS scraper)."""
-        return None
-
-    def validate_params(self, params: Dict | None) -> None:
-        """
-        Validate required parameters.
-
-        Required params:
-        - current_css_selector: CSS selector for current price
-        - currency: Currency code (e.g., "EUR", "USD")
-
-        Optional params:
-        - decimal_format: "us" (default) or "eu" for number parsing
-          - US format: 1,234.56 (comma = thousands, dot = decimal)
-          - EU format: 1.234,56 (dot = thousands, comma = decimal)
-        - history_css_selector: CSS selector for historical prices (not implemented yet)
-        - timeout: Request timeout in seconds (default: 30)
-        - user_agent: Custom User-Agent header
-        """
-        if not params:
-            raise AssetSourceError(
-                "CSS scraper requires provider_params",
-                "MISSING_PARAMS",
-                {"params": params}
-                )
-
-        # Check required params
-        required = ['current_css_selector', 'currency']
-        missing = [k for k in required if k not in params]
-        if missing:
-            raise AssetSourceError(
-                f"Missing required params: {', '.join(missing)}",
-                "MISSING_PARAMS",
-                {"missing": missing, "params": params}
-                )
-
-        # Validate decimal_format if present
-        if 'decimal_format' in params:
-            if params['decimal_format'] not in ['us', 'eu']:
-                raise AssetSourceError(
-                    "decimal_format must be 'us' or 'eu'",
-                    "INVALID_PARAMS",
-                    {"decimal_format": params['decimal_format']}
-                    )
-
-    def parse_price(self, text: str, decimal_format: str = 'us') -> Decimal:
-        """
-        Parse price from text with robust number format detection.
-
-        Supports:
-        - US format: 1,234.56 (comma = thousands, dot = decimal)
-        - EU format: 1.234,56 (dot = thousands, comma = decimal)
-        - Currency symbols: €$£¥
-        - Whitespace
-        - Percentage signs (removed)
-
-        Args:
-            text: Raw text from web page
-            decimal_format: 'us' or 'eu' (default: 'us')
-
-        Returns:
-            Decimal value
-
-        Raises:
-            AssetSourceError: If parsing fails
-        """
-        # Remove whitespace and currency symbols
-        text = text.strip()
-        text = re.sub(r'[€$£¥\s%]', '', text)
-
-        if not text:
-            raise AssetSourceError(
-                "Empty price text",
-                "PARSE_ERROR",
-                {"text": text}
-                )
-
-        # TODO: gestire anche parsing particolari come:
-        #       "1 234,56" (francese con spazio)
-        #       "1,234.56" (ambiguità su chi è separatore decimali) <- Probabilemente non gestibile senza info esterne, quindi in mancanza di sollevare un eccezione
-        try:
-            if decimal_format == 'us':
-                # US format: 1,234.56
-                # Remove commas (thousands separator)
-                text = text.replace(',', '')
-                return Decimal(text)
-            else:
-                # EU format: 1.234,56
-                # Remove dots (thousands separator), replace comma with dot (decimal)
-                text = text.replace('.', '').replace(',', '.')
-                return Decimal(text)
-
-        except (InvalidOperation, ValueError) as e:
-            raise AssetSourceError(
-                f"Failed to parse price: {text}",
-                "PARSE_ERROR",
-                {"text": text, "decimal_format": decimal_format, "error": str(e)}
-                )
-
     async def get_current_value(
         self,
         identifier: str,
-        provider_params: Dict | None = None,
+        provider_params: Dict | None = None,  # TODO: cambiare il parametro per prendere la classe pydantic invece di un dict
         ) -> CurrentValueModel:
         """
         Fetch current price by scraping URL with CSS selector.
 
         Args:
             identifier: URL to scrape (e.g., "https://example.com/price")
-            # TODO: documentare i parametri possibili in validate_params
+            # TODO: spostare la documentazione dei parametri possibili in validate_params o nella classe pydantic associata
             provider_params: Required params:
                 - current_css_selector: CSS selector for price element
                 - currency: Currency code
@@ -280,12 +174,17 @@ class CSSScraperProvider(AssetSourceProvider):
                 {"url": url, "error": str(e)}
                 )
 
+    @property
+    def supports_history(self) -> bool:
+        """Whether this provider supports historical data."""
+        return False
+
     async def get_history_value(
         self,
         identifier: str,
         start_date: date,
         end_date: date,
-        provider_params: Dict | None = None,
+        provider_params: Dict | None = None,  # TODO: cambiare il parametro per prendere la classe pydantic invece di un dict, come nel metodo sopra
         ) -> HistoricalDataModel:
         """
         Fetch historical prices (NOT IMPLEMENTED for CSS scraper).
@@ -313,17 +212,109 @@ class CSSScraperProvider(AssetSourceProvider):
                 }
             )
 
-    async def search(self, query: str) -> list[dict]:
-        """
-        Search for assets (NOT APPLICABLE for CSS scraper).
+    @property
+    def test_search_query(self) -> str | None:
+        """Search query to use in tests (not supported for CSS scraper)."""
+        return None
 
-        CSS scraper works with direct URLs, not search.
+    # TODO: siccome i parametri devono essere inviati già da API, conviene creare una classe pydantic per i parametri del CSS scraper
+    #  e usarla sia qui che nelle API per validare i parametri in ingresso
+    def validate_params(self, params: Dict | None) -> None:
+        """
+        Validate required parameters.
+
+        Required params:
+        - current_css_selector: CSS selector for current price
+        - currency: Currency code (e.g., "EUR", "USD")
+
+        Optional params:
+        - decimal_format: "us" (default) or "eu" for number parsing
+          - US format: 1,234.56 (comma = thousands, dot = decimal)
+          - EU format: 1.234,56 (dot = thousands, comma = decimal)
+        - history_css_selector: CSS selector for historical prices (not implemented yet)
+        - timeout: Request timeout in seconds (default: 30)
+        - user_agent: Custom User-Agent header
+        """
+        if not params:
+            raise AssetSourceError(
+                "CSS scraper requires provider_params",
+                "MISSING_PARAMS",
+                {"params": params}
+                )
+
+        # Check required params
+        required = ['current_css_selector', 'currency']
+        missing = [k for k in required if k not in params]
+        if missing:
+            raise AssetSourceError(
+                f"Missing required params: {', '.join(missing)}",
+                "MISSING_PARAMS",
+                {"missing": missing, "params": params}
+                )
+
+        # Validate decimal_format if present
+        if 'decimal_format' in params:
+            if params['decimal_format'] not in ['us', 'eu']:
+                raise AssetSourceError(
+                    "decimal_format must be 'us' or 'eu'",
+                    "INVALID_PARAMS",
+                    {"decimal_format": params['decimal_format']}
+                    )
+
+    # ============================================================================
+    # HELPER FUNCTIONS
+    # ============================================================================
+
+    def parse_price(self, text: str, decimal_format: str = 'us') -> Decimal:
+        """
+        Parse price from text with robust number format detection.
+
+        Supports:
+        - US format: 1,234.56 (comma = thousands, dot = decimal)
+        - EU format: 1.234,56 (dot = thousands, comma = decimal)
+        - Currency symbols: €$£¥
+        - Whitespace
+        - Percentage signs (removed)
 
         Args:
-            query: Search query
+            text: Raw text from web page
+            decimal_format: 'us' or 'eu' (default: 'us')
 
         Returns:
-            Empty list (not applicable)
+            Decimal value
+
+        Raises:
+            AssetSourceError: If parsing fails
         """
-        logger.debug(f"Search not applicable for CSS scraper: {query}")
-        return []
+        # Remove whitespace and currency symbols
+        text = text.strip()
+        text = re.sub(r'[€$£¥\s%]', '', text)
+
+        if not text:
+            raise AssetSourceError(
+                "Empty price text",
+                "PARSE_ERROR",
+                {"text": text}
+                )
+
+        # TODO: gestire anche parsing particolari come:
+        #       "1 234,56" (francese con spazio) <- basta fare una replace degli spazi
+        #       "1,234.56" (ambiguità su chi è separatore decimali) <- Probabilemente non gestibile senza info esterne, quindi in mancanza di sollevare un eccezione
+        try:
+            if decimal_format == 'us':
+                # US format: 1,234.56
+                # Remove commas (thousands separator)
+                text = text.replace(',', '')
+                return Decimal(text)
+            else:
+                # EU format: 1.234,56
+                # Remove dots (thousands separator), replace comma with dot (decimal)
+                text = text.replace('.', '').replace(',', '.')
+                return Decimal(text)
+
+        except (InvalidOperation, ValueError) as e:
+            raise AssetSourceError(
+                f"Failed to parse price: {text}",
+                "PARSE_ERROR",
+                {"text": text, "decimal_format": decimal_format, "error": str(e)}
+                )

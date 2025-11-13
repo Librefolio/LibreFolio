@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
-
+# TODO: muovi dentro models.py
 def get_column_decimal_precision(model_class, column_name: str) -> tuple[int, int]:
     """
     Get the decimal precision (total, scale) from a Numeric column definition.
@@ -66,11 +66,8 @@ def get_column_decimal_precision(model_class, column_name: str) -> tuple[int, in
     return column.type.precision, column.type.scale
 
 
-def truncate_decimal_to_db_precision(
-    value: Decimal,
-    model_class,
-    column_name: str
-    ) -> Decimal:
+# TODO: muovi dentro models.py
+def truncate_decimal_to_db_precision(value: Decimal, model_class, column_name: str) -> Decimal:
     """
     Truncate a Decimal value to match database column precision.
 
@@ -96,32 +93,6 @@ def truncate_decimal_to_db_precision(
     # Create quantization string: "0.0000000001" for scale=10
     quantize_str = "0." + "0" * scale
     return value.quantize(Decimal(quantize_str), rounding=ROUND_DOWN)
-
-
-# Backward compatibility helpers for FxRate.rate column
-def get_rate_decimal_precision() -> tuple[int, int]:
-    """
-    Get the decimal precision from FxRate.rate column.
-
-    This is a convenience wrapper for backward compatibility.
-    For new code, prefer get_column_decimal_precision(FxRate, 'rate').
-    """
-    return get_column_decimal_precision(FxRate, 'rate')
-
-
-def truncate_rate_to_db_precision(rate: Decimal) -> Decimal:
-    """
-    Truncate a rate value to match FxRate.rate column precision.
-
-    This is a convenience wrapper for backward compatibility.
-    For new code, prefer truncate_decimal_to_db_precision(rate, FxRate, 'rate').
-    """
-    return truncate_decimal_to_db_precision(rate, FxRate, 'rate')
-
-
-# Import providers to auto-register them
-# This must be at the end of imports to avoid circular dependencies
-# Providers will call FXProviderFactory.register() on import
 
 
 # ============================================================================
@@ -363,7 +334,7 @@ def normalize_rate_for_storage(
 # ============================================================================
 # PROVIDER FACTORY
 # ============================================================================
-
+# TODO: Rimuovere questa classe e usare FXProviderRegistry in provider_registry.py
 class FXProviderFactory:
     """
     Factory for creating FX rate provider instances.
@@ -473,6 +444,7 @@ class FXProviderFactory:
         return code.upper() in cls._providers
 
 
+# TODO: rimuovi questa registrazione ridondante
 # ============================================================================
 # LEGACY ECB CONSTANTS (TO BE MOVED TO ECBProvider)
 # ============================================================================
@@ -503,7 +475,7 @@ class RateNotFoundError(FXServiceError):
 # ============================================================================
 # MULTI-PROVIDER ORCHESTRATOR
 # ============================================================================
-
+# TODO: capire se ha senso mettere un provider di default
 async def ensure_rates_multi_source(
     session,  # AsyncSession
     date_range: tuple[date, date],
@@ -706,7 +678,7 @@ async def ensure_rates_multi_source(
 
         # Truncate new rate to DB precision for comparison
         # This prevents false "updates" when values are identical after truncation
-        rate_truncated = truncate_rate_to_db_precision(rate_value)
+        rate_truncated = truncate_decimal_to_db_precision(rate_value, FxRate, 'rate')
 
         if old_rate is None:
             # New insert
@@ -716,7 +688,7 @@ async def ensure_rates_multi_source(
             logger.debug(f"New rate: {base}/{quote} on {obs_date} = {rate_truncated}")
         else:
             # Truncate old rate too for proper comparison
-            old_rate_truncated = truncate_rate_to_db_precision(old_rate)
+            old_rate_truncated = truncate_decimal_to_db_precision(old_rate, FxRate, 'rate')
             if old_rate_truncated != rate_truncated:
                 # Updated value (only if different after truncation)
                 if currency not in changes_by_currency:
@@ -737,7 +709,7 @@ async def ensure_rates_multi_source(
         for obs_date, base, quote, rate in observations:
             norm_base, norm_quote, norm_rate = normalize_rate_for_storage(base, quote, rate)
             # Truncate to DB precision to match what will actually be stored
-            norm_rate_truncated = truncate_rate_to_db_precision(norm_rate)
+            norm_rate_truncated = truncate_decimal_to_db_precision(norm_rate, FxRate, 'rate')
             normalized_observations.append((obs_date, norm_base, norm_quote, norm_rate_truncated))
 
         if normalized_observations:
@@ -823,11 +795,7 @@ async def convert(
         RateNotFoundError: If no rate is found at all for this currency pair
     """
     # Call bulk version with single item (raise_on_error=True for backward compatibility)
-    results, errors = await convert_bulk(
-        session,
-        [(amount, from_currency, to_currency, as_of_date)],
-        raise_on_error=True
-        )
+    results, errors = await convert_bulk(session, [(amount, from_currency, to_currency, as_of_date)], raise_on_error=True)
 
     converted_amount, rate_date, backward_fill_applied = results[0]
 
@@ -1266,6 +1234,7 @@ async def delete_rates_bulk(
     return results
 
 
+# TODO: rimuovi questa importazione che serviva per il vecchio factory
 # ============================================================================
 # AUTO-REGISTER PROVIDERS
 # ============================================================================

@@ -28,7 +28,7 @@ from sqlmodel import Field, SQLModel
 # HELPERS
 # ============================================================================
 
-
+# TODO: Move to utils module if needed elsewhere
 def utcnow() -> datetime:
     """Get current UTC datetime with timezone info."""
     return datetime.now(timezone.utc)
@@ -126,7 +126,7 @@ class ValuationModel(str, Enum):
     Impact:
     - MARKET_PRICE -> runtime service fetches latest price from price_history (automated)
     - SCHEDULED_YIELD -> runtime service computes NPV from interest_schedule (calculated)
-    - MANUAL -> runtime service uses latest price_history with source="manual" (user-provided)
+    - MANUAL -> runtime service uses latest price_history with source="manual", if not set by user, use last Buy transaction (user-provided)
     - Affects which data plugins are used (market data vs synthetic vs manual)
     - Changes how portfolio value is computed in aggregation services
     """
@@ -320,6 +320,32 @@ class Broker(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+# TODO: aggiornare documentazione per Interest schedule, ma creare anche l'interesse composto,
+#  credo che la soluzione proposta qui sia molto più completa
+#  Il face_value e maturity_date vanno eliminati. Il face_value è ridondante e va calcolato guardando le varie transazioni,
+#  il maturity_date altro non sarebbe che l'ultimo end_date della interest_schedule, e se si va oltre scatta il late_interest
+#  e anzi io direi che il late_interest andrebbe inserito anche lui nella interest_schedule come segmento a parte che scatta dopo la maturity_date
+#  Il json dell'interest_schedule andrebbe modificato così:
+#       {
+#       "schedule": [
+#           {
+#               "start_date": "YYYY-MM-DD", # Compreso
+#               "end_date": "YYYY-MM-DD",   # Compreso
+#               "annual_rate": 0.085,
+#               "compounding": "SIMPLE" or "COMPOUND",
+#               "compound_frequency": "DAILY" | "MONTHLY" | "ANNUAL",
+#               "day_count": "ACT/365" | "ACT/360" | "30/360"
+#           },...],
+#       "late_interest": {
+#           "annual_rate": 0.12,
+#           "grace_days": 0
+#           }
+#     }
+#     e aggiungere una validazione per assicurarsi che le date non si sovrappongano e che non ci siano buchi,
+#     se dopo una certa data smette di maturare, ma non c'è mora, il late_interest avrà un rate = 0.
+#     In corso di validazione le date schedulate non devono avere buchi e neanche sovrapposizioni.
+#     Ricapitolando: eliminare i campi face_value e maturity_date, e creare un validatore per l'interest_schedule, magari con pydantic
+
 class Asset(SQLModel, table=True):
     """
     Asset definition with loan schedule support and provider assignments.
@@ -358,7 +384,7 @@ class Asset(SQLModel, table=True):
     display_name: str = Field(nullable=False)
     identifier: str = Field(nullable=False, index=True)
     identifier_type: IdentifierType = Field(default=IdentifierType.OTHER)
-    currency: str = Field(nullable=False)  # ISO 4217
+    currency: str = Field(nullable=False, description="Asset original currency")  # ISO 4217
     asset_type: AssetType = Field(default=AssetType.OTHER)
 
     # Valuation model
@@ -376,6 +402,28 @@ class Asset(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+# TODO: aggiungere un campo per referenziare anche l'eventuale cash_movment generato assieme alla transazione
+#   class Transaction(SQLModel, table=True):
+#     ...
+#     cash_movement_id: Optional[int] = Field(
+#         default=None,
+#         foreign_key="cash_movements.id",
+#         description="ID del movimento di cassa associato"
+#     )
+#   E capire se è possibile sincronizzare automaticamente l'eventuale cancellazione, sia da qui che da là con un "ON DELETE CASCAD"
+#
+# TODO: Eliminare le colonne fees e taxes, che sono ridondanti e non servono a nulla, sono tutte e 2 ulteriori transazioni di tipo FEE e TAX
+#  riferite allo stesso asset, e anzi vanno collegate ai rispettivi cash_movements generati
+#
+# TODO: Nota, aggiornare documentazione e codice affinchè nei calcoli si usi settlement_date, e la trade_date è solo informativa e quindi opzionale
+#   Nel contesto delle transazioni finanziarie, `trade_date` rappresenta la data in cui l’operazione viene eseguita (es. ordine di acquisto/vendita),
+#   mentre `settlement_date` è la data in cui l’operazione viene effettivamente regolata (trasferimento di denaro/titoli).
+#   Nei CSV di Directa:
+#   - "Data operazione" corrisponde a `trade_date`
+#   - "Data valuta" corrisponde a `settlement_date`
+#   Quindi, per importare correttamente i dati, occorre rimappare:
+#     "Data operazione" → trade_date
+#     "Data valuta"     → settlement_date
 class Transaction(SQLModel, table=True):
     """
     Unified asset transaction record.
@@ -585,6 +633,7 @@ class CashAccount(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+# TODO: aggiungere anche qui settlement_date oltre a trade_date, e aggiornare documentazione di conseguenza, per uniformarci alle Transaction
 class CashMovement(SQLModel, table=True):
     """
     Cash movement record.
