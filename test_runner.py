@@ -21,6 +21,8 @@ Author: LibreFolio Contributors
 """
 
 import argparse
+import os
+
 import argcomplete
 import subprocess
 import sys
@@ -315,6 +317,22 @@ def db_numeric_truncation(verbose: bool = False) -> bool:
         )
 
 
+def db_transaction_cash_bidirectional(verbose: bool = False) -> bool:
+    """
+    Test bidirectional relationship between Transaction and CashMovement.
+    Validates Phase 2 remediation (task 1.1).
+    """
+    print_section("DB Test: Transaction ↔ CashMovement Bidirectional")
+    print_info("Testing bidirectional foreign key relationship")
+    print_info("Tests: Creation, Navigation, Consistency")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_transaction_cash_bidirectional"],
+        "Transaction-CashMovement bidirectional tests",
+        verbose=verbose
+        )
+
+
 def db_all(verbose: bool = False) -> bool:
     """
     Run all database tests in sequence.
@@ -333,6 +351,7 @@ def db_all(verbose: bool = False) -> bool:
         ("Validate Schema", lambda: db_validate(verbose)),
         ("Numeric Truncation", lambda: db_numeric_truncation(verbose)),
         ("Populate Mock Data", lambda: db_populate(verbose, force=True)),  # Use force in 'all' mode
+        ("Transaction-CashMovement Bidirectional", lambda: db_transaction_cash_bidirectional(verbose)),
         ("FX Rates Persistence", lambda: db_fx_rates(verbose)),
         ]
 
@@ -432,6 +451,85 @@ def services_synthetic_yield(verbose: bool = False) -> bool:
         "Synthetic yield tests",
         verbose=verbose
         )
+
+
+# ============================================================================
+# UTILS TESTS
+# ============================================================================
+
+def utils_decimal_precision(verbose: bool = False) -> bool:
+    """Test decimal precision utilities (Phase 2 task 3.2)."""
+    print_section("Utils: Decimal Precision")
+    print_info("Testing: backend/app/utils/decimal_utils.py")
+    print_info("Tests: Model precision extraction, Truncation, Edge cases")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_decimal_utils.py", "-v"],
+        "Decimal precision tests",
+        verbose=verbose
+        )
+
+
+def utils_datetime(verbose: bool = False) -> bool:
+    """Test datetime utilities (Phase 1 task 3.1)."""
+    print_section("Utils: Datetime")
+    print_info("Testing: backend/app/utils/datetime_utils.py")
+    print_info("Tests: Timezone-aware datetime helpers")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_datetime_utils.py", "-v"],
+        "Datetime utils tests",
+        verbose=verbose
+        )
+
+def utils_financial_math(verbose: bool = False) -> bool:
+    """Test financial math utilities."""
+    print_section("Utils: Financial Math")
+    print_info("Testing: backend/app/utils/financial_math.py")
+    print_info("Tests: Day count conventions, Interest calculations, Rate finding")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_financial_math.py", "-v"],
+        "Financial math tests",
+        verbose=verbose
+        )
+
+
+def utils_all(verbose: bool = False) -> bool:
+    """Run all utility tests."""
+    print_header("LibreFolio Utility Tests")
+    print_info("Testing utility modules and helper functions")
+
+    tests = [
+        ("Decimal Precision", lambda: utils_decimal_precision(verbose)),
+        ("Datetime Utils", lambda: utils_datetime(verbose)),
+        ("Financial Math", lambda: utils_financial_math(verbose)),
+        ]
+
+    results = []
+    for test_name, test_func in tests:
+        success = test_func()
+        results.append((test_name, success))
+
+        if not success:
+            print_error(f"Test failed: {test_name}")
+            print_warning("Stopping utils tests execution")
+            break
+
+    # Summary
+    print_section("Utility Tests Summary")
+    passed = sum(1 for _, success in results if success)
+    total = len(results)
+
+    for test_name, success in results:
+        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
+        print(f"{status} - {test_name}")
+
+    print(f"\nResults: {passed}/{total} tests passed")
+
+    if passed == total:
+        print_success("All utility tests passed! 🎉")
+        return True
+    else:
+        print_error(f"{total - passed} test(s) failed")
+        return False
 
 
 def services_all(verbose: bool = False) -> bool:
@@ -535,6 +633,7 @@ def run_all_tests(verbose: bool = False) -> bool:
     test_categories = [
         ("External Services", lambda: external_all(verbose)),
         ("Database Layer", lambda: db_all(verbose)),
+        ("Utility Modules", lambda: utils_all(verbose)),
         ("Backend Services", lambda: services_all(verbose)),
         ("API Endpoints", lambda: api_test(verbose)),  # Auto-starts server via TestServerManager
         ]
@@ -585,6 +684,10 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Test Categories:
+
+  utils    - Utility Module Tests
+             Tests utility modules and helper functions (no backend server needed).
+             Verifies: Decimal precision, datetime utils, financial math, ...
   
   external - External Services Tests
              Tests external API integrations (no backend server needed).
@@ -766,6 +869,46 @@ Future: FIFO calculations, portfolio aggregations, loan schedules will be added 
         )
 
     # ========================================================================
+    # UTILS TESTS SUBPARSER
+    # ========================================================================
+    utils_parser = subparsers.add_parser(
+        "utils",
+        help="Utility module tests (helper functions)",
+        description="""
+Utility Module Tests
+
+These tests verify utility modules and helper functions:
+  • No backend server required
+  • Tests pure functions and helpers
+  • Foundational code used across the application
+
+Test commands:
+  decimal-precision - Test decimal precision utilities (Phase 2 task 3.2)
+                      📋 Prerequisites: None
+                      💡 Tests: get_model_column_precision(), truncate_to_db_precision()
+                      
+  datetime         - Test datetime utilities (Phase 1 task 3.1)
+                     📋 Prerequisites: None
+                     💡 Tests: utcnow() timezone-aware datetime helper
+                     
+  financial-math   - Test financial math utilities
+                     📋 Prerequisites: None
+                     💡 Tests: Day count conventions (ACT/365), Interest calculations, Rate finding
+  
+  all              - Run all utility tests
+  
+These are foundational tests for remediation phases 1 & 2.
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+
+    utils_parser.add_argument(
+        "action",
+        choices=["decimal-precision", "datetime", "financial-math", "all"],
+        help="Utility test to run"
+        )
+
+    # ========================================================================
     # API TESTS SUBPARSER
     # ========================================================================
     api_parser = subparsers.add_parser(
@@ -883,6 +1026,17 @@ def main():
             success = services_synthetic_yield(verbose=verbose)
         elif args.action == "all":
             success = services_all(verbose=verbose)
+
+    elif args.category == "utils":
+        # Utility module tests
+        if args.action == "decimal-precision":
+            success = utils_decimal_precision(verbose=verbose)
+        elif args.action == "datetime":
+            success = utils_datetime(verbose=verbose)
+        elif args.action == "financial-math":
+            success = utils_financial_math(verbose=verbose)
+        elif args.action == "all":
+            success = utils_all(verbose=verbose)
 
     elif args.category == "api":
         # API tests

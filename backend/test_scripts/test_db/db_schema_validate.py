@@ -24,7 +24,7 @@ setup_test_database()
 from sqlalchemy import inspect, text, CheckConstraint, UniqueConstraint, ForeignKeyConstraint
 
 # App imports
-from backend.app.db import sync_engine as engine  # Use sync engine for validation script
+from backend.app.db.session import get_sync_engine
 from backend.app.db.base import SQLModel
 from backend.app.db.models import (
     IdentifierType,
@@ -35,7 +35,6 @@ from backend.app.db.models import (
     )
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints
 
-
 def test_tables_exist():
     """
     Verify all required tables exist.
@@ -43,7 +42,7 @@ def test_tables_exist():
     Uses SQLModel metadata to dynamically discover expected tables from models.
     This makes the test future-proof - new tables are automatically detected.
     """
-    inspector = inspect(engine)
+    inspector = inspect(get_sync_engine())
     actual_tables = set(inspector.get_table_names())
 
     # Get expected tables from SQLModel metadata (dynamically from models)
@@ -80,7 +79,7 @@ def test_unique_constraints():
     Dynamically reads unique constraints from SQLModel metadata and verifies
     they exist in the database.
     """
-    inspector = inspect(engine)
+    inspector = inspect(get_sync_engine())
 
     # Get tables with unique constraints from models
     tables_with_unique = []
@@ -111,7 +110,7 @@ def test_foreign_keys():
     Dynamically reads foreign key constraints from SQLModel metadata and verifies
     they exist in the database.
     """
-    inspector = inspect(engine)
+    inspector = inspect(get_sync_engine())
 
     # Get tables with foreign keys from models
     tables_with_fks = []
@@ -142,7 +141,7 @@ def test_indexes():
     Dynamically reads indexes from SQLModel metadata and verifies they exist
     in the database.
     """
-    inspector = inspect(engine)
+    inspector = inspect(get_sync_engine())
 
     # Get tables with indexes from models
     tables_with_indexes = []
@@ -171,7 +170,7 @@ def test_indexes():
 
 def test_fk_pragma():
     """Verify PRAGMA foreign_keys is ON."""
-    with engine.connect() as conn:
+    with get_sync_engine().connect() as conn:
         result = conn.execute(text("PRAGMA foreign_keys"))
         fk_enabled = result.scalar()
 
@@ -208,7 +207,7 @@ def test_model_imports():
 
 def test_daily_point_constraints():
     """Verify daily-point policy unique constraints."""
-    inspector = inspect(engine)
+    inspector = inspect(get_sync_engine())
 
     # Check price_history has (asset_id, date) unique
     price_uq = inspector.get_unique_constraints('price_history')

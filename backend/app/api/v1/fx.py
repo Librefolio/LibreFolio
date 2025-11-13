@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, delete as sql_delete, and_, or_
 
 from backend.app.db.models import FxCurrencyPairSource
-from backend.app.db.session import get_session
+from backend.app.db.session import get_session_generator
 from backend.app.schemas.common import BackwardFillInfo
 from backend.app.schemas.fx import (
     # Provider models
@@ -143,7 +143,7 @@ async def sync_rates(
     currencies: str = Query("USD,GBP,CHF,JPY", description="Comma-separated currency codes"),
     provider: str | None = Query(None, description="Provider code (ECB, FED, BOE, SNB). If NULL, uses fx_currency_pair_sources configuration."),
     base_currency: str | None = Query(None, description="Base currency (for multi-base providers)"),
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """
     Synchronize FX rates for the specified date range and currencies.
@@ -346,7 +346,7 @@ async def sync_rates(
 @router.post("/rate-set/bulk", response_model=UpsertRatesResponseModel, status_code=200)
 async def upsert_rates_endpoint(
     request: UpsertRatesRequestModel,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """
     Manually insert or update one or more FX rates (bulk operation).
@@ -427,7 +427,7 @@ async def upsert_rates_endpoint(
 @router.delete("/rate-set/bulk", response_model=DeleteRatesResponseModel)
 async def delete_rates_endpoint(
     request: DeleteRatesRequestModel,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """
     Delete one or more FX rates (bulk operation).
@@ -559,7 +559,7 @@ async def delete_rates_endpoint(
 @router.post("/convert/bulk", response_model=ConvertResponseModel)
 async def convert_currency_bulk(
     request: ConvertRequestModel,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """
     Convert one or more amounts between currencies (bulk operation).
@@ -677,7 +677,7 @@ async def convert_currency_bulk(
 # ============================================================================
 
 @router.get("/pair-sources", response_model=PairSourcesResponseModel)
-async def list_pair_sources(session: AsyncSession = Depends(get_session)):
+async def list_pair_sources(session: AsyncSession = Depends(get_session_generator)):
     """
     Get the list of configured currency pair sources.
 
@@ -714,7 +714,7 @@ async def list_pair_sources(session: AsyncSession = Depends(get_session)):
 @router.post("/pair-sources/bulk", response_model=CreatePairSourcesResponseModel, status_code=201)
 async def create_pair_sources_bulk(
     request: CreatePairSourcesRequestModel,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """
     Create or update multiple currency pair sources in a single atomic transaction.
@@ -871,7 +871,7 @@ async def create_pair_sources_bulk(
 @router.delete("/pair-sources/bulk", response_model=DeletePairSourcesResponseModel)
 async def delete_pair_sources_bulk(
     request: DeletePairSourcesRequestModel,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """
     Delete multiple currency pair sources.

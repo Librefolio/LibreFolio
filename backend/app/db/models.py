@@ -7,7 +7,7 @@ All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
 - Daily-point policy: one record per day for prices and FX rates
 - Foreign keys enforced with PRAGMA foreign_keys=ON
 """
-from datetime import date as date_type, datetime, timezone
+from datetime import date as date_type, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -23,15 +23,7 @@ from sqlalchemy import (
     )
 from sqlmodel import Field, SQLModel
 
-
-# ============================================================================
-# HELPERS
-# ============================================================================
-
-# TODO: Move to utils module if needed elsewhere
-def utcnow() -> datetime:
-    """Get current UTC datetime with timezone info."""
-    return datetime.now(timezone.utc)
+from backend.app.utils.datetime_utils import utcnow
 
 
 # ============================================================================
@@ -410,7 +402,7 @@ class Asset(SQLModel, table=True):
 #         foreign_key="cash_movements.id",
 #         description="ID del movimento di cassa associato"
 #     )
-#   E capire se è possibile sincronizzare automaticamente l'eventuale cancellazione, sia da qui che da là con un "ON DELETE CASCAD"
+#   E capire se è possibile sincronizzare automaticamente l'eventuale cancellazione, sia da qui che da là con un "ON DELETE CASCADE"
 #
 # TODO: Eliminare le colonne fees e taxes, che sono ridondanti e non servono a nulla, sono tutte e 2 ulteriori transazioni di tipo FEE e TAX
 #  riferite allo stesso asset, e anzi vanno collegate ai rispettivi cash_movements generati
@@ -461,8 +453,11 @@ class Transaction(SQLModel, table=True):
     price: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
     currency: str = Field(nullable=False)  # ISO 4217
 
-    fees: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
-    taxes: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
+    # Bidirectional relationship with CashMovement
+    cash_movement_id: Optional[int] = Field(
+        default=None, index=True, foreign_key="cash_movements.id",
+        description="ID del movimento di cassa associato (bidirectional link)"
+        )
 
     trade_date: date_type = Field(nullable=False, index=True)
     settlement_date: Optional[date_type] = Field(default=None)

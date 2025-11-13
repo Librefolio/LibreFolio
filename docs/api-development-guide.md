@@ -295,11 +295,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.session import get_session
+from backend.app.db.session import get_session_generator
 from backend.app.services.your_service import (
     YourServiceError,
     your_bulk_function,
-)
+    )
 
 router = APIRouter(prefix="/your-prefix", tags=["YourFeature"])
 
@@ -321,7 +321,7 @@ class YourItemRequest(BaseModel):
     field1: str = Field(..., min_length=1, max_length=100, description="Description of field1")
     field2: Decimal = Field(..., gt=0, description="Description of field2 (must be positive)")
     optional_field: str | None = Field(None, description="Optional field description")
-    
+
     class Config:
         # Allow using both field name and alias
         populate_by_name = True
@@ -340,10 +340,10 @@ class YourBulkRequest(BaseModel):
         }
     """
     items: list[YourItemRequest] = Field(
-        ..., 
-        min_length=1, 
+        ...,
+        min_length=1,
         description="List of items to process (minimum 1)"
-    )
+        )
 
 
 # ============================================================================
@@ -391,9 +391,9 @@ class YourBulkResponse(BaseModel):
 
 @router.post("/process", response_model=YourBulkResponse, status_code=200)
 async def process_items_bulk(
-    request: YourBulkRequest,
-    session: AsyncSession = Depends(get_session)
-):
+        request: YourBulkRequest,
+        session: AsyncSession = Depends(get_session_generator)
+        ):
     """
     Process one or more items (bulk operation).
     
@@ -449,17 +449,17 @@ async def process_items_bulk(
     service_input = [
         (item.field1, item.field2, item.optional_field)
         for item in request.items
-    ]
-    
+        ]
+
     # Call bulk service function
     try:
         service_results, service_errors = await your_bulk_function(
-            session, 
+            session,
             service_input
-        )
+            )
     except YourServiceError as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     # Format response
     results = []
     for idx, result in enumerate(service_results):
@@ -468,28 +468,28 @@ async def process_items_bulk(
                 success=True,
                 processed_value=result,
                 message="Item processed successfully"
-            ))
-    
+                ))
+
     # If all failed, return error
     if service_errors and not results:
         raise HTTPException(
             status_code=400,
             detail=f"All items failed: {'; '.join(service_errors)}"
-        )
-    
+            )
+
     return YourBulkResponse(
         results=results,
         success_count=len(results),
         errors=service_errors
-    )
+        )
 
 
 @router.get("/items", response_model=list[YourItemResult])
 async def list_items(
-    limit: int = Query(100, ge=1, le=1000, description="Maximum items to return"),
-    offset: int = Query(0, ge=0, description="Offset for pagination"),
-    session: AsyncSession = Depends(get_session)
-):
+        limit: int = Query(100, ge=1, le=1000, description="Maximum items to return"),
+        offset: int = Query(0, ge=0, description="Offset for pagination"),
+        session: AsyncSession = Depends(get_session_generator)
+        ):
     """
     List items with pagination.
     
@@ -520,19 +520,19 @@ async def list_items(
     """
     from backend.app.db.models import YourModel
     from sqlmodel import select
-    
+
     stmt = select(YourModel).offset(offset).limit(limit)
     result = await session.execute(stmt)
     items = result.scalars().all()
-    
+
     return [
         YourItemResult(
             success=True,
             processed_value=item.value,
             message=item.name
-        )
+            )
         for item in items
-    ]
+        ]
 ```
 
 > **📚 Technical Note - Pydantic v2**:

@@ -21,9 +21,11 @@ This ensures:
 """
 import asyncio
 import sys
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
+
+from backend.app.utils.datetime_utils import utcnow
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -222,7 +224,7 @@ async def test_database_truncation():
                 quote=test_quote,
                 rate=test_value,  # Insert with extra precision
                 source=source,
-                fetched_at=datetime.now(timezone.utc)
+                fetched_at=utcnow()
                 )
             session.add(test_rate)
             await session.commit()
@@ -311,7 +313,7 @@ async def test_no_false_updates():
                 quote=test_quote,
                 rate=test_value,
                 source=source,
-                fetched_at=datetime.now(timezone.utc)
+                fetched_at=utcnow()
                 )
             session.add(test_rate)
             await session.commit()
@@ -348,7 +350,7 @@ async def test_no_false_updates():
             if stored_truncated != new_truncated:
                 # Values are different after truncation, should update
                 stored_rate_1.rate = new_value_with_extra_precision
-                stored_rate_1.fetched_at = datetime.now(timezone.utc)
+                stored_rate_1.fetched_at = utcnow()
                 await session.commit()
                 await session.refresh(stored_rate_1)
                 print(f"   ✓ Update applied (values differ after truncation)")

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.session import get_session
+from backend.app.db.session import get_session_generator
 from backend.app.schemas.common import BackwardFillInfo
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.provider_registry import AssetProviderRegistry
@@ -218,7 +218,7 @@ async def list_providers():
 @router.post("/provider/bulk", response_model=BulkAssignProvidersResponse)
 async def assign_providers_bulk(
     request: BulkAssignProvidersRequest,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk assign providers to assets (PRIMARY bulk endpoint)."""
     try:
@@ -242,7 +242,7 @@ async def assign_providers_bulk(
 async def assign_provider_single(
     asset_id: int,
     assignment: ProviderAssignmentItem,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Assign provider to single asset (convenience endpoint, calls bulk internally)."""
     try:
@@ -267,7 +267,7 @@ async def assign_provider_single(
 @router.delete("/provider/bulk", response_model=BulkRemoveProvidersResponse)
 async def remove_providers_bulk(
     request: BulkRemoveProvidersRequest,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk remove provider assignments (PRIMARY bulk endpoint)."""
     try:
@@ -285,7 +285,7 @@ async def remove_providers_bulk(
 @router.delete("/{asset_id}/provider")
 async def remove_provider_single(
     asset_id: int,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Remove provider from single asset (convenience endpoint, calls bulk internally)."""
     try:
@@ -303,7 +303,7 @@ async def remove_provider_single(
 @router.post("/prices/bulk", response_model=BulkUpsertPricesResponse)
 async def upsert_prices_bulk(
     request: BulkUpsertPricesRequest,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk upsert prices manually (PRIMARY bulk endpoint)."""
     try:
@@ -331,7 +331,7 @@ async def upsert_prices_bulk(
 async def upsert_prices_single(
     asset_id: int,
     prices: List[PriceUpsertItem],
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Upsert prices for single asset (convenience endpoint, calls bulk internally)."""
     try:
@@ -346,7 +346,7 @@ async def upsert_prices_single(
 @router.delete("/prices/bulk", response_model=BulkDeletePricesResponse)
 async def delete_prices_bulk(
     request: BulkDeletePricesRequest,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk delete price ranges (PRIMARY bulk endpoint)."""
     try:
@@ -373,7 +373,7 @@ async def delete_prices_bulk(
 async def delete_prices_single(
     asset_id: int,
     date_ranges: List[DateRange],
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Delete price ranges for single asset (convenience endpoint, calls bulk internally)."""
     try:
@@ -394,7 +394,7 @@ async def get_prices(
     asset_id: int,
     start_date: date = Query(..., description="Start date (required)"),
     end_date: Optional[date] = Query(None, description="End date (optional, defaults to start_date)"),
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Get prices for asset with backward-fill support."""
     try:
@@ -420,7 +420,7 @@ async def get_prices(
 @router.post("/prices-refresh/bulk", response_model=BulkRefreshResponse)
 async def refresh_prices_bulk(
     request: BulkRefreshRequest,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk refresh prices via providers (PRIMARY bulk endpoint)."""
     try:
@@ -441,7 +441,7 @@ async def refresh_prices_single(
     start_date: date = Query(..., description="Start date"),
     end_date: date = Query(..., description="End date"),
     force: bool = Query(False, description="Force refresh"),
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session_generator)
     ):
     """Refresh prices for single asset (convenience endpoint, calls bulk internally)."""
     try:

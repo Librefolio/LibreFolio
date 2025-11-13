@@ -15,6 +15,8 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from backend.app.utils.decimal_utils import get_price_column_precision, truncate_price_to_db_precision
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -31,11 +33,8 @@ from backend.app.db.models import (
     AssetType,
     ValuationModel,
     )
-from backend.app.services.asset_source import (
-    AssetSourceManager,
-    truncate_price_to_db_precision,
-    get_price_column_precision,
-    )
+from backend.app.services.asset_source import AssetSourceManager
+
 from backend.app.utils.financial_math import (
     calculate_daily_factor_between_act365,
     find_active_rate,

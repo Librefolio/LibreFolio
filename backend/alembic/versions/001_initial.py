@@ -162,29 +162,30 @@ def upgrade() -> None:
     print("📦 Creating table: transactions...")
     conn.execute(sa.text("""CREATE TABLE transactions
                             (
-                                id              INTEGER PRIMARY KEY,
-                                asset_id        INTEGER        NOT NULL,
-                                broker_id       INTEGER        NOT NULL,
-                                type            VARCHAR(14)    NOT NULL,
-                                quantity        NUMERIC(18, 6) NOT NULL,
-                                price           NUMERIC(18, 6),
-                                currency        VARCHAR        NOT NULL,
-                                fees            NUMERIC(18, 6),
-                                taxes           NUMERIC(18, 6),
-                                trade_date      DATE           NOT NULL,
-                                settlement_date DATE,
-                                note            TEXT,
-                                created_at      DATETIME       NOT NULL,
-                                updated_at      DATETIME       NOT NULL,
+                                id                INTEGER PRIMARY KEY,
+                                asset_id          INTEGER        NOT NULL,
+                                broker_id         INTEGER        NOT NULL,
+                                type              VARCHAR(14)    NOT NULL,
+                                quantity          NUMERIC(18, 6) NOT NULL,
+                                price             NUMERIC(18, 6),
+                                currency          VARCHAR        NOT NULL,
+                                cash_movement_id  INTEGER,
+                                trade_date        DATE           NOT NULL,
+                                settlement_date   DATE,
+                                note              TEXT,
+                                created_at        DATETIME       NOT NULL,
+                                updated_at        DATETIME       NOT NULL,
                                 FOREIGN KEY (asset_id) REFERENCES assets (id),
-                                FOREIGN KEY (broker_id) REFERENCES brokers (id)
+                                FOREIGN KEY (broker_id) REFERENCES brokers (id),
+                                FOREIGN KEY (cash_movement_id) REFERENCES cash_movements (id)
                             )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE INDEX idx_transactions_asset_broker_date ON transactions (asset_id, broker_id, trade_date, id)"))
     conn.execute(sa.text("CREATE INDEX ix_transactions_asset_id ON transactions (asset_id)"))
     conn.execute(sa.text("CREATE INDEX ix_transactions_broker_id ON transactions (broker_id)"))
     conn.execute(sa.text("CREATE INDEX ix_transactions_trade_date ON transactions (trade_date)"))
-    print("  ✓ 4 Indexes created")
+    conn.execute(sa.text("CREATE INDEX ix_transactions_cash_movement_id ON transactions (cash_movement_id)"))
+    print("  ✓ 5 Indexes created")
 
     # Cash movements table
     print("📦 Creating table: cash_movements...")
