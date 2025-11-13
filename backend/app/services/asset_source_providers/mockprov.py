@@ -42,25 +42,6 @@ class MockProvider(AssetSourceProvider):
                 }
             ]
 
-    @property
-    def supports_history(self) -> bool:
-        """Whether this provider supports historical data."""
-        return True
-
-    @property
-    def test_search_query(self) -> str | None:
-        """Search query to use in tests."""
-        return 'TEST'
-
-    def validate_params(self, params: Dict | None) -> None:
-        """
-        Mock provider accepts any parameters.
-
-        In a real provider, this would validate required params.
-        """
-        # Accept any params for testing flexibility
-        pass
-
     async def get_current_value(
         self,
         identifier: str,
@@ -79,6 +60,11 @@ class MockProvider(AssetSourceProvider):
             as_of_date=date.today(),
             source=self.provider_name
             )
+
+    @property
+    def supports_history(self) -> bool:
+        """Whether this provider supports historical data."""
+        return True
 
     async def get_history_value(
         self,
@@ -113,6 +99,11 @@ class MockProvider(AssetSourceProvider):
             source=self.provider_name
             )
 
+    @property
+    def test_search_query(self) -> str | None:
+        """Search query to use in tests."""
+        return 'TEST'
+
     async def search(self, query: str) -> list[dict]:
         """
         Mock search - returns dummy result for any query.
@@ -125,3 +116,12 @@ class MockProvider(AssetSourceProvider):
                 "type": "MOCK"
                 }
             ]
+
+    def validate_params(self, params: Dict | None) -> None:
+        """
+        Mock provider accepts any parameters.
+
+        In a real provider, this would validate required params.
+        """
+        # Accept any params for testing flexibility
+        pass

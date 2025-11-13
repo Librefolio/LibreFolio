@@ -58,16 +58,10 @@ def ensure_database_exists():
         needs_migration = False
 
         if not db_path.exists():
-            logger.warning(
-                "Database file not found, running migrations",
-                db_path=str(db_path)
-                )
+            logger.warning("Database file not found, running migrations", db_path=str(db_path))
             needs_migration = True
         elif db_path.stat().st_size == 0:
-            logger.warning(
-                "Database file is empty (0 bytes), running migrations",
-                db_path=str(db_path)
-                )
+            logger.warning("Database file is empty (0 bytes), running migrations", db_path=str(db_path))
             needs_migration = True
         else:
             # Check if database has tables using SQLite directly
@@ -81,21 +75,12 @@ def ensure_database_exists():
                 conn.close()
 
                 if table_count == 0:
-                    logger.warning(
-                        "Database has no tables, running migrations",
-                        db_path=str(db_path)
-                        )
+                    logger.warning("Database has no tables, running migrations", db_path=str(db_path))
                     needs_migration = True
                 else:
-                    logger.info(
-                        f"Database initialized with {table_count} tables",
-                        db_path=str(db_path)
-                        )
+                    logger.info(f"Database initialized with {table_count} tables", db_path=str(db_path))
             except sqlite3.DatabaseError as e:
-                logger.warning(
-                    f"Database appears corrupted, running migrations: {e}",
-                    db_path=str(db_path)
-                    )
+                logger.warning(f"Database appears corrupted, running migrations: {e}", db_path=str(db_path))
                 needs_migration = True
 
         if needs_migration:
@@ -118,10 +103,7 @@ def ensure_database_exists():
                 if result.returncode == 0:
                     logger.info("Database created and migrated successfully")
                 else:
-                    logger.error(
-                        "Failed to create database",
-                        stderr=result.stderr
-                        )
+                    logger.error("Failed to create database", stderr=result.stderr)
                     sys.exit(1)
 
             except Exception as e:
@@ -180,8 +162,4 @@ async def root():
     Root endpoint.
     Provides basic API information.
     """
-    return {
-        "name": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "docs": f"{settings.API_V1_PREFIX}/docs",
-        }
+    return {"name": settings.PROJECT_NAME, "version": settings.VERSION, "docs": f"{settings.API_V1_PREFIX}/docs", }

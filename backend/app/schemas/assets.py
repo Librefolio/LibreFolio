@@ -1,3 +1,4 @@
+# Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
 from datetime import date
@@ -69,7 +70,8 @@ class AssetProviderAssignmentModel(BaseModel):
 # SCHEDULED INVESTMENT SCHEMAS
 # ============================================================================
 
-
+# TODO: aggiornare seguendo i commenti del interest_schedule scritti nel TODO della tabella Asset in model.py,
+#  creare una classe pydantic che possa essere usata sia dalle API che nel validare il JSON da inserire nel DB
 class InterestRatePeriod(BaseModel):
     """
     Interest rate period for scheduled investments.
@@ -113,6 +115,8 @@ class InterestRatePeriod(BaseModel):
         return v
 
 
+# TODO: aggiornare seguendo i commenti del interest_schedule scritti nel TODO della tabella Asset in model.py,
+#  creare una classe pydantic che possa essere usata sia dalle API che nel validare il JSON da inserire nel DB
 class LateInterestConfig(BaseModel):
     """
     Late interest configuration for scheduled investments.
@@ -153,6 +157,8 @@ class LateInterestConfig(BaseModel):
         return v
 
 
+# TODO: aggiornare seguendo i commenti del interest_schedule scritti nel TODO della tabella Asset in model.py,
+#  creare una classe pydantic che possa essere usata sia dalle API che nel validare il JSON da inserire nel DB
 class ScheduledInvestmentParams(BaseModel):
     """
     Provider parameters for scheduled investment assets.

@@ -2,8 +2,9 @@
 Yahoo Finance asset pricing provider.
 
 Uses yfinance library to fetch stock/ETF/crypto prices from Yahoo Finance.
-Supports both current values and historical OHLC data.
+Supports both current values and historical OHLC (Open, High, Low, Close) data.
 """
+# Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
 import logging
@@ -33,7 +34,7 @@ class YahooFinanceProvider(AssetSourceProvider):
     """Yahoo Finance data provider using yfinance library."""
 
     # Cache for search results (10 min TTL)
-    # TODO: implementare pulizia cache quando ttl si esaurisce
+    # TODO: implementare pulizia cache quando ttl si esaurisce, con cache system a livello di sistema
     _search_cache: Dict[str, tuple[list[dict], datetime]] = {}
     _CACHE_TTL_SECONDS = 600  # 10 minutes
     _MIN_SEARCH_CHARS = 2
@@ -55,22 +56,6 @@ class YahooFinanceProvider(AssetSourceProvider):
                 'provider_params': None
                 }
             ]
-
-    @property
-    def test_search_query(self) -> str | None:
-        """Search query to use in tests."""
-        return 'AAPL'
-
-    def validate_params(self, params: Dict | None) -> None:
-        """
-        Validate provider parameters.
-
-        For Yahoo Finance, identifier is passed directly to methods,
-        no special params needed.
-        """
-        # Yahoo Finance doesn't require specific params
-        # Identifier is passed as method argument
-        pass
 
     async def get_current_value(
         self,
@@ -237,6 +222,11 @@ class YahooFinanceProvider(AssetSourceProvider):
                 {"identifier": identifier, "error": str(e)}
                 )
 
+    @property
+    def test_search_query(self) -> str | None:
+        """Search query to use in tests."""
+        return 'AAPL'
+
     async def search(self, query: str) -> list[dict]:
         """
         Search Yahoo Finance for matching tickers.
@@ -308,3 +298,14 @@ class YahooFinanceProvider(AssetSourceProvider):
                 "SEARCH_ERROR",
                 {"query": query, "error": str(e)}
                 )
+
+    def validate_params(self, params: Dict | None) -> None:
+        """
+        Validate provider parameters.
+
+        For Yahoo Finance, identifier is passed directly to methods,
+        no special params needed.
+        """
+        # Yahoo Finance doesn't require specific params
+        # Identifier is passed as method argument
+        pass
