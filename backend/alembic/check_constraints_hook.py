@@ -6,17 +6,25 @@ This hook verifies that all CHECK constraints defined in SQLModel models exist i
 and adds them if missing.
 
 Usage:
-  Can be run standalone: python -m backend.alembic.check_constraints_hook
+  Can be run standalone: python -m backend.alembic.check_constraints_hook [--log-level info|debug|verbose]
   Or imported and called after migration: check_and_add_missing_constraints()
+
+Log Levels:
+  - info: Shows only summary (pass/fail count)
+  - debug: Shows summary + which constraints pass/fail (default)
+  - verbose: Shows everything including how to fix issues
 
 Author: LibreFolio Contributors
 """
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import sqlglot
 from sqlalchemy import CheckConstraint, text
 from sqlalchemy import create_engine
+from sqlglot.expressions import CheckColumnConstraint
 from sqlmodel import Session
 
 # Add project root to path
@@ -24,6 +32,31 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.db.base import SQLModel
+
+# TODO: più avanti spostare in una libreria comune se serve altrove
+class LogLevel(str, Enum):
+    """Log levels for constraint verification output."""
+    INFO = "info"  # Only summary
+    DEBUG = "debug"  # Summary + pass/fail details
+    VERBOSE = "verbose"  # Everything including fix instructions
+
+
+def is_check_constraints_eq(cc1: CheckColumnConstraint, cc2: CheckColumnConstraint) -> bool:
+    """
+    Compare two CheckColumnConstraint objects for semantic equivalence.
+
+    Args:
+        cc1: First CheckColumnConstraint object
+        cc2: Second CheckColumnConstraint object
+
+    Returns:
+        True if the constraints are semantically equivalent, False otherwise
+    """
+    # Convert both to SQL, parse them again for normalization, then compare
+    sql1 = str(sqlglot.parse_one(cc1.sql(dialect="sqlite"), dialect="sqlite"))
+    sql2 = str(sqlglot.parse_one(cc2.sql(dialect="sqlite"), dialect="sqlite"))
+
+    return sql1 == sql2
 
 
 def get_engine_for_check():
@@ -76,7 +109,7 @@ def get_engine_for_check():
     return engine
 
 
-def get_model_check_constraints() -> Dict[str, List[Tuple[str, str]]]:
+def get_model_check_constraints() -> Dict[str, List[Tuple[str, CheckColumnConstraint]]]:
     """
     Extract CHECK constraints from SQLModel models.
 
@@ -92,8 +125,8 @@ def get_model_check_constraints() -> Dict[str, List[Tuple[str, str]]]:
         for constraint in table.constraints:
             if isinstance(constraint, CheckConstraint):
                 constraint_name = constraint.name
-                # Get SQL expression as string
-                constraint_sql = str(constraint.sqltext)
+                # Get SQL expression as string (not normalized here, done during comparison)
+                constraint_sql = sqlglot.expressions.CheckColumnConstraint(this=sqlglot.parse_one(str(constraint.sqltext), dialect="sqlite"))
                 check_constraints.append((constraint_name, constraint_sql))
 
         if check_constraints:
@@ -102,7 +135,7 @@ def get_model_check_constraints() -> Dict[str, List[Tuple[str, str]]]:
     return constraints
 
 
-def get_db_check_constraints(table_name: str) -> List[str]:
+def get_db_check_constraints(table_name: str) -> List[CheckColumnConstraint]:
     """
     Get CHECK constraints from database for a specific table (SQLite).
 
@@ -110,7 +143,7 @@ def get_db_check_constraints(table_name: str) -> List[str]:
         table_name: Name of the table
 
     Returns:
-        List of constraint SQL expressions found in CREATE TABLE statement
+        List of tuples (constraint_name, constraint_sql) found in CREATE TABLE statement
     """
     engine = get_engine_for_check()
 
@@ -139,21 +172,8 @@ def get_db_check_constraints(table_name: str) -> List[str]:
         if not result or not result[0]:
             return []
 
-        create_sql = result[0]
-
-        # Parse CHECK constraints from CREATE TABLE
-        # Look for "CHECK (...)" or "CONSTRAINT name CHECK (...)"
-        import re
-
-        # Use DOTALL flag to match across newlines
-        # Pattern explanation:
-        # - (?:CONSTRAINT\s+\w+\s+)? - optional CONSTRAINT name
-        # - CHECK\s*\( - CHECK keyword followed by opening paren
-        # - ([^)]+) - capture everything up to closing paren
-        check_pattern = r'(?:CONSTRAINT\s+\w+\s+)?CHECK\s*\(([^)]+)\)'
-        matches = re.findall(check_pattern, create_sql, re.IGNORECASE | re.DOTALL)
-
-        return matches
+        check_constrain = list(sqlglot.parse_one(result[0], dialect="sqlite").find_all(sqlglot.expressions.CheckColumnConstraint))
+        return check_constrain
 
 
 def add_check_constraint_to_table(table_name: str, constraint_name: str, constraint_sql: str) -> bool:
@@ -180,18 +200,25 @@ def add_check_constraint_to_table(table_name: str, constraint_name: str, constra
     return False
 
 
-def check_and_add_missing_constraints(auto_fix: bool = False, verbose: bool = True) -> Tuple[bool, List[str]]:
+def check_and_add_missing_constraints(
+    auto_fix: bool = False,
+    log_level: LogLevel = LogLevel.DEBUG
+    ) -> Tuple[bool, List[str]]:
     """
     Check if all CHECK constraints from models exist in database.
 
     Args:
         auto_fix: If True, attempt to add missing constraints (limited on SQLite)
-        verbose: If True, print detailed output
+        log_level: Logging verbosity level (INFO, DEBUG, or VERBOSE)
 
     Returns:
         Tuple of (all_present, missing_constraints_list)
     """
-    if verbose:
+    show_header = log_level in [LogLevel.DEBUG, LogLevel.VERBOSE]
+    show_details = log_level in [LogLevel.DEBUG, LogLevel.VERBOSE]
+    show_fix_instructions = log_level == LogLevel.VERBOSE
+
+    if show_header:
         print("=" * 70, flush=True)
         print("CHECK Constraints Verification", flush=True)
         print("=" * 70, flush=True)
@@ -199,42 +226,49 @@ def check_and_add_missing_constraints(auto_fix: bool = False, verbose: bool = Tr
 
     model_constraints = get_model_check_constraints()
     missing = []
+    passed = []
 
     for table_name, constraints in model_constraints.items():
-        if verbose:
+        if show_details:
             print(f"📋 Table: {table_name}")
 
-        db_constraints = get_db_check_constraints(table_name)
+        db_table_constraints_detected = get_db_check_constraints(table_name)
 
-        for constraint_name, constraint_sql in constraints:
-            # Normalize SQL for comparison (remove extra spaces, case-insensitive)
-            normalized_expected = constraint_sql.strip().lower().replace(" ", "")
-
-            found = False
-            for db_constraint in db_constraints:
-                normalized_db = db_constraint.strip().lower().replace(" ", "")
-                if normalized_expected == normalized_db:
-                    found = True
+        # For each constraint of the current table, describe in the model, check if it exists in the database
+        for constraint_name, colum_constraints in constraints:
+            constraint_full_name = f"{table_name}.{constraint_name}"
+            found = None
+            for colum_constraints_detected in db_table_constraints_detected:
+                if is_check_constraints_eq(colum_constraints, colum_constraints_detected):
+                    found = colum_constraints
                     break
 
             if found:
-                if verbose:
-                    print(f"  ✅ {constraint_name}: {constraint_sql}")
+                passed.append(constraint_full_name)
+                if show_details:
+                    print(f"  ✅  {constraint_name} - PRESENT:\n     {colum_constraints.sql(dialect="sqlite")}")
             else:
-                if verbose:
-                    print(f"  ❌ {constraint_name}: {constraint_sql} - MISSING")
-                missing.append(f"{table_name}.{constraint_name}")
+                missing.append(constraint_full_name)
+                if show_details:
+                    print(f"  ❌  {constraint_name} - MISSING:\n     {colum_constraints.sql(dialect="sqlite")}")
 
                 if auto_fix:
-                    add_check_constraint_to_table(table_name, constraint_name, constraint_sql)
+                    add_check_constraint_to_table(table_name, constraint_name, colum_constraints.sql(dialect="sqlite"))
 
-        if verbose:
+        if show_details:
             print()
 
+    # Always show summary (for all log levels including INFO)
+    total = len(passed) + len(missing)
+    print(f"📊 Summary: {len(passed)}/{total} CHECK constraints present", flush=True)
+
     if missing:
-        if verbose:
-            print(f"⚠️  Found {len(missing)} missing CHECK constraint(s)")
-            print("   These constraints are defined in models but not in database.")
+        print(f"⚠️  {len(missing)} missing constraint(s):", flush=True)
+        if show_details:
+            for constraint in missing:
+                print(f"   - {constraint}", flush=True)
+
+        if show_fix_instructions:
             print()
             print("🔧 HOW TO FIX:")
             print()
@@ -274,11 +308,11 @@ def check_and_add_missing_constraints(auto_fix: bool = False, verbose: bool = Tr
             print()
             print("📚 See: docs/alembic-guide.md (SQLite CHECK Constraints section)")
             print()
+
         return False, missing
     else:
-        if verbose:
-            print("✅ All CHECK constraints are present in database")
-            print()
+        print("✅ All CHECK constraints are present in database", flush=True)
+        print()
         return True, []
 
 
@@ -293,13 +327,22 @@ def main():
     try:
         parser = argparse.ArgumentParser(description="Verify CHECK constraints in database")
         parser.add_argument("--fix", action="store_true", help="Attempt to add missing constraints")
-        parser.add_argument("--quiet", action="store_true", help="Minimal output")
+        parser.add_argument(
+            "--log-level",
+            type=str,
+            choices=["info", "debug", "verbose"],
+            default="debug",
+            help="Logging verbosity: info (summary only), debug (details), verbose (with fix instructions)"
+            )
 
         args = parser.parse_args()
 
+        # Convert string to LogLevel enum
+        log_level = LogLevel(args.log_level)
+
         all_present, missing = check_and_add_missing_constraints(
             auto_fix=args.fix,
-            verbose=not args.quiet
+            log_level=log_level
             )
 
         if not all_present:

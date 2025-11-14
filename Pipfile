@@ -24,6 +24,7 @@ pandas = "*"
 httpx = "*"
 beautifulsoup4 = "*"
 argcomplete = "*"
+sqlglot = "*"
 
 [dev-packages]
 pytest = "*"

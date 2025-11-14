@@ -331,10 +331,10 @@ function db_migrate() {
 
     local check_result
     if [ -n "$db_url" ]; then
-        ALEMBIC_DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook --quiet
+        ALEMBIC_DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook --log-level info
         check_result=$?
     else
-        pipenv run python -m backend.alembic.check_constraints_hook --quiet
+        pipenv run python -m backend.alembic.check_constraints_hook --log-level info
         check_result=$?
     fi
 
@@ -412,10 +412,10 @@ function db_upgrade() {
 
     local check_result
     if [ -n "$db_url" ]; then
-        ALEMBIC_DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook --quiet
+        ALEMBIC_DATABASE_URL="$db_url" pipenv run python -m backend.alembic.check_constraints_hook --log-level debug
         check_result=$?
     else
-        pipenv run python -m backend.alembic.check_constraints_hook --quiet
+        pipenv run python -m backend.alembic.check_constraints_hook --log-level debug
         check_result=$?
     fi
 

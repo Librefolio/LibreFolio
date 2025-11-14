@@ -11,11 +11,13 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+# Import the mapping dictionary to maintain consistency
+from backend.app.db.models import CASH_REQUIRED_TYPES_SQL
+
 revision: str = '001_initial'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
-
 
 def upgrade() -> None:
     """Create all tables."""
@@ -160,7 +162,7 @@ def upgrade() -> None:
 
     # Transactions table
     print("📦 Creating table: transactions...")
-    conn.execute(sa.text("""CREATE TABLE transactions
+    conn.execute(sa.text(f"""CREATE TABLE transactions
                             (
                                 id                INTEGER PRIMARY KEY,
                                 asset_id          INTEGER        NOT NULL,
@@ -177,7 +179,12 @@ def upgrade() -> None:
                                 updated_at        DATETIME       NOT NULL,
                                 FOREIGN KEY (asset_id) REFERENCES assets (id),
                                 FOREIGN KEY (broker_id) REFERENCES brokers (id),
-                                FOREIGN KEY (cash_movement_id) REFERENCES cash_movements (id)
+                                FOREIGN KEY (cash_movement_id) REFERENCES cash_movements (id) ON DELETE CASCADE,
+                                CHECK (
+                                    (type IN ({CASH_REQUIRED_TYPES_SQL}) AND cash_movement_id IS NOT NULL)
+                                    OR
+                                    (type NOT IN ({CASH_REQUIRED_TYPES_SQL}) AND cash_movement_id IS NULL)
+                                )
                             )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE INDEX idx_transactions_asset_broker_date ON transactions (asset_id, broker_id, trade_date, id)"))
@@ -191,28 +198,27 @@ def upgrade() -> None:
     print("📦 Creating table: cash_movements...")
     conn.execute(sa.text("""CREATE TABLE cash_movements
                             (
-                                id                    INTEGER PRIMARY KEY,
-                                cash_account_id       INTEGER        NOT NULL,
-                                type                  VARCHAR(15)    NOT NULL,
-                                amount                NUMERIC(18, 6) NOT NULL,
-                                trade_date            DATE           NOT NULL,
-                                note                  TEXT,
-                                linked_transaction_id INTEGER,
-                                created_at            DATETIME       NOT NULL,
-                                updated_at            DATETIME       NOT NULL,
-                                FOREIGN KEY (cash_account_id) REFERENCES cash_accounts (id),
-                                FOREIGN KEY (linked_transaction_id) REFERENCES transactions (id)
+                                id              INTEGER PRIMARY KEY,
+                                cash_account_id INTEGER        NOT NULL,
+                                type            VARCHAR(15)    NOT NULL,
+                                amount          NUMERIC(18, 6) NOT NULL,
+                                trade_date      DATE           NOT NULL,
+                                note            TEXT,
+                                created_at      DATETIME       NOT NULL,
+                                updated_at      DATETIME       NOT NULL,
+                                FOREIGN KEY (cash_account_id) REFERENCES cash_accounts (id)
                             )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE INDEX idx_cash_movements_account_date ON cash_movements (cash_account_id, trade_date, id)"))
     conn.execute(sa.text("CREATE INDEX ix_cash_movements_cash_account_id ON cash_movements (cash_account_id)"))
-    conn.execute(sa.text("CREATE INDEX ix_cash_movements_linked_transaction_id ON cash_movements (linked_transaction_id)"))
     conn.execute(sa.text("CREATE INDEX ix_cash_movements_trade_date ON cash_movements (trade_date)"))
-    print("  ✓ 4 Indexes created")
+    print("  ✓ 3 Indexes created")
 
     print("=" * 60)
     print("✅ Migration 001_initial completed successfully!")
     print("📊 Created 9 tables with all indexes and constraints")
+    print("🔗 Transaction -> CashMovement: unidirectional with ON DELETE CASCADE")
+    print("✅ CHECK constraint ensures Transaction types have required CashMovement")
 
 
 def downgrade() -> None:

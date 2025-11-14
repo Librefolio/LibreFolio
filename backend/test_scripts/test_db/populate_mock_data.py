@@ -526,9 +526,62 @@ def populate_transactions_and_cash(session: Session):
         ]
 
     for tx_data in transactions:
-        if not tx_data["broker"] or not tx_data["asset"]:
-            continue
+        # Determine if this transaction type requires a cash movement
+        requires_cash = tx_data["type"] in [
+            TransactionType.BUY,
+            TransactionType.SELL,
+            TransactionType.DIVIDEND,
+            TransactionType.INTEREST,
+            TransactionType.FEE,
+            TransactionType.TAX,
+        ]
 
+        cash_movement_id = None
+
+        # Create CashMovement FIRST if required (before Transaction due to CHECK constraint)
+        if requires_cash:
+            cash_account = session.exec(
+                select(CashAccount).where(
+                    CashAccount.broker_id == tx_data["broker"].id,
+                    CashAccount.currency == tx_data["currency"]
+                )
+            ).first()
+
+            if cash_account:
+                cash_type = None
+                cash_amount = Decimal("0.00")
+
+                if tx_data["type"] == TransactionType.BUY:
+                    cash_type = CashMovementType.BUY_SPEND
+                    cash_amount = tx_data["quantity"] * tx_data["price"] + tx_data.get("fees", Decimal("0.00"))
+                elif tx_data["type"] == TransactionType.SELL:
+                    cash_type = CashMovementType.SALE_PROCEEDS
+                    cash_amount = tx_data["quantity"] * tx_data["price"] - tx_data.get("fees", Decimal("0.00"))
+                elif tx_data["type"] == TransactionType.DIVIDEND:
+                    cash_type = CashMovementType.DIVIDEND_INCOME
+                    cash_amount = tx_data["price"] - tx_data.get("taxes", Decimal("0.00"))
+                elif tx_data["type"] == TransactionType.INTEREST:
+                    cash_type = CashMovementType.INTEREST_INCOME
+                    cash_amount = tx_data["price"]
+                elif tx_data["type"] == TransactionType.FEE:
+                    cash_type = CashMovementType.FEE
+                    cash_amount = tx_data["price"]
+                elif tx_data["type"] == TransactionType.TAX:
+                    cash_type = CashMovementType.TAX
+                    cash_amount = tx_data["price"]
+
+                if cash_type:
+                    cash_mov = CashMovement(
+                        cash_account_id=cash_account.id,
+                        type=cash_type,
+                        amount=cash_amount,
+                        trade_date=date.today() - timedelta(days=tx_data["days_ago"]),
+                    )
+                    session.add(cash_mov)
+                    session.flush()  # Get cash_movement ID
+                    cash_movement_id = cash_mov.id
+
+        # Now create Transaction with cash_movement_id already set
         tx = Transaction(
             asset_id=tx_data["asset"].id,
             broker_id=tx_data["broker"].id,
@@ -536,57 +589,19 @@ def populate_transactions_and_cash(session: Session):
             quantity=tx_data["quantity"],
             price=tx_data["price"],
             currency=tx_data["currency"],
+            cash_movement_id=cash_movement_id,  # Set from CashMovement created above
             trade_date=date.today() - timedelta(days=tx_data["days_ago"]),
             note=tx_data["note"],
-            )
+        )
         session.add(tx)
         session.flush()  # Get transaction ID
-
-        # Auto-generate cash movement
-        cash_account = session.exec(
-            select(CashAccount).where(
-                CashAccount.broker_id == tx_data["broker"].id,
-                CashAccount.currency == tx_data["currency"]
-                )
-            ).first()
-
-        if cash_account:
-            cash_type = None
-            cash_amount = Decimal("0.00")
-
-            if tx_data["type"] == TransactionType.BUY:
-                cash_type = CashMovementType.BUY_SPEND
-                cash_amount = tx_data["quantity"] * tx_data["price"] + tx_data.get("fees", Decimal("0.00"))
-            elif tx_data["type"] == TransactionType.SELL:
-                cash_type = CashMovementType.SALE_PROCEEDS
-                cash_amount = tx_data["quantity"] * tx_data["price"] - tx_data.get("fees", Decimal("0.00"))
-            elif tx_data["type"] == TransactionType.DIVIDEND:
-                cash_type = CashMovementType.DIVIDEND_INCOME
-                cash_amount = tx_data["price"] - tx_data.get("taxes", Decimal("0.00"))
-            elif tx_data["type"] == TransactionType.INTEREST:
-                cash_type = CashMovementType.INTEREST_INCOME
-                cash_amount = tx_data["price"]
-
-            if cash_type:
-                cash_mov = CashMovement(
-                    cash_account_id=cash_account.id,
-                    type=cash_type,
-                    amount=cash_amount,
-                    trade_date=tx.trade_date,
-                    linked_transaction_id=tx.id,
-                    )
-                session.add(cash_mov)
-                session.flush()  # Get cash_movement ID
-
-                # Set bidirectional relationship
-                tx.cash_movement_id = cash_mov.id
 
         tx_type_emoji = {
             TransactionType.BUY: "🛒",
             TransactionType.SELL: "💰",
             TransactionType.DIVIDEND: "💵",
             TransactionType.INTEREST: "📈",
-            }.get(tx_data["type"], "📊")
+        }.get(tx_data["type"], "📊")
 
         print(f"  {tx_type_emoji} {tx_data['type'].value}: {tx_data['asset'].identifier} "
               f"(qty: {tx_data['quantity']}, price: {tx_data['price']} {tx_data['currency']})")
