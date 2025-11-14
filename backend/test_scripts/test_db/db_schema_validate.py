@@ -33,7 +33,7 @@ from backend.app.db.models import (
     TransactionType,
     CashMovementType,
     )
-from backend.alembic.check_constraints_hook import check_and_add_missing_constraints
+from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
 
 def test_tables_exist():
     """
@@ -248,7 +248,7 @@ def test_check_constraints():
         return True
 
     print("  Verifying constraints exist in database...")
-    all_present, missing = check_and_add_missing_constraints(auto_fix=False, verbose=False)
+    all_present, missing = check_and_add_missing_constraints(auto_fix=False, log_level=LogLevel.VERBOSE)
 
     if not all_present:
         print(f"  ❌ Missing CHECK constraints:")

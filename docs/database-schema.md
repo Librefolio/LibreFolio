@@ -282,15 +282,21 @@ CREATE TABLE transactions (
     price DECIMAL(18,6),                 -- Price per unit (BUY/SELL) or total amount (DIVIDEND)
     currency TEXT NOT NULL,              -- Transaction currency
     
-    fees DECIMAL(18,6),                  -- Transaction fees
-    taxes DECIMAL(18,6),                 -- Taxes paid
+    cash_movement_id INTEGER,            -- FK to cash_movements (ON DELETE CASCADE)
     
     trade_date DATE NOT NULL,
     settlement_date DATE,
     note TEXT,
     
     created_at DATETIME,
-    updated_at DATETIME
+    updated_at DATETIME,
+    
+    -- CHECK constraint ensures types that require cash have it
+    CHECK (
+        (type IN ('BUY', 'SELL', 'DIVIDEND', 'INTEREST', 'FEE', 'TAX') AND cash_movement_id IS NOT NULL)
+        OR
+        (type NOT IN ('BUY', 'SELL', 'DIVIDEND', 'INTEREST', 'FEE', 'TAX') AND cash_movement_id IS NULL)
+    )
 );
 ```
 
@@ -310,10 +316,12 @@ CREATE TABLE transactions (
 | **TAX** | No change (qty=0) | Cash decrease (TAX) | Standalone tax |
 
 **Key points:**
-- **Auto-generates cash movements**: BUY, SELL, DIVIDEND, INTEREST, FEE, TAX automatically create corresponding cash_movements
-  - ⚠️ **Important**: This is implemented in the **backend Python code**, NOT at database level with triggers
-  - The backend service creates both records in the same transaction
-  - If a transaction is deleted, the backend must also delete the linked cash_movement (cascade logic in Python)
+- **Unidirectional relationship**: Transaction → CashMovement (via `cash_movement_id`)
+  - Types BUY, SELL, DIVIDEND, INTEREST, FEE, TAX **MUST** have `cash_movement_id` set (enforced by CHECK constraint)
+  - Types ADD_HOLDING, REMOVE_HOLDING, TRANSFER_IN, TRANSFER_OUT **MUST NOT** have `cash_movement_id` (no cash impact)
+  - To find Transaction from CashMovement: `SELECT * FROM transactions WHERE cash_movement_id = <id>`
+- **ON DELETE CASCADE**: Deleting a Transaction automatically deletes its linked CashMovement, ensuring no orphan cash movements. Deleting a CashMovement is not allowed if linked to a Transaction thanks the `PRAGMA foreign_keys = ON` .
+- **Fees and taxes**: Handled as separate FEE/TAX transactions (not columns), each with its own CashMovement
 - **Quantity rules**: 
   - `> 0` for BUY, SELL, TRANSFER, ADD/REMOVE_HOLDING
   - `= 0` for DIVIDEND, INTEREST, FEE, TAX (cash-only)
@@ -346,9 +354,35 @@ CREATE TABLE cash_movements (
     amount DECIMAL(18,6) NOT NULL,       -- Always positive (direction in type)
     trade_date DATE NOT NULL,
     note TEXT,
-    linked_transaction_id INTEGER,       -- FK to transactions (if auto-generated)
     created_at DATETIME,
     updated_at DATETIME
+);
+```
+
+**Cash movement types:**
+
+| Type | Direction | Auto-Generated? | Description |
+|------|-----------|-----------------|-------------|
+| **DEPOSIT** | Inflow | No | Add funds to broker |
+| **WITHDRAWAL** | Outflow | No | Remove funds from broker |
+| **BUY_SPEND** | Outflow | Yes (from BUY) | Cash spent buying assets |
+| **SALE_PROCEEDS** | Inflow | Yes (from SELL) | Cash received selling assets |
+| **DIVIDEND_INCOME** | Inflow | Yes (from DIVIDEND) | Dividend payment |
+| **INTEREST_INCOME** | Inflow | Yes (from INTEREST) | Interest payment |
+| **FEE** | Outflow | Yes (from FEE) | Fee/commission |
+| **TAX** | Outflow | Yes (from TAX) | Tax payment |
+| **TRANSFER_IN** | Inflow | No | Cash from another broker |
+| **TRANSFER_OUT** | Outflow | No | Cash to another broker |
+
+**Key points:**
+- **Unidirectional relationship**: Transaction → CashMovement (via Transaction.cash_movement_id)
+  - To find the Transaction that created a CashMovement: `SELECT * FROM transactions WHERE cash_movement_id = <cash_movement.id>`
+  - No `linked_transaction_id` field in CashMovement (avoids redundancy and maintains single source of truth)
+- **Amount always positive**: Direction is implied by type (inflow vs outflow)
+- **Balance calculation**: `SUM(inflows) - SUM(outflows)` for account balance
+- **Manual vs auto-generated**: 
+  - Manual: DEPOSIT, WITHDRAWAL, TRANSFER_IN, TRANSFER_OUT (created by user)
+  - Auto-generated: BUY_SPEND, SALE_PROCEEDS, DIVIDEND_INCOME, INTEREST_INCOME, FEE, TAX (created by backend when Transaction is created)
 );
 ```
 

@@ -22,12 +22,12 @@ Author: LibreFolio Contributors
 
 import argparse
 import os
-
-import argcomplete
 import subprocess
 import sys
 import traceback
 from pathlib import Path
+
+import argcomplete
 
 # Setup test database configuration and get test database path
 from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH, TEST_DATABASE_URL
@@ -317,20 +317,21 @@ def db_numeric_truncation(verbose: bool = False) -> bool:
         )
 
 
-def db_transaction_cash_bidirectional(verbose: bool = False) -> bool:
+def db_test_transaction_cash_integrity(verbose: bool = False) -> bool:
     """
-    Test bidirectional relationship between Transaction and CashMovement.
-    Validates Phase 2 remediation (task 1.1).
+    Test unidirectional relationship between Transaction and CashMovement.
+    Validates Phase 2b remediation (task 1.1b): Transaction -> CashMovement unidirectional.
+    Tests: CASCADE delete, CHECK constraints, relationship integrity.
     """
-    print_section("DB Test: Transaction ↔ CashMovement Bidirectional")
-    print_info("Testing bidirectional foreign key relationship")
-    print_info("Tests: Creation, Navigation, Consistency")
+    print_section("DB Test: Transaction → CashMovement Integrity")
+    print_info("Testing unidirectional relationship with CASCADE and CHECK constraints")
+    print_info("Tests: Unidirectional navigation, ON DELETE CASCADE, CHECK constraints")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_transaction_cash_bidirectional"],
-        "Transaction-CashMovement bidirectional tests",
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_transaction_cash_integrity"],
+        "Transaction-CashMovement integrity tests",
         verbose=verbose
-        )
+    )
 
 
 def db_all(verbose: bool = False) -> bool:
@@ -351,7 +352,7 @@ def db_all(verbose: bool = False) -> bool:
         ("Validate Schema", lambda: db_validate(verbose)),
         ("Numeric Truncation", lambda: db_numeric_truncation(verbose)),
         ("Populate Mock Data", lambda: db_populate(verbose, force=True)),  # Use force in 'all' mode
-        ("Transaction-CashMovement Bidirectional", lambda: db_transaction_cash_bidirectional(verbose)),
+        ("Transaction-CashMovement Integrity", lambda: db_test_transaction_cash_integrity(verbose)),
         ("FX Rates Persistence", lambda: db_fx_rates(verbose)),
         ]
 
@@ -479,6 +480,7 @@ def utils_datetime(verbose: bool = False) -> bool:
         "Datetime utils tests",
         verbose=verbose
         )
+
 
 def utils_financial_math(verbose: bool = False) -> bool:
     """Test financial math utilities."""
@@ -790,23 +792,27 @@ These tests operate directly on the SQLite database file:
   • Tests schema, constraints, data persistence
 
 Test commands:
-  create            - Delete existing DB and create fresh from migrations
-                      📋 Prerequisites: None - this is the first test to run
-              
-  validate          - Verify all tables, constraints, indexes, foreign keys
-                      📋 Prerequisites: Database created (run: db create)
-              
-  numeric-truncation - Test Numeric column truncation for ALL tables
-                      📋 Prerequisites: Database created (run: db create)
-                      💡 Tests helper functions and database precision handling
-              
-  populate          - Populate database with MOCK DATA for testing/frontend dev
-                      📋 Prerequisites: Database created (run: db create)
-                      💡 Use --force to delete existing data and recreate
-              
-  fx-rates          - Test FX rates persistence (fetch from ECB & persist)
-                      📋 Prerequisites: External ECB API working (run: external ecb)
-                      💡 Can run on database with existing data (uses UPSERT)
+  create                     - Delete existing DB and create fresh from migrations
+                               📋 Prerequisites: None - this is the first test to run
+                       
+  validate                   - Verify all tables, constraints, indexes, foreign keys
+                               📋 Prerequisites: Database created (run: db create)
+                       
+  numeric-truncation          - Test Numeric column truncation for ALL tables
+                               📋 Prerequisites: Database created (run: db create)
+                               💡 Tests helper functions and database precision handling
+                       
+  populate                   - Populate database with MOCK DATA for testing/frontend dev
+                               📋 Prerequisites: Database created (run: db create)
+                               💡 Use --force to delete existing data and recreate
+                       
+  fx-rates                   - Test FX rates persistence (fetch from ECB & persist)
+                               📋 Prerequisites: External ECB API working (run: external ecb)
+                               💡 Can run on database with existing data (uses UPSERT)
+                      
+  transaction-cash-integrity - Test unidirectional relationship between Transaction and CashMovement
+                               📋 Prerequisites: Database created (run: db create)
+                               💡 Validates Transaction -> CashMovement unidirectional properties
               
   all               - Run all DB tests (create → validate → numeric-truncation → populate → fx-rates)
         """,
@@ -815,7 +821,7 @@ Test commands:
 
     db_parser.add_argument(
         "action",
-        choices=["create", "validate", "numeric-truncation", "fx-rates", "populate", "all"],
+        choices=["create", "validate", "numeric-truncation", "fx-rates", "populate", "transaction-cash-integrity", "all"],
         help="Database test to run"
         )
 
@@ -1011,6 +1017,8 @@ def main():
         elif args.action == "populate":
             force = getattr(args, 'force', False)
             success = db_populate(verbose=verbose, force=force)
+        elif args.action == "transaction-cash-integrity":
+            success = db_test_transaction_cash_integrity(verbose=verbose)
         elif args.action == "all":
             success = db_all(verbose=verbose)
 

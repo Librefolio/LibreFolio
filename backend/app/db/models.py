@@ -20,6 +20,8 @@ from sqlalchemy import (
     Text,
     event,
     CheckConstraint,
+    Integer,
+    ForeignKey,
     )
 from sqlmodel import Field, SQLModel
 
@@ -225,40 +227,38 @@ class CashMovementType(str, Enum):
 
     == Auto-generated movements (linked to asset transactions) ==
 
+    Note: The relationship with Transaction is unidirectional (Transaction -> CashMovement).
+    To find the Transaction that created a CashMovement, query:
+        SELECT * FROM transactions WHERE cash_movement_id = <cash_movement.id>
+
     - BUY_SPEND: Cash spent on asset purchase
       When: Auto-created from BUY transaction
       Effect: ↓ cash balance
-      Link: linked_transaction_id -> BUY transaction
       Example: Spend €1500 to buy 10 shares (price €150 each)
 
     - SALE_PROCEEDS: Cash received from asset sale
       When: Auto-created from SELL transaction
       Effect: ↑ cash balance
-      Link: linked_transaction_id -> SELL transaction
       Example: Receive €3000 from selling 10 shares (price €300 each)
 
     - DIVIDEND_INCOME: Dividend payment received
       When: Auto-created from DIVIDEND transaction
       Effect: ↑ cash balance
-      Link: linked_transaction_id -> DIVIDEND transaction
       Example: Receive €50 dividend from stock holdings
 
     - INTEREST_INCOME: Interest payment received
       When: Auto-created from INTEREST transaction
       Effect: ↑ cash balance
-      Link: linked_transaction_id -> INTEREST transaction
       Example: Receive €20 monthly interest from loan
 
     - FEE: Fee/commission payment
       When: Auto-created from FEE transaction, or manual broker fees
       Effect: ↓ cash balance
-      Link: linked_transaction_id -> FEE transaction (if applicable)
       Example: Pay €5 monthly account maintenance fee
 
     - TAX: Tax payment
       When: Auto-created from TAX transaction, or manual tax payments
       Effect: ↓ cash balance
-      Link: linked_transaction_id -> TAX transaction (if applicable)
       Example: Pay €100 capital gains tax
 
     == Transfer movements (between brokers) ==
@@ -275,8 +275,8 @@ class CashMovementType(str, Enum):
 
     Impact:
     - All amounts are positive (direction implied by type)
-    - Auto-generated movements have linked_transaction_id set
     - Cash balance = sum(DEPOSIT, SALE_PROCEEDS, DIVIDEND_INCOME, INTEREST_INCOME, TRANSFER_IN)
+                    - sum(WITHDRAWAL, BUY_SPEND, FEE, TAX, TRANSFER_OUT)
     """
     DEPOSIT = "DEPOSIT"
     WITHDRAWAL = "WITHDRAWAL"
@@ -288,6 +288,19 @@ class CashMovementType(str, Enum):
     TAX = "TAX"
     TRANSFER_IN = "TRANSFER_IN"
     TRANSFER_OUT = "TRANSFER_OUT"
+
+
+TRANSACTION_TYPES_REQUIRING_CASH_MOVEMENT = {
+    TransactionType.BUY: CashMovementType.BUY_SPEND,
+    TransactionType.SELL: CashMovementType.SALE_PROCEEDS,
+    TransactionType.DIVIDEND: CashMovementType.DIVIDEND_INCOME,
+    TransactionType.INTEREST: CashMovementType.INTEREST_INCOME,
+    TransactionType.FEE: CashMovementType.FEE,
+    TransactionType.TAX: CashMovementType.TAX,
+}
+
+# Helper to generate SQL IN clause for CHECK constraint
+CASH_REQUIRED_TYPES_SQL = ", ".join(f"'{t.value}'" for t in TRANSACTION_TYPES_REQUIRING_CASH_MOVEMENT.keys())
 
 
 # ============================================================================
@@ -441,7 +454,15 @@ class Transaction(SQLModel, table=True):
     __tablename__ = "transactions"
     __table_args__ = (
         Index("idx_transactions_asset_broker_date", "asset_id", "broker_id", "trade_date", "id"),
-        )
+        CheckConstraint(
+            f"""
+            (type IN ({CASH_REQUIRED_TYPES_SQL}) AND cash_movement_id IS NOT NULL)
+            OR
+            (type NOT IN ({CASH_REQUIRED_TYPES_SQL}) AND cash_movement_id IS NULL)
+            """,
+            name="ck_transaction_cash_movement_required"
+        ),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -453,11 +474,18 @@ class Transaction(SQLModel, table=True):
     price: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
     currency: str = Field(nullable=False)  # ISO 4217
 
-    # Bidirectional relationship with CashMovement
+    # Unidirectional relationship: Transaction -> CashMovement
+    # ON DELETE CASCADE ensures that deleting the CashMovement also delete the Transaction that references it
     cash_movement_id: Optional[int] = Field(
-        default=None, index=True, foreign_key="cash_movements.id",
-        description="ID del movimento di cassa associato (bidirectional link)"
-        )
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("cash_movements.id", ondelete="CASCADE"),
+            index=True,
+            nullable=True
+        ),
+        description="ID del movimento di cassa associato (unidirectional: Transaction -> CashMovement)"
+    )
 
     trade_date: date_type = Field(nullable=False, index=True)
     settlement_date: Optional[date_type] = Field(default=None)
@@ -639,7 +667,11 @@ class CashMovement(SQLModel, table=True):
     - Transfer: TRANSFER_IN, TRANSFER_OUT
 
     Amount is always positive (direction implied by type).
-    linked_transaction_id set when auto-generated from asset transaction.
+
+    Note: The relationship with Transaction is unidirectional.
+    Use Transaction.cash_movement_id to link a Transaction to its CashMovement.
+    To find the Transaction that created a CashMovement, query:
+        SELECT * FROM transactions WHERE cash_movement_id = <cash_movement.id>
     """
     __tablename__ = "cash_movements"
     __table_args__ = (
@@ -654,11 +686,6 @@ class CashMovement(SQLModel, table=True):
 
     trade_date: date_type = Field(nullable=False, index=True)
     note: Optional[str] = Field(default=None, sa_column=Column(Text))
-    linked_transaction_id: Optional[int] = Field(
-        default=None,
-        foreign_key="transactions.id",
-        index=True
-        )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
