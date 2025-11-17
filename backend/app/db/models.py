@@ -325,62 +325,43 @@ class Broker(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-# TODO: aggiornare documentazione per Interest schedule, ma creare anche l'interesse composto,
-#  credo che la soluzione proposta qui sia molto più completa
-#  Il face_value e maturity_date vanno eliminati. Il face_value è ridondante e va calcolato guardando le varie transazioni,
-#  il maturity_date altro non sarebbe che l'ultimo end_date della interest_schedule, e se si va oltre scatta il late_interest
-#  e anzi io direi che il late_interest andrebbe inserito anche lui nella interest_schedule come segmento a parte che scatta dopo la maturity_date
-#  Il json dell'interest_schedule andrebbe modificato così:
-#       {
-#       "schedule": [
-#           {
-#               "start_date": "YYYY-MM-DD", # Compreso
-#               "end_date": "YYYY-MM-DD",   # Compreso
-#               "annual_rate": 0.085,
-#               "compounding": "SIMPLE" or "COMPOUND",
-#               "compound_frequency": "DAILY" | "MONTHLY" | "ANNUAL",
-#               "day_count": "ACT/365" | "ACT/360" | "30/360"
-#           },...],
-#       "late_interest": {
-#           "annual_rate": 0.12,
-#           "grace_days": 0
-#           }
-#     }
-#     e aggiungere una validazione per assicurarsi che le date non si sovrappongano e che non ci siano buchi,
-#     se dopo una certa data smette di maturare, ma non c'è mora, il late_interest avrà un rate = 0.
-#     In corso di validazione le date schedulate non devono avere buchi e neanche sovrapposizioni.
-#     Ricapitolando: eliminare i campi face_value e maturity_date, e creare un validatore per l'interest_schedule, magari con pydantic
-
 class Asset(SQLModel, table=True):
     """
-    Asset definition with loan schedule support and provider assignments.
+    Asset definition with interest schedule support for scheduled-yield assets.
 
-    Provider assignments (Step 05):
+    Provider assignments:
     - Use asset_provider_assignments table (1-to-1 relationship)
     - Each asset can have at most one provider for pricing data
     - Provider handles both current and historical data fetching
 
-    Loan/scheduled-yield fields (for CROWDFUND_LOAN, BOND, etc.):
-    - face_value: Principal amount
-    - maturity_date: When the loan matures
-    - interest_schedule: JSON array of interest rate segments
-    - late_interest: JSON object with late payment terms
+    Scheduled-yield fields (for CROWDFUND_LOAN, BOND, etc.):
+    - interest_schedule: JSON containing complete ScheduledInvestmentSchedule
 
-    Interest schedule segment schema:
+    The interest_schedule JSON should conform to ScheduledInvestmentSchedule schema:
     {
-      "start_date": "YYYY-MM-DD",
-      "end_date": "YYYY-MM-DD" or null,
-      "annual_rate": 0.085,
-      "compounding": "SIMPLE" or "COMPOUND",
-      "compound_frequency": "DAILY" | "MONTHLY" | "ANNUAL",
-      "day_count": "ACT/365" | "ACT/360" | "30/360"
+      "schedule": [
+        {
+          "start_date": "YYYY-MM-DD",
+          "end_date": "YYYY-MM-DD",
+          "annual_rate": 0.085,
+          "compounding": "SIMPLE" | "COMPOUND",
+          "compound_frequency": "DAILY" | "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL" | "CONTINUOUS",
+          "day_count": "ACT/365" | "ACT/360" | "ACT/ACT" | "30/360"
+        },
+        ...
+      ],
+      "late_interest": {
+        "annual_rate": 0.12,
+        "grace_period_days": 30,
+        "compounding": "SIMPLE",
+        "day_count": "ACT/365"
+      }
     }
 
-    Late interest schema:
-    {
-      "annual_rate": 0.12,
-      "grace_days": 0
-    }
+    Notes:
+    - face_value (principal) is calculated from transactions (BUY - SELL)
+    - maturity_date is the last period's end_date in the schedule
+    - Validation is done via ScheduledInvestmentSchedule Pydantic model
     """
     __tablename__ = "assets"
 
@@ -395,11 +376,10 @@ class Asset(SQLModel, table=True):
     # Valuation model
     valuation_model: ValuationModel = Field(default=ValuationModel.MARKET_PRICE)
 
-    # Loan / scheduled-yield fields
-    face_value: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
-    maturity_date: Optional[date_type] = Field(default=None)
-    interest_schedule: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON array
-    late_interest: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON object
+    # Scheduled-yield configuration (JSON)
+    # Should contain ScheduledInvestmentSchedule structure
+    # Validated when loaded using ScheduledInvestmentSchedule(**json.loads(interest_schedule))
+    interest_schedule: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     active: bool = Field(default=True)
 
@@ -420,18 +400,25 @@ class Asset(SQLModel, table=True):
 # TODO: Eliminare le colonne fees e taxes, che sono ridondanti e non servono a nulla, sono tutte e 2 ulteriori transazioni di tipo FEE e TAX
 #  riferite allo stesso asset, e anzi vanno collegate ai rispettivi cash_movements generati
 #
-# TODO: Nota, aggiornare documentazione e codice affinchè nei calcoli si usi settlement_date, e la trade_date è solo informativa e quindi opzionale
-#   Nel contesto delle transazioni finanziarie, `trade_date` rappresenta la data in cui l’operazione viene eseguita (es. ordine di acquisto/vendita),
-#   mentre `settlement_date` è la data in cui l’operazione viene effettivamente regolata (trasferimento di denaro/titoli).
-#   Nei CSV di Directa:
-#   - "Data operazione" corrisponde a `trade_date`
-#   - "Data valuta" corrisponde a `settlement_date`
-#   Quindi, per importare correttamente i dati, occorre rimappare:
-#     "Data operazione" → trade_date
-#     "Data valuta"     → settlement_date
 class Transaction(SQLModel, table=True):
     """
     Unified asset transaction record.
+
+    Dates:
+    - trade_date: When the order was executed (optional, informational)
+    - settlement_date: When the transaction was settled (REQUIRED for calculations)
+
+    ⚠️ IMPORTANT: All portfolio calculations MUST use settlement_date, not trade_date.
+
+    In financial transactions:
+    - trade_date: The date when the order is executed (e.g., buy/sell order placed)
+    - settlement_date: The date when the transaction is actually settled (money/securities transfer)
+
+    Example (Directa CSV import):
+    - "Data operazione" (Operation date) → trade_date
+    - "Data valuta" (Value date) → settlement_date
+
+    For manual entries without trade_date, set trade_date = settlement_date.
 
     Quantity rules:
     - BUY, SELL, ADD_HOLDING, REMOVE_HOLDING, TRANSFER_IN, TRANSFER_OUT: quantity > 0
@@ -656,10 +643,15 @@ class CashAccount(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-# TODO: aggiungere anche qui settlement_date oltre a trade_date, e aggiornare documentazione di conseguenza, per uniformarci alle Transaction
 class CashMovement(SQLModel, table=True):
     """
     Cash movement record.
+
+    Dates:
+    - trade_date: When the cash movement was initiated (REQUIRED)
+    - settlement_date: When the cash movement was settled (optional, defaults to trade_date)
+
+    For consistency with Transaction model, calculations should use settlement_date when available.
 
     Types:
     - Manual: DEPOSIT, WITHDRAWAL
@@ -685,6 +677,10 @@ class CashMovement(SQLModel, table=True):
     amount: Decimal = Field(sa_column=Column(Numeric(18, 6), nullable=False))
 
     trade_date: date_type = Field(nullable=False, index=True)
+    settlement_date: Optional[date_type] = Field(
+        default=None,
+        description="Settlement date (defaults to trade_date if not provided)"
+    )
     note: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(default_factory=utcnow)

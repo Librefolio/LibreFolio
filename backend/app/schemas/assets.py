@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from enum import Enum
 from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -10,6 +11,60 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 class CommonConfig:
     model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": []})
+
+
+# ============================================================================
+# ENUMS FOR FINANCIAL CALCULATIONS
+# ============================================================================
+
+class CompoundingType(str, Enum):
+    """
+    Interest compounding type.
+
+    - SIMPLE: Interest calculated on principal only (I = P * r * t)
+    - COMPOUND: Interest calculated on principal + accumulated interest (A = P * (1 + r/n)^(nt))
+    """
+    SIMPLE = "SIMPLE"
+    COMPOUND = "COMPOUND"
+
+
+class CompoundFrequency(str, Enum):
+    """
+    Frequency of interest compounding (for COMPOUND interest).
+
+    - DAILY: Compounds every day (n=365)
+    - MONTHLY: Compounds every month (n=12)
+    - QUARTERLY: Compounds every quarter (n=4)
+    - SEMIANNUAL: Compounds twice a year (n=2)
+    - ANNUAL: Compounds once a year (n=1)
+    - CONTINUOUS: Continuous compounding (A = P * e^(rt))
+    """
+    DAILY = "DAILY"
+    MONTHLY = "MONTHLY"
+    QUARTERLY = "QUARTERLY"
+    SEMIANNUAL = "SEMIANNUAL"
+    ANNUAL = "ANNUAL"
+    CONTINUOUS = "CONTINUOUS"
+
+
+class DayCountConvention(str, Enum):
+    """
+    Day count convention for interest calculations.
+
+    - ACT_365: Actual days / 365 (standard for most markets)
+    - ACT_360: Actual days / 360 (common in money markets)
+    - ACT_ACT: Actual days / actual days in year (365 or 366)
+    - THIRTY_360: Assumes 30 days per month, 360 days per year
+    """
+    ACT_365 = "ACT/365"
+    ACT_360 = "ACT/360"
+    ACT_ACT = "ACT/ACT"
+    THIRTY_360 = "30/360"
+
+
+# ============================================================================
+# BASIC MODELS
+# ============================================================================
 
 
 class BackwardFillInfo(BaseModel):
@@ -70,34 +125,50 @@ class AssetProviderAssignmentModel(BaseModel):
 # SCHEDULED INVESTMENT SCHEMAS
 # ============================================================================
 
-# TODO: aggiornare seguendo i commenti del interest_schedule scritti nel TODO della tabella Asset in model.py,
-#  creare una classe pydantic che possa essere usata sia dalle API che nel validare il JSON da inserire nel DB
 class InterestRatePeriod(BaseModel):
     """
     Interest rate period for scheduled investments.
 
-    Represents a time period with a specific interest rate.
+    Represents a time period with specific interest calculation parameters.
     Used in interest_schedule arrays.
 
     Attributes:
         start_date: Period start date (inclusive)
         end_date: Period end date (inclusive)
-        rate: Annual interest rate as decimal (e.g., 0.05 for 5%)
+        annual_rate: Annual interest rate as decimal (e.g., 0.05 for 5%)
+        compounding: Interest compounding type (SIMPLE or COMPOUND)
+        compound_frequency: Compounding frequency (for COMPOUND type only)
+        day_count: Day count convention for time fraction calculation
 
-    Example:
+    Example (Simple interest):
         {
             "start_date": "2025-01-01",
             "end_date": "2025-12-31",
-            "rate": "0.05"  # 5% annual rate
+            "annual_rate": 0.05,
+            "compounding": "SIMPLE",
+            "day_count": "ACT/365"
+        }
+
+    Example (Compound interest):
+        {
+            "start_date": "2025-01-01",
+            "end_date": "2025-12-31",
+            "annual_rate": 0.05,
+            "compounding": "COMPOUND",
+            "compound_frequency": "MONTHLY",
+            "day_count": "ACT/365"
         }
     """
     model_config = ConfigDict(extra="forbid")
 
     start_date: date
     end_date: date
-    rate: Decimal
+    annual_rate: Decimal
+    compounding: CompoundingType = CompoundingType.SIMPLE
+    compound_frequency: Optional[CompoundFrequency] = None
+    day_count: DayCountConvention = DayCountConvention.ACT_365
 
-    @field_validator("rate", mode="before")
+    @field_validator("annual_rate", mode="before")
     @classmethod
     def parse_rate(cls, v):
         """Convert rate to Decimal and validate it's non-negative."""
@@ -106,6 +177,7 @@ class InterestRatePeriod(BaseModel):
             raise ValueError("Interest rate must be non-negative")
         return rate
 
+    # TODO: aggiungere validazione per start_date come campo presente e non nullo, prima di end_date
     @field_validator("end_date")
     @classmethod
     def validate_date_range(cls, v, info):
@@ -114,9 +186,18 @@ class InterestRatePeriod(BaseModel):
             raise ValueError("end_date must be on or after start_date")
         return v
 
+    @field_validator("compound_frequency")
+    @classmethod
+    def validate_compound_frequency(cls, v, info):
+        """Ensure compound_frequency is provided when compounding is COMPOUND."""
+        if "compounding" in info.data:
+            if info.data["compounding"] == CompoundingType.COMPOUND and v is None:
+                raise ValueError("compound_frequency is required when compounding is COMPOUND")
+            if info.data["compounding"] == CompoundingType.SIMPLE and v is not None:
+                raise ValueError("compound_frequency should not be set when compounding is SIMPLE")
+        return v
 
-# TODO: aggiornare seguendo i commenti del interest_schedule scritti nel TODO della tabella Asset in model.py,
-#  creare una classe pydantic che possa essere usata sia dalle API che nel validare il JSON da inserire nel DB
+
 class LateInterestConfig(BaseModel):
     """
     Late interest configuration for scheduled investments.
@@ -125,21 +206,29 @@ class LateInterestConfig(BaseModel):
     after the asset's maturity date.
 
     Attributes:
-        rate: Annual late interest rate as decimal (e.g., 0.12 for 12%)
+        annual_rate: Annual late interest rate as decimal (e.g., 0.12 for 12%)
         grace_period_days: Number of days after maturity before late interest applies
+        compounding: Interest compounding type (default: SIMPLE)
+        compound_frequency: Compounding frequency (for COMPOUND type only)
+        day_count: Day count convention (default: ACT/365)
 
     Example:
         {
-            "rate": "0.12",  # 12% annual late interest
-            "grace_period_days": 30  # 30 days grace period
+            "annual_rate": 0.12,
+            "grace_period_days": 30,
+            "compounding": "SIMPLE",
+            "day_count": "ACT/365"
         }
     """
     model_config = ConfigDict(extra="forbid")
 
-    rate: Decimal
+    annual_rate: Decimal
     grace_period_days: int = 0
+    compounding: CompoundingType = CompoundingType.SIMPLE
+    compound_frequency: Optional[CompoundFrequency] = None
+    day_count: DayCountConvention = DayCountConvention.ACT_365
 
-    @field_validator("rate", mode="before")
+    @field_validator("annual_rate", mode="before")
     @classmethod
     def parse_rate(cls, v):
         """Convert rate to Decimal and validate it's non-negative."""
@@ -156,9 +245,98 @@ class LateInterestConfig(BaseModel):
             raise ValueError("Grace period must be non-negative")
         return v
 
+    @field_validator("compound_frequency")
+    @classmethod
+    def validate_compound_frequency(cls, v, info):
+        """Ensure compound_frequency is provided when compounding is COMPOUND."""
+        if "compounding" in info.data:
+            if info.data["compounding"] == CompoundingType.COMPOUND and v is None:
+                raise ValueError("compound_frequency is required when compounding is COMPOUND")
+            if info.data["compounding"] == CompoundingType.SIMPLE and v is not None:
+                raise ValueError("compound_frequency should not be set when compounding is SIMPLE")
+        return v
 
-# TODO: aggiornare seguendo i commenti del interest_schedule scritti nel TODO della tabella Asset in model.py,
-#  creare una classe pydantic che possa essere usata sia dalle API che nel validare il JSON da inserire nel DB
+
+class ScheduledInvestmentSchedule(BaseModel):
+    """
+    Complete interest schedule configuration for scheduled investments.
+
+    This is the comprehensive schema that should be stored in Asset.interest_schedule JSON field.
+    It includes all periods and late interest configuration with full validation.
+
+    Attributes:
+        schedule: List of interest rate periods (must be non-overlapping and contiguous)
+        late_interest: Optional late interest configuration applied after maturity
+
+    Validation:
+        - Periods must not overlap
+        - Periods must not have gaps (contiguous dates)
+        - Periods must be ordered by start_date
+        - Each period's end_date must be before the next period's start_date (or exactly 1 day before)
+
+    Example:
+        {
+            "schedule": [
+                {
+                    "start_date": "2025-01-01",
+                    "end_date": "2025-06-30",
+                    "annual_rate": 0.05,
+                    "compounding": "SIMPLE",
+                    "day_count": "ACT/365"
+                },
+                {
+                    "start_date": "2025-07-01",
+                    "end_date": "2025-12-31",
+                    "annual_rate": 0.06,
+                    "compounding": "SIMPLE",
+                    "day_count": "ACT/365"
+                }
+            ],
+            "late_interest": {
+                "annual_rate": 0.12,
+                "grace_period_days": 30,
+                "compounding": "SIMPLE",
+                "day_count": "ACT/365"
+            }
+        }
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    schedule: List[InterestRatePeriod]
+    late_interest: Optional[LateInterestConfig] = None
+
+    @field_validator("schedule")
+    @classmethod
+    def validate_schedule_continuity(cls, v):
+        """Ensure schedule periods are contiguous and non-overlapping."""
+        if not v:
+            raise ValueError("schedule must contain at least one period")
+
+        # Sort by start_date to ensure proper ordering
+        sorted_schedule = sorted(v, key=lambda p: p.start_date)
+
+        # Check for overlaps and gaps
+        for i in range(len(sorted_schedule) - 1):
+            current = sorted_schedule[i]
+            next_period = sorted_schedule[i + 1]
+
+            # Check if current end_date is before next start_date (with at most 1 day gap)
+            days_gap = (next_period.start_date - current.end_date).days
+
+            if days_gap < 0:
+                raise ValueError(
+                    f"Overlapping periods detected: period ending {current.end_date} "
+                    f"overlaps with period starting {next_period.start_date}"
+                )
+            elif days_gap > 1:
+                raise ValueError(
+                    f"Gap detected between periods: period ending {current.end_date} "
+                    f"and period starting {next_period.start_date} ({days_gap} days gap)"
+                )
+
+        return sorted_schedule
+
+
 class ScheduledInvestmentParams(BaseModel):
     """
     Provider parameters for scheduled investment assets.
@@ -227,6 +405,11 @@ class ScheduledInvestmentParams(BaseModel):
 
 # Export convenience
 __all__ = [
+    # Enums
+    "CompoundingType",
+    "CompoundFrequency",
+    "DayCountConvention",
+    # Basic models
     "BackwardFillInfo",
     "CurrentValueModel",
     "PricePointModel",
@@ -235,5 +418,6 @@ __all__ = [
     # Scheduled investment schemas
     "InterestRatePeriod",
     "LateInterestConfig",
+    "ScheduledInvestmentSchedule",
     "ScheduledInvestmentParams",
     ]

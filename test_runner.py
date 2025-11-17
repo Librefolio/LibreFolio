@@ -494,6 +494,18 @@ def utils_financial_math(verbose: bool = False) -> bool:
         )
 
 
+def utils_day_count(verbose: bool = False) -> bool:
+    """Test day count conventions."""
+    print_section("Utils: Day Count Conventions")
+    print_info("Testing: backend/app/utils/financial_math.py (day count functions)")
+    print_info("Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_day_count_conventions.py", "-v"],
+        "Day count convention tests",
+        verbose=verbose
+        )
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     print_header("LibreFolio Utility Tests")
@@ -503,6 +515,7 @@ def utils_all(verbose: bool = False) -> bool:
         ("Decimal Precision", lambda: utils_decimal_precision(verbose)),
         ("Datetime Utils", lambda: utils_datetime(verbose)),
         ("Financial Math", lambda: utils_financial_math(verbose)),
+        ("Day Count Conventions", lambda: utils_day_count(verbose)),
         ]
 
     results = []
@@ -901,6 +914,10 @@ Test commands:
                      📋 Prerequisites: None
                      💡 Tests: Day count conventions (ACT/365), Interest calculations, Rate finding
   
+  day-count        - Test day count conventions (Phase 4 task 2.1)
+                     📋 Prerequisites: None
+                     💡 Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions with exact comparisons
+  
   all              - Run all utility tests
   
 These are foundational tests for remediation phases 1 & 2.
@@ -910,7 +927,7 @@ These are foundational tests for remediation phases 1 & 2.
 
     utils_parser.add_argument(
         "action",
-        choices=["decimal-precision", "datetime", "financial-math", "all"],
+        choices=["decimal-precision", "datetime", "financial-math", "day-count", "all"],
         help="Utility test to run"
         )
 
@@ -1043,6 +1060,8 @@ def main():
             success = utils_datetime(verbose=verbose)
         elif args.action == "financial-math":
             success = utils_financial_math(verbose=verbose)
+        elif args.action == "day-count":
+            success = utils_day_count(verbose=verbose)
         elif args.action == "all":
             success = utils_all(verbose=verbose)
 
