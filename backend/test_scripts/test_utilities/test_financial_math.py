@@ -7,10 +7,11 @@ from decimal import Decimal
 
 import pytest
 
-from backend.app.schemas.assets import InterestRatePeriod, LateInterestConfig
+from backend.app.schemas.assets import InterestRatePeriod, LateInterestConfig, CompoundingType, CompoundFrequency, DayCountConvention
 from backend.app.utils.financial_math import (
     calculate_daily_factor_between_act365,
     find_active_rate,
+    find_active_period,
     calculate_accrued_interest,
     parse_decimal_value,
     )
@@ -253,6 +254,151 @@ def test_calculate_accrued_interest_rate_change():
     assert interest > Decimal("0")
     # Interest should be between 500 (all at 5%) and 600 (all at 6%)
     assert Decimal("500") < interest < Decimal("600")
+
+
+# ============================================================================
+# TESTS: find_active_period (returns full InterestRatePeriod object)
+# ============================================================================
+
+def test_find_active_period_within_schedule():
+    """Test finding period within scheduled dates."""
+    schedule = [
+        InterestRatePeriod(
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 6, 30),
+            annual_rate=Decimal("0.05"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+        ),
+        InterestRatePeriod(
+            start_date=date(2025, 7, 1),
+            end_date=date(2025, 12, 31),
+            annual_rate=Decimal("0.06"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+        )
+    ]
+    maturity = date(2025, 12, 31)
+
+    # Test date in first period
+    period = find_active_period(schedule, date(2025, 3, 15), maturity)
+    assert period is not None
+    assert period.annual_rate == Decimal("0.05")
+    assert period.compounding == CompoundingType.SIMPLE
+    assert period.day_count == DayCountConvention.ACT_365
+
+    # Test date in second period
+    period = find_active_period(schedule, date(2025, 9, 15), maturity)
+    assert period is not None
+    assert period.annual_rate == Decimal("0.06")
+
+
+def test_find_active_period_within_grace():
+    """Test finding period within grace period after maturity."""
+    schedule = [
+        InterestRatePeriod(
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+            annual_rate=Decimal("0.05"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+        )
+    ]
+    maturity = date(2025, 12, 31)
+    late_interest = LateInterestConfig(
+        annual_rate=Decimal("0.12"),
+        grace_period_days=30,
+        compounding=CompoundingType.SIMPLE,
+        day_count=DayCountConvention.ACT_365
+    )
+
+    # Date within grace period (15 days after maturity)
+    period = find_active_period(schedule, date(2026, 1, 15), maturity, late_interest)
+    assert period is not None
+    assert period.annual_rate == Decimal("0.05")  # Still uses last scheduled rate
+
+
+def test_find_active_period_after_grace():
+    """Test finding period after grace period (late interest)."""
+    schedule = [
+        InterestRatePeriod(
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+            annual_rate=Decimal("0.05"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+        )
+    ]
+    maturity = date(2025, 12, 31)
+    late_interest = LateInterestConfig(
+        annual_rate=Decimal("0.12"),
+        grace_period_days=30,
+        compounding=CompoundingType.SIMPLE,
+        day_count=DayCountConvention.ACT_365
+    )
+
+    # Date 45 days after maturity (past grace period)
+    period = find_active_period(schedule, date(2026, 2, 14), maturity, late_interest)
+    assert period is not None
+    assert period.annual_rate == Decimal("0.12")  # Uses late interest rate
+    assert period.compounding == CompoundingType.SIMPLE
+    assert period.day_count == DayCountConvention.ACT_365
+
+
+def test_find_active_period_no_late_interest():
+    """Test behavior after maturity without late interest config."""
+    schedule = [
+        InterestRatePeriod(
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+            annual_rate=Decimal("0.05"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+        )
+    ]
+    maturity = date(2025, 12, 31)
+
+    # Date after maturity, no late_interest
+    period = find_active_period(schedule, date(2026, 1, 15), maturity)
+    assert period is None  # Should return None
+
+
+def test_find_active_period_before_schedule():
+    """Test behavior before schedule starts."""
+    schedule = [
+        InterestRatePeriod(
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+            annual_rate=Decimal("0.05"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+        )
+    ]
+    maturity = date(2025, 12, 31)
+
+    # Date before schedule starts
+    period = find_active_period(schedule, date(2024, 12, 15), maturity)
+    assert period is None
+
+
+def test_find_active_period_with_compound_monthly():
+    """Test that period preserves compound frequency."""
+    schedule = [
+        InterestRatePeriod(
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+            annual_rate=Decimal("0.05"),
+            compounding=CompoundingType.COMPOUND,
+            compound_frequency=CompoundFrequency.MONTHLY,
+            day_count=DayCountConvention.ACT_365
+        )
+    ]
+    maturity = date(2025, 12, 31)
+
+    period = find_active_period(schedule, date(2025, 6, 15), maturity)
+    assert period is not None
+    assert period.compounding == CompoundingType.COMPOUND
+    assert period.compound_frequency == CompoundFrequency.MONTHLY
 
 
 # ============================================================================

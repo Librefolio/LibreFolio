@@ -518,6 +518,18 @@ def utils_compound_interest(verbose: bool = False) -> bool:
         )
 
 
+def utils_scheduled_investment_schemas(verbose: bool = False) -> bool:
+    """Test Pydantic schemas for scheduled investment (InterestRatePeriod, LateInterestConfig, ScheduledInvestmentSchedule)."""
+    print_section("Utils: Scheduled Investment Schemas")
+    print_info("Testing: backend/app/schemas/assets.py (scheduled investment related models)")
+    print_info("Tests: Period validation, late interest, schedule continuity")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_scheduled_investment_schemas.py", "-v"],
+        "Scheduled investment schema tests",
+        verbose=verbose,
+    )
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     print_header("LibreFolio Utility Tests")
@@ -529,6 +541,7 @@ def utils_all(verbose: bool = False) -> bool:
         ("Financial Math", lambda: utils_financial_math(verbose)),
         ("Day Count Conventions", lambda: utils_day_count(verbose)),
         ("Compound Interest", lambda: utils_compound_interest(verbose)),
+        ("Scheduled Investment Schemas", lambda: utils_scheduled_investment_schemas(verbose)),
         ]
 
     results = []
@@ -935,6 +948,10 @@ Test commands:
                       📋 Prerequisites: None
                       💡 Tests: Simple, Compound (annual, semiannual, quarterly, monthly, daily, continuous)
   
+  scheduled-investment-schemas - Test Pydantic schemas for scheduled investment (InterestRatePeriod, LateInterestConfig, ScheduledInvestmentSchedule)
+                                 📋 Prerequisites: None
+                                 💡 Tests: Period validation, late interest, schedule continuity
+  
   all              - Run all utility tests
   
 These are foundational tests for remediation phases 1 & 2.
@@ -944,9 +961,17 @@ These are foundational tests for remediation phases 1 & 2.
 
     utils_parser.add_argument(
         "action",
-        choices=["decimal-precision", "datetime", "financial-math", "day-count", "compound-interest", "all"],
-        help="Utility test to run"
-        )
+        choices=[
+            "decimal-precision",
+            "datetime",
+            "financial-math",
+            "day-count",
+            "compound-interest",
+            "scheduled-investment-schemas",
+            "all",
+        ],
+        help="Utility test to run",
+    )
 
     # ========================================================================
     # API TESTS SUBPARSER
@@ -1081,6 +1106,8 @@ def main():
             success = utils_day_count(verbose=verbose)
         elif args.action == "compound-interest":
             success = utils_compound_interest(verbose=verbose)
+        elif args.action == "scheduled-investment-schemas":
+            success = utils_scheduled_investment_schemas(verbose=verbose)
         elif args.action == "all":
             success = utils_all(verbose=verbose)
 
