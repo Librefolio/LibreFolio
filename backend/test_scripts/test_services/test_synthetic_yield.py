@@ -6,7 +6,7 @@ Tests cover:
 - Provider calculation methods (get_current_value, get_history_value)
 - Private calculation method (_calculate_value_for_date)
 - Integration with get_prices() - automatic provider delegation
-- Utility functions (find_active_rate, calculate_accrued_interest)
+- Utility functions (find_active_period)
 """
 import asyncio
 import json
@@ -30,9 +30,15 @@ from backend.app.db.models import (
 )
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.asset_source_providers.scheduled_investment import ScheduledInvestmentProvider
-from backend.app.utils.financial_math import find_active_rate, calculate_accrued_interest
+from backend.app.utils.financial_math import find_active_period
 
-from backend.app.schemas.assets import InterestRatePeriod, LateInterestConfig, ScheduledInvestmentSchedule
+from backend.app.schemas.assets import (
+    InterestRatePeriod,
+    LateInterestConfig,
+    ScheduledInvestmentSchedule,
+    CompoundingType,
+    DayCountConvention,
+)
 
 
 # ============================================================================
@@ -338,15 +344,32 @@ async def test_provider_private_calculate_value():
 # ============================================================================
 
 
-def test_find_active_rate_with_pydantic():
-    """Test find_active_rate utility with Pydantic models (only format accepted)."""
+def test_find_active_period_with_pydantic():
+    """Test find_active_period utility with Pydantic models (only format accepted)."""
 
     # Use Pydantic models (only way to call the function)
     schedule = [
-        InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), annual_rate=Decimal("0.05")),
-        InterestRatePeriod(start_date=date(2026, 1, 1), end_date=date(2026, 12, 31), annual_rate=Decimal("0.06"))
+        InterestRatePeriod(
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+            annual_rate=Decimal("0.05"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+        ),
+        InterestRatePeriod(
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+            annual_rate=Decimal("0.06"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+        )
         ]
-    late_interest = LateInterestConfig(annual_rate=Decimal("0.12"), grace_period_days=30)
+    late_interest = LateInterestConfig(
+        annual_rate=Decimal("0.12"),
+        grace_period_days=30,
+        compounding=CompoundingType.SIMPLE,
+        day_count=DayCountConvention.ACT_365
+    )
     maturity = date(2026, 12, 31)
 
     test_cases = [
@@ -358,7 +381,11 @@ def test_find_active_rate_with_pydantic():
 
     results = []
     for target, expected, desc in test_cases:
-        actual = find_active_rate(schedule, target, maturity, late_interest)
+        period = find_active_period(schedule, target, maturity, late_interest)
+        if period is None:
+            actual = Decimal("0")  # No period found
+        else:
+            actual = period.annual_rate
         passed = actual == expected
         results.append({
             "test": desc,
@@ -372,47 +399,9 @@ def test_find_active_rate_with_pydantic():
         "details": results
         }
 
-
-def test_calculate_accrued_conversion():
-    """Test calculate_accrued_interest with dict converted to Pydantic models."""
-
-    face_value = Decimal("10000")
-
-    # Start with dict (typical use case)
-    schedule_dict = [
-        {"start_date": "2025-01-01", "end_date": "2025-06-30", "annual_rate": "0.05"},
-        {"start_date": "2025-07-01", "end_date": "2025-12-31", "annual_rate": "0.06"}
-        ]
-
-    # Convert to Pydantic models (required by function)
-    schedule = [InterestRatePeriod(**item) for item in schedule_dict]
-    maturity = date(2025, 12, 31)
-
-    # Calculate interest for full year
-    interest = calculate_accrued_interest(
-        face_value=face_value,
-        start_date=date(2025, 1, 1),
-        end_date=date(2025, 12, 31),
-        schedule=schedule,
-        maturity_date=maturity,
-        late_interest=None
-        )
-
-    # Expected: ~248 (181 days @ 5%) + ~302 (184 days @ 6%) = ~550
-    expected_part1 = Decimal("10000") * Decimal("0.05") * Decimal("181") / Decimal("365")
-    expected_part2 = Decimal("10000") * Decimal("0.06") * Decimal("184") / Decimal("365")
-    expected = expected_part1 + expected_part2
-
-    diff = abs(interest - expected)
-    passed = diff < Decimal("1.00")
-
-    return {
-        "passed": passed,
-        "interest": str(interest),
-        "expected": str(expected),
-        "diff": str(diff),
-        "message": f"Dict→Pydantic conversion: {interest:.2f} (expected {expected:.2f})"
-        }
+# NOTE: test_calculate_accrued_conversion removed - function deprecated
+# The calculate_accrued_interest() function was obsolete (day-by-day, SIMPLE only)
+# Use period-based calculation in ScheduledInvestmentProvider instead
 
 
 # ============================================================================
@@ -650,13 +639,12 @@ async def run_all_tests():
         "Test 4: Provider _calculate_value_for_date()": test_provider_private_calculate_value,
 
         # Utility tests (require Pydantic models)
-        "Test 5: find_active_rate() with Pydantic": test_find_active_rate_with_pydantic,
-        "Test 6: calculate_accrued_interest() Dict→Pydantic": test_calculate_accrued_conversion,
+        "Test 5: find_active_period() with Pydantic": test_find_active_period_with_pydantic,
 
         # Integration tests
-        "Test 7: get_prices() Integration": test_get_prices_integration,
-        "Test 8: No DB Storage (On-Demand)": test_no_db_storage,
-        "Test 9: Pydantic Schema Validation Error": test_pydantic_schema_validation,
+        "Test 6: get_prices() Integration": test_get_prices_integration,
+        "Test 7: No DB Storage (On-Demand)": test_no_db_storage,
+        "Test 8: Pydantic Schema Validation Error": test_pydantic_schema_validation,
         }
 
     results = {}

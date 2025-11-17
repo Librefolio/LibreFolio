@@ -26,14 +26,19 @@ Welcome to LibreFolio documentation!
 - **[Asset Pricing System](assets/README.md)** - Asset pricing system documentation index
   - **[Asset Pricing Architecture](assets/architecture.md)** - Technical design, data flow, and patterns
   - **[Asset Provider Development](assets/provider-development.md)** - ⭐ How to create new asset pricing providers
-- **[Asset Pricing System](assets/README.md)** - Asset pricing system documentation index
-  - **[Asset Pricing Architecture](assets/architecture.md)** - Technical design, data flow, and patterns
-  - **[Asset Provider Development](assets/provider-development.md)** - ⭐ How to create new asset pricing providers
-- **[Financial Calculations](financial-calculations.md)** - Mathematical reasoning and precision handling
+- **[Financial Calculations](financial-calculations/README.md)** - ⭐ Complete mathematical guide
+  - **[Day Count Conventions](financial-calculations/day-count-conventions.md)** - ACT/365, ACT/360, ACT/ACT, 30/360
+  - **[Interest Types](financial-calculations/interest-types.md)** - Simple vs Compound interest
+  - **[Compounding Frequencies](financial-calculations/compounding-frequencies.md)** - All frequencies comparison
+  - **[Scheduled Investment Provider](financial-calculations/scheduled-investment-provider.md)** - ⭐ Synthetic yield calculation architecture
 
 ### Testing
-- **[Testing Guide for New Developers](testing-guide.md)** - ⭐ Hands-on introduction to the test suite (start here!)
-- **[Testing Environment](testing-environment.md)** - Test vs production database isolation
+- **[Testing Guide](testing/README.md)** - ⭐ Complete testing documentation
+  - **[Utility Tests](testing/utils-tests.md)** - Day count, compound interest, schemas
+  - **[Service Tests](testing/services-tests.md)** - FX conversion, asset source, synthetic yield
+  - **[Database Tests](testing/database-tests.md)** - Schema validation, constraints, persistence
+  - **[API Tests](testing/api-tests.md)** - REST endpoint testing
+  - **[Synthetic Yield E2E](testing/synthetic-yield-e2e.md)** - Integration test scenarios
 
 ### Configuration
 - **[Environment Variables](environment-variables.md)** - Configuration options and Docker deployment
@@ -47,21 +52,19 @@ todo: add more links when more docs are added
 | Document | Purpose | Audience |
 |----------|---------|----------|
 | [environment-variables.md](environment-variables.md) | Configuration & deployment | Developers, DevOps |
-| [testing-guide.md](testing-guide.md) | ⭐ Learn the system via testing (new devs start here!) | New Developers |
-| [testing-environment.md](testing-environment.md) | Test vs production database isolation | Developers |
+| [testing/README.md](testing/README.md) | ⭐ Complete testing guide | New Developers, Contributors |
 | [api-development-guide.md](api-development-guide.md) | 🚀 ⭐ Complete guide to add REST API endpoints | Contributors |
 | [alembic-guide.md](alembic-guide.md) | Learn database migrations | Everyone |
 | [database-schema.md](database-schema.md) | Database tables & relationships | Everyone |
 | [async-architecture.md](async-architecture.md) | ⭐ Async/concurrent architecture explained | Contributors |
 | [fx-implementation.md](fx-implementation.md) | FX rates system overview | Everyone |
 | [fx/architecture.md](fx/architecture.md) | FX system technical architecture | Developers |
+| [fx/providers.md](fx/providers.md) | Available FX providers details | Developers |
+| [fx/provider-development.md](fx/provider-development.md) | ⭐ How to add FX providers | Contributors |
 | [assets/README.md](assets/README.md) | Asset pricing system documentation index | Everyone |
 | [assets/architecture.md](assets/architecture.md) | Asset pricing technical architecture | Developers |
 | [assets/provider-development.md](assets/provider-development.md) | ⭐ How to add asset pricing providers | Contributors |
-| [fx/api-reference.md](fx/api-reference.md) | FX REST API endpoints | Developers, Frontend |
-| [fx/providers.md](fx/providers.md) | Available FX providers details | Developers |
-| [fx/provider-development.md](fx/provider-development.md) | ⭐ How to add FX providers | Contributors |
-| [financial-calculations.md](financial-calculations.md) | Mathematical reasoning & precision | Developers, Contributors |
+| [financial-calculations/README.md](financial-calculations/README.md) | ⭐ Complete mathematical guide | Developers, Contributors |
 | [README.md](../README.md) | Project overview | Everyone |
 
 
