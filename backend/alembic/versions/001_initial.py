@@ -37,10 +37,7 @@ def upgrade() -> None:
                                 currency          VARCHAR     NOT NULL,
                                 asset_type        VARCHAR(14) NOT NULL,
                                 valuation_model   VARCHAR(15) NOT NULL,
-                                face_value        NUMERIC(18, 6),
-                                maturity_date     DATE,
                                 interest_schedule TEXT,
-                                late_interest     TEXT,
                                 active            BOOLEAN     NOT NULL,
                                 created_at        DATETIME    NOT NULL,
                                 updated_at        DATETIME    NOT NULL
@@ -203,6 +200,7 @@ def upgrade() -> None:
                                 type            VARCHAR(15)    NOT NULL,
                                 amount          NUMERIC(18, 6) NOT NULL,
                                 trade_date      DATE           NOT NULL,
+                                settlement_date DATE,
                                 note            TEXT,
                                 created_at      DATETIME       NOT NULL,
                                 updated_at      DATETIME       NOT NULL,

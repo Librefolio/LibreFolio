@@ -284,8 +284,8 @@ CREATE TABLE transactions (
     
     cash_movement_id INTEGER,            -- FK to cash_movements (ON DELETE CASCADE)
     
-    trade_date DATE NOT NULL,
-    settlement_date DATE,
+    trade_date DATE NOT NULL,            -- When order was executed (informational)
+    settlement_date DATE,                -- When settled (REQUIRED for calculations)
     note TEXT,
     
     created_at DATETIME,
@@ -299,6 +299,12 @@ CREATE TABLE transactions (
     )
 );
 ```
+
+**Important notes on dates:**
+- **trade_date**: When the order was executed (optional, informational) - e.g., "Data operazione" in Directa CSV
+- **settlement_date**: When the transaction was actually settled - e.g., "Data valuta" in Directa CSV
+- ⚠️ **All portfolio calculations MUST use settlement_date**, not trade_date
+- For manual entries without trade_date, set trade_date = settlement_date
 
 **Transaction types and their effects:**
 
@@ -352,7 +358,8 @@ CREATE TABLE cash_movements (
     cash_account_id INTEGER NOT NULL,   -- FK to cash_accounts
     type TEXT NOT NULL,                  -- DEPOSIT, WITHDRAWAL, BUY_SPEND, etc.
     amount DECIMAL(18,6) NOT NULL,       -- Always positive (direction in type)
-    trade_date DATE NOT NULL,
+    trade_date DATE NOT NULL,            -- When movement was initiated
+    settlement_date DATE,                -- When movement was settled (NULL = defaults to trade_date)
     note TEXT,
     created_at DATETIME,
     updated_at DATETIME
