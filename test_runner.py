@@ -331,7 +331,21 @@ def db_test_transaction_cash_integrity(verbose: bool = False) -> bool:
         ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_transaction_cash_integrity"],
         "Transaction-CashMovement integrity tests",
         verbose=verbose
-    )
+        )
+
+
+def db_transaction_types(verbose: bool = False) -> bool:
+    """
+    Test tipologie di Transaction (BUY, SELL, DEPOSIT, WITHDRAW, ecc.).
+    Verifica mapping enum, vincoli logici e coerenza con CashMovement.
+    """
+    print_section("DB Test: Transaction Types")
+    print_info(f"Operando su: {TEST_DB_PATH} (test database)")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_transaction_types"],
+        "Transaction types tests",
+        verbose=verbose
+        )
 
 
 def db_all(verbose: bool = False) -> bool:
@@ -353,6 +367,7 @@ def db_all(verbose: bool = False) -> bool:
         ("Numeric Truncation", lambda: db_numeric_truncation(verbose)),
         ("Populate Mock Data", lambda: db_populate(verbose, force=True)),  # Use force in 'all' mode
         ("Transaction-CashMovement Integrity", lambda: db_test_transaction_cash_integrity(verbose)),
+        ("Transaction Types", lambda: db_transaction_types(verbose)),
         ("FX Rates Persistence", lambda: db_fx_rates(verbose)),
         ]
 
@@ -439,6 +454,20 @@ def services_asset_source_refresh(verbose: bool = False) -> bool:
         )
 
 
+def services_provider_registry(verbose: bool = False) -> bool:
+    """
+    Test registry dei provider (asset & fx).
+    Verifica registrazione, lookup, priorità e fallback.
+    """
+    print_section("Services: Provider Registry")
+    print_info("Testing: backend/app/services/provider_registry.py")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_provider_registry"],
+        "Provider registry tests",
+        verbose=verbose
+        )
+
+
 def services_synthetic_yield(verbose: bool = False) -> bool:
     """
     Test synthetic yield calculation for SCHEDULED_YIELD assets.
@@ -451,6 +480,18 @@ def services_synthetic_yield(verbose: bool = False) -> bool:
         ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_synthetic_yield"],
         "Synthetic yield tests",
         verbose=verbose
+        )
+
+
+def services_synthetic_yield_integration(verbose: bool = False) -> bool:
+    """Test E2E synthetic yield integration scenarios (P2P loan, bond, mixed schedule)."""
+    print_section("Services: Synthetic Yield Integration E2E")
+    print_info("Testing: ScheduledInvestmentProvider end-to-end scenarios")
+    print_info("Scenarios: P2P loan (grace + late), bond compound quarterly, mixed SIMPLE/COMPOUND")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_synthetic_yield_integration.py", "-v"],
+        "Synthetic yield integration E2E tests",
+        verbose=verbose,
         )
 
 
@@ -527,7 +568,7 @@ def utils_scheduled_investment_schemas(verbose: bool = False) -> bool:
         ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_scheduled_investment_schemas.py", "-v"],
         "Scheduled investment schema tests",
         verbose=verbose,
-    )
+        )
 
 
 def utils_all(verbose: bool = False) -> bool:
@@ -584,8 +625,10 @@ def services_all(verbose: bool = False) -> bool:
     tests = [
         ("FX Conversion Logic", lambda: services_fx_conversion(verbose)),
         ("Asset Source Logic", lambda: services_asset_source(verbose)),
+        ("Asset Source Refresh (smoke)", lambda: services_asset_source_refresh(verbose)),
+        ("Provider Registry", lambda: services_provider_registry(verbose)),
         ("Synthetic Yield Calculation", lambda: services_synthetic_yield(verbose)),
-        # Future: FIFO calculations, portfolio aggregations, etc.
+        ("Synthetic Yield Integration E2E", lambda: services_synthetic_yield_integration(verbose)),
         ]
 
     results = []
@@ -852,6 +895,10 @@ Test commands:
   transaction-cash-integrity - Test unidirectional relationship between Transaction and CashMovement
                                📋 Prerequisites: Database created (run: db create)
                                💡 Validates Transaction -> CashMovement unidirectional properties
+                               
+  transaction-types          - Test Transaction types (BUY, SELL, DEPOSIT, WITHDRAW, etc.)
+                               📋 Prerequisites: Database created (run: db create)
+                               💡 Verifies enum mapping, logical constraints, CashMovement consistency
               
   all               - Run all DB tests (create → validate → numeric-truncation → populate → fx-rates)
         """,
@@ -860,7 +907,7 @@ Test commands:
 
     db_parser.add_argument(
         "action",
-        choices=["create", "validate", "numeric-truncation", "fx-rates", "populate", "transaction-cash-integrity", "all"],
+        choices=["create", "validate", "numeric-truncation", "fx-rates", "populate", "transaction-cash-integrity", "transaction-types", "all"],
         help="Database test to run"
         )
 
@@ -895,10 +942,18 @@ Test commands:
   asset-source-refresh - Smoke test: Asset Source refresh orchestration
                          📋 Prerequisites: Database created (run: db create)
                          💡 Runs lightweight refresh orchestration smoke test using a mock provider
+
+  provider-registry   - Test provider registry (asset & fx)
+                        📋 Prerequisites: Database created (run: db create)
+                        💡 Tests: Registration, lookup, priority, fallback
   
   synthetic-yield      - Test synthetic yield calculation for SCHEDULED_YIELD assets
                          📋 Prerequisites: Database created (run: db create)
                          💡 Tests: ACT/365 day count, rate lookup, accrued interest, full valuation
+  
+  synthetic-yield-integration - Test E2E synthetic yield integration scenarios (P2P loan, bond, mixed schedule)
+                              📋 Prerequisites: Database created (run: db create)
+                              💡 Scenarios: P2P loan (grace + late), bond compound quarterly, mixed SIMPLE/COMPOUND
   
   all                   - Run all backend service tests
   
@@ -909,7 +964,7 @@ Future: FIFO calculations, portfolio aggregations, loan schedules will be added 
 
     services_parser.add_argument(
         "action",
-        choices=["fx", "asset-source", "asset-source-refresh", "synthetic-yield", "all"],
+        choices=["fx", "asset-source", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "all"],
         help="Service test to run"
         )
 
@@ -969,9 +1024,9 @@ These are foundational tests for remediation phases 1 & 2.
             "compound-interest",
             "scheduled-investment-schemas",
             "all",
-        ],
+            ],
         help="Utility test to run",
-    )
+        )
 
     # ========================================================================
     # API TESTS SUBPARSER
@@ -1078,6 +1133,8 @@ def main():
             success = db_populate(verbose=verbose, force=force)
         elif args.action == "transaction-cash-integrity":
             success = db_test_transaction_cash_integrity(verbose=verbose)
+        elif args.action == "transaction-types":
+            success = db_transaction_types(verbose=verbose)
         elif args.action == "all":
             success = db_all(verbose=verbose)
 
@@ -1089,8 +1146,12 @@ def main():
             success = services_asset_source(verbose=verbose)
         elif args.action == "asset-source-refresh":
             success = services_asset_source_refresh(verbose=verbose)
+        elif args.action == "provider-registry":
+            success = services_provider_registry(verbose=verbose)
         elif args.action == "synthetic-yield":
             success = services_synthetic_yield(verbose=verbose)
+        elif args.action == "synthetic-yield-integration":
+            success = services_synthetic_yield_integration(verbose=verbose)
         elif args.action == "all":
             success = services_all(verbose=verbose)
 

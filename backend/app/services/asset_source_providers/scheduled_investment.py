@@ -55,6 +55,7 @@ from backend.app.schemas.assets import (
     PricePointModel,
     ScheduledInvestmentSchedule,
     CompoundingType,
+    InterestRatePeriod,  # added for synthetic periods
     )
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
@@ -487,103 +488,113 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         face_value: Decimal,
         target_date: date_type,
         ) -> Decimal:
+        """Period-based synthetic value calculation.
+
+        Replaces previous day-by-day loop to avoid O(days) complexity and infinite loops.
+
+        Steps:
+          1. If target_date before first period start -> return principal.
+          2. Collect real periods truncated to target_date.
+          3. If after maturity, append synthetic grace / late periods as needed.
+          4. Sum interest per period using appropriate method.
+          5. Return principal + total interest.
+
+        Synthetic periods:
+          * Grace period: (maturity+1 .. min(grace_end, target_date)) with last scheduled rate.
+          * Late period: (grace_end+1 .. target_date) with late_interest config.
         """
-        Calculate synthetic value for a specific date.
-
-        Core calculation method used by both get_current_value() and get_history_value().
-
-        Formula:
-            value = principal + accrued_interest
-
-        Where accrued_interest is calculated period-by-period using the appropriate:
-        - Day count convention (ACT/365, ACT/360, 30/360, ACT/ACT)
-        - Interest type (SIMPLE or COMPOUND)
-        - Compounding frequency (if COMPOUND)
-
-        Args:
-            schedule: Validated ScheduledInvestmentSchedule with all periods
-            face_value: Current principal amount
-            target_date: Date to calculate value for
-
-        Returns:
-            Calculated value as Decimal
-
-        Note:
-            Handles multiple scenarios:
-            - Before schedule starts: returns principal only
-            - During schedule: calculates accrued interest
-            - After maturity (grace period): continues with last rate
-            - After grace period: applies late interest rate
-        """
-        # Extract schedule start date from first period
         if not schedule.schedule:
-            return face_value  # No schedule = no interest
-
-        schedule_start = schedule.schedule[0].start_date
-
-        # Calculate maturity date from last period's end_date
-        maturity_date = schedule.schedule[-1].end_date
-
-        # Before investment starts: return only principal (no interest accrued yet)
-        if target_date < schedule_start:
             return face_value
 
-        # Calculate accrued interest from schedule start to target date
-        # Process period by period to handle rate changes and different calculation methods
-        total_interest = Decimal("0")
-        current_date = schedule_start
+        first_start = schedule.schedule[0].start_date
+        maturity_date = schedule.schedule[-1].end_date
 
-        while current_date <= target_date:
-            # Find the active period for this date
-            period = find_active_period(
-                schedule=schedule.schedule,
-                target_date=current_date,
-                maturity_date=maturity_date,
-                late_interest=schedule.late_interest
-            )
+        if target_date < first_start:
+            return face_value
 
-            if period is None:
-                # No applicable period (shouldn't happen if schedule is valid)
+        periods_to_process: list[InterestRatePeriod] = []
+
+        # 1. Real scheduled periods (truncate to target_date)
+        for p in schedule.schedule:
+            if p.start_date > target_date:
                 break
+            eff_start = p.start_date
+            eff_end = p.end_date if p.end_date <= target_date else target_date
+            if eff_end >= eff_start:
+                periods_to_process.append(
+                    InterestRatePeriod(
+                        start_date=eff_start,
+                        end_date=eff_end,
+                        annual_rate=p.annual_rate,
+                        compounding=p.compounding,
+                        compound_frequency=p.compound_frequency,
+                        day_count=p.day_count,
+                    )
+                )
 
-            # Calculate end date for this calculation segment
-            # (either end of period or target_date, whichever comes first)
-            segment_end = min(period.end_date, target_date)
+        # 2. Post-maturity synthetic periods
+        if target_date > maturity_date and schedule.late_interest:
+            li = schedule.late_interest
+            grace_end = maturity_date + timedelta(days=li.grace_period_days)
+            last_rate_period = schedule.schedule[-1]
+            # Grace segment (only if target_date >= maturity+1 and grace_days > 0)
+            grace_start = maturity_date + timedelta(days=1)
+            if grace_start <= target_date and li.grace_period_days > 0:
+                grace_segment_end = min(grace_end, target_date)
+                if grace_segment_end >= grace_start:
+                    periods_to_process.append(
+                        InterestRatePeriod(
+                            start_date=grace_start,
+                            end_date=grace_segment_end,
+                            annual_rate=last_rate_period.annual_rate,
+                            compounding=last_rate_period.compounding,
+                            compound_frequency=last_rate_period.compound_frequency,
+                            day_count=last_rate_period.day_count,
+                        )
+                    )
+            # Late segment (after grace_end)
+            late_start = grace_end + timedelta(days=1)
+            if target_date >= late_start:
+                late_end = target_date
+                if late_end >= late_start:
+                    periods_to_process.append(
+                        InterestRatePeriod(
+                            start_date=late_start,
+                            end_date=late_end,
+                            annual_rate=li.annual_rate,
+                            compounding=li.compounding,
+                            compound_frequency=li.compound_frequency,
+                            day_count=li.day_count,
+                        )
+                    )
 
-            # Calculate time fraction using period's day count convention
+        total_interest = Decimal("0")
+        for period in periods_to_process:
+            # day count fraction inclusive of start/end
             time_fraction = calculate_day_count_fraction(
-                start_date=current_date,
-                end_date=segment_end,
-                convention=period.day_count
+                start_date=period.start_date,
+                end_date=period.end_date,
+                convention=period.day_count,
             )
-
-            # Calculate interest for this segment based on compounding type
+            if time_fraction <= 0:
+                continue  # defensive, shouldn't happen
             if period.compounding == CompoundingType.SIMPLE:
                 segment_interest = calculate_simple_interest(
                     principal=face_value,
                     annual_rate=period.annual_rate,
-                    time_fraction=time_fraction
+                    time_fraction=time_fraction,
                 )
-            else:  # COMPOUND
+            else:
                 if period.compound_frequency is None:
                     raise ValueError("compound_frequency required for COMPOUND interest")
                 segment_interest = calculate_compound_interest(
                     principal=face_value,
                     annual_rate=period.annual_rate,
                     time_fraction=time_fraction,
-                    frequency=period.compound_frequency
+                    frequency=period.compound_frequency,
                 )
-
             total_interest += segment_interest
 
-            # Move to next segment (day after segment_end)
-            current_date = segment_end + timedelta(days=1)
-
-            # If we've reached target_date, stop
-            if segment_end >= target_date:
-                break
-
-        # Total value = principal + accumulated interest
         return face_value + total_interest
 
     def validate_params(self, provider_params: dict) -> ScheduledInvestmentSchedule:

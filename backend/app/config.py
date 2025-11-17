@@ -5,6 +5,7 @@ Loads environment variables and provides application-wide settings.
 import os
 from pathlib import Path
 
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 # Get project root (two levels up from this file)
@@ -59,11 +60,11 @@ class Settings(BaseSettings):
     # CORS (for frontend development)
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
-    class Config:
-        env_file = str(PROJECT_ROOT / ".env")
-        case_sensitive = True
-        # Environment variables take precedence over .env file
-        env_file_encoding = 'utf-8'
+    model_config = ConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        case_sensitive=True,
+        env_file_encoding='utf-8'
+        )
 
 
 def get_settings() -> Settings:
