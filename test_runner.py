@@ -506,6 +506,18 @@ def utils_day_count(verbose: bool = False) -> bool:
         )
 
 
+def utils_compound_interest(verbose: bool = False) -> bool:
+    """Test compound interest calculations."""
+    print_section("Utils: Compound Interest")
+    print_info("Testing: backend/app/utils/financial_math.py (interest calculations)")
+    print_info("Tests: Simple, Compound (annual, semiannual, quarterly, monthly, daily, continuous)")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_compound_interest.py", "-v"],
+        "Compound interest tests",
+        verbose=verbose
+        )
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     print_header("LibreFolio Utility Tests")
@@ -516,6 +528,7 @@ def utils_all(verbose: bool = False) -> bool:
         ("Datetime Utils", lambda: utils_datetime(verbose)),
         ("Financial Math", lambda: utils_financial_math(verbose)),
         ("Day Count Conventions", lambda: utils_day_count(verbose)),
+        ("Compound Interest", lambda: utils_compound_interest(verbose)),
         ]
 
     results = []
@@ -918,6 +931,10 @@ Test commands:
                      📋 Prerequisites: None
                      💡 Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions with exact comparisons
   
+  compound-interest - Test compound interest calculations (Phase 4 task 2.1)
+                      📋 Prerequisites: None
+                      💡 Tests: Simple, Compound (annual, semiannual, quarterly, monthly, daily, continuous)
+  
   all              - Run all utility tests
   
 These are foundational tests for remediation phases 1 & 2.
@@ -927,7 +944,7 @@ These are foundational tests for remediation phases 1 & 2.
 
     utils_parser.add_argument(
         "action",
-        choices=["decimal-precision", "datetime", "financial-math", "day-count", "all"],
+        choices=["decimal-precision", "datetime", "financial-math", "day-count", "compound-interest", "all"],
         help="Utility test to run"
         )
 
@@ -1062,6 +1079,8 @@ def main():
             success = utils_financial_math(verbose=verbose)
         elif args.action == "day-count":
             success = utils_day_count(verbose=verbose)
+        elif args.action == "compound-interest":
+            success = utils_compound_interest(verbose=verbose)
         elif args.action == "all":
             success = utils_all(verbose=verbose)
 
