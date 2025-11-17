@@ -265,8 +265,11 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 # Test mode: use provided transactions
                 transactions = transaction_override
 
+                # Remove _transaction_override from params before validation
+                params_copy = {k: v for k, v in provider_params.items() if k != "_transaction_override"}
+
                 # Validate and extract schedule
-                schedule = self.validate_params(provider_params)
+                schedule = self.validate_params(params_copy)
                 currency = "EUR"  # Default for tests
             else:
                 # Production mode: fetch from DB
@@ -379,7 +382,11 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             if transaction_override:
                 # Test mode: use provided transactions
                 all_transactions = transaction_override
-                schedule = self.validate_params(provider_params)
+
+                # Remove _transaction_override from params before validation
+                params_copy = {k: v for k, v in provider_params.items() if k != "_transaction_override"}
+
+                schedule = self.validate_params(params_copy)
                 currency = "EUR"
             else:
                 # Production mode: fetch from DB

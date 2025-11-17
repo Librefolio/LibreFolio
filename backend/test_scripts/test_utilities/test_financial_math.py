@@ -71,7 +71,7 @@ def test_find_active_rate_within_period():
         InterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
-            rate=Decimal("0.05")
+            annual_rate=Decimal("0.05")
             )
         ]
     maturity = date(2025, 12, 31)
@@ -88,12 +88,12 @@ def test_find_active_rate_multiple_periods():
         InterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 6, 30),
-            rate=Decimal("0.05")
+            annual_rate=Decimal("0.05")
             ),
         InterestRatePeriod(
             start_date=date(2025, 7, 1),
             end_date=date(2025, 12, 31),
-            rate=Decimal("0.06")
+            annual_rate=Decimal("0.06")
             )
         ]
     maturity = date(2025, 12, 31)
@@ -113,11 +113,11 @@ def test_find_active_rate_after_maturity_with_grace():
         InterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
-            rate=Decimal("0.05")
+            annual_rate=Decimal("0.05")
             )
         ]
     maturity = date(2025, 12, 31)
-    late_interest = LateInterestConfig(rate=Decimal("0.12"), grace_period_days=30)
+    late_interest = LateInterestConfig(annual_rate=Decimal("0.12"), grace_period_days=30)
 
     # Within grace period (15 days after maturity)
     target = date(2026, 1, 15)
@@ -132,11 +132,11 @@ def test_find_active_rate_after_grace_period():
         InterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
-            rate=Decimal("0.05")
+            annual_rate=Decimal("0.05")
             )
         ]
     maturity = date(2025, 12, 31)
-    late_interest = LateInterestConfig(rate=Decimal("0.12"), grace_period_days=30)
+    late_interest = LateInterestConfig(annual_rate=Decimal("0.12"), grace_period_days=30)
 
     # After grace period (45 days after maturity)
     target = date(2026, 2, 14)
@@ -151,7 +151,7 @@ def test_find_active_rate_no_late_interest():
         InterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
-            rate=Decimal("0.05")
+            annual_rate=Decimal("0.05")
             )
         ]
     maturity = date(2025, 12, 31)
@@ -173,7 +173,7 @@ def test_calculate_accrued_interest_single_rate():
         InterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
-            rate=Decimal("0.05")
+            annual_rate=Decimal("0.05")
             )
         ]
     maturity = date(2025, 12, 31)
@@ -201,7 +201,7 @@ def test_calculate_accrued_interest_full_year():
         InterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
-            rate=Decimal("0.05")
+            annual_rate=Decimal("0.05")
             )
         ]
     maturity = date(2025, 12, 31)
@@ -229,12 +229,12 @@ def test_calculate_accrued_interest_rate_change():
         InterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 6, 30),
-            rate=Decimal("0.05")
+            annual_rate=Decimal("0.05")
             ),
         InterestRatePeriod(
             start_date=date(2025, 7, 1),
             end_date=date(2025, 12, 31),
-            rate=Decimal("0.06")
+            annual_rate=Decimal("0.06")
             )
         ]
     maturity = date(2025, 12, 31)

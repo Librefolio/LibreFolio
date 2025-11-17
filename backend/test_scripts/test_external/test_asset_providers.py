@@ -215,7 +215,7 @@ async def test_provider_error_handling(provider) -> dict:
             return {"passed": False, "message": "Should have raised error for invalid identifier"}
         except AssetSourceError as e:
             # Expected error
-            if e.error_code in ["NO_DATA", "NOT_FOUND", "FETCH_ERROR", "MISSING_PARAMS"]:
+            if e.error_code in ["NO_DATA", "NOT_FOUND", "FETCH_ERROR", "MISSING_PARAMS", "INVALID_IDENTIFIER"]:
                 return {"passed": True, "message": f"Error handling OK: {e.error_code}"}
             return {"passed": False, "message": f"Unexpected error code: {e.error_code}"}
 

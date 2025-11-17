@@ -143,11 +143,11 @@ def test_find_active_rate():
 
         # Convert dict to Pydantic models (required by function)
         schedule = [
-            InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), rate=Decimal("0.05")),
-            InterestRatePeriod(start_date=date(2026, 1, 1), end_date=date(2026, 12, 31), rate=Decimal("0.06"))
+            InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), annual_rate=Decimal("0.05")),
+            InterestRatePeriod(start_date=date(2026, 1, 1), end_date=date(2026, 12, 31), annual_rate=Decimal("0.06"))
             ]
         maturity = date(2026, 12, 31)
-        late_interest = LateInterestConfig(rate=Decimal("0.12"), grace_period_days=30)
+        late_interest = LateInterestConfig(annual_rate=Decimal("0.12"), grace_period_days=30)
 
         test_cases = [
             (date(2025, 6, 15), Decimal("0.05"), "Mid-2025 (first period)"),
@@ -179,7 +179,7 @@ def test_calculate_accrued_interest():
         face_value = Decimal("10000")
         # Convert dict to Pydantic model (required by function)
         schedule = [
-            InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), rate=Decimal("0.05"))
+            InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), annual_rate=Decimal("0.05"))
             ]
         maturity = date(2025, 12, 31)
         late_interest = None
