@@ -177,7 +177,6 @@ class InterestRatePeriod(BaseModel):
             raise ValueError("Interest rate must be non-negative")
         return rate
 
-    # TODO: aggiungere validazione per start_date come campo presente e non nullo, prima di end_date
     @field_validator("end_date")
     @classmethod
     def validate_date_range(cls, v, info):

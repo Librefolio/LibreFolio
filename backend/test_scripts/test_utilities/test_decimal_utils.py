@@ -10,8 +10,8 @@ from backend.app.db.models import PriceHistory, FxRate, Transaction
 from backend.app.utils.decimal_utils import (
     get_model_column_precision,
     truncate_to_db_precision,
-    truncate_price_to_db_precision,
-    truncate_fx_rate_to_db_precision,
+    truncate_priceHistory,
+    truncate_fx_rate,
     )
 
 
@@ -72,7 +72,7 @@ def test_truncate_to_db_precision_fx_rate():
 def test_truncate_price_to_db_precision_convenience():
     """Test convenience function for price truncation."""
     value = Decimal("99.999999999")
-    truncated = truncate_price_to_db_precision(value)
+    truncated = truncate_priceHistory(value)
 
     assert truncated == Decimal("99.999999")
 
@@ -80,7 +80,7 @@ def test_truncate_price_to_db_precision_convenience():
 def test_truncate_fx_rate_to_db_precision_convenience():
     """Test convenience function for FX rate truncation."""
     value = Decimal("1.123456789012345")
-    truncated = truncate_fx_rate_to_db_precision(value)
+    truncated = truncate_fx_rate(value)
 
     assert truncated == Decimal("1.1234567890")
 
@@ -127,7 +127,7 @@ def test_no_false_update_detection():
     external_value = Decimal("175.123456789")
 
     # Truncate before comparing with DB value
-    truncated = truncate_price_to_db_precision(external_value)
+    truncated = truncate_priceHistory(external_value)
 
     # Simulate DB value (already truncated by SQLite)
     db_value = Decimal("175.123456")

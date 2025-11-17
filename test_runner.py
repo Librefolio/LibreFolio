@@ -622,6 +622,15 @@ def services_all(verbose: bool = False) -> bool:
     print_info("Testing business logic and service layer")
     print_info("No backend server required")
 
+    # Ensure clean test database before running services tests
+    print_info("\n⚙️  Creating clean test database for services tests...")
+    if not db_create(verbose=False):
+        print_error("Failed to create clean test database")
+        print_warning("Services tests may fail due to dirty database state")
+        # Continue anyway, don't block tests
+    else:
+        print_success("Clean test database created\n")
+
     tests = [
         ("FX Conversion Logic", lambda: services_fx_conversion(verbose)),
         ("Asset Source Logic", lambda: services_asset_source(verbose)),

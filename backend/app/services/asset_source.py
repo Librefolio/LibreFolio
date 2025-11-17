@@ -37,7 +37,7 @@ from backend.app.db.models import (
     )
 from backend.app.schemas import CurrentValueModel, HistoricalDataModel
 from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.app.utils.decimal_utils import truncate_price_to_db_precision
+from backend.app.utils.decimal_utils import truncate_priceHistory
 from backend.app.utils.financial_math import parse_decimal_value
 
 
@@ -445,10 +445,10 @@ class AssetSourceManager:
                 price_obj = PriceHistory(
                     asset_id=asset_id,
                     date=price["date"],
-                    open=truncate_price_to_db_precision(open_v, "open") if open_v is not None else None,
-                    high=truncate_price_to_db_precision(high_v, "high") if high_v is not None else None,
-                    low=truncate_price_to_db_precision(low_v, "low") if low_v is not None else None,
-                    close=truncate_price_to_db_precision(close_v, "close") if close_v is not None else None,
+                    open=truncate_priceHistory(open_v, "open") if open_v is not None else None,
+                    high=truncate_priceHistory(high_v, "high") if high_v is not None else None,
+                    low=truncate_priceHistory(low_v, "low") if low_v is not None else None,
+                    close=truncate_priceHistory(close_v, "close") if close_v is not None else None,
                     volume=volume_v,
                     currency=price.get("currency", default_currency),  # Use asset currency as default
                     source_plugin_key="MANUAL",  # Manual price insert

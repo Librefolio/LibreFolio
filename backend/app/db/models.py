@@ -387,19 +387,6 @@ class Asset(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-# TODO: aggiungere un campo per referenziare anche l'eventuale cash_movment generato assieme alla transazione
-#   class Transaction(SQLModel, table=True):
-#     ...
-#     cash_movement_id: Optional[int] = Field(
-#         default=None,
-#         foreign_key="cash_movements.id",
-#         description="ID del movimento di cassa associato"
-#     )
-#   E capire se è possibile sincronizzare automaticamente l'eventuale cancellazione, sia da qui che da là con un "ON DELETE CASCADE"
-#
-# TODO: Eliminare le colonne fees e taxes, che sono ridondanti e non servono a nulla, sono tutte e 2 ulteriori transazioni di tipo FEE e TAX
-#  riferite allo stesso asset, e anzi vanno collegate ai rispettivi cash_movements generati
-#
 class Transaction(SQLModel, table=True):
     """
     Unified asset transaction record.

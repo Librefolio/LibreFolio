@@ -42,7 +42,7 @@ from sqlmodel import select
 
 from backend.app.db import models
 from backend.app.db.session import get_async_engine
-from backend.app.services.fx import get_column_decimal_precision, truncate_decimal_to_db_precision
+from backend.app.utils.decimal_utils import truncate_to_db_precision, get_model_column_precision, truncate_fx_rate
 from backend.test_scripts.test_db_config import initialize_test_database
 
 
@@ -143,7 +143,7 @@ async def test_truncation_helpers():
 
         try:
             # Test get_column_decimal_precision
-            precision, scale = get_column_decimal_precision(model, column_name)
+            precision, scale = get_model_column_precision(model, column_name)
 
             if precision != expected_precision or scale != expected_scale:
                 print(f"❌ {model.__name__}.{column_name}: Expected ({expected_precision}, {expected_scale}), "
@@ -153,7 +153,7 @@ async def test_truncation_helpers():
 
             # Test truncate_decimal_to_db_precision
             test_value = generate_test_value(scale)
-            truncated = truncate_decimal_to_db_precision(test_value, model, column_name)
+            truncated = truncate_to_db_precision(test_value, model, column_name)
 
             # Verify truncation
             truncated_str = str(truncated)
@@ -195,7 +195,7 @@ async def test_database_truncation():
     # Generate value with extra precision
     scale = 10
     test_value = generate_test_value(scale)
-    truncated_expected = truncate_decimal_to_db_precision(test_value, models.FxRate, 'rate')
+    truncated_expected = truncate_to_db_precision(test_value, models.FxRate, 'rate')
 
     print(f"\n   Test value (input):    {test_value}")
     print(f"   Expected (truncated):  {truncated_expected}")
@@ -284,7 +284,7 @@ async def test_no_false_updates():
     # Generate value with extra precision
     scale = 10
     test_value = generate_test_value(scale)
-    truncated = truncate_decimal_to_db_precision(test_value, models.FxRate, 'rate')
+    truncated = truncate_fx_rate(test_value)
 
     print(f"\n   Test value:       {test_value}")
     print(f"   Truncated value:  {truncated}")
@@ -340,8 +340,8 @@ async def test_no_false_updates():
 
             # IMPORTANT: Our sync code should truncate BEFORE comparing
             # Let's simulate what our FIXED code does:
-            stored_truncated = truncate_decimal_to_db_precision(stored_value_1, models.FxRate, 'rate')
-            new_truncated = truncate_decimal_to_db_precision(new_value_with_extra_precision, models.FxRate, 'rate')
+            stored_truncated = truncate_fx_rate(stored_value_1)
+            new_truncated = truncate_fx_rate(new_value_with_extra_precision)
 
             print(f"   Stored truncated: {stored_truncated}")
             print(f"   New truncated:    {new_truncated}")

@@ -5,8 +5,8 @@ Their scope is validate data structures exchanged between components and standar
 
 Organized by domain:
 - common.py: Shared schemas (BackwardFillInfo, etc.)
-- fx.py: FX-related schemas (TODO - future factorization)
-- assets.py: Asset-related schemas (TODO - future factorization)
+- fx.py: FX-related schemas
+- assets.py: Asset-related schemas
 """
 from backend.app.schemas.assets import (
     CurrentValueModel,

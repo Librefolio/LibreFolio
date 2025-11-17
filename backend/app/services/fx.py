@@ -7,92 +7,16 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import date
 from decimal import Decimal
-from decimal import ROUND_DOWN
 
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select as sql_select, or_, and_
 from sqlalchemy.dialects.sqlite import insert
-from sqlalchemy.types import Numeric
 from sqlmodel import select
 
 from backend.app.db.models import FxRate
+from backend.app.utils.decimal_utils import truncate_fx_rate
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-# TODO: muovi dentro models.py
-def get_column_decimal_precision(model_class, column_name: str) -> tuple[int, int]:
-    """
-    Get the decimal precision (total, scale) from a Numeric column definition.
-
-    This is a generic helper that works with any SQLModel table and Numeric column.
-
-    Args:
-        model_class: SQLModel class (e.g., FxRate, PriceHistory, Transaction)
-        column_name: Name of the Numeric column
-
-    Returns:
-        tuple: (precision, scale) e.g. (24, 10) means 24 total digits, 10 after decimal
-
-    Raises:
-        AttributeError: If column doesn't exist
-        ValueError: If column is not a Numeric type
-
-    Example:
-        precision, scale = get_column_decimal_precision(FxRate, 'rate')
-        # Returns (24, 10) from Numeric(24, 10)
-    """
-
-    # Get the SQLAlchemy column from SQLModel
-    if not hasattr(model_class, '__table__'):
-        raise ValueError(f"{model_class.__name__} is not a SQLModel table")
-
-    if column_name not in model_class.__table__.columns:
-        raise AttributeError(f"Column '{column_name}' not found in {model_class.__name__}")
-
-    column = model_class.__table__.columns[column_name]
-
-    # Check if column is Numeric type
-    if not isinstance(column.type, Numeric):
-        raise ValueError(
-            f"Column '{column_name}' in {model_class.__name__} is not a Numeric type "
-            f"(found: {type(column.type).__name__})"
-            )
-
-    # Extract precision and scale from Numeric type
-    return column.type.precision, column.type.scale
-
-
-# TODO: muovi dentro models.py
-def truncate_decimal_to_db_precision(value: Decimal, model_class, column_name: str) -> Decimal:
-    """
-    Truncate a Decimal value to match database column precision.
-
-    This is a generic helper that prevents false "update" detections when comparing
-    fetched values with stored values that have been truncated by the database.
-
-    Args:
-        value: Decimal value to truncate
-        model_class: SQLModel class (e.g., FxRate, PriceHistory, Transaction)
-        column_name: Name of the Numeric column
-
-    Returns:
-        Decimal: Value truncated to database precision
-
-    Example:
-        >>> from backend.app.db.models import FxRate
-        >>> rate = Decimal("1.065757220505168922519450069")
-        >>> truncate_decimal_to_db_precision(rate, FxRate, 'rate')
-        Decimal("1.0657572205")  # Truncated to 10 decimals (Numeric(24, 10))
-    """
-
-    _, scale = get_column_decimal_precision(model_class, column_name)
-    # Create quantization string: "0.0000000001" for scale=10
-    quantize_str = "0." + "0" * scale
-    return value.quantize(Decimal(quantize_str), rounding=ROUND_DOWN)
 
 
 # ============================================================================
@@ -114,8 +38,10 @@ class FXRateProvider(ABC):
     To add a new provider:
     1. Create a new class inheriting from FXRateProvider
     2. Implement all abstract methods
-    3. Register in FXProviderFactory
-    4. See docs/fx-provider-development-guide.md for details
+    3. Add @register_provider(FXProviderRegistry) decorator
+    4. Place in backend/app/services/fx_providers/ directory
+    5. Provider will be auto-discovered on startup
+    6. See docs/fx/provider-development.md for details
     """
 
     @property
@@ -332,120 +258,6 @@ def normalize_rate_for_storage(
 
 
 # ============================================================================
-# PROVIDER FACTORY
-# ============================================================================
-# TODO: Rimuovere questa classe e usare FXProviderRegistry in provider_registry.py
-class FXProviderFactory:
-    """
-    Factory for creating FX rate provider instances.
-
-    Usage:
-        provider = FXProviderFactory.get_provider('ECB')
-        currencies = await provider.get_supported_currencies()
-        rates = await provider.fetch_rates(date_range, currencies)
-    """
-
-    _providers: dict[str, type[FXRateProvider]] = {}
-
-    @classmethod
-    def register(cls, provider_class: type[FXRateProvider]) -> None:
-        """
-        Register a provider class.
-
-        This is typically called automatically when a provider module is imported.
-
-        Args:
-            provider_class: Class inheriting from FXRateProvider
-
-        Example:
-            class ECBProvider(FXRateProvider):
-                ...
-
-            # Register automatically
-            FXProviderFactory.register(ECBProvider)
-        """
-        instance = provider_class()
-        code = instance.code.upper()
-        cls._providers[code] = provider_class
-        logger.info(f"Registered FX provider: {code} ({instance.name})")
-
-    @classmethod
-    def get_provider(cls, code: str) -> FXRateProvider:
-        """
-        Get provider instance by code.
-
-        Args:
-            code: Provider code (case-insensitive, e.g., 'ECB', 'ecb', 'Ecb')
-
-        Returns:
-            Provider instance
-
-        Raises:
-            ValueError: If provider not found
-
-        Example:
-            provider = FXProviderFactory.get_provider('ECB')
-        """
-        code_upper = code.upper()
-        provider_class = cls._providers.get(code_upper)
-
-        if not provider_class:
-            available = ', '.join(sorted(cls._providers.keys()))
-            raise ValueError(
-                f"Unknown FX provider: {code}. "
-                f"Available providers: {available or 'none registered'}"
-                )
-
-        return provider_class()
-
-    @classmethod
-    def get_all_providers(cls) -> list[dict]:
-        """
-        Get metadata for all registered providers.
-
-        Returns:
-            List of provider metadata dictionaries
-
-        Example:
-                [
-                    {
-                        'code': 'ECB',
-                        'name': 'European Central Bank',
-                        'base_currency': 'EUR',
-                        'base_currencies': ['EUR'],
-                        'description': 'Official rates from ECB'
-                    },
-                    {
-                        'code': 'HYPAPI',
-                        'name': 'Hypothetical Multi-Base API',
-                        'base_currency': 'USD',
-                        'base_currencies': ['EUR', 'GBP', 'USD'],
-                        'description': 'Multi-base provider example'
-                    },
-                    ...
-                ]
-        """
-        providers = []
-        for code in sorted(cls._providers.keys()):
-            provider_class = cls._providers[code]
-            instance = provider_class()
-            providers.append({
-                'code': instance.code,
-                'name': instance.name,
-                'base_currency': instance.base_currency,
-                'base_currencies': instance.base_currencies,
-                'description': instance.description
-                })
-        return providers
-
-    @classmethod
-    def is_registered(cls, code: str) -> bool:
-        """Check if a provider is registered."""
-        return code.upper() in cls._providers
-
-
-# TODO: rimuovi questa registrazione ridondante
-# ============================================================================
 # LEGACY ECB CONSTANTS (TO BE MOVED TO ECBProvider)
 # ============================================================================
 
@@ -475,12 +287,11 @@ class RateNotFoundError(FXServiceError):
 # ============================================================================
 # MULTI-PROVIDER ORCHESTRATOR
 # ============================================================================
-# TODO: capire se ha senso mettere un provider di default
 async def ensure_rates_multi_source(
     session,  # AsyncSession
     date_range: tuple[date, date],
     currencies: list[str],
-    provider_code: str = "ECB",
+    provider_code: str,
     base_currency: str | None = None
     ) -> dict[str, int]:
     """
@@ -678,7 +489,7 @@ async def ensure_rates_multi_source(
 
         # Truncate new rate to DB precision for comparison
         # This prevents false "updates" when values are identical after truncation
-        rate_truncated = truncate_decimal_to_db_precision(rate_value, FxRate, 'rate')
+        rate_truncated = truncate_fx_rate(rate_value)
 
         if old_rate is None:
             # New insert
@@ -688,7 +499,7 @@ async def ensure_rates_multi_source(
             logger.debug(f"New rate: {base}/{quote} on {obs_date} = {rate_truncated}")
         else:
             # Truncate old rate too for proper comparison
-            old_rate_truncated = truncate_decimal_to_db_precision(old_rate, FxRate, 'rate')
+            old_rate_truncated = truncate_fx_rate(old_rate)
             if old_rate_truncated != rate_truncated:
                 # Updated value (only if different after truncation)
                 if currency not in changes_by_currency:
@@ -709,7 +520,7 @@ async def ensure_rates_multi_source(
         for obs_date, base, quote, rate in observations:
             norm_base, norm_quote, norm_rate = normalize_rate_for_storage(base, quote, rate)
             # Truncate to DB precision to match what will actually be stored
-            norm_rate_truncated = truncate_decimal_to_db_precision(norm_rate, FxRate, 'rate')
+            norm_rate_truncated = truncate_fx_rate(norm_rate)
             normalized_observations.append((obs_date, norm_base, norm_quote, norm_rate_truncated))
 
         if normalized_observations:
@@ -1232,15 +1043,3 @@ async def delete_rates_bulk(
     await session.commit()
 
     return results
-
-
-# TODO: rimuovi questa importazione che serviva per il vecchio factory
-# ============================================================================
-# AUTO-REGISTER PROVIDERS
-# ============================================================================
-# Import providers to register them automatically in the factory
-# This happens when the fx module is imported
-from backend.app.services.fx_providers.ecb import ECBProvider  # noqa: F401
-from backend.app.services.fx_providers.fed import FEDProvider  # noqa: F401
-from backend.app.services.fx_providers.boe import BOEProvider  # noqa: F401
-from backend.app.services.fx_providers.snb import SNBProvider  # noqa: F401

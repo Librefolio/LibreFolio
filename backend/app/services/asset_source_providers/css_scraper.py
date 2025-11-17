@@ -77,13 +77,7 @@ class CSSScraperProvider(AssetSourceProvider):
 
         Args:
             identifier: URL to scrape (e.g., "https://example.com/price")
-            # TODO: spostare la documentazione dei parametri possibili in validate_params o nella classe pydantic associata
-            provider_params: Required params:
-                - current_css_selector: CSS selector for price element
-                - currency: Currency code
-                - decimal_format: 'us' or 'eu' (optional, default: 'us')
-                - timeout: Request timeout (optional, default: 30)
-                - user_agent: Custom User-Agent (optional)
+            provider_params: see self.validate_params()
 
         Returns:
             CurrentValueModel with value, currency, as_of_date, source
@@ -218,7 +212,7 @@ class CSSScraperProvider(AssetSourceProvider):
         return None
 
     # TODO: siccome i parametri devono essere inviati già da API, conviene creare una classe pydantic per i parametri del CSS scraper
-    #  e usarla sia qui che nelle API per validare i parametri in ingresso
+    #  e usarla sia qui che nelle API per validare i parametri in ingresso, non cambiare firma del metodo però, validare appena dopo
     def validate_params(self, params: Dict | None) -> None:
         """
         Validate required parameters.
@@ -297,10 +291,8 @@ class CSSScraperProvider(AssetSourceProvider):
                 {"text": text}
                 )
 
-        # TODO: gestire anche parsing particolari come:
-        #       "1 234,56" (francese con spazio) <- basta fare una replace degli spazi
-        #       "1,234.56" (ambiguità su chi è separatore decimali) <- Probabilemente non gestibile senza info esterne, quindi in mancanza di sollevare un eccezione
         try:
+            text = text.replace(' ', '')  # remove spaces if any (like French format: "1 234,56")
             if decimal_format == 'us':
                 # US format: 1,234.56
                 # Remove commas (thousands separator)
@@ -313,6 +305,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 return Decimal(text)
 
         except (InvalidOperation, ValueError) as e:
+            # Case like "1,234.56" is too unambiguity and cannot be parsed reliably
             raise AssetSourceError(
                 f"Failed to parse price: {text}",
                 "PARSE_ERROR",

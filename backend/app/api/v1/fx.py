@@ -724,7 +724,7 @@ async def create_pair_sources_bulk(
 
     Validations:
     - base < quote (alphabetical ordering)
-    - Provider code must be registered in FXProviderFactory
+    - Provider code must be registered in FXProviderRegistry
     - Priority must be >= 1
 
     Args:

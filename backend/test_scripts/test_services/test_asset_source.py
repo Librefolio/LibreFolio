@@ -15,7 +15,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from backend.app.utils.decimal_utils import get_price_column_precision, truncate_price_to_db_precision
+from backend.app.utils.decimal_utils import truncate_priceHistory, get_model_column_precision
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -36,9 +36,7 @@ from backend.app.db.models import (
 from backend.app.services.asset_source import AssetSourceManager
 
 from backend.app.utils.financial_math import (
-    calculate_daily_factor_between_act365,
-    find_active_rate,
-    calculate_accrued_interest,
+    calculate_day_count_fraction,
     )
 from backend.test_scripts.test_utils import (
     print_error,
@@ -66,7 +64,7 @@ def test_price_column_precision():
     try:
         columns = ["open", "high", "low", "close", "adjusted_close"]
         for col in columns:
-            precision, scale = get_price_column_precision(col)
+            precision, scale = get_model_column_precision(PriceHistory, col)
             # Detailed logging per case
             print_info(f"Case: column={col} | expected=(18,6) | actual=({precision},{scale})")
             assert precision == 18, f"{col}: Expected precision 18, got {precision}"
@@ -93,7 +91,7 @@ def test_truncate_price():
 
         for input_str, expected_str in test_cases:
             input_val = Decimal(input_str)
-            result = truncate_price_to_db_precision(input_val)
+            result = truncate_priceHistory(input_val)
             expected = Decimal(expected_str)
 
             # Detailed logging per case
@@ -120,7 +118,7 @@ def test_act365_calculation():
             ]
 
         for start, end, expected in test_cases:
-            result = calculate_daily_factor_between_act365(start, end)
+            result = calculate_day_count_fraction(start, end)
 
             # Detailed logging per case
             print_info(f"Case: start={start} end={end} | expected={expected} | actual={result}")
@@ -580,11 +578,9 @@ async def run_all_tests():
     helper_act365 = test_act365_calculation()
     print_result_detail("ACT/365 Calculation", helper_act365)
 
-    helper_find_rate = test_find_active_rate()
-    print_result_detail("Find Active Rate", helper_find_rate)
-
-    helper_accrued = test_calculate_accrued_interest()
-    print_result_detail("Calculate Accrued Interest", helper_accrued)
+    # NOTE: test_find_active_rate and test_calculate_accrued_interest removed
+    # Those functions are deprecated. Use find_active_period() and period-based
+    # calculation in ScheduledInvestmentProvider instead.
 
     # Run the bulk assign first to retrieve asset_ids for dependent tests
     bulk_assign_result = await test_bulk_assign_providers()
@@ -596,8 +592,6 @@ async def run_all_tests():
         "Price Column Precision": helper_price_precision,
         "Price Truncation": helper_truncate,
         "ACT/365 Calculation": helper_act365,
-        "Find Active Rate": helper_find_rate,
-        "Calculate Accrued Interest": helper_accrued,
         "Bulk Assign Providers": bulk_assign_result,
         }
 

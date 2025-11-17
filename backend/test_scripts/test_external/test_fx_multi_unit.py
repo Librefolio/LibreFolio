@@ -20,7 +20,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.services.fx import FXProviderFactory
+from backend.app.services.provider_registry import FXProviderRegistry
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,
@@ -82,7 +82,7 @@ async def test_multi_unit_identification(provider_code: str) -> bool:
     print_section(f"Test 1: {provider_code} - Multi-Unit Currency Identification")
 
     try:
-        provider = FXProviderFactory.get_provider(provider_code)
+        provider = FXProviderRegistry.get_provider_instance(provider_code)
 
         # Get multi-unit currencies from provider property (always exists, may be empty)
         multi_unit = provider.multi_unit_currencies
@@ -112,12 +112,12 @@ async def test_multi_unit_identification(provider_code: str) -> bool:
         return False
 
 
-async def test_multi_unit_rates(provider_code: str) -> bool:
+async def test_multi_unit_reasonableness(provider_code: str) -> bool:
     """Test that multi-unit currency rates are in reasonable ranges."""
     print_section(f"Test 2: {provider_code} - Multi-Unit Rate Reasonableness")
 
     try:
-        provider = FXProviderFactory.get_provider(provider_code)
+        provider = FXProviderRegistry.get_provider_instance(provider_code)
 
         # Get multi-unit currencies from provider property
         multi_unit_currencies = provider.multi_unit_currencies
@@ -185,7 +185,7 @@ async def test_multi_unit_consistency(provider_code: str) -> bool:
     print_section(f"Test 3: {provider_code} - Multi-Unit Calculation Consistency")
 
     try:
-        provider = FXProviderFactory.get_provider(provider_code)
+        provider = FXProviderRegistry.get_provider_instance(provider_code)
 
         # Get multi-unit currencies from provider property
         multi_unit_currencies = provider.multi_unit_currencies
@@ -235,7 +235,7 @@ async def test_provider(provider_code: str) -> dict[str, bool]:
     print_info("")
 
     results['identification'] = await test_multi_unit_identification(provider_code)
-    results['reasonableness'] = await test_multi_unit_rates(provider_code)
+    results['reasonableness'] = await test_multi_unit_reasonableness(provider_code)
     results['consistency'] = await test_multi_unit_consistency(provider_code)
 
     return results
@@ -265,7 +265,7 @@ The code must handle this correctly:
     """)
 
     # Get all registered providers
-    providers = FXProviderFactory.get_all_providers()
+    providers = FXProviderRegistry.list_providers()
 
     print_info(f"Found {len(providers)} registered provider(s):")
     for p in providers:

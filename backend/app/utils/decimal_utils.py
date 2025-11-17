@@ -21,6 +21,7 @@ from typing import Type, Tuple
 
 from sqlalchemy import Numeric
 from sqlmodel import SQLModel
+
 from backend.app.db.models import PriceHistory, FxRate
 
 
@@ -73,22 +74,12 @@ def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple
     scale = column_type.scale
 
     if precision is None or scale is None:
-        raise ValueError(
-            f"Column '{column_name}' in {model.__name__} has undefined precision/scale"
-            )
+        raise ValueError(f"Column '{column_name}' in {model.__name__} has undefined precision/scale")
 
-    return (precision, scale)
-
-def get_price_column_precision(column_name: str) -> Tuple[int, int]:
-    """Get (precision, scale) for price_history numeric columns. Backward-compatible wrapper."""
-    return get_model_column_precision(PriceHistory, column_name)
+    return precision, scale
 
 
-def truncate_to_db_precision(
-    value: Decimal,
-    model: Type[SQLModel],
-    column_name: str
-    ) -> Decimal:
+def truncate_to_db_precision(value: Decimal, model: Type[SQLModel], column_name: str) -> Decimal:
     """
     Truncate decimal to match database column precision.
 
@@ -124,12 +115,15 @@ def truncate_to_db_precision(
     return value.quantize(quantizer, rounding=ROUND_DOWN)
 
 
-def truncate_price_to_db_precision(value: Decimal, column_name: str = "close") -> Decimal:
-    """Truncate price to NUMERIC(18, 6) for price_history columns. Backward-compatible wrapper."""
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def truncate_priceHistory(value: Decimal, column_name: str = "close") -> Decimal:
+    """Truncate value with the precision used in DB price_history.<column_name>."""
     return truncate_to_db_precision(value, PriceHistory, column_name)
 
 
-def truncate_fx_rate_to_db_precision(value: Decimal) -> Decimal:
-    """Truncate FX rate to NUMERIC(24, 10) for fx_rates.rate column."""
+def truncate_fx_rate(value: Decimal) -> Decimal:
+    """Truncate value with the precision used in DB fx_rates.rate column."""
     return truncate_to_db_precision(value, FxRate, "rate")
-
