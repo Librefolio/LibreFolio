@@ -36,6 +36,7 @@ from backend.app.db.models import (
     PriceHistory,
     )
 from backend.app.schemas import CurrentValueModel, HistoricalDataModel
+from backend.app.schemas.assets import PricePointModel, BackwardFillInfo
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.decimal_utils import truncate_priceHistory
 from backend.app.utils.financial_math import parse_decimal_value
@@ -352,10 +353,7 @@ class AssetSourceManager:
         return results[0]
 
     @staticmethod
-    async def get_asset_provider(
-        asset_id: int,
-        session: AsyncSession,
-        ) -> Optional[AssetProviderAssignment]:
+    async def get_asset_provider(asset_id: int, session: AsyncSession) -> Optional[AssetProviderAssignment]:
         """
         Fetch provider assignment for asset.
 
@@ -366,11 +364,7 @@ class AssetSourceManager:
         Returns:
             AssetProviderAssignment or None if not assigned
         """
-        result = await session.execute(
-            select(AssetProviderAssignment).where(
-                AssetProviderAssignment.asset_id == asset_id
-                )
-            )
+        result = await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))
         return result.scalar_one_or_none()
 
     # ========================================================================
@@ -600,152 +594,131 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
+    def _parse_provider_params(raw_params):
+        """Parse provider params from DB (string/dict) into dict safely."""
+        import json
+        if raw_params is None:
+            return {}
+        if isinstance(raw_params, dict):
+            return raw_params
+        if isinstance(raw_params, str):
+            try:
+                return json.loads(raw_params)
+            except Exception:
+                return {}
+        return {}
+
+    @staticmethod
+    async def _fetch_provider_history(
+        assignment: AssetProviderAssignment,
+        asset_id: int,
+        start_date: date_type,
+        end_date: date_type,
+        ) -> Optional[list[PricePointModel]]:
+        """Delegate to provider history fetch, returning PricePointModel list or None on failure."""
+        provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
+        if not provider:
+            return None
+        params = AssetSourceManager._parse_provider_params(assignment.provider_params)
+        try:
+            historical = await provider.get_history_value(str(asset_id), params, start_date, end_date)
+            # historical expected HistoricalDataModel with prices: List[PricePointModel]
+            return historical.prices
+        except Exception:
+            return None  # silent fallback; logging could be added
+
+    @staticmethod
+    async def _fetch_db_price_map(
+        session: AsyncSession,
+        asset_id: int,
+        start_date: date_type,
+        end_date: date_type,
+        ) -> dict[date_type, PriceHistory]:
+        stmt = select(PriceHistory).where(
+            and_(
+                PriceHistory.asset_id == asset_id,
+                PriceHistory.date >= start_date,
+                PriceHistory.date <= end_date,
+                )
+            ).order_by(PriceHistory.date)
+        db_result = await session.execute(stmt)
+        return {p.date: p for p in db_result.scalars().all()}
+
+    @staticmethod
+    def  _build_backward_filled_series(price_map: dict[date_type, PriceHistory],start_date: date_type,end_date: date_type,) -> list[PricePointModel]:
+        results: list[PricePointModel] = []
+        last_known: Optional[PriceHistory] = None
+        current = start_date
+        while current <= end_date:
+            ph = price_map.get(current)
+            if ph:
+                last_known = ph
+                results.append(
+                    PricePointModel(
+                        date=current,
+                        open=ph.open,
+                        high=ph.high,
+                        low=ph.low,
+                        close=ph.close,
+                        volume=ph.volume,
+                        currency=ph.currency,
+                        backward_fill_info=None,
+                        )
+                    )
+            elif last_known:
+                days_back = (current - last_known.date).days
+                results.append(
+                    PricePointModel(
+                        date=current,
+                        open=last_known.open,
+                        high=last_known.high,
+                        low=last_known.low,
+                        close=last_known.close,
+                        volume=last_known.volume,
+                        currency=last_known.currency,
+                        backward_fill_info=BackwardFillInfo(
+                            actual_rate_date=last_known.date,
+                            days_back=days_back,
+                            ),
+                        )
+                    )
+            # else: skip days before first known price
+            current += timedelta(days=1)
+        return results
+
+    @staticmethod
     async def get_prices(
         asset_id: int,
         start_date: date_type,
         end_date: date_type,
         session: AsyncSession,
-        ) -> list[dict]:
-        """
-        Get prices for asset with backward-fill and synthetic yield support.
+        ) -> list[PricePointModel]:
+        """Get prices for asset with backward-fill and provider delegation.
 
         Logic:
-        1. Fetch asset to check valuation_model
-        2. If SCHEDULED_YIELD: Calculate synthetic values (no DB query for prices)
-        3. If other types: Query price_history with backward-fill
+        1. Validate date range
+        2. Fetch asset
+        3. If provider assignment exists -> try provider fetch
+        4. Fallback to DB with backward-fill
 
-        Args:
-            asset_id: Asset ID
-            start_date: Start date (inclusive)
-            end_date: End date (inclusive)
-            session: Database session
-
-        Returns:
-            List of price dicts with backward_fill_info:
-            [{
-                date, open, high, low, close, volume, currency,
-                backward_fill_info: {actual_rate_date, days_back} or None
-            }, ...]
-
-        Raises:
-            ValueError: If asset not found or date range invalid
+        Returns List[PricePointModel] (uniform output).
+        Synthetic yield (scheduled investment) handled entirely inside the dedicated provider plugin.
         """
-        # Validate date range
         if start_date > end_date:
             raise ValueError(f"Start date {start_date} is after end date {end_date}")
 
-        # Fetch asset
         asset = await session.get(Asset, asset_id)
         if not asset:
             raise ValueError(f"Asset {asset_id} not found")
 
-        # ====================================================================
-        # CHECK FOR ASSIGNED PROVIDER FIRST
-        # ====================================================================
         assignment = await AssetSourceManager.get_asset_provider(asset_id, session)
         if assignment:
-            # Asset has a provider assigned - delegate to provider
-            provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
-            if provider:
-                # Parse provider params
-                import json
-                provider_params = assignment.provider_params or {}
-                if isinstance(provider_params, str):
-                    try:
-                        provider_params = json.loads(provider_params)
-                    except:
-                        provider_params = {}
-
-                try:
-                    # Get historical data from provider
-                    historical_data = await provider.get_history_value(
-                        str(asset_id),  # identifier (not used by most providers)
-                        provider_params,
-                        start_date,
-                        end_date
-                        )
-
-                    # Convert to expected format
-                    results = []
-                    for price_point in historical_data.prices:
-                        results.append({
-                            "date": price_point.date,
-                            "open": price_point.open,
-                            "high": price_point.high,
-                            "low": price_point.low,
-                            "close": price_point.close,
-                            "volume": price_point.volume,
-                            "currency": price_point.currency,
-                            "backward_fill_info": None  # Providers return exact data
-                            })
-
-                    return results
-
-                except Exception as e:
-                    # Provider failed - fall back to DB query
-                    pass
-
-        # TODO: capire se questo fallback ha senso farlo o è residuo di una mock precedente
-        # ====================================================================
-        # FALLBACK: Query price_history with backward-fill
-        # ====================================================================
-
-        # Query all available prices in range
-        stmt = select(PriceHistory).where(
-            and_(
-                PriceHistory.asset_id == asset_id,
-                PriceHistory.date >= start_date,
-                PriceHistory.date <= end_date
-                )
-            ).order_by(PriceHistory.date)
-
-        db_result = await session.execute(stmt)
-        db_prices = {p.date: p for p in db_result.scalars().all()}
-
-        # Build results with backward-fill
-        results = []
-        current_date = start_date
-        last_known_price = None
-
-        while current_date <= end_date:
-            if current_date in db_prices:
-                # Exact match
-                price = db_prices[current_date]
-                last_known_price = price
-
-                results.append({
-                    "date": current_date,
-                    "open": price.open,
-                    "high": price.high,
-                    "low": price.low,
-                    "close": price.close,
-                    "currency": price.currency,
-                    "backward_fill_info": None
-                    })
-            elif last_known_price:
-                # Backward-fill
-                days_back = (current_date - last_known_price.date).days
-
-                results.append({
-                    "date": current_date,
-                    "open": last_known_price.open,
-                    "high": last_known_price.high,
-                    "low": last_known_price.low,
-                    "close": last_known_price.close,
-                    "currency": last_known_price.currency,
-                    "backward_fill_info": {
-                        "actual_rate_date": str(last_known_price.date),
-                        "days_back": days_back
-                        }
-                    })
-            else:
-                # No data available (TODO Step 03: fallback to last BUY transaction)
-                # For now, skip this date
-                pass
-
-            current_date += timedelta(days=1)
-
-        return results
+            provider_prices = await AssetSourceManager._fetch_provider_history(assignment, asset_id, start_date, end_date)
+            if provider_prices is not None:
+                return provider_prices
+        # Fallback DB if no provider is assigned at current asset
+        price_map = await AssetSourceManager._fetch_db_price_map(session, asset_id, start_date, end_date)
+        return AssetSourceManager._build_backward_filled_series(price_map, start_date, end_date)
 
     # ========================================================================
     # PRICE REFRESH (PROVIDER) METHODS - NEW
