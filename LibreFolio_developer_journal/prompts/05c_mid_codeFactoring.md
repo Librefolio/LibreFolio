@@ -266,11 +266,11 @@ Scelta utente: aggiungere, nel commento dei file appena creati, e negli altri fi
 
 ### Phase 7: Cleanup & Export
 
-- [ ] 7.7.1 Rimuovere duplicati da `api/v1/assets.py` e `api/v1/fx.py`.
-- [ ] 7.7.2 Controllo import inutilizzati.
-- [ ] 7.7.3 Aggiornare `schemas/__init__.py` (includere nuovi moduli + FXSyncResponse da refresh).
-- [ ] 7.7.4 Grep finale per confermare eliminazione `PriceQueryResult`, `ProviderAssignmentItem`, `SyncResponseModel` (vecchio nome).
-- [ ] 7.7.5 Test finale combinato (utils, services, db).
+- [x] 7.7.1 Rimuovere duplicati da `api/v1/assets.py` e `api/v1/fx.py`.
+- [x] 7.7.2 Controllo import inutilizzati.
+- [x] 7.7.3 Aggiornare `schemas/__init__.py` (includere nuovi moduli + FXSyncResponse da refresh).
+- [x] 7.7.4 Grep finale per confermare eliminazione `PriceQueryResult`, `ProviderAssignmentItem`, `SyncResponseModel` (vecchio nome).
+- [x] 7.7.5 Test finale combinato (utils, services, db).
 
 ### Phase 8: Documentazione
 

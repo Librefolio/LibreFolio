@@ -9,6 +9,7 @@ Verifies:
 """
 # Setup test database BEFORE importing app modules
 from backend.test_scripts.test_db_config import setup_test_database
+
 setup_test_database()
 
 from datetime import date
@@ -25,9 +26,6 @@ from backend.app.db import (
     CashAccount,
     TransactionType,
     CashMovementType,
-    AssetType,
-    ValuationModel,
-    IdentifierType,
     )
 
 from backend.app.db.session import get_sync_engine
@@ -58,7 +56,7 @@ def test_unidirectional_relationship():
             amount=Decimal("1000.00"),
             trade_date=date(2025, 1, 15),
             note="Test cash movement"
-        )
+            )
         session.add(cash_mov)
         session.flush()
 
@@ -74,7 +72,7 @@ def test_unidirectional_relationship():
             currency="EUR",
             trade_date=date(2025, 1, 15),
             cash_movement_id=cash_mov.id
-        )
+            )
         session.add(tx)
         session.commit()
 
@@ -85,12 +83,12 @@ def test_unidirectional_relationship():
         print("\n🔍 Verifying Transaction -> CashMovement lookup...")
         tx_from_db = session.exec(
             select(Transaction).where(Transaction.id == tx.id)
-        ).first()
+            ).first()
 
         if tx_from_db and tx_from_db.cash_movement_id:
             cash_mov_via_tx = session.exec(
                 select(CashMovement).where(CashMovement.id == tx_from_db.cash_movement_id)
-            ).first()
+                ).first()
 
             if cash_mov_via_tx:
                 print(f"  ✅ Found CashMovement via Transaction.cash_movement_id")
@@ -106,7 +104,7 @@ def test_unidirectional_relationship():
         print("\n🔍 Verifying CashMovement -> Transaction reverse lookup...")
         tx_via_cash = session.exec(
             select(Transaction).where(Transaction.cash_movement_id == cash_mov.id)
-        ).first()
+            ).first()
 
         if tx_via_cash:
             print(f"  ✅ Found Transaction via query WHERE cash_movement_id = {cash_mov.id}")
@@ -138,7 +136,7 @@ def test_cascade_delete():
             type=CashMovementType.DIVIDEND_INCOME,
             amount=Decimal("50.00"),
             trade_date=date(2025, 2, 1),
-        )
+            )
         session.add(cash_mov)
         session.flush()
         cash_mov_id = cash_mov.id
@@ -154,7 +152,7 @@ def test_cascade_delete():
             currency="EUR",
             trade_date=date(2025, 2, 1),
             cash_movement_id=cash_mov_id
-        )
+            )
         session.add(tx)
         session.commit()
         tx_id = tx.id
@@ -214,7 +212,7 @@ def test_check_constraint_required():
                 currency="EUR",
                 trade_date=date(2025, 3, 1),
                 cash_movement_id=None  # Missing required cash_movement_id
-            )
+                )
             session.add(tx)
             session.commit()
 
@@ -252,7 +250,7 @@ def test_check_constraint_not_required():
                 currency="EUR",
                 trade_date=date(2025, 4, 1),
                 cash_movement_id=None  # OK for ADD_HOLDING
-            )
+                )
             session.add(tx)
             session.commit()
 
@@ -266,6 +264,7 @@ def test_check_constraint_not_required():
             print(f"  ❌ IntegrityError raised unexpectedly")
             print(f"     Error: {str(e)}")
             return False
+
 
 def test_no_cascade_delete_transaction():
     """Test that deleting Transaction does NOT cascade to CashMovement."""
@@ -286,7 +285,7 @@ def test_no_cascade_delete_transaction():
             type=CashMovementType.SALE_PROCEEDS,
             amount=Decimal("500.00"),
             trade_date=date(2025, 5, 1),
-        )
+            )
         session.add(cash_mov)
         session.flush()
         cash_mov_id = cash_mov.id
@@ -302,7 +301,7 @@ def test_no_cascade_delete_transaction():
             currency="EUR",
             trade_date=date(2025, 5, 1),
             cash_movement_id=cash_mov_id
-        )
+            )
         session.add(tx)
         session.commit()
         tx_id = tx.id
@@ -326,7 +325,6 @@ def test_no_cascade_delete_transaction():
         else:
             print(f"  ❌ CashMovement {cash_mov_id} was deleted (unexpected CASCADE)")
             return False
-
 
 
 def main():

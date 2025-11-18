@@ -26,6 +26,7 @@ Covers upsert, delete, and query operations for asset price history.
 from datetime import date as date_type
 from decimal import Decimal
 from typing import List, Optional
+
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from backend.app.schemas.common import DateRangeModel
@@ -133,11 +134,9 @@ class FABulkDeleteResponse(BaseModel):
     results: List[FAAssetDeleteResult]
     deleted_count: int
 
-
 # ============================================================================
 # FA PRICE QUERY
 # ============================================================================
 
 # Note: Response uses List[PricePointModel] directly (no wrapper)
 # This was decided in Phase 4 to simplify API and eliminate FAGetPricesResponse duplicate
-

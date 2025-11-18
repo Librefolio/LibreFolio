@@ -33,6 +33,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.db.base import SQLModel
 
+
 # TODO: più avanti spostare in una libreria comune se serve altrove
 class LogLevel(str, Enum):
     """Log levels for constraint verification output."""

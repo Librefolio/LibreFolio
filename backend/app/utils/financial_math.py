@@ -16,25 +16,25 @@ Note:
     To convert from dict/JSON, use: InterestRatePeriod(**dict_data)
     To get dict/JSON from model: model.dict() or model.json()
 """
+import calendar
+import math
 from datetime import date as date_type, timedelta
 from decimal import Decimal
 from typing import Optional, List
-import calendar
-import math
 
 from backend.app.schemas.assets import (
     InterestRatePeriod,
     LateInterestConfig,
     DayCountConvention,
     CompoundFrequency,
-)
+    )
 
 
 # ============================================================================
 # DAY COUNT CONVENTIONS
 # ============================================================================
 
-def calculate_day_count_fraction( start_date: date_type, end_date: date_type, convention: DayCountConvention = DayCountConvention.ACT_365 ) -> Decimal:
+def calculate_day_count_fraction(start_date: date_type, end_date: date_type, convention: DayCountConvention = DayCountConvention.ACT_365) -> Decimal:
     """
     Calculate day fraction using specified day count convention.
 
@@ -159,6 +159,7 @@ def _calculate_30_360(start_date: date_type, end_date: date_type) -> Decimal:
     days = (y2 - y1) * 360 + (m2 - m1) * 30 + (d2 - d1)
     return Decimal(days) / Decimal(360)
 
+
 # ============================================================================
 # COMPOUND INTEREST CALCULATIONS
 # ============================================================================
@@ -197,7 +198,7 @@ def calculate_compound_interest(
     annual_rate: Decimal,
     time_fraction: Decimal,
     frequency: CompoundFrequency
-) -> Decimal:
+    ) -> Decimal:
     """
     Calculate compound interest for a given period.
 
@@ -253,7 +254,7 @@ def calculate_simple_interest(
     principal: Decimal,
     annual_rate: Decimal,
     time_fraction: Decimal
-) -> Decimal:
+    ) -> Decimal:
     """
     Calculate simple interest for a given period.
 
@@ -293,7 +294,7 @@ def find_active_period(
     target_date: date_type,
     maturity_date: date_type,
     late_interest: Optional[LateInterestConfig] = None,
-) -> Optional[InterestRatePeriod]:
+    ) -> Optional[InterestRatePeriod]:
     """
     Find the active interest rate period for a given date.
 
@@ -344,11 +345,10 @@ def find_active_period(
                     compounding=late_interest.compounding,
                     compound_frequency=late_interest.compound_frequency,
                     day_count=late_interest.day_count
-                )
+                    )
 
     # Step 3: No applicable period found
     return None
-
 
 
 def parse_decimal_value(value) -> Optional[Decimal]:

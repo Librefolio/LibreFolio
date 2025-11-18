@@ -24,6 +24,7 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 - Bulk Operations: Batch processing for efficiency
 """
 from typing import List, Optional
+
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -142,4 +143,3 @@ class FABulkRemoveResponse(BaseModel):
 
     results: List[FAProviderRemovalResult]
     success_count: int
-

@@ -534,7 +534,7 @@ def populate_transactions_and_cash(session: Session):
             TransactionType.INTEREST,
             TransactionType.FEE,
             TransactionType.TAX,
-        ]
+            ]
 
         cash_movement_id = None
 
@@ -544,8 +544,8 @@ def populate_transactions_and_cash(session: Session):
                 select(CashAccount).where(
                     CashAccount.broker_id == tx_data["broker"].id,
                     CashAccount.currency == tx_data["currency"]
-                )
-            ).first()
+                    )
+                ).first()
 
             if cash_account:
                 cash_type = None
@@ -576,7 +576,7 @@ def populate_transactions_and_cash(session: Session):
                         type=cash_type,
                         amount=cash_amount,
                         trade_date=date.today() - timedelta(days=tx_data["days_ago"]),
-                    )
+                        )
                     session.add(cash_mov)
                     session.flush()  # Get cash_movement ID
                     cash_movement_id = cash_mov.id
@@ -592,7 +592,7 @@ def populate_transactions_and_cash(session: Session):
             cash_movement_id=cash_movement_id,  # Set from CashMovement created above
             trade_date=date.today() - timedelta(days=tx_data["days_ago"]),
             note=tx_data["note"],
-        )
+            )
         session.add(tx)
         session.flush()  # Get transaction ID
 
@@ -601,7 +601,7 @@ def populate_transactions_and_cash(session: Session):
             TransactionType.SELL: "💰",
             TransactionType.DIVIDEND: "💵",
             TransactionType.INTEREST: "📈",
-        }.get(tx_data["type"], "📊")
+            }.get(tx_data["type"], "📊")
 
         print(f"  {tx_type_emoji} {tx_data['type'].value}: {tx_data['asset'].identifier} "
               f"(qty: {tx_data['quantity']}, price: {tx_data['price']} {tx_data['currency']})")

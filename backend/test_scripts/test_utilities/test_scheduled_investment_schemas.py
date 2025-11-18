@@ -8,9 +8,10 @@ Tests validation logic for:
 
 All tests verify that Pydantic validation correctly enforces business rules.
 """
-import pytest
 from datetime import date
 from decimal import Decimal
+
+import pytest
 from pydantic import ValidationError
 
 from backend.app.schemas.assets import (
@@ -20,7 +21,7 @@ from backend.app.schemas.assets import (
     CompoundingType,
     CompoundFrequency,
     DayCountConvention,
-)
+    )
 
 
 # ============================================================================
@@ -38,7 +39,7 @@ class TestInterestRatePeriod:
             annual_rate=Decimal("0.05"),
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365
-        )
+            )
         assert period.annual_rate == Decimal("0.05")
         assert period.compounding == CompoundingType.SIMPLE
         assert period.compound_frequency is None
@@ -52,7 +53,7 @@ class TestInterestRatePeriod:
             compounding=CompoundingType.COMPOUND,
             compound_frequency=CompoundFrequency.MONTHLY,
             day_count=DayCountConvention.ACT_365
-        )
+            )
         assert period.compounding == CompoundingType.COMPOUND
         assert period.compound_frequency == CompoundFrequency.MONTHLY
 
@@ -63,7 +64,7 @@ class TestInterestRatePeriod:
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("-0.05"),
-            )
+                )
 
     def test_end_date_before_start_date_rejected(self):
         """Test that end_date before start_date is rejected."""
@@ -72,7 +73,7 @@ class TestInterestRatePeriod:
                 start_date=date(2025, 12, 31),
                 end_date=date(2025, 1, 1),
                 annual_rate=Decimal("0.05"),
-            )
+                )
 
     def test_same_start_end_date_allowed(self):
         """Test that same start and end date is allowed (single day period)."""
@@ -80,7 +81,7 @@ class TestInterestRatePeriod:
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 1),
             annual_rate=Decimal("0.05"),
-        )
+            )
         assert period.start_date == period.end_date
 
     # TODO: This validation doesn't work as expected due to field_validator execution order
@@ -95,7 +96,7 @@ class TestInterestRatePeriod:
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 compounding=CompoundingType.COMPOUND,
-            )
+                )
 
     def test_simple_with_frequency_rejected(self):
         """Test that SIMPLE with compound_frequency is rejected."""
@@ -106,7 +107,7 @@ class TestInterestRatePeriod:
                 annual_rate=Decimal("0.05"),
                 compounding=CompoundingType.SIMPLE,
                 compound_frequency=CompoundFrequency.MONTHLY,
-            )
+                )
 
     def test_defaults(self):
         """Test that defaults are applied correctly."""
@@ -114,7 +115,7 @@ class TestInterestRatePeriod:
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-        )
+            )
         assert period.compounding == CompoundingType.SIMPLE
         assert period.day_count == DayCountConvention.ACT_365
         assert period.compound_frequency is None
@@ -125,7 +126,7 @@ class TestInterestRatePeriod:
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate="0.05",
-        )
+            )
         assert period.annual_rate == Decimal("0.05")
 
     def test_extra_fields_rejected(self):
@@ -136,7 +137,7 @@ class TestInterestRatePeriod:
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 extra_field="should_fail"
-            )
+                )
 
 
 # ============================================================================
@@ -151,7 +152,7 @@ class TestLateInterestConfig:
         config = LateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
-        )
+            )
         assert config.annual_rate == Decimal("0.12")
         assert config.grace_period_days == 30
         assert config.compounding == CompoundingType.SIMPLE
@@ -161,7 +162,7 @@ class TestLateInterestConfig:
         with pytest.raises(ValidationError, match="non-negative"):
             LateInterestConfig(
                 annual_rate=Decimal("-0.12"),
-            )
+                )
 
     def test_negative_grace_period_rejected(self):
         """Test that negative grace period is rejected."""
@@ -169,14 +170,14 @@ class TestLateInterestConfig:
             LateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 grace_period_days=-10,
-            )
+                )
 
     def test_zero_grace_period_allowed(self):
         """Test that zero grace period is allowed."""
         config = LateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=0,
-        )
+            )
         assert config.grace_period_days == 0
 
     def test_compound_late_interest(self):
@@ -186,7 +187,7 @@ class TestLateInterestConfig:
             grace_period_days=30,
             compounding=CompoundingType.COMPOUND,
             compound_frequency=CompoundFrequency.DAILY,
-        )
+            )
         assert config.compounding == CompoundingType.COMPOUND
         assert config.compound_frequency == CompoundFrequency.DAILY
 
@@ -198,7 +199,7 @@ class TestLateInterestConfig:
             LateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 compounding=CompoundingType.COMPOUND,
-            )
+                )
 
     def test_simple_with_frequency_rejected(self):
         """Test that SIMPLE with frequency is rejected."""
@@ -207,7 +208,7 @@ class TestLateInterestConfig:
                 annual_rate=Decimal("0.12"),
                 compounding=CompoundingType.SIMPLE,
                 compound_frequency=CompoundFrequency.MONTHLY,
-            )
+                )
 
 
 # ============================================================================
@@ -225,9 +226,9 @@ class TestScheduledInvestmentSchedule:
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.05"),
-                )
-            ]
-        )
+                    )
+                ]
+            )
         assert len(schedule.schedule) == 1
 
     def test_valid_multiple_periods_contiguous(self):
@@ -238,14 +239,14 @@ class TestScheduledInvestmentSchedule:
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 6, 30),
                     annual_rate=Decimal("0.05"),
-                ),
+                    ),
                 InterestRatePeriod(
                     start_date=date(2025, 7, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),
-                )
-            ]
-        )
+                    )
+                ]
+            )
         assert len(schedule.schedule) == 2
 
     def test_empty_schedule_rejected(self):
@@ -262,14 +263,14 @@ class TestScheduledInvestmentSchedule:
                         start_date=date(2025, 1, 1),
                         end_date=date(2025, 7, 15),
                         annual_rate=Decimal("0.05"),
-                    ),
+                        ),
                     InterestRatePeriod(
                         start_date=date(2025, 7, 1),  # Overlaps with previous!
                         end_date=date(2025, 12, 31),
                         annual_rate=Decimal("0.06"),
-                    )
-                ]
-            )
+                        )
+                    ]
+                )
 
     def test_gap_in_periods_rejected(self):
         """Test that gaps between periods are rejected."""
@@ -280,14 +281,14 @@ class TestScheduledInvestmentSchedule:
                         start_date=date(2025, 1, 1),
                         end_date=date(2025, 6, 30),
                         annual_rate=Decimal("0.05"),
-                    ),
+                        ),
                     InterestRatePeriod(
                         start_date=date(2025, 7, 5),  # Gap of 5 days!
                         end_date=date(2025, 12, 31),
                         annual_rate=Decimal("0.06"),
-                    )
-                ]
-            )
+                        )
+                    ]
+                )
 
     def test_unsorted_periods_are_sorted(self):
         """Test that unsorted periods are automatically sorted."""
@@ -297,14 +298,14 @@ class TestScheduledInvestmentSchedule:
                     start_date=date(2025, 7, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),
-                ),
+                    ),
                 InterestRatePeriod(
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 6, 30),
                     annual_rate=Decimal("0.05"),
-                ),
-            ]
-        )
+                    ),
+                ]
+            )
         # Should be sorted by start_date
         assert schedule.schedule[0].start_date == date(2025, 1, 1)
         assert schedule.schedule[1].start_date == date(2025, 7, 1)
@@ -317,13 +318,13 @@ class TestScheduledInvestmentSchedule:
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.05"),
-                )
-            ],
+                    )
+                ],
             late_interest=LateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 grace_period_days=30,
+                )
             )
-        )
         assert schedule.late_interest is not None
         assert schedule.late_interest.annual_rate == Decimal("0.12")
 
@@ -336,26 +337,25 @@ class TestScheduledInvestmentSchedule:
                     end_date=date(2025, 4, 30),
                     annual_rate=Decimal("0.04"),
                     compounding=CompoundingType.SIMPLE,
-                ),
+                    ),
                 InterestRatePeriod(
                     start_date=date(2025, 5, 1),
                     end_date=date(2025, 8, 31),
                     annual_rate=Decimal("0.05"),
                     compounding=CompoundingType.COMPOUND,
                     compound_frequency=CompoundFrequency.QUARTERLY,
-                ),
+                    ),
                 InterestRatePeriod(
                     start_date=date(2025, 9, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),
                     compounding=CompoundingType.SIMPLE,
-                )
-            ]
-        )
+                    )
+                ]
+            )
         assert len(schedule.schedule) == 3
         assert schedule.schedule[1].compounding == CompoundingType.COMPOUND
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

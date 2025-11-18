@@ -27,6 +27,7 @@ and update price/rate data from external providers.
 """
 from datetime import date as date_type
 from typing import List, Optional
+
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -91,4 +92,3 @@ class FXSyncResponse(BaseModel):
     synced: int = Field(..., description="Number of new rates inserted/updated")
     date_range: tuple[str, str] = Field(..., description="Date range synced (ISO format)")
     currencies: List[str] = Field(..., description="Currencies synced")
-
