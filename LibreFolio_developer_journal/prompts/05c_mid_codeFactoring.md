@@ -140,7 +140,7 @@
 
 ### 6.3 Price Schemas (come prima)
 
-- [ ] 7.3.1 Copiare e rinominare classi FA prices in `schemas/prices.py`:
+- [x] 7.3.1 Copiare e rinominare classi FA prices in `schemas/prices.py`:
     - `PriceUpsertItem` → `FAUpsertItem`
     - `AssetPricesUpsert` → `FAUpsert`
     - `BulkUpsertPricesRequest` → `FABulkUpsertRequest`
@@ -151,15 +151,15 @@
     - `AssetPricesDeleteResult` → `FAAssetDeleteResult`
     - `BulkDeletePricesResponse` → `FABulkDeleteResponse`
     - `GetPricesResponse` → `FAGetPricesResponse` (usare `PricePointModel`)
-- [ ] 7.3.2 Eliminare definizione `PriceQueryResult` da `api/v1/assets.py`.
-- [ ] 7.3.3 Aggiornare `FAGetPricesResponse` per usare `List[PricePointModel]` da `schemas/assets`.
-- [ ] 7.3.4 Aggiornare import in `api/v1/assets.py`:
+- [x] 7.3.2 Eliminare definizione `PriceQueryResult` da `api/v1/assets.py`.
+- [x] 7.3.3 Aggiornare `FAGetPricesResponse` per usare `List[PricePointModel]` da `schemas/assets`.
+- [x] 7.3.4 Aggiornare import in `api/v1/assets.py`:
     - Rimuovere classi spostate.
     - Aggiungere `from backend.app.schemas.prices import FAUpsertItem, FABulkUpsertRequest, ...`
     - Aggiungere `from backend.app.schemas.common import DateRangeModel`
-- [ ] 7.3.5 Aggiornare tutti gli endpoint prices per usare nuovi nomi.
-- [ ] 7.3.6 Aggiornare `backend/app/services/asset_source.py` per ritornare `PricePointModel` invece di dict.
-- [ ] 7.3.7 Test: eseguire `./test_runner.py services asset-source`.
+- [x] 7.3.5 Aggiornare tutti gli endpoint prices per usare nuovi nomi.
+- [x] 7.3.6 Aggiornare `backend/app/services/asset_source.py` per ritornare `PricePointModel` invece di dict.
+- [x] 7.3.7 Test: eseguire `./test_runner.py services asset-source`.
 
 ### 6.4 Refresh / Sync Schemas (AGGIORNATO)
 

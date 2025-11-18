@@ -1,12 +1,30 @@
 """
-FX (Foreign Exchange) Pydantic schemas.
+Foreign Exchange (FX) Schemas.
 
-This module contains all Pydantic v2 models for FX request/response shapes.
-Used by API endpoints, services, and tests to ensure consistent validation
-and serialization.
+This module contains Pydantic models for Foreign Exchange rate operations.
+Covers provider info, currency conversion, rate upsert/delete, and pair sources.
 
-All Decimal fields are configured to serialize as strings in JSON to preserve
-precision for financial calculations.
+**Naming Conventions**:
+- FX prefix: Foreign Exchange (currency rates from central banks)
+- Model suffix REMOVED during refactoring (e.g., RateUpsertItemModel → FXUpsertItem)
+
+**Domain Coverage**:
+- Provider info: FX rate provider discovery (ECB, FED, BOE, SNB)
+- Conversion: Currency conversion requests and results
+- Upsert: Insert/update FX rates in bulk
+- Delete: Remove FX rates by date ranges
+- Pair sources: Configure provider priority for currency pairs
+
+**Design Notes**:
+- No backward compatibility maintained during refactoring
+- All models use Pydantic v2 with strict validation
+- Decimal fields serialize as strings in JSON for precision
+- FX Sync models moved to refresh.py (consolidation with FA refresh)
+
+**Structure Differences vs FA**:
+- FX: 2-level nesting (Item → Bulk) - direct item-to-bulk
+- FA: 3-level nesting (Item → Asset → Bulk) - grouping by asset first
+- Reason: FX rates are simpler (pair-date-rate), FA prices are complex (OHLC+volume per asset)
 """
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
