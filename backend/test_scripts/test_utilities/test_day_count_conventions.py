@@ -9,9 +9,10 @@ Tests all 4 supported day count conventions with exact value comparisons:
 
 All test values are calculated exactly - NO tolerance ranges.
 """
-import pytest
 from datetime import date
 from decimal import Decimal
+
+import pytest
 
 from backend.app.schemas.assets import DayCountConvention
 from backend.app.utils.financial_math import calculate_day_count_fraction
@@ -26,7 +27,7 @@ class TestACT365:
             date(2025, 1, 1),
             date(2025, 1, 31),
             DayCountConvention.ACT_365
-        )
+            )
         expected = Decimal("30") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -36,7 +37,7 @@ class TestACT365:
             date(2025, 1, 1),
             date(2026, 1, 1),
             DayCountConvention.ACT_365
-        )
+            )
         expected = Decimal("365") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -46,7 +47,7 @@ class TestACT365:
             date(2024, 1, 1),
             date(2025, 1, 1),
             DayCountConvention.ACT_365
-        )
+            )
         expected = Decimal("366") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -56,7 +57,7 @@ class TestACT365:
             date(2024, 1, 1),
             date(2026, 1, 1),
             DayCountConvention.ACT_365
-        )
+            )
         # 366 days (2024) + 365 days (2025) = 731 days
         expected = Decimal("731") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
@@ -71,7 +72,7 @@ class TestACT360:
             date(2025, 1, 1),
             date(2025, 1, 31),
             DayCountConvention.ACT_360
-        )
+            )
         expected = Decimal("30") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -81,7 +82,7 @@ class TestACT360:
             date(2025, 1, 1),
             date(2025, 4, 1),
             DayCountConvention.ACT_360
-        )
+            )
         expected = Decimal("90") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -91,7 +92,7 @@ class TestACT360:
             date(2025, 1, 1),
             date(2025, 12, 27),  # 360 days after Jan 1
             DayCountConvention.ACT_360
-        )
+            )
         expected = Decimal("360") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -101,7 +102,7 @@ class TestACT360:
             date(2025, 1, 1),
             date(2026, 1, 1),
             DayCountConvention.ACT_360
-        )
+            )
         expected = Decimal("365") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -115,7 +116,7 @@ class TestACTACT:
             date(2025, 1, 1),
             date(2025, 1, 31),
             DayCountConvention.ACT_ACT
-        )
+            )
         expected = Decimal("30") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -125,7 +126,7 @@ class TestACTACT:
             date(2024, 1, 1),
             date(2024, 1, 31),
             DayCountConvention.ACT_ACT
-        )
+            )
         expected = Decimal("30") / Decimal("366")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -139,7 +140,7 @@ class TestACTACT:
             date(2023, 12, 1),
             date(2024, 2, 1),
             DayCountConvention.ACT_ACT
-        )
+            )
         expected = Decimal("30") / Decimal("365") + Decimal("31") / Decimal("366")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -152,7 +153,7 @@ class TestACTACT:
             date(2024, 12, 1),
             date(2025, 2, 1),
             DayCountConvention.ACT_ACT
-        )
+            )
         expected = Decimal("30") / Decimal("366") + Decimal("31") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -168,7 +169,7 @@ class TestACTACT:
             date(2023, 1, 1),
             date(2026, 1, 1),
             DayCountConvention.ACT_ACT
-        )
+            )
         expected = Decimal("364") / Decimal("365") + Decimal("365") / Decimal("366") + Decimal("365") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -183,7 +184,7 @@ class Test30360:
             date(2025, 1, 5),
             date(2025, 1, 20),
             DayCountConvention.THIRTY_360
-        )
+            )
         expected = Decimal("15") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -194,7 +195,7 @@ class Test30360:
             date(2025, 1, 1),
             date(2025, 2, 1),
             DayCountConvention.THIRTY_360
-        )
+            )
         expected = Decimal("30") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -204,7 +205,7 @@ class Test30360:
             date(2025, 1, 1),
             date(2026, 1, 1),
             DayCountConvention.THIRTY_360
-        )
+            )
         # 12 months * 30 days = 360 days
         expected = Decimal("360") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
@@ -217,7 +218,7 @@ class Test30360:
             date(2025, 1, 31),
             date(2025, 2, 28),
             DayCountConvention.THIRTY_360
-        )
+            )
         expected = Decimal("28") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -230,7 +231,7 @@ class Test30360:
             date(2025, 1, 31),
             date(2025, 3, 15),
             DayCountConvention.THIRTY_360
-        )
+            )
         expected = Decimal("45") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -271,4 +272,3 @@ class TestEdgeCases:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

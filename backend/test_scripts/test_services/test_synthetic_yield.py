@@ -27,7 +27,7 @@ from backend.app.db.models import (
     Asset, ValuationModel, AssetType, PriceHistory,
     Transaction, AssetProviderAssignment, CashMovement, CashAccount, Broker,
     TransactionType, CashMovementType
-)
+    )
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.asset_source_providers.scheduled_investment import ScheduledInvestmentProvider
 from backend.app.utils.financial_math import find_active_period
@@ -38,7 +38,7 @@ from backend.app.schemas.assets import (
     ScheduledInvestmentSchedule,
     CompoundingType,
     DayCountConvention,
-)
+    )
 
 
 # ============================================================================
@@ -81,7 +81,7 @@ async def create_test_asset(session: AsyncSession) -> Asset:
     full_schedule = {
         "schedule": interest_schedule,
         "late_interest": late_interest
-    }
+        }
 
     # Create broker for transactions (or reuse existing)
     # Try to find existing broker first
@@ -110,8 +110,8 @@ async def create_test_asset(session: AsyncSession) -> Asset:
         select(CashAccount).where(
             CashAccount.broker_id == broker.id,
             CashAccount.currency == "EUR"
+            )
         )
-    )
     cash_account = result.scalar_one_or_none()
 
     if not cash_account:
@@ -126,7 +126,7 @@ async def create_test_asset(session: AsyncSession) -> Asset:
         amount=Decimal("-10000"),
         trade_date=date(2025, 1, 1),
         currency="EUR"
-    )
+        )
     session.add(cash_mov)
     await session.flush()
 
@@ -140,7 +140,7 @@ async def create_test_asset(session: AsyncSession) -> Asset:
         currency="EUR",
         cash_movement_id=cash_mov.id,
         trade_date=date(2025, 1, 1)
-    )
+        )
     session.add(txn)
     await session.commit()
     await session.refresh(asset)
@@ -166,15 +166,15 @@ async def test_provider_validate_params():
                 "annual_rate": "0.05",
                 "compounding": "SIMPLE",
                 "day_count": "ACT/365"
-            }
-        ],
+                }
+            ],
         "late_interest": {
             "annual_rate": "0.12",
             "grace_period_days": 30,
             "compounding": "SIMPLE",
             "day_count": "ACT/365"
+            }
         }
-    }
 
     try:
         validated = provider.validate_params(valid_params)
@@ -204,18 +204,18 @@ async def test_provider_get_current_value():
                 "annual_rate": "0.05",
                 "compounding": "SIMPLE",
                 "day_count": "ACT/365"
-            }
-        ],
+                }
+            ],
         "late_interest": {
             "annual_rate": "0.12",
             "grace_period_days": 30,
             "compounding": "SIMPLE",
             "day_count": "ACT/365"
-        },
+            },
         "_transaction_override": [
             {"type": "BUY", "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
-        ]
-    }
+            ]
+        }
 
     try:
         # Use identifier "1" for test mode with _transaction_override
@@ -248,18 +248,18 @@ async def test_provider_get_history_value():
                 "annual_rate": "0.05",
                 "compounding": "SIMPLE",
                 "day_count": "ACT/365"
-            }
-        ],
+                }
+            ],
         "late_interest": {
             "annual_rate": "0.12",
             "grace_period_days": 30,
             "compounding": "SIMPLE",
             "day_count": "ACT/365"
-        },
+            },
         "_transaction_override": [
             {"type": "BUY", "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
-        ]
-    }
+            ]
+        }
 
     start = date(2025, 1, 1)
     end = date(2025, 1, 7)
@@ -304,15 +304,15 @@ async def test_provider_private_calculate_value():
                 "annual_rate": "0.05",
                 "compounding": "SIMPLE",
                 "day_count": "ACT/365"
-            }
-        ],
+                }
+            ],
         "late_interest": {
             "annual_rate": "0.12",
             "grace_period_days": 30,
             "compounding": "SIMPLE",
             "day_count": "ACT/365"
+            }
         }
-    }
     params = ScheduledInvestmentSchedule(**params_dict)
 
     try:
@@ -355,21 +355,21 @@ def test_find_active_period_with_pydantic():
             annual_rate=Decimal("0.05"),
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365
-        ),
+            ),
         InterestRatePeriod(
             start_date=date(2026, 1, 1),
             end_date=date(2026, 12, 31),
             annual_rate=Decimal("0.06"),
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365
-        )
+            )
         ]
     late_interest = LateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
         compounding=CompoundingType.SIMPLE,
         day_count=DayCountConvention.ACT_365
-    )
+        )
     maturity = date(2026, 12, 31)
 
     test_cases = [
@@ -398,6 +398,7 @@ def test_find_active_period_with_pydantic():
         "passed": all(r["passed"] for r in results),
         "details": results
         }
+
 
 # NOTE: test_calculate_accrued_conversion removed - function deprecated
 # The calculate_accrued_interest() function was obsolete (day-by-day, SIMPLE only)
@@ -456,13 +457,13 @@ async def test_get_prices_integration():
             # 1. Delete provider assignment first
             await session.execute(
                 sqlmodel_delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset.id)
-            )
+                )
             await session.flush()
 
             # 2. Delete price history
             await session.execute(
                 sqlmodel_delete(PriceHistory).where(PriceHistory.asset_id == asset.id)
-            )
+                )
             await session.flush()
 
             # 3. Get cash movement IDs before deleting transactions
@@ -473,20 +474,20 @@ async def test_get_prices_integration():
             # 4. Delete transactions
             await session.execute(
                 sqlmodel_delete(Transaction).where(Transaction.asset_id == asset.id)
-            )
+                )
             await session.flush()
 
             # 5. Delete cash movements
             if cash_movement_ids:
                 await session.execute(
                     sqlmodel_delete(CashMovement).where(CashMovement.id.in_(cash_movement_ids))
-                )
+                    )
                 await session.flush()
 
             # 6. Finally delete asset
             await session.execute(
                 sqlmodel_delete(Asset).where(Asset.id == asset.id)
-            )
+                )
 
             await session.commit()
 
@@ -506,7 +507,7 @@ async def test_no_db_storage():
                 provider_code="scheduled_investment",
                 provider_params=json.dumps(schedule_data),
                 session=session
-            )
+                )
 
             # Query prices (should calculate on-demand)
             await AssetSourceManager.get_prices(
@@ -536,13 +537,13 @@ async def test_no_db_storage():
             # 1. Delete provider assignment first
             await session.execute(
                 sqlmodel_delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset.id)
-            )
+                )
             await session.flush()
 
             # 2. Delete price history
             await session.execute(
                 sqlmodel_delete(PriceHistory).where(PriceHistory.asset_id == asset.id)
-            )
+                )
             await session.flush()
 
             # 3. Get cash movement IDs before deleting transactions
@@ -553,20 +554,20 @@ async def test_no_db_storage():
             # 4. Delete transactions
             await session.execute(
                 sqlmodel_delete(Transaction).where(Transaction.asset_id == asset.id)
-            )
+                )
             await session.flush()
 
             # 5. Delete cash movements
             if cash_movement_ids:
                 await session.execute(
                     sqlmodel_delete(CashMovement).where(CashMovement.id.in_(cash_movement_ids))
-                )
+                    )
                 await session.flush()
 
             # 6. Finally delete asset
             await session.execute(
                 sqlmodel_delete(Asset).where(Asset.id == asset.id)
-            )
+                )
 
             await session.commit()
 
@@ -586,9 +587,9 @@ async def test_pydantic_schema_validation():
                 "annual_rate": "0.05",
                 "compounding": "SIMPLE",
                 "day_count": "ACT/365"
-            }
-        ]
-    }
+                }
+            ]
+        }
 
     try:
         provider.validate_params(invalid_params)

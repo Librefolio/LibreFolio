@@ -14,7 +14,6 @@ from sqlmodel import select, delete as sql_delete, and_, or_
 from backend.app.db.models import FxCurrencyPairSource
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.common import BackwardFillInfo
-from backend.app.schemas.refresh import FXSyncResponse
 from backend.app.schemas.fx import (
     # Provider models
     FXProviderInfo,
@@ -43,6 +42,7 @@ from backend.app.schemas.fx import (
     # Currency list models
     CurrenciesResponseModel,  # TODO: Rename to FXCurrenciesResponse if exists
     )
+from backend.app.schemas.refresh import FXSyncResponse
 from backend.app.services.fx import (
     FXServiceError,
     convert_bulk,

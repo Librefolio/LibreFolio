@@ -20,16 +20,17 @@ Where:
 - I = Interest earned
 - A = Final amount (principal + interest)
 """
-import pytest
-from decimal import Decimal
 import math
+from decimal import Decimal
+
+import pytest
 
 from backend.app.schemas.assets import CompoundFrequency
 from backend.app.utils.financial_math import (
     calculate_simple_interest,
     calculate_compound_interest,
     get_compounding_periods_per_year,
-)
+    )
 
 
 class TestSimpleInterest:
@@ -41,7 +42,7 @@ class TestSimpleInterest:
             principal=Decimal("10000"),
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("1")
-        )
+            )
         expected = Decimal("500")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -51,7 +52,7 @@ class TestSimpleInterest:
             principal=Decimal("10000"),
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("0.5")
-        )
+            )
         expected = Decimal("250")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -61,7 +62,7 @@ class TestSimpleInterest:
             principal=Decimal("10000"),
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("0.25")
-        )
+            )
         expected = Decimal("125")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -74,7 +75,7 @@ class TestSimpleInterest:
             principal=Decimal("10000"),
             annual_rate=Decimal("0.12"),
             time_fraction=time_fraction
-        )
+            )
         expected = Decimal("10000") * Decimal("0.12") * time_fraction
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -84,7 +85,7 @@ class TestSimpleInterest:
             (Decimal("1000"), Decimal("0.05"), Decimal("1"), Decimal("50")),
             (Decimal("5000"), Decimal("0.10"), Decimal("1"), Decimal("500")),
             (Decimal("100000"), Decimal("0.03"), Decimal("1"), Decimal("3000")),
-        ]
+            ]
 
         for principal, rate, time, expected in test_cases:
             result = calculate_simple_interest(principal, rate, time)
@@ -101,7 +102,7 @@ class TestCompoundInterestAnnual:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("1"),
             frequency=CompoundFrequency.ANNUAL
-        )
+            )
         # (1 + 0.05)^1 = 1.05, Interest = 10000 * 0.05 = 500
         expected = Decimal("500")
         assert result == expected, f"Expected {expected}, got {result}"
@@ -113,7 +114,7 @@ class TestCompoundInterestAnnual:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("2"),
             frequency=CompoundFrequency.ANNUAL
-        )
+            )
         # A = 10000 * (1.05)^2 = 10000 * 1.1025 = 11025
         # I = 11025 - 10000 = 1025
         expected = Decimal("1025")
@@ -126,7 +127,7 @@ class TestCompoundInterestAnnual:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("0.5"),
             frequency=CompoundFrequency.ANNUAL
-        )
+            )
         # A = 10000 * (1.05)^0.5 = 10000 * 1.024695076595959...
         # I = 246.95076595959...
         base = Decimal("1.05")
@@ -146,7 +147,7 @@ class TestCompoundInterestSemiannual:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("1"),
             frequency=CompoundFrequency.SEMIANNUAL
-        )
+            )
         # A = 10000 * (1 + 0.05/2)^(2*1) = 10000 * (1.025)^2 = 10000 * 1.050625 = 10506.25
         # I = 506.25
         expected = Decimal("506.25")
@@ -159,7 +160,7 @@ class TestCompoundInterestSemiannual:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("0.5"),
             frequency=CompoundFrequency.SEMIANNUAL
-        )
+            )
         # A = 10000 * (1.025)^1 = 10250
         # I = 250
         expected = Decimal("250")
@@ -172,7 +173,7 @@ class TestCompoundInterestSemiannual:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("2"),
             frequency=CompoundFrequency.SEMIANNUAL
-        )
+            )
         # A = 10000 * (1.025)^4 = 10000 * 1.10381289062 = 11038.1289062
         # I = 1038.1289062...
         base = Decimal("1") + Decimal("0.05") / Decimal("2")
@@ -192,7 +193,7 @@ class TestCompoundInterestQuarterly:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("1"),
             frequency=CompoundFrequency.QUARTERLY
-        )
+            )
         # A = 10000 * (1 + 0.05/4)^4 = 10000 * (1.0125)^4
         base = Decimal("1") + Decimal("0.05") / Decimal("4")
         exponent = 4
@@ -207,7 +208,7 @@ class TestCompoundInterestQuarterly:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("2"),
             frequency=CompoundFrequency.QUARTERLY
-        )
+            )
         # A = 10000 * (1.0125)^8
         base = Decimal("1") + Decimal("0.05") / Decimal("4")
         exponent = 8
@@ -226,7 +227,7 @@ class TestCompoundInterestMonthly:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("1"),
             frequency=CompoundFrequency.MONTHLY
-        )
+            )
         # A = 10000 * (1 + 0.05/12)^12
         base = Decimal("1") + Decimal("0.05") / Decimal("12")
         exponent = 12
@@ -241,7 +242,7 @@ class TestCompoundInterestMonthly:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("2"),
             frequency=CompoundFrequency.MONTHLY
-        )
+            )
         # A = 10000 * (1 + 0.05/12)^24
         base = Decimal("1") + Decimal("0.05") / Decimal("12")
         exponent = 24
@@ -260,7 +261,7 @@ class TestCompoundInterestDaily:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("1"),
             frequency=CompoundFrequency.DAILY
-        )
+            )
         # A = 10000 * (1 + 0.05/365)^365
         base = Decimal("1") + Decimal("0.05") / Decimal("365")
         exponent = 365
@@ -276,7 +277,7 @@ class TestCompoundInterestDaily:
             annual_rate=Decimal("0.05"),
             time_fraction=time_fraction,
             frequency=CompoundFrequency.DAILY
-        )
+            )
         # A = 10000 * (1 + 0.05/365)^(365 * 30/365) = 10000 * (1 + 0.05/365)^30
         base = Decimal("1") + Decimal("0.05") / Decimal("365")
         exponent = 30
@@ -295,7 +296,7 @@ class TestCompoundInterestContinuous:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("1"),
             frequency=CompoundFrequency.CONTINUOUS
-        )
+            )
         # A = 10000 * e^(0.05 * 1) = 10000 * e^0.05
         exponent = 0.05
         multiplier = Decimal(str(math.exp(exponent)))
@@ -309,7 +310,7 @@ class TestCompoundInterestContinuous:
             annual_rate=Decimal("0.05"),
             time_fraction=Decimal("2"),
             frequency=CompoundFrequency.CONTINUOUS
-        )
+            )
         # A = 10000 * e^(0.05 * 2) = 10000 * e^0.1
         exponent = 0.1
         multiplier = Decimal(str(math.exp(exponent)))
@@ -324,43 +325,43 @@ class TestEdgeCases:
         """Rate 0% should return 0 interest."""
         result_simple = calculate_simple_interest(
             Decimal("10000"), Decimal("0"), Decimal("1")
-        )
+            )
         assert result_simple == Decimal("0")
 
         result_compound = calculate_compound_interest(
             Decimal("10000"), Decimal("0"), Decimal("1"), CompoundFrequency.MONTHLY
-        )
+            )
         assert result_compound == Decimal("0")
 
     def test_zero_time(self):
         """Time 0 should return 0 interest."""
         result_simple = calculate_simple_interest(
             Decimal("10000"), Decimal("0.05"), Decimal("0")
-        )
+            )
         assert result_simple == Decimal("0")
 
         result_compound = calculate_compound_interest(
             Decimal("10000"), Decimal("0.05"), Decimal("0"), CompoundFrequency.MONTHLY
-        )
+            )
         assert result_compound == Decimal("0")
 
     def test_zero_principal(self):
         """Principal 0 should return 0 interest."""
         result_simple = calculate_simple_interest(
             Decimal("0"), Decimal("0.05"), Decimal("1")
-        )
+            )
         assert result_simple == Decimal("0")
 
         result_compound = calculate_compound_interest(
             Decimal("0"), Decimal("0.05"), Decimal("1"), CompoundFrequency.MONTHLY
-        )
+            )
         assert result_compound == Decimal("0")
 
     def test_very_small_amounts(self):
         """Test with very small principal amounts."""
         result = calculate_simple_interest(
             Decimal("0.01"), Decimal("0.05"), Decimal("1")
-        )
+            )
         expected = Decimal("0.0005")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -432,4 +433,3 @@ class TestComparisonSimpleVsCompound:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

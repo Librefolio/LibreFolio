@@ -35,6 +35,7 @@ from backend.app.db.models import (
     )
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
 
+
 def test_tables_exist():
     """
     Verify all required tables exist.

@@ -297,7 +297,7 @@ TRANSACTION_TYPES_REQUIRING_CASH_MOVEMENT = {
     TransactionType.INTEREST: CashMovementType.INTEREST_INCOME,
     TransactionType.FEE: CashMovementType.FEE,
     TransactionType.TAX: CashMovementType.TAX,
-}
+    }
 
 # Helper to generate SQL IN clause for CHECK constraint
 CASH_REQUIRED_TYPES_SQL = ", ".join(f"'{t.value}'" for t in TRANSACTION_TYPES_REQUIRING_CASH_MOVEMENT.keys())
@@ -435,8 +435,8 @@ class Transaction(SQLModel, table=True):
             (type NOT IN ({CASH_REQUIRED_TYPES_SQL}) AND cash_movement_id IS NULL)
             """,
             name="ck_transaction_cash_movement_required"
-        ),
-    )
+            ),
+        )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -457,9 +457,9 @@ class Transaction(SQLModel, table=True):
             ForeignKey("cash_movements.id", ondelete="CASCADE"),
             index=True,
             nullable=True
-        ),
+            ),
         description="ID del movimento di cassa associato (unidirectional: Transaction -> CashMovement)"
-    )
+        )
 
     trade_date: date_type = Field(nullable=False, index=True)
     settlement_date: Optional[date_type] = Field(default=None)
@@ -668,7 +668,7 @@ class CashMovement(SQLModel, table=True):
     settlement_date: Optional[date_type] = Field(
         default=None,
         description="Settlement date (defaults to trade_date if not provided)"
-    )
+        )
     note: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(default_factory=utcnow)

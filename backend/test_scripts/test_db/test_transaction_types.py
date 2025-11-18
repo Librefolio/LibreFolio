@@ -7,6 +7,7 @@ Verifies that different transaction types are handled correctly:
 """
 # Setup test database BEFORE importing app modules
 from backend.test_scripts.test_db_config import setup_test_database
+
 setup_test_database()
 
 from datetime import date
@@ -22,11 +23,9 @@ from backend.app.db import (
     Asset,
     CashAccount,
     TransactionType,
-    CashMovementType,
     )
 from backend.app.db.models import TRANSACTION_TYPES_REQUIRING_CASH_MOVEMENT
 from backend.app.db.session import get_sync_engine
-
 
 # All TransactionType values that are NOT in the mapping
 NON_CASH_TYPES = [t for t in TransactionType if t not in TRANSACTION_TYPES_REQUIRING_CASH_MOVEMENT]
@@ -64,7 +63,7 @@ def test_cash_generating_types():
                     currency="EUR",
                     trade_date=date(2025, 5, 1),
                     cash_movement_id=None
-                )
+                    )
                 session.add(tx_bad)
                 session.commit()
 
@@ -85,7 +84,7 @@ def test_cash_generating_types():
                     type=expected_cash_type,
                     amount=Decimal("100.00"),
                     trade_date=date(2025, 5, 1),
-                )
+                    )
                 session.add(cash_mov)
                 session.flush()
 
@@ -98,7 +97,7 @@ def test_cash_generating_types():
                     currency="EUR",
                     trade_date=date(2025, 5, 1),
                     cash_movement_id=cash_mov.id
-                )
+                    )
                 session.add(tx_good)
                 session.commit()
 
@@ -150,7 +149,7 @@ def test_non_cash_types():
                     currency="EUR",
                     trade_date=date(2025, 6, 1),
                     cash_movement_id=None
-                )
+                    )
                 session.add(tx)
                 session.commit()
 
@@ -210,4 +209,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-

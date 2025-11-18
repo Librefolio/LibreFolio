@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from typing import Optional
+
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -90,5 +91,3 @@ class DateRangeModel(BaseModel):
     #         if v < info.data['start']:
     #             raise ValueError('end date must be >= start date')
     #     return v
-
-

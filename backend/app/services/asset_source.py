@@ -23,11 +23,11 @@ Design principles:
 - Parallel provider calls where possible
 """
 import asyncio
-import structlog
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta, datetime
 from typing import Optional
 
+import structlog
 from sqlalchemy import select, delete, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +41,6 @@ from backend.app.schemas.assets import PricePointModel, BackwardFillInfo
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.decimal_utils import truncate_priceHistory
 from backend.app.utils.financial_math import parse_decimal_value
-
 
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
@@ -634,7 +633,7 @@ class AssetSourceManager:
                 asset_id=asset_id,
                 start_date=str(start_date),
                 end_date=str(end_date)
-            )
+                )
             return None
 
         params = AssetSourceManager._parse_provider_params(assignment.provider_params)
@@ -652,7 +651,7 @@ class AssetSourceManager:
                 end_date=str(end_date),
                 exception_type=type(e).__name__,
                 exception_message=str(e)
-            )
+                )
             return None
 
     @staticmethod
@@ -673,7 +672,7 @@ class AssetSourceManager:
         return {p.date: p for p in db_result.scalars().all()}
 
     @staticmethod
-    def  _build_backward_filled_series(price_map: dict[date_type, PriceHistory],start_date: date_type,end_date: date_type,) -> list[PricePointModel]:
+    def _build_backward_filled_series(price_map: dict[date_type, PriceHistory], start_date: date_type, end_date: date_type, ) -> list[PricePointModel]:
         results: list[PricePointModel] = []
         last_known: Optional[PriceHistory] = None
         current = start_date

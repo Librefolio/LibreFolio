@@ -48,4 +48,3 @@ def test_utcnow_tzinfo_is_utc():
     result = utcnow()
     assert result.tzinfo == timezone.utc
     assert result.utcoffset().total_seconds() == 0
-

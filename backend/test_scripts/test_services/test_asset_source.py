@@ -521,7 +521,7 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                     volume=day1_volume,
                     currency="USD",
                     source_plugin_key="manual_test"
-                ),
+                    ),
                 PriceHistory(
                     asset_id=test_asset_id,
                     date=date(2025, 1, 2),
@@ -532,8 +532,8 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                     volume=day2_volume,
                     currency="USD",
                     source_plugin_key="manual_test"
-                )
-            ]
+                    )
+                ]
 
             session.add_all(prices_to_insert)
             await session.commit()
@@ -544,7 +544,7 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 1, 4),
                 session=session
-            )
+                )
 
             assert len(prices) == 4, f"Expected 4 prices (2 actual + 2 backfilled), got {len(prices)}"
 
@@ -566,23 +566,23 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
             # Verify Day 3 and Day 4 (backfilled from Day 2)
             for idx, expected_date in enumerate([date(2025, 1, 3), date(2025, 1, 4)], start=2):
                 price = prices[idx]
-                assert price.date == expected_date, f"Day {idx+1} date mismatch"
-                assert price.backward_fill_info is not None, f"Day {idx+1} should have backward_fill_info"
+                assert price.date == expected_date, f"Day {idx + 1} date mismatch"
+                assert price.backward_fill_info is not None, f"Day {idx + 1} should have backward_fill_info"
                 assert price.backward_fill_info.actual_rate_date == date(2025, 1, 2), \
-                    f"Day {idx+1} should be backfilled from Day 2"
+                    f"Day {idx + 1} should be backfilled from Day 2"
                 assert price.backward_fill_info.days_back == idx - 1, \
-                    f"Day {idx+1} days_back should be {idx - 1}"
+                    f"Day {idx + 1} days_back should be {idx - 1}"
 
                 # Critical assertion: volume must be backfilled
-                assert price.close == Decimal("106.00"), f"Day {idx+1} close should be backfilled"
+                assert price.close == Decimal("106.00"), f"Day {idx + 1} close should be backfilled"
                 assert price.volume == day2_volume, \
-                    f"Day {idx+1} volume should be backfilled: expected {day2_volume}, got {price.volume}"
+                    f"Day {idx + 1} volume should be backfilled: expected {day2_volume}, got {price.volume}"
 
                 print_success(
-                    f"✓ Day {idx+1}: close={price.close}, volume={price.volume} "
+                    f"✓ Day {idx + 1}: close={price.close}, volume={price.volume} "
                     f"(backfilled from {price.backward_fill_info.actual_rate_date}, "
                     f"days_back={price.backward_fill_info.days_back})"
-                )
+                    )
 
             backfilled_count = sum(1 for p in prices if p.backward_fill_info)
 
@@ -590,7 +590,7 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                 "passed": True,
                 "message": f"Volume propagation verified: 2 exact + 2 backfilled prices",
                 "backfilled_count": backfilled_count
-            }
+                }
 
     except AssertionError as e:
         print_error(f"Assertion failed in volume propagation test: {e}")
@@ -628,7 +628,7 @@ async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 1, 4),
                 session=session
-            )
+                )
 
             # Should return empty list (no data to backfill from)
             assert len(prices) == 0, f"Expected empty list when no data exists, got {len(prices)} prices"
@@ -637,7 +637,7 @@ async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
             return {
                 "passed": True,
                 "message": "Edge case verified: no crash when querying range with no data"
-            }
+                }
 
     except Exception as e:
         print_error(f"Exception in edge case test: {e}")
@@ -671,7 +671,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
                 provider_code=invalid_provider,
                 provider_params='{}',
                 session=session
-            )
+                )
             print_info(f"Assigned invalid provider '{invalid_provider}' to asset {test_asset_id}")
 
             # Insert fallback prices in DB
@@ -685,7 +685,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
                 close=Decimal("999.00"),
                 currency="USD",
                 source_plugin_key="manual_test_fallback"
-            )
+                )
             session.add(fallback_price)
             await session.commit()
             print_info(f"Inserted fallback price in DB: date=2025-01-10, close=999.00")
@@ -696,7 +696,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
                 start_date=date(2025, 1, 10),
                 end_date=date(2025, 1, 10),
                 session=session
-            )
+                )
 
             # Verify fallback worked
             assert len(prices) == 1, f"Expected 1 price from DB fallback, got {len(prices)}"
@@ -709,7 +709,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             return {
                 "passed": True,
                 "message": f"Invalid provider handled gracefully, fallback to DB successful"
-            }
+                }
 
     except Exception as e:
         print_error(f"Exception in provider fallback test: {e}")

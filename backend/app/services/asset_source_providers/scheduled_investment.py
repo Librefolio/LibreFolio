@@ -38,8 +38,8 @@ For detailed parameter structure documentation, see:
 - backend.app.schemas.assets.InterestRatePeriod
 - backend.app.schemas.assets.LateInterestConfig
 """
-import logging
 import json
+import logging
 from datetime import date as date_type, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -63,7 +63,6 @@ from backend.app.utils.financial_math import (
     calculate_day_count_fraction,
     calculate_simple_interest,
     calculate_compound_interest,
-    find_active_period,
     )
 
 logger = logging.getLogger(__name__)
@@ -109,8 +108,8 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                             "quantity": 1,
                             "price": "10000",
                             "trade_date": "2025-01-01"
-                        }
-                    ]
+                            }
+                        ]
                     }
                 }
             ]
@@ -136,7 +135,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         """
         result = await session.execute(
             select(Asset).where(Asset.id == asset_id)
-        )
+            )
         asset = result.scalar_one_or_none()
 
         if not asset:
@@ -144,7 +143,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 f"Asset not found: {asset_id}",
                 error_code="ASSET_NOT_FOUND",
                 details={"asset_id": asset_id}
-            )
+                )
 
         return asset
 
@@ -153,7 +152,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         asset_id: int,
         session: AsyncSession,
         up_to_date: Optional[date_type] = None
-    ) -> list[Transaction]:
+        ) -> list[Transaction]:
         """
         Retrieve all transactions for an asset from database.
 
@@ -172,8 +171,8 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             query = query.where(
                 and_(
                     Transaction.trade_date <= up_to_date
+                    )
                 )
-            )
 
         query = query.order_by(Transaction.trade_date, Transaction.id)
 
@@ -183,7 +182,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
     def _calculate_face_value_from_transactions(
         self,
         transactions: list[Transaction] | list[dict]
-    ) -> Decimal:
+        ) -> Decimal:
         """
         Calculate current principal (face_value) from transactions.
 
@@ -287,7 +286,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                             f"Asset {asset_id} has no interest_schedule configured",
                             error_code="MISSING_SCHEDULE",
                             details={"asset_id": asset_id}
-                        )
+                            )
 
                     schedule_data = json.loads(asset.interest_schedule)
                     schedule = ScheduledInvestmentSchedule(**schedule_data)
@@ -299,7 +298,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     "Failed to load schedule",
                     error_code="SCHEDULE_LOAD_ERROR",
                     details={"asset_id": asset_id}
-                )
+                    )
 
             # Calculate current principal from transactions
             face_value = self._calculate_face_value_from_transactions(transactions)
@@ -311,7 +310,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     currency=currency,
                     as_of_date=date_type.today(),
                     source=self.provider_name
-                )
+                    )
 
             # Calculate value for today
             target_date = date_type.today()
@@ -331,7 +330,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 f"Invalid asset ID: {identifier}",
                 error_code="INVALID_IDENTIFIER",
                 details={"error": str(e)}
-            )
+                )
         except Exception as e:
             raise AssetSourceError(
                 f"Failed to calculate current value for asset '{identifier}': {e}",
@@ -395,14 +394,14 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     asset = await self._get_asset_from_db(asset_id, session)
                     all_transactions = await self._get_transactions_from_db(
                         asset_id, session, up_to_date=end_date
-                    )
+                        )
 
                     if not asset.interest_schedule:
                         raise AssetSourceError(
                             f"Asset {asset_id} has no interest_schedule configured",
                             error_code="MISSING_SCHEDULE",
                             details={"asset_id": asset_id}
-                        )
+                            )
 
                     schedule_data = json.loads(asset.interest_schedule)
                     schedule = ScheduledInvestmentSchedule(**schedule_data)
@@ -414,7 +413,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     "Failed to load schedule",
                     error_code="SCHEDULE_LOAD_ERROR",
                     details={"asset_id": asset_id}
-                )
+                    )
 
             # Calculate for each day in range
             prices = []
@@ -425,8 +424,8 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 transactions_up_to_date = [
                     txn for txn in all_transactions
                     if (isinstance(txn, dict) and txn.get("trade_date") <= current_date.isoformat())
-                    or (not isinstance(txn, dict) and txn.trade_date <= current_date)
-                ]
+                       or (not isinstance(txn, dict) and txn.trade_date <= current_date)
+                    ]
 
                 # Calculate face_value for this date
                 face_value = self._calculate_face_value_from_transactions(transactions_up_to_date)
@@ -457,7 +456,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 f"Invalid asset ID: {identifier}",
                 error_code="INVALID_IDENTIFIER",
                 details={"error": str(e)}
-            )
+                )
         except Exception as e:
             raise AssetSourceError(
                 f"Failed to calculate history: {e}",
@@ -529,8 +528,8 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                         compounding=p.compounding,
                         compound_frequency=p.compound_frequency,
                         day_count=p.day_count,
+                        )
                     )
-                )
 
         # 2. Post-maturity synthetic periods
         if target_date > maturity_date and schedule.late_interest:
@@ -550,8 +549,8 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                             compounding=last_rate_period.compounding,
                             compound_frequency=last_rate_period.compound_frequency,
                             day_count=last_rate_period.day_count,
+                            )
                         )
-                    )
             # Late segment (after grace_end)
             late_start = grace_end + timedelta(days=1)
             if target_date >= late_start:
@@ -565,8 +564,8 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                             compounding=li.compounding,
                             compound_frequency=li.compound_frequency,
                             day_count=li.day_count,
+                            )
                         )
-                    )
 
         total_interest = Decimal("0")
         for period in periods_to_process:
@@ -575,7 +574,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 start_date=period.start_date,
                 end_date=period.end_date,
                 convention=period.day_count,
-            )
+                )
             if time_fraction <= 0:
                 continue  # defensive, shouldn't happen
             if period.compounding == CompoundingType.SIMPLE:
@@ -583,7 +582,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     principal=face_value,
                     annual_rate=period.annual_rate,
                     time_fraction=time_fraction,
-                )
+                    )
             else:
                 if period.compound_frequency is None:
                     raise ValueError("compound_frequency required for COMPOUND interest")
@@ -592,7 +591,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     annual_rate=period.annual_rate,
                     time_fraction=time_fraction,
                     frequency=period.compound_frequency,
-                )
+                    )
             total_interest += segment_interest
 
         return face_value + total_interest

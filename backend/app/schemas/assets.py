@@ -357,12 +357,12 @@ class ScheduledInvestmentSchedule(BaseModel):
                 raise ValueError(
                     f"Overlapping periods detected: period ending {current.end_date} "
                     f"overlaps with period starting {next_period.start_date}"
-                )
+                    )
             elif days_gap > 1:
                 raise ValueError(
                     f"Gap detected between periods: period ending {current.end_date} "
                     f"and period starting {next_period.start_date} ({days_gap} days gap)"
-                )
+                    )
 
         return sorted_schedule
 
