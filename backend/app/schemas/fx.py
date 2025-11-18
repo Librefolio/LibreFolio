@@ -42,7 +42,7 @@ from backend.app.schemas.common import BackwardFillInfo
 # PROVIDER MODELS
 # ============================================================================
 
-class ProviderInfoModel(BaseModel):
+class FXProviderInfo(BaseModel):
     """Information about a single FX rate provider."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
@@ -56,36 +56,24 @@ class ProviderInfoModel(BaseModel):
     description: str = Field(..., description="Provider description")
 
 
-class ProvidersResponseModel(BaseModel):
+class FXProvidersResponse(BaseModel):
     """Response model for listing FX providers."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
         )
 
-    providers: list[ProviderInfoModel] = Field(..., description="List of available providers")
+    providers: list[FXProviderInfo] = Field(..., description="List of available providers")
     count: int = Field(..., description="Number of providers")
 
 
 # ============================================================================
 # RATE SYNC MODELS
-# ============================================================================
-
-class SyncResponseModel(BaseModel):
-    """Response model for FX rate sync operation."""
-    model_config = ConfigDict(
-        json_encoders={Decimal: str},
-        )
-
-    synced: int = Field(..., description="Number of new rates inserted")
-    date_range: tuple[str, str] = Field(..., description="Date range synced (ISO format)")
-    currencies: list[str] = Field(..., description="Currencies synced")
-
 
 # ============================================================================
 # CONVERSION MODELS
 # ============================================================================
 
-class ConversionRequestModel(BaseModel):
+class FXConversionRequest(BaseModel):
     """Single conversion request with optional date range."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
@@ -118,16 +106,16 @@ class ConversionRequestModel(BaseModel):
         return v
 
 
-class ConvertRequestModel(BaseModel):
+class FXConvertRequest(BaseModel):
     """Request model for bulk currency conversion."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
         )
 
-    conversions: list[ConversionRequestModel] = Field(..., min_length=1, description="List of conversions to perform")
+    conversions: list[FXConversionRequest] = Field(..., min_length=1, description="List of conversions to perform")
 
 
-class ConversionResultModel(BaseModel):
+class FXConversionResult(BaseModel):
     """Single conversion result."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
@@ -146,13 +134,13 @@ class ConversionResultModel(BaseModel):
         )
 
 
-class ConvertResponseModel(BaseModel):
+class FXConvertResponse(BaseModel):
     """Response model for bulk currency conversion."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
         )
 
-    results: list[ConversionResultModel] = Field(..., description="Conversion results in order")
+    results: list[FXConversionResult] = Field(..., description="Conversion results in order")
     errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
 
 
@@ -160,7 +148,7 @@ class ConvertResponseModel(BaseModel):
 # RATE UPSERT MODELS
 # ============================================================================
 
-class RateUpsertItemModel(BaseModel):
+class FXUpsertItem(BaseModel):
     """Single rate to upsert."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
@@ -193,16 +181,16 @@ class RateUpsertItemModel(BaseModel):
         return v
 
 
-class UpsertRatesRequestModel(BaseModel):
+class FXBulkUpsertRequest(BaseModel):
     """Request model for bulk rate upsert."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
         )
 
-    rates: list[RateUpsertItemModel] = Field(..., min_length=1, description="List of rates to insert/update")
+    rates: list[FXUpsertItem] = Field(..., min_length=1, description="List of rates to insert/update")
 
 
-class RateUpsertResultModel(BaseModel):
+class FXUpsertResult(BaseModel):
     """Single rate upsert result."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
@@ -216,13 +204,13 @@ class RateUpsertResultModel(BaseModel):
     quote: str = Field(..., description="Quote currency")
 
 
-class UpsertRatesResponseModel(BaseModel):
+class FXBulkUpsertResponse(BaseModel):
     """Response model for bulk rate upsert."""
     model_config = ConfigDict(
         json_encoders={Decimal: str},
         )
 
-    results: list[RateUpsertResultModel] = Field(..., description="Upsert results in order")
+    results: list[FXUpsertResult] = Field(..., description="Upsert results in order")
     success_count: int = Field(..., description="Number of successful operations")
     errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
 
@@ -231,7 +219,7 @@ class UpsertRatesResponseModel(BaseModel):
 # RATE DELETE MODELS
 # ============================================================================
 
-class RateDeleteRequestModel(BaseModel):
+class FXDeleteItem(BaseModel):
     """Single rate deletion request."""
     model_config = ConfigDict(
         populate_by_name=True,
@@ -252,12 +240,12 @@ class RateDeleteRequestModel(BaseModel):
         return v
 
 
-class DeleteRatesRequestModel(BaseModel):
+class FXBulkDeleteRequest(BaseModel):
     """Request model for bulk rate deletion."""
-    deletions: list[RateDeleteRequestModel] = Field(..., min_length=1, description="List of rates to delete")
+    deletions: list[FXDeleteItem] = Field(..., min_length=1, description="List of rates to delete")
 
 
-class RateDeleteResultModel(BaseModel):
+class FXDeleteResult(BaseModel):
     """Single rate deletion result."""
     success: bool = Field(..., description="Whether the operation succeeded (always True, errors are graceful)")
     base: str = Field(..., description="Base currency (normalized)")
@@ -269,9 +257,9 @@ class RateDeleteResultModel(BaseModel):
     message: Optional[str] = Field(None, description="Warning/info message (e.g., 'no rates found')")
 
 
-class DeleteRatesResponseModel(BaseModel):
+class FXBulkDeleteResponse(BaseModel):
     """Response model for bulk rate deletion."""
-    results: list[RateDeleteResultModel] = Field(..., description="Deletion results in order")
+    results: list[FXDeleteResult] = Field(..., description="Deletion results in order")
     total_deleted: int = Field(..., description="Total number of rates deleted across all requests")
     errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
 
@@ -280,7 +268,7 @@ class DeleteRatesResponseModel(BaseModel):
 # PAIR SOURCE CONFIGURATION MODELS
 # ============================================================================
 
-class PairSourceItemModel(BaseModel):
+class FXPairSourceItem(BaseModel):
     """Configuration for a currency pair source."""
     model_config = ConfigDict(
         str_strip_whitespace=True,
@@ -300,18 +288,18 @@ class PairSourceItemModel(BaseModel):
         return v
 
 
-class PairSourcesResponseModel(BaseModel):
+class FXPairSourcesResponse(BaseModel):
     """Response model for listing pair sources."""
-    sources: list[PairSourceItemModel] = Field(..., description="Configured pair sources")
+    sources: list[FXPairSourceItem] = Field(..., description="Configured pair sources")
     count: int = Field(..., description="Number of configured sources")
 
 
-class CreatePairSourcesRequestModel(BaseModel):
+class FXCreatePairSourcesRequest(BaseModel):
     """Request model for creating/updating pair sources."""
-    sources: list[PairSourceItemModel] = Field(..., min_length=1, description="Pair sources to create/update")
+    sources: list[FXPairSourceItem] = Field(..., min_length=1, description="Pair sources to create/update")
 
 
-class PairSourceResultModel(BaseModel):
+class FXPairSourceResult(BaseModel):
     """Result of a single pair source creation/update."""
     success: bool = Field(..., description="Whether the operation succeeded")
     base: str = Field(..., description="Base currency")
@@ -322,15 +310,15 @@ class PairSourceResultModel(BaseModel):
     message: Optional[str] = Field(None, description="Additional info/warning")
 
 
-class CreatePairSourcesResponseModel(BaseModel):
+class FXCreatePairSourcesResponse(BaseModel):
     """Response model for bulk pair source creation."""
-    results: list[PairSourceResultModel] = Field(..., description="Results for each source")
+    results: list[FXPairSourceResult] = Field(..., description="Results for each source")
     success_count: int = Field(..., description="Number of successful operations")
     error_count: int = Field(default=0, description="Number of failed operations")
     errors: list[str] = Field(default_factory=list, description="Errors encountered")
 
 
-class DeletePairSourcesRequestModel(BaseModel):
+class FXDeletePairSourcesRequest(BaseModel):
     """Request model for deleting pair sources."""
     sources: list[dict] = Field(
         ...,
@@ -339,7 +327,7 @@ class DeletePairSourcesRequestModel(BaseModel):
         )
 
 
-class DeletePairSourceResultModel(BaseModel):
+class FXDeletePairSourceResult(BaseModel):
     """Result of a single pair source deletion."""
     success: bool = Field(..., description="Whether the operation succeeded")
     base: str = Field(..., description="Base currency")
@@ -349,9 +337,9 @@ class DeletePairSourceResultModel(BaseModel):
     message: Optional[str] = Field(None, description="Warning/error message if any")
 
 
-class DeletePairSourcesResponseModel(BaseModel):
+class FXDeletePairSourcesResponse(BaseModel):
     """Response model for DELETE /pair-sources/bulk."""
-    results: list[DeletePairSourceResultModel] = Field(..., description="Results for each deletion")
+    results: list[FXDeletePairSourceResult] = Field(..., description="Results for each deletion")
     total_deleted: int = Field(..., description="Total number of records deleted")
 
 

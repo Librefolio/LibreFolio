@@ -79,15 +79,16 @@ class FABulkRefreshResponse(BaseModel):
 class FXSyncResponse(BaseModel):
     """Response for FX rate synchronization from central banks.
 
-    Provides summary of fetched and stored FX rates.
-    Different structure from FA: summarizes overall sync operation
+    Provides summary of synced FX rates operation.
+    Different structure from FA: summarizes overall sync with date range
     rather than per-asset results.
+
+    Migrated from fx.py (was SyncResponseModel) to consolidate refresh/sync
+    operations in single module for operational coherence.
     """
     model_config = ConfigDict(extra="forbid")
 
-    fetched: int = Field(..., description="Total rates fetched from providers")
-    inserted: int = Field(..., description="Total new rates inserted into DB")
-    updated: int = Field(..., description="Total existing rates updated in DB")
-    skipped: int = Field(0, description="Total rates skipped (already up-to-date)")
-    errors: List[str] = Field(default_factory=list, description="List of errors encountered")
+    synced: int = Field(..., description="Number of new rates inserted/updated")
+    date_range: tuple[str, str] = Field(..., description="Date range synced (ISO format)")
+    currencies: List[str] = Field(..., description="Currencies synced")
 

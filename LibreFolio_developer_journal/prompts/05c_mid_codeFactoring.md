@@ -235,27 +235,27 @@ Scelta utente: aggiungere, nel commento dei file appena creati, e negli altri fi
 
 ### Phase 2: Migrazione Provider Schemas
 
-- [ ] 7.2.x (come versione precedente) + docstring provider.
+- [x] 7.2.x (come versione precedente) + docstring provider.
 
 ### Phase 3: Migrazione Price Schemas
 
-- [ ] 7.3.x (come versione precedente) + rimozione `PriceQueryResult` + docstring prices.
+- [x] 7.3.x (come versione precedente) + rimozione `PriceQueryResult` + docstring prices.
 
 ### Phase 4: Migrazione Refresh & Sync Schemas
 
-- [ ] 7.4.1 Spostare classi FA Refresh.
-- [ ] 7.4.2 Spostare `FXSyncResponse` da `fx.py` a `refresh.py` con docstring sezione FX Sync.
-- [ ] 7.4.3 Aggiornare endpoint FX che usano `SyncResponseModel` → `FXSyncResponse` (da nuovo path).
-- [ ] 7.4.4 Aggiornare import endpoint FA Refresh.
-- [ ] 7.4.5 Verifica nessuna definizione pydantic rimasta inline in `api/v1`.
-- [ ] 7.4.6 Test incrementale (services).
+- [x] 7.4.1 Spostare classi FA Refresh.
+- [x] 7.4.2 Spostare `FXSyncResponse` da `fx.py` a `refresh.py` con docstring sezione FX Sync.
+- [x] 7.4.3 Aggiornare endpoint FX che usano `SyncResponseModel` → `FXSyncResponse` (da nuovo path).
+- [x] 7.4.4 Aggiornare import endpoint FA Refresh.
+- [x] 7.4.5 Verifica nessuna definizione pydantic rimasta inline in `api/v1`.
+- [x] 7.4.6 Test incrementale (services).
 
 ### Phase 5: Rinominazioni FX In-Place
 
-- [ ] 7.5.1 Rinominare classi FX rimanenti (`RateUpsertItemModel` etc.).
-- [ ] 7.5.2 Aggiornare import `api/v1/fx.py`.
-- [ ] 7.5.3 Docstring `fx.py` aggiornata (senza sezione sync).
-- [ ] 7.5.4 Test FX.
+- [x] 7.5.1 Rinominare classi FX rimanenti (`RateUpsertItemModel` etc.).
+- [x] 7.5.2 Aggiornare import `api/v1/fx.py`.
+- [x] 7.5.3 Docstring `fx.py` aggiornata (senza sezione sync).
+- [x] 7.5.4 Test FX.
 
 ### Phase 6: Aggiornamento Test Scripts
 
@@ -274,7 +274,7 @@ Scelta utente: aggiungere, nel commento dei file appena creati, e negli altri fi
 
 ### Phase 8: Documentazione
 
-- [ ] 7.8.1 Aggiornare `api-development-guide.md` (nuova organizzazione, docstring guidance, differenze FA vs FX, file refresh consolidato).
+- [ ] 7.8.1 Aggiornare `api-development-guide.md` (nuova organizzazione, docstring guidance, differenze FA vs FX, file refresh consolidato, tabella comparativa tra FA e FX per mostrare come la stessa esigenza ha 2 classi diverse, dovute alle peculiarita dei 2 sotto sistemi).
 - [ ] 7.8.2 Aggiornare `database-schema.md` (colonna volume + nota refactoring, nessuna retro‑compatibilità necessaria).
 - [ ] 7.8.3 Aggiornare `FEATURE_COVERAGE_REPORT.md` (stato refactoring schema).
 - [ ] 7.8.4 Aggiornare `REMEDIATION_PLAN.md` (spuntare passi) + aggiungere sezione "Schema Consolidation Completed".

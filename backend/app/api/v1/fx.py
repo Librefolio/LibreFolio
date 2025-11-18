@@ -14,35 +14,34 @@ from sqlmodel import select, delete as sql_delete, and_, or_
 from backend.app.db.models import FxCurrencyPairSource
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.common import BackwardFillInfo
+from backend.app.schemas.refresh import FXSyncResponse
 from backend.app.schemas.fx import (
     # Provider models
-    ProviderInfoModel,
-    ProvidersResponseModel,
-    # Sync models
-    SyncResponseModel,
+    FXProviderInfo,
+    FXProvidersResponse,
     # Conversion models
-    ConvertRequestModel,
-    ConversionResultModel,
-    ConvertResponseModel,
+    FXConvertRequest,
+    FXConversionResult,
+    FXConvertResponse,
     # Rate upsert models
-    UpsertRatesRequestModel,
-    RateUpsertResultModel,
-    UpsertRatesResponseModel,
+    FXBulkUpsertRequest,
+    FXUpsertResult,
+    FXBulkUpsertResponse,
     # Rate delete models
-    DeleteRatesRequestModel,
-    RateDeleteResultModel,
-    DeleteRatesResponseModel,
+    FXBulkDeleteRequest,
+    FXDeleteResult,
+    FXBulkDeleteResponse,
     # Pair source models
-    PairSourceItemModel,
-    PairSourcesResponseModel,
-    CreatePairSourcesRequestModel,
-    PairSourceResultModel,
-    CreatePairSourcesResponseModel,
-    DeletePairSourcesRequestModel,
-    DeletePairSourceResultModel,
-    DeletePairSourcesResponseModel,
+    FXPairSourceItem,
+    FXPairSourcesResponse,
+    FXCreatePairSourcesRequest,
+    FXPairSourceResult,
+    FXCreatePairSourcesResponse,
+    FXDeletePairSourcesRequest,
+    FXDeletePairSourceResult,
+    FXDeletePairSourcesResponse,
     # Currency list models
-    CurrenciesResponseModel,
+    CurrenciesResponseModel,  # TODO: Rename to FXCurrenciesResponse if exists
     )
 from backend.app.services.fx import (
     FXServiceError,
@@ -61,7 +60,7 @@ router = APIRouter(prefix="/fx", tags=["FX"])
 # ENDPOINTS
 # ============================================================================
 
-@router.get("/providers", response_model=ProvidersResponseModel)
+@router.get("/providers", response_model=FXProvidersResponse)
 async def list_providers():
     """
     Get the list of all available FX rate providers.
@@ -91,7 +90,7 @@ async def list_providers():
             else:
                 base_currencies = [instance.base_currency]
 
-            providers.append(ProviderInfoModel(
+            providers.append(FXProviderInfo(
                 code=code,
                 name=provider_dict['name'],
                 base_currency=instance.base_currency,
@@ -99,7 +98,7 @@ async def list_providers():
                 description=getattr(instance, 'description', f'{provider_dict["name"]} FX rate provider')
                 ))
 
-        return ProvidersResponseModel(providers=providers, count=len(providers))
+        return FXProvidersResponse(providers=providers, count=len(providers))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}")
 
@@ -136,7 +135,7 @@ async def list_currencies(
         raise HTTPException(status_code=502, detail=f"Failed to fetch currencies: {str(e)}")
 
 
-@router.post("/sync/bulk", response_model=SyncResponseModel)
+@router.post("/sync/bulk", response_model=FXSyncResponse)
 async def sync_rates(
     start: date = Query(..., description="Start date (inclusive)"),
     end: date = Query(..., description="End date (inclusive)"),
@@ -192,7 +191,7 @@ async def sync_rates(
                 provider_code=provider,
                 base_currency=base_currency
                 )
-            return SyncResponseModel(
+            return FXSyncResponse(
                 synced=result['total_changed'],
                 date_range=(start.isoformat(), end.isoformat()),
                 currencies=result['currencies_synced']
@@ -331,7 +330,7 @@ async def sync_rates(
                     detail=f"All providers failed: {'; '.join(final_errors)}"
                     )
 
-            return SyncResponseModel(
+            return FXSyncResponse(
                 synced=total_changed,
                 date_range=(start.isoformat(), end.isoformat()),
                 currencies=sorted(list(all_currencies_synced))
@@ -343,9 +342,9 @@ async def sync_rates(
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
 
 
-@router.post("/rate-set/bulk", response_model=UpsertRatesResponseModel, status_code=200)
+@router.post("/rate-set/bulk", response_model=FXBulkUpsertResponse, status_code=200)
 async def upsert_rates_endpoint(
-    request: UpsertRatesRequestModel,
+    request: FXBulkUpsertRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -394,7 +393,7 @@ async def upsert_rates_endpoint(
 
             success, action = rate_results[0]
 
-            results.append(RateUpsertResultModel(
+            results.append(FXUpsertResult(
                 success=success,
                 action=action,
                 rate=rate_value,
@@ -417,16 +416,16 @@ async def upsert_rates_endpoint(
             detail=f"All rates failed: {'; '.join(errors)}"
             )
 
-    return UpsertRatesResponseModel(
+    return FXBulkUpsertResponse(
         results=results,
         success_count=len(results),
         errors=errors
         )
 
 
-@router.delete("/rate-set/bulk", response_model=DeleteRatesResponseModel)
+@router.delete("/rate-set/bulk", response_model=FXBulkDeleteResponse)
 async def delete_rates_endpoint(
-    request: DeleteRatesRequestModel,
+    request: FXBulkDeleteRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -523,7 +522,7 @@ async def delete_rates_endpoint(
                 else:
                     base, quote = from_cur, to_cur
 
-                results.append(RateDeleteResultModel(
+                results.append(FXDeleteResult(
                     success=success,
                     base=base,
                     quote=quote,
@@ -549,16 +548,16 @@ async def delete_rates_endpoint(
             detail=f"All deletions failed validation: {'; '.join(errors)}"
             )
 
-    return DeleteRatesResponseModel(
+    return FXBulkDeleteResponse(
         results=results,
         total_deleted=total_deleted,
         errors=errors
         )
 
 
-@router.post("/convert/bulk", response_model=ConvertResponseModel)
+@router.post("/convert/bulk", response_model=FXConvertResponse)
 async def convert_currency_bulk(
-    request: ConvertRequestModel,
+    request: FXConvertRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -649,7 +648,7 @@ async def convert_currency_bulk(
                 days_back=days_back
                 )
 
-        results.append(ConversionResultModel(
+        results.append(FXConversionResult(
             amount=conversion.amount,
             from_currency=from_cur,
             to_currency=to_cur,
@@ -666,7 +665,7 @@ async def convert_currency_bulk(
             detail=f"All conversions failed: {'; '.join(bulk_errors)}"
             )
 
-    return ConvertResponseModel(
+    return FXConvertResponse(
         results=results,
         errors=bulk_errors
         )
@@ -676,7 +675,7 @@ async def convert_currency_bulk(
 # PROVIDER CONFIGURATION ENDPOINTS
 # ============================================================================
 
-@router.get("/pair-sources", response_model=PairSourcesResponseModel)
+@router.get("/pair-sources", response_model=FXPairSourcesResponse)
 async def list_pair_sources(session: AsyncSession = Depends(get_session_generator)):
     """
     Get the list of configured currency pair sources.
@@ -697,7 +696,7 @@ async def list_pair_sources(session: AsyncSession = Depends(get_session_generato
         sources = result.scalars().all()
 
         sources_list = [
-            PairSourceItemModel(
+            FXPairSourceItem(
                 base=s.base,
                 quote=s.quote,
                 provider_code=s.provider_code,
@@ -706,14 +705,14 @@ async def list_pair_sources(session: AsyncSession = Depends(get_session_generato
             for s in sources
             ]
 
-        return PairSourcesResponseModel(sources=sources_list, count=len(sources_list))
+        return FXPairSourcesResponse(sources=sources_list, count=len(sources_list))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch pair sources: {str(e)}")
 
 
-@router.post("/pair-sources/bulk", response_model=CreatePairSourcesResponseModel, status_code=201)
+@router.post("/pair-sources/bulk", response_model=FXCreatePairSourcesResponse, status_code=201)
 async def create_pair_sources_bulk(
-    request: CreatePairSourcesRequestModel,
+    request: FXCreatePairSourcesRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -779,7 +778,7 @@ async def create_pair_sources_bulk(
         for source in request.sources:
             # Validate provider exists
             if source.provider_code.upper() not in available_providers:
-                results.append(PairSourceResultModel(
+                results.append(FXPairSourceResult(
                     success=False,
                     action="error",
                     base=source.base,
@@ -794,7 +793,7 @@ async def create_pair_sources_bulk(
             # Check for inverse pair conflict (same priority)
             inverse_key = (source.quote.upper(), source.base.upper(), source.priority)
             if inverse_key in existing_inverses:
-                results.append(PairSourceResultModel(
+                results.append(FXPairSourceResult(
                     success=False,
                     action="error",
                     base=source.base,
@@ -831,7 +830,7 @@ async def create_pair_sources_bulk(
                 session.add(new_source)
                 action = "created"
 
-            results.append(PairSourceResultModel(
+            results.append(FXPairSourceResult(
                 success=True,
                 action=action,
                 base=source.base.upper(),
@@ -855,7 +854,7 @@ async def create_pair_sources_bulk(
 
         await session.commit()
 
-        return CreatePairSourcesResponseModel(
+        return FXCreatePairSourcesResponse(
             results=results,
             success_count=success_count,
             error_count=error_count
@@ -868,9 +867,9 @@ async def create_pair_sources_bulk(
         raise HTTPException(status_code=500, detail=f"Failed to create pair sources: {str(e)}")
 
 
-@router.delete("/pair-sources/bulk", response_model=DeletePairSourcesResponseModel)
+@router.delete("/pair-sources/bulk", response_model=FXDeletePairSourcesResponse)
 async def delete_pair_sources_bulk(
-    request: DeletePairSourcesRequestModel,
+    request: FXDeletePairSourcesRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -899,7 +898,7 @@ async def delete_pair_sources_bulk(
             priority = source_dict.get("priority")
 
             if not base or not quote:
-                results.append(DeletePairSourceResultModel(
+                results.append(FXDeletePairSourceResult(
                     success=False,
                     base=base or "MISSING",
                     quote=quote or "MISSING",
@@ -930,7 +929,7 @@ async def delete_pair_sources_bulk(
             if deleted_count == 0:
                 # Warning: pair not found
                 priority_str = f" with priority={priority}" if priority else ""
-                results.append(DeletePairSourceResultModel(
+                results.append(FXDeletePairSourceResult(
                     success=True,  # Not an error, just a warning
                     base=base,
                     quote=quote,
@@ -939,7 +938,7 @@ async def delete_pair_sources_bulk(
                     message=f"Pair {base}/{quote}{priority_str} not found (nothing to delete)"
                     ))
             else:
-                results.append(DeletePairSourceResultModel(
+                results.append(FXDeletePairSourceResult(
                     success=True,
                     base=base,
                     quote=quote,
@@ -951,7 +950,7 @@ async def delete_pair_sources_bulk(
 
         await session.commit()
 
-        return DeletePairSourcesResponseModel(
+        return FXDeletePairSourcesResponse(
             results=results,
             total_deleted=total_deleted
             )
