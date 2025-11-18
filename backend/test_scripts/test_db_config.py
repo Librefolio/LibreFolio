@@ -10,6 +10,9 @@ Can be customized via environment variable.
 import os
 from pathlib import Path
 
+from backend.app.config import get_settings
+from backend.app.main import ensure_database_exists
+
 # Avoid importing app config at module import time to prevent early evaluation
 # of settings (which can pick up production DATABASE_URL). Instead read TEST
 # database URL from environment if provided, otherwise fall back to the default.
@@ -83,7 +86,6 @@ def verify_test_database() -> tuple[bool, str]:
         tuple: (is_test_db, database_url)
     """
     # Import settings at call time so that LIBREFOLIO_TEST_MODE env var has effect
-    from backend.app.config import get_settings
     settings = get_settings()
     db_url = settings.DATABASE_URL
 
@@ -132,8 +134,5 @@ def initialize_test_database(print_func=None):
     print_func(f"✅ Using test database: {db_url}")
 
     # Ensure database exists and is migrated
-    # Import ensure_database_exists at call time to pick up test mode
-    from backend.app.main import ensure_database_exists
     ensure_database_exists()
-
     return True
