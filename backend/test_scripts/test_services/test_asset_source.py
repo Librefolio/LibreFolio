@@ -37,6 +37,7 @@ from backend.app.services.asset_source import AssetSourceManager
 
 from backend.app.utils.financial_math import (
     calculate_day_count_fraction,
+    find_active_period,
     )
 from backend.test_scripts.test_utils import (
     print_error,
@@ -132,21 +133,47 @@ def test_act365_calculation():
         return {"passed": False, "message": f"Failed: {str(e)}"}
 
 
-def test_find_active_rate():
-    """Test find_active_rate() for synthetic yield."""
-    print_section("Test 4: Find Active Rate (Synthetic Yield)")
+def test_find_active_period():
+    """Test find_active_period() for synthetic yield using Pydantic periods.
 
+    Covers:
+      - Mid first period
+      - Mid second period
+      - Maturity date (still in schedule)
+      - Grace period (uses last scheduled rate)
+      - Late interest period (after grace)
+    """
+    print_section("Test 4: Find Active Period (Synthetic Yield)")
     try:
-        from backend.app.schemas.assets import InterestRatePeriod, LateInterestConfig
-
-        # Convert dict to Pydantic models (required by function)
+        from backend.app.schemas.assets import (
+            InterestRatePeriod,
+            LateInterestConfig,
+            CompoundingType,
+            DayCountConvention,
+            )
         schedule = [
-            InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), annual_rate=Decimal("0.05")),
-            InterestRatePeriod(start_date=date(2026, 1, 1), end_date=date(2026, 12, 31), annual_rate=Decimal("0.06"))
+            InterestRatePeriod(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 12, 31),
+                annual_rate=Decimal("0.05"),
+                compounding=CompoundingType.SIMPLE,
+                day_count=DayCountConvention.ACT_365,
+                ),
+            InterestRatePeriod(
+                start_date=date(2026, 1, 1),
+                end_date=date(2026, 12, 31),
+                annual_rate=Decimal("0.06"),
+                compounding=CompoundingType.SIMPLE,
+                day_count=DayCountConvention.ACT_365,
+                ),
             ]
         maturity = date(2026, 12, 31)
-        late_interest = LateInterestConfig(annual_rate=Decimal("0.12"), grace_period_days=30)
-
+        late_interest = LateInterestConfig(
+            annual_rate=Decimal("0.12"),
+            grace_period_days=30,
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365,
+            )
         test_cases = [
             (date(2025, 6, 15), Decimal("0.05"), "Mid-2025 (first period)"),
             (date(2026, 6, 15), Decimal("0.06"), "Mid-2026 (second period)"),
@@ -154,59 +181,19 @@ def test_find_active_rate():
             (date(2027, 1, 15), Decimal("0.06"), "15 days after maturity (grace period)"),
             (date(2027, 2, 15), Decimal("0.12"), "45 days after maturity (late interest)"),
             ]
-
-        for target, expected, desc in test_cases:
-            result = find_active_rate(schedule, target, maturity, late_interest)
-            print_info(f"Case: {desc} | expected={expected} | actual={result}")
-            assert result == expected, f"Mismatch for {desc}: {result} != {expected}"
-            print_success(f"✓ {desc} -> {result}")
-
-        return {"passed": True, "message": f"All {len(test_cases)} find_active_rate cases passed"}
+        for target, expected_rate, desc in test_cases:
+            period = find_active_period(schedule, target, maturity, late_interest)
+            if desc.startswith("45 days"):
+                assert period is not None, f"Late interest period not found for {target}"
+            if period is None:
+                raise AssertionError(f"No period found for {desc} ({target})")
+            actual_rate = period.annual_rate
+            print_info(f"Case: {desc} | expected={expected_rate} | actual={actual_rate}")
+            assert actual_rate == expected_rate, f"Mismatch for {desc}: {actual_rate} != {expected_rate}"
+            print_success(f"✓ {desc} -> {actual_rate}")
+        return {"passed": True, "message": f"All {len(test_cases)} find_active_period cases passed"}
     except Exception as e:
-        print_error(f"Error during find_active_rate test: {e}")
-        return {"passed": False, "message": f"Failed: {str(e)}"}
-
-
-def test_calculate_accrued_interest():
-    """Test calculate_accrued_interest() for synthetic yield."""
-    print_section("Test 5: Calculate Accrued Interest (Synthetic Yield)")
-
-    try:
-        from backend.app.schemas.assets import InterestRatePeriod
-
-        face_value = Decimal("10000")
-        # Convert dict to Pydantic model (required by function)
-        schedule = [
-            InterestRatePeriod(start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), annual_rate=Decimal("0.05"))
-            ]
-        maturity = date(2025, 12, 31)
-        late_interest = None
-
-        # Test: 30 days at 5%
-        start = date(2025, 1, 1)
-        end = date(2025, 1, 30)
-
-        interest = calculate_accrued_interest(
-            face_value=face_value,
-            start_date=start,
-            end_date=end,
-            schedule=schedule,
-            maturity_date=maturity,
-            late_interest=late_interest
-            )
-
-        # Expected: 10000 * 0.05 * (30/365) = 41.0958...
-        expected = Decimal("10000") * Decimal("0.05") * Decimal("30") / Decimal("365")
-        diff = abs(interest - expected)
-
-        print_info(f"Case: 30 days at 5% | expected={expected:.2f} | actual={interest:.2f} | diff={diff:.4f}")
-
-        assert diff < Decimal("0.01"), f"Difference too large: {diff}"
-        print_success(f"✓ Accrued interest calculation OK: {interest:.2f}")
-
-        return {"passed": True, "message": f"Accrued interest calculation passed (diff < 0.01)"}
-    except Exception as e:
-        print_error(f"Error during accrued interest test: {e}")
+        print_error(f"Error during find_active_period test: {e}")
         return {"passed": False, "message": f"Failed: {str(e)}"}
 
 
@@ -217,7 +204,7 @@ def test_calculate_accrued_interest():
 
 async def test_bulk_assign_providers():
     """Test bulk_assign_providers() method."""
-    print_section("Test 4: Bulk Assign Providers")
+    print_section("Test 5: Bulk Assign Providers")
 
     try:
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -279,7 +266,7 @@ async def test_bulk_assign_providers():
 
 async def test_single_assign_provider(asset_ids: list[int]):
     """Test assign_provider() single method (calls bulk)."""
-    print_section("Test 5: Single Assign Provider (calls bulk)")
+    print_section("Test 6: Single Assign Provider (calls bulk)")
 
     try:
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -310,7 +297,7 @@ async def test_single_assign_provider(asset_ids: list[int]):
 
 async def test_bulk_remove_providers(asset_ids: list[int]):
     """Test bulk_remove_providers() method."""
-    print_section("Test 6: Bulk Remove Providers")
+    print_section("Test 7: Bulk Remove Providers")
 
     try:
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -338,7 +325,7 @@ async def test_bulk_remove_providers(asset_ids: list[int]):
 
 async def test_single_remove_provider(asset_ids: list[int]):
     """Test remove_provider() single method (calls bulk)."""
-    print_section("Test 7: Single Remove Provider (calls bulk)")
+    print_section("Test 8: Single Remove Provider (calls bulk)")
 
     try:
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -375,7 +362,7 @@ async def test_single_remove_provider(asset_ids: list[int]):
 
 async def test_bulk_upsert_prices(asset_ids: list[int]):
     """Test bulk_upsert_prices() method."""
-    print_section("Test 8: Bulk Upsert Prices")
+    print_section("Test 9: Bulk Upsert Prices")
 
     try:
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -384,14 +371,14 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
                 {
                     "asset_id": asset_ids[0],
                     "prices": [
-                        {"date": date(2025, 1, 1), "close": Decimal("100.50"), "currency": "USD"},
-                        {"date": date(2025, 1, 2), "close": Decimal("101.25"), "currency": "USD"},
+                        {"date": date(2025, 1, 1), "close": Decimal("100.50"), "volume": Decimal("1000"), "currency": "USD"},
+                        {"date": date(2025, 1, 2), "close": Decimal("101.25"), "volume": Decimal("1500"), "currency": "USD"},
                         ]
                     },
                 {
                     "asset_id": asset_ids[1],
                     "prices": [
-                        {"date": date(2025, 1, 1), "close": Decimal("200.00"), "currency": "USD"},
+                        {"date": date(2025, 1, 1), "close": Decimal("200.00"), "volume": Decimal("500"), "currency": "USD"},
                         ]
                     },
                 ]
@@ -403,7 +390,7 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
                 stmt = select(PriceHistory).where(PriceHistory.asset_id == item["asset_id"])
                 db_result = await session.execute(stmt)
                 prices = db_result.scalars().all()
-                print_info(f"Asset {item['asset_id']} prices in DB: {[(p.date, p.close) for p in prices]}")
+                print_info(f"Asset {item['asset_id']} prices in DB: {[(p.date, p.close, p.volume) for p in prices]}")
 
             # Verify in DB
             stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_ids[0])
@@ -411,6 +398,7 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
             prices = db_result.scalars().all()
 
             assert len(prices) == 2, f"Expected 2 prices, got {len(prices)}"
+            assert prices[0].volume == Decimal("1000") and prices[1].volume == Decimal("1500"), "Volume values not persisted correctly"
 
             return {"passed": True, "message": f"Bulk upserted {result['inserted_count']} prices successfully", "inserted_count": result.get('inserted_count', 0)}
     except Exception as e:
@@ -420,7 +408,7 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
 
 async def test_single_upsert_prices(asset_ids: list[int]):
     """Test upsert_prices() single method (calls bulk)."""
-    print_section("Test 9: Single Upsert Prices (calls bulk)")
+    print_section("Test 10: Single Upsert Prices (calls bulk)")
 
     try:
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -460,7 +448,7 @@ async def test_single_upsert_prices(asset_ids: list[int]):
 
 async def test_get_prices_with_backfill(asset_ids: list[int]):
     """Test get_prices() with backward-fill logic."""
-    print_section("Test 10: Get Prices with Backward-Fill")
+    print_section("Test 11: Get Prices with Backward-Fill")
 
     try:
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -476,14 +464,13 @@ async def test_get_prices_with_backfill(asset_ids: list[int]):
 
             # Print each date's info
             for p in prices:
-                bf = p.get("backward_fill_info")
+                bf = p.backward_fill_info
                 if bf:
-                    print_info(f"{p['date']}: {p['close']} (backfilled from {bf.get('actual_rate_date')} , days_back={bf.get('days_back')})")
+                    print_info(f"{p.date}: {p.close} (backfilled from {bf.actual_rate_date} , days_back={bf.days_back})")
                 else:
-                    print_info(f"{p['date']}: {p['close']} (exact)")
-
+                    print_info(f"{p.date}: {p.close} (exact)")
             # Count backfilled dates
-            backfilled = [p for p in prices if p.get("backward_fill_info")]
+            backfilled = [p for p in prices if p.backward_fill_info]
 
             return {
                 "passed": True,
@@ -497,7 +484,7 @@ async def test_get_prices_with_backfill(asset_ids: list[int]):
 
 async def test_bulk_delete_prices(asset_ids: list[int]):
     """Test bulk_delete_prices() method."""
-    print_section("Test 11: Bulk Delete Prices")
+    print_section("Test 12: Bulk Delete Prices")
 
     try:
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -578,9 +565,9 @@ async def run_all_tests():
     helper_act365 = test_act365_calculation()
     print_result_detail("ACT/365 Calculation", helper_act365)
 
-    # NOTE: test_find_active_rate and test_calculate_accrued_interest removed
-    # Those functions are deprecated. Use find_active_period() and period-based
-    # calculation in ScheduledInvestmentProvider instead.
+    # Insert new period-based helper
+    helper_find_period = test_find_active_period()
+    print_result_detail("Find Active Period", helper_find_period)
 
     # Run the bulk assign first to retrieve asset_ids for dependent tests
     bulk_assign_result = await test_bulk_assign_providers()
@@ -592,6 +579,7 @@ async def run_all_tests():
         "Price Column Precision": helper_price_precision,
         "Price Truncation": helper_truncate,
         "ACT/365 Calculation": helper_act365,
+        "Find Active Period": helper_find_period,
         "Bulk Assign Providers": bulk_assign_result,
         }
 
@@ -644,3 +632,8 @@ async def run_all_tests():
 if __name__ == "__main__":
     success = asyncio.run(run_all_tests())
     exit_with_result(success)
+
+# TODO:
+#  Aggiungere casi limite (data prima dell’inizio del schedule, dopo la late interest senza config).
+#  Test aggiuntivi per compounding diverso (es. COMPOUND con frequenza mensile).
+#  Un test negativo (periodo mancante → None).

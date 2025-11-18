@@ -146,6 +146,7 @@ def upgrade() -> None:
                                 high              NUMERIC(18, 6),
                                 low               NUMERIC(18, 6),
                                 close             NUMERIC(18, 6),
+                                volume            NUMERIC(24, 0),
                                 adjusted_close    NUMERIC(18, 6),
                                 currency          VARCHAR  NOT NULL,
                                 source_plugin_key VARCHAR  NOT NULL,

@@ -155,7 +155,7 @@ class BulkRefreshResponse(BaseModel):
     """Response for bulk price refresh."""
     results: List[RefreshResult]
 
-
+# TODO: capire se serve davvero o riutilizzare PricePointModel, in generale capire i doppioni con schemas/assets.py
 class PriceQueryResult(BaseModel):
     """Single price point with backward-fill info."""
     date: date
@@ -163,6 +163,7 @@ class PriceQueryResult(BaseModel):
     high: Optional[Decimal] = None
     low: Optional[Decimal] = None
     close: Decimal
+    volume: Optional[Decimal] = None
     currency: str
     backward_fill_info: Optional[BackwardFillInfo] = None
 
@@ -403,9 +404,7 @@ async def get_prices(
 
         prices = await AssetSourceManager.get_prices(asset_id, start_date, end_date, session)
 
-        return GetPricesResponse(
-            prices=[PriceQueryResult(**p) for p in prices]
-            )
+        return GetPricesResponse(prices=prices)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
