@@ -495,6 +495,7 @@ class PriceHistory(SQLModel, table=True):
     high: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
     low: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
     close: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
+    volume: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(24, 0)))
     adjusted_close: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
 
     currency: str = Field(nullable=False)  # ISO 4217

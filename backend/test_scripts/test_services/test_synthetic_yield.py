@@ -436,8 +436,8 @@ async def test_get_prices_integration():
 
             # Validate
             passed = len(prices) == 7
-            all_exact = all(p.get("backward_fill_info") is None for p in prices)
-            values = [p["close"] for p in prices]
+            all_exact = all(p.backward_fill_info is None for p in prices)
+            values = [p.close for p in prices]
             increasing = all(values[i] < values[i + 1] for i in range(len(values) - 1))
 
             passed = passed and all_exact and increasing

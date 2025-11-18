@@ -209,61 +209,6 @@ def test_find_active_period_before_schedule():
 
     assert period is None
 
-
-def test_find_active_period_with_compound_monthly():
-    """Test that period preserves compound frequency."""
-    schedule = [
-        InterestRatePeriod(
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 12, 31),
-            annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.COMPOUND,
-            compound_frequency=CompoundFrequency.MONTHLY,
-            day_count=DayCountConvention.ACT_365
-            )
-        ]
-    maturity = date(2025, 12, 31)
-    target = date(2025, 6, 15)
-
-    period = find_active_period(schedule, target, maturity)
-
-    assert period is not None
-    assert period.compounding == CompoundingType.COMPOUND
-    assert period.compound_frequency == CompoundFrequency.MONTHLY
-
-
-# NOTE: calculate_accrued_interest tests removed - function deprecated
-# The ScheduledInvestmentProvider now uses period-based calculation directly
-    schedule = [
-        InterestRatePeriod(
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 12, 31),
-            annual_rate=Decimal("0.05")
-            )
-        ]
-    maturity = date(2025, 12, 31)
-    face_value = Decimal("10000")
-
-    # Calculate interest for 30 days
-    interest = calculate_accrued_interest(
-        face_value=face_value,
-        start_date=date(2025, 1, 1),
-        end_date=date(2025, 1, 31),
-        schedule=schedule,
-        maturity_date=maturity
-        )
-
-    # Expected: 10000 * 0.05 * (30/365) ≈ 41.095...
-    # Note: Actual calculation sums daily, so may differ slightly due to precision
-    expected = face_value * Decimal("0.05") * (Decimal("30") / Decimal("365"))
-    # Allow small tolerance for daily accumulation precision differences
-    assert abs(interest - expected) < Decimal("2")  # Within 2 units (0.02%)
-
-# NOTE: test_calculate_accrued_interest tests removed - function deprecated
-# The function used day-by-day iteration and only supported SIMPLE interest.
-# Use period-based calculation in ScheduledInvestmentProvider instead.
-
-
 # ============================================================================
 # TESTS: find_active_period (returns full InterestRatePeriod object)
 # ============================================================================
@@ -402,7 +347,7 @@ def test_find_active_period_with_compound_monthly():
         )
     ]
     maturity = date(2025, 12, 31)
-
+    print("ciao")
     period = find_active_period(schedule, date(2025, 6, 15), maturity)
     assert period is not None
     assert period.compounding == CompoundingType.COMPOUND
