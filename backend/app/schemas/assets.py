@@ -1,3 +1,34 @@
+"""
+Financial Asset (FA) Core Schemas.
+
+This module contains Pydantic models for Financial Assets domain, including
+price points, asset metadata, and scheduled investment calculations.
+
+**Naming Conventions**:
+- FA domain: Financial Assets (stocks, ETFs, bonds, P2P loans, etc.)
+- No FA prefix on base models (PricePointModel, not FAPricePointModel)
+  because these are foundational schemas used throughout FA system
+
+**Domain Coverage**:
+- Price points: OHLC data with volume and backward-fill info
+- Current values: Latest available price/valuation
+- Historical data: Time series of price points
+- Provider assignments: Asset-to-provider mappings
+- Scheduled investments: Interest schedules for bonds/loans (synthetic yield)
+
+**Design Notes**:
+- No backward compatibility maintained during refactoring
+- All numeric fields use Decimal for precision
+- Pydantic v2 with strict validation (extra="forbid")
+- Scheduled investment uses Pydantic models (not dict configs)
+- Enums for compounding types, frequencies, and day count conventions
+
+**Structure**:
+- Enums: Financial calculation types (compounding, frequencies, day counts)
+- Base models: PricePointModel, CurrentValueModel, HistoricalDataModel
+- Provider: AssetProviderAssignmentModel
+- Scheduled Investment: InterestRatePeriod, LateInterestConfig, ScheduledInvestmentSchedule, ScheduledInvestmentParams
+"""
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
