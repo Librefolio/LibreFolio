@@ -23,6 +23,7 @@ Design principles:
 - Parallel provider calls where possible
 """
 import asyncio
+import structlog
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta, datetime
 from typing import Optional
@@ -40,6 +41,10 @@ from backend.app.schemas.assets import PricePointModel, BackwardFillInfo
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.decimal_utils import truncate_priceHistory
 from backend.app.utils.financial_math import parse_decimal_value
+
+
+# Initialize structured logger
+logger = structlog.get_logger(__name__)
 
 
 # (Pydantic models for API request/response live in backend.app.schemas.assets)
@@ -615,17 +620,40 @@ class AssetSourceManager:
         start_date: date_type,
         end_date: date_type,
         ) -> Optional[list[PricePointModel]]:
-        """Delegate to provider history fetch, returning PricePointModel list or None on failure."""
-        provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
+        """Delegate to provider history fetch, returning PricePointModel list or None on failure.
+
+        Logs warnings with context when provider fetch fails for diagnostics.
+        """
+        provider_code = assignment.provider_code
+        provider = AssetProviderRegistry.get_provider_instance(provider_code)
+
         if not provider:
+            logger.warning(
+                "Provider not registered in registry, falling back to DB",
+                provider_code=provider_code,
+                asset_id=asset_id,
+                start_date=str(start_date),
+                end_date=str(end_date)
+            )
             return None
+
         params = AssetSourceManager._parse_provider_params(assignment.provider_params)
+
         try:
             historical = await provider.get_history_value(str(asset_id), params, start_date, end_date)
             # historical expected HistoricalDataModel with prices: List[PricePointModel]
             return historical.prices
-        except Exception:
-            return None  # silent fallback; logging could be added
+        except Exception as e:
+            logger.warning(
+                "Provider fetch failed with exception, falling back to DB",
+                provider_code=provider_code,
+                asset_id=asset_id,
+                start_date=str(start_date),
+                end_date=str(end_date),
+                exception_type=type(e).__name__,
+                exception_message=str(e)
+            )
+            return None
 
     @staticmethod
     async def _fetch_db_price_map(

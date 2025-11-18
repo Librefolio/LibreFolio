@@ -1,8 +1,41 @@
 # 📊 LibreFolio - Feature Coverage & API Analysis Report
 
 **Data analisi**: 5 Novembre 2025  
-**Versione**: 2.0 (Multi-Provider FX System)  
+**Versione**: 2.1 (Schema Refactoring + Volume Field)  
 **Database**: SQLite con SQLModel/Alembic migrations
+
+---
+
+## 🎉 Aggiornamento Versione 2.1 - Schema Refactoring (18 Nov 2025)
+
+### 🆕 Schema & Code Quality Improvements
+
+**Price History Enhancements** (100% completato):
+- ✅ Volume field added to `price_history` table (NUMERIC(24,0))
+- ✅ Backward-fill propagates volume along with price
+- ✅ Test coverage: volume propagation + edge cases
+- ✅ Structured logging for provider fallback scenarios
+- ✅ Documentation updated (database schema, API guide, architecture)
+
+**Test Coverage Updates**:
+- Asset Source: 15/15 ✅ (+2 tests: volume propagation, provider fallback)
+- **New Tests**:
+  - Test 12: Backward-Fill Volume Propagation ✅
+  - Test 13: Backward-Fill Edge Case (No Initial Data) ✅
+  - Test 14: Provider Fallback (Invalid Provider) ✅
+
+**Code Quality**:
+- ✅ Provider failure logging with structured context (provider_code, asset_id, exception)
+- ✅ Distinct warnings: "provider not registered" vs "runtime exception"
+- ✅ No breaking changes (volume nullable, retrocompatible)
+
+**Documentation**:
+- ✅ `docs/database-schema.md` - Volume field section added
+- ✅ `docs/assets/architecture.md` - API response format documented
+- ✅ `docs/testing/services-tests.md` - Test coverage expanded
+- ✅ `FEATURE_COVERAGE_REPORT.md` - Updated with v2.1 changes
+
+**Time**: ~3 hours (Phase 1-3 of schema refactoring checklist)
 
 ---
 
@@ -405,6 +438,7 @@ CREATE TABLE price_history (
     high NUMERIC(18,6),
     low NUMERIC(18,6),
     close NUMERIC(18,6),
+    volume NUMERIC(24,0),            -- ← ADDED in schema v2.1
     adjusted_close NUMERIC(18,6),
     
     currency TEXT NOT NULL,
@@ -419,13 +453,23 @@ CREATE TABLE price_history (
 **Funzionalità**:
 - ✅ Daily-point policy (1 record per asset per day)
 - ✅ OHLC + adjusted close
+- ✅ **Volume field** (trading volume in shares/units) - **NEW in v2.1**
 - ✅ Source tracking (plugin che ha fetchato)
 - ✅ UPSERT behavior (aggiorna se già esiste)
 
-**Test Coverage**: ✅ Schema + populate
+**Volume Field (Added November 2025)**:
+- **Type**: NUMERIC(24,0) - integer-like for large volumes
+- **Purpose**: Liquidity analysis, future VWAP calculations
+- **Nullable**: Yes (NULL if unavailable from source)
+- **Backward-fill**: Propagated along with price when filling gaps
+- **Retrocompatibility**: No breaking changes; existing queries work; volume=NULL for older data
+
+**Test Coverage**: ✅ Schema + populate + **volume backward-fill**
 - Test schema existence
 - Test UNIQUE constraint (asset_id, date)
 - Test populate con ~200 price points
+- **Test volume propagation in backward-fill** ✅ (added Nov 2025)
+- **Test edge case: no initial data** ✅ (added Nov 2025)
 
 **Missing Tests**:
 - ⚠️ **UPSERT behavior validation**

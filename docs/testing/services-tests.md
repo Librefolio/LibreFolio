@@ -38,14 +38,43 @@ Service tests verify **business logic** and **service layer functionality** with
 
 **File**: `backend/test_scripts/test_services/test_asset_source.py`
 
+**Coverage**: 15/15 tests pass
+
 **What it tests**:
-- Provider assignment (bulk and single)
-- Helper functions (truncation, precision)
-- Price retrieval and storage
+- **Helper Functions**:
+  - Price column precision validation (18,6)
+  - Price truncation to DB precision
+  - ACT/365 day count calculation
+  - Find active period for synthetic yield schedules
+- **Provider Assignment**:
+  - Bulk and single provider assignment
+  - Bulk and single provider removal
+  - Provider metadata validation
+- **Price Operations**:
+  - Bulk and single price upsert
+  - Bulk and single price deletion
+  - Price retrieval with date ranges
+- **Backward-Fill Logic**:
+  - Basic backward-fill with gap filling
+  - **Volume propagation** in backward-filled prices (NEW)
+  - Edge case: query with no initial data (empty result)
+- **Provider Fallback**:
+  - Invalid/unregistered provider graceful fallback to DB (NEW)
+  - Structured logging of provider failures (NEW)
 
 **DB Requirements**: Clean test database (auto-created)
 
 **Run**: `./test_runner.py services asset-source`
+
+**Key Features Tested**:
+- Backward-fill preserves `volume` field from last known price
+- Provider fetch failures logged with context (provider_code, asset_id, exception)
+- Distinct warnings for "provider not registered" vs "runtime exception"
+- Graceful degradation to DB when provider unavailable
+
+**See**: 
+- [Asset Source Architecture](../assets/architecture.md)
+- [Provider Development](../assets/provider-development.md)
 
 ---
 

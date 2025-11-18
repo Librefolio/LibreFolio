@@ -456,6 +456,7 @@ CREATE TABLE price_history (
     high DECIMAL(18,6),                  -- High price
     low DECIMAL(18,6),                   -- Low price
     close DECIMAL(18,6),                 -- Closing price (most important)
+    volume DECIMAL(24,0),                -- Trading volume (optional)
     adjusted_close DECIMAL(18,6),        -- Split/dividend adjusted
     
     currency TEXT NOT NULL,              -- Price currency
@@ -471,6 +472,33 @@ CREATE TABLE price_history (
 - **Upsert behavior**: Updating today's price replaces the existing record
 - **Close price**: Usually used for calculations
 - **Adjusted close**: Accounts for stock splits and dividends
+- **Volume field**: Trading volume for liquidity analysis (see details below)
+
+**Volume Field Details:**
+
+**Type**: `DECIMAL(24,0)` - integer-like decimal supporting large volumes
+
+**Domain**: 
+- **Positive integers**: Represents number of shares/units traded
+- **NULL**: Acceptable when volume data is unavailable or not applicable
+- **Zero**: Rare but valid (no trading activity on that day)
+
+**Motivations**:
+1. **Liquidity analysis**: Assess how easily an asset can be bought/sold
+2. **Future VWAP calculations**: Volume-Weighted Average Price for better entry/exit decisions
+3. **Market activity indicator**: High volume may indicate significant news or events
+4. **Provider compatibility**: Most price providers (yfinance, etc.) already include volume in their responses
+
+**Backward-fill behavior**:
+- When prices are backward-filled (gaps in data), the `volume` field is also propagated from the last known value
+- This ensures consistency in the price series structure
+- `PricePointModel.backward_fill_info` indicates when data is backfilled vs actual
+
+**Retrocompatibility Note**:
+- **Before schema v2.1**: Volume field did not exist
+- **After schema v2.1**: Volume field present but optional (NULL if unknown)
+- **No breaking changes**: Existing queries continue to work; volume is simply available as additional data when present
+- **Manual entries**: Users can leave volume NULL when manually adding prices
 
 **Important: This is NOT for:**
 - Your purchase prices (those are in `transactions.price`)

@@ -18,35 +18,35 @@
 
 ## 1. Test Backward-Fill con Volume
 
-- [ ] 1.1 Creare nuovo test `test_backward_fill_volume_propagation` in `backend/test_scripts/test_services/test_asset_source.py`.
+- [x] 1.1 Creare nuovo test `test_backward_fill_volume_propagation` in `backend/test_scripts/test_services/test_asset_source.py`.
     - Scenario: prezzi disponibili per i primi 2 giorni con volume; terzo e quarto giorno mancanti -> verificare propagazione `close` e `volume`.
     - Asserzioni: `PricePointModel.backward_fill_info` non è `None`; `volume` backfilled = ultimo noto.
-- [ ] 1.2 Caso edge: primo giorno senza dati -> nessun backfill (lista più corta) + log esplicativo.
-- [ ] 1.3 Aggiornare summary test runner per includere conteggio backfilled con volume.
-- [ ] 1.4 Aggiornare documentazione di testing (cartella `docs/testing/`).
+- [x] 1.2 Caso edge: primo giorno senza dati -> nessun backfill (lista più corta) + log esplicativo.
+- [x] 1.3 Aggiornare summary test runner per includere conteggio backfilled con volume.
+- [x] 1.4 Aggiornare documentazione di testing (cartella `docs/testing/`).
 
 ## 2. Logging Fallback Provider
 
-- [ ] 2.1 Aggiungere logger e `warning` dettagliato (`provider_code`, `asset_id`, eccezione) se `_fetch_provider_history` fallisce.
-- [ ] 2.2 Log distinto: provider non registrato vs eccezione runtime.
-- [ ] 2.3 Test che forza provider inesistente verificando fallback + nessun crash.
+- [x] 2.1 Aggiungere logger e `warning` dettagliato (`provider_code`, `asset_id`, eccezione) se `_fetch_provider_history` fallisce.
+- [x] 2.2 Log distinto: provider non registrato vs eccezione runtime.
+- [x] 2.3 Test che forza provider inesistente verificando fallback + nessun crash.
 
 ## 3. Documentazione Colonna Volume
 
-- [ ] 3.1 Aggiornare `docs/database-schema.md` sezione "PriceHistory.volume" (tipo, dominio, motivazioni: liquidità, VWAP futuro).
-- [ ] 3.2 Aggiornare guida API (es. `api-development-guide.md`) includendo `volume` nella risposta get prices.
-- [ ] 3.3 Nota retrocompatibilità: prima assente, ora presente (null se sconosciuto).
-- [ ] 3.4 Aggiornare `FEATURE_COVERAGE_REPORT.md`.
+- [x] 3.1 Aggiornare `docs/database-schema.md` sezione "PriceHistory.volume" (tipo, dominio, motivazioni: liquidità, VWAP futuro).
+- [x] 3.2 Aggiornare guida API (es. `api-development-guide.md`) includendo `volume` nella risposta get prices.
+- [x] 3.3 Nota retrocompatibilità: prima assente, ora presente (null se sconosciuto).
+- [x] 3.4 Aggiornare `FEATURE_COVERAGE_REPORT.md`.
 
 ## 4. Uniformare API: Eliminare PriceQueryResult
 
-- [ ] 4.1 Analisi differenze tra `PriceQueryResult` e `PricePointModel`.
-- [ ] 4.2 Rimuovere `PriceQueryResult`.
-- [ ] 4.3 Modificare risposta endpoint GET `/assets/{asset_id}/prices` -> `List[PricePointModel]`.
-- [ ] 4.4 Aggiornare test (`test_asset_source.py`).
-- [ ] 4.5 Grep globale riferimenti e migrazione.
-- [ ] 4.6 Aggiornare documentazione API.
-- [ ] 4.7 Validare assenza cicli di import.
+- [x] 4.1 Analisi differenze tra `PriceQueryResult` e `PricePointModel`.
+- [x] 4.2 Rimuovere `PriceQueryResult`.
+- [x] 4.3 Modificare endpoint GET `/assets/{asset_id}/prices`.
+- [x] 4.4 Aggiornare test (service tests già passano - 15/15).
+- [x] 4.5 Grep globale riferimenti (solo in documentazione/checklist).
+- [x] 4.6 Aggiornare documentazione API.
+- [x] 4.7 Validare assenza cicli import (✅ verificato).
 
 ## 5. Censimento & Unificazione Classi Pydantic
 

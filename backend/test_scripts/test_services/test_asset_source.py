@@ -482,9 +482,243 @@ async def test_get_prices_with_backfill(asset_ids: list[int]):
         return {"passed": False, "message": f"Failed: {str(e)}"}
 
 
+async def test_backward_fill_volume_propagation(asset_ids: list[int]):
+    """Test backward-fill with volume propagation.
+
+    Scenario:
+    - Day 1 and 2: have prices WITH volume
+    - Day 3 and 4: missing (should backfill close AND volume)
+
+    Assertions:
+    - backward_fill_info is not None for days 3-4
+    - volume backfilled equals last known volume
+    - Edge case: if no initial data exists, no backfill occurs (empty list or shorter list)
+    """
+    print_section("Test 12: Backward-Fill Volume Propagation")
+
+    try:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            # Setup: Insert prices for Day 1 and Day 2 WITH volume
+            test_asset_id = asset_ids[0]
+
+            # Clear existing prices first
+            from sqlalchemy import delete
+            await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == test_asset_id))
+            await session.commit()
+
+            # Insert Day 1 and Day 2 with volume
+            day1_volume = Decimal("1000.50")
+            day2_volume = Decimal("2500.75")
+
+            prices_to_insert = [
+                PriceHistory(
+                    asset_id=test_asset_id,
+                    date=date(2025, 1, 1),
+                    open=Decimal("100.00"),
+                    high=Decimal("105.00"),
+                    low=Decimal("99.00"),
+                    close=Decimal("103.00"),
+                    volume=day1_volume,
+                    currency="USD",
+                    source_plugin_key="manual_test"
+                ),
+                PriceHistory(
+                    asset_id=test_asset_id,
+                    date=date(2025, 1, 2),
+                    open=Decimal("103.00"),
+                    high=Decimal("107.00"),
+                    low=Decimal("102.00"),
+                    close=Decimal("106.00"),
+                    volume=day2_volume,
+                    currency="USD",
+                    source_plugin_key="manual_test"
+                )
+            ]
+
+            session.add_all(prices_to_insert)
+            await session.commit()
+
+            # Query range Day 1-4 (Day 3 and 4 should be backfilled)
+            prices = await AssetSourceManager.get_prices(
+                asset_id=test_asset_id,
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 4),
+                session=session
+            )
+
+            assert len(prices) == 4, f"Expected 4 prices (2 actual + 2 backfilled), got {len(prices)}"
+
+            # Verify Day 1 and Day 2 (exact, no backfill)
+            day1_price = prices[0]
+            assert day1_price.date == date(2025, 1, 1), "Day 1 date mismatch"
+            assert day1_price.close == Decimal("103.00"), "Day 1 close mismatch"
+            assert day1_price.volume == day1_volume, f"Day 1 volume mismatch: expected {day1_volume}, got {day1_price.volume}"
+            assert day1_price.backward_fill_info is None, "Day 1 should not be backfilled"
+            print_success(f"✓ Day 1: close={day1_price.close}, volume={day1_price.volume} (exact)")
+
+            day2_price = prices[1]
+            assert day2_price.date == date(2025, 1, 2), "Day 2 date mismatch"
+            assert day2_price.close == Decimal("106.00"), "Day 2 close mismatch"
+            assert day2_price.volume == day2_volume, f"Day 2 volume mismatch: expected {day2_volume}, got {day2_price.volume}"
+            assert day2_price.backward_fill_info is None, "Day 2 should not be backfilled"
+            print_success(f"✓ Day 2: close={day2_price.close}, volume={day2_price.volume} (exact)")
+
+            # Verify Day 3 and Day 4 (backfilled from Day 2)
+            for idx, expected_date in enumerate([date(2025, 1, 3), date(2025, 1, 4)], start=2):
+                price = prices[idx]
+                assert price.date == expected_date, f"Day {idx+1} date mismatch"
+                assert price.backward_fill_info is not None, f"Day {idx+1} should have backward_fill_info"
+                assert price.backward_fill_info.actual_rate_date == date(2025, 1, 2), \
+                    f"Day {idx+1} should be backfilled from Day 2"
+                assert price.backward_fill_info.days_back == idx - 1, \
+                    f"Day {idx+1} days_back should be {idx - 1}"
+
+                # Critical assertion: volume must be backfilled
+                assert price.close == Decimal("106.00"), f"Day {idx+1} close should be backfilled"
+                assert price.volume == day2_volume, \
+                    f"Day {idx+1} volume should be backfilled: expected {day2_volume}, got {price.volume}"
+
+                print_success(
+                    f"✓ Day {idx+1}: close={price.close}, volume={price.volume} "
+                    f"(backfilled from {price.backward_fill_info.actual_rate_date}, "
+                    f"days_back={price.backward_fill_info.days_back})"
+                )
+
+            backfilled_count = sum(1 for p in prices if p.backward_fill_info)
+
+            return {
+                "passed": True,
+                "message": f"Volume propagation verified: 2 exact + 2 backfilled prices",
+                "backfilled_count": backfilled_count
+            }
+
+    except AssertionError as e:
+        print_error(f"Assertion failed in volume propagation test: {e}")
+        return {"passed": False, "message": f"Assertion failed: {str(e)}"}
+    except Exception as e:
+        print_error(f"Exception in volume propagation test: {e}")
+        return {"passed": False, "message": f"Failed: {str(e)}"}
+
+
+async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
+    """Test backward-fill edge case: no initial data exists.
+
+    Scenario:
+    - Query range Day 1-4 but NO prices exist in DB
+
+    Expected:
+    - Empty list or no backfill (implementation dependent)
+    - Should NOT crash
+    """
+    print_section("Test 13: Backward-Fill Edge Case (No Initial Data)")
+
+    try:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            # Use a different asset to ensure it has no prices
+            test_asset_id = asset_ids[1] if len(asset_ids) > 1 else asset_ids[0]
+
+            # Clear all prices for this asset
+            from sqlalchemy import delete
+            await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == test_asset_id))
+            await session.commit()
+
+            # Query range with no data
+            prices = await AssetSourceManager.get_prices(
+                asset_id=test_asset_id,
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 4),
+                session=session
+            )
+
+            # Should return empty list (no data to backfill from)
+            assert len(prices) == 0, f"Expected empty list when no data exists, got {len(prices)} prices"
+            print_info("✓ Edge case handled: empty list returned when no initial data exists")
+
+            return {
+                "passed": True,
+                "message": "Edge case verified: no crash when querying range with no data"
+            }
+
+    except Exception as e:
+        print_error(f"Exception in edge case test: {e}")
+        return {"passed": False, "message": f"Failed: {str(e)}"}
+
+
+async def test_provider_fallback_invalid(asset_ids: list[int]):
+    """Test provider fallback when invalid/unregistered provider assigned.
+
+    Scenario:
+    - Assign an invalid (non-existent) provider to an asset
+    - Insert some prices in DB as fallback
+    - Query prices -> should fallback to DB gracefully
+    - Verify warning log is generated (manually via log inspection)
+
+    Expected:
+    - No crash
+    - Prices returned from DB fallback
+    - Warning logged about provider not registered
+    """
+    print_section("Test 14: Provider Fallback (Invalid Provider)")
+
+    try:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            test_asset_id = asset_ids[0]
+
+            # Assign invalid provider (not registered in AssetProviderRegistry)
+            invalid_provider = "invalid_nonexistent_provider"
+            await AssetSourceManager.assign_provider(
+                asset_id=test_asset_id,
+                provider_code=invalid_provider,
+                provider_params='{}',
+                session=session
+            )
+            print_info(f"Assigned invalid provider '{invalid_provider}' to asset {test_asset_id}")
+
+            # Insert fallback prices in DB
+            from sqlalchemy import delete
+            await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == test_asset_id))
+            await session.commit()
+
+            fallback_price = PriceHistory(
+                asset_id=test_asset_id,
+                date=date(2025, 1, 10),
+                close=Decimal("999.00"),
+                currency="USD",
+                source_plugin_key="manual_test_fallback"
+            )
+            session.add(fallback_price)
+            await session.commit()
+            print_info(f"Inserted fallback price in DB: date=2025-01-10, close=999.00")
+
+            # Query prices -> should fallback to DB (provider fetch will fail)
+            prices = await AssetSourceManager.get_prices(
+                asset_id=test_asset_id,
+                start_date=date(2025, 1, 10),
+                end_date=date(2025, 1, 10),
+                session=session
+            )
+
+            # Verify fallback worked
+            assert len(prices) == 1, f"Expected 1 price from DB fallback, got {len(prices)}"
+            assert prices[0].close == Decimal("999.00"), "Price mismatch in fallback"
+            assert prices[0].date == date(2025, 1, 10), "Date mismatch in fallback"
+
+            print_success(f"✓ Fallback to DB successful: retrieved price {prices[0].close}")
+            print_info("⚠️  Check logs for warning: 'Provider not registered in registry, falling back to DB'")
+
+            return {
+                "passed": True,
+                "message": f"Invalid provider handled gracefully, fallback to DB successful"
+            }
+
+    except Exception as e:
+        print_error(f"Exception in provider fallback test: {e}")
+        return {"passed": False, "message": f"Failed: {str(e)}"}
+
+
 async def test_bulk_delete_prices(asset_ids: list[int]):
     """Test bulk_delete_prices() method."""
-    print_section("Test 12: Bulk Delete Prices")
+    print_section("Test 15: Bulk Delete Prices")
 
     try:
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -604,6 +838,15 @@ async def run_all_tests():
         full_results["Get Prices (Backward-Fill)"] = await test_get_prices_with_backfill(asset_ids)
         print_result_detail("Get Prices (Backward-Fill)", full_results["Get Prices (Backward-Fill)"])
 
+        full_results["Backward-Fill Volume Propagation"] = await test_backward_fill_volume_propagation(asset_ids)
+        print_result_detail("Backward-Fill Volume Propagation", full_results["Backward-Fill Volume Propagation"])
+
+        full_results["Backward-Fill Edge Case (No Data)"] = await test_backward_fill_edge_case_no_initial_data(asset_ids)
+        print_result_detail("Backward-Fill Edge Case (No Data)", full_results["Backward-Fill Edge Case (No Data)"])
+
+        full_results["Provider Fallback (Invalid Provider)"] = await test_provider_fallback_invalid(asset_ids)
+        print_result_detail("Provider Fallback (Invalid Provider)", full_results["Provider Fallback (Invalid Provider)"])
+
         full_results["Bulk Delete Prices"] = await test_bulk_delete_prices(asset_ids)
         print_result_detail("Bulk Delete Prices", full_results["Bulk Delete Prices"])
     else:
@@ -616,6 +859,9 @@ async def run_all_tests():
             "Bulk Upsert Prices",
             "Single Upsert Prices",
             "Get Prices (Backward-Fill)",
+            "Backward-Fill Volume Propagation",
+            "Backward-Fill Edge Case (No Data)",
+            "Provider Fallback (Invalid Provider)",
             "Bulk Delete Prices",
             ]:
             full_results[key] = skipped_result
