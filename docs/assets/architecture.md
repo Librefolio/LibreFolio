@@ -279,6 +279,78 @@ class HistoricalDataModel(BaseModel):
 
 ---
 
+### 4. API Response Format
+
+#### GET `/assets/{asset_id}/prices`
+
+**Query Parameters:**
+- `start_date`: Start date (YYYY-MM-DD)
+- `end_date`: End date (YYYY-MM-DD)
+
+**Response**: `List[PricePointModel]` (direct array, no wrapper)
+
+**Example Response**:
+```json
+[
+  {
+    "date": "2025-01-15",
+    "open": "175.25",
+    "high": "178.50",
+    "low": "174.80",
+    "close": "177.95",
+    "volume": "52847392",
+    "currency": "USD",
+    "backward_fill_info": null
+  },
+  {
+    "date": "2025-01-16",
+    "open": null,
+    "high": null,
+    "low": null,
+    "close": "177.95",
+    "volume": "52847392",
+    "currency": "USD",
+    "backward_fill_info": {
+      "actual_rate_date": "2025-01-15",
+      "days_back": 1
+    }
+  }
+]
+```
+
+**Field Descriptions**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | string (date) | ✅ Yes | The date for this price point (YYYY-MM-DD) |
+| `open` | string (decimal) | ❌ No | Opening price for the day |
+| `high` | string (decimal) | ❌ No | Highest price for the day |
+| `low` | string (decimal) | ❌ No | Lowest price for the day |
+| `close` | string (decimal) | ✅ Yes | Closing price (primary value for calculations) |
+| `volume` | string (decimal) | ❌ No | **Trading volume** (number of shares/units traded) |
+| `currency` | string | ❌ No | Currency code (ISO 4217, e.g., "USD", "EUR") |
+| `backward_fill_info` | object | ❌ No | Present when data is backfilled from a previous date |
+
+**Volume Field Usage**:
+- **NULL when unavailable**: If the data source doesn't provide volume, this field will be `null`
+- **Integer-like values**: Volume represents whole units (shares, contracts, etc.)
+- **Liquidity indicator**: Higher volume = easier to buy/sell without price impact
+- **Future analytics**: Enables VWAP (Volume-Weighted Average Price) calculations
+- **Backward-fill behavior**: When a date has no actual data, both `close` and `volume` are propagated from the most recent known price
+
+**Backward-Fill Indicator**:
+- When `backward_fill_info` is `null`: Data is actual/real from the source
+- When `backward_fill_info` is present: Data was copied from `actual_rate_date` (gap-filling)
+  - `actual_rate_date`: The date of the real price that was used
+  - `days_back`: Number of days between requested date and actual price date
+
+**Retrocompatibility Note**:
+- **Before schema v2.1**: `volume` field did not exist in responses
+- **After schema v2.1**: `volume` field always present (may be `null`)
+- **Client impact**: Clients can safely ignore `volume` if not needed; existing parsers will receive `null` for older data
+
+---
+
 ## 📊 Database Schema
 
 ### Table: `price_history`
@@ -293,7 +365,7 @@ CREATE TABLE price_history (
     low NUMERIC(18, 6),
     close NUMERIC(18, 6),
     adjusted_close NUMERIC(18, 6),
-    volume NUMERIC(18, 6),
+    volume NUMERIC(24, 0),         -- Trading volume (integer-like, optional)
     currency VARCHAR(3),
     source_plugin_key VARCHAR(50),
     fetched_at TIMESTAMP,
@@ -301,6 +373,16 @@ CREATE TABLE price_history (
     FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
 ```
+
+**Field Notes**:
+- **volume**: Trading volume in number of shares/units traded (DECIMAL(24,0) for large volumes)
+  - **Optional**: Can be NULL if unavailable
+  - **Purpose**: Liquidity analysis, future VWAP calculations
+  - **Backward-fill**: Propagated along with price when filling gaps
+  - **Provider support**: Most providers (yfinance, etc.) include volume in responses
+- **close**: Primary field used for portfolio calculations
+- **adjusted_close**: Accounts for splits and dividends (optional)
+- **Daily-point policy**: Exactly one record per (asset_id, date)
 
 ### Table: `asset_provider_assignments`
 

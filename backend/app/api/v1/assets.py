@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_session_generator
-from backend.app.schemas.common import BackwardFillInfo
+from backend.app.schemas.assets import PricePointModel
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.provider_registry import AssetProviderRegistry
 
@@ -154,23 +154,6 @@ class RefreshResult(BaseModel):
 class BulkRefreshResponse(BaseModel):
     """Response for bulk price refresh."""
     results: List[RefreshResult]
-
-# TODO: capire se serve davvero o riutilizzare PricePointModel, in generale capire i doppioni con schemas/assets.py
-class PriceQueryResult(BaseModel):
-    """Single price point with backward-fill info."""
-    date: date
-    open: Optional[Decimal] = None
-    high: Optional[Decimal] = None
-    low: Optional[Decimal] = None
-    close: Decimal
-    volume: Optional[Decimal] = None
-    currency: str
-    backward_fill_info: Optional[BackwardFillInfo] = None
-
-
-class GetPricesResponse(BaseModel):
-    """Response for price query."""
-    prices: List[PriceQueryResult]
 
 
 class ProviderInfo(BaseModel):
@@ -390,21 +373,24 @@ async def delete_prices_single(
 # PRICE QUERY ENDPOINTS
 # ============================================================================
 
-@router.get("/{asset_id}/prices", response_model=GetPricesResponse)
+@router.get("/{asset_id}/prices", response_model=List[PricePointModel])
 async def get_prices(
     asset_id: int,
     start_date: date = Query(..., description="Start date (required)"),
     end_date: Optional[date] = Query(None, description="End date (optional, defaults to start_date)"),
     session: AsyncSession = Depends(get_session_generator)
     ):
-    """Get prices for asset with backward-fill support."""
+    """Get prices for asset with backward-fill support.
+
+    Returns a list of PricePointModel with OHLC data, volume, and backward-fill info.
+    """
     try:
         if end_date is None:
             end_date = start_date
 
         prices = await AssetSourceManager.get_prices(asset_id, start_date, end_date, session)
 
-        return GetPricesResponse(prices=prices)
+        return prices  # Already List[PricePointModel] from service
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
