@@ -125,3 +125,30 @@ class MockProvider(AssetSourceProvider):
         """
         # Accept any params for testing flexibility
         pass
+
+    async def fetch_asset_metadata(
+        self,
+        identifier: str,
+        provider_params: Dict | None = None,
+    ) -> dict | None:
+        """
+        Fetch mock asset metadata for testing.
+
+        Returns predictable mock data to test metadata auto-populate,
+        refresh, and validation flows.
+
+        Args:
+            identifier: Asset identifier
+            provider_params: Optional parameters (unused)
+
+        Returns:
+            Mock metadata dict with all fields populated
+        """
+        # Return mock data for testing
+        return {
+            "investment_type": "stock",
+            "short_description": f"Mock test asset {identifier} - used for testing metadata features",
+            "geographic_area": {"USA": "0.6", "ITA": "0.4"},  # Test string parsing
+            "sector": "Technology"
+        }
+

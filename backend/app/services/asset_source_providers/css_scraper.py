@@ -255,6 +255,24 @@ class CSSScraperProvider(AssetSourceProvider):
                     {"decimal_format": params['decimal_format']}
                     )
 
+    async def fetch_asset_metadata(
+        self,
+        identifier: str,
+        provider_params: Dict | None = None,
+    ) -> dict | None:
+        """
+        Fetch asset metadata (NOT SUPPORTED for CSS scraper).
+
+        CSS scraper is for manual/custom assets where metadata
+        is entered manually by the user.
+
+        Returns:
+            None (metadata not supported)
+        """
+        # CSS scraper doesn't provide metadata
+        # User enters metadata manually
+        return None
+
     # ============================================================================
     # HELPER FUNCTIONS
     # ============================================================================

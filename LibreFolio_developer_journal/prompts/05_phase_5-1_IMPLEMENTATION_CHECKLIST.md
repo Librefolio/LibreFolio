@@ -429,14 +429,51 @@
 
 ---
 
-## Phase 4: Provider Plugin Updates (1 day)
+## Phase 4: Provider Plugin Updates (1 day) ✅ COMPLETED
 
-### 4.1 Update Existing Providers (Optional Metadata Support)
+**Status**: ✅ **COMPLETED** - November 19, 2025  
+**Duration**: ~15 minutes
 
 **Note**: Metadata fetch is OPTIONAL. Not all providers need to implement it.
 
-- [ ] **YahooFinance: Add fetch_asset_metadata()**
-  - File: `backend/app/services/asset_source_providers/yahoo_finance.py`
+### 4.1 Update Existing Providers (Optional Metadata Support) ✅
+
+- [x] **YahooFinance: Add fetch_asset_metadata()**
+  - File: ✅ `backend/app/services/asset_source_providers/yahoo_finance.py` (UPDATED, +95 lines)
+  - Implementation: Full metadata extraction from yfinance ticker.info
+  - Fields returned:
+    - ✅ `investment_type`: Mapped from quoteType (equity→stock, etf→etf, etc.)
+    - ✅ `short_description`: From longBusinessSummary (truncated to 500 chars) or names
+    - ✅ `sector`: From sector field
+    - ❌ `geographic_area`: Not available from Yahoo Finance (returns None)
+  - Error handling: Returns None on any exception, logs warning
+  - **Result**: Full implementation ready for auto-populate
+
+- [x] **CSS Scraper: Add fetch_asset_metadata() stub**
+  - File: ✅ `backend/app/services/asset_source_providers/css_scraper.py` (UPDATED, +20 lines)
+  - Implementation: Returns None (not supported for manual/CSV providers)
+  - Rationale: User enters metadata manually for custom assets
+  - **Result**: Stub added, no breaking changes
+
+- [x] **ScheduledInvestment: Add fetch_asset_metadata() stub**
+  - File: ✅ `backend/app/services/asset_source_providers/scheduled_investment.py` (UPDATED, +20 lines)
+  - Implementation: Returns None (synthetic provider, no external metadata)
+  - Rationale: Calculated values from interest schedule, no external source
+  - **Result**: Stub added, no breaking changes
+
+- [x] **MockProv: Add fetch_asset_metadata() for testing**
+  - File: ✅ `backend/app/services/asset_source_providers/mockprov.py` (UPDATED, +30 lines)
+  - Implementation: Returns predictable mock data for testing
+  - Mock data returned:
+    ```python
+    {
+        "investment_type": "stock",
+        "short_description": "Mock test asset {identifier} - used for testing metadata features",
+        "geographic_area": {"USA": "0.6", "ITA": "0.4"},  # Tests string parsing
+        "sector": "Technology"
+    }
+    ```
+  - **Result**: Full mock implementation for testing auto-populate flows
   - Implementation:
     ```python
     async def fetch_asset_metadata(self, identifier: str, provider_params: dict | None = None) -> dict | None:
@@ -456,15 +493,15 @@
             return None
     ```
 
-- [ ] **CSS Scraper: Add fetch_asset_metadata() stub**
+- [x] **CSS Scraper: Add fetch_asset_metadata() stub**
   - File: `backend/app/services/asset_source_providers/css_scraper.py`
   - Return None (not supported for manual/CSV providers)
 
-- [ ] **ScheduledInvestment: Add fetch_asset_metadata() stub**
+- [x] **ScheduledInvestment: Add fetch_asset_metadata() stub**
   - File: `backend/app/services/asset_source_providers/scheduled_investment.py`
   - Return None (synthetic provider, no external metadata)
 
-- [ ] **MockProv: Add fetch_asset_metadata() for testing**
+- [x] **MockProv: Add fetch_asset_metadata() for testing**
   - File: `backend/app/services/asset_source_providers/mockprov.py`
   - Return mock data for test cases:
     ```python
