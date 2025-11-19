@@ -311,3 +311,88 @@ class YahooFinanceProvider(AssetSourceProvider):
         # Yahoo Finance doesn't require specific params
         # Identifier is passed as method argument
         pass
+
+    async def fetch_asset_metadata(
+        self,
+        identifier: str,
+        provider_params: Dict | None = None,
+    ) -> dict | None:
+        """
+        Fetch asset metadata from Yahoo Finance.
+
+        Extracts investment type, description, and sector from yfinance ticker info.
+        Geographic area is not available from Yahoo Finance.
+
+        Args:
+            identifier: Yahoo Finance ticker symbol
+            provider_params: Optional parameters (unused)
+
+        Returns:
+            Dict with metadata fields or None if fetch fails:
+            {
+                "investment_type": str,
+                "short_description": str,
+                "sector": str,
+                "geographic_area": None  # Not available
+            }
+
+        Note:
+            Returns RAW data - normalization happens in core service layer.
+        """
+        if not YFINANCE_AVAILABLE:
+            logger.warning(f"yfinance not available, cannot fetch metadata for {identifier}")
+            return None
+
+        try:
+            ticker = yf.Ticker(identifier)
+            info = ticker.info
+
+            if not info:
+                logger.warning(f"No info data returned from yfinance for {identifier}")
+                return None
+
+            # Map quoteType to investment_type
+            quote_type = info.get('quoteType', '').lower()
+            investment_type_map = {
+                'equity': 'stock',
+                'etf': 'etf',
+                'mutualfund': 'mutual_fund',
+                'cryptocurrency': 'crypto',
+                'currency': 'currency',
+                'future': 'future',
+                'option': 'option',
+            }
+            investment_type = investment_type_map.get(quote_type, 'stock')
+
+            # Get description (truncate to 500 chars)
+            long_business_summary = info.get('longBusinessSummary', '')
+            short_name = info.get('shortName', '')
+            long_name = info.get('longName', '')
+
+            # Prefer longBusinessSummary, fallback to names
+            if long_business_summary:
+                short_description = long_business_summary[:500]
+            elif long_name:
+                short_description = long_name
+            elif short_name:
+                short_description = short_name
+            else:
+                short_description = f"{identifier} from Yahoo Finance"
+
+            # Get sector
+            sector = info.get('sector')
+
+            metadata = {
+                "investment_type": investment_type,
+                "short_description": short_description,
+                "sector": sector,
+                # geographic_area not available from Yahoo Finance
+            }
+
+            logger.info(f"Fetched metadata from yfinance for {identifier}: type={investment_type}, sector={sector}")
+            return metadata
+
+        except Exception as e:
+            logger.warning(f"Could not fetch metadata for {identifier}: {e}")
+            return None
+
