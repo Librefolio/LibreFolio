@@ -433,6 +433,143 @@ class ScheduledInvestmentParams(BaseModel):
         return v.upper()
 
 
+# ============================================================================
+# ASSET METADATA & CLASSIFICATION
+# ============================================================================
+
+class ClassificationParamsModel(BaseModel):
+    """
+    Asset classification metadata.
+
+    All fields optional (partial updates supported via PATCH).
+    geographic_area is indivisible block (full replace on update, no merge).
+
+    Validation:
+    - geographic_area: ISO-3166-A3 codes, weights must sum to 1.0 (±1e-6)
+    - Weights quantized to 4 decimals (ROUND_HALF_EVEN)
+    - Automatic renormalization if sum != 1.0
+
+    Examples:
+        >>> params = ClassificationParamsModel(
+        ...     investment_type="stock",
+        ...     short_description="Apple Inc. - Technology company",
+        ...     geographic_area={"USA": Decimal("0.6"), "EUR": Decimal("0.4")},
+        ...     sector="Technology"
+        ... )
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    investment_type: Optional[str] = None
+    short_description: Optional[str] = None
+    geographic_area: Optional[dict[str, Decimal]] = None
+    sector: Optional[str] = None
+
+    @field_validator("geographic_area")
+    @classmethod
+    def validate_geo_area(cls, v):
+        """Validate and normalize geographic area distribution."""
+        if v is None:
+            return None
+        from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
+        return validate_and_normalize_geographic_area(v)
+
+
+class PatchAssetMetadataRequest(BaseModel):
+    """
+    PATCH metadata request (partial update).
+
+    Rules:
+    - **Absent fields** (not in request JSON): ignored (no update)
+    - **null in JSON** (None in Python): clear field
+    - **Value present**: update field
+    - **geographic_area**: full block replace (no merge)
+
+    Examples:
+        >>> # Update only short_description
+        >>> patch = PatchAssetMetadataRequest(short_description="New description")
+
+        >>> # Clear sector field
+        >>> patch = PatchAssetMetadataRequest(sector=None)
+
+        >>> # Update geographic_area (full replace)
+        >>> patch = PatchAssetMetadataRequest(
+        ...     geographic_area={"USA": Decimal("1.0")}
+        ... )
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    investment_type: Optional[str] = None
+    short_description: Optional[str] = None
+    geographic_area: Optional[dict[str, Decimal] | None] = None
+    sector: Optional[str] = None
+
+
+class AssetMetadataResponse(BaseModel):
+    """
+    Asset with metadata fields.
+
+    Used for GET/PATCH responses.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    display_name: str
+    identifier: str
+    currency: str
+    classification_params: Optional[ClassificationParamsModel] = None
+
+
+class MetadataChangeDetail(BaseModel):
+    """Single field change in metadata."""
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+
+
+class MetadataRefreshResult(BaseModel):
+    """
+    Result of metadata refresh for single asset.
+
+    Follows FA pattern: { asset_id, success, message, ... }
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    success: bool
+    message: str
+    changes: Optional[List[MetadataChangeDetail]] = None
+    warnings: Optional[List[str]] = None
+
+
+class BulkAssetReadRequest(BaseModel):
+    """Request to read multiple assets by IDs."""
+    model_config = ConfigDict(extra="forbid")
+
+    asset_ids: List[int]
+
+
+class BulkMetadataRefreshRequest(BaseModel):
+    """Bulk metadata refresh request."""
+    model_config = ConfigDict(extra="forbid")
+
+    asset_ids: List[int]
+
+
+class BulkMetadataRefreshResponse(BaseModel):
+    """
+    Bulk metadata refresh response (partial success).
+
+    Follows FA pattern: { results, success_count, failed_count }
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    results: List[MetadataRefreshResult]
+    success_count: int
+    failed_count: int
+
+
 # Export convenience
 __all__ = [
     # Enums
@@ -450,4 +587,13 @@ __all__ = [
     "LateInterestConfig",
     "ScheduledInvestmentSchedule",
     "ScheduledInvestmentParams",
+    # Metadata & classification (NEW)
+    "ClassificationParamsModel",
+    "PatchAssetMetadataRequest",
+    "AssetMetadataResponse",
+    "MetadataChangeDetail",
+    "MetadataRefreshResult",
+    "BulkAssetReadRequest",
+    "BulkMetadataRefreshRequest",
+    "BulkMetadataRefreshResponse",
     ]

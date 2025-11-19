@@ -571,6 +571,18 @@ def utils_scheduled_investment_schemas(verbose: bool = False) -> bool:
         )
 
 
+def utils_geo_normalization(verbose: bool = False) -> bool:
+    """Test geographic area normalization utilities (country codes, weight validation)."""
+    print_section("Utils: Geographic Area Normalization")
+    print_info("Testing: backend/app/utils/geo_normalization.py")
+    print_info("Tests: ISO-3166-A3 normalization, weight parsing, validation pipeline")
+    return run_command(
+        ["python", "-m", "backend.test_scripts.test_utilities.test_geo_normalization"],
+        "Geographic area normalization tests",
+        verbose=verbose,
+        )
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     print_header("LibreFolio Utility Tests")
@@ -583,6 +595,7 @@ def utils_all(verbose: bool = False) -> bool:
         ("Day Count Conventions", lambda: utils_day_count(verbose)),
         ("Compound Interest", lambda: utils_compound_interest(verbose)),
         ("Scheduled Investment Schemas", lambda: utils_scheduled_investment_schemas(verbose)),
+        ("Geographic Area Normalization", lambda: utils_geo_normalization(verbose)),
         ]
 
     results = []
@@ -1016,6 +1029,10 @@ Test commands:
                                  📋 Prerequisites: None
                                  💡 Tests: Period validation, late interest, schedule continuity
   
+  geo-normalization - Test geographic area normalization utilities (Phase 5.1)
+                      📋 Prerequisites: pycountry installed
+                      💡 Tests: ISO-3166-A3 conversion, weight validation, sum normalization
+  
   all              - Run all utility tests
   
 These are foundational tests for remediation phases 1 & 2.
@@ -1032,6 +1049,7 @@ These are foundational tests for remediation phases 1 & 2.
             "day-count",
             "compound-interest",
             "scheduled-investment-schemas",
+            "geo-normalization",
             "all",
             ],
         help="Utility test to run",
@@ -1178,6 +1196,8 @@ def main():
             success = utils_compound_interest(verbose=verbose)
         elif args.action == "scheduled-investment-schemas":
             success = utils_scheduled_investment_schemas(verbose=verbose)
+        elif args.action == "geo-normalization":
+            success = utils_geo_normalization(verbose=verbose)
         elif args.action == "all":
             success = utils_all(verbose=verbose)
 
