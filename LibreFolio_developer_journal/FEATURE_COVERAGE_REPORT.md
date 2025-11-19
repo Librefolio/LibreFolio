@@ -37,6 +37,63 @@
 
 **Time**: ~3 hours (Phase 1-3 of schema refactoring checklist)
 
+### 🏗️ Schema Consolidation Completed (18 Nov 2025)
+
+**Objective**: Eliminate inline Pydantic definitions in API layer, consolidate schemas in dedicated modules with clear FA/FX naming conventions.
+
+**Achievements** (Phase 7.1-7.9, ~8 hours total):
+
+**Schema Organization**:
+- ✅ 3 new schema modules created: `provider.py`, `prices.py`, `refresh.py`
+- ✅ 6 total schema modules (was 3: assets, fx, common)
+- ✅ 40+ classes organized and relocated
+- ✅ 0 inline Pydantic definitions remaining in `api/v1/*.py` (verified with grep)
+- ✅ 22 FX models renamed (removed `Model` suffix, added `FX` prefix)
+- ✅ `DateRangeModel` added to `common.py` for reusability
+
+**Naming Consistency**:
+- ✅ FA prefix: Financial Assets (stocks, ETFs, bonds, loans)
+- ✅ FX prefix: Foreign Exchange (currency rates)
+- ✅ 100% systematic application across all schemas
+
+**Code Quality**:
+- ✅ DRY principle enforced (eliminated `PriceQueryResult` duplicate)
+- ✅ `FXSyncResponse` consolidated with `FABulkRefreshRequest` in `refresh.py`
+- ✅ 3 unused imports removed from API files
+- ✅ `schemas/__init__.py` updated with 32 exports (was 5)
+
+**Documentation**:
+- ✅ Comprehensive docstrings in all 6 schema files
+- ✅ FA vs FX structural differences documented (3-level vs 2-level nesting)
+- ✅ `api-development-guide.md` updated with schema organization guide
+- ✅ Comparison table added: FA vs FX schema patterns
+
+**Validation**:
+- ✅ 0 import cycles (verified both assets + fx routers)
+- ✅ 0 inline BaseModel definitions in api/v1/ (grep verified)
+- ✅ 15/15 service tests passing (no regressions)
+- ✅ All FX imports working correctly
+
+**Bug Fixes**:
+- ✅ Fixed missed `SyncResponseModel` reference in fx.py (line 194)
+- ✅ Fixed Pydantic field name clash (`date` → `date_type` alias)
+
+**Structure Comparison Documented**:
+| Aspect | FA | FX | Reason |
+|--------|----|----|--------|
+| Nesting | 3-level (Item→Asset→Bulk) | 2-level (Item→Bulk) | FA groups by asset, FX is flat |
+| Data | OHLC+volume | Base+quote+rate | FA tracks intraday, FX only close |
+| Refresh | Asset-by-asset | Date range sync | Heterogeneous vs uniform data |
+
+**Quality Metrics**:
+- Inline definitions: 20+ → **0** (-100%) ✅
+- Schema modules: 3 → **6** (+100%) ✅
+- Exports in __init__: 5 → **32** (+540%) ✅
+- Import cycles: Unchecked → **0 validated** ✅
+- Naming consistency: Mixed → **100%** ✅
+
+**Time Investment**: ~8 hours (Phase 1-9 execution + documentation + validation)
+
 ---
 
 ## 🎉 Aggiornamento Versione 2.0 - Multi-Provider FX System

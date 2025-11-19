@@ -5,9 +5,9 @@
 **Project**: LibreFolio - Asset Pricing Provider System  
 **Start Date**: 6 November 2025  
 **Estimated Duration**: 6-8 days  
-**Status**: ✅ **Phase 0-4 COMPLETED** — Plugin Architecture Complete
+**Status**: ✅ **Phase 0-5 COMPLETED** — Plugin Architecture + Schema Consolidation Complete
 
-**Last Updated**: 2025-11-11
+**Last Updated**: 2025-11-18
 
 ---
 
@@ -15,7 +15,7 @@
 
 Completed (verified):
 - ✅ Phase 0: Database migration + `asset_provider_assignments` table — completed and applied
-- ✅ Phase 0.2.2: Asset Source Service foundation + tests — all service-level tests passing (13/13)
+- ✅ Phase 0.2.2: Asset Source Service foundation + tests — all service-level tests passing (15/15, was 13/13)
 - ✅ Phase 1: Unified Provider Registry + Auto-Discovery — FX and Asset providers unified
 - ✅ Phase 1.2: Asset Source Manager + Pydantic Schemas — full CRUD + refresh implemented
 - ✅ Phase 1.3: Provider folder setup — auto-discovery working for both FX and Asset providers
@@ -23,26 +23,44 @@ Completed (verified):
 - ✅ Phase 1.5: FX Pydantic schemas migration — 24 models centralized in schemas/fx.py
 - ✅ Phase 2: yfinance Provider — full implementation with Pydantic models, tests passing
 - ✅ Phase 3: CSS Scraper Provider — full implementation with US/EU format support, tests passing
-- ✅ **Phase 4: Synthetic Yield Plugin Refactor — scheduled_investment provider, financial_math utilities, 100% tests passing (20/20 total)**
+- ✅ Phase 4: Synthetic Yield Plugin Refactor — scheduled_investment provider, financial_math utilities, 100% tests passing (103/103 total)
+- ✅ **Phase 5: Schema Consolidation & Code Quality** — Database corrections, Scheduled Investment refactoring, Schema organization (6 modules, FA/FX naming, 0 inline Pydantic)
 - ✅ Generic Test Suite: Uniform tests for all asset providers (test_external/test_asset_providers.py)
 
-**🎉 Major Milestone: Plugin Architecture Complete!**
-- 4 asset providers registered: cssscraper, mockprov, **scheduled_investment**, yfinance
-- Financial calculation utilities extracted to reusable module
-- Dual implementation (plugin + internal) for maximum flexibility
-- All tests passing: 7/7 synthetic_yield, 13/13 asset_source, 3/3 services
+**🎉 Major Milestone: Plugin Architecture + Code Quality Complete!**
+- 4 asset providers registered: cssscraper, mockprov, scheduled_investment, yfinance
+- Schema consolidation: 6 modules (common, assets, provider, prices, refresh, fx)
+- Naming conventions: 100% FA/FX systematic
+- Financial calculation utilities extracted and documented (4 guides)
+- Testing documentation complete (5 guides)
+- All tests passing: 15/15 asset_source, 103/103 financial_math, 0 regressions
+- Quality gates: 8/8 passed
 
 Current focus / next steps:
-- 🎯 **Next**: Step 06 - Runtime Analysis with Loans (portfolio valuation with synthetic yield)
-- 🔄 Optional: API documentation update for scheduled_investment provider
-- 🔄 Optional: Add scheduled_investment to generic provider test suite
+- 🎯 **Next**: Phase 6 - Advanced Provider Implementations (JustETF, etc.) — **READY TO START**
+- 🎯 Phase 7: Search & Cache System
+- 🎯 Phase 8: Documentation & Developer Guides (final polish)
+
+**Phase 5 Code Quality Summary** (Nov 13-18, 2025):
+- Database: Transaction → CashMovement corrected (unidirectional, CASCADE, CHECK constraints)
+- Scheduled Investment: Full refactoring (Pydantic schemas, compound interest, day count conventions)
+- Schema Organization: 6 modules (0 inline Pydantic, FA/FX naming, 32 exports)
+- Documentation: 9 new guides (financial-calculations/ + testing/)
+- Quality: 8/8 gates passed, 0 import cycles, 15/15 service tests
+- Reports: 3 comprehensive reports generated
 
 Test environment safety:
 - ✅ Test environment safety fixes: `backend/test_scripts/test_db_config.py` and `test_runner.py` updated
 - ✅ Tests use `TEST_DATABASE_URL` and never touch prod DB
-- ✅ Synthetic yield tests: 7/7 passing in test_synthetic_yield.py
-- ✅ Asset source tests: 13/13 passing (includes synthetic yield helpers)
-- ✅ All services tests: 3/3 passing (FX + Asset Source + Synthetic Yield)
+- ✅ Schema refactoring: 0 inline Pydantic in api/v1/, all imports clean
+- ✅ Database schema: Transaction → CashMovement unidirectional, CHECK constraints normalized
+- ✅ All services tests: 15/15 passing (Asset Source + volume + provider fallback)
+- ✅ Financial math tests: 103/103 passing (day count + compound + integration)
+
+**Next Steps**:
+1. **Phase 6**: Implement advanced providers (JustETF, Borsa Italiana, etc.)
+2. **Phase 7**: Add search & cache system for provider queries
+3. **Phase 8**: Complete provider documentation (API ref already in api-development-guide.md)
 
 ---
 
@@ -1191,183 +1209,153 @@ Ti riscrivo la **versione finale consolidata e coerente** di **Phase 5**, con tu
 
 ---
 
-# 🧭 **Phase 5 — Asset Metadata & Classification System + API Integration**
+## Phase 5: Schema Consolidation & Code Quality (Completed - Nov 13-18, 2025)
 
-**Durata:** 3–4 giorni 
-**Stato:** 🔴 NOT STARTED
+**Status**: ✅ **COMPLETED** - Schema refactoring + Remediation plan execution
 
-**Obiettivo:**
-Introdurre un sistema avanzato di metadati e classificazione per gli asset, integrato con i provider esterni per l’import automatico e pienamente esposto tramite API REST coerenti con gli altri moduli (design “bulk-first”, validazione Pydantic, query SQL ottimizzate).
+**Goal**: Clean up code organization, eliminate technical debt, consolidate schemas, and improve maintainability.
 
----
+### 5.1 Database Schema Corrections ✅
 
-## **5.1 Database Migration – Asset Metadata Columns**
+**Reference**: `05_mid_REMEDIATION_PLAN.md` Category 1
 
-Aggiungere colonne alla tabella `assets` tramite:
+- [x] **1.1b Correct Transaction → CashMovement architecture**
+  - [x] Made relationship unidirectional (Transaction → CashMovement only)
+  - [x] Added ON DELETE CASCADE to Transaction.cash_movement_id FK
+  - [x] Removed CashMovement.linked_transaction_id (redundant)
+  - [x] Added CHECK constraint to validate cash_movement_id presence based on transaction type
+  - [x] Verified PRAGMA foreign_keys = ON activation
+  - [x] Updated migration 001_initial.py
+  - [x] Updated populate_mock_data.py
+  - [x] Renamed test: test_transaction_cash_bidirectional → test_transaction_cash_integrity
+  - [x] Created test_transaction_types.py
+  - [x] Updated docs/database-schema.md
+  - [x] Implemented CHECK constraint normalization with sqlglot
 
-```bash
-./dev.sh db:migrate "add asset metadata and classification"
+- [x] **1.2 Remove redundant fees/taxes columns**
+  - [x] Removed from Transaction model (use separate Transaction rows with type=FEE/TAX instead)
+  - [x] Updated migration and mock data
+  - [x] Schema validation tests passing
+
+### 5.2 Scheduled Investment Refactoring ✅
+
+**Reference**: `05_mid_REMEDIATION_PLAN.md` Category 2
+
+- [x] **2.1 Interest calculation refactoring**
+  - [x] Created Pydantic enums: `CompoundingType`, `CompoundFrequency`, `DayCountConvention`
+  - [x] Extended `InterestRatePeriod` with compounding fields
+  - [x] Implemented compound interest formulas in `utils/financial_math.py`
+  - [x] Implemented day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360)
+  - [x] Created `ScheduledInvestmentSchedule` with validation (overlaps, gaps, auto-sorting)
+  - [x] Updated `ScheduledInvestmentProvider` to use new calculations
+  - [x] Removed face_value and maturity_date from Asset model (calculated from transactions)
+  - [x] Tests: 103/103 passing (day count, compound interest, financial math, provider, integration)
+  - [x] Documentation: Created docs/financial-calculations/ structure (4 guides)
+  - [x] Documentation: Created docs/testing/ structure (5 guides)
+  - [x] Documentation consolidation: Removed legacy files, updated README.md
+
+### 5.3 Code Organization ✅
+
+**Reference**: `05_mid_REMEDIATION_PLAN.md` Category 3
+
+- [x] **3.1 Move utcnow() to utils**
+  - [x] Created `utils/datetime_utils.py`
+  - [x] Moved function with comprehensive docstring
+  - [x] Updated imports in models.py
+  - [x] Added tests for datetime utilities
+
+### 5.4 Schema Refactoring & Consolidation ✅
+
+**Reference**: `05c_mid_codeFactoring.md` (Full schema refactoring checklist)
+
+- [x] **Phase 1-4: Initial cleanup**
+  - [x] Added volume field to price_history table with backward-fill support
+  - [x] Implemented structured logging for provider fallback
+  - [x] Eliminated PriceQueryResult duplicate (use PricePointModel)
+  - [x] Documented volume field in database schema
+
+- [x] **Phase 7.1-7.5: Schema module organization**
+  - [x] Created 3 new schema modules: `provider.py`, `prices.py`, `refresh.py`
+  - [x] Moved all inline Pydantic definitions from api/v1/ to schemas/
+  - [x] Applied FA/FX naming conventions systematically (22 FX models renamed)
+  - [x] Consolidated FXSyncResponse with FA refresh operations in refresh.py
+  - [x] Added DateRangeModel to common.py for reusability
+  - [x] Result: 6 schema modules total (common, assets, provider, prices, refresh, fx)
+
+- [x] **Phase 7.6-7.7: Cleanup & Export**
+  - [x] Removed all unused imports from API files
+  - [x] Updated schemas/__init__.py with 32 exports (was 5)
+  - [x] Verified 0 inline Pydantic definitions in api/v1/ (grep validated)
+  - [x] Verified 0 import cycles (assets + fx routers tested)
+  - [x] All service tests passing (15/15)
+
+- [x] **Phase 7.8-7.9: Documentation & Validation**
+  - [x] Updated api-development-guide.md with schema organization section
+  - [x] Added FA vs FX comparison table (3-level vs 2-level nesting explained)
+  - [x] Updated FEATURE_COVERAGE_REPORT.md with schema consolidation section
+  - [x] Final validation: grep verified 0 old class names, 0 inline BaseModel
+
+**Schema Structure (Final)**:
+```
+backend/app/schemas/
+├── __init__.py          # 32 exports (Common + Assets + Provider + Prices + Refresh + FX)
+├── common.py            # BackwardFillInfo, DateRangeModel
+├── assets.py            # PricePointModel, CurrentValueModel, ScheduledInvestment*
+├── provider.py          # FA + FX provider assignment schemas
+├── prices.py            # FA price operations (upsert, delete, query)
+├── refresh.py           # FA refresh + FX sync (operational workflows)
+└── fx.py                # FX conversion, upsert, delete, pair sources
 ```
 
-**Nuove colonne:**
+**Metrics**:
+- Schema modules: 3 → **6** (+100%)
+- Inline Pydantic: 20+ → **0** (-100%)
+- Exports in __all__: 5 → **32** (+540%)
+- FX models with FX prefix: 0 → **22**
+- Import cycles: **0** (validated)
 
-| Campo                   | Tipo              | Descrizione                                       |
-| ----------------------- | ----------------- | ------------------------------------------------- |
-| `investment_type`       | VARCHAR(50) NULL  | Es. `stock`, `etf`, `bond`, `crypto`, `commodity` |
-| `short_description`     | VARCHAR(255) NULL | Breve descrizione leggibile                       |
-| `classification_params` | TEXT NULL (JSON)  | Dati di classificazione estesi                    |
+**Bug Fixes**:
+- Fixed missed SyncResponseModel reference in fx.py (line 194)
+- Fixed Pydantic field name clash (date → date_type alias)
 
-**Struttura JSON consigliata:**
+**Quality Gates (8/8 Passed)**:
+- ✅ Build & Import Pass
+- ✅ Lint Pass (no unused imports)
+- ✅ Unit tests pass (15/15 service tests)
+- ✅ API smoke tests pass
+- ✅ Docstrings present in all schema files
+- ✅ Documentation coherent
+- ✅ Grep clean (old names removed)
+- ✅ Log: "Schema consolidation completed"
 
-```json
-{
-  "geographic_area": {"USA": 0.65, "DEU": 0.25, "JPN": 0.10},
-  "base_currency": "USD",
-  "sector": "Technology",
-  "custom_tags": ["growth", "large-cap"]
-}
-```
+**Time Investment**: ~8 hours (Nov 13-18, 2025)
 
-**Regole:**
-
-* `geographic_area` usa **codici ISO-3166-A3** e valori **float 0.0 – 1.0**.
-* Nessuna validazione di schema a livello DB (flessibilità futura).
-* Colonne nullable, nessun backfill iniziale.
-
----
-
-## **5.2 API Endpoints — Completa**
-
-### **5.2.1 Asset Metadata Management**
-
-| Metodo    | Endpoint                                     | Descrizione                                                                                                            |
-| --------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **PATCH** | `/api/v1/assets/{asset_id}/metadata`         | Aggiorna parzialmente i metadati. Merge dei campi; `null` o `""` azzera. Valida ISO-A3 e float 0–1.0.                  |
-| **GET**   | `/api/v1/assets/{asset_id}`                  | Restituisce asset completo, inclusi `investment_type`, `short_description` e `classification_params` (JSON nativo).    |
-| **GET**   | `/api/v1/assets`                             | Lista asset con campi metadata; filtri opzionali: `?investment_type=etf`, `?base_currency=USD`.                        |
-| **POST**  | `/api/v1/assets/{asset_id}/metadata/refresh` | Re-importa manualmente i metadata dal provider associato (`import_asset_metadata()`). Ignorato nei refresh schedulati. |
+**Reports Generated**:
+- `SCHEMA_REFACTORING_PHASE7_1_5_REPORT.md`
+- `SCHEMA_REFACTORING_PHASE7_6_7_REPORT.md`
+- `SCHEMA_REFACTORING_COMPLETE_REPORT.md`
 
 ---
 
-### **5.2.2 Provider Assignment**
-
-| Metodo     | Endpoint                            | Descrizione                                                                                                                     |
-| ---------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **GET**    | `/api/v1/assets/{asset_id}/scraber` | Ritorna il provider assegnato all’asset.                                                                                        |
-| **POST**   | `/api/v1/assets/scraber/bulk`       | Assegna provider multipli `{asset_id, provider_code, provider_params}`.<br>Chiama `AssetSourceManager.bulk_assign_providers()`. |
-| **DELETE** | `/api/v1/assets/scraber/bulk`       | Rimuove provider assegnati `{asset_id}` o `{asset_id, provider_code}`.<br>Chiama `bulk_remove_providers()`.                     |
-
-**Comportamento:**
-
-* Design **bulk-first** (single = wrapper del bulk).
-* Transazioni uniche per payload.
-* Risposte con risultati per asset: `{asset_id, success, message}`.
-* Dopo un’assegnazione provider riuscita → trigger automatico di `import_asset_metadata()`.
-
----
-
-### **5.2.3 Asset Price Management**
-
-| Metodo     | Endpoint                              | Descrizione                                                                                       |
-| ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **POST**   | `/api/v1/assets/price/upsert/bulk`    | Upsert multiplo di prezzi giornalieri `{asset_id, prices:[{date, close, ...}]}`. SQL consolidato. |
-| **DELETE** | `/api/v1/assets/price/delete/bulk`    | Cancella prezzi per range `{asset_id, date_ranges:[{start_date, end_date?}]}` (range inclusivo).  |
-| **GET**    | `/api/v1/assets/{asset_id}/price-set` | Restituisce serie storica prezzi o valore sintetico per `SCHEDULED_YIELD`, con `backfill_info`.   |
-
----
-
-### **5.2.4 FX Management (da Phase 5 old, integrato)**
-
-| Metodo     | Endpoint                   | Descrizione                                                                          |
-| ---------- | -------------------------- | ------------------------------------------------------------------------------------ |
-| **POST**   | `/api/v1/fx/sync/bulk`     | Sincronizzazione automatica; segue `fx_currency_pair_sources` in ordine di priorità. |
-| **POST**   | `/api/v1/fx/rate-set/bulk` | Upsert manuale tassi FX (accetta coppie in qualsiasi ordine).                        |
-| **DELETE** | `/api/v1/fx/rate-set/bulk` | Cancella intervalli di tassi `{base, quote, start_date, end_date?}`.                 |
-| **POST**   | `/api/v1/fx/convert/bulk`  | Conversione valute per data o intervallo (`start_date` obbligatorio).                |
-
-**Regole comuni:**
-
-* Validazione Pydantic + controlli semantici (start ≤ end).
-* Query SQL compatte (multi-row INSERT, DELETE OR/IN).
-* Errori: 400/422 (validazione), 502/503 (provider).
-* Partial success con report per item.
-
----
-
-## **5.3 Provider Integration — `import_asset_metadata()`**
-
-Interfaccia in `backend/app/services/asset_source.py`:
-
-```python
-def import_asset_metadata(identifier: str, provider_params: dict) -> Optional[dict]:
-    """Importa i metadati dal provider esterno."""
-```
-
-**Implementazioni:**
-
-| Provider                 | Comportamento                                                                                                                                                                          |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **YahooFinanceProvider** | Usa `yfinance.info` per estrarre `quoteType` → `investment_type`, `longName` → `short_description`, `sector` + `currency`.<br>Converte `country` in codice **ISO-A3** con `pycountry`. |
-| **CSS Scraper**          | Ritorna `None`.                                                                                                                                                                        |
-| **Scheduled Investment** | Ritorna `None`.                                                                                                                                                                        |
-
-**Nota:** i provider che restituiscono `None` non aggiornano i campi metadata.
-
----
-
-## **5.4 Auto-Population Workflow**
-
-* Dopo `bulk_assign_providers()` → `provider.import_asset_metadata()`
-
-  * Se ritorna metadati validi → salva in `investment_type`, `short_description`, `classification_params`.
-  * Se `None` → lascia i campi invariati.
-* Endpoint `/metadata/refresh` → eseguito **solo su richiesta utente**.
-* Le modifiche manuali persistono finché l’utente non forza un refresh.
-
----
-
-## **5.5 Tests**
-
-* ✅ PATCH /metadata — CRUD, merge, clear, validazione ISO-A3 + float.
-* ✅ GET /asset — metadata inclusi nel payload.
-* ✅ Provider import (Yahoo vs CSS/Scheduled).
-* ✅ Auto-populate post-assign.
-* ✅ Refresh manuale ≠ scheduled.
-* ✅ API bulk integration (assign/remove, price upsert/delete, FX range, convert).
-
----
-
-## **5.6 Documentation**
-
-Aggiornare:
-
-* `docs/api-reference` → nuovi endpoint metadata + refresh.
-* `docs/fx/providers.md` → note su provider senza API key.
-* Swagger (`/docs`) → esempi JSON con ISO-A3 + float 0–1.0.
-* Esempi curl per bulk price/rate/convert.
-
----
-
-## **🧩 Design & Implementation Notes**
-
-```
-classification_params = JSON TEXT
-geographic_area = ISO-3166-A3 → float 0.0-1.0
-investment_type = VARCHAR (potenziale ENUM futuro)
-base_currency duplicata per query più rapide
-import_asset_metadata() = provider-level
-API = bulk-first, Pydantic, SQL ottimizzate
-CSS/ScheduledInvestment → None
-metadata restituiti direttamente via GET /assets e /assets/{id}
-```
+Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-1_IMPLEMENTATION_CHECKLIST.md`
 
 ---
 
 ## Phase 6: Advanced Provider Implementations (4-5 days)
 
-**Status**: 🔴 **NOT STARTED** - Requires Phase 3 completion
+**Status**: 🟡 **READY TO START** - Phase 5 (Schema consolidation) completed
 
 **Goal**: Implement additional specialized providers with advanced features (dividend history, search, metadata extraction).
+
+**Schema Organization Note**: Since Phase 5 schema refactoring:
+- All Pydantic schemas in `backend/app/schemas/` modules (not inline in api/v1/)
+- Provider schemas in `schemas/provider.py` (FA prefix: `FAProviderInfo`, `FABulkAssignRequest`, etc.)
+- Price schemas in `schemas/prices.py` (FA prefix: `FAUpsertItem`, `FABulkUpsertRequest`, etc.)
+- Asset models in `schemas/assets.py` (`PricePointModel`, `CurrentValueModel`, `HistoricalDataModel`)
+- Use imports: `from backend.app.schemas.assets import CurrentValueModel, HistoricalDataModel`
+- API endpoints in `api/v1/assets.py` use FA-prefixed schemas for requests/responses
+
+**Provider Registration**: All providers use `@register_provider(AssetProviderRegistry)` decorator with auto-discovery.
 
 ### 6.1 JustETF Provider
 
@@ -1536,9 +1524,14 @@ metadata restituiti direttamente via GET /assets e /assets/{id}
 
 ## Phase 7: Search & Cache System (3-4 days)
 
-**Status**: 🔴 **NOT STARTED** - Requires infrastructure planning
+**Status**: 🟡 **READY TO START** - Provider infrastructure in place
 
 **Goal**: Implement unified search and caching system for asset provider queries with fuzzy matching and automatic cache management.
+
+**Schema Organization Note**: 
+- Search results will use `PricePointModel` from `schemas/assets.py` for price data
+- API responses use FA schemas from `schemas/provider.py` and `schemas/assets.py`
+- No inline Pydantic models - all schemas imported from dedicated modules
 
 ### 7.1 Cache Infrastructure
 
@@ -1690,9 +1683,18 @@ metadata restituiti direttamente via GET /assets e /assets/{id}
 
 ## Phase 8: Documentation & Developer Guides (2-3 days)
 
-**Status**: 🔴 **NOT STARTED** - Should be done at end
+**Status**: 🟡 **PARTIALLY COMPLETE** - Schema organization documented in Phase 5
 
 **Goal**: Comprehensive documentation for asset provider system, including developer guides, API reference, and integration examples.
+
+**Already Documented (Phase 5)**:
+- ✅ `api-development-guide.md` - Schema organization section with FA vs FX comparison table
+- ✅ `docs/financial-calculations/` - 4 guides (day count, interest types, compounding, scheduled investment)
+- ✅ `docs/testing/` - 5 guides (utils, services, database, API, synthetic yield E2E)
+- ✅ `docs/database-schema.md` - Volume field, schema refactoring notes
+- ✅ `FEATURE_COVERAGE_REPORT.md` - Schema consolidation section
+
+**Remaining**: Provider-specific guides, API reference updates
 
 ### 8.1 Asset Provider Development Guide
 
@@ -1728,13 +1730,20 @@ metadata restituiti direttamente via GET /assets e /assets/{id}
 - [ ] **Update API documentation**
   - File: `docs/api-reference.md` or OpenAPI spec
   - Document all asset-related endpoints:
-    - Provider discovery (`GET /asset-providers`)
-    - Provider search (`GET /asset-providers/{code}/search`)
-    - Provider assignment (bulk + single)
-    - Price management (bulk CRUD + query)
+    - Provider discovery (`GET /assets/providers`)
+    - Provider search (`GET /assets/providers/{code}/search`)
+    - Provider assignment (bulk + single) - uses `FABulkAssignRequest` from `schemas/provider.py`
+    - Price management (bulk CRUD + query) - uses `FABulkUpsertRequest`, `FABulkDeleteRequest` from `schemas/prices.py`
+    - Price queries - returns `List[PricePointModel]` from `schemas/assets.py`
     - Metadata management (`PATCH /assets/{id}/metadata`)
     - Metadata refresh (`POST /assets/{id}/metadata/refresh`)
     - Search & cache endpoints
+
+- [ ] **Document schema organization**
+  - Reference: 6 schema modules (common, assets, provider, prices, refresh, fx)
+  - Note: All request/response models use FA prefix (Financial Assets)
+  - Example: `FAProviderInfo`, `FABulkAssignRequest`, `FAUpsertItem`
+  - Import pattern: `from backend.app.schemas.provider import FAProviderInfo`
 
 - [ ] **Add request/response examples**
   - Show realistic payloads for each endpoint
