@@ -311,104 +311,121 @@
 
 ---
 
-## Phase 3: Core Service Layer (2 days)
+## Phase 3: Core Service Layer (2 days) ✅ COMPLETED
 
-### 3.1 Metadata Normalization Service
+**Status**: ✅ **COMPLETED** - November 19, 2025  
+**Duration**: ~50 minutes total (3.1: 15min, 3.2: 20min, 3.3: 15min)
 
-- [ ] **Create metadata service module**
-  - File: `backend/app/services/asset_metadata.py` (NEW)
-  - Class: `AssetMetadataService` (static methods)
+### 3.1 Metadata Normalization Service ✅ COMPLETED
 
-- [ ] **Implement parse_classification_params()**
-  - Signature: `@staticmethod def parse_classification_params(json_str: Optional[str]) -> ClassificationParamsModel | None`
+- [x] **Create metadata service module**
+  - File: ✅ `backend/app/services/asset_metadata.py` (264 lines)
+  - Class: ✅ `AssetMetadataService` (static methods)
+  - **Result**: Service module created and tested
+
+- [x] **Implement parse_classification_params()**
+  - Signature: ✅ `@staticmethod def parse_classification_params(json_str: Optional[str]) -> ClassificationParamsModel | None`
   - Logic:
-    1. If `json_str` is None or empty → return None
-    2. Parse JSON → dict
-    3. Validate with `ClassificationParamsModel(**data)`
-    4. Return validated model
-  - **Reuse**: Import geo_normalization utilities
-  - Raises: ValueError with details if validation fails
+    1. ✅ If `json_str` is None or empty → return None
+    2. ✅ Parse JSON → dict
+    3. ✅ Validate with `ClassificationParamsModel(**data)`
+    4. ✅ Return validated model
+  - **Reuse**: ✅ Import geo_normalization utilities (in Pydantic validator)
+  - **Test**: ✅ Passed - `✅ Parse: stock, geo_area keys: ['USA', 'ITA']`
 
-- [ ] **Implement serialize_classification_params()**
-  - Signature: `@staticmethod def serialize_classification_params(model: ClassificationParamsModel | None) -> str | None`
+- [x] **Implement serialize_classification_params()**
+  - Signature: ✅ `@staticmethod def serialize_classification_params(model: ClassificationParamsModel | None) -> str | None`
   - Logic:
-    1. If model is None → return None
-    2. Convert to dict: `model.model_dump(exclude_none=True)`
-    3. Serialize to JSON: `json.dumps(data)`
-    4. Return JSON string
+    1. ✅ If model is None → return None
+    2. ✅ Convert to dict: `model.model_dump(exclude_none=True)`
+    3. ✅ Serialize to JSON: `json.dumps(data)`
+    4. ✅ Return JSON string
+  - **Test**: ✅ Passed - `✅ Serialize: 77 chars`
 
-- [ ] **Implement compute_metadata_diff()**
-  - Signature: `@staticmethod def compute_metadata_diff(old: ClassificationParamsModel | None, new: ClassificationParamsModel | None) -> list[MetadataChangeDetail]`
+- [x] **Implement compute_metadata_diff()**
+  - Signature: ✅ `@staticmethod def compute_metadata_diff(old, new) -> list[MetadataChangeDetail]`
   - Logic:
-    1. Compare old vs new field by field
-    2. Track changes: `{ field, old_value, new_value }`
-    3. Return list of changes
-  - Special handling for geographic_area (dict comparison)
+    1. ✅ Compare old vs new field by field
+    2. ✅ Track changes: `{ field, old_value, new_value }`
+    3. ✅ Return list of changes
+  - Special handling: ✅ geographic_area (dict comparison)
+  - **Test**: ✅ Passed - `✅ Diff: 2 changes detected`
 
-- [ ] **Implement apply_partial_update()**
-  - Signature: `@staticmethod def apply_partial_update(current: ClassificationParamsModel | None, patch: PatchAssetMetadataRequest) -> ClassificationParamsModel`
+- [x] **Implement apply_partial_update()**
+  - Signature: ✅ `@staticmethod def apply_partial_update(current, patch) -> ClassificationParamsModel`
   - Logic (PATCH semantics):
-    1. Start with current params (or empty if None)
-    2. For each field in patch:
+    1. ✅ Start with current params (or empty if None)
+    2. ✅ For each field in patch:
        - **Not present** in patch dict (absent key) → **ignore**, keep current
        - **null in JSON** (None in Python) → **clear** field
        - **Value present** → **update** field
-    3. Special: geographic_area is **full replace** (no merge)
-    4. Validate result with `ClassificationParamsModel`
-    5. Return updated model
-  - **Note**: Use `patch.model_dump(exclude_unset=True)` to distinguish absent vs null
+    3. ✅ Special: geographic_area is **full replace** (no merge)
+    4. ✅ Validate result with `ClassificationParamsModel`
+    5. ✅ Return updated model
+  - **Note**: ✅ Use `patch.model_dump(exclude_unset=True)` to distinguish absent vs null
+  - **Test**: ✅ Passed - `✅ PATCH: sector cleared, investment_type=stock`
 
-### 3.2 Provider Integration in AssetSourceManager
+- [x] **BONUS: Implement merge_provider_metadata()**
+  - Signature: ✅ `@staticmethod def merge_provider_metadata(current, provider_data) -> ClassificationParamsModel`
+  - Logic: Provider data merges with current (provider takes precedence)
+  - **Status**: ✅ Implemented for Phase 4 provider integration
 
-- [ ] **Update bulk_assign_providers() for auto-populate**
-  - File: `backend/app/services/asset_source.py` (UPDATE, ~line 250)
+### 3.2 Provider Integration in AssetSourceManager ✅ COMPLETED
+
+- [x] **Update bulk_assign_providers() for auto-populate**
+  - File: ✅ `backend/app/services/asset_source.py` (UPDATED, line ~274)
   - After each successful assignment:
-    1. Call `provider.fetch_asset_metadata(identifier, provider_params)`
-    2. If metadata returned:
-       - Normalize via `AssetMetadataService`
-       - Compute diff
-       - Persist to `asset.classification_params`
-       - Add `metadata_changes` to result dict
-    3. If metadata is None or provider doesn't support → skip (no error)
-  - **Logging**: Use structlog to log metadata auto-populate events
-  - **Reuse**: Import `AssetMetadataService` methods
+    1. ✅ Call `provider.fetch_asset_metadata(identifier, provider_params)`
+    2. ✅ If metadata returned:
+       - ✅ Normalize via `AssetMetadataService`
+       - ✅ Compute diff
+       - ✅ Persist to `asset.classification_params`
+       - ✅ Add `metadata_changes` to result dict
+    3. ✅ If metadata is None or provider doesn't support → skip (no error)
+  - **Logging**: ✅ Uses structlog to log metadata auto-populate events
+  - **Reuse**: ✅ Import `AssetMetadataService` methods
+  - **Error Handling**: ✅ Non-blocking (logs warning, doesn't fail assignment)
 
-- [ ] **Create manual refresh method**
-  - File: `backend/app/services/asset_source.py` (UPDATE)
-  - Method: `@staticmethod async def refresh_asset_metadata(asset_id: int, session: AsyncSession) -> dict`
+- [x] **Create refresh_asset_metadata() method**
+  - File: ✅ `backend/app/services/asset_source.py` (UPDATED, ~165 lines)
+  - Method: ✅ `@staticmethod async def refresh_asset_metadata(asset_id: int, session: AsyncSession) -> dict`
   - Logic:
-    1. Load asset + provider assignment
-    2. If no provider → return `{ success: False, message: "No provider assigned" }`
-    3. Get provider instance
-    4. Call `fetch_asset_metadata()`
-    5. If None → return `{ success: False, message: "Provider doesn't support metadata" }`
-    6. Normalize, compute diff, persist
-    7. Return `{ success: True, message: "...", changes: [...] }`
+    1. ✅ Load asset + provider assignment
+    2. ✅ If no provider → return `{ success: False, message: "No provider assigned" }`
+    3. ✅ Get provider instance
+    4. ✅ Call `fetch_asset_metadata()`
+    5. ✅ If None → return `{ success: False, message: "Provider doesn't support metadata" }`
+    6. ✅ Normalize, compute diff, persist
+    7. ✅ Return `{ success: True, message: "...", changes: [...] }`
+  - **Result**: Full implementation with comprehensive error handling
 
-- [ ] **Create bulk refresh method**
-  - File: `backend/app/services/asset_source.py` (UPDATE)
-  - Method: `@staticmethod async def bulk_refresh_metadata(asset_ids: list[int], session: AsyncSession) -> dict`
+- [x] **Create bulk_refresh_metadata() method**
+  - File: ✅ `backend/app/services/asset_source.py` (UPDATED, ~40 lines)
+  - Method: ✅ `@staticmethod async def bulk_refresh_metadata(asset_ids: list[int], session: AsyncSession) -> dict`
   - Logic:
-    1. For each asset_id: call `refresh_asset_metadata()`
-    2. Collect results (partial success)
-    3. Return `{ results: [...], success_count: N, failed_count: M }`
-  - **Optimization**: Can be parallelized with `asyncio.gather()`
+    1. ✅ For each asset_id: call `refresh_asset_metadata()`
+    2. ✅ Collect results (partial success)
+    3. ✅ Return `{ results: [...], success_count: N, failed_count: M }`
+  - **Optimization**: ✅ Comment added noting parallelization possibility with `asyncio.gather()`
+  - **Result**: Full bulk implementation with success/failure counts
 
-### 3.3 PATCH Metadata Service Method
+### 3.3 PATCH Metadata Service Method ✅ COMPLETED
 
-- [ ] **Create update_asset_metadata() method**
-  - File: `backend/app/services/asset_metadata.py` (UPDATE)
-  - Method: `@staticmethod async def update_asset_metadata(asset_id: int, patch: PatchAssetMetadataRequest, session: AsyncSession) -> AssetMetadataResponse`
+- [x] **Create update_asset_metadata() method**
+  - File: ✅ `backend/app/services/asset_metadata.py` (UPDATED, +100 lines)
+  - Method: ✅ `@staticmethod async def update_asset_metadata(asset_id: int, patch: PatchAssetMetadataRequest, session: AsyncSession) -> AssetMetadataResponse`
   - Logic:
-    1. Load asset from DB
-    2. Parse current `classification_params`
-    3. Apply patch via `apply_partial_update()`
-    4. Validate result (geographic_area block validation)
-    5. Serialize back to JSON
-    6. Update asset.classification_params
-    7. Commit transaction
-    8. Return `AssetMetadataResponse`
-  - Error handling: 422 if geographic_area validation fails
+    1. ✅ Load asset from DB (`select(Asset).where(Asset.id == asset_id)`)
+    2. ✅ Parse current `classification_params` via `parse_classification_params()`
+    3. ✅ Apply patch via `apply_partial_update()`
+    4. ✅ Validate result (geographic_area block validation in Pydantic)
+    5. ✅ Serialize back to JSON via `serialize_classification_params()`
+    6. ✅ Update asset.classification_params
+    7. ✅ Commit transaction (`await session.commit()`)
+    8. ✅ Refresh asset (`await session.refresh(asset)`)
+    9. ✅ Return `AssetMetadataResponse`
+  - Error handling: ✅ ValueError if asset not found or validation fails (422 in API layer)
+  - **Result**: Full async PATCH implementation ready for API endpoints
 
 ---
 
