@@ -26,6 +26,15 @@ from backend.app.schemas.assets import (
     PricePointModel,
     HistoricalDataModel,
     AssetProviderAssignmentModel,
+    # Metadata & classification (NEW)
+    ClassificationParamsModel,
+    PatchAssetMetadataRequest,
+    AssetMetadataResponse,
+    MetadataChangeDetail,
+    MetadataRefreshResult,
+    BulkAssetReadRequest,
+    BulkMetadataRefreshRequest,
+    BulkMetadataRefreshResponse,
     )
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -71,6 +80,15 @@ __all__ = [
     "PricePointModel",
     "HistoricalDataModel",
     "AssetProviderAssignmentModel",
+    # Assets: Metadata & classification
+    "ClassificationParamsModel",
+    "PatchAssetMetadataRequest",
+    "AssetMetadataResponse",
+    "MetadataChangeDetail",
+    "MetadataRefreshResult",
+    "BulkAssetReadRequest",
+    "BulkMetadataRefreshRequest",
+    "BulkMetadataRefreshResponse",
     # Provider
     "FAProviderInfo",
     "FABulkAssignRequest",
@@ -97,4 +115,4 @@ __all__ = [
     "FXBulkDeleteResponse",
     "FXPairSourcesResponse",
     "FXCreatePairSourcesRequest",
-    ]
+]

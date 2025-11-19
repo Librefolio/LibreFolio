@@ -116,9 +116,11 @@
 
 ---
 
-## Phase 2: Pydantic Schemas (2 days)
+## Phase 2: Pydantic Schemas (2 days) ✅ COMPLETED
 
-**Priority**: Define ALL schemas BEFORE implementing API endpoints
+**Status**: ✅ **COMPLETED** - November 19, 2025
+
+**Note**: All schemas defined in dedicated modules following Phase 5 refactoring patterns (no inline definitions).
 
 ### 2.1 Review Existing Schemas (Reuse Analysis)
 
@@ -146,18 +148,19 @@
        - Return validated dict or raise ValueError with details
   - **Imports**: `pycountry` ✅, `decimal.Decimal`, `typing`, `backend.app.utils.financial_math.parse_decimal_value`
 
-- [ ] **Create tests for geo_normalization**
-  - File: `backend/test_scripts/test_utilities/test_geo_normalization.py` (NEW)
+- [x] **Create tests for geo_normalization**
+  - File: ✅ `backend/test_scripts/test_utilities/test_geo_normalization.py` (240 lines)
   - Test cases:
-    1. Valid ISO-3166-A3 codes (USA, GBR, ITA)
-    2. ISO-2 to ISO-3 conversion (US → USA, GB → GBR)
-    3. Country names to ISO-3 (United States → USA, Italy → ITA)
-    4. Invalid country → raises ValueError
-    5. Weights as strings → converts to Decimal
-    6. Sum within tolerance → quantizes correctly
-    7. Sum out of tolerance → renormalizes on smallest weight
-    8. Sum too far (e.g., 0.5 total) → raises ValueError
-  - Run: `./test_runner.py utils geo-normalization`
+    1. ✅ Valid ISO-3166-A3 codes (USA, GBR, ITA)
+    2. ✅ ISO-2 to ISO-3 conversion (US → USA, GB → GBR)
+    3. ✅ Country names to ISO-3 (United States → USA, Italy → ITA)
+    4. ✅ Invalid country → raises ValueError
+    5. ✅ Weights as strings → converts to Decimal
+    6. ✅ Sum within tolerance → quantizes correctly
+    7. ✅ Sum out of tolerance → renormalizes on smallest weight
+    8. ✅ Sum too far (e.g., 0.5 total) → raises ValueError
+  - Run: ✅ `./test_runner.py utils geo-normalization`
+  - **Result**: ✅ ALL TESTS PASSING (added to test_runner.py)
 
 - [ ] **Create GeographicArea Pydantic model**
   - File: `backend/app/schemas/assets.py` (UPDATE)
@@ -209,43 +212,21 @@
 
 ### 2.3 Metadata PATCH Request/Response Schemas
 
-- [ ] **Create PATCH metadata request schema**
-  - File: `backend/app/schemas/assets.py` (UPDATE)
-  - Model:
-    ```python
-    class PatchAssetMetadataRequest(BaseModel):
-        """PATCH metadata request (partial update).
-        
-        Rules:
-        - Absent fields: ignored (no update)
-        - null/"": clear field
-        - geographic_area: full block replace (no merge)
-        """
-        model_config = ConfigDict(extra="forbid")
-        
-        investment_type: Optional[str] = None
-        short_description: Optional[str] = None
-        geographic_area: Optional[dict[str, Decimal] | None] = None  # None = ignore, null in JSON = clear
-        sector: Optional[str] = None
-    ```
+- [x] **Create PATCH metadata request schema**
+  - File: ✅ `backend/app/schemas/assets.py` (UPDATED)
+  - Model: ✅ `PatchAssetMetadataRequest` created
+  - Fields: investment_type, short_description, geographic_area, sector (all Optional)
+  - PATCH semantics: absent = ignore, null = clear, value = update
+  - geographic_area: full block replace (no partial merge)
+  - ConfigDict: extra="forbid"
 
-- [ ] **Create metadata response schemas**
-  - File: `backend/app/schemas/assets.py` (UPDATE)
-  - Models:
-    ```python
-    class AssetMetadataResponse(BaseModel):
-        """Asset with metadata fields."""
-        asset_id: int
-        display_name: str
-        identifier: str
-        currency: str
-        classification_params: Optional[ClassificationParamsModel] = None
-        
-    class MetadataChangeDetail(BaseModel):
-        """Single field change."""
-        field: str
-        old_value: Any
-        new_value: Any
+- [x] **Create metadata response schemas**
+  - File: ✅ `backend/app/schemas/assets.py` (UPDATED)
+  - Models created:
+    - ✅ `AssetMetadataResponse` - asset with metadata (asset_id, display_name, identifier, currency, classification_params)
+    - ✅ `MetadataChangeDetail` - single field change (field, old_value, new_value)
+    - ✅ `MetadataRefreshResult` - per-asset refresh result (asset_id, success, message, changes, warnings)
+  - Follows FA pattern: { asset_id, success, message, ... }
         
     class MetadataRefreshResult(BaseModel):
         """Result of metadata refresh for single asset."""
@@ -258,7 +239,7 @@
 
 ### 2.4 Bulk Read Schemas
 
-- [ ] **Create bulk asset read request**
+- [x] **Create bulk asset read request**
   - File: `backend/app/schemas/assets.py` (UPDATE)
   - Check if `BulkAssetIdsRequest` already exists in provider.py or prices.py
   - If exists: **REUSE**, add to assets.py imports
@@ -271,7 +252,7 @@
         asset_ids: list[int] = Field(..., min_length=1, max_length=1000, description="Asset IDs to fetch")
     ```
 
-- [ ] **Create bulk metadata refresh request/response**
+- [x] **Create bulk metadata refresh request/response**
   - File: `backend/app/schemas/assets.py` (UPDATE)
   - Models:
     ```python
@@ -290,7 +271,7 @@
 
 ### 2.5 Provider Metadata Fetch Schema
 
-- [ ] **Define provider metadata return structure**
+- [x] **Define provider metadata return structure**
   - File: Add docstring to `AssetSourceProvider` abstract class
   - New method signature (to be implemented by providers):
     ```python
@@ -314,24 +295,19 @@
 
 ### 2.6 Schema Export Updates
 
-- [ ] **Update schemas/__init__.py**
-  - File: `backend/app/schemas/__init__.py`
-  - Add exports:
-    ```python
-    from backend.app.schemas.assets import (
-        # ...existing...
-        GeographicAreaModel,
-        ClassificationParamsModel,
-        PatchAssetMetadataRequest,
-        AssetMetadataResponse,
-        MetadataChangeDetail,
-        MetadataRefreshResult,
-        BulkAssetReadRequest,
-        BulkMetadataRefreshRequest,
-        BulkMetadataRefreshResponse,
-    )
-    ```
-  - Update `__all__` list
+- [x] **Update schemas/__init__.py**
+  - File: ✅ `backend/app/schemas/__init__.py` (UPDATED)
+  - Added 8 new imports from assets.py:
+    - ✅ ClassificationParamsModel
+    - ✅ PatchAssetMetadataRequest
+    - ✅ AssetMetadataResponse
+    - ✅ MetadataChangeDetail
+    - ✅ MetadataRefreshResult
+    - ✅ BulkAssetReadRequest
+    - ✅ BulkMetadataRefreshRequest
+    - ✅ BulkMetadataRefreshResponse
+  - Updated `__all__` list: 32 → 40 exports (+25%)
+  - **Verification**: ✅ `from backend.app.schemas import ClassificationParamsModel` works
 
 ---
 
