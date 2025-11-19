@@ -358,10 +358,32 @@ class Asset(SQLModel, table=True):
       }
     }
 
+    Classification and metadata fields:
+    - classification_params: JSON containing ClassificationParamsModel structure
+
+    The classification_params JSON should conform to ClassificationParamsModel schema:
+    {
+      "investment_type": "stock" | "etf" | "bond" | etc.,
+      "short_description": "Brief asset description (max 500 chars)",
+      "geographic_area": {
+        "USA": 0.60,    # ISO-3166-A3 codes
+        "EUR": 0.30,    # Weights must sum to 1.0 (±1e-6 tolerance)
+        "GBR": 0.10     # Quantized to 4 decimals
+      },
+      "sector": "Technology" | "Healthcare" | etc.  # Optional
+    }
+
+    Geographic area validation:
+    - Country codes must be valid ISO-3166-A3 (e.g., USA, GBR, ITA)
+    - Weights must sum to 1.0 within tolerance (abs(sum - 1) <= 1e-6)
+    - Weights quantized to 4 decimals (ROUND_HALF_EVEN)
+    - Renormalization applied if sum != 1.0 (adjusts smallest weight)
+
     Notes:
     - face_value (principal) is calculated from transactions (BUY - SELL)
     - maturity_date is the last period's end_date in the schedule
     - Validation is done via ScheduledInvestmentSchedule Pydantic model
+    - Classification validation done via ClassificationParamsModel Pydantic model
     """
     __tablename__ = "assets"
 
@@ -380,6 +402,16 @@ class Asset(SQLModel, table=True):
     # Should contain ScheduledInvestmentSchedule structure
     # Validated when loaded using ScheduledInvestmentSchedule(**json.loads(interest_schedule))
     interest_schedule: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+    # Classification and metadata (JSON TEXT)
+    # Structure: {
+    #   "investment_type": "stock" | "etf" | "bond" | etc.,
+    #   "short_description": "Brief asset description",
+    #   "geographic_area": {"USA": 0.60, "EUR": 0.30, "GBR": 0.10},  # ISO-3166-A3, sum=1.0
+    #   "sector": "Technology" | "Healthcare" | etc.  # Optional
+    # }
+    # Validation is done via ClassificationParamsModel Pydantic model when loaded
+    classification_params: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     active: bool = Field(default=True)
 

@@ -25,6 +25,7 @@ httpx = "*"
 beautifulsoup4 = "*"
 argcomplete = "*"
 sqlglot = "*"
+pycountry = "*"
 
 [dev-packages]
 pytest = "*"

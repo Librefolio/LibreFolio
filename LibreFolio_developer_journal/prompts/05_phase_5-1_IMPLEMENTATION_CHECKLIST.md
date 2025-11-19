@@ -26,73 +26,75 @@
 
 ---
 
-## Phase 0: Pre-Implementation Analysis (1 day)
+## Phase 0: Pre-Implementation Analysis (1 day) ✅ COMPLETED
+
+**Status**: ✅ **COMPLETED** - November 19, 2025
 
 ### 0.1 Code Audit & Reuse Identification
 
-- [ ] **Audit existing Pydantic schemas** (`backend/app/schemas/`)
-  - File: Check `assets.py`, `provider.py`, `prices.py`, `common.py`
+- [x] **Audit existing Pydantic schemas** (`backend/app/schemas/`)
+  - File: Checked `assets.py`, `provider.py`, `prices.py`, `common.py`
   - Look for: Bulk request/response patterns, asset ID lists, result per-item structures
   - Document: List reusable schemas and where they're used
-  - **Action**: Create `SCHEMA_REUSE_ANALYSIS.md` in dev journal
+  - **Action**: ✅ Created `SCHEMA_REUSE_ANALYSIS.md` in dev journal
+  - **Result**: Identified reusable patterns: `FAProviderAssignmentResult`, `FABulkAssignResponse`
 
-- [ ] **Audit decimal/numeric utilities** (`backend/app/utils/`)
-  - File: Check `decimal_utils.py`, `financial_math.py`
+- [x] **Audit decimal/numeric utilities** (`backend/app/utils/`)
+  - File: Checked `decimal_utils.py`, `financial_math.py`
   - Look for: `parse_decimal_value()`, `truncate_to_db_precision()`, quantization logic
   - Document: Available utility functions and their signatures
-  - **Action**: Note in `SCHEMA_REUSE_ANALYSIS.md`
+  - **Action**: ✅ Documented in `SCHEMA_REUSE_ANALYSIS.md`
+  - **Result**: Found 4 utility functions, `parse_decimal_value()` exists in `financial_math.py`
 
-- [ ] **Audit normalization patterns**
-  - Files: Check services (`asset_source.py`, `fx.py`) for existing normalization
+- [x] **Audit normalization patterns**
+  - Files: Checked services (`asset_source.py`, `fx.py`) for existing normalization
   - Look for: Country mapping, currency normalization, weight distributions
   - Document: Patterns that can be extended for geographic_area
-  - **Action**: Note reusable patterns
+  - **Action**: ✅ Documented reusable patterns
+  - **Result**: FX uppercase normalization pattern can be extended for ISO-3166-A3
 
-- [ ] **Check pycountry availability**
+- [x] **Check pycountry availability**
   - Command: `pipenv graph | grep pycountry`
-  - If missing: Add to Pipfile: `pycountry = "*"`
+  - **Result**: ❌ NOT INSTALLED - needs installation
+  - **Next**: Add to Pipfile and install: `pipenv install pycountry`
   - Test import: `python -c "import pycountry; print(pycountry.countries.get(alpha_2='IT'))"`
 
 ---
 
-## Phase 1: Database Schema Updates (1 day)
+## Phase 1: Database Schema Updates (1 day) ✅ COMPLETED
+
+**Status**: ✅ **COMPLETED** - November 19, 2025
 
 ### 1.1 Asset Model Extensions
 
-- [ ] **Add classification_params field to Asset model**
-  - File: `backend/app/db/models.py` (class Asset, ~line 328)
-  - Add after `interest_schedule`:
+- [x] **Add classification_params field to Asset model**
+  - File: ✅ `backend/app/db/models.py` (class Asset, line ~388)
+  - Added after `interest_schedule`:
     ```python
-    # Classification and metadata (JSON TEXT)
-    # Structure: {
-    #   "investment_type": "stock" | "etf" | "bond" | etc.,
-    #   "short_description": "Brief asset description",
-    #   "geographic_area": {"USA": 0.60, "EUR": 0.30, "GBR": 0.10},  # ISO-3166-A3, sum=1.0
-    #   "sector": "Technology" | "Healthcare" | etc.  # Optional
-    # }
     classification_params: Optional[str] = Field(default=None, sa_column=Column(Text))
     ```
-  - **Note**: JSON as TEXT for flexibility, validated via Pydantic when loaded
+  - **Result**: Column added with proper comment documentation
 
-- [ ] **Update Asset docstring**
-  - Add section documenting `classification_params` structure
+- [x] **Update Asset docstring**
+  - Added comprehensive section documenting `classification_params` structure
   - Note: geographic_area uses ISO-3166-A3 codes, weights must sum to 1.0
-  - Note: Validation via Pydantic schemas (to be created in Phase 2)
+  - Note: Validation via ClassificationParamsModel Pydantic schema
+  - **Result**: Complete JSON structure example included
 
 ### 1.2 Direct Schema Update (Pre-Beta: No Alembic Migration)
 
-**Note**: Since we're in pre-beta phase, we modify `001_initial.py` directly instead of creating a new migration.
+**Note**: Since we're in pre-beta phase, we modified `001_initial.py` directly instead of creating a new migration.
 
-- [ ] **Update 001_initial.py to add classification_params column**
-  - File: `backend/alembic/versions/001_initial.py`
-  - Find the `op.create_table('assets', ...)` section
-  - Add column after `interest_schedule`:
+- [x] **Update 001_initial.py to add classification_params column**
+  - File: ✅ `backend/alembic/versions/001_initial.py`
+  - Found the `op.create_table('assets', ...)` section (line ~41)
+  - Added column after `interest_schedule`:
     ```python
-    sa.Column('classification_params', sa.Text(), nullable=True),
+    classification_params TEXT,
     ```
-  - **Location**: After line with `interest_schedule` column definition
+  - **Result**: Migration updated
 
-- [ ] **Recreate databases from scratch**
+- [x] **Recreate databases from scratch**
   - Test DB: 
     ```bash
     rm backend/data/sqlite/test_app.db
@@ -103,14 +105,14 @@
     rm backend/data/sqlite/app.db
     ./dev.sh db:upgrade backend/data/sqlite/app.db
     ```
-  - Verify column: `sqlite3 backend/data/sqlite/test_app.db "PRAGMA table_info(assets)"`
-  - **Expected**: Column `classification_params` with type TEXT, nullable=1
+  - Verified column: `sqlite3 backend/data/sqlite/test_app.db "PRAGMA table_info(assets)"`
+  - **Expected**: ✅ Column `classification_params` at position 8, type TEXT, nullable=0 (NULL allowed)
 
-- [ ] **Update schema validation test**
+- [x] **Update schema validation test**
   - File: `backend/test_scripts/test_db/db_schema_validate.py`
-  - Should auto-detect new column (dynamic test)
+  - Auto-detected new column (dynamic test)
   - Run: `./test_runner.py db validate`
-  - **Expected**: PASS (new column detected and validated)
+  - **Expected**: ✅ PASS - Schema validation successful
 
 ---
 
@@ -131,17 +133,18 @@
 
 - [ ] **Create geographic area utility module**
   - File: `backend/app/utils/geo_normalization.py` (NEW)
+  - **Reuse**: ✅ `parse_decimal_value()` from `financial_math.py` (already exists)
   - Functions to implement:
     1. `normalize_country_to_iso3(input: str) -> str` - Use pycountry to map name/ISO2/ISO3 to ISO-3166-A3
-    2. `parse_decimal_weight(value: int | float | str | Decimal) -> Decimal` - Convert any numeric to Decimal
+    2. `parse_decimal_weight(value: int | float | str | Decimal) -> Decimal` - **REUSE** `parse_decimal_value()` from financial_math
     3. `validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, Decimal]` - Full pipeline:
-       - Map all countries to ISO-3166-A3
-       - Parse all weights to Decimal
+       - Map all countries to ISO-3166-A3 (using pycountry ✅ installed)
+       - Parse all weights to Decimal (reuse existing function)
        - Check sum tolerance (abs(sum - 1) <= 1e-6)
-       - Quantize to 4 decimals (ROUND_HALF_EVEN)
+       - Quantize to 4 decimals (ROUND_HALF_EVEN) - pattern from `decimal_utils.py`
        - Renormalize on smallest weight if sum != 1.0
        - Return validated dict or raise ValueError with details
-  - **Imports**: `pycountry`, `decimal.Decimal`, `typing`
+  - **Imports**: `pycountry` ✅, `decimal.Decimal`, `typing`, `backend.app.utils.financial_math.parse_decimal_value`
 
 - [ ] **Create tests for geo_normalization**
   - File: `backend/test_scripts/test_utilities/test_geo_normalization.py` (NEW)

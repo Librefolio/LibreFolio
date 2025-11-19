@@ -39,6 +39,7 @@ def upgrade() -> None:
                                 asset_type        VARCHAR(14) NOT NULL,
                                 valuation_model   VARCHAR(15) NOT NULL,
                                 interest_schedule TEXT,
+                                classification_params TEXT,
                                 active            BOOLEAN     NOT NULL,
                                 created_at        DATETIME    NOT NULL,
                                 updated_at        DATETIME    NOT NULL
