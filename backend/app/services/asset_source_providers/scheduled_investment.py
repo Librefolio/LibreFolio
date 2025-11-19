@@ -651,3 +651,21 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 error_code="INVALID_PARAMS",
                 details={"error": str(e)}
                 )
+
+    async def fetch_asset_metadata(
+        self,
+        identifier: str,
+        provider_params: dict | None = None,
+    ) -> dict | None:
+        """
+        Fetch asset metadata (NOT SUPPORTED for synthetic scheduled investment).
+
+        Scheduled investment is a synthetic provider that calculates
+        values from interest schedules. No external metadata available.
+
+        Returns:
+            None (metadata not supported)
+        """
+        # Synthetic provider - no external metadata
+        return None
+
