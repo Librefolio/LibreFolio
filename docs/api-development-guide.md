@@ -1,7 +1,7 @@
 # API Development Guide - LibreFolio
 
-**Version**: 1.0  
-**Last Updated**: November 2, 2025  
+**Version**: 2.1  
+**Last Updated**: November 18, 2025  
 **Target Audience**: Developers contributing to LibreFolio
 
 ---
@@ -32,6 +32,7 @@ LibreFolio uses **FastAPI** for REST API endpoints with the following stack:
 - **Pattern**: 3-layer architecture (API → Service → Database)
 
 **Key Principles**:
+
 - ✅ **Bulk-first**: Where multiple items can be processed, prefer bulk endpoints
 - ✅ **Async**: All endpoints and database operations are async
 - ✅ **Validation**: Comprehensive Pydantic models for request/response
@@ -100,6 +101,7 @@ from typing import Optional
 from decimal import Decimal
 from sqlalchemy import Column, Numeric
 
+
 class YourModel(SQLModel, table=True):
     """
     Brief description of what this model represents.
@@ -107,27 +109,27 @@ class YourModel(SQLModel, table=True):
     Usage: Explain when/how this is used
     """
     __tablename__ = "your_table"
-    
+
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(nullable=False, index=True)
     value: Decimal = Field(sa_column=Column(Numeric(18, 6)))
-    
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 ```
 
 > **📚 Technical Note - SQLModel**:
-> 
+>
 > **What is SQLModel?**  
 > SQLModel combines Pydantic (data validation) with SQLAlchemy (ORM) in a single class.
-> 
+>
 > **Value Added**:
 > - ✅ **Type safety**: Python type hints become database column types automatically
 > - ✅ **Data validation**: Pydantic validates data before inserting to database
 > - ✅ **IDE support**: Full autocomplete for table columns
 > - ✅ **Single source of truth**: One model for both API validation and database schema
 > - ✅ **Async support**: Works with SQLAlchemy 2.x async engine
-> 
+>
 > **How it works**:
 > ```python
 > # The same class definition:
@@ -143,7 +145,7 @@ class YourModel(SQLModel, table=True):
 > model = YourModel(name="test")  # ✅ OK
 > model = YourModel(name=None)    # ❌ ValidationError
 > ```
-> 
+>
 > **When a field changes**:
 > - Python code: Update type hint
 > - Database: Run Alembic migration (auto-generated from model changes)
@@ -175,9 +177,9 @@ class YourServiceError(Exception):
 
 
 async def your_bulk_function(
-    session,  # AsyncSession
-    items: list[tuple[...]]  # Input data as tuples
-) -> tuple[list[...], list[str]]:
+        session,  # AsyncSession
+        items: list[tuple[...]]  # Input data as tuples
+        ) -> tuple[list[...], list[str]]:
     """
     Process multiple items in a single batch operation.
     
@@ -197,13 +199,13 @@ async def your_bulk_function(
     """
     if not items:
         return ([], [])
-    
+
     results = []
     errors = []
-    
+
     # OPTIMIZATION: Batch database queries where possible
     # Example: Single query for all items instead of N queries
-    
+
     for idx, item in enumerate(items):
         try:
             # Process item
@@ -212,14 +214,14 @@ async def your_bulk_function(
         except Exception as e:
             errors.append(f"Item {idx}: {str(e)}")
             results.append(None)
-    
+
     return (results, errors)
 
 
 async def your_single_function(
-    session,  # AsyncSession
-    item_data: ...
-) -> ...:
+        session,  # AsyncSession
+        item_data: ...
+        ) -> ...:
     """
     Convenience wrapper for single item processing.
     Calls your_bulk_function() with 1 element.
@@ -235,24 +237,24 @@ async def your_single_function(
         YourServiceError: If operation fails
     """
     results, errors = await your_bulk_function(session, [item_data])
-    
+
     if errors:
         raise YourServiceError(errors[0])
-    
+
     return results[0]
 ```
 
 > **📚 Technical Note - Async/Await Pattern**:
-> 
+>
 > **What is async/await?**  
 > Python's built-in concurrency model for I/O-bound operations (database, network calls).
-> 
+>
 > **Value Added**:
 > - ✅ **Non-blocking I/O**: While waiting for database response, server can handle other requests
 > - ✅ **High throughput**: Single Python process can handle 1000+ concurrent requests
 > - ✅ **Resource efficient**: No need for thread-per-request (lighter than threading)
 > - ✅ **Native database support**: SQLAlchemy 2.x, aiosqlite are fully async
-> 
+>
 > **How it works**:
 > ```python
 > # ❌ Synchronous (blocks entire server during DB query):
@@ -269,13 +271,13 @@ async def your_single_function(
 > # Sync: 0 other requests handled
 > # Async: 10+ other requests can be processed
 > ```
-> 
+>
 > **Why service layer?**
 > - **Separation of concerns**: Business logic separate from HTTP/API concerns
 > - **Reusability**: Same function used by API endpoint, CLI tools, background jobs
 > - **Testability**: Test business logic without HTTP server
 > - **Maintainability**: Changes to logic don't affect API contract
-> 
+>
 > **Learn more**: See [async-architecture.md](./async-architecture.md) for detailed guide on async patterns in LibreFolio
 
 ---
@@ -536,10 +538,10 @@ async def list_items(
 ```
 
 > **📚 Technical Note - Pydantic v2**:
-> 
+>
 > **What is Pydantic?**  
 > Data validation library using Python type hints. LibreFolio uses **Pydantic v2** (rewritten in Rust for performance).
-> 
+>
 > **Value Added**:
 > - ✅ **Automatic validation**: Type hints = runtime validation (no manual checks)
 > - ✅ **Performance**: V2 is ~10x faster than v1 (Rust core)
@@ -547,7 +549,7 @@ async def list_items(
 > - ✅ **JSON serialization**: Automatic conversion Python ↔ JSON
 > - ✅ **OpenAPI generation**: FastAPI uses Pydantic models to generate Swagger docs
 > - ✅ **IDE support**: Autocomplete, type checking at development time
-> 
+>
 > **How it works**:
 > ```python
 > # Define model with type hints:
@@ -567,13 +569,13 @@ async def list_items(
 >     # If we reach this point, data is already validated!
 >     # No need for: if amount <= 0: raise ...
 > ```
-> 
+>
 > **Benefits for API development**:
 > 1. **No manual validation**: Type hints do the work
 > 2. **Consistent errors**: 422 status with detailed field-level errors
 > 3. **Self-documenting**: Field descriptions appear in Swagger UI
 > 4. **Type safety**: IDE warns if you use wrong types
-> 
+>
 > **Example error response** (automatic):
 > ```json
 > {
@@ -606,16 +608,16 @@ router.include_router(your_module.router)  # Add this line
 ```
 
 > **📚 Technical Note - FastAPI Router & Dependency Injection**:
-> 
+>
 > **What is APIRouter?**  
 > FastAPI's modular routing system to organize endpoints by feature/domain.
-> 
+>
 > **Value Added**:
 > - ✅ **Modularity**: Each feature (fx, portfolio, assets) has its own file
 > - ✅ **Prefix management**: `/fx` prefix applied to all routes in fx.py
 > - ✅ **Tag grouping**: Automatic Swagger UI grouping by feature
 > - ✅ **Maintainability**: Add/remove features without touching main router
-> 
+>
 > **How router registration works**:
 > ```python
 > # In backend/app/api/v1/fx.py:
@@ -633,7 +635,7 @@ router.include_router(your_module.router)  # Add this line
 > 
 > # Result: POST /api/v1/fx/convert/bulk
 > ```
-> 
+>
 > **Dependency Injection (`Depends`)**:
 > ```python
 > # FastAPI automatically injects dependencies:
@@ -651,7 +653,7 @@ router.include_router(your_module.router)  # Add this line
 >         yield session  # Provided to endpoint
 >         # Automatically closed after endpoint finishes
 > ```
-> 
+>
 > **Benefits**:
 > - Database session automatically created and closed
 > - No connection leaks (guaranteed cleanup)
@@ -665,10 +667,12 @@ router.include_router(your_module.router)  # Add this line
 ### Why Bulk-First?
 
 **Performance**: Portfolio with 100 assets
+
 - ❌ **Without bulk**: 100 API calls = 100 requests + 100 DB queries
 - ✅ **With bulk**: 1 API call = 1 request + 1-2 DB queries
 
 **Benefits**:
+
 1. **Network efficiency**: Fewer round-trips
 2. **Database efficiency**: Batch queries reduce load
 3. **Transactional consistency**: All-or-nothing operations
@@ -677,12 +681,14 @@ router.include_router(your_module.router)  # Add this line
 ### When to Use Bulk
 
 ✅ **Use bulk when**:
+
 - Processing multiple similar items (conversions, upserts, calculations)
 - Portfolio operations (valuation, rebalancing)
 - Data imports (CSV, API sync)
 - Batch updates
 
 ❌ **Don't use bulk for**:
+
 - Single entity operations (GET /user/:id)
 - Unrelated operations
 - Simple lookups
@@ -699,12 +705,14 @@ async def process_bulk(items: list[...]) -> tuple[list[...], list[str]]:
     # Return (results, errors)
     pass
 
+
 async def process_single(item: ...) -> ...:
     """Convenience wrapper - calls bulk with 1 item."""
     results, errors = await process_bulk([item])
     if errors:
         raise Exception(errors[0])
     return results[0]
+
 
 # API endpoint uses bulk function directly
 @router.post("/process")
@@ -729,7 +737,7 @@ elif errors:
         results=results,
         success_count=len(results),
         errors=errors  # Client can see what failed
-    )
+        )
 else:
     # All succeeded
     return BulkResponse(results=results, success_count=len(results), errors=[])
@@ -747,11 +755,12 @@ else:
 from pydantic import BaseModel, Field, field_validator
 from decimal import Decimal
 
+
 class YourRequest(BaseModel):
     # Basic validation
     amount: Decimal = Field(..., gt=0, description="Amount (must be positive)")
     currency: str = Field(..., min_length=3, max_length=3, description="ISO 4217 currency code")
-    
+
     # Custom validation
     @field_validator('currency')
     @classmethod
@@ -768,7 +777,7 @@ class YourRequest(BaseModel):
 class YourRequest(BaseModel):
     # Use alias for different JSON key name
     conversion_date: date = Field(..., alias="date", description="Date for operation")
-    
+
     class Config:
         populate_by_name = True  # Allow both 'date' and 'conversion_date'
 ```
@@ -789,11 +798,157 @@ class Address(BaseModel):
     street: str
     city: str
 
+
 class Person(BaseModel):
     name: str
     address: Address  # Nested model
     emails: list[str]  # List of strings
 ```
+
+### Schema Organization (Since v2.1 Refactoring)
+
+**Important**: Since November 2025 (v2.1), all Pydantic schema definitions have been moved to dedicated modules under `backend/app/schemas/`. **No inline BaseModel definitions are
+allowed in `api/v1/*.py` files.**
+
+#### Schema Module Structure
+
+```
+backend/app/schemas/
+├── __init__.py          # Central exports (32+ classes)
+├── common.py            # Shared: BackwardFillInfo, DateRangeModel
+├── assets.py            # FA core: PricePointModel, CurrentValueModel, ScheduledInvestment*
+├── provider.py          # Provider assignment (FA + FX)
+├── prices.py            # FA price operations (upsert, delete, query)
+├── refresh.py           # FA refresh + FX sync (operational workflows)
+└── fx.py                # FX specific: conversion, upsert, delete, pair sources
+```
+
+#### Naming Conventions
+
+**FA Prefix** (Financial Assets):
+
+- Domain: Stocks, ETFs, bonds, P2P loans, etc.
+- Examples: `FAUpsertItem`, `FABulkRefreshRequest`, `FAProviderInfo`
+
+**FX Prefix** (Foreign Exchange):
+
+- Domain: Currency rates from central banks (ECB, FED, BOE, SNB)
+- Examples: `FXUpsertItem`, `FXSyncResponse`, `FXProviderInfo`
+
+**No Prefix**:
+
+- Common/shared models: `BackwardFillInfo`, `DateRangeModel`
+- Core FA models: `PricePointModel`, `CurrentValueModel` (foundational, no prefix needed)
+
+#### Import Pattern
+
+```python
+# In api/v1/your_endpoint.py
+
+# Option 1: Import from specific module
+from backend.app.schemas.prices import FAUpsertItem, FABulkUpsertRequest
+from backend.app.schemas.refresh import FABulkRefreshResponse
+
+# Option 2: Import from package __init__ (recommended for common schemas)
+from backend.app.schemas import PricePointModel, BackwardFillInfo
+```
+
+#### FA vs FX Schema Comparison
+
+The FA and FX systems have similar operational needs (upsert, delete, sync/refresh) but different data complexity, resulting in different schema structures:
+
+| Aspect               | FA (Financial Assets)                               | FX (Foreign Exchange)                    | Reason for Difference                                                            |
+|----------------------|-----------------------------------------------------|------------------------------------------|----------------------------------------------------------------------------------|
+| **Nesting Levels**   | 3-level (Item → Asset → Bulk)                       | 2-level (Item → Bulk)                    | FA groups multiple price points per asset, FX rates are simpler (pair-date-rate) |
+| **Upsert Structure** | `FAUpsertItem` → `FAUpsert` → `FABulkUpsertRequest` | `FXUpsertItem` → `FXBulkUpsertRequest`   | FA needs intermediate grouping by asset_id                                       |
+| **Data Complexity**  | OHLC + volume + currency per point                  | Base + quote + rate                      | FA tracks intraday data, FX only closing rates                                   |
+| **Delete Structure** | Asset + multiple DateRanges                         | Direct pair + DateRange                  | FA allows deleting multiple ranges per asset in one call                         |
+| **Refresh/Sync**     | Asset-by-asset refresh (provider per asset)         | Date range sync (provider for all pairs) | FA has heterogeneous assets, FX is uniform currency pairs                        |
+
+**Example - Upsert Structure Comparison**:
+
+```python
+# FA: 3 levels (Item → Asset → Bulk)
+FABulkUpsertRequest(
+    assets=[  # Multiple assets
+        FAUpsert(
+            asset_id=1,
+            prices=[  # Multiple dates per asset
+                FAUpsertItem(date="2025-01-01", close=100.50, volume=1000),
+                FAUpsertItem(date="2025-01-02", close=101.25, volume=1500),
+                ]
+            ),
+        FAUpsert(
+            asset_id=2,
+            prices=[...]
+            )
+        ]
+    )
+
+# FX: 2 levels (Item → Bulk)
+FXBulkUpsertRequest(
+    rates=[  # Direct flat list
+        FXUpsertItem(date="2025-01-01", base="EUR", quote="USD", rate=1.08),
+        FXUpsertItem(date="2025-01-02", base="EUR", quote="USD", rate=1.09),
+        FXUpsertItem(date="2025-01-01", base="EUR", quote="GBP", rate=0.85),
+        ]
+    )
+```
+
+**Why This Matters**:
+
+- When creating FA endpoints: Group data by asset_id first, then by dates
+- When creating FX endpoints: Direct flat structure, no intermediate grouping
+- Don't mix patterns: FA always 3-level, FX always 2-level for consistency
+
+#### Docstring Requirements
+
+Every schema file must include a comprehensive docstring covering:
+
+1. **Purpose**: What domain/operations does this file cover?
+2. **Naming conventions**: FA/FX prefix usage
+3. **Design notes**: Structural differences, no backward compatibility
+4. **Domain coverage**: Specific operations included
+
+**Example** (from `refresh.py`):
+
+```python
+"""
+Refresh & Sync Operation Schemas (FA + FX).
+
+**Naming Conventions**:
+- FA prefix: Financial Assets refresh operations
+- FX prefix: Foreign Exchange sync operations
+
+**Domain Coverage**:
+- FA Refresh: Fetch and store asset prices from providers
+- FX Sync: Fetch and store FX rates from central banks
+
+**Design Notes**:
+- Consolidation rationale: Both operations perform similar workflows
+- Kept separate sections (FA Refresh / FX Sync) for semantic clarity
+- No backward compatibility maintained during refactoring
+
+**Structure Differences**:
+- FA Refresh: 3-level (Item → Bulk → Result per asset)
+- FX Sync: 2-level (Request with params → Response with summary)
+"""
+```
+
+#### Schema Consolidation Notes
+
+**refresh.py Consolidation** (November 2025):
+
+- Previously: FA refresh in `assets.py` endpoints, FX sync in `fx.py` schemas
+- Now: Both consolidated in `refresh.py` under separate sections
+- Rationale: Both are "fetch-and-store" operational workflows
+- Benefit: Single location for all data refresh operations
+
+**common.py Reusability**:
+
+- `DateRangeModel`: Used in both FA delete and FX operations
+- `BackwardFillInfo`: Used in both FA prices and FX conversion responses
+- Future validators (e.g., `end >= start`) can be centralized here
 
 ---
 
@@ -818,19 +973,20 @@ async def process_items_slow(session, items):
         results.append(result.scalars().first())
     return results
 
+
 # ✅ GOOD: 1 batch query
 async def process_items_fast(session, items):
     # Collect all IDs
     ids = [item.id for item in items]
-    
+
     # Single query with OR/IN condition
     stmt = select(Model).where(Model.id.in_(ids))
     result = await session.execute(stmt)
     all_models = result.scalars().all()
-    
+
     # Build lookup dictionary
     model_lookup = {model.id: model for model in all_models}
-    
+
     # Process using in-memory lookup (no DB access)
     results = [model_lookup.get(item.id) for item in items]
     return results
@@ -842,31 +998,32 @@ async def process_items_fast(session, items):
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy import func
 
+
 async def upsert_bulk(session, items):
     """Batch UPSERT - single INSERT statement for all items."""
-    
+
     # Prepare all values
     values_list = [
         {
             'field1': item.field1,
             'field2': item.field2,
             'updated_at': func.current_timestamp()
-        }
+            }
         for item in items
-    ]
-    
+        ]
+
     # Single batch INSERT
     batch_stmt = insert(YourModel).values(values_list)
-    
+
     # On conflict: update
     batch_stmt = batch_stmt.on_conflict_do_update(
         index_elements=['field1'],
         set_={
             'field2': batch_stmt.excluded.field2,
             'updated_at': func.current_timestamp()
-        }
-    )
-    
+            }
+        )
+
     # Execute once for all items
     await session.execute(batch_stmt)
     await session.commit()
@@ -893,13 +1050,14 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.test_scripts.test_db_config import setup_test_database
+
 setup_test_database()
 
 from backend.test_scripts.test_server_helper import TestServerManager, TEST_API_BASE_URL
 from backend.test_scripts.test_utils import (
     print_error, print_info, print_section, print_success,
     print_test_header, print_test_summary, exit_with_result
-)
+    )
 
 API_BASE_URL = TEST_API_BASE_URL
 TIMEOUT = 30.0
@@ -908,36 +1066,36 @@ TIMEOUT = 30.0
 def test_single_item():
     """Test processing single item (1-element bulk)."""
     print_section("Test 1: Single Item Processing")
-    
+
     try:
         response = httpx.post(
             f"{API_BASE_URL}/your-prefix/process",
             json={
                 "items": [
                     {"field1": "value1", "field2": "123.45"}
-                ]
-            },
+                    ]
+                },
             timeout=TIMEOUT
-        )
-        
+            )
+
         if response.status_code != 200:
             print_error(f"Expected 200, got {response.status_code}")
             return False
-        
+
         data = response.json()
-        
+
         # Validate response structure
         if "results" not in data or "errors" not in data:
             print_error("Invalid response structure")
             return False
-        
+
         if len(data["results"]) != 1:
             print_error(f"Expected 1 result, got {len(data['results'])}")
             return False
-        
+
         print_success("Single item processed successfully")
         return True
-        
+
     except Exception as e:
         print_error(f"Request failed: {e}")
         return False
@@ -946,7 +1104,7 @@ def test_single_item():
 def test_bulk_items():
     """Test processing multiple items."""
     print_section("Test 2: Bulk Processing (3 items)")
-    
+
     try:
         response = httpx.post(
             f"{API_BASE_URL}/your-prefix/process",
@@ -955,28 +1113,28 @@ def test_bulk_items():
                     {"field1": "value1", "field2": "100.00"},
                     {"field1": "value2", "field2": "200.00"},
                     {"field1": "value3", "field2": "300.00"}
-                ]
-            },
+                    ]
+                },
             timeout=TIMEOUT
-        )
-        
+            )
+
         if response.status_code != 200:
             print_error(f"Expected 200, got {response.status_code}")
             return False
-        
+
         data = response.json()
-        
+
         if len(data["results"]) != 3:
             print_error(f"Expected 3 results, got {len(data['results'])}")
             return False
-        
+
         if data["success_count"] != 3:
             print_error(f"Expected success_count=3, got {data['success_count']}")
             return False
-        
+
         print_success("Bulk processing successful (3 items)")
         return True
-        
+
     except Exception as e:
         print_error(f"Request failed: {e}")
         return False
@@ -985,7 +1143,7 @@ def test_bulk_items():
 def test_partial_failure():
     """Test partial failure handling."""
     print_section("Test 3: Partial Failure (2 valid, 1 invalid)")
-    
+
     try:
         response = httpx.post(
             f"{API_BASE_URL}/your-prefix/process",
@@ -994,31 +1152,31 @@ def test_partial_failure():
                     {"field1": "valid1", "field2": "100.00"},
                     {"field1": "invalid", "field2": "-100.00"},  # Invalid (negative)
                     {"field1": "valid2", "field2": "200.00"}
-                ]
-            },
+                    ]
+                },
             timeout=TIMEOUT
-        )
-        
+            )
+
         if response.status_code != 200:
             print_error(f"Expected 200 (partial success), got {response.status_code}")
             return False
-        
+
         data = response.json()
-        
+
         # Should have 2 results and 1 error
         if data["success_count"] != 2:
             print_error(f"Expected 2 successes, got {data['success_count']}")
             return False
-        
+
         if len(data["errors"]) != 1:
             print_error(f"Expected 1 error, got {len(data['errors'])}")
             return False
-        
+
         print_success("Partial failure handled correctly")
         print_info(f"  Successes: {data['success_count']}")
         print_info(f"  Errors: {len(data['errors'])}")
         return True
-        
+
     except Exception as e:
         print_error(f"Request failed: {e}")
         return False
@@ -1027,9 +1185,9 @@ def test_partial_failure():
 def test_validation():
     """Test request validation."""
     print_section("Test 4: Validation")
-    
+
     all_ok = True
-    
+
     # Test 1: Empty array
     print_info("Test 4.1: Empty items array")
     try:
@@ -1037,8 +1195,8 @@ def test_validation():
             f"{API_BASE_URL}/your-prefix/process",
             json={"items": []},
             timeout=TIMEOUT
-        )
-        
+            )
+
         if response.status_code == 200:
             print_error("Empty array was accepted (should return 422)")
             all_ok = False
@@ -1047,7 +1205,7 @@ def test_validation():
     except Exception as e:
         print_error(f"Request failed: {e}")
         all_ok = False
-    
+
     # Test 2: Missing required field
     print_info("\nTest 4.2: Missing required field")
     try:
@@ -1056,11 +1214,11 @@ def test_validation():
             json={
                 "items": [
                     {"field1": "value1"}  # Missing field2
-                ]
-            },
+                    ]
+                },
             timeout=TIMEOUT
-        )
-        
+            )
+
         if response.status_code == 200:
             print_error("Missing field was accepted (should return 422)")
             all_ok = False
@@ -1069,7 +1227,7 @@ def test_validation():
     except Exception as e:
         print_error(f"Request failed: {e}")
         all_ok = False
-    
+
     return all_ok
 
 
@@ -1079,28 +1237,28 @@ def run_all_tests():
         "LibreFolio - Your API Tests",
         description="Tests for your feature endpoints",
         prerequisites=["Test server will be started automatically"]
-    )
-    
+        )
+
     with TestServerManager() as server_manager:
         print_section("Backend Server Management")
-        
+
         print_info("Starting test server...")
         if not server_manager.start_server():
             print_error("Failed to start server")
             return False
-        
+
         print_success("Test server started")
-        
+
         # Run tests
         results = {
             "Single Item": test_single_item(),
             "Bulk Items": test_bulk_items(),
             "Partial Failure": test_partial_failure(),
             "Validation": test_validation()
-        }
-        
+            }
+
         success = print_test_summary(results, "Your API Tests")
-        
+
         print_info("Stopping test server...")
         return success
 
@@ -1113,6 +1271,7 @@ if __name__ == "__main__":
 ### Test Coverage Requirements
 
 Every endpoint must test:
+
 1. ✅ **Happy path**: Valid single item
 2. ✅ **Bulk operation**: Multiple items (3+)
 3. ✅ **Partial failure**: Mix of valid/invalid items
@@ -1130,9 +1289,9 @@ FastAPI automatically generates OpenAPI/Swagger docs from your code:
 ```python
 @router.post("/process", response_model=YourBulkResponse, status_code=200)
 async def process_items_bulk(
-    request: YourBulkRequest,
-    session: AsyncSession = Depends(get_session)
-):
+        request: YourBulkRequest,
+        session: AsyncSession = Depends(get_session)
+        ):
     """
     Process one or more items (bulk operation).
     
@@ -1184,16 +1343,16 @@ class YourItemRequest(BaseModel):
         }
     """
     field1: str = Field(
-        ..., 
-        min_length=1, 
-        max_length=100, 
+        ...,
+        min_length=1,
+        max_length=100,
         description="Description shown in API docs"
-    )
+        )
     field2: Decimal = Field(
-        ..., 
-        gt=0, 
+        ...,
+        gt=0,
         description="Must be positive number"
-    )
+        )
 ```
 
 ### 3. Markdown Documentation
@@ -1206,6 +1365,7 @@ Create detailed guides in `docs/` folder:
 # Your Feature API
 
 ## Overview
+
 Brief description of what this API does.
 
 ## Endpoints
@@ -1215,6 +1375,7 @@ Brief description of what this API does.
 Process one or more items in bulk.
 
 **Request**:
+
 ```json
 {
     "items": [
@@ -1224,6 +1385,7 @@ Process one or more items in bulk.
 ```
 
 **Response**:
+
 ```json
 {
     "results": [...],
@@ -1233,6 +1395,7 @@ Process one or more items in bulk.
 ```
 
 **Errors**:
+
 - `400`: All items failed
 - `422`: Validation error
 - `500`: Server error
@@ -1240,6 +1403,7 @@ Process one or more items in bulk.
 ## Examples
 
 ### Single Item
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/your-prefix/process \
   -H "Content-Type: application/json" \
@@ -1247,6 +1411,7 @@ curl -X POST http://localhost:8000/api/v1/your-prefix/process \
 ```
 
 ### Bulk Items
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/your-prefix/process \
   -H "Content-Type: application/json" \
@@ -1268,10 +1433,11 @@ curl -X POST http://localhost:8000/api/v1/your-prefix/process \
 ```python
 # ✅ GOOD
 async def process_items(
-    session: AsyncSession,
-    items: list[tuple[str, Decimal]]
-) -> tuple[list[dict], list[str]]:
+        session: AsyncSession,
+        items: list[tuple[str, Decimal]]
+        ) -> tuple[list[dict], list[str]]:
     pass
+
 
 # ❌ BAD
 async def process_items(session, items):
@@ -1284,6 +1450,7 @@ async def process_items(session, items):
 # ✅ GOOD: Pydantic validates automatically
 class Request(BaseModel):
     amount: Decimal = Field(..., gt=0)
+
 
 # ❌ BAD: Manual validation
 def endpoint(amount: float):
@@ -1298,6 +1465,7 @@ def endpoint(amount: float):
 async def endpoint():
     result = await async_function()
     return result
+
 
 # ❌ BAD: Mixing sync/async
 async def endpoint():
@@ -1328,7 +1496,9 @@ except:
 
 ```python
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 async def service_function():
     logger.info("Starting operation")
@@ -1348,6 +1518,7 @@ async def service_function():
 async def endpoint(session: AsyncSession = Depends(get_session)):
     result = await session.execute(stmt)
     return result
+
 
 # ❌ BAD: Manual session management
 @router.post("/endpoint")
@@ -1369,6 +1540,7 @@ See the FX API implementation as reference:
 - **Documentation**: `docs/fx-implementation.md`
 
 **Key endpoints to study**:
+
 1. `POST /fx/convert/bulk` - Bulk conversion (single query for N conversions)
 2. `POST /fx/rate` - Bulk upsert (single INSERT for N rates)
 3. `POST /fx/sync/bulk` - Bulk fetch from external API
@@ -1379,52 +1551,74 @@ See the FX API implementation as reference:
 
 When adding a new API endpoint:
 
-- [ ] 1. Define database models (if needed) in `backend/app/db/models.py`
-- [ ] 2. Create migration with Alembic (if schema changes)
-- [ ] 3. Implement service layer in `backend/app/services/your_service.py`
-  - [ ] Implement bulk function first
-  - [ ] Add single-item wrapper
-  - [ ] Use batch DB queries
-- [ ] 4. Create Pydantic models in `backend/app/api/v1/your_module.py`
-  - [ ] Request models with validation
-  - [ ] Response models with examples
-- [ ] 5. Implement endpoints
-  - [ ] Use bulk-first design
-  - [ ] Handle partial failures
-  - [ ] Add comprehensive docstrings
-- [ ] 6. Register router in `backend/app/api/v1/router.py`
-- [ ] 7. Write tests in `backend/test_scripts/test_api/test_your_api.py`
-  - [ ] Single item test
-  - [ ] Bulk test (3+ items)
-  - [ ] Partial failure test
-  - [ ] Validation tests
-- [ ] 8. Update documentation
-  - [ ] Add inline docs (docstrings)
-  - [ ] Create markdown guide in `docs/`
-- [ ] 9. Run tests: `python test_runner.py api your-feature`
-- [ ] 10. Verify Swagger docs: `http://localhost:8000/docs`
+- [ ] 
+    1. Define database models (if needed) in `backend/app/db/models.py`
+- [ ] 
+    2. Create migration with Alembic (if schema changes)
+- [ ] 
+    3. Implement service layer in `backend/app/services/your_service.py`
+
+    - [ ] Implement bulk function first
+    - [ ] Add single-item wrapper
+    - [ ] Use batch DB queries
+- [ ] 
+    4. Create Pydantic models in `backend/app/api/v1/your_module.py`
+
+    - [ ] Request models with validation
+    - [ ] Response models with examples
+- [ ] 
+    5. Implement endpoints
+
+    - [ ] Use bulk-first design
+    - [ ] Handle partial failures
+    - [ ] Add comprehensive docstrings
+- [ ] 
+    6. Register router in `backend/app/api/v1/router.py`
+- [ ] 
+    7. Write tests in `backend/test_scripts/test_api/test_your_api.py`
+
+    - [ ] Single item test
+    - [ ] Bulk test (3+ items)
+    - [ ] Partial failure test
+    - [ ] Validation tests
+- [ ] 
+    8. Update documentation
+
+    - [ ] Add inline docs (docstrings)
+    - [ ] Create markdown guide in `docs/`
+- [ ] 
+    9. Run tests: `python test_runner.py api your-feature`
+- [ ] 
+    10. Verify Swagger docs: `http://localhost:8000/docs`
 
 ---
 
 ## 🆘 Common Issues
 
 ### Issue: "NullPool has no attribute 'connect'"
+
 **Solution**: Use `get_session()` dependency injection, don't create sessions manually.
 
 ### Issue: "asyncio.run() cannot be called from a running event loop"
+
 **Solution**: Use `await` everywhere, don't mix `asyncio.run()` in async code.
 
 ### Issue: "SQLite database is locked"
-**Solution**: 
+
+**Solution**:
+
 - Ensure using WAL mode: `PRAGMA journal_mode=WAL`
 - Use NullPool for SQLite (already configured)
 - Don't hold transactions open too long
 
 ### Issue: "Field required" validation error
+
 **Solution**: Check Pydantic model - all fields without default are required. Use `Field(None)` for optional.
 
 ### Issue: Test server won't start
+
 **Solution**: Check if port is in use:
+
 ```bash
 lsof -ti:8001 | xargs kill -9  # Kill process on port 8001
 ```

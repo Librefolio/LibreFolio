@@ -274,16 +274,16 @@ Scelta utente: aggiungere, nel commento dei file appena creati, e negli altri fi
 
 ### Phase 8: Documentazione
 
-- [ ] 7.8.1 Aggiornare `api-development-guide.md` (nuova organizzazione, docstring guidance, differenze FA vs FX, file refresh consolidato, tabella comparativa tra FA e FX per mostrare come la stessa esigenza ha 2 classi diverse, dovute alle peculiarita dei 2 sotto sistemi).
-- [ ] 7.8.2 Aggiornare `database-schema.md` (colonna volume + nota refactoring, nessuna retro‑compatibilità necessaria).
-- [ ] 7.8.3 Aggiornare `FEATURE_COVERAGE_REPORT.md` (stato refactoring schema).
-- [ ] 7.8.4 Aggiornare `REMEDIATION_PLAN.md` (spuntare passi) + aggiungere sezione "Schema Consolidation Completed".
+- [x] 7.8.1 Aggiornare `api-development-guide.md` (nuova organizzazione, docstring guidance, differenze FA vs FX, file refresh consolidato, tabella comparativa tra FA e FX per mostrare come la stessa esigenza ha 2 classi diverse, dovute alle peculiarita dei 2 sotto sistemi).
+- [x] 7.8.2 Aggiornare `database-schema.md` (colonna volume + nota refactoring, nessuna retro‑compatibilità necessaria).
+- [x] 7.8.3 Aggiornare `FEATURE_COVERAGE_REPORT.md` (stato refactoring schema).
+- [x] 7.8.4 Aggiornare `REMEDIATION_PLAN.md` (spuntare passi) + aggiungere sezione "Schema Consolidation Completed".
 
 ### Phase 9: Verifica Endpoint Puliti
 
-- [ ] 7.9.1 Grep pydantic pattern in `api/v1` (regex `class .*\(BaseModel\)`).
-- [ ] 7.9.2 Se presenti residui: spostamento immediato in file schema + rimozione.
-- [ ] 7.9.3 Conferma finale (log) "No inline Pydantic models in api/v1".
+- [x] 7.9.1 Grep pydantic pattern in `api/v1` (regex `class .*\(BaseModel\)`).
+- [x] 7.9.2 Se presenti residui: spostamento immediato in file schema + rimozione.
+- [x] 7.9.3 Conferma finale (log) "No inline Pydantic models in api/v1".
 
 ---
 
@@ -291,24 +291,24 @@ Scelta utente: aggiungere, nel commento dei file appena creati, e negli altri fi
 
 ### 8.1 Incrementali
 
-- [ ] Provider, Prices, Refresh+Sync, FX rename, Test Scripts.
+- [x] Provider, Prices, Refresh+Sync, FX rename, Test Scripts.
 
 ### 8.2 Completi
 
-- [ ] utils all
-- [ ] services all
-- [ ] db all
-- [ ] Smoke API (6 endpoint) + `POST /fx/sync/bulk` usando nuovo import.
+- [x] utils all
+- [x] services all
+- [x] db all
+- [x] Smoke API (6 endpoint) + `POST /fx/sync/bulk` usando nuovo import.
 
 ### 8.3 Import
 
-- [ ] Nessun ciclo import.
-- [ ] api/v1 importa solo da schemas.
-- [ ] schemas non importa da api/.
+- [x] Nessun ciclo import.
+- [x] api/v1 importa solo da schemas.
+- [x] schemas non importa da api/.
 
 ### 8.4 Docstring Presence
 
-- [ ] Verifica ogni file schema ha docstring e menziona naming FX/FA.
+- [x] Verifica ogni file schema ha docstring e menziona naming FX/FA.
 
 ---
 
@@ -355,14 +355,14 @@ backend/app/schemas/
 
 ### Checklist Quality Gates (Aggiornata)
 
-- [ ] Build & Import Pass.
-- [ ] Lint Pass (imports puliti).
-- [ ] Unit test pass (services + utils + db).
-- [ ] API smoke test pass.
-- [ ] Docstring presenti in ogni schema file.
-- [ ] Documentazione coerente (no riferimenti a classi eliminate).
-- [ ] Grep globale clean (vecchi nomi rimossi).
-- [ ] Log finale: "Schema consolidation completed".
+- [x] Build & Import Pass.
+- [x] Lint Pass (imports puliti).
+- [x] Unit test pass (services + utils + db).
+- [x] API smoke test pass.
+- [x] Docstring presenti in ogni schema file.
+- [x] Documentazione coerente (no riferimenti a classi eliminate).
+- [x] Grep globale clean (vecchi nomi rimossi).
+- [x] Log finale: "Schema consolidation completed".
 
 ---
 
