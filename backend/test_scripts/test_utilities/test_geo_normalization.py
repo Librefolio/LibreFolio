@@ -219,6 +219,75 @@ def test_validate_and_normalize_geographic_area():
     print_test("Many countries with fractional weights")
 
 
+def test_geographic_area_edge_cases():
+    """Test geographic area edge cases for Phase 6.4."""
+    print_section("Test 5: Geographic Area Edge Cases (Phase 6.4)")
+
+    # Case 1: Sum = 0.999999 (within tolerance) → normalized to 1.0
+    data = {"USA": "0.333333", "GBR": "0.333333", "ITA": "0.333333"}
+    result = validate_and_normalize_geographic_area(data)
+    total = sum(result.values())
+    assert abs(total - Decimal("1.0")) < Decimal("0.0001"), f"Sum should be ~1.0, got {total}"
+    print_test("Edge case 1: Sum 0.999999 (within tolerance) normalized")
+
+    # Case 2: Sum = 1.000001 (within tolerance) → normalized to 1.0
+    data = {"USA": "0.333334", "GBR": "0.333334", "ITA": "0.333333"}
+    result = validate_and_normalize_geographic_area(data)
+    total = sum(result.values())
+    assert abs(total - Decimal("1.0")) < Decimal("0.0001"), f"Sum should be ~1.0, got {total}"
+    print_test("Edge case 2: Sum 1.000001 (within tolerance) normalized")
+
+    # Case 3: Sum = 0.95 (out of tolerance) → ValueError
+    try:
+        data = {"USA": "0.95"}
+        validate_and_normalize_geographic_area(data)
+        print_test("Edge case 3: Sum 0.95 should raise ValueError", False)
+    except ValueError as e:
+        assert "sum" in str(e).lower()
+        print_test("Edge case 3: Sum 0.95 raises ValueError")
+
+    # Case 4: Sum = 1.05 (out of tolerance) → ValueError
+    try:
+        data = {"USA": "1.05"}
+        validate_and_normalize_geographic_area(data)
+        print_test("Edge case 4: Sum 1.05 should raise ValueError", False)
+    except ValueError as e:
+        assert "sum" in str(e).lower()
+        print_test("Edge case 4: Sum 1.05 raises ValueError")
+
+    # Case 5: Single country weight = 1.0 → valid
+    data = {"USA": "1.0"}
+    result = validate_and_normalize_geographic_area(data)
+    assert result == {"USA": Decimal("1.0000")}
+    assert sum(result.values()) == Decimal("1.0")
+    print_test("Edge case 5: Single country with 100% allocation valid")
+
+    # Case 6: Empty dict → ValueError (no countries)
+    try:
+        data = {}
+        validate_and_normalize_geographic_area(data)
+        print_test("Edge case 6: Empty dict should raise ValueError", False)
+    except ValueError as e:
+        assert "empty" in str(e).lower() or "no countries" in str(e).lower()
+        print_test("Edge case 6: Empty dict raises ValueError")
+
+    # Case 7: Negative weight → ValueError
+    try:
+        data = {"USA": "-0.5", "GBR": "1.5"}
+        validate_and_normalize_geographic_area(data)
+        print_test("Edge case 7: Negative weight should raise ValueError", False)
+    except ValueError as e:
+        assert "negative" in str(e).lower() or "non-negative" in str(e).lower()
+        print_test("Edge case 7: Negative weight raises ValueError")
+
+    # Case 8: Zero weight → valid (country with 0% allocation)
+    data = {"USA": "0.6", "GBR": "0.4", "ITA": "0.0"}
+    result = validate_and_normalize_geographic_area(data)
+    assert result["ITA"] == Decimal("0.0000")
+    assert sum(result.values()) == Decimal("1.0")
+    print_test("Edge case 8: Zero weight valid (0% allocation)")
+
+
 def main():
     """Run all tests."""
     print("\n" + "=" * 60)
@@ -230,6 +299,7 @@ def main():
         test_parse_decimal_weight()
         test_quantize_weight()
         test_validate_and_normalize_geographic_area()
+        test_geographic_area_edge_cases()
 
         print("\n" + "=" * 60)
         print("  ✅ All tests passed!")

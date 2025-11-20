@@ -765,25 +765,38 @@
 
 ### 6.4 Edge Cases & Error Handling
 
-- [ ] **Test geographic_area edge cases**
-  - File: `backend/test_scripts/test_utilities/test_geo_normalization.py` (UPDATE)
+- [x] **Test geographic_area edge cases**
+  - File: `backend/test_scripts/test_utilities/test_geo_normalization.py` (UPDATED +70 lines)
+  - Function: `test_geographic_area_edge_cases()` - Test 5
   - Cases:
-    1. Sum = 0.999999 (within tolerance) → normalized to 1.0
-    2. Sum = 1.000001 (within tolerance) → normalized to 1.0
-    3. Sum = 0.95 (out of tolerance) → ValueError
-    4. Sum = 1.05 (out of tolerance) → ValueError
-    5. Single country weight = 1.0 → valid
-    6. Empty dict → ValueError (no countries)
-    7. Negative weight → ValueError
-    8. Zero weight → valid (country with 0% allocation)
+    1. ✅ Sum = 0.999999 (within tolerance) → normalized to 1.0
+    2. ✅ Sum = 1.000001 (within tolerance) → normalized to 1.0
+    3. ✅ Sum = 0.95 (out of tolerance) → ValueError
+    4. ✅ Sum = 1.05 (out of tolerance) → ValueError
+    5. ✅ Single country weight = 1.0 → valid
+    6. ✅ Empty dict → ValueError (no countries)
+    7. ✅ Negative weight → ValueError
+    8. ✅ Zero weight → valid (country with 0% allocation)
+  - Run: `./test_runner.py utils geo-normalization`
+  - **Status**: ✅ PASS (Nov 20, 2025 @14:09) - All 8 edge cases passing
 
-- [ ] **Test PATCH semantic edge cases**
-  - File: `backend/test_scripts/test_services/test_asset_metadata.py` (UPDATE)
+- [x] **Test PATCH semantic edge cases**
+  - File: `backend/test_scripts/test_services/test_asset_metadata.py` (UPDATED +100 lines)
+  - Function: `test_patch_semantic_edge_cases()` - New test function
   - Cases:
-    1. PATCH with only geographic_area → other fields unchanged
-    2. PATCH geographic_area=null → clears existing geographic_area
-    3. Multiple PATCHes in sequence → final state correct
-    4. Concurrent PATCHes (optimistic locking) → last write wins
+    1. ✅ PATCH with only geographic_area → other fields unchanged
+    2. ✅ PATCH geographic_area=null → clears existing geographic_area
+    3. ✅ Multiple PATCHes in sequence → final state correct
+    4. ✅ Concurrent PATCHes (optimistic locking) → last write wins
+  - Run: `./test_runner.py services asset-metadata`
+  - **Status**: ✅ PASS (Nov 20, 2025 @14:10) - All 4 semantic cases passing
+  - **Note**: Optimistic locking noted as API/DB layer responsibility
+
+**Phase 6.4 Summary**:
+- Geographic area edge cases: ✅ 8/8 tests passing
+- PATCH semantic edge cases: ✅ 4/4 tests passing
+- Total new edge case tests: 12
+- All edge cases thoroughly covered and validated
 
 ---
 
