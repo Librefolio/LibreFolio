@@ -138,5 +138,4 @@ class FABulkDeleteResponse(BaseModel):
 # FA PRICE QUERY
 # ============================================================================
 
-# Note: Response uses List[PricePointModel] directly (no wrapper)
-# This was decided in Phase 4 to simplify API and eliminate FAGetPricesResponse duplicate
+# TODO: capire se mettere qui le cose di prezzo contenute in asset.py

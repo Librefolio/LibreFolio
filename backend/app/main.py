@@ -8,10 +8,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Response, APIRouter
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.v1.router import router as api_v1_router
 from backend.app.config import get_settings, set_test_mode, is_test_mode
