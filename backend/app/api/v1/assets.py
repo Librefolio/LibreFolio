@@ -199,7 +199,7 @@ async def upsert_prices_bulk(
         logger.error(f"Error in bulk upsert prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
+# TODO: rimuovere e usare solo la bulk
 @router.post("/{asset_id}/prices")
 async def upsert_prices_single(
     asset_id: int,
@@ -241,7 +241,7 @@ async def delete_prices_bulk(
         logger.error(f"Error in bulk delete prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
+# TODO: rimuovere e usare solo la bulk
 @router.delete("/{asset_id}/prices")
 async def delete_prices_single(
     asset_id: int,
@@ -286,13 +286,78 @@ async def get_prices(
         logger.error(f"Error getting prices for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# TODO: aggiungere endpoint per creare Asset bulk, capire endpoint e request/response model e anche per eliminare asset e
 
+# TODO: aggiungere GET /api/v1/assets per avere la lista degli asset
+
+# TODO: rinominare in /bulk
 @router.post("", response_model=List[AssetMetadataResponse])
 async def read_assets_bulk(
     request: BulkAssetReadRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
-    """Bulk read assets with metadata, preserving request order."""
+    """
+    Bulk read assets with classification metadata (preserves request order).
+
+    Fetches basic asset information along with parsed classification_params
+    for multiple assets in a single request. Assets not found are silently
+    skipped.
+
+    **Request Body**:
+    ```json
+    {
+      "asset_ids": [1, 2, 3]
+    }
+    ```
+
+    **Response** (ordered by request):
+    ```json
+    [
+      {
+        "asset_id": 1,
+        "display_name": "Apple Inc.",
+        "identifier": "AAPL",
+        "currency": "USD",
+        "classification_params": {
+          "investment_type": "stock",
+          "sector": "Technology",
+          "short_description": "Consumer electronics",
+          "geographic_area": {
+            "USA": "1.0000"
+          }
+        }
+      },
+      {
+        "asset_id": 2,
+        "display_name": "Vanguard S&P 500",
+        "identifier": "VOO",
+        "currency": "USD",
+        "classification_params": {
+          "investment_type": "etf",
+          "geographic_area": {
+            "USA": "1.0000"
+          }
+        }
+      }
+    ]
+    ```
+
+    **Classification Params**:
+    - Parsed from JSON stored in database
+    - May be null if no metadata set
+    - Geographic area contains ISO-3166-A3 codes
+    - Weights are Decimal strings (4 decimal places)
+
+    Args:
+        request: Bulk read request with list of asset IDs
+        session: Database session
+
+    Returns:
+        List of AssetMetadataResponse in request order (missing assets skipped)
+
+    Raises:
+        HTTPException: 500 if unexpected error occurs
+    """
     try:
         if not request.asset_ids:
             return []
@@ -346,7 +411,7 @@ async def refresh_prices_bulk(
         logger.error(f"Error in bulk refresh prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
+# TODO: rimuovere e usare solo la bulk
 @router.post("/{asset_id}/prices-refresh")
 async def refresh_prices_single(
     asset_id: int,
@@ -371,7 +436,69 @@ async def update_assets_metadata_bulk(
     request: BulkPatchAssetMetadataRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
-    """Bulk metadata PATCH keeping FA response pattern."""
+    """
+    Bulk partial update (PATCH) of asset classification metadata.
+
+    Follows RFC 7386 JSON Merge Patch semantics:
+    - Absent fields in patch: ignored (no change)
+    - Field = null: clears the field
+    - Field = value: updates the field
+
+    **Geographic Area Handling**:
+    - Full replacement (not merge) of geographic_area dict
+    - Countries normalized to ISO-3166-A3 codes
+    - Weights must sum to 1.0 (±0.0001 tolerance)
+    - Weights quantized to 4 decimal places
+
+    **Request Body**:
+    ```json
+    {
+      "assets": [
+        {
+          "asset_id": 1,
+          "patch": {
+            "investment_type": "etf",
+            "sector": "Technology",
+            "geographic_area": {
+              "USA": "0.6",
+              "GBR": "0.4"
+            }
+          }
+        }
+      ]
+    }
+    ```
+
+    **Response** (per-item results):
+    ```json
+    [
+      {
+        "asset_id": 1,
+        "success": true,
+        "message": "updated",
+        "changes": [
+          {"field": "investment_type", "old": "stock", "new": "etf"},
+          {"field": "geographic_area", "old": {...}, "new": {...}}
+        ]
+      }
+    ]
+    ```
+
+    **Validation Errors** (per-item):
+    - Invalid country code → success=false, message with details
+    - Geographic area sum != 1.0 → success=false
+    - Negative weights → success=false
+
+    Args:
+        request: Bulk PATCH request with list of asset patches
+        session: Database session
+
+    Returns:
+        List of MetadataRefreshResult (per-item success/failure)
+
+    Raises:
+        HTTPException: 500 if unexpected error occurs
+    """
     try:
         results = []
         for item in request.assets:
@@ -401,13 +528,67 @@ async def update_assets_metadata_bulk(
         logger.error(f"Error in bulk metadata update: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
+# TODO: rimuovere endpoint singolo e usare solo il bulk
 @router.post("/{asset_id}/metadata/refresh", response_model=MetadataRefreshResult)
 async def refresh_asset_metadata_single(
     asset_id: int,
     session: AsyncSession = Depends(get_session_generator)
     ):
-    """Refresh metadata for a single asset via its provider."""
+    """
+    Refresh classification metadata for a single asset from its assigned provider.
+
+    Fetches fresh metadata from the asset's pricing provider (if it supports
+    metadata) and merges it with existing classification_params. Provider data
+    takes precedence over existing user-entered data.
+
+    **Provider Requirements**:
+    - Asset must have a provider assigned
+    - Provider must support metadata fetching
+    - Provider must return valid classification data
+
+    **Response Examples**:
+
+    Success with metadata updated:
+    ```json
+    {
+      "asset_id": 1,
+      "success": true,
+      "message": "Metadata refreshed from yfinance",
+      "changes": [
+        {"field": "sector", "old": null, "new": "Technology"},
+        {"field": "investment_type", "old": "stock", "new": "etf"}
+      ]
+    }
+    ```
+
+    No provider assigned:
+    ```json
+    {
+      "asset_id": 1,
+      "success": false,
+      "message": "No provider assigned to asset"
+    }
+    ```
+
+    Provider doesn't support metadata:
+    ```json
+    {
+      "asset_id": 1,
+      "success": false,
+      "message": "Provider cssscraper does not support metadata"
+    }
+    ```
+
+    Args:
+        asset_id: ID of the asset to refresh metadata for
+        session: Database session
+
+    Returns:
+        MetadataRefreshResult with success status and changes
+
+    Raises:
+        HTTPException: 500 if unexpected error occurs
+    """
     try:
         result = await AssetSourceManager.refresh_asset_metadata(asset_id, session)
         return MetadataRefreshResult(**result)
@@ -421,7 +602,59 @@ async def refresh_asset_metadata_bulk(
     request: BulkMetadataRefreshRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
-    """Bulk metadata refresh endpoint (partial success)."""
+    """
+    Bulk refresh classification metadata from providers (partial success allowed).
+
+    Refreshes metadata for multiple assets in a single request. Each asset is
+    processed independently, and partial failures are reported per-item.
+
+    **Request Body**:
+    ```json
+    {
+      "asset_ids": [1, 2, 3]
+    }
+    ```
+
+    **Response**:
+    ```json
+    {
+      "results": [
+        {
+          "asset_id": 1,
+          "success": true,
+          "message": "Metadata refreshed from yfinance",
+          "changes": [{"field": "sector", "old": null, "new": "Technology"}]
+        },
+        {
+          "asset_id": 2,
+          "success": false,
+          "message": "No provider assigned to asset"
+        },
+        {
+          "asset_id": 3,
+          "success": true,
+          "message": "No metadata changes"
+        }
+      ],
+      "success_count": 2,
+      "failed_count": 1
+    }
+    ```
+
+    **Per-Item Outcomes**:
+    - success=true: Metadata refreshed (may have 0 changes)
+    - success=false: No provider, provider doesn't support metadata, or error
+
+    Args:
+        request: Bulk refresh request with list of asset IDs
+        session: Database session
+
+    Returns:
+        BulkMetadataRefreshResponse with per-item results and counts
+
+    Raises:
+        HTTPException: 500 if unexpected error occurs
+    """
     try:
         result = await AssetSourceManager.bulk_refresh_metadata(request.asset_ids, session)
         return BulkMetadataRefreshResponse(**result)

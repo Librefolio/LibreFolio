@@ -197,6 +197,102 @@ The fields are documented in detail in the [Interest Calculation Guide](docs/int
 - An asset definition (AAPL) is **global** - defined once
 - Holdings of that asset are tracked via **transactions** per broker
 
+#### Classification Params (JSON Metadata)
+
+The `classification_params` field stores asset classification and taxonomy data as JSON. This enables flexible categorization without schema changes.
+
+**Structure**:
+```json
+{
+  "investment_type": "stock",
+  "sector": "Technology", 
+  "short_description": "Consumer electronics and software",
+  "geographic_area": {
+    "USA": "1.0000"
+  }
+}
+```
+
+**Fields** (all optional):
+- `investment_type` (string): Asset category - "stock", "etf", "bond", "crypto", etc.
+- `sector` (string): Industry sector - "Technology", "Healthcare", "Finance", etc.
+- `short_description` (string): Brief asset description
+- `geographic_area` (dict): Geographic exposure as ISO-3166-A3 codes → weights (Decimal strings)
+
+**Geographic Area Rules**:
+1. **Country codes**: Automatically normalized to ISO-3166-A3
+   - "US" → "USA", "GB" → "GBR", "Italy" → "ITA"
+2. **Weights**: Must sum to 1.0000 (±0.0001 tolerance)
+   - Stored as 4-decimal Decimal strings
+   - Example: `{"USA": "0.6000", "GBR": "0.3000", "ITA": "0.1000"}`
+3. **Validation**: Enforced at API/service layer
+   - Invalid country codes → rejected
+   - Sum != 1.0 (outside tolerance) → rejected
+   - Negative weights → rejected
+   - Zero weights allowed (0% allocation)
+
+**Examples**:
+
+Stock with US exposure only:
+```json
+{
+  "investment_type": "stock",
+  "sector": "Technology",
+  "short_description": "Apple Inc. - Consumer electronics",
+  "geographic_area": {"USA": "1.0000"}
+}
+```
+
+ETF with multi-country exposure:
+```json
+{
+  "investment_type": "etf",
+  "sector": "Diversified",
+  "short_description": "Vanguard All-World UCITS ETF",
+  "geographic_area": {
+    "USA": "0.5500",
+    "GBR": "0.0400",
+    "JPN": "0.0600",
+    "DEU": "0.0300",
+    "FRA": "0.0300",
+    "CAN": "0.0300",
+    "CHE": "0.0300",
+    "AUS": "0.0200",
+    "NLD": "0.0100",
+    "SWE": "0.0100",
+    "...": "..."
+  }
+}
+```
+
+Bond with no geo data:
+```json
+{
+  "investment_type": "bond",
+  "sector": "Government",
+  "short_description": "Italian Government Bond BTP 2025"
+}
+```
+
+**Provider Auto-Population**:
+- Providers (e.g., yfinance) can fetch metadata automatically
+- See `POST /api/v1/assets/{id}/metadata/refresh`
+- Provider data takes precedence over existing user data
+
+**PATCH Semantics** (RFC 7386 JSON Merge Patch):
+- Absent field → no change
+- Field = `null` → clear field
+- Field = value → update field
+- Geographic area: full replacement (not merge)
+
+**Storage**: TEXT column in database (JSON string)
+**Parsing**: Handled by `AssetMetadataService.parse_classification_params()`
+**Validation**: `validate_and_normalize_geographic_area()` from `geo_normalization.py`
+
+See also:
+- [Metadata Management API Examples](api-examples/metadata-management.md)
+- [Metadata Management Guide](metadata-management.md)
+
 ---
 
 ### 3. `cash_accounts` - Cash Within Brokers
@@ -489,7 +585,7 @@ CREATE TABLE price_history (
 3. **Market activity indicator**: High volume may indicate significant news or events
 4. **Provider compatibility**: Most price providers (yfinance, etc.) already include volume in their responses
 
-**Backward-fill behavior**:
+**Backward-fill behavior:**
 - When prices are backward-filled (gaps in data), the `volume` field is also propagated from the last known value
 - This ensures consistency in the price series structure
 - `PricePointModel.backward_fill_info` indicates when data is backfilled vs actual
@@ -676,7 +772,7 @@ CREATE INDEX idx_fx_rates_base_quote_date ON fx_rates (base, quote, date);
 - **Unique constraint**: `(date, base, quote)` - we store only one direction!
 - **CHECK constraint**: `base < quote` (alphabetically) - prevents storing both EUR/USD and USD/EUR
   - We **always** store currency pairs in alphabetical order
-  - Example: Store EUR/USD (not USD/EUR), GBP/USD (not USD/GBP), EUR/GBP (not GBP/EUR)
+  - Example: Store EUR/USD (not USD/EUR), GBP/USD (not USD/GBP), EUR/GBP (not GBP/EUR), etc.
   - The backend must normalize pairs before inserting: if you want USD/EUR, store as EUR/USD with rate = 1/original_rate
 - **Reverse rate**: Calculated as `1/rate` in code (not stored twice)
   - Example: If we have EUR/USD = 1.0850, we calculate USD/EUR = 1/1.0850 = 0.9217
@@ -996,12 +1092,4 @@ GROUP BY ca.id;
 - Transactions auto-generate cash movements
 
 **Smart scheduling features:**
-- `asset_provider_assignments.last_fetch_at`: Tracks when each asset was last fetched (for scheduling and monitoring)
-- `fx_currency_pair_sources.fetch_interval`: Defines refresh frequency per currency pair (optimizes API usage)
-
----
-
-For more technical details, see:
-- [Database Models Source Code](../backend/app/db/models.py)
-- [Alembic Migration Guide](alembic-guide.md)
-
+- `asset_provider_assignments.last_fetch_at`
