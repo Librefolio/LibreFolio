@@ -714,17 +714,62 @@ def api_fx(verbose: bool = False) -> bool:
         )
 
 
+def api_assets_metadata(verbose: bool = False) -> bool:
+    """
+    Run Assets Metadata API endpoint tests.
+    """
+    print_section("Assets Metadata API Endpoint Tests")
+    print_info("Testing REST API endpoints for asset metadata management")
+    print_info("Tests: PATCH metadata, bulk read, refresh endpoints")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_api.test_assets_metadata"],
+        "Assets Metadata API tests",
+        verbose=verbose
+        )
+
+
 def api_test(verbose: bool = False) -> bool:
     """
     Run all API tests.
     """
     print_header("LibreFolio API Tests")
     print_info("Testing REST API endpoints")
-    print_info("Requires: Running backend server on http://localhost:8000")
-    print_warning("⚠️  Start server before running: ./dev.sh server\n")
+    print_info("Note: Server will be automatically started/stopped by tests")
 
-    # For now, only FX API tests exist
-    return api_fx(verbose=verbose)
+    tests = [
+        ("FX API", lambda: api_fx(verbose)),
+        ("Assets Metadata API", lambda: api_assets_metadata(verbose)),
+    ]
+
+    results = []
+    for test_name, test_func in tests:
+        success = test_func()
+        results.append((test_name, success))
+
+        if not success:
+            print_error(f"Test failed: {test_name}")
+            print_warning("Stopping API tests execution")
+            break
+
+    # Summary
+    print_section("API Tests Summary")
+    passed = sum(1 for _, success in results if success)
+    total = len(results)
+
+    for test_name, success in results:
+        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
+        print(f"{status} - {test_name}")
+
+    print(f"\nResults: {passed}/{total} tests passed")
+
+    if passed == total:
+        print_success("All API tests passed! 🎉")
+        return True
+    else:
+        print_error(f"{total - passed} test(s) failed")
+        return False
 
 
 # ============================================================================
@@ -1082,23 +1127,28 @@ These are foundational tests for remediation phases 1 & 2.
 API Endpoint Tests
 
 These tests verify REST API endpoints:
-  • Target: http://localhost:8000
+  • Target: http://localhost:8001 (test server)
   • Backend server auto-started if not running
   • Tests HTTP requests/responses, validation, error handling
 
 Test commands:
-  fx   - Test FX endpoints (GET /currencies, POST /sync, GET /convert)
-         📋 Prerequisites: Services FX conversion subsystem (run: db fx-rates)
-         Note: Server will be automatically started and stopped by test
+  fx              - Test FX endpoints (GET /currencies, POST /sync, GET /convert)
+                    📋 Prerequisites: Services FX conversion subsystem (run: db fx-rates)
+                    Note: Server will be automatically started and stopped by test
+  
+  assets-metadata - Test Assets Metadata endpoints (PATCH, bulk read, refresh)
+                    📋 Prerequisites: Database created (run: db create)
+                    💡 Tests: PATCH metadata, bulk read, single/bulk refresh, provider assignments
+                    Note: Server will be automatically started and stopped by test
          
-  all  - Run all API tests (currently only FX)
+  all             - Run all API tests (FX + Assets Metadata)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
     api_parser.add_argument(
         "action",
-        choices=["fx", "all"],
+        choices=["fx", "assets-metadata", "all"],
         help="API test to run"
         )
 
@@ -1224,6 +1274,8 @@ def main():
         # API tests
         if args.action == "fx":
             success = api_fx(verbose=verbose)
+        elif args.action == "assets-metadata":
+            success = api_assets_metadata(verbose=verbose)
         elif args.action == "all":
             success = api_test(verbose=verbose)
 
