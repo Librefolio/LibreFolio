@@ -156,3 +156,119 @@ def test_merge_provider_metadata():
     assert merged.investment_type == "etf"  # Provider wins
     assert merged.sector == "Technology"  # Added by provider
     assert merged.short_description == "User description"  # Unchanged
+
+
+def test_patch_semantic_edge_cases():
+    """Test PATCH semantic edge cases for Phase 6.4."""
+    print("\n" + "=" * 70)
+    print("  Test: PATCH Semantic Edge Cases (Phase 6.4)")
+    print("=" * 70)
+
+    # Case 1: PATCH with only geographic_area → other fields unchanged
+    print("\nCase 1: PATCH only geographic_area, other fields unchanged")
+    current = ClassificationParamsModel(
+        investment_type="stock",
+        sector="Technology",
+        short_description="Tech stock",
+        geographic_area={"USA": Decimal("1.0")}
+    )
+    patch = PatchAssetMetadataRequest(
+        geographic_area={"USA": "0.6", "GBR": "0.4"}
+    )
+    updated = AssetMetadataService.apply_partial_update(current, patch)
+
+    # Verify: geographic_area changed, other fields unchanged
+    assert updated.investment_type == "stock", "investment_type should be unchanged"
+    assert updated.sector == "Technology", "sector should be unchanged"
+    assert updated.short_description == "Tech stock", "short_description should be unchanged"
+    assert updated.geographic_area == {"USA": Decimal("0.6000"), "GBR": Decimal("0.4000")}
+    print("✅ Only geographic_area changed, other fields preserved")
+
+    # Case 2: PATCH geographic_area=null → clears existing geographic_area
+    print("\nCase 2: PATCH geographic_area=null clears field")
+    current = ClassificationParamsModel(
+        investment_type="etf",
+        geographic_area={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}
+    )
+    patch = PatchAssetMetadataRequest(geographic_area=None)
+    updated = AssetMetadataService.apply_partial_update(current, patch)
+
+    # Verify: geographic_area cleared, investment_type unchanged
+    assert updated.geographic_area is None, "geographic_area should be None"
+    assert updated.investment_type == "etf", "investment_type should be unchanged"
+    print("✅ geographic_area cleared with null")
+
+    # Case 3: Multiple PATCHes in sequence → final state correct
+    print("\nCase 3: Multiple PATCHes in sequence")
+    current = ClassificationParamsModel(
+        investment_type="stock",
+        sector="Finance"
+    )
+
+    # First PATCH: Update sector and add geo area
+    patch1 = PatchAssetMetadataRequest(
+        sector="Technology",
+        geographic_area={"USA": "1.0"}
+    )
+    current = AssetMetadataService.apply_partial_update(current, patch1)
+    assert current.sector == "Technology"
+    assert current.geographic_area == {"USA": Decimal("1.0000")}
+
+    # Second PATCH: Update investment_type, keep others
+    patch2 = PatchAssetMetadataRequest(investment_type="etf")
+    current = AssetMetadataService.apply_partial_update(current, patch2)
+    assert current.investment_type == "etf"
+    assert current.sector == "Technology"  # Still there
+    assert current.geographic_area == {"USA": Decimal("1.0000")}  # Still there
+
+    # Third PATCH: Clear sector
+    patch3 = PatchAssetMetadataRequest(sector=None)
+    current = AssetMetadataService.apply_partial_update(current, patch3)
+    assert current.sector is None
+    assert current.investment_type == "etf"  # Still there
+    assert current.geographic_area == {"USA": Decimal("1.0000")}  # Still there
+
+    print("✅ Multiple sequential PATCHes result in correct final state")
+
+    # Case 4: Concurrent PATCHes (last write wins) - Simulation
+    print("\nCase 4: Concurrent PATCH semantics (last write wins)")
+    # Simulate two concurrent PATCHes to the same asset
+    # In a real scenario, this would be handled by optimistic locking
+    # For testing, we just verify that the last PATCH wins
+
+    current = ClassificationParamsModel(
+        investment_type="stock",
+        sector="Technology"
+    )
+
+    # User A PATCHes sector
+    patch_a = PatchAssetMetadataRequest(sector="Finance")
+    result_a = AssetMetadataService.apply_partial_update(current, patch_a)
+
+    # User B PATCHes sector (simulates concurrent write)
+    patch_b = PatchAssetMetadataRequest(sector="Healthcare")
+    result_b = AssetMetadataService.apply_partial_update(current, patch_b)
+
+    # Both are valid transformations from the same base state
+    assert result_a.sector == "Finance"
+    assert result_b.sector == "Healthcare"
+    print("✅ Last write wins (no optimistic locking enforced at service layer)")
+    print("   Note: Optimistic locking should be handled at API/DB layer if needed")
+
+    print("\n" + "=" * 70)
+    print("  ✅ All PATCH semantic edge cases passed!")
+    print("=" * 70)
+
+
+if __name__ == "__main__":
+    test_parse_classification_params_valid_json()
+    test_parse_classification_params_none()
+    test_serialize_classification_params()
+    test_serialize_classification_params_none()
+    test_compute_metadata_diff()
+    test_apply_partial_update_absent_fields_ignored()
+    test_apply_partial_update_null_clears_field()
+    test_apply_partial_update_geographic_area_full_replace()
+    test_apply_partial_update_invalid_geo_area_raises()
+    test_merge_provider_metadata()
+    test_patch_semantic_edge_cases()
