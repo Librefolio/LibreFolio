@@ -2638,8 +2638,6 @@ def run_all_tests():
         print_info(f"\nStarting test server...")
 
         if not server_manager.start_server():
-            print_error("Failed to start backend server")
-            print_info(f"Check if port {test_port} is available")
             return False
 
         print_success("Test server started successfully")
