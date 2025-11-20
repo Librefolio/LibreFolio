@@ -656,7 +656,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: dict | None = None,
-    ) -> dict | None:
+        ) -> dict | None:
         """
         Fetch asset metadata (NOT SUPPORTED for synthetic scheduled investment).
 
@@ -668,4 +668,3 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         """
         # Synthetic provider - no external metadata
         return None
-

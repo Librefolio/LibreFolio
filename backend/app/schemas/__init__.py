@@ -35,6 +35,8 @@ from backend.app.schemas.assets import (
     BulkAssetReadRequest,
     BulkMetadataRefreshRequest,
     BulkMetadataRefreshResponse,
+    PatchAssetMetadataItem,
+    BulkPatchAssetMetadataRequest,
     )
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -89,6 +91,8 @@ __all__ = [
     "BulkAssetReadRequest",
     "BulkMetadataRefreshRequest",
     "BulkMetadataRefreshResponse",
+    "PatchAssetMetadataItem",
+    "BulkPatchAssetMetadataRequest",
     # Provider
     "FAProviderInfo",
     "FABulkAssignRequest",
@@ -115,4 +119,4 @@ __all__ = [
     "FXBulkDeleteResponse",
     "FXPairSourcesResponse",
     "FXCreatePairSourcesRequest",
-]
+    ]

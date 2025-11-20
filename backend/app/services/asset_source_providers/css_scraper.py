@@ -259,7 +259,7 @@ class CSSScraperProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-    ) -> dict | None:
+        ) -> dict | None:
         """
         Fetch asset metadata (NOT SUPPORTED for CSS scraper).
 

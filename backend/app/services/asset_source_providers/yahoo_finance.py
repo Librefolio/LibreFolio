@@ -316,7 +316,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-    ) -> dict | None:
+        ) -> dict | None:
         """
         Fetch asset metadata from Yahoo Finance.
 
@@ -361,7 +361,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 'currency': 'currency',
                 'future': 'future',
                 'option': 'option',
-            }
+                }
             investment_type = investment_type_map.get(quote_type, 'stock')
 
             # Get description (truncate to 500 chars)
@@ -387,7 +387,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 "short_description": short_description,
                 "sector": sector,
                 # geographic_area not available from Yahoo Finance
-            }
+                }
 
             logger.info(f"Fetched metadata from yfinance for {identifier}: type={investment_type}, sector={sector}")
             return metadata
@@ -395,4 +395,3 @@ class YahooFinanceProvider(AssetSourceProvider):
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {identifier}: {e}")
             return None
-

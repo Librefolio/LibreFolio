@@ -360,7 +360,7 @@ class Asset(SQLModel, table=True):
 
     Classification and metadata fields:
     - classification_params: JSON containing ClassificationParamsModel structure
-
+    
     The classification_params JSON should conform to ClassificationParamsModel schema:
     {
       "investment_type": "stock" | "etf" | "bond" | etc.,
@@ -372,7 +372,7 @@ class Asset(SQLModel, table=True):
       },
       "sector": "Technology" | "Healthcare" | etc.  # Optional
     }
-
+    
     Geographic area validation:
     - Country codes must be valid ISO-3166-A3 (e.g., USA, GBR, ITA)
     - Weights must sum to 1.0 within tolerance (abs(sum - 1) <= 1e-6)

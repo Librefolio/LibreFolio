@@ -48,7 +48,7 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
         bool: True if command succeeded
     """
     print(f"\n{Colors.BLUE}Running: {description}{Colors.NC}")
-    print(f"Command: {' '.join(cmd)}")
+    print(f"Command:\n└─▶ $ {' '.join(cmd)}")
 
     try:
         # Ensure test subprocesses run in test mode when invoking test scripts
@@ -423,6 +423,18 @@ def services_fx_conversion(verbose: bool = False) -> bool:
         )
 
 
+def services_asset_metadata(verbose: bool = False) -> bool:
+    """Test AssetMetadataService static utility behavior."""
+    print_section("Services: Asset Metadata Service")
+    print_info("Testing: backend/app/services/asset_metadata.py")
+    print_info("Tests: parse/serialize, diff, patch semantics")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_asset_metadata.py", "-v"],
+        "Asset metadata service tests",
+        verbose=verbose,
+        )
+
+
 def services_asset_source(verbose: bool = False) -> bool:
     """
     Test Asset Source service logic.
@@ -646,6 +658,7 @@ def services_all(verbose: bool = False) -> bool:
 
     tests = [
         ("FX Conversion Logic", lambda: services_fx_conversion(verbose)),
+        ("Asset Metadata Service", lambda: services_asset_metadata(verbose)),
         ("Asset Source Logic", lambda: services_asset_source(verbose)),
         ("Asset Source Refresh (smoke)", lambda: services_asset_source_refresh(verbose)),
         ("Provider Registry", lambda: services_provider_registry(verbose)),
@@ -965,6 +978,10 @@ Test commands:
                          📋 Prerequisites: Database created (run: db create)
                          💡 Runs lightweight refresh orchestration smoke test using a mock provider
 
+  asset-metadata      - Test AssetMetadataService static utility behavior
+                        📋 Prerequisites: Database created (run: db create)
+                        💡 Tests: parse/serialize, diff, patch semantics
+  
   provider-registry   - Test provider registry (asset & fx)
                         📋 Prerequisites: Database created (run: db create)
                         💡 Tests: Registration, lookup, priority, fallback
@@ -986,7 +1003,7 @@ Future: FIFO calculations, portfolio aggregations, loan schedules will be added 
 
     services_parser.add_argument(
         "action",
-        choices=["fx", "asset-source", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "all"],
+        choices=["fx", "asset-source", "asset-metadata", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "all"],
         help="Service test to run"
         )
 
@@ -1171,6 +1188,8 @@ def main():
             success = services_fx_conversion(verbose=verbose)
         elif args.action == "asset-source":
             success = services_asset_source(verbose=verbose)
+        elif args.action == "asset-metadata":
+            success = services_asset_metadata(verbose=verbose)
         elif args.action == "asset-source-refresh":
             success = services_asset_source_refresh(verbose=verbose)
         elif args.action == "provider-registry":

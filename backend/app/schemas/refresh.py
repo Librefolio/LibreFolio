@@ -79,11 +79,11 @@ class FABulkRefreshResponse(BaseModel):
 
 class FXSyncResponse(BaseModel):
     """Response for FX rate synchronization from central banks.
-
+    
     Provides summary of synced FX rates operation.
     Different structure from FA: summarizes overall sync with date range
     rather than per-asset results.
-
+    
     Migrated from fx.py (was SyncResponseModel) to consolidate refresh/sync
     operations in single module for operational coherence.
     """

@@ -130,7 +130,7 @@ class MockProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-    ) -> dict | None:
+        ) -> dict | None:
         """
         Fetch mock asset metadata for testing.
 
@@ -150,5 +150,4 @@ class MockProvider(AssetSourceProvider):
             "short_description": f"Mock test asset {identifier} - used for testing metadata features",
             "geographic_area": {"USA": "0.6", "ITA": "0.4"},  # Test string parsing
             "sector": "Technology"
-        }
-
+            }
