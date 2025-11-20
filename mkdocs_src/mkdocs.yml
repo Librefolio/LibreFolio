@@ -1,0 +1,44 @@
+site_name: LibreFolio Documentation
+site_description: "Developer and user manuals for LibreFolio"
+#TODO: capire se la porta fissa possa essere un problema
+site_url: http://localhost:8000/mkdocs/
+repo_url: https://github.com/LibreFolio/LibreFolio
+edit_uri: ""
+docs_dir: docs
+site_dir: ../site
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - content.action.edit
+    - toc.integrate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep purple
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep purple
+  language: en
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Examples: examples.md
+  - Developer Manual:
+      - Test Walkthrough: developer/test-walkthrough.md
+      - Architecture Overview: developer/architecture.md
+  - User Manual:
+      - Overview: user/index.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/LibreFolio/LibreFolio
+      name: LibreFolio on GitHub
+plugins:
+  - search

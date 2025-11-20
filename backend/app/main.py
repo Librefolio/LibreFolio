@@ -8,8 +8,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.v1.router import router as api_v1_router
 from backend.app.config import get_settings, set_test_mode, is_test_mode
@@ -154,6 +156,50 @@ app.add_middleware(
 
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
+
+# Serve mkdocs site from FastAPI at /mkdocs if site directory exists, otherwise return placeholder HTML.
+SITE_DIR = Path(__file__).parent.parent.parent / "site"
+
+
+def docs_available() -> bool:
+    return SITE_DIR.exists() and (SITE_DIR / "index.html").exists()
+
+# TODO: aggiornare guida per il caso docker quando docker ci sarà
+def render_docs_not_built() -> HTMLResponse:
+    return HTMLResponse(
+            """<html><body>
+            <h1>Documentation not generated</h1>
+            <p>To build the <b>MkDocs</b> site, change into the <b>LibreFolio</b> installation directory and run:</p>
+            <pre><code>cd `/path/to/LibreFolio`
+    ./dev.sh info:mk build</code></pre>
+            <p>If you are using <b>Docker</b> (coming soon), open a shell in the backend container and run the same command:</p>
+            <pre><code>docker compose exec backend /bin/bash
+    ./dev.sh info:mk build</code></pre>
+            </body></html>"""
+        )
+
+
+@app.get("/mkdocs", response_class=HTMLResponse)
+async def mkdocs_root():
+    if docs_available():
+        return FileResponse(SITE_DIR / "index.html")
+    return render_docs_not_built()
+
+
+@app.get("/mkdocs/{path:path}")
+async def mkdocs_static(path: str):
+    if not docs_available():
+        return render_docs_not_built()
+
+    requested_path = path.strip("/")
+    target = SITE_DIR / requested_path
+    if target.is_dir():
+        target = target / "index.html"
+
+    if target.exists() and target.is_file():
+        return FileResponse(target)
+
+    return HTMLResponse("<h1>Documentation file not found</h1>", status_code=404)
 
 
 @app.get("/")

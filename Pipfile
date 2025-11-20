@@ -26,6 +26,8 @@ beautifulsoup4 = "*"
 argcomplete = "*"
 sqlglot = "*"
 pycountry = "*"
+mkdocs = "*"
+mkdocs-material = "*"
 
 [dev-packages]
 pytest = "*"
