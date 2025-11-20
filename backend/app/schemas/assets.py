@@ -39,15 +39,10 @@ from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
-class CommonConfig:
-    model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": []})
-
-
 # ============================================================================
 # ENUMS FOR FINANCIAL CALCULATIONS
 # ============================================================================
-
+# TODO: capire se va spostato in price.py
 class CompoundingType(str, Enum):
     """
     Interest compounding type.
@@ -58,7 +53,7 @@ class CompoundingType(str, Enum):
     SIMPLE = "SIMPLE"
     COMPOUND = "COMPOUND"
 
-
+# TODO: capire se va spostato in price.py
 class CompoundFrequency(str, Enum):
     """
     Frequency of interest compounding (for COMPOUND interest).
@@ -77,7 +72,7 @@ class CompoundFrequency(str, Enum):
     ANNUAL = "ANNUAL"
     CONTINUOUS = "CONTINUOUS"
 
-
+# TODO: capire se va spostato in price.py
 class DayCountConvention(str, Enum):
     """
     Day count convention for interest calculations.
@@ -97,13 +92,13 @@ class DayCountConvention(str, Enum):
 # BASIC MODELS
 # ============================================================================
 
-
+# TODO: cancellare/mergiare con quello in common.py
 class BackwardFillInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
     actual_rate_date: date
     days_back: int
 
-
+# TODO: capire se va spostato in price.py
 class CurrentValueModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     value: Decimal
@@ -116,7 +111,7 @@ class CurrentValueModel(BaseModel):
     def parse_decimal(cls, v):
         return Decimal(str(v))
 
-
+# TODO: capire se va spostato in price.py
 class PricePointModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     date: date
@@ -134,15 +129,14 @@ class PricePointModel(BaseModel):
         if v is None:
             return None
         return Decimal(str(v))
-
-
+# TODO: capire se va spostato in price.py
 class HistoricalDataModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     prices: List[PricePointModel]
     currency: Optional[str] = None
     source: Optional[str] = None
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class AssetProviderAssignmentModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     asset_id: int
@@ -155,7 +149,7 @@ class AssetProviderAssignmentModel(BaseModel):
 # ============================================================================
 # SCHEDULED INVESTMENT SCHEMAS
 # ============================================================================
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class InterestRatePeriod(BaseModel):
     """
     Interest rate period for scheduled investments.
@@ -227,7 +221,7 @@ class InterestRatePeriod(BaseModel):
                 raise ValueError("compound_frequency should not be set when compounding is SIMPLE")
         return v
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class LateInterestConfig(BaseModel):
     """
     Late interest configuration for scheduled investments.
@@ -286,7 +280,7 @@ class LateInterestConfig(BaseModel):
                 raise ValueError("compound_frequency should not be set when compounding is SIMPLE")
         return v
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class ScheduledInvestmentSchedule(BaseModel):
     """
     Complete interest schedule configuration for scheduled investments.
@@ -366,7 +360,7 @@ class ScheduledInvestmentSchedule(BaseModel):
 
         return sorted_schedule
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class ScheduledInvestmentParams(BaseModel):
     """
     Provider parameters for scheduled investment assets.
@@ -436,7 +430,7 @@ class ScheduledInvestmentParams(BaseModel):
 # ============================================================================
 # ASSET METADATA & CLASSIFICATION
 # ============================================================================
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class ClassificationParamsModel(BaseModel):
     """
     Asset classification metadata.
@@ -473,7 +467,7 @@ class ClassificationParamsModel(BaseModel):
         from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
         return validate_and_normalize_geographic_area(v)
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class PatchAssetMetadataRequest(BaseModel):
     """
     PATCH metadata request (partial update).
@@ -503,7 +497,7 @@ class PatchAssetMetadataRequest(BaseModel):
     geographic_area: Optional[dict[str, Decimal] | None] = None
     sector: Optional[str] = None
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class PatchAssetMetadataItem(BaseModel):
     """Single asset metadata patch item for bulk requests."""
     model_config = ConfigDict(extra="forbid")
@@ -511,14 +505,14 @@ class PatchAssetMetadataItem(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     patch: PatchAssetMetadataRequest
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class BulkPatchAssetMetadataRequest(BaseModel):
     """Bulk metadata patch payload matching FA bulk patterns."""
     model_config = ConfigDict(extra="forbid")
 
     assets: List[PatchAssetMetadataItem] = Field(..., min_length=1, description="List of metadata patches")
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class AssetMetadataResponse(BaseModel):
     """
     Asset with metadata fields.
@@ -533,7 +527,7 @@ class AssetMetadataResponse(BaseModel):
     currency: str
     classification_params: Optional[ClassificationParamsModel] = None
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class MetadataChangeDetail(BaseModel):
     """Single field change in metadata."""
     model_config = ConfigDict(extra="forbid")
@@ -542,7 +536,7 @@ class MetadataChangeDetail(BaseModel):
     old_value: Optional[str] = None
     new_value: Optional[str] = None
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class MetadataRefreshResult(BaseModel):
     """
     Result of metadata refresh for single asset.
@@ -557,21 +551,21 @@ class MetadataRefreshResult(BaseModel):
     changes: Optional[List[MetadataChangeDetail]] = None
     warnings: Optional[List[str]] = None
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class BulkAssetReadRequest(BaseModel):
     """Request to read multiple assets by IDs."""
     model_config = ConfigDict(extra="forbid")
 
     asset_ids: List[int]
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class BulkMetadataRefreshRequest(BaseModel):
     """Bulk metadata refresh request."""
     model_config = ConfigDict(extra="forbid")
 
     asset_ids: List[int]
 
-
+# TODO: rinominare aggiungendo FA per seguire nomenclatura
 class BulkMetadataRefreshResponse(BaseModel):
     """
     Bulk metadata refresh response (partial success).
