@@ -6,11 +6,14 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
 
-# Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+NC='\033[0m'  # No Color
 
 function get_server_port() {
     # Get server port from system environment variable
@@ -160,6 +163,8 @@ function print_help() {
     echo ""
     echo "Information:"
     echo "  info:api         List all API endpoints with descriptions"
+    echo "  info:mk [cmd]    MkDocs helper (cmd = build | serve | clean | help)"
+    echo "                     Use: ./dev.sh info:mk help for details"
     echo ""
     echo "Help:"
     echo "  help             Show this help message"
@@ -196,8 +201,12 @@ function start_server() {
     echo -e "${GREEN}Starting LibreFolio API server...${NC}"
     echo -e "${YELLOW}Database: $db${NC}"
     echo -e "${YELLOW}Port: $port${NC}"
-    echo -e "${YELLOW}API Redoc: http://localhost:$port/api/v1/redoc${NC}"
-    echo -e "${YELLOW}API Docs: http://localhost:$port/api/v1/docs${NC}"
+    echo -e "${BLUE}${BOLD}API Docs available here:${NC}"
+    echo -e " ├── 💻 ${YELLOW}API Redoc: http://localhost:$port/api/v1/redoc${NC}"
+    echo -e " └── 🚀 ${YELLOW}API Docs: http://localhost:$port/api/v1/docs${NC}"
+    echo ""
+    echo -e "${BLUE}${BOLD}User Documentation available here:${NC}"
+    echo -e " └── 📚 ${YELLOW}User Doc: http://localhost:$port/mkdocs/user/${NC}"
     echo ""
     pipenv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port $port
 }
@@ -206,11 +215,14 @@ function start_server_test() {
     local port=$(get_test_server_port)
     local db=$(get_test_database_path)
 
-    echo -e "${GREEN}Starting LibreFolio API server in TEST MODE...${NC}"
-    echo -e "${YELLOW}🧪 Database: $db${NC}"
-    echo -e "${YELLOW}🧪 Port: $port${NC}"
-    echo -e "${YELLOW}API Redoc: http://localhost:$port/api/v1/redoc${NC}"
-    echo -e "${YELLOW}API Docs: http://localhost:$port/api/v1/docs${NC}"
+    echo -e "${GREEN}Starting LibreFolio API server...${NC}"
+    echo -e "${YELLOW}Database: $db${NC}"
+    echo -e "${YELLOW}Port: $port${NC}"
+    echo -e "${RED} API Docs available here:${NC}"
+    echo -e "💻${YELLOW}API Redoc: http://localhost:$port/api/v1/redoc${NC}"
+    echo -e "🚀${YELLOW}API Docs: http://localhost:$port/api/v1/docs${NC}"
+    echo -e "${RED} User Documentation available here:${NC}"
+    echo -e "📚${YELLOW}User Doc: http://localhost:$port/mkdocs/user/${NC}"
     echo ""
     echo -e "${YELLOW}⚠️  Warning: This uses the TEST database, not production!${NC}"
     echo ""
@@ -588,6 +600,42 @@ case "$COMMAND" in
         ;;
     info:api)
         list_api_endpoints
+        ;;
+    info:mk)
+        shift
+        subcommand="${1:-help}"
+        if [ "$subcommand" = "help" ]; then
+            echo -e "${GREEN}MkDocs Helper Commands:${NC}"
+            echo "  build    Build documentation (mkdocs build)"
+            echo "  serve    Serve documentation locally (mkdocs serve)"
+            echo "  clean    Remove built site/ directory"
+            echo "  help     Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  ./dev.sh info:mk build"
+            echo "  ./dev.sh info:mk serve"
+            echo ""
+            exit 0
+        fi
+        case "$subcommand" in
+            build)
+                echo -e "${GREEN}Building MkDocs site...${NC}"
+                pipenv run mkdocs build -f mkdocs_src/mkdocs.yml
+                ;;
+            serve)
+                echo -e "${GREEN}Serving MkDocs site (http://127.0.0.1:8002)${NC}"
+                pipenv run mkdocs serve -f mkdocs_src/mkdocs.yml -a 127.0.0.1:8002
+                ;;
+            clean)
+                echo -e "${YELLOW}Removing site directory...${NC}"
+                rm -rf site
+                ;;
+            *)
+                echo -e "${RED}Unknown mkdocs info subcommand${NC}"
+                exit 1
+                ;;
+        esac
+        exit 0
         ;;
     help|--help|-h)
         print_help
