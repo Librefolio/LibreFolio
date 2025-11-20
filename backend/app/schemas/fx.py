@@ -45,7 +45,6 @@ from backend.app.schemas.common import BackwardFillInfo
 class FXProviderInfo(BaseModel):
     """Information about a single FX rate provider."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
         str_strip_whitespace=True,
         )
 
@@ -59,7 +58,7 @@ class FXProviderInfo(BaseModel):
 class FXProvidersResponse(BaseModel):
     """Response model for listing FX providers."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
+
         )
 
     providers: list[FXProviderInfo] = Field(..., description="List of available providers")
@@ -76,7 +75,7 @@ class FXProvidersResponse(BaseModel):
 class FXConversionRequest(BaseModel):
     """Single conversion request with optional date range."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
+
         populate_by_name=True,
         str_strip_whitespace=True,
         )
@@ -109,7 +108,7 @@ class FXConversionRequest(BaseModel):
 class FXConvertRequest(BaseModel):
     """Request model for bulk currency conversion."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
+
         )
 
     conversions: list[FXConversionRequest] = Field(..., min_length=1, description="List of conversions to perform")
@@ -118,7 +117,7 @@ class FXConvertRequest(BaseModel):
 class FXConversionResult(BaseModel):
     """Single conversion result."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
+
         )
 
     amount: Decimal = Field(..., description="Original amount")
@@ -137,7 +136,7 @@ class FXConversionResult(BaseModel):
 class FXConvertResponse(BaseModel):
     """Response model for bulk currency conversion."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
+
         )
 
     results: list[FXConversionResult] = Field(..., description="Conversion results in order")
@@ -151,7 +150,7 @@ class FXConvertResponse(BaseModel):
 class FXUpsertItem(BaseModel):
     """Single rate to upsert."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
+
         populate_by_name=True,
         str_strip_whitespace=True,
         )
@@ -184,7 +183,7 @@ class FXUpsertItem(BaseModel):
 class FXBulkUpsertRequest(BaseModel):
     """Request model for bulk rate upsert."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
+
         )
 
     rates: list[FXUpsertItem] = Field(..., min_length=1, description="List of rates to insert/update")
@@ -193,7 +192,7 @@ class FXBulkUpsertRequest(BaseModel):
 class FXUpsertResult(BaseModel):
     """Single rate upsert result."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
+
         )
 
     success: bool = Field(..., description="Whether the operation was successful")
@@ -207,7 +206,7 @@ class FXUpsertResult(BaseModel):
 class FXBulkUpsertResponse(BaseModel):
     """Response model for bulk rate upsert."""
     model_config = ConfigDict(
-        json_encoders={Decimal: str},
+
         )
 
     results: list[FXUpsertResult] = Field(..., description="Upsert results in order")

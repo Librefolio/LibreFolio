@@ -11,7 +11,7 @@ from backend.app.utils.geo_normalization import (
     parse_decimal_weight,
     quantize_weight,
     validate_and_normalize_geographic_area,
-)
+    )
 
 
 def print_section(title):
@@ -129,7 +129,7 @@ def test_validate_and_normalize_geographic_area():
         "USA": Decimal("0.6000"),
         "GBR": Decimal("0.3000"),
         "ITA": Decimal("0.1000")
-    }
+        }
     assert sum(result.values()) == Decimal("1.0")
     print_test("Valid ISO-3 codes with exact sum")
 
@@ -212,7 +212,7 @@ def test_validate_and_normalize_geographic_area():
         "GBR": 0.25,
         "ITA": 0.25,
         "FRA": 0.25
-    }
+        }
     result = validate_and_normalize_geographic_area(data)
     assert len(result) == 4
     assert sum(result.values()) == Decimal("1.0")
@@ -247,4 +247,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-

@@ -37,7 +37,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Optional, List
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CommonConfig:
@@ -504,6 +504,21 @@ class PatchAssetMetadataRequest(BaseModel):
     sector: Optional[str] = None
 
 
+class PatchAssetMetadataItem(BaseModel):
+    """Single asset metadata patch item for bulk requests."""
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(..., description="Asset ID")
+    patch: PatchAssetMetadataRequest
+
+
+class BulkPatchAssetMetadataRequest(BaseModel):
+    """Bulk metadata patch payload matching FA bulk patterns."""
+    model_config = ConfigDict(extra="forbid")
+
+    assets: List[PatchAssetMetadataItem] = Field(..., min_length=1, description="List of metadata patches")
+
+
 class AssetMetadataResponse(BaseModel):
     """
     Asset with metadata fields.
@@ -596,4 +611,6 @@ __all__ = [
     "BulkAssetReadRequest",
     "BulkMetadataRefreshRequest",
     "BulkMetadataRefreshResponse",
+    "PatchAssetMetadataItem",
+    "BulkPatchAssetMetadataRequest",
     ]

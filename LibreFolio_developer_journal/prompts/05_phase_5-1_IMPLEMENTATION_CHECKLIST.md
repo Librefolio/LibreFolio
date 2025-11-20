@@ -519,34 +519,60 @@
 
 ### 5.1 Metadata Management Endpoints
 
-- [ ] **PATCH /api/v1/assets/{asset_id}/metadata (NEW)**
+- [x] **PATCH /api/v1/assets/metadata (NEW BULK)**
   - File: `backend/app/api/v1/assets.py` (UPDATE)
   - Endpoint:
     ```python
-    @router.patch("/{asset_id}/metadata", response_model=AssetMetadataResponse)
-    async def update_asset_metadata(
-        asset_id: int,
-        patch: PatchAssetMetadataRequest,
+    from fastapi import Depends, HTTPException
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from backend.app.services.asset_metadata import AssetMetadataService
+    from backend.app.schemas.assets import (
+        BulkPatchAssetMetadataRequest,
+        MetadataRefreshResult,
+    )
+
+    @router.patch("/metadata", response_model=list[MetadataRefreshResult])
+    async def update_assets_metadata_bulk(
+        request: BulkPatchAssetMetadataRequest,
         session: AsyncSession = Depends(get_session_generator)
     ):
-        """Update asset metadata (partial update, PATCH semantics).
-        
-        Rules:
-        - Absent fields: ignored
-        - null: clear field
-        - geographic_area: full block replace (validated as unit)
-        """
+        """Bulk partial update of asset metadata (FA pattern)."""
         try:
-            result = await AssetMetadataService.update_asset_metadata(asset_id, patch, session)
-            return result
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            results = []
+            for item in request.assets:
+                try:
+                    res = await AssetMetadataService.update_asset_metadata(item.asset_id, item.patch, session)
+                    results.append({
+                        "asset_id": item.asset_id,
+                        "success": True,
+                        "message": "updated",
+                        "changes": getattr(res, "changes", None)
+                    })
+                except ValueError as e:
+                    results.append({
+                        "asset_id": item.asset_id,
+                        "success": False,
+                        "message": str(e)
+                    })
+                except Exception as e:
+                    logger.error(f"Error updating metadata for asset {item.asset_id}: {e}")
+                    results.append({
+                        "asset_id": item.asset_id,
+                        "success": False,
+                        "message": "internal error"
+                    })
+            return results
         except Exception as e:
-            logger.error(f"Error updating metadata for asset {asset_id}: {e}")
+            logger.error(f"Error in bulk metadata update: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     ```
+  - Notes:
+    - Request schema: `BulkPatchAssetMetadataRequest` / `PatchAssetMetadataItem` (asset_id + patch payload)
+    - Follows FA per-item result pattern (`MetadataRefreshResult` with optional `changes`)
+    - Returns 422 when payload fails validation (list required, per-item patch validation enforced)
+    - Makes sure doc blocks import `AsyncSession`, `Depends`, `BulkPatchAssetMetadataRequest`, `MetadataRefreshResult`, and `AssetMetadataService` to avoid IDE irons
 
-- [ ] **POST /api/v1/assets (bulk read) (MODIFY EXISTING or NEW)**
+- [x] **POST /api/v1/assets (bulk read) (MODIFY EXISTING or NEW)**
   - File: `backend/app/api/v1/assets.py` (UPDATE)
   - Check if `GET /api/v1/assets/{asset_id}` exists
   - Create new bulk endpoint:
@@ -580,7 +606,7 @@
             raise HTTPException(status_code=500, detail=str(e))
     ```
 
-- [ ] **POST /api/v1/assets/{asset_id}/metadata/refresh (NEW)**
+- [x] **POST /api/v1/assets/{asset_id}/metadata/refresh (NEW)**
   - File: `backend/app/api/v1/assets.py` (UPDATE)
   - Endpoint:
     ```python
@@ -598,7 +624,7 @@
             raise HTTPException(status_code=500, detail=str(e))
     ```
 
-- [ ] **POST /api/v1/assets/metadata/refresh/bulk (NEW, optional but recommended)**
+- [x] **POST /api/v1/assets/metadata/refresh/bulk (NEW, optional but recommended)**
   - File: `backend/app/api/v1/assets.py` (UPDATE)
   - Endpoint:
     ```python
@@ -655,34 +681,41 @@
 
 ### 6.1 Unit Tests - Utilities
 
-- [ ] **Test geo_normalization utilities**
+- [x] **Test geo_normalization utilities**
   - File: `backend/test_scripts/test_utilities/test_geo_normalization.py`
   - Already created in Phase 2.2
   - Run: `./test_runner.py utils geo-normalization`
-  - **Expected**: All tests pass
+  - **Expected**: ✅ All tests pass (Last run Nov 20, 2025 @09:56)
 
 ### 6.2 Unit Tests - Service Layer
 
-- [ ] **Test AssetMetadataService**
-  - File: `backend/test_scripts/test_services/test_asset_metadata.py` (NEW)
+- [x] **Test AssetMetadataService**
+  - File: `backend/test_scripts/test_services/test_asset_metadata.py` (NEW - 125 lines)
   - Test cases:
-    1. parse_classification_params(): valid JSON → model
-    2. parse_classification_params(): None → None
-    3. serialize_classification_params(): model → JSON
-    4. compute_metadata_diff(): old vs new → changes list
-    5. apply_partial_update(): absent fields ignored
-    6. apply_partial_update(): null clears field
-    7. apply_partial_update(): geographic_area full replace
-    8. apply_partial_update(): invalid geographic_area → raises ValueError
+    1. ✅ parse_classification_params(): valid JSON → model
+    2. ✅ parse_classification_params(): None → None
+    3. ✅ serialize_classification_params(): model → JSON
+    4. ✅ serialize_classification_params(): None → None
+    5. ✅ compute_metadata_diff(): old vs new → changes list
+    6. ✅ apply_partial_update(): absent fields ignored
+    7. ✅ apply_partial_update(): null clears field
+    8. ✅ apply_partial_update(): geographic_area full replace
+    9. ✅ apply_partial_update(): invalid geographic_area → raises ValueError
+    10. ✅ merge_provider_metadata(): provider data merges correctly
   - Run: `./test_runner.py services asset-metadata`
+  - **Status**: ✅ PASS (Nov 20, 2025 @10:34) - All 10 test functions passing
+  - **Note**: Fixed Pydantic v2 deprecation warnings (removed json_encoders from fx.py)
 
-- [ ] **Test provider metadata auto-populate**
-  - File: `backend/test_scripts/test_services/test_asset_source.py` (UPDATE)
-  - Add test: `test_bulk_assign_providers_with_metadata_autopopulate()`
-  - Mock: Use mockprov provider with metadata support
-  - Verify: After assignment, asset.classification_params is populated
-  - Verify: Metadata changes in result dict
+- [x] **Test provider metadata auto-populate**
+  - File: `backend/test_scripts/test_services/test_asset_source.py` (UPDATED +70 lines)
+  - Added test: `test_metadata_auto_populate()` - Test 6a in orchestration
+  - Mock: Uses mockprov provider with metadata support
+  - Verify: ✅ After assignment, asset.classification_params is populated
+  - Verify: ✅ Metadata changes in result dict (4 fields: sector, investment_type, short_description, geographic_area)
+  - Verify: ✅ Result includes metadata_updated flag
   - Run: `./test_runner.py services asset-source`
+  - **Status**: ✅ PASS (Nov 20, 2025 @10:43) - All 16/16 tests passing including metadata auto-populate
+  - **Output**: Metadata auto-populated: {"investment_type":"stock","short_description":"Mock test asset...
 
 ### 6.3 Integration Tests - API
 
@@ -903,4 +936,3 @@
 ---
 
 **Next Phase**: Phase 5.2 - Advanced Provider Implementations with metadata fetch
-

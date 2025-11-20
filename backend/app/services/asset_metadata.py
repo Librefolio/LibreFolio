@@ -35,7 +35,7 @@ from backend.app.schemas.assets import (
     ClassificationParamsModel,
     PatchAssetMetadataRequest,
     MetadataChangeDetail,
-)
+    )
 
 
 class AssetMetadataService:
@@ -117,7 +117,7 @@ class AssetMetadataService:
     def compute_metadata_diff(
         old: Optional[ClassificationParamsModel],
         new: Optional[ClassificationParamsModel]
-    ) -> list[MetadataChangeDetail]:
+        ) -> list[MetadataChangeDetail]:
         """
         Compute diff between old and new metadata.
 
@@ -162,7 +162,7 @@ class AssetMetadataService:
                     field=field,
                     old_value=old_display,
                     new_value=new_display
-                ))
+                    ))
 
         return changes
 
@@ -170,7 +170,7 @@ class AssetMetadataService:
     def apply_partial_update(
         current: Optional[ClassificationParamsModel],
         patch: PatchAssetMetadataRequest
-    ) -> ClassificationParamsModel:
+        ) -> ClassificationParamsModel:
         """
         Apply PATCH request to current metadata.
 
@@ -205,7 +205,7 @@ class AssetMetadataService:
             'short_description': None,
             'geographic_area': None,
             'sector': None,
-        }
+            }
 
         # Get patch fields that were explicitly set (exclude unset fields)
         # This distinguishes between "field not in request" vs "field=null in request"
@@ -225,7 +225,7 @@ class AssetMetadataService:
     def merge_provider_metadata(
         current: Optional[ClassificationParamsModel],
         provider_data: dict
-    ) -> ClassificationParamsModel:
+        ) -> ClassificationParamsModel:
         """
         Merge provider-fetched metadata with current metadata.
 
@@ -251,7 +251,7 @@ class AssetMetadataService:
             'short_description': None,
             'geographic_area': None,
             'sector': None,
-        }
+            }
 
         # Update with provider data (only non-None values)
         for field in ['investment_type', 'short_description', 'geographic_area', 'sector']:
@@ -266,7 +266,7 @@ class AssetMetadataService:
         asset_id: int,
         patch: PatchAssetMetadataRequest,
         session: 'AsyncSession'
-    ) -> 'AssetMetadataResponse':
+        ) -> 'AssetMetadataResponse':
         """
         Update asset metadata with PATCH semantics.
 
@@ -297,7 +297,7 @@ class AssetMetadataService:
         # Load asset from DB
         result = await session.execute(
             select(Asset).where(Asset.id == asset_id)
-        )
+            )
         asset = result.scalar_one_or_none()
 
         if not asset:
@@ -306,14 +306,14 @@ class AssetMetadataService:
         # Parse current classification_params
         current_params = AssetMetadataService.parse_classification_params(
             asset.classification_params
-        )
+            )
 
         # Apply PATCH update
         try:
             updated_params = AssetMetadataService.apply_partial_update(
                 current_params,
                 patch
-            )
+                )
         except ValueError as e:
             # Re-raise validation errors (will become 422 in API layer)
             raise ValueError(f"Validation failed: {e}")
@@ -321,7 +321,7 @@ class AssetMetadataService:
         # Serialize back to JSON
         asset.classification_params = AssetMetadataService.serialize_classification_params(
             updated_params
-        )
+            )
 
         # Commit transaction
         await session.commit()
@@ -336,4 +336,4 @@ class AssetMetadataService:
             identifier=asset.identifier,
             currency=asset.currency,
             classification_params=updated_params
-        )
+            )

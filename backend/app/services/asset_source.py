@@ -37,6 +37,7 @@ from backend.app.db.models import (
     PriceHistory,
     )
 from backend.app.schemas import CurrentValueModel, HistoricalDataModel
+from backend.app.schemas.assets import MetadataRefreshResult
 from backend.app.schemas.assets import PricePointModel, BackwardFillInfo
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -277,7 +278,7 @@ class AssetSourceManager:
                 "asset_id": assignment["asset_id"],
                 "success": True,
                 "message": f"Provider {assignment['provider_code']} assigned"
-            }
+                }
 
             # Try to auto-populate metadata from provider
             try:
@@ -289,42 +290,42 @@ class AssetSourceManager:
                     # Get asset to fetch identifier
                     asset_result = await session.execute(
                         select(Asset).where(Asset.id == assignment["asset_id"])
-                    )
+                        )
                     asset = asset_result.scalar_one_or_none()
 
                     if asset:
                         # Try to fetch metadata
                         try:
-                            provider_metadata = await provider.fetch_asset_metadata(
+                            metadata = await provider.fetch_asset_metadata(
                                 asset.identifier,
                                 assignment.get("provider_params")
-                            )
+                                )
 
-                            if provider_metadata:
+                            if metadata:
                                 # Import metadata service
                                 from backend.app.services.asset_metadata import AssetMetadataService
 
                                 # Parse current metadata
                                 current_params = AssetMetadataService.parse_classification_params(
                                     asset.classification_params
-                                )
+                                    )
 
                                 # Merge with provider data
                                 updated_params = AssetMetadataService.merge_provider_metadata(
                                     current_params,
-                                    provider_metadata
-                                )
+                                    metadata
+                                    )
 
                                 # Compute diff
                                 changes = AssetMetadataService.compute_metadata_diff(
                                     current_params,
                                     updated_params
-                                )
+                                    )
 
                                 # Serialize and update asset
                                 asset.classification_params = AssetMetadataService.serialize_classification_params(
                                     updated_params
-                                )
+                                    )
 
                                 await session.commit()
 
@@ -334,13 +335,13 @@ class AssetSourceManager:
                                     result["metadata_changes"] = [
                                         {"field": c.field, "old": c.old_value, "new": c.new_value}
                                         for c in changes
-                                    ]
+                                        ]
                                     logger.info(
                                         "Metadata auto-populated from provider",
                                         asset_id=assignment["asset_id"],
                                         provider=assignment["provider_code"],
                                         changes_count=len(changes)
-                                    )
+                                        )
                                 else:
                                     result["metadata_updated"] = False
                         except Exception as e:
@@ -350,14 +351,14 @@ class AssetSourceManager:
                                 asset_id=assignment["asset_id"],
                                 provider=assignment["provider_code"],
                                 error=str(e)
-                            )
+                                )
             except Exception as e:
                 # Log but don't fail assignment
                 logger.warning(
                     "Error during metadata auto-populate",
                     asset_id=assignment["asset_id"],
                     error=str(e)
-                )
+                    )
 
             results.append(result)
 
@@ -442,7 +443,7 @@ class AssetSourceManager:
     async def refresh_asset_metadata(
         asset_id: int,
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Refresh metadata for single asset from its assigned provider.
 
@@ -464,7 +465,7 @@ class AssetSourceManager:
             # Load asset and provider assignment
             asset_result = await session.execute(
                 select(Asset).where(Asset.id == asset_id)
-            )
+                )
             asset = asset_result.scalar_one_or_none()
 
             if not asset:
@@ -472,14 +473,14 @@ class AssetSourceManager:
                     "asset_id": asset_id,
                     "success": False,
                     "message": f"Asset {asset_id} not found"
-                }
+                    }
 
             # Get provider assignment
             provider_result = await session.execute(
                 select(AssetProviderAssignment).where(
                     AssetProviderAssignment.asset_id == asset_id
+                    )
                 )
-            )
             provider_assignment = provider_result.scalar_one_or_none()
 
             if not provider_assignment:
@@ -487,19 +488,19 @@ class AssetSourceManager:
                     "asset_id": asset_id,
                     "success": False,
                     "message": "No provider assigned to asset"
-                }
+                    }
 
             # Get provider instance
             provider = AssetProviderRegistry.get_provider_instance(
                 provider_assignment.provider_code
-            )
+                )
 
             if not provider:
                 return {
                     "asset_id": asset_id,
                     "success": False,
                     "message": f"Provider {provider_assignment.provider_code} not found"
-                }
+                    }
 
             # Check if provider supports metadata fetch
             if not hasattr(provider, 'fetch_asset_metadata'):
@@ -507,7 +508,7 @@ class AssetSourceManager:
                     "asset_id": asset_id,
                     "success": False,
                     "message": f"Provider {provider_assignment.provider_code} doesn't support metadata fetch"
-                }
+                    }
 
             # Parse provider params
             import json
@@ -520,52 +521,52 @@ class AssetSourceManager:
 
             # Fetch metadata from provider
             try:
-                provider_metadata = await provider.fetch_asset_metadata(
+                metadata = await provider.fetch_asset_metadata(
                     asset.identifier,
                     provider_params
-                )
+                    )
             except Exception as e:
                 return {
                     "asset_id": asset_id,
                     "success": False,
                     "message": f"Failed to fetch metadata: {str(e)}"
-                }
+                    }
 
-            if not provider_metadata:
+            if not metadata:
                 return {
                     "asset_id": asset_id,
                     "success": False,
                     "message": "Provider returned no metadata"
-                }
+                    }
 
             # Parse current metadata
             current_params = AssetMetadataService.parse_classification_params(
                 asset.classification_params
-            )
+                )
 
             # Merge with provider data
             try:
-                updated_params = AssetMetadataService.merge_provider_metadata(
+                merged = AssetMetadataService.merge_provider_metadata(
                     current_params,
-                    provider_metadata
-                )
+                    metadata
+                    )
             except ValueError as e:
                 return {
                     "asset_id": asset_id,
                     "success": False,
                     "message": f"Validation failed: {str(e)}"
-                }
+                    }
 
             # Compute diff
             changes = AssetMetadataService.compute_metadata_diff(
                 current_params,
-                updated_params
-            )
+                merged
+                )
 
             # Update asset
             asset.classification_params = AssetMetadataService.serialize_classification_params(
-                updated_params
-            )
+                merged
+                )
 
             await session.commit()
 
@@ -575,19 +576,19 @@ class AssetSourceManager:
                 asset_id=asset_id,
                 provider=provider_assignment.provider_code,
                 changes_count=len(changes)
-            )
+                )
 
             result = {
                 "asset_id": asset_id,
                 "success": True,
                 "message": f"Metadata refreshed from {provider_assignment.provider_code}"
-            }
+                }
 
             if changes:
                 result["changes"] = [
                     {"field": c.field, "old_value": c.old_value, "new_value": c.new_value}
                     for c in changes
-                ]
+                    ]
 
             return result
 
@@ -596,18 +597,18 @@ class AssetSourceManager:
                 "Error refreshing metadata",
                 asset_id=asset_id,
                 error=str(e)
-            )
+                )
             return {
                 "asset_id": asset_id,
                 "success": False,
                 "message": f"Internal error: {str(e)}"
-            }
+                }
 
     @staticmethod
     async def bulk_refresh_metadata(
         asset_ids: list[int],
         session: AsyncSession,
-    ) -> dict:
+        ) -> dict:
         """
         Bulk refresh metadata for multiple assets (PRIMARY bulk method).
 
@@ -628,7 +629,7 @@ class AssetSourceManager:
                 "results": [],
                 "success_count": 0,
                 "failed_count": 0
-            }
+                }
 
         # Process each asset (could parallelize with asyncio.gather)
         results = []
@@ -641,10 +642,10 @@ class AssetSourceManager:
         failed_count = len(results) - success_count
 
         return {
-            "results": results,
+            "results": [MetadataRefreshResult(**r) for r in results],
             "success_count": success_count,
-            "failed_count": failed_count
-        }
+            "failed_count": failed_count,
+            }
 
     @staticmethod
     async def get_asset_provider(asset_id: int, session: AsyncSession) -> Optional[AssetProviderAssignment]:

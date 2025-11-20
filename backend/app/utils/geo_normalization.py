@@ -26,7 +26,6 @@ import pycountry
 
 from backend.app.utils.financial_math import parse_decimal_value
 
-
 # Tolerance for sum validation (1e-6 = 0.000001)
 SUM_TOLERANCE = Decimal("0.000001")
 
@@ -105,7 +104,7 @@ def normalize_country_to_iso3(country_input: str) -> str:
     raise ValueError(
         f"Country '{country_input}' not found. "
         f"Please use ISO-3166-A2 (e.g., US), ISO-3166-A3 (e.g., USA), or full country name."
-    )
+        )
 
 
 def parse_decimal_weight(value: Any) -> Decimal:
@@ -210,7 +209,7 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
             raise ValueError(
                 f"Duplicate country after normalization: '{country_input}' → {iso3_code} "
                 f"(already present in geographic area)"
-            )
+                )
 
         # Parse weight
         try:
@@ -234,13 +233,13 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
         raise ValueError(
             f"Geographic area weights must sum to 1.0 (±{SUM_TOLERANCE}). "
             f"Current sum: {total_sum} (difference: {sum_diff})"
-        )
+            )
 
     # Step 4: Quantize all weights to 4 decimals
     quantized: dict[str, Decimal] = {
         country: quantize_weight(weight)
         for country, weight in normalized.items()
-    }
+        }
 
     # Step 5: Renormalize if sum != 1.0 after quantization
     quantized_sum = sum(quantized.values())
@@ -261,7 +260,7 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
             raise ValueError(
                 f"Cannot renormalize: adjustment would make weight negative. "
                 f"Country: {min_country}, Original: {min_weight}, Adjustment: {adjustment}"
-            )
+                )
 
         # Apply adjustment
         quantized[min_country] = adjusted_weight
@@ -273,7 +272,6 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
         raise ValueError(
             f"Internal error: final sum is {final_sum} after renormalization "
             f"(expected {TARGET_SUM})"
-        )
+            )
 
     return quantized
-

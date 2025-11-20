@@ -7,10 +7,20 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.db.models import Asset
 from backend.app.db.session import get_session_generator
-from backend.app.schemas.assets import PricePointModel
+from backend.app.schemas.assets import (
+    PricePointModel,
+    MetadataRefreshResult,
+    BulkPatchAssetMetadataRequest,
+    AssetMetadataResponse,
+    BulkAssetReadRequest,
+    BulkMetadataRefreshRequest,
+    BulkMetadataRefreshResponse,
+    )
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import (
     FAUpsertItem,
@@ -36,6 +46,7 @@ from backend.app.schemas.refresh import (
     FARefreshResult,
     FABulkRefreshResponse,
     )
+from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.provider_registry import AssetProviderRegistry
 
@@ -276,6 +287,44 @@ async def get_prices(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("", response_model=List[AssetMetadataResponse])
+async def read_assets_bulk(
+    request: BulkAssetReadRequest,
+    session: AsyncSession = Depends(get_session_generator)
+    ):
+    """Bulk read assets with metadata, preserving request order."""
+    try:
+        if not request.asset_ids:
+            return []
+
+        stmt = select(Asset).where(Asset.id.in_(request.asset_ids))
+        result = await session.execute(stmt)
+        assets = result.scalars().all()
+        asset_map = {asset.id: asset for asset in assets}
+
+        responses = []
+        for asset_id in request.asset_ids:
+            asset = asset_map.get(asset_id)
+            if not asset:
+                continue
+            responses.append(
+                AssetMetadataResponse(
+                    asset_id=asset.id,
+                    display_name=asset.display_name,
+                    identifier=asset.identifier,
+                    currency=asset.currency,
+                    classification_params=AssetMetadataService.parse_classification_params(
+                        asset.classification_params
+                        )
+                    )
+                )
+
+        return responses
+    except Exception as e:
+        logger.error(f"Error reading assets bulk: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # PROVIDER REFRESH ENDPOINTS
 # ============================================================================
@@ -314,4 +363,68 @@ async def refresh_prices_single(
         return result
     except Exception as e:
         logger.error(f"Error refreshing prices for asset {asset_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/metadata", response_model=list[MetadataRefreshResult])
+async def update_assets_metadata_bulk(
+    request: BulkPatchAssetMetadataRequest,
+    session: AsyncSession = Depends(get_session_generator)
+    ):
+    """Bulk metadata PATCH keeping FA response pattern."""
+    try:
+        results = []
+        for item in request.assets:
+            try:
+                res = await AssetMetadataService.update_asset_metadata(item.asset_id, item.patch, session)
+                results.append({
+                    "asset_id": item.asset_id,
+                    "success": True,
+                    "message": "updated",
+                    "changes": getattr(res, "changes", None)
+                    })
+            except ValueError as e:
+                results.append({
+                    "asset_id": item.asset_id,
+                    "success": False,
+                    "message": str(e)
+                    })
+            except Exception as e:
+                logger.error(f"Error updating metadata for asset {item.asset_id}: {e}")
+                results.append({
+                    "asset_id": item.asset_id,
+                    "success": False,
+                    "message": "internal error"
+                    })
+        return results
+    except Exception as e:
+        logger.error(f"Error in bulk metadata update: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{asset_id}/metadata/refresh", response_model=MetadataRefreshResult)
+async def refresh_asset_metadata_single(
+    asset_id: int,
+    session: AsyncSession = Depends(get_session_generator)
+    ):
+    """Refresh metadata for a single asset via its provider."""
+    try:
+        result = await AssetSourceManager.refresh_asset_metadata(asset_id, session)
+        return MetadataRefreshResult(**result)
+    except Exception as e:
+        logger.error(f"Error refreshing metadata for asset {asset_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/metadata/refresh/bulk", response_model=BulkMetadataRefreshResponse)
+async def refresh_asset_metadata_bulk(
+    request: BulkMetadataRefreshRequest,
+    session: AsyncSession = Depends(get_session_generator)
+    ):
+    """Bulk metadata refresh endpoint (partial success)."""
+    try:
+        result = await AssetSourceManager.bulk_refresh_metadata(request.asset_ids, session)
+        return BulkMetadataRefreshResponse(**result)
+    except Exception as e:
+        logger.error(f"Error in bulk metadata refresh: {e}")
         raise HTTPException(status_code=500, detail=str(e))

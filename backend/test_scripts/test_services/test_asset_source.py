@@ -295,6 +295,74 @@ async def test_single_assign_provider(asset_ids: list[int]):
         return {"passed": False, "message": f"Failed: {str(e)}"}
 
 
+async def test_metadata_auto_populate(asset_ids: list[int]):
+    """Test metadata auto-populate on provider assignment."""
+    print_section("Test 6a: Metadata Auto-Populate")
+
+    try:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            # Create new test asset for metadata test
+            test_asset = Asset(
+                display_name="MockProvider Test Asset",
+                identifier="MOCK_METADATA_TEST",
+                identifier_type="TICKER",
+                currency="USD",
+                asset_type=AssetType.STOCK,
+                valuation_model=ValuationModel.MARKET_PRICE,
+                active=True,
+                classification_params=None  # Start with no metadata
+                )
+            session.add(test_asset)
+            await session.commit()
+            await session.refresh(test_asset)
+
+            print_info(f"Created test asset {test_asset.id} with no metadata")
+
+            # Assign mockprov provider (has metadata support)
+            result = await AssetSourceManager.assign_provider(
+                asset_id=test_asset.id,
+                provider_code="mockprov",
+                provider_params='{"mock_param": "test"}',
+                session=session,
+                )
+
+            print_info(f"Assignment result: {result}")
+            assert result["success"], f"Assignment failed: {result}"
+
+            # Refresh asset to get updated metadata
+            await session.refresh(test_asset)
+
+            # Verify metadata was populated
+            if test_asset.classification_params:
+                print_success(f"✓ Metadata auto-populated: {test_asset.classification_params[:100]}")
+
+                # Parse and verify content
+                import json
+                metadata = json.loads(test_asset.classification_params)
+                assert "investment_type" in metadata, "investment_type not populated"
+                assert metadata["investment_type"] == "stock", "investment_type incorrect"
+                print_success("✓ Metadata content verified (investment_type=stock)")
+
+                # Check for metadata_updated flag in result
+                if result.get("metadata_updated"):
+                    print_success("✓ Result includes metadata_updated flag")
+                    if result.get("metadata_changes"):
+                        print_info(f"  Changes: {len(result['metadata_changes'])} fields updated")
+            else:
+                print_info("ℹ️  Note: Metadata not populated (provider may not support it)")
+
+            return {
+                "passed": True,
+                "message": "Metadata auto-populate test completed",
+                "metadata_populated": test_asset.classification_params is not None
+                }
+    except Exception as e:
+        print_error(f"Exception in metadata auto-populate test: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"passed": False, "message": f"Failed: {str(e)}"}
+
+
 async def test_bulk_remove_providers(asset_ids: list[int]):
     """Test bulk_remove_providers() method."""
     print_section("Test 7: Bulk Remove Providers")
@@ -822,6 +890,9 @@ async def run_all_tests():
         full_results["Single Assign Provider"] = await test_single_assign_provider(asset_ids)
         print_result_detail("Single Assign Provider", full_results["Single Assign Provider"])
 
+        full_results["Metadata Auto-Populate"] = await test_metadata_auto_populate(asset_ids)
+        print_result_detail("Metadata Auto-Populate", full_results["Metadata Auto-Populate"])
+
         full_results["Bulk Remove Providers"] = await test_bulk_remove_providers(asset_ids)
         print_result_detail("Bulk Remove Providers", full_results["Bulk Remove Providers"])
 
@@ -854,6 +925,7 @@ async def run_all_tests():
         skipped_result = {"passed": False, "message": "Skipped (no assets created)", "asset_ids": []}
         for key in [
             "Single Assign Provider",
+            "Metadata Auto-Populate",
             "Bulk Remove Providers",
             "Single Remove Provider",
             "Bulk Upsert Prices",

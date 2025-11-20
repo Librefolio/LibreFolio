@@ -31,18 +31,18 @@ def upgrade() -> None:
     print("📦 Creating table: assets...")
     conn.execute(sa.text("""CREATE TABLE assets
                             (
-                                id                INTEGER PRIMARY KEY,
-                                display_name      VARCHAR     NOT NULL,
-                                identifier        VARCHAR     NOT NULL,
-                                identifier_type   VARCHAR(6)  NOT NULL,
-                                currency          VARCHAR     NOT NULL,
-                                asset_type        VARCHAR(14) NOT NULL,
-                                valuation_model   VARCHAR(15) NOT NULL,
-                                interest_schedule TEXT,
+                                id                    INTEGER PRIMARY KEY,
+                                display_name          VARCHAR     NOT NULL,
+                                identifier            VARCHAR     NOT NULL,
+                                identifier_type       VARCHAR(6)  NOT NULL,
+                                currency              VARCHAR     NOT NULL,
+                                asset_type            VARCHAR(14) NOT NULL,
+                                valuation_model       VARCHAR(15) NOT NULL,
+                                interest_schedule     TEXT,
                                 classification_params TEXT,
-                                active            BOOLEAN     NOT NULL,
-                                created_at        DATETIME    NOT NULL,
-                                updated_at        DATETIME    NOT NULL
+                                active                BOOLEAN     NOT NULL,
+                                created_at            DATETIME    NOT NULL,
+                                updated_at            DATETIME    NOT NULL
                             )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE INDEX ix_assets_identifier ON assets (identifier)"))
