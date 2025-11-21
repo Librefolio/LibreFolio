@@ -730,6 +730,22 @@ def api_assets_metadata(verbose: bool = False) -> bool:
         )
 
 
+def api_assets_crud(verbose: bool = False) -> bool:
+    """
+    Run Assets CRUD API endpoint tests.
+    """
+    print_section("Assets CRUD API Endpoint Tests")
+    print_info("Testing REST API endpoints for asset CRUD operations")
+    print_info("Tests: Create assets, list/filter assets, delete assets")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_api.test_assets_crud"],
+        "Assets CRUD API tests",
+        verbose=verbose
+        )
+
+
 def api_test(verbose: bool = False) -> bool:
     """
     Run all API tests.
@@ -741,6 +757,7 @@ def api_test(verbose: bool = False) -> bool:
     tests = [
         ("FX API", lambda: api_fx(verbose)),
         ("Assets Metadata API", lambda: api_assets_metadata(verbose)),
+        ("Assets CRUD API", lambda: api_assets_crud(verbose)),
     ]
 
     results = []
@@ -1140,15 +1157,20 @@ Test commands:
                     📋 Prerequisites: Database created (run: db create)
                     💡 Tests: PATCH metadata, bulk read, single/bulk refresh, provider assignments
                     Note: Server will be automatically started and stopped by test
+  
+  assets-crud     - Test Assets CRUD endpoints (create, list, delete)
+                    📋 Prerequisites: Database created (run: db create)
+                    💡 Tests: POST /bulk (create), GET /list (filter), DELETE /bulk
+                    Note: Server will be automatically started and stopped by test
          
-  all             - Run all API tests (FX + Assets Metadata)
+  all             - Run all API tests (FX + Assets Metadata + Assets CRUD)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
     api_parser.add_argument(
         "action",
-        choices=["fx", "assets-metadata", "all"],
+        choices=["fx", "assets-metadata", "assets-crud", "all"],
         help="API test to run"
         )
 
@@ -1276,6 +1298,8 @@ def main():
             success = api_fx(verbose=verbose)
         elif args.action == "assets-metadata":
             success = api_assets_metadata(verbose=verbose)
+        elif args.action == "assets-crud":
+            success = api_assets_crud(verbose=verbose)
         elif args.action == "all":
             success = api_test(verbose=verbose)
 

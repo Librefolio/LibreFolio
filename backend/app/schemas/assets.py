@@ -579,6 +579,124 @@ class BulkMetadataRefreshResponse(BaseModel):
     failed_count: int
 
 
+# ============================================================================
+# ASSET CRUD SCHEMAS
+# ============================================================================
+
+class FAAssetCreateItem(BaseModel):
+    """Single asset to create in bulk operation."""
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str = Field(..., description="Human-readable asset name")
+    identifier: str = Field(..., min_length=1, description="Asset identifier (ticker, ISIN, etc.)")
+    identifier_type: Optional[str] = Field(None, description="Identifier type (TICKER, ISIN, CUSIP, etc.)")
+    currency: str = Field(..., min_length=3, max_length=3, description="Asset currency (ISO 4217)")
+    asset_type: Optional[str] = Field(None, description="Asset type (STOCK, ETF, BOND, etc.)")
+    valuation_model: Optional[str] = Field("MARKET_PRICE", description="Valuation model (MARKET_PRICE, SCHEDULED_YIELD, MANUAL)")
+
+    # Scheduled yield fields (optional, for bonds/loans)
+    face_value: Optional[Decimal] = Field(None, description="Face value/principal for scheduled yield assets")
+    maturity_date: Optional[date] = Field(None, description="Maturity date for scheduled yield assets")
+    interest_schedule: Optional[str] = Field(None, description="Interest schedule JSON for scheduled yield assets")
+    late_interest: Optional[str] = Field(None, description="Late interest policy JSON for scheduled yield assets")
+
+    # Classification metadata (optional)
+    classification_params: Optional[ClassificationParamsModel] = Field(None, description="Asset classification metadata")
+
+    @field_validator('currency')
+    @classmethod
+    def currency_uppercase(cls, v: str) -> str:
+        """Ensure currency is uppercase."""
+        return v.upper() if v else v
+
+    @field_validator('identifier')
+    @classmethod
+    def identifier_not_empty(cls, v: str) -> str:
+        """Ensure identifier is not empty after stripping."""
+        if not v or not v.strip():
+            raise ValueError("identifier cannot be empty")
+        return v.strip()
+
+
+class FABulkAssetCreateRequest(BaseModel):
+    """Bulk asset creation request."""
+    model_config = ConfigDict(extra="forbid")
+
+    assets: List[FAAssetCreateItem] = Field(..., min_length=1, description="List of assets to create")
+
+
+class FAAssetCreateResult(BaseModel):
+    """Result of single asset creation in bulk operation."""
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: Optional[int] = Field(None, description="Created asset ID (null if failed)")
+    success: bool = Field(..., description="Whether creation succeeded")
+    message: str = Field(..., description="Success message or error description")
+    display_name: str = Field(..., description="Asset display name (for identification)")
+    identifier: str = Field(..., description="Asset identifier (for identification)")
+
+
+class FABulkAssetCreateResponse(BaseModel):
+    """Bulk asset creation response (partial success allowed)."""
+    model_config = ConfigDict(extra="forbid")
+
+    results: List[FAAssetCreateResult] = Field(..., description="Per-asset creation results")
+    success_count: int = Field(..., description="Number of successfully created assets")
+    failed_count: int = Field(..., description="Number of failed asset creations")
+
+
+class FAAssetListFilters(BaseModel):
+    """Filters for asset list query (used internally, not in request body)."""
+    model_config = ConfigDict(extra="forbid")
+
+    currency: Optional[str] = Field(None, description="Filter by currency (e.g., USD)")
+    asset_type: Optional[str] = Field(None, description="Filter by asset type (e.g., STOCK)")
+    valuation_model: Optional[str] = Field(None, description="Filter by valuation model (e.g., MARKET_PRICE)")
+    active: bool = Field(True, description="Include only active assets (default: true)")
+    search: Optional[str] = Field(None, description="Search in display_name or identifier")
+
+
+class FAAssetListResponse(BaseModel):
+    """Single asset in list response."""
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(..., description="Asset ID")
+    display_name: str = Field(..., description="Asset display name")
+    identifier: str = Field(..., description="Asset identifier")
+    identifier_type: Optional[str] = Field(None, description="Identifier type")
+    currency: str = Field(..., description="Asset currency")
+    asset_type: Optional[str] = Field(None, description="Asset type")
+    valuation_model: Optional[str] = Field(None, description="Valuation model")
+    active: bool = Field(..., description="Whether asset is active")
+    has_provider: bool = Field(..., description="Whether asset has a provider assigned")
+    has_metadata: bool = Field(..., description="Whether asset has classification metadata")
+
+
+class FABulkAssetDeleteRequest(BaseModel):
+    """Bulk asset deletion request."""
+    model_config = ConfigDict(extra="forbid")
+
+    asset_ids: List[int] = Field(..., min_length=1, description="List of asset IDs to delete")
+
+
+class FAAssetDeleteResult(BaseModel):
+    """Result of single asset deletion in bulk operation."""
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(..., description="Asset ID")
+    success: bool = Field(..., description="Whether deletion succeeded")
+    message: str = Field(..., description="Success message or error description")
+
+
+class FABulkAssetDeleteResponse(BaseModel):
+    """Bulk asset deletion response (partial success allowed)."""
+    model_config = ConfigDict(extra="forbid")
+
+    results: List[FAAssetDeleteResult] = Field(..., description="Per-asset deletion results")
+    success_count: int = Field(..., description="Number of successfully deleted assets")
+    failed_count: int = Field(..., description="Number of failed asset deletions")
+
+
 # Export convenience
 __all__ = [
     # Enums
@@ -607,4 +725,14 @@ __all__ = [
     "BulkMetadataRefreshResponse",
     "PatchAssetMetadataItem",
     "BulkPatchAssetMetadataRequest",
+    # Asset CRUD schemas
+    "FAAssetCreateItem",
+    "FABulkAssetCreateRequest",
+    "FAAssetCreateResult",
+    "FABulkAssetCreateResponse",
+    "FAAssetListFilters",
+    "FAAssetListResponse",
+    "FABulkAssetDeleteRequest",
+    "FAAssetDeleteResult",
+    "FABulkAssetDeleteResponse",
     ]
