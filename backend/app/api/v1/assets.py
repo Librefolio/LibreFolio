@@ -20,6 +20,13 @@ from backend.app.schemas.assets import (
     BulkAssetReadRequest,
     BulkMetadataRefreshRequest,
     BulkMetadataRefreshResponse,
+    # Asset CRUD schemas
+    FABulkAssetCreateRequest,
+    FABulkAssetCreateResponse,
+    FAAssetListFilters,
+    FAAssetListResponse,
+    FABulkAssetDeleteRequest,
+    FABulkAssetDeleteResponse,
     )
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import (
@@ -46,6 +53,7 @@ from backend.app.schemas.refresh import (
     FARefreshResult,
     FABulkRefreshResponse,
     )
+from backend.app.services.asset_crud import AssetCRUDService
 from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.provider_registry import AssetProviderRegistry
@@ -53,6 +61,156 @@ from backend.app.services.provider_registry import AssetProviderRegistry
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assets", tags=["Assets"])
+
+
+# ============================================================================
+# ASSET CRUD ENDPOINTS
+# ============================================================================
+
+@router.post("/bulk", response_model=FABulkAssetCreateResponse, status_code=201)
+async def create_assets_bulk(
+    request: FABulkAssetCreateRequest,
+    session: AsyncSession = Depends(get_session_generator)
+):
+    """
+    Create multiple assets in bulk (partial success allowed).
+
+    Creates asset records with optional classification metadata.
+    Provider assignment can be done separately via POST /assets/provider/bulk.
+
+    **Request Example**:
+    ```json
+    {
+      "assets": [
+        {
+          "display_name": "Apple Inc.",
+          "identifier": "AAPL",
+          "identifier_type": "TICKER",
+          "currency": "USD",
+          "asset_type": "STOCK",
+          "valuation_model": "MARKET_PRICE",
+          "classification_params": {
+            "investment_type": "stock",
+            "sector": "Technology",
+            "geographic_area": {"USA": "1.0"}
+          }
+        }
+      ]
+    }
+    ```
+
+    **Response Example**:
+    ```json
+    {
+      "results": [
+        {
+          "asset_id": 1,
+          "success": true,
+          "message": "Asset created successfully",
+          "display_name": "Apple Inc.",
+          "identifier": "AAPL"
+        }
+      ],
+      "success_count": 1,
+      "failed_count": 0
+    }
+    ```
+    """
+    try:
+        return await AssetCRUDService.create_assets_bulk(request.assets, session)
+    except Exception as e:
+        logger.error(f"Error in bulk asset creation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/list", response_model=List[FAAssetListResponse])
+async def list_assets(
+    currency: Optional[str] = Query(None, description="Filter by currency (e.g., USD)"),
+    asset_type: Optional[str] = Query(None, description="Filter by asset type (e.g., STOCK)"),
+    valuation_model: Optional[str] = Query(None, description="Filter by valuation model (e.g., MARKET_PRICE)"),
+    active: bool = Query(True, description="Include only active assets (default: true)"),
+    search: Optional[str] = Query(None, description="Search in display_name or identifier"),
+    session: AsyncSession = Depends(get_session_generator)
+):
+    """
+    List all assets with optional filters.
+
+    **Query Parameters**:
+    - `currency`: Filter by currency code (e.g., "USD", "EUR")
+    - `asset_type`: Filter by type (e.g., "STOCK", "ETF", "BOND")
+    - `valuation_model`: Filter by valuation model (e.g., "MARKET_PRICE", "SCHEDULED_YIELD")
+    - `active`: Include only active assets (default: true, set to false for inactive)
+    - `search`: Search text in asset name or identifier (case-insensitive)
+
+    **Response Fields**:
+    - `has_provider`: True if asset has a pricing provider assigned
+    - `has_metadata`: True if asset has classification metadata (sector, geographic_area, etc.)
+
+    **Example**:
+    ```
+    GET /api/v1/assets/list?currency=USD&asset_type=STOCK&search=Apple
+    ```
+    """
+    try:
+        filters = FAAssetListFilters(
+            currency=currency,
+            asset_type=asset_type,
+            valuation_model=valuation_model,
+            active=active,
+            search=search
+        )
+        return await AssetCRUDService.list_assets(filters, session)
+    except Exception as e:
+        logger.error(f"Error listing assets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/bulk", response_model=FABulkAssetDeleteResponse)
+async def delete_assets_bulk(
+    request: FABulkAssetDeleteRequest,
+    session: AsyncSession = Depends(get_session_generator)
+):
+    """
+    Delete multiple assets in bulk (partial success allowed).
+
+    **Warning**: This will CASCADE DELETE:
+    - Provider assignments (asset_provider_assignments table)
+    - Price history (price_history table)
+
+    **Blocks deletion** if asset has transactions (foreign key constraint).
+
+    **Request Example**:
+    ```json
+    {
+      "asset_ids": [1, 2, 3]
+    }
+    ```
+
+    **Response Example**:
+    ```json
+    {
+      "results": [
+        {
+          "asset_id": 1,
+          "success": true,
+          "message": "Asset deleted successfully"
+        },
+        {
+          "asset_id": 2,
+          "success": false,
+          "message": "Cannot delete asset 2: has existing transactions"
+        }
+      ],
+      "success_count": 1,
+      "failed_count": 1
+    }
+    ```
+    """
+    try:
+        return await AssetCRUDService.delete_assets_bulk(request.asset_ids, session)
+    except Exception as e:
+        logger.error(f"Error in bulk asset deletion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
