@@ -26,7 +26,7 @@ except ImportError:
 
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
-from backend.app.schemas.assets import CurrentValueModel, PricePointModel, HistoricalDataModel
+from backend.app.schemas.assets import FACurrentValue, FAPricePoint, FAHistoricalData
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-        ) -> CurrentValueModel:
+        ) -> FACurrentValue:
         """
         Fetch current price from Yahoo Finance.
 
@@ -74,7 +74,7 @@ class YahooFinanceProvider(AssetSourceProvider):
             provider_params: Optional parameters (unused for Yahoo Finance)
 
         Returns:
-            CurrentValueModel with value, currency, as_of_date, source
+            FACurrentValue with value, currency, as_of_date, source
 
         Raises:
             AssetSourceError: If yfinance not available or data fetch fails
@@ -94,7 +94,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 last_price = ticker.fast_info.get('lastPrice')
                 if last_price and last_price > 0:
                     currency = ticker.fast_info.get('currency', 'USD')
-                    return CurrentValueModel(
+                    return FACurrentValue(
                         value=Decimal(str(last_price)),
                         currency=currency,
                         as_of_date=date.today(),
@@ -123,7 +123,7 @@ class YahooFinanceProvider(AssetSourceProvider):
             except Exception:
                 logger.warning(f"Could not get currency for {identifier}, using USD")
 
-            return CurrentValueModel(
+            return FACurrentValue(
                 value=Decimal(str(last_row['Close'])),
                 currency=currency,
                 as_of_date=last_date,
@@ -145,7 +145,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         start_date: date,
         end_date: date,
         provider_params: Dict | None = None,
-        ) -> HistoricalDataModel:
+        ) -> FAHistoricalData:
         """
         Fetch historical OHLC data from Yahoo Finance.
 
@@ -156,7 +156,7 @@ class YahooFinanceProvider(AssetSourceProvider):
             provider_params: Optional parameters (unused)
 
         Returns:
-            HistoricalDataModel with prices list, currency, source
+            FAHistoricalData with prices list, currency, source
 
         Raises:
             AssetSourceError: If yfinance not available or data fetch fails
@@ -196,10 +196,10 @@ class YahooFinanceProvider(AssetSourceProvider):
             except Exception:
                 logger.warning(f"Could not get currency for {identifier}, using USD")
 
-            # Convert DataFrame to PricePointModel list
+            # Convert DataFrame to FAPricePoint list
             prices = []
             for idx, row in hist.iterrows():
-                prices.append(PricePointModel(
+                prices.append(FAPricePoint(
                     date=idx.date(),  # TODO: verify timezone handling
                     open=Decimal(str(row['Open'])) if pd.notna(row['Open']) else None,
                     high=Decimal(str(row['High'])) if pd.notna(row['High']) else None,
@@ -209,7 +209,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                     currency=currency
                     ))
 
-            return HistoricalDataModel(
+            return FAHistoricalData(
                 prices=prices,
                 currency=currency,
                 source=self.provider_name

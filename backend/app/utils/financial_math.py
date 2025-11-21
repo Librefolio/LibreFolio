@@ -13,7 +13,7 @@ Key concepts:
 
 Note:
     All functions require Pydantic models from backend.app.schemas.assets.
-    To convert from dict/JSON, use: InterestRatePeriod(**dict_data)
+    To convert from dict/JSON, use: FAInterestRatePeriod(**dict_data)
     To get dict/JSON from model: model.dict() or model.json()
 """
 import calendar
@@ -23,8 +23,8 @@ from decimal import Decimal
 from typing import Optional, List
 
 from backend.app.schemas.assets import (
-    InterestRatePeriod,
-    LateInterestConfig,
+    FAInterestRatePeriod,
+    FALateInterestConfig,
     DayCountConvention,
     CompoundFrequency,
     )
@@ -290,15 +290,15 @@ def calculate_simple_interest(
 # ============================================================================
 
 def find_active_period(
-    schedule: List[InterestRatePeriod],
+    schedule: List[FAInterestRatePeriod],
     target_date: date_type,
     maturity_date: date_type,
-    late_interest: Optional[LateInterestConfig] = None,
-    ) -> Optional[InterestRatePeriod]:
+    late_interest: Optional[FALateInterestConfig] = None,
+    ) -> Optional[FAInterestRatePeriod]:
     """
     Find the active interest rate period for a given date.
 
-    Returns the full InterestRatePeriod object (with compounding, day_count, etc.)
+    Returns the full FAInterestRatePeriod object (with compounding, day_count, etc.)
     or constructs a late interest period if applicable.
 
     Logic:
@@ -308,13 +308,13 @@ def find_active_period(
     4. Otherwise: return None
 
     Args:
-        schedule: List of InterestRatePeriod objects
+        schedule: List of FAInterestRatePeriod objects
         target_date: Date to find period for
         maturity_date: Asset maturity date
-        late_interest: Optional LateInterestConfig object
+        late_interest: Optional FALateInterestConfig object
 
     Returns:
-        InterestRatePeriod or None if no applicable period
+        FAInterestRatePeriod or None if no applicable period
 
     Example:
         >>> period = find_active_period(schedule, date(2025, 6, 15), date(2025, 12, 31))
@@ -338,7 +338,7 @@ def find_active_period(
             else:
                 # Past grace period: construct a late interest period
                 # Use late_interest config to create a synthetic period
-                return InterestRatePeriod(
+                return FAInterestRatePeriod(
                     start_date=grace_end + timedelta(days=1),
                     end_date=target_date,  # Extend to current date
                     annual_rate=late_interest.annual_rate,

@@ -33,9 +33,9 @@ from backend.app.services.asset_source_providers.scheduled_investment import Sch
 from backend.app.utils.financial_math import find_active_period
 
 from backend.app.schemas.assets import (
-    InterestRatePeriod,
-    LateInterestConfig,
-    ScheduledInvestmentSchedule,
+    FAInterestRatePeriod,
+    FALateInterestConfig,
+    FAScheduledInvestmentSchedule,
     CompoundingType,
     DayCountConvention,
     )
@@ -178,7 +178,7 @@ async def test_provider_validate_params():
 
     try:
         validated = provider.validate_params(valid_params)
-        passed = isinstance(validated, ScheduledInvestmentSchedule)
+        passed = isinstance(validated, FAScheduledInvestmentSchedule)
         passed = passed and len(validated.schedule) == 1
         passed = passed and validated.schedule[0].annual_rate == Decimal("0.05")
         passed = passed and validated.late_interest is not None
@@ -313,7 +313,7 @@ async def test_provider_private_calculate_value():
             "day_count": "ACT/365"
             }
         }
-    params = ScheduledInvestmentSchedule(**params_dict)
+    params = FAScheduledInvestmentSchedule(**params_dict)
 
     try:
         # Calculate value for Jan 30, 2025 (29 days from Jan 1 - timedelta does not include end date)
@@ -349,14 +349,14 @@ def test_find_active_period_with_pydantic():
 
     # Use Pydantic models (only way to call the function)
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365
             ),
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2026, 1, 1),
             end_date=date(2026, 12, 31),
             annual_rate=Decimal("0.06"),
@@ -364,7 +364,7 @@ def test_find_active_period_with_pydantic():
             day_count=DayCountConvention.ACT_365
             )
         ]
-    late_interest = LateInterestConfig(
+    late_interest = FALateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
         compounding=CompoundingType.SIMPLE,
@@ -416,7 +416,7 @@ async def test_get_prices_integration():
         asset = await create_test_asset(session)
 
         try:
-            # Assign provider - interest_schedule now contains full ScheduledInvestmentSchedule structure
+            # Assign provider - interest_schedule now contains full FAScheduledInvestmentSchedule structure
             schedule_data = json.loads(asset.interest_schedule)
             provider_params = schedule_data  # Already has {schedule: [...], late_interest: {...}}
 

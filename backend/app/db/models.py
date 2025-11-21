@@ -335,9 +335,9 @@ class Asset(SQLModel, table=True):
     - Provider handles both current and historical data fetching
 
     Scheduled-yield fields (for CROWDFUND_LOAN, BOND, etc.):
-    - interest_schedule: JSON containing complete ScheduledInvestmentSchedule
+    - interest_schedule: JSON containing complete FAScheduledInvestmentSchedule
 
-    The interest_schedule JSON should conform to ScheduledInvestmentSchedule schema:
+    The interest_schedule JSON should conform to FAScheduledInvestmentSchedule schema:
     {
       "schedule": [
         {
@@ -382,7 +382,7 @@ class Asset(SQLModel, table=True):
     Notes:
     - face_value (principal) is calculated from transactions (BUY - SELL)
     - maturity_date is the last period's end_date in the schedule
-    - Validation is done via ScheduledInvestmentSchedule Pydantic model
+    - Validation is done via FAScheduledInvestmentSchedule Pydantic model
     - Classification validation done via ClassificationParamsModel Pydantic model
     """
     __tablename__ = "assets"
@@ -399,8 +399,8 @@ class Asset(SQLModel, table=True):
     valuation_model: ValuationModel = Field(default=ValuationModel.MARKET_PRICE)
 
     # Scheduled-yield configuration (JSON)
-    # Should contain ScheduledInvestmentSchedule structure
-    # Validated when loaded using ScheduledInvestmentSchedule(**json.loads(interest_schedule))
+    # Should contain FAScheduledInvestmentSchedule structure
+    # Validated when loaded using FAScheduledInvestmentSchedule(**json.loads(interest_schedule))
     interest_schedule: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     # Classification and metadata (JSON TEXT)

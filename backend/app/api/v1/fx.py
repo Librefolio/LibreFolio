@@ -193,7 +193,7 @@ async def sync_rates(
                 )
             return FXSyncResponse(
                 synced=result['total_changed'],
-                date_range=(start.isoformat(), end.isoformat()),
+                date_range=(start, end),
                 currencies=result['currencies_synced']
                 )
 
@@ -332,7 +332,7 @@ async def sync_rates(
 
             return FXSyncResponse(
                 synced=total_changed,
-                date_range=(start.isoformat(), end.isoformat()),
+                date_range=(start, end),
                 currencies=sorted(list(all_currencies_synced))
                 )
 
@@ -526,8 +526,8 @@ async def delete_rates_endpoint(
                     success=success,
                     base=base,
                     quote=quote,
-                    start_date=metadata['start_date'].isoformat(),
-                    end_date=metadata['end_date'].isoformat() if metadata['end_date'] else None,
+                    start_date=metadata['start_date'],
+                    end_date=metadata['end_date'] if metadata['end_date'] else None,
                     existing_count=existing_count,
                     deleted_count=deleted_count,
                     message=message
@@ -643,10 +643,7 @@ async def convert_currency_bulk(
         backward_fill_info = None
         if backward_fill_applied:
             days_back = (on_date - actual_rate_date).days
-            backward_fill_info = BackwardFillInfo(
-                actual_rate_date=actual_rate_date.isoformat(),
-                days_back=days_back
-                )
+            backward_fill_info = BackwardFillInfo(actual_rate_date=actual_rate_date.isoformat(), days_back=days_back)
 
         results.append(FXConversionResult(
             amount=conversion.amount,

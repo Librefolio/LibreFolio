@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
 
-from backend.app.schemas.assets import CurrentValueModel, HistoricalDataModel, PricePointModel
+from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 
@@ -46,7 +46,7 @@ class MockProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-        ) -> CurrentValueModel:
+        ) -> FACurrentValue:
         """
         Return fixed mock current value.
 
@@ -54,7 +54,7 @@ class MockProvider(AssetSourceProvider):
         """
         if identifier == "INVALID_TICKER_12345":
             raise AssetSourceError("Invalid identifier for mock provider.", error_code="NOT_FOUND")
-        return CurrentValueModel(
+        return FACurrentValue(
             value=Decimal('100.00'),
             currency='USD',
             as_of_date=date.today(),
@@ -72,7 +72,7 @@ class MockProvider(AssetSourceProvider):
         start_date: date,
         end_date: date,
         provider_params: Dict | None = None,
-        ) -> HistoricalDataModel:
+        ) -> FAHistoricalData:
         """
         Generate mock historical data.
 
@@ -82,7 +82,7 @@ class MockProvider(AssetSourceProvider):
         current = start_date
 
         while current <= end_date:
-            prices.append(PricePointModel(
+            prices.append(FAPricePoint(
                 date=current,
                 open=Decimal('100.00'),
                 high=Decimal('100.00'),
@@ -93,7 +93,7 @@ class MockProvider(AssetSourceProvider):
                 ))
             current += timedelta(days=1)
 
-        return HistoricalDataModel(
+        return FAHistoricalData(
             prices=prices,
             currency='USD',
             source=self.provider_name

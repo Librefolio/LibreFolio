@@ -29,13 +29,14 @@ Covers provider info, currency conversion, rate upsert/delete, and pair sources.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
-from datetime import date
+from datetime import date as date_type
 from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from backend.app.schemas.common import BackwardFillInfo
+from backend.app.utils.datetime_utils import parse_ISO_date
 
 
 # ============================================================================
@@ -57,9 +58,7 @@ class FXProviderInfo(BaseModel):
 
 class FXProvidersResponse(BaseModel):
     """Response model for listing FX providers."""
-    model_config = ConfigDict(
-
-        )
+    model_config = ConfigDict()
 
     providers: list[FXProviderInfo] = Field(..., description="List of available providers")
     count: int = Field(..., description="Number of providers")
@@ -83,8 +82,8 @@ class FXConversionRequest(BaseModel):
     amount: Decimal = Field(..., gt=0, description="Amount to convert (must be positive)")
     from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
-    start_date: date = Field(..., description="Start date (required). If end_date is not provided, only this date is used")
-    end_date: Optional[date] = Field(None, description="End date (optional). If provided, converts for all dates from start_date to end_date (inclusive)")
+    start_date: date_type = Field(..., description="Start date (required). If end_date is not provided, only this date is used")
+    end_date: Optional[date_type] = Field(None, description="End date (optional). If provided, converts for all dates from start_date to end_date (inclusive)")
 
     @field_validator('amount', mode='before')
     @classmethod
@@ -107,23 +106,19 @@ class FXConversionRequest(BaseModel):
 
 class FXConvertRequest(BaseModel):
     """Request model for bulk currency conversion."""
-    model_config = ConfigDict(
-
-        )
+    model_config = ConfigDict()
 
     conversions: list[FXConversionRequest] = Field(..., min_length=1, description="List of conversions to perform")
 
 
 class FXConversionResult(BaseModel):
     """Single conversion result."""
-    model_config = ConfigDict(
-
-        )
+    model_config = ConfigDict()
 
     amount: Decimal = Field(..., description="Original amount")
     from_currency: str = Field(..., description="Source currency code")
     to_currency: str = Field(..., description="Target currency code")
-    conversion_date: str = Field(..., description="Date requested for conversion (ISO format)")
+    conversion_date: date_type = Field(..., description="Date requested for conversion (ISO format)")
     converted_amount: Decimal = Field(..., description="Converted amount")
     rate: Optional[Decimal] = Field(None, description="Exchange rate used (if not identity)")
     backward_fill_info: Optional[BackwardFillInfo] = Field(
@@ -132,12 +127,19 @@ class FXConversionResult(BaseModel):
                     "If null, rate_date = conversion_date"
         )
 
+    @field_validator("conversion_date", mode="before")
+    @classmethod
+    def _parse_conversion_date(cls, v):
+        return parse_ISO_date(v)
+
+    def conversion_date_str(self) -> str:
+        """Restituisce la data in formato ISO string (YYYY-MM-DD)."""
+        return self.conversion_date.isoformat()
+
 
 class FXConvertResponse(BaseModel):
     """Response model for bulk currency conversion."""
-    model_config = ConfigDict(
-
-        )
+    model_config = ConfigDict()
 
     results: list[FXConversionResult] = Field(..., description="Conversion results in order")
     errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
@@ -155,7 +157,7 @@ class FXUpsertItem(BaseModel):
         str_strip_whitespace=True,
         )
 
-    rate_date: date = Field(..., description="Date of the rate (ISO format)", alias="date")
+    rate_date: date_type = Field(..., description="Date of the rate (ISO format)", alias="date")
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
     rate: Decimal = Field(..., gt=0, description="Exchange rate (must be positive)")
@@ -182,32 +184,34 @@ class FXUpsertItem(BaseModel):
 
 class FXBulkUpsertRequest(BaseModel):
     """Request model for bulk rate upsert."""
-    model_config = ConfigDict(
-
-        )
+    model_config = ConfigDict()
 
     rates: list[FXUpsertItem] = Field(..., min_length=1, description="List of rates to insert/update")
 
 
 class FXUpsertResult(BaseModel):
     """Single rate upsert result."""
-    model_config = ConfigDict(
-
-        )
+    model_config = ConfigDict()
 
     success: bool = Field(..., description="Whether the operation was successful")
     action: str = Field(..., description="Action taken: 'inserted' or 'updated'")
     rate: Decimal = Field(..., description="The rate value stored")
-    date: str = Field(..., description="Date of the rate (ISO format)")
+    date: date_type = Field(..., description="Date of the rate (ISO format)")
     base: str = Field(..., description="Base currency")
     quote: str = Field(..., description="Quote currency")
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def _parse_date(cls, v):
+        return parse_ISO_date(v)
+
+    def date_str(self) -> str:
+        return self.date.isoformat()
 
 
 class FXBulkUpsertResponse(BaseModel):
     """Response model for bulk rate upsert."""
-    model_config = ConfigDict(
-
-        )
+    model_config = ConfigDict()
 
     results: list[FXUpsertResult] = Field(..., description="Upsert results in order")
     success_count: int = Field(..., description="Number of successful operations")
@@ -227,8 +231,8 @@ class FXDeleteItem(BaseModel):
 
     from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
-    start_date: date = Field(..., description="Start date (required). If end_date is not provided, only this date is deleted")
-    end_date: Optional[date] = Field(None, description="End date (optional). If provided, deletes all dates from start_date to end_date (inclusive)")
+    start_date: date_type = Field(..., description="Start date (required). If end_date is not provided, only this date is deleted")
+    end_date: Optional[date_type] = Field(None, description="End date (optional). If provided, deletes all dates from start_date to end_date (inclusive)")
 
     @field_validator('from_currency', 'to_currency', mode='before')
     @classmethod
@@ -249,11 +253,29 @@ class FXDeleteResult(BaseModel):
     success: bool = Field(..., description="Whether the operation succeeded (always True, errors are graceful)")
     base: str = Field(..., description="Base currency (normalized)")
     quote: str = Field(..., description="Quote currency (normalized)")
-    start_date: str = Field(..., description="Start date (ISO format)")
-    end_date: Optional[str] = Field(None, description="End date (ISO format) if range deletion")
+    start_date: date_type = Field(..., description="Start date (ISO format)")
+    end_date: Optional[date_type] = Field(None, description="End date (ISO format) if range deletion")
     existing_count: int = Field(..., description="Number of rates present before deletion")
     deleted_count: int = Field(..., description="Number of rates actually deleted")
     message: Optional[str] = Field(None, description="Warning/info message (e.g., 'no rates found')")
+
+    @field_validator("start_date", mode="before")
+    @classmethod
+    def _parse_start_date(cls, v):
+        return parse_ISO_date(v)
+
+    @field_validator("end_date", mode="before")
+    @classmethod
+    def _parse_end_date(cls, v):
+        if v is None: # end_date is optional and can be None
+            return None
+        return parse_ISO_date(v)
+
+    def start_date_str(self) -> str:
+        return self.start_date.isoformat()
+
+    def end_date_str(self) -> Optional[str]:
+        return self.end_date.isoformat() if self.end_date else None
 
 
 class FXBulkDeleteResponse(BaseModel):

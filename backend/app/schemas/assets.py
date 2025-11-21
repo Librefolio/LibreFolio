@@ -6,7 +6,7 @@ price points, asset metadata, and scheduled investment calculations.
 
 **Naming Conventions**:
 - FA domain: Financial Assets (stocks, ETFs, bonds, P2P loans, etc.)
-- No FA prefix on base models (PricePointModel, not FAPricePointModel)
+- No FA prefix on base models (FAPricePoint, not FAFAPricePoint)
   because these are foundational schemas used throughout FA system
 
 **Domain Coverage**:
@@ -25,9 +25,9 @@ price points, asset metadata, and scheduled investment calculations.
 
 **Structure**:
 - Enums: Financial calculation types (compounding, frequencies, day counts)
-- Base models: PricePointModel, CurrentValueModel, HistoricalDataModel
-- Provider: AssetProviderAssignmentModel
-- Scheduled Investment: InterestRatePeriod, LateInterestConfig, ScheduledInvestmentSchedule, ScheduledInvestmentParams
+- Base models: FAPricePoint, FACurrentValue, FAHistoricalData
+- Provider: FAAssetProviderAssignment
+- Scheduled Investment: FAInterestRatePeriod, FALateInterestConfig, FAScheduledInvestmentSchedule, FAScheduledInvestmentParams
 """
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
@@ -39,10 +39,15 @@ from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+# Import from common and prices modules
+from backend.app.schemas.common import BackwardFillInfo
+from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
+
+
 # ============================================================================
 # ENUMS FOR FINANCIAL CALCULATIONS
 # ============================================================================
-# TODO: capire se va spostato in price.py
+
 class CompoundingType(str, Enum):
     """
     Interest compounding type.
@@ -53,7 +58,7 @@ class CompoundingType(str, Enum):
     SIMPLE = "SIMPLE"
     COMPOUND = "COMPOUND"
 
-# TODO: capire se va spostato in price.py
+
 class CompoundFrequency(str, Enum):
     """
     Frequency of interest compounding (for COMPOUND interest).
@@ -72,7 +77,7 @@ class CompoundFrequency(str, Enum):
     ANNUAL = "ANNUAL"
     CONTINUOUS = "CONTINUOUS"
 
-# TODO: capire se va spostato in price.py
+
 class DayCountConvention(str, Enum):
     """
     Day count convention for interest calculations.
@@ -89,55 +94,9 @@ class DayCountConvention(str, Enum):
 
 
 # ============================================================================
-# BASIC MODELS
+# PROVIDER ASSIGNMENT
 # ============================================================================
-
-# TODO: cancellare/mergiare con quello in common.py
-class BackwardFillInfo(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    actual_rate_date: date
-    days_back: int
-
-# TODO: capire se va spostato in price.py
-class CurrentValueModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    value: Decimal
-    currency: str
-    as_of_date: date
-    source: Optional[str] = None
-
-    @field_validator("value", mode="before")
-    @classmethod
-    def parse_decimal(cls, v):
-        return Decimal(str(v))
-
-# TODO: capire se va spostato in price.py
-class PricePointModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    date: date
-    open: Optional[Decimal] = None
-    high: Optional[Decimal] = None
-    low: Optional[Decimal] = None
-    close: Decimal
-    volume: Optional[Decimal] = None
-    currency: Optional[str] = None
-    backward_fill_info: Optional[BackwardFillInfo] = None
-
-    @field_validator("open", "high", "low", "close", "volume", mode="before")
-    @classmethod
-    def parse_optional_decimal(cls, v):
-        if v is None:
-            return None
-        return Decimal(str(v))
-# TODO: capire se va spostato in price.py
-class HistoricalDataModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    prices: List[PricePointModel]
-    currency: Optional[str] = None
-    source: Optional[str] = None
-
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class AssetProviderAssignmentModel(BaseModel):
+class FAAssetProviderAssignment(BaseModel):
     model_config = ConfigDict(extra="forbid")
     asset_id: int
     provider_code: str
@@ -149,8 +108,8 @@ class AssetProviderAssignmentModel(BaseModel):
 # ============================================================================
 # SCHEDULED INVESTMENT SCHEMAS
 # ============================================================================
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class InterestRatePeriod(BaseModel):
+
+class FAInterestRatePeriod(BaseModel):
     """
     Interest rate period for scheduled investments.
 
@@ -221,8 +180,8 @@ class InterestRatePeriod(BaseModel):
                 raise ValueError("compound_frequency should not be set when compounding is SIMPLE")
         return v
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class LateInterestConfig(BaseModel):
+
+class FALateInterestConfig(BaseModel):
     """
     Late interest configuration for scheduled investments.
 
@@ -280,8 +239,8 @@ class LateInterestConfig(BaseModel):
                 raise ValueError("compound_frequency should not be set when compounding is SIMPLE")
         return v
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class ScheduledInvestmentSchedule(BaseModel):
+
+class FAScheduledInvestmentSchedule(BaseModel):
     """
     Complete interest schedule configuration for scheduled investments.
 
@@ -326,8 +285,8 @@ class ScheduledInvestmentSchedule(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
 
-    schedule: List[InterestRatePeriod]
-    late_interest: Optional[LateInterestConfig] = None
+    schedule: List[FAInterestRatePeriod]
+    late_interest: Optional[FALateInterestConfig] = None
 
     @field_validator("schedule")
     @classmethod
@@ -360,8 +319,8 @@ class ScheduledInvestmentSchedule(BaseModel):
 
         return sorted_schedule
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class ScheduledInvestmentParams(BaseModel):
+
+class FAScheduledInvestmentParams(BaseModel):
     """
     Provider parameters for scheduled investment assets.
 
@@ -397,9 +356,9 @@ class ScheduledInvestmentParams(BaseModel):
 
     face_value: Decimal
     currency: str
-    interest_schedule: List[InterestRatePeriod]
+    interest_schedule: List[FAInterestRatePeriod]
     maturity_date: date
-    late_interest: Optional[LateInterestConfig] = None
+    late_interest: Optional[FALateInterestConfig] = None
 
     @field_validator("face_value", mode="before")
     @classmethod
@@ -430,8 +389,8 @@ class ScheduledInvestmentParams(BaseModel):
 # ============================================================================
 # ASSET METADATA & CLASSIFICATION
 # ============================================================================
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class ClassificationParamsModel(BaseModel):
+
+class FAClassificationParams(BaseModel):
     """
     Asset classification metadata.
 
@@ -444,7 +403,7 @@ class ClassificationParamsModel(BaseModel):
     - Automatic renormalization if sum != 1.0
 
     Examples:
-        >>> params = ClassificationParamsModel(
+        >>> params = FAClassificationParams(
         ...     investment_type="stock",
         ...     short_description="Apple Inc. - Technology company",
         ...     geographic_area={"USA": Decimal("0.6"), "EUR": Decimal("0.4")},
@@ -467,8 +426,8 @@ class ClassificationParamsModel(BaseModel):
         from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
         return validate_and_normalize_geographic_area(v)
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class PatchAssetMetadataRequest(BaseModel):
+
+class FAPatchMetadataRequest(BaseModel):
     """
     PATCH metadata request (partial update).
 
@@ -480,13 +439,13 @@ class PatchAssetMetadataRequest(BaseModel):
 
     Examples:
         >>> # Update only short_description
-        >>> patch = PatchAssetMetadataRequest(short_description="New description")
+        >>> patch = FAPatchMetadataRequest(short_description="New description")
 
         >>> # Clear sector field
-        >>> patch = PatchAssetMetadataRequest(sector=None)
+        >>> patch = FAPatchMetadataRequest(sector=None)
 
         >>> # Update geographic_area (full replace)
-        >>> patch = PatchAssetMetadataRequest(
+        >>> patch = FAPatchMetadataRequest(
         ...     geographic_area={"USA": Decimal("1.0")}
         ... )
     """
@@ -497,23 +456,23 @@ class PatchAssetMetadataRequest(BaseModel):
     geographic_area: Optional[dict[str, Decimal] | None] = None
     sector: Optional[str] = None
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class PatchAssetMetadataItem(BaseModel):
+
+class FAPatchMetadataItem(BaseModel):
     """Single asset metadata patch item for bulk requests."""
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    patch: PatchAssetMetadataRequest
+    patch: FAPatchMetadataRequest
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class BulkPatchAssetMetadataRequest(BaseModel):
+
+class FABulkPatchMetadataRequest(BaseModel):
     """Bulk metadata patch payload matching FA bulk patterns."""
     model_config = ConfigDict(extra="forbid")
 
-    assets: List[PatchAssetMetadataItem] = Field(..., min_length=1, description="List of metadata patches")
+    assets: List[FAPatchMetadataItem] = Field(..., min_length=1, description="List of metadata patches")
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class AssetMetadataResponse(BaseModel):
+
+class FAAssetMetadataResponse(BaseModel):
     """
     Asset with metadata fields.
 
@@ -525,10 +484,10 @@ class AssetMetadataResponse(BaseModel):
     display_name: str
     identifier: str
     currency: str
-    classification_params: Optional[ClassificationParamsModel] = None
+    classification_params: Optional[FAClassificationParams] = None
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class MetadataChangeDetail(BaseModel):
+
+class FAMetadataChangeDetail(BaseModel):
     """Single field change in metadata."""
     model_config = ConfigDict(extra="forbid")
 
@@ -536,8 +495,8 @@ class MetadataChangeDetail(BaseModel):
     old_value: Optional[str] = None
     new_value: Optional[str] = None
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class MetadataRefreshResult(BaseModel):
+
+class FAMetadataRefreshResult(BaseModel):
     """
     Result of metadata refresh for single asset.
 
@@ -548,25 +507,25 @@ class MetadataRefreshResult(BaseModel):
     asset_id: int
     success: bool
     message: str
-    changes: Optional[List[MetadataChangeDetail]] = None
+    changes: Optional[List[FAMetadataChangeDetail]] = None
     warnings: Optional[List[str]] = None
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class BulkAssetReadRequest(BaseModel):
+
+class FABulkAssetReadRequest(BaseModel):
     """Request to read multiple assets by IDs."""
     model_config = ConfigDict(extra="forbid")
 
     asset_ids: List[int]
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class BulkMetadataRefreshRequest(BaseModel):
+
+class FABulkMetadataRefreshRequest(BaseModel):
     """Bulk metadata refresh request."""
     model_config = ConfigDict(extra="forbid")
 
     asset_ids: List[int]
 
-# TODO: rinominare aggiungendo FA per seguire nomenclatura
-class BulkMetadataRefreshResponse(BaseModel):
+
+class FABulkMetadataRefreshResponse(BaseModel):
     """
     Bulk metadata refresh response (partial success).
 
@@ -574,7 +533,7 @@ class BulkMetadataRefreshResponse(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
 
-    results: List[MetadataRefreshResult]
+    results: List[FAMetadataRefreshResult]
     success_count: int
     failed_count: int
 
@@ -601,7 +560,7 @@ class FAAssetCreateItem(BaseModel):
     late_interest: Optional[str] = Field(None, description="Late interest policy JSON for scheduled yield assets")
 
     # Classification metadata (optional)
-    classification_params: Optional[ClassificationParamsModel] = Field(None, description="Asset classification metadata")
+    classification_params: Optional[FAClassificationParams] = Field(None, description="Asset classification metadata")
 
     @field_validator('currency')
     @classmethod
@@ -705,26 +664,26 @@ __all__ = [
     "DayCountConvention",
     # Basic models
     "BackwardFillInfo",
-    "CurrentValueModel",
-    "PricePointModel",
-    "HistoricalDataModel",
-    "AssetProviderAssignmentModel",
+    "FACurrentValue",
+    "FAPricePoint",
+    "FAHistoricalData",
+    "FAAssetProviderAssignment",
     # Scheduled investment schemas
-    "InterestRatePeriod",
-    "LateInterestConfig",
-    "ScheduledInvestmentSchedule",
-    "ScheduledInvestmentParams",
+    "FAInterestRatePeriod",
+    "FALateInterestConfig",
+    "FAScheduledInvestmentSchedule",
+    "FAScheduledInvestmentParams",
     # Metadata & classification (NEW)
-    "ClassificationParamsModel",
-    "PatchAssetMetadataRequest",
-    "AssetMetadataResponse",
-    "MetadataChangeDetail",
-    "MetadataRefreshResult",
-    "BulkAssetReadRequest",
-    "BulkMetadataRefreshRequest",
-    "BulkMetadataRefreshResponse",
-    "PatchAssetMetadataItem",
-    "BulkPatchAssetMetadataRequest",
+    "FAClassificationParams",
+    "FAPatchMetadataRequest",
+    "FAAssetMetadataResponse",
+    "FAMetadataChangeDetail",
+    "FAMetadataRefreshResult",
+    "FABulkAssetReadRequest",
+    "FABulkMetadataRefreshRequest",
+    "FABulkMetadataRefreshResponse",
+    "FAPatchMetadataItem",
+    "FABulkPatchMetadataRequest",
     # Asset CRUD schemas
     "FAAssetCreateItem",
     "FABulkAssetCreateRequest",

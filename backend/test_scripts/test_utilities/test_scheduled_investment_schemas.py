@@ -2,9 +2,9 @@
 Test suite for Pydantic schemas used in scheduled investments.
 
 Tests validation logic for:
-- InterestRatePeriod: date ranges, rate validation, compounding/frequency logic
-- LateInterestConfig: rate validation, grace period logic
-- ScheduledInvestmentSchedule: period ordering, overlaps, gaps detection
+- FAInterestRatePeriod: date ranges, rate validation, compounding/frequency logic
+- FALateInterestConfig: rate validation, grace period logic
+- FAScheduledInvestmentSchedule: period ordering, overlaps, gaps detection
 
 All tests verify that Pydantic validation correctly enforces business rules.
 """
@@ -15,9 +15,9 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.schemas.assets import (
-    InterestRatePeriod,
-    LateInterestConfig,
-    ScheduledInvestmentSchedule,
+    FAInterestRatePeriod,
+    FALateInterestConfig,
+    FAScheduledInvestmentSchedule,
     CompoundingType,
     CompoundFrequency,
     DayCountConvention,
@@ -25,15 +25,15 @@ from backend.app.schemas.assets import (
 
 
 # ============================================================================
-# TESTS: InterestRatePeriod
+# TESTS: FAInterestRatePeriod
 # ============================================================================
 
 class TestInterestRatePeriod:
-    """Test InterestRatePeriod schema validation."""
+    """Test FAInterestRatePeriod schema validation."""
 
     def test_valid_simple_interest_period(self):
         """Test creating valid simple interest period."""
-        period = InterestRatePeriod(
+        period = FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -46,7 +46,7 @@ class TestInterestRatePeriod:
 
     def test_valid_compound_interest_period(self):
         """Test creating valid compound interest period."""
-        period = InterestRatePeriod(
+        period = FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -60,7 +60,7 @@ class TestInterestRatePeriod:
     def test_negative_rate_rejected(self):
         """Test that negative interest rates are rejected."""
         with pytest.raises(ValidationError, match="non-negative"):
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("-0.05"),
@@ -69,7 +69,7 @@ class TestInterestRatePeriod:
     def test_end_date_before_start_date_rejected(self):
         """Test that end_date before start_date is rejected."""
         with pytest.raises(ValidationError, match="end_date must be on or after start_date"):
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 12, 31),
                 end_date=date(2025, 1, 1),
                 annual_rate=Decimal("0.05"),
@@ -77,7 +77,7 @@ class TestInterestRatePeriod:
 
     def test_same_start_end_date_allowed(self):
         """Test that same start and end date is allowed (single day period)."""
-        period = InterestRatePeriod(
+        period = FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 1),
             annual_rate=Decimal("0.05"),
@@ -91,7 +91,7 @@ class TestInterestRatePeriod:
     def test_compound_without_frequency_rejected(self):
         """Test that COMPOUND without compound_frequency is rejected."""
         with pytest.raises(ValidationError, match="compound_frequency is required"):
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
@@ -101,7 +101,7 @@ class TestInterestRatePeriod:
     def test_simple_with_frequency_rejected(self):
         """Test that SIMPLE with compound_frequency is rejected."""
         with pytest.raises(ValidationError, match="compound_frequency should not be set"):
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
@@ -111,7 +111,7 @@ class TestInterestRatePeriod:
 
     def test_defaults(self):
         """Test that defaults are applied correctly."""
-        period = InterestRatePeriod(
+        period = FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -122,7 +122,7 @@ class TestInterestRatePeriod:
 
     def test_rate_string_conversion(self):
         """Test that rate can be provided as string."""
-        period = InterestRatePeriod(
+        period = FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate="0.05",
@@ -132,7 +132,7 @@ class TestInterestRatePeriod:
     def test_extra_fields_rejected(self):
         """Test that extra fields are rejected (extra='forbid')."""
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
@@ -141,15 +141,15 @@ class TestInterestRatePeriod:
 
 
 # ============================================================================
-# TESTS: LateInterestConfig
+# TESTS: FALateInterestConfig
 # ============================================================================
 
 class TestLateInterestConfig:
-    """Test LateInterestConfig schema validation."""
+    """Test FALateInterestConfig schema validation."""
 
     def test_valid_late_interest(self):
         """Test creating valid late interest config."""
-        config = LateInterestConfig(
+        config = FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
             )
@@ -160,21 +160,21 @@ class TestLateInterestConfig:
     def test_negative_rate_rejected(self):
         """Test that negative late interest rate is rejected."""
         with pytest.raises(ValidationError, match="non-negative"):
-            LateInterestConfig(
+            FALateInterestConfig(
                 annual_rate=Decimal("-0.12"),
                 )
 
     def test_negative_grace_period_rejected(self):
         """Test that negative grace period is rejected."""
         with pytest.raises(ValidationError, match="non-negative"):
-            LateInterestConfig(
+            FALateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 grace_period_days=-10,
                 )
 
     def test_zero_grace_period_allowed(self):
         """Test that zero grace period is allowed."""
-        config = LateInterestConfig(
+        config = FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=0,
             )
@@ -182,7 +182,7 @@ class TestLateInterestConfig:
 
     def test_compound_late_interest(self):
         """Test late interest with compounding."""
-        config = LateInterestConfig(
+        config = FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
             compounding=CompoundingType.COMPOUND,
@@ -191,12 +191,12 @@ class TestLateInterestConfig:
         assert config.compounding == CompoundingType.COMPOUND
         assert config.compound_frequency == CompoundFrequency.DAILY
 
-    # TODO: Same validation order issue as InterestRatePeriod
+    # TODO: Same validation order issue as FAInterestRatePeriod
     @pytest.mark.skip(reason="Validation order issue - field_validator doesn't catch this")
     def test_compound_without_frequency_rejected(self):
         """Test that COMPOUND without frequency is rejected."""
         with pytest.raises(ValidationError, match="compound_frequency is required"):
-            LateInterestConfig(
+            FALateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 compounding=CompoundingType.COMPOUND,
                 )
@@ -204,7 +204,7 @@ class TestLateInterestConfig:
     def test_simple_with_frequency_rejected(self):
         """Test that SIMPLE with frequency is rejected."""
         with pytest.raises(ValidationError, match="compound_frequency should not be set"):
-            LateInterestConfig(
+            FALateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 compounding=CompoundingType.SIMPLE,
                 compound_frequency=CompoundFrequency.MONTHLY,
@@ -212,17 +212,17 @@ class TestLateInterestConfig:
 
 
 # ============================================================================
-# TESTS: ScheduledInvestmentSchedule
+# TESTS: FAScheduledInvestmentSchedule
 # ============================================================================
 
 class TestScheduledInvestmentSchedule:
-    """Test ScheduledInvestmentSchedule schema validation."""
+    """Test FAScheduledInvestmentSchedule schema validation."""
 
     def test_valid_single_period_schedule(self):
         """Test valid schedule with single period."""
-        schedule = ScheduledInvestmentSchedule(
+        schedule = FAScheduledInvestmentSchedule(
             schedule=[
-                InterestRatePeriod(
+                FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.05"),
@@ -233,14 +233,14 @@ class TestScheduledInvestmentSchedule:
 
     def test_valid_multiple_periods_contiguous(self):
         """Test valid schedule with contiguous periods."""
-        schedule = ScheduledInvestmentSchedule(
+        schedule = FAScheduledInvestmentSchedule(
             schedule=[
-                InterestRatePeriod(
+                FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 6, 30),
                     annual_rate=Decimal("0.05"),
                     ),
-                InterestRatePeriod(
+                FAInterestRatePeriod(
                     start_date=date(2025, 7, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),
@@ -252,19 +252,19 @@ class TestScheduledInvestmentSchedule:
     def test_empty_schedule_rejected(self):
         """Test that empty schedule is rejected."""
         with pytest.raises(ValidationError, match="at least one period"):
-            ScheduledInvestmentSchedule(schedule=[])
+            FAScheduledInvestmentSchedule(schedule=[])
 
     def test_overlapping_periods_rejected(self):
         """Test that overlapping periods are rejected."""
         with pytest.raises(ValidationError, match="Overlapping periods"):
-            ScheduledInvestmentSchedule(
+            FAScheduledInvestmentSchedule(
                 schedule=[
-                    InterestRatePeriod(
+                    FAInterestRatePeriod(
                         start_date=date(2025, 1, 1),
                         end_date=date(2025, 7, 15),
                         annual_rate=Decimal("0.05"),
                         ),
-                    InterestRatePeriod(
+                    FAInterestRatePeriod(
                         start_date=date(2025, 7, 1),  # Overlaps with previous!
                         end_date=date(2025, 12, 31),
                         annual_rate=Decimal("0.06"),
@@ -275,14 +275,14 @@ class TestScheduledInvestmentSchedule:
     def test_gap_in_periods_rejected(self):
         """Test that gaps between periods are rejected."""
         with pytest.raises(ValidationError, match="Gap detected"):
-            ScheduledInvestmentSchedule(
+            FAScheduledInvestmentSchedule(
                 schedule=[
-                    InterestRatePeriod(
+                    FAInterestRatePeriod(
                         start_date=date(2025, 1, 1),
                         end_date=date(2025, 6, 30),
                         annual_rate=Decimal("0.05"),
                         ),
-                    InterestRatePeriod(
+                    FAInterestRatePeriod(
                         start_date=date(2025, 7, 5),  # Gap of 5 days!
                         end_date=date(2025, 12, 31),
                         annual_rate=Decimal("0.06"),
@@ -292,14 +292,14 @@ class TestScheduledInvestmentSchedule:
 
     def test_unsorted_periods_are_sorted(self):
         """Test that unsorted periods are automatically sorted."""
-        schedule = ScheduledInvestmentSchedule(
+        schedule = FAScheduledInvestmentSchedule(
             schedule=[
-                InterestRatePeriod(
+                FAInterestRatePeriod(
                     start_date=date(2025, 7, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),
                     ),
-                InterestRatePeriod(
+                FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 6, 30),
                     annual_rate=Decimal("0.05"),
@@ -312,15 +312,15 @@ class TestScheduledInvestmentSchedule:
 
     def test_with_late_interest(self):
         """Test schedule with late interest configuration."""
-        schedule = ScheduledInvestmentSchedule(
+        schedule = FAScheduledInvestmentSchedule(
             schedule=[
-                InterestRatePeriod(
+                FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.05"),
                     )
                 ],
-            late_interest=LateInterestConfig(
+            late_interest=FALateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 grace_period_days=30,
                 )
@@ -330,22 +330,22 @@ class TestScheduledInvestmentSchedule:
 
     def test_three_periods_mixed_compounding(self):
         """Test schedule with multiple periods using different compounding."""
-        schedule = ScheduledInvestmentSchedule(
+        schedule = FAScheduledInvestmentSchedule(
             schedule=[
-                InterestRatePeriod(
+                FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 4, 30),
                     annual_rate=Decimal("0.04"),
                     compounding=CompoundingType.SIMPLE,
                     ),
-                InterestRatePeriod(
+                FAInterestRatePeriod(
                     start_date=date(2025, 5, 1),
                     end_date=date(2025, 8, 31),
                     annual_rate=Decimal("0.05"),
                     compounding=CompoundingType.COMPOUND,
                     compound_frequency=CompoundFrequency.QUARTERLY,
                     ),
-                InterestRatePeriod(
+                FAInterestRatePeriod(
                     start_date=date(2025, 9, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),

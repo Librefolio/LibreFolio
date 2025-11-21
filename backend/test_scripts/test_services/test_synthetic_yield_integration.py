@@ -17,9 +17,9 @@ from decimal import Decimal
 import pytest
 
 from backend.app.schemas.assets import (
-    InterestRatePeriod,
-    LateInterestConfig,
-    ScheduledInvestmentSchedule,
+    FAInterestRatePeriod,
+    FALateInterestConfig,
+    FAScheduledInvestmentSchedule,
     CompoundingType,
     CompoundFrequency,
     DayCountConvention,
@@ -46,18 +46,18 @@ async def _history_values(params: dict, start: date, end: date):
 # =============================================================================
 @pytest.mark.asyncio
 async def test_e2e_p2p_loan_two_periods_late_interest():
-    schedule_model = ScheduledInvestmentSchedule(
+    schedule_model = FAScheduledInvestmentSchedule(
         schedule=[
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 1, 1), end_date=date(2025, 6, 30), annual_rate=Decimal("0.05"),
                 compounding=CompoundingType.SIMPLE, day_count=DayCountConvention.ACT_365
                 ),
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 7, 1), end_date=date(2025, 12, 31), annual_rate=Decimal("0.06"),
                 compounding=CompoundingType.SIMPLE, day_count=DayCountConvention.ACT_365
                 ),
             ],
-        late_interest=LateInterestConfig(
+        late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"), grace_period_days=30,
             compounding=CompoundingType.SIMPLE, day_count=DayCountConvention.ACT_365
             )
@@ -99,9 +99,9 @@ async def test_e2e_p2p_loan_two_periods_late_interest():
 # =============================================================================
 @pytest.mark.asyncio
 async def test_e2e_bond_quarterly_compound():
-    schedule_model = ScheduledInvestmentSchedule(
+    schedule_model = FAScheduledInvestmentSchedule(
         schedule=[
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), annual_rate=Decimal("0.04"),
                 compounding=CompoundingType.COMPOUND, compound_frequency=CompoundFrequency.QUARTERLY,
                 day_count=DayCountConvention.ACT_365
@@ -130,18 +130,18 @@ async def test_e2e_bond_quarterly_compound():
 # =============================================================================
 @pytest.mark.asyncio
 async def test_e2e_mixed_schedule_simple_compound():
-    schedule_model = ScheduledInvestmentSchedule(
+    schedule_model = FAScheduledInvestmentSchedule(
         schedule=[
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 1, 1), end_date=date(2025, 3, 31), annual_rate=Decimal("0.03"),
                 compounding=CompoundingType.SIMPLE, day_count=DayCountConvention.ACT_365
                 ),
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 4, 1), end_date=date(2025, 6, 30), annual_rate=Decimal("0.035"),
                 compounding=CompoundingType.COMPOUND, compound_frequency=CompoundFrequency.MONTHLY,
                 day_count=DayCountConvention.ACT_365
                 ),
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 7, 1), end_date=date(2025, 12, 31), annual_rate=Decimal("0.04"),
                 compounding=CompoundingType.SIMPLE, day_count=DayCountConvention.ACT_365
                 ),

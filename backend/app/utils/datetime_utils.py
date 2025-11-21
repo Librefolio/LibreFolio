@@ -3,7 +3,7 @@ Date and time utilities for LibreFolio.
 
 Provides timezone-aware datetime helpers and date manipulation functions.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 
 def utcnow() -> datetime:
@@ -23,3 +23,16 @@ def utcnow() -> datetime:
         timezone-aware timestamps across the application.
     """
     return datetime.now(timezone.utc)
+
+
+def parse_ISO_date(v) -> date:
+    if isinstance(v, date):
+        return v
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, str):
+        try:
+            return date.fromisoformat(v)
+        except ValueError as e:
+            raise ValueError(f"Input must be an ISO date string (YYYY-MM-DD). Error: {e}")
+    raise TypeError(f"Input must be a str, date or datetime, got {type(v)}")

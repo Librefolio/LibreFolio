@@ -19,7 +19,9 @@ from __future__ import annotations
 from datetime import date as date_type
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+from backend.app.utils.datetime_utils import parse_ISO_date
 
 
 class BackwardFillInfo(BaseModel):
@@ -30,7 +32,7 @@ class BackwardFillInfo(BaseModel):
     to indicate when historical data was used instead of exact date match.
 
     Attributes:
-        actual_rate_date: ISO date string of the actual data used (YYYY-MM-DD)
+        actual_rate_date: stored as a `date` (accepts ISO string, `date` or `datetime` on input)
         days_back: Number of days back from requested date
 
     Examples:
@@ -51,8 +53,19 @@ class BackwardFillInfo(BaseModel):
             }
         }
     """
-    actual_rate_date: str = Field(..., description="ISO date of actual data used (YYYY-MM-DD)")
+    model_config = ConfigDict()
+
+    actual_rate_date: date_type = Field(..., description="ISO date of actual data used (YYYY-MM-DD)")
     days_back: int = Field(..., description="Number of days back from requested date")
+
+    @field_validator("actual_rate_date", mode="before")
+    @classmethod
+    def _parse_actual_rate_date(cls, v):
+        return parse_ISO_date(v)
+
+    def actual_rate_date_str(self) -> str:
+        """Restituisce la data in formato ISO string (YYYY-MM-DD)."""
+        return self.actual_rate_date.isoformat()
 
 
 class DateRangeModel(BaseModel):
