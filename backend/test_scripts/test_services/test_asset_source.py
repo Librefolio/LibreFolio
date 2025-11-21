@@ -146,20 +146,20 @@ def test_find_active_period():
     print_section("Test 4: Find Active Period (Synthetic Yield)")
     try:
         from backend.app.schemas.assets import (
-            InterestRatePeriod,
-            LateInterestConfig,
+            FAInterestRatePeriod,
+            FALateInterestConfig,
             CompoundingType,
             DayCountConvention,
             )
         schedule = [
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 compounding=CompoundingType.SIMPLE,
                 day_count=DayCountConvention.ACT_365,
                 ),
-            InterestRatePeriod(
+            FAInterestRatePeriod(
                 start_date=date(2026, 1, 1),
                 end_date=date(2026, 12, 31),
                 annual_rate=Decimal("0.06"),
@@ -168,7 +168,7 @@ def test_find_active_period():
                 ),
             ]
         maturity = date(2026, 12, 31)
-        late_interest = LateInterestConfig(
+        late_interest = FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
             compounding=CompoundingType.SIMPLE,

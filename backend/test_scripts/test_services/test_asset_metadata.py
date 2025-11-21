@@ -15,16 +15,16 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.schemas.assets import ClassificationParamsModel, PatchAssetMetadataRequest
+from backend.app.schemas.assets import FAClassificationParams, FAPatchMetadataRequest
 from backend.app.services.asset_metadata import AssetMetadataService
 
 
 def test_parse_classification_params_valid_json():
-    """Test parsing valid JSON to ClassificationParamsModel."""
+    """Test parsing valid JSON to FAClassificationParams."""
     json_str = '{"investment_type":"stock","sector":"Technology"}'
     parsed = AssetMetadataService.parse_classification_params(json_str)
 
-    assert isinstance(parsed, ClassificationParamsModel)
+    assert isinstance(parsed, FAClassificationParams)
     assert parsed.investment_type == "stock"
     assert parsed.sector == "Technology"
 
@@ -36,8 +36,8 @@ def test_parse_classification_params_none():
 
 
 def test_serialize_classification_params():
-    """Test serializing ClassificationParamsModel to JSON."""
-    model = ClassificationParamsModel(
+    """Test serializing FAClassificationParams to JSON."""
+    model = FAClassificationParams(
         investment_type="stock",
         sector="Technology"
         )
@@ -58,9 +58,9 @@ def test_serialize_classification_params_none():
 
 
 def test_compute_metadata_diff():
-    """Test computing differences between two ClassificationParamsModel instances."""
-    old = ClassificationParamsModel(investment_type="stock", sector="Energy")
-    new = ClassificationParamsModel(investment_type="etf", sector="Technology")
+    """Test computing differences between two FAClassificationParams instances."""
+    old = FAClassificationParams(investment_type="stock", sector="Energy")
+    new = FAClassificationParams(investment_type="etf", sector="Technology")
 
     changes = AssetMetadataService.compute_metadata_diff(old, new)
     fields = {c.field for c in changes}
@@ -72,13 +72,13 @@ def test_compute_metadata_diff():
 
 def test_apply_partial_update_absent_fields_ignored():
     """Test that absent fields in patch are ignored (PATCH semantics)."""
-    current = ClassificationParamsModel(
+    current = FAClassificationParams(
         investment_type="stock",
         sector="Technology"
         )
 
     # Patch only updates short_description, other fields should remain
-    patch = PatchAssetMetadataRequest(
+    patch = FAPatchMetadataRequest(
         short_description="New description"
         )
 
@@ -90,14 +90,14 @@ def test_apply_partial_update_absent_fields_ignored():
 
 def test_apply_partial_update_null_clears_field():
     """Test that null in patch clears the field (PATCH semantics)."""
-    current = ClassificationParamsModel(
+    current = FAClassificationParams(
         investment_type="stock",
         short_description="Original",
         sector="Technology"
         )
 
     # Explicitly set sector to None to clear it
-    patch = PatchAssetMetadataRequest(
+    patch = FAPatchMetadataRequest(
         sector=None
         )
 
@@ -108,14 +108,14 @@ def test_apply_partial_update_null_clears_field():
 
 def test_apply_partial_update_geographic_area_full_replace():
     """Test that geographic_area is fully replaced (no merge)."""
-    current = ClassificationParamsModel(
+    current = FAClassificationParams(
         investment_type="stock",
         geographic_area={"USA": Decimal("0.6"), "ITA": Decimal("0.4")},
         sector="Technology"
         )
 
     # Replace entire geographic_area
-    patch = PatchAssetMetadataRequest(
+    patch = FAPatchMetadataRequest(
         geographic_area={"USA": Decimal("0.7"), "FRA": Decimal("0.3")}
         )
 
@@ -131,8 +131,8 @@ def test_apply_partial_update_geographic_area_full_replace():
 
 def test_apply_partial_update_invalid_geo_area_raises():
     """Test that invalid geographic_area raises ValueError."""
-    current = ClassificationParamsModel(investment_type="stock")
-    patch = PatchAssetMetadataRequest(
+    current = FAClassificationParams(investment_type="stock")
+    patch = FAPatchMetadataRequest(
         geographic_area={"INVALID": Decimal("1.0")}
         )
 
@@ -142,7 +142,7 @@ def test_apply_partial_update_invalid_geo_area_raises():
 
 def test_merge_provider_metadata():
     """Test merging provider-fetched metadata with current metadata."""
-    current = ClassificationParamsModel(
+    current = FAClassificationParams(
         investment_type="stock",
         short_description="User description"
         )
@@ -166,15 +166,15 @@ def test_patch_semantic_edge_cases():
 
     # Case 1: PATCH with only geographic_area → other fields unchanged
     print("\nCase 1: PATCH only geographic_area, other fields unchanged")
-    current = ClassificationParamsModel(
+    current = FAClassificationParams(
         investment_type="stock",
         sector="Technology",
         short_description="Tech stock",
         geographic_area={"USA": Decimal("1.0")}
-    )
-    patch = PatchAssetMetadataRequest(
+        )
+    patch = FAPatchMetadataRequest(
         geographic_area={"USA": "0.6", "GBR": "0.4"}
-    )
+        )
     updated = AssetMetadataService.apply_partial_update(current, patch)
 
     # Verify: geographic_area changed, other fields unchanged
@@ -186,11 +186,11 @@ def test_patch_semantic_edge_cases():
 
     # Case 2: PATCH geographic_area=null → clears existing geographic_area
     print("\nCase 2: PATCH geographic_area=null clears field")
-    current = ClassificationParamsModel(
+    current = FAClassificationParams(
         investment_type="etf",
         geographic_area={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}
-    )
-    patch = PatchAssetMetadataRequest(geographic_area=None)
+        )
+    patch = FAPatchMetadataRequest(geographic_area=None)
     updated = AssetMetadataService.apply_partial_update(current, patch)
 
     # Verify: geographic_area cleared, investment_type unchanged
@@ -200,29 +200,29 @@ def test_patch_semantic_edge_cases():
 
     # Case 3: Multiple PATCHes in sequence → final state correct
     print("\nCase 3: Multiple PATCHes in sequence")
-    current = ClassificationParamsModel(
+    current = FAClassificationParams(
         investment_type="stock",
         sector="Finance"
-    )
+        )
 
     # First PATCH: Update sector and add geo area
-    patch1 = PatchAssetMetadataRequest(
+    patch1 = FAPatchMetadataRequest(
         sector="Technology",
         geographic_area={"USA": "1.0"}
-    )
+        )
     current = AssetMetadataService.apply_partial_update(current, patch1)
     assert current.sector == "Technology"
     assert current.geographic_area == {"USA": Decimal("1.0000")}
 
     # Second PATCH: Update investment_type, keep others
-    patch2 = PatchAssetMetadataRequest(investment_type="etf")
+    patch2 = FAPatchMetadataRequest(investment_type="etf")
     current = AssetMetadataService.apply_partial_update(current, patch2)
     assert current.investment_type == "etf"
     assert current.sector == "Technology"  # Still there
     assert current.geographic_area == {"USA": Decimal("1.0000")}  # Still there
 
     # Third PATCH: Clear sector
-    patch3 = PatchAssetMetadataRequest(sector=None)
+    patch3 = FAPatchMetadataRequest(sector=None)
     current = AssetMetadataService.apply_partial_update(current, patch3)
     assert current.sector is None
     assert current.investment_type == "etf"  # Still there
@@ -236,17 +236,17 @@ def test_patch_semantic_edge_cases():
     # In a real scenario, this would be handled by optimistic locking
     # For testing, we just verify that the last PATCH wins
 
-    current = ClassificationParamsModel(
+    current = FAClassificationParams(
         investment_type="stock",
         sector="Technology"
-    )
+        )
 
     # User A PATCHes sector
-    patch_a = PatchAssetMetadataRequest(sector="Finance")
+    patch_a = FAPatchMetadataRequest(sector="Finance")
     result_a = AssetMetadataService.apply_partial_update(current, patch_a)
 
     # User B PATCHes sector (simulates concurrent write)
-    patch_b = PatchAssetMetadataRequest(sector="Healthcare")
+    patch_b = FAPatchMetadataRequest(sector="Healthcare")
     result_b = AssetMetadataService.apply_partial_update(current, patch_b)
 
     # Both are valid transformations from the same base state

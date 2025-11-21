@@ -6,7 +6,7 @@ and standardize data exchange between components.
 
 **Organization by Domain**:
 - common.py: Shared schemas (BackwardFillInfo, DateRangeModel)
-- assets.py: Asset-related schemas (PricePointModel, ScheduledInvestment*, etc.)
+- assets.py: Asset-related schemas (FAPricePoint, ScheduledInvestment*, etc.)
 - provider.py: Provider assignment schemas (FA + FX)
 - prices.py: FA price operation schemas (upsert, delete, query)
 - refresh.py: FA refresh + FX sync operational schemas
@@ -22,21 +22,21 @@ and standardize data exchange between components.
 - Schemas separated from API layer (no inline definitions)
 """
 from backend.app.schemas.assets import (
-    CurrentValueModel,
-    PricePointModel,
-    HistoricalDataModel,
-    AssetProviderAssignmentModel,
+    FACurrentValue,
+    FAPricePoint,
+    FAHistoricalData,
+    FAAssetProviderAssignment,
     # Metadata & classification
-    ClassificationParamsModel,
-    PatchAssetMetadataRequest,
-    AssetMetadataResponse,
-    MetadataChangeDetail,
-    MetadataRefreshResult,
-    BulkAssetReadRequest,
-    BulkMetadataRefreshRequest,
-    BulkMetadataRefreshResponse,
-    PatchAssetMetadataItem,
-    BulkPatchAssetMetadataRequest,
+    FAClassificationParams,
+    FAPatchMetadataRequest,
+    FAAssetMetadataResponse,
+    FAMetadataChangeDetail,
+    FAMetadataRefreshResult,
+    FABulkAssetReadRequest,
+    FABulkMetadataRefreshRequest,
+    FABulkMetadataRefreshResponse,
+    FAPatchMetadataItem,
+    FABulkPatchMetadataRequest,
     # Asset CRUD (NEW)
     FAAssetCreateItem,
     FABulkAssetCreateRequest,
@@ -88,21 +88,21 @@ __all__ = [
     "BackwardFillInfo",
     "DateRangeModel",
     # Assets
-    "CurrentValueModel",
-    "PricePointModel",
-    "HistoricalDataModel",
-    "AssetProviderAssignmentModel",
+    "FACurrentValue",
+    "FAPricePoint",
+    "FAHistoricalData",
+    "FAAssetProviderAssignment",
     # Assets: Metadata & classification
-    "ClassificationParamsModel",
-    "PatchAssetMetadataRequest",
-    "AssetMetadataResponse",
-    "MetadataChangeDetail",
-    "MetadataRefreshResult",
-    "BulkAssetReadRequest",
-    "BulkMetadataRefreshRequest",
-    "BulkMetadataRefreshResponse",
-    "PatchAssetMetadataItem",
-    "BulkPatchAssetMetadataRequest",
+    "FAClassificationParams",
+    "FAPatchMetadataRequest",
+    "FAAssetMetadataResponse",
+    "FAMetadataChangeDetail",
+    "FAMetadataRefreshResult",
+    "FABulkAssetReadRequest",
+    "FABulkMetadataRefreshRequest",
+    "FABulkMetadataRefreshResponse",
+    "FAPatchMetadataItem",
+    "FABulkPatchMetadataRequest",
     # Assets: CRUD
     "FAAssetCreateItem",
     "FABulkAssetCreateRequest",

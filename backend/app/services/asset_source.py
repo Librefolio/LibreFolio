@@ -36,9 +36,9 @@ from backend.app.db.models import (
     AssetProviderAssignment,
     PriceHistory,
     )
-from backend.app.schemas import CurrentValueModel, HistoricalDataModel
-from backend.app.schemas.assets import MetadataRefreshResult
-from backend.app.schemas.assets import PricePointModel, BackwardFillInfo
+from backend.app.schemas import FACurrentValue, FAHistoricalData
+from backend.app.schemas.assets import FAMetadataRefreshResult
+from backend.app.schemas.assets import FAPricePoint, BackwardFillInfo
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.decimal_utils import truncate_priceHistory
 from backend.app.utils.financial_math import parse_decimal_value
@@ -109,7 +109,7 @@ class AssetSourceProvider(ABC):
         self,
         identifier: str,
         provider_params: dict,
-        ) -> CurrentValueModel:
+        ) -> FACurrentValue:
         """
         Fetch current price for asset.
 
@@ -137,7 +137,7 @@ class AssetSourceProvider(ABC):
         provider_params: dict,
         start_date: date_type,
         end_date: date_type,
-        ) -> HistoricalDataModel:
+        ) -> FAHistoricalData:
         """
         Fetch historical prices for date range.
 
@@ -642,7 +642,7 @@ class AssetSourceManager:
         failed_count = len(results) - success_count
 
         return {
-            "results": [MetadataRefreshResult(**r) for r in results],
+            "results": [FAMetadataRefreshResult(**r) for r in results],
             "success_count": success_count,
             "failed_count": failed_count,
             }
@@ -909,8 +909,8 @@ class AssetSourceManager:
         asset_id: int,
         start_date: date_type,
         end_date: date_type,
-        ) -> Optional[list[PricePointModel]]:
-        """Delegate to provider history fetch, returning PricePointModel list or None on failure.
+        ) -> Optional[list[FAPricePoint]]:
+        """Delegate to provider history fetch, returning FAPricePoint list or None on failure.
 
         Logs warnings with context when provider fetch fails for diagnostics.
         """
@@ -931,7 +931,7 @@ class AssetSourceManager:
 
         try:
             historical = await provider.get_history_value(str(asset_id), params, start_date, end_date)
-            # historical expected HistoricalDataModel with prices: List[PricePointModel]
+            # historical expected FAHistoricalData with prices: List[FAPricePoint]
             return historical.prices
         except Exception as e:
             logger.warning(
@@ -963,8 +963,8 @@ class AssetSourceManager:
         return {p.date: p for p in db_result.scalars().all()}
 
     @staticmethod
-    def _build_backward_filled_series(price_map: dict[date_type, PriceHistory], start_date: date_type, end_date: date_type, ) -> list[PricePointModel]:
-        results: list[PricePointModel] = []
+    def _build_backward_filled_series(price_map: dict[date_type, PriceHistory], start_date: date_type, end_date: date_type, ) -> list[FAPricePoint]:
+        results: list[FAPricePoint] = []
         last_known: Optional[PriceHistory] = None
         current = start_date
         while current <= end_date:
@@ -972,7 +972,7 @@ class AssetSourceManager:
             if ph:
                 last_known = ph
                 results.append(
-                    PricePointModel(
+                    FAPricePoint(
                         date=current,
                         open=ph.open,
                         high=ph.high,
@@ -986,7 +986,7 @@ class AssetSourceManager:
             elif last_known:
                 days_back = (current - last_known.date).days
                 results.append(
-                    PricePointModel(
+                    FAPricePoint(
                         date=current,
                         open=last_known.open,
                         high=last_known.high,
@@ -994,10 +994,7 @@ class AssetSourceManager:
                         close=last_known.close,
                         volume=last_known.volume,
                         currency=last_known.currency,
-                        backward_fill_info=BackwardFillInfo(
-                            actual_rate_date=last_known.date,
-                            days_back=days_back,
-                            ),
+                        backward_fill_info=BackwardFillInfo(actual_rate_date=last_known.date, days_back=days_back),
                         )
                     )
             # else: skip days before first known price
@@ -1010,7 +1007,7 @@ class AssetSourceManager:
         start_date: date_type,
         end_date: date_type,
         session: AsyncSession,
-        ) -> list[PricePointModel]:
+        ) -> list[FAPricePoint]:
         """Get prices for asset with backward-fill and provider delegation.
 
         Logic:
@@ -1019,7 +1016,7 @@ class AssetSourceManager:
         3. If provider assignment exists -> try provider fetch
         4. Fallback to DB with backward-fill
 
-        Returns List[PricePointModel] (uniform output).
+        Returns List[FAPricePoint] (uniform output).
         Synthetic yield (scheduled investment) handled entirely inside the dedicated provider plugin.
         """
         if start_date > end_date:

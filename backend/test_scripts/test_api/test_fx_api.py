@@ -10,6 +10,8 @@ from pathlib import Path
 
 import httpx
 
+from backend.app.schemas import FXConvertResponse
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -1148,36 +1150,19 @@ def test_convert_missing_rate():
             print_error(f"Response: {response.text}")
             return False
 
-        data = response.json()
+        data = FXConvertResponse(**response.json())
 
         # Validate bulk response and extract first result
-        if "results" not in data or len(data["results"]) == 0:
+        if len(data.results) == 0:
             print_error("Response missing results")
             return False
 
-        result = data["results"][0]
-
-        # Verify backward_fill_info is present
-        if "backward_fill_info" not in result:
-            print_error("Response missing backward_fill_info field")
-            return False
-
-        fill_info = result["backward_fill_info"]
-
-        if fill_info is None:
-            print_error("backward_fill_info should not be null for old date")
-            return False
-
-        # Verify structure (simplified: no more 'applied' and 'requested_date')
-        required_fields = ["actual_rate_date", "days_back"]
-        for field in required_fields:
-            if field not in fill_info:
-                print_error(f"backward_fill_info missing field: {field}")
-                return False
+        result = data.results[0]
+        fill_info = result.backward_fill_info
 
         # Verify actual_rate_date is <= requested_date (conversion_date)
-        actual_date = data_type.fromisoformat(fill_info["actual_rate_date"])
-        conversion_date = data_type.fromisoformat(result["conversion_date"])
+        actual_date = fill_info.actual_rate_date
+        conversion_date = result.conversion_date
 
         if actual_date > conversion_date:
             print_error(f"actual_rate_date ({actual_date}) should be <= conversion_date ({conversion_date})")
@@ -1185,13 +1170,13 @@ def test_convert_missing_rate():
 
         # Verify days_back calculation is correct
         expected_days_back = (conversion_date - actual_date).days
-        if fill_info["days_back"] != expected_days_back:
+        if fill_info.days_back != expected_days_back:
             print_error(f"days_back incorrect: expected {expected_days_back}, got {fill_info['days_back']}")
             return False
 
-        print_success(f"✓ Backward-fill applied: {fill_info['days_back']} days back")
-        print_info(f"  Conversion date: {result['conversion_date']} ✓")
-        print_info(f"  Actual rate from: {fill_info['actual_rate_date']} ✓")
+        print_success(f"✓ Backward-fill applied: {fill_info.days_back} days back")
+        print_info(f"  Conversion date: {result.conversion_date} ✓")
+        print_info(f"  Actual rate from: {fill_info.actual_rate_date} ✓")
         print_info(f"  Days back calculation: correct ✓")
         print_success("Backward-fill warning works correctly with all validations passing")
         return True

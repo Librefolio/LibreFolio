@@ -13,13 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.assets import (
-    PricePointModel,
-    MetadataRefreshResult,
-    BulkPatchAssetMetadataRequest,
-    AssetMetadataResponse,
-    BulkAssetReadRequest,
-    BulkMetadataRefreshRequest,
-    BulkMetadataRefreshResponse,
+    FAPricePoint,
+    FAMetadataRefreshResult,
+    FABulkPatchMetadataRequest,
+    FAAssetMetadataResponse,
+    FABulkAssetReadRequest,
+    FABulkMetadataRefreshRequest,
+    FABulkMetadataRefreshResponse,
     # Asset CRUD schemas
     FABulkAssetCreateRequest,
     FABulkAssetCreateResponse,
@@ -71,7 +71,7 @@ router = APIRouter(prefix="/assets", tags=["Assets"])
 async def create_assets_bulk(
     request: FABulkAssetCreateRequest,
     session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Create multiple assets in bulk (partial success allowed).
 
@@ -131,7 +131,7 @@ async def list_assets(
     active: bool = Query(True, description="Include only active assets (default: true)"),
     search: Optional[str] = Query(None, description="Search in display_name or identifier"),
     session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     List all assets with optional filters.
 
@@ -158,7 +158,7 @@ async def list_assets(
             valuation_model=valuation_model,
             active=active,
             search=search
-        )
+            )
         return await AssetCRUDService.list_assets(filters, session)
     except Exception as e:
         logger.error(f"Error listing assets: {e}")
@@ -169,7 +169,7 @@ async def list_assets(
 async def delete_assets_bulk(
     request: FABulkAssetDeleteRequest,
     session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Delete multiple assets in bulk (partial success allowed).
 
@@ -357,6 +357,7 @@ async def upsert_prices_bulk(
         logger.error(f"Error in bulk upsert prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # TODO: rimuovere e usare solo la bulk
 @router.post("/{asset_id}/prices")
 async def upsert_prices_single(
@@ -399,6 +400,7 @@ async def delete_prices_bulk(
         logger.error(f"Error in bulk delete prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # TODO: rimuovere e usare solo la bulk
 @router.delete("/{asset_id}/prices")
 async def delete_prices_single(
@@ -420,7 +422,7 @@ async def delete_prices_single(
 # PRICE QUERY ENDPOINTS
 # ============================================================================
 
-@router.get("/{asset_id}/prices", response_model=List[PricePointModel])
+@router.get("/{asset_id}/prices", response_model=List[FAPricePoint])
 async def get_prices(
     asset_id: int,
     start_date: date = Query(..., description="Start date (required)"),
@@ -429,7 +431,7 @@ async def get_prices(
     ):
     """Get prices for asset with backward-fill support.
 
-    Returns a list of PricePointModel with OHLC data, volume, and backward-fill info.
+    Returns a list of FAPricePoint with OHLC data, volume, and backward-fill info.
     """
     try:
         if end_date is None:
@@ -437,21 +439,22 @@ async def get_prices(
 
         prices = await AssetSourceManager.get_prices(asset_id, start_date, end_date, session)
 
-        return prices  # Already List[PricePointModel] from service
+        return prices  # Already List[FAPricePoint] from service
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting prices for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # TODO: aggiungere endpoint per creare Asset bulk, capire endpoint e request/response model e anche per eliminare asset e
 
 # TODO: aggiungere GET /api/v1/assets per avere la lista degli asset
 
 # TODO: rinominare in /bulk
-@router.post("", response_model=List[AssetMetadataResponse])
+@router.post("", response_model=List[FAAssetMetadataResponse])
 async def read_assets_bulk(
-    request: BulkAssetReadRequest,
+    request: FABulkAssetReadRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -511,7 +514,7 @@ async def read_assets_bulk(
         session: Database session
 
     Returns:
-        List of AssetMetadataResponse in request order (missing assets skipped)
+        List of FAAssetMetadataResponse in request order (missing assets skipped)
 
     Raises:
         HTTPException: 500 if unexpected error occurs
@@ -531,7 +534,7 @@ async def read_assets_bulk(
             if not asset:
                 continue
             responses.append(
-                AssetMetadataResponse(
+                FAAssetMetadataResponse(
                     asset_id=asset.id,
                     display_name=asset.display_name,
                     identifier=asset.identifier,
@@ -569,6 +572,7 @@ async def refresh_prices_bulk(
         logger.error(f"Error in bulk refresh prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # TODO: rimuovere e usare solo la bulk
 @router.post("/{asset_id}/prices-refresh")
 async def refresh_prices_single(
@@ -589,9 +593,9 @@ async def refresh_prices_single(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.patch("/metadata", response_model=list[MetadataRefreshResult])
+@router.patch("/metadata", response_model=list[FAMetadataRefreshResult])
 async def update_assets_metadata_bulk(
-    request: BulkPatchAssetMetadataRequest,
+    request: FABulkPatchMetadataRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -652,7 +656,7 @@ async def update_assets_metadata_bulk(
         session: Database session
 
     Returns:
-        List of MetadataRefreshResult (per-item success/failure)
+        List of FAMetadataRefreshResult (per-item success/failure)
 
     Raises:
         HTTPException: 500 if unexpected error occurs
@@ -686,8 +690,9 @@ async def update_assets_metadata_bulk(
         logger.error(f"Error in bulk metadata update: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # TODO: rimuovere endpoint singolo e usare solo il bulk
-@router.post("/{asset_id}/metadata/refresh", response_model=MetadataRefreshResult)
+@router.post("/{asset_id}/metadata/refresh", response_model=FAMetadataRefreshResult)
 async def refresh_asset_metadata_single(
     asset_id: int,
     session: AsyncSession = Depends(get_session_generator)
@@ -742,22 +747,22 @@ async def refresh_asset_metadata_single(
         session: Database session
 
     Returns:
-        MetadataRefreshResult with success status and changes
+        FAMetadataRefreshResult with success status and changes
 
     Raises:
         HTTPException: 500 if unexpected error occurs
     """
     try:
         result = await AssetSourceManager.refresh_asset_metadata(asset_id, session)
-        return MetadataRefreshResult(**result)
+        return FAMetadataRefreshResult(**result)
     except Exception as e:
         logger.error(f"Error refreshing metadata for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/metadata/refresh/bulk", response_model=BulkMetadataRefreshResponse)
+@router.post("/metadata/refresh/bulk", response_model=FABulkMetadataRefreshResponse)
 async def refresh_asset_metadata_bulk(
-    request: BulkMetadataRefreshRequest,
+    request: FABulkMetadataRefreshRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -808,14 +813,14 @@ async def refresh_asset_metadata_bulk(
         session: Database session
 
     Returns:
-        BulkMetadataRefreshResponse with per-item results and counts
+        FABulkMetadataRefreshResponse with per-item results and counts
 
     Raises:
         HTTPException: 500 if unexpected error occurs
     """
     try:
         result = await AssetSourceManager.bulk_refresh_metadata(request.asset_ids, session)
-        return BulkMetadataRefreshResponse(**result)
+        return FABulkMetadataRefreshResponse(**result)
     except Exception as e:
         logger.error(f"Error in bulk metadata refresh: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -29,7 +29,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.common import DateRangeModel, BackwardFillInfo
 
 
 # ============================================================================
@@ -134,8 +134,51 @@ class FABulkDeleteResponse(BaseModel):
     results: List[FAAssetDeleteResult]
     deleted_count: int
 
+
 # ============================================================================
 # FA PRICE QUERY
 # ============================================================================
 
-# TODO: capire se mettere qui le cose di prezzo contenute in asset.py
+class FACurrentValue(BaseModel):
+    """Current value of an asset."""
+    model_config = ConfigDict(extra="forbid")
+
+    value: Decimal
+    currency: str
+    as_of_date: date_type
+    source: Optional[str] = None
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def parse_decimal(cls, v):
+        return Decimal(str(v))
+
+
+class FAPricePoint(BaseModel):
+    """Single price point with OHLC data and optional backward-fill info."""
+    model_config = ConfigDict(extra="forbid")
+
+    date: date_type
+    open: Optional[Decimal] = None
+    high: Optional[Decimal] = None
+    low: Optional[Decimal] = None
+    close: Decimal
+    volume: Optional[Decimal] = None
+    currency: Optional[str] = None
+    backward_fill_info: Optional[BackwardFillInfo] = None
+
+    @field_validator("open", "high", "low", "close", "volume", mode="before")
+    @classmethod
+    def parse_optional_decimal(cls, v):
+        if v is None:
+            return None
+        return Decimal(str(v))
+
+
+class FAHistoricalData(BaseModel):
+    """Historical price data for an asset (list of price points)."""
+    model_config = ConfigDict(extra="forbid")
+
+    prices: List[FAPricePoint]
+    currency: Optional[str] = None
+    source: Optional[str] = None

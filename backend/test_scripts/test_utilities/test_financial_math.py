@@ -5,7 +5,7 @@ All test is independent of the others, so help use pytest features.
 from datetime import date
 from decimal import Decimal
 
-from backend.app.schemas.assets import InterestRatePeriod, LateInterestConfig, CompoundingType, CompoundFrequency, DayCountConvention
+from backend.app.schemas.assets import FAInterestRatePeriod, FALateInterestConfig, CompoundingType, CompoundFrequency, DayCountConvention
 from backend.app.utils.financial_math import (
     find_active_period,
     parse_decimal_value,
@@ -65,7 +65,7 @@ def test_calculate_daily_factor_between_act365_zero_days():
 def test_find_active_period_within_schedule():
     """Test finding period within scheduled dates."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -86,14 +86,14 @@ def test_find_active_period_within_schedule():
 def test_find_active_period_multiple_periods():
     """Test finding correct period across multiple periods."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 6, 30),
             annual_rate=Decimal("0.05"),
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365
             ),
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 7, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.06"),
@@ -117,7 +117,7 @@ def test_find_active_period_multiple_periods():
 def test_find_active_period_within_grace():
     """Test finding period within grace period after maturity."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -126,7 +126,7 @@ def test_find_active_period_within_grace():
             )
         ]
     maturity = date(2025, 12, 31)
-    late_interest = LateInterestConfig(
+    late_interest = FALateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
         compounding=CompoundingType.SIMPLE,
@@ -144,7 +144,7 @@ def test_find_active_period_within_grace():
 def test_find_active_period_after_grace():
     """Test finding period after grace period (late interest)."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -153,7 +153,7 @@ def test_find_active_period_after_grace():
             )
         ]
     maturity = date(2025, 12, 31)
-    late_interest = LateInterestConfig(
+    late_interest = FALateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
         compounding=CompoundingType.SIMPLE,
@@ -171,7 +171,7 @@ def test_find_active_period_after_grace():
 def test_find_active_period_no_late_interest():
     """Test behavior after maturity without late interest config."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -191,7 +191,7 @@ def test_find_active_period_no_late_interest():
 def test_find_active_period_before_schedule():
     """Test behavior before schedule starts."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -209,20 +209,20 @@ def test_find_active_period_before_schedule():
 
 
 # ============================================================================
-# TESTS: find_active_period (returns full InterestRatePeriod object)
+# TESTS: find_active_period (returns full FAInterestRatePeriod object)
 # ============================================================================
 
 def test_find_active_period_within_schedule():
     """Test finding period within scheduled dates."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 6, 30),
             annual_rate=Decimal("0.05"),
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365
             ),
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 7, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.06"),
@@ -248,7 +248,7 @@ def test_find_active_period_within_schedule():
 def test_find_active_period_within_grace():
     """Test finding period within grace period after maturity."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -257,7 +257,7 @@ def test_find_active_period_within_grace():
             )
         ]
     maturity = date(2025, 12, 31)
-    late_interest = LateInterestConfig(
+    late_interest = FALateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
         compounding=CompoundingType.SIMPLE,
@@ -273,7 +273,7 @@ def test_find_active_period_within_grace():
 def test_find_active_period_after_grace():
     """Test finding period after grace period (late interest)."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -282,7 +282,7 @@ def test_find_active_period_after_grace():
             )
         ]
     maturity = date(2025, 12, 31)
-    late_interest = LateInterestConfig(
+    late_interest = FALateInterestConfig(
         annual_rate=Decimal("0.12"),
         grace_period_days=30,
         compounding=CompoundingType.SIMPLE,
@@ -300,7 +300,7 @@ def test_find_active_period_after_grace():
 def test_find_active_period_no_late_interest():
     """Test behavior after maturity without late interest config."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -318,7 +318,7 @@ def test_find_active_period_no_late_interest():
 def test_find_active_period_before_schedule():
     """Test behavior before schedule starts."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
@@ -336,7 +336,7 @@ def test_find_active_period_before_schedule():
 def test_find_active_period_with_compound_monthly():
     """Test that period preserves compound frequency."""
     schedule = [
-        InterestRatePeriod(
+        FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),

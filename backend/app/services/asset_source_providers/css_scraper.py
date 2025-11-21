@@ -22,7 +22,7 @@ except ImportError:
 
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
-from backend.app.schemas.assets import CurrentValueModel, HistoricalDataModel
+from backend.app.schemas.assets import FACurrentValue, FAHistoricalData
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class CSSScraperProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,  # TODO: cambiare il parametro per prendere la classe pydantic invece di un dict
-        ) -> CurrentValueModel:
+        ) -> FACurrentValue:
         """
         Fetch current price by scraping URL with CSS selector.
 
@@ -80,7 +80,7 @@ class CSSScraperProvider(AssetSourceProvider):
             provider_params: see self.validate_params()
 
         Returns:
-            CurrentValueModel with value, currency, as_of_date, source
+            FACurrentValue with value, currency, as_of_date, source
 
         Raises:
             AssetSourceError: If scraping fails or price not found
@@ -136,7 +136,7 @@ class CSSScraperProvider(AssetSourceProvider):
 
             price_value = self.parse_price(price_text, decimal_format)
 
-            return CurrentValueModel(
+            return FACurrentValue(
                 value=price_value,
                 currency=currency,
                 as_of_date=date.today(),
@@ -179,7 +179,7 @@ class CSSScraperProvider(AssetSourceProvider):
         start_date: date,
         end_date: date,
         provider_params: Dict | None = None,  # TODO: cambiare il parametro per prendere la classe pydantic invece di un dict, come nel metodo sopra
-        ) -> HistoricalDataModel:
+        ) -> FAHistoricalData:
         """
         Fetch historical prices (NOT IMPLEMENTED for CSS scraper).
 
@@ -192,7 +192,7 @@ class CSSScraperProvider(AssetSourceProvider):
             end_date: End date
             provider_params: Provider parameters
         Returns:
-            HistoricalDataModel with prices list, currency, source
+            FAHistoricalData with prices list, currency, source
         Raises:
             AssetSourceError: Always (not implemented)
         """

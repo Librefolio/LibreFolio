@@ -34,9 +34,9 @@ Test support:
 - Override should contain list of transaction dicts for testing
 
 For detailed parameter structure documentation, see:
-- backend.app.schemas.assets.ScheduledInvestmentSchedule
-- backend.app.schemas.assets.InterestRatePeriod
-- backend.app.schemas.assets.LateInterestConfig
+- backend.app.schemas.assets.FAScheduledInvestmentSchedule
+- backend.app.schemas.assets.FAInterestRatePeriod
+- backend.app.schemas.assets.FALateInterestConfig
 """
 import json
 import logging
@@ -50,12 +50,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset, Transaction, TransactionType
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.assets import (
-    CurrentValueModel,
-    HistoricalDataModel,
-    PricePointModel,
-    ScheduledInvestmentSchedule,
+    FACurrentValue,
+    FAHistoricalData,
+    FAPricePoint,
+    FAScheduledInvestmentSchedule,
     CompoundingType,
-    InterestRatePeriod,  # added for synthetic periods
+    FAInterestRatePeriod,  # added for synthetic periods
     )
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
@@ -229,7 +229,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: dict,
-        ) -> CurrentValueModel:
+        ) -> FACurrentValue:
         """
         Calculate current value for scheduled investment.
 
@@ -245,7 +245,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             provider_params: Can include "_transaction_override" for testing
 
         Returns:
-            CurrentValueModel with calculated value
+            FACurrentValue with calculated value
 
         Raises:
             AssetSourceError: If calculation fails or asset not found
@@ -289,7 +289,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                             )
 
                     schedule_data = json.loads(asset.interest_schedule)
-                    schedule = ScheduledInvestmentSchedule(**schedule_data)
+                    schedule = FAScheduledInvestmentSchedule(**schedule_data)
                     currency = asset.currency
                     break  # Exit after first iteration
 
@@ -305,7 +305,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
             # If no principal invested, return 0
             if face_value <= 0:
-                return CurrentValueModel(
+                return FACurrentValue(
                     value=Decimal("0"),
                     currency=currency,
                     as_of_date=date_type.today(),
@@ -316,7 +316,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             target_date = date_type.today()
             total_value = self._calculate_value_for_date(schedule, face_value, target_date)
 
-            return CurrentValueModel(
+            return FACurrentValue(
                 value=total_value,
                 currency=currency,
                 as_of_date=target_date,
@@ -349,7 +349,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         provider_params: dict,
         start_date: date_type,
         end_date: date_type,
-        ) -> HistoricalDataModel:
+        ) -> FAHistoricalData:
         """
         Calculate historical values for scheduled investment.
 
@@ -363,7 +363,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             end_date: End date (inclusive)
 
         Returns:
-            HistoricalDataModel with prices list, currency, source
+            FAHistoricalData with prices list, currency, source
 
         Raises:
             AssetSourceError: If calculation fails
@@ -404,7 +404,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                             )
 
                     schedule_data = json.loads(asset.interest_schedule)
-                    schedule = ScheduledInvestmentSchedule(**schedule_data)
+                    schedule = FAScheduledInvestmentSchedule(**schedule_data)
                     currency = asset.currency
                     break
 
@@ -436,14 +436,14 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 else:
                     value = self._calculate_value_for_date(schedule, face_value, current_date)
 
-                prices.append(PricePointModel(
+                prices.append(FAPricePoint(
                     date=current_date,
                     close=value,
                     currency=currency
                     ))
                 current_date += timedelta(days=1)
 
-            return HistoricalDataModel(
+            return FAHistoricalData(
                 prices=prices,
                 currency=currency,
                 source=self.provider_name
@@ -483,7 +483,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
     def _calculate_value_for_date(
         self,
-        schedule: ScheduledInvestmentSchedule,
+        schedule: FAScheduledInvestmentSchedule,
         face_value: Decimal,
         target_date: date_type,
         ) -> Decimal:
@@ -511,7 +511,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         if target_date < first_start:
             return face_value
 
-        periods_to_process: list[InterestRatePeriod] = []
+        periods_to_process: list[FAInterestRatePeriod] = []
 
         # 1. Real scheduled periods (truncate to target_date)
         for p in schedule.schedule:
@@ -521,7 +521,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             eff_end = p.end_date if p.end_date <= target_date else target_date
             if eff_end >= eff_start:
                 periods_to_process.append(
-                    InterestRatePeriod(
+                    FAInterestRatePeriod(
                         start_date=eff_start,
                         end_date=eff_end,
                         annual_rate=p.annual_rate,
@@ -542,7 +542,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 grace_segment_end = min(grace_end, target_date)
                 if grace_segment_end >= grace_start:
                     periods_to_process.append(
-                        InterestRatePeriod(
+                        FAInterestRatePeriod(
                             start_date=grace_start,
                             end_date=grace_segment_end,
                             annual_rate=last_rate_period.annual_rate,
@@ -557,7 +557,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 late_end = target_date
                 if late_end >= late_start:
                     periods_to_process.append(
-                        InterestRatePeriod(
+                        FAInterestRatePeriod(
                             start_date=late_start,
                             end_date=late_end,
                             annual_rate=li.annual_rate,
@@ -596,20 +596,20 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
         return face_value + total_interest
 
-    def validate_params(self, provider_params: dict) -> ScheduledInvestmentSchedule:
+    def validate_params(self, provider_params: dict) -> FAScheduledInvestmentSchedule:
         """
         Validate provider parameters for scheduled investment.
 
-        Uses Pydantic ScheduledInvestmentSchedule model for validation.
+        Uses Pydantic FAScheduledInvestmentSchedule model for validation.
         Automatically converts dict/JSON to Pydantic model.
 
-        See backend.app.schemas.assets.ScheduledInvestmentSchedule for full documentation.
+        See backend.app.schemas.assets.FAScheduledInvestmentSchedule for full documentation.
 
         Args:
-            provider_params: Parameters dict (will be converted to ScheduledInvestmentSchedule)
+            provider_params: Parameters dict (will be converted to FAScheduledInvestmentSchedule)
 
         Returns:
-            Validated ScheduledInvestmentSchedule instance
+            Validated FAScheduledInvestmentSchedule instance
 
         Raises:
             AssetSourceError: If validation fails
@@ -633,7 +633,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 }
             }
             validated = provider.validate_params(params)
-            # Returns ScheduledInvestmentSchedule instance with validated data
+            # Returns FAScheduledInvestmentSchedule instance with validated data
         """
         if not provider_params:
             raise AssetSourceError(
@@ -644,7 +644,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
         try:
             # Convert dict to Pydantic model (automatic validation)
-            return ScheduledInvestmentSchedule(**provider_params)
+            return FAScheduledInvestmentSchedule(**provider_params)
         except ValueError as e:
             raise AssetSourceError(
                 f"Invalid provider params: {e}",

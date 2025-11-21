@@ -163,18 +163,19 @@ SITE_DIR = Path(__file__).parent.parent.parent / "site"
 def docs_available() -> bool:
     return SITE_DIR.exists() and (SITE_DIR / "index.html").exists()
 
+
 # TODO: aggiornare guida per il caso docker quando docker ci sarà
 def render_docs_not_built() -> HTMLResponse:
     return HTMLResponse(
-            """<html><body>
-            <h1>Documentation not generated</h1>
-            <p>To build the <b>MkDocs</b> site, change into the <b>LibreFolio</b> installation directory and run:</p>
-            <pre><code>cd `/path/to/LibreFolio`
-    ./dev.sh info:mk build</code></pre>
-            <p>If you are using <b>Docker</b> (coming soon), open a shell in the backend container and run the same command:</p>
-            <pre><code>docker compose exec backend /bin/bash
-    ./dev.sh info:mk build</code></pre>
-            </body></html>"""
+        """<html><body>
+        <h1>Documentation not generated</h1>
+        <p>To build the <b>MkDocs</b> site, change into the <b>LibreFolio</b> installation directory and run:</p>
+        <pre><code>cd `/path/to/LibreFolio`
+./dev.sh info:mk build</code></pre>
+        <p>If you are using <b>Docker</b> (coming soon), open a shell in the backend container and run the same command:</p>
+        <pre><code>docker compose exec backend /bin/bash
+./dev.sh info:mk build</code></pre>
+        </body></html>"""
         )
 
 

@@ -276,7 +276,7 @@ def test_metadata_refresh_single(base_url: str, asset_id: int) -> bool:
         data = resp.json()
         print_info(f"Response: {json.dumps(data, indent=2)}")
 
-        # Verify structure (MetadataRefreshResult)
+        # Verify structure (FAMetadataRefreshResult)
         assert 'asset_id' in data, "Response should have asset_id"
         assert 'success' in data, "Response should have success"
         assert 'message' in data, "Response should have message"
@@ -317,7 +317,7 @@ def test_metadata_refresh_bulk(base_url: str, asset_id: int) -> bool:
         data = resp.json()
         print_info(f"Response: {json.dumps(data, indent=2)}")
 
-        # Verify structure (BulkMetadataRefreshResponse)
+        # Verify structure (FABulkMetadataRefreshResponse)
         assert 'results' in data, "Response should have results"
         assert 'success_count' in data, "Response should have success_count"
         assert 'failed_count' in data, "Response should have failed_count"

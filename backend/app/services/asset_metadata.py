@@ -32,9 +32,9 @@ import json
 from typing import Optional
 
 from backend.app.schemas.assets import (
-    ClassificationParamsModel,
-    PatchAssetMetadataRequest,
-    MetadataChangeDetail,
+    FAClassificationParams,
+    FAPatchMetadataRequest,
+    FAMetadataChangeDetail,
     )
 
 
@@ -46,7 +46,7 @@ class AssetMetadataService:
     """
 
     @staticmethod
-    def parse_classification_params(json_str: Optional[str]) -> Optional[ClassificationParamsModel]:
+    def parse_classification_params(json_str: Optional[str]) -> Optional[FAClassificationParams]:
         """
         Parse classification_params JSON string to Pydantic model.
 
@@ -54,7 +54,7 @@ class AssetMetadataService:
             json_str: JSON string from Asset.classification_params field
 
         Returns:
-            ClassificationParamsModel if json_str is not None/empty, else None
+            FAClassificationParams if json_str is not None/empty, else None
 
         Raises:
             ValueError: If JSON is malformed or validation fails
@@ -79,24 +79,24 @@ class AssetMetadataService:
             raise ValueError(f"classification_params must be a JSON object, got {type(data).__name__}")
 
         try:
-            return ClassificationParamsModel(**data)
+            return FAClassificationParams(**data)
         except Exception as e:
             raise ValueError(f"Validation failed for classification_params: {e}")
 
     @staticmethod
-    def serialize_classification_params(model: Optional[ClassificationParamsModel]) -> Optional[str]:
+    def serialize_classification_params(model: Optional[FAClassificationParams]) -> Optional[str]:
         """
-        Serialize ClassificationParamsModel to JSON string for database storage.
+        Serialize FAClassificationParams to JSON string for database storage.
 
         Args:
-            model: ClassificationParamsModel instance or None
+            model: FAClassificationParams instance or None
 
         Returns:
             JSON string if model is not None, else None
 
         Examples:
             >>> from decimal import Decimal
-            >>> params = ClassificationParamsModel(
+            >>> params = FAClassificationParams(
             ...     investment_type="etf",
             ...     geographic_area={"USA": Decimal("0.5"), "EUR": Decimal("0.5")}
             ... )
@@ -115,9 +115,9 @@ class AssetMetadataService:
 
     @staticmethod
     def compute_metadata_diff(
-        old: Optional[ClassificationParamsModel],
-        new: Optional[ClassificationParamsModel]
-        ) -> list[MetadataChangeDetail]:
+        old: Optional[FAClassificationParams],
+        new: Optional[FAClassificationParams]
+        ) -> list[FAMetadataChangeDetail]:
         """
         Compute diff between old and new metadata.
 
@@ -128,11 +128,11 @@ class AssetMetadataService:
             new: New metadata state (or None)
 
         Returns:
-            List of MetadataChangeDetail objects describing changes
+            List of FAMetadataChangeDetail objects describing changes
 
         Examples:
-            >>> old = ClassificationParamsModel(investment_type="stock")
-            >>> new = ClassificationParamsModel(investment_type="etf", sector="Technology")
+            >>> old = FAClassificationParams(investment_type="stock")
+            >>> new = FAClassificationParams(investment_type="etf", sector="Technology")
             >>> changes = AssetMetadataService.compute_metadata_diff(old, new)
             >>> len(changes)
             2
@@ -158,7 +158,7 @@ class AssetMetadataService:
                 old_display = json.dumps(old_value, default=str) if old_value is not None else None
                 new_display = json.dumps(new_value, default=str) if new_value is not None else None
 
-                changes.append(MetadataChangeDetail(
+                changes.append(FAMetadataChangeDetail(
                     field=field,
                     old_value=old_display,
                     new_value=new_display
@@ -168,9 +168,9 @@ class AssetMetadataService:
 
     @staticmethod
     def apply_partial_update(
-        current: Optional[ClassificationParamsModel],
-        patch: PatchAssetMetadataRequest
-        ) -> ClassificationParamsModel:
+        current: Optional[FAClassificationParams],
+        patch: FAPatchMetadataRequest
+        ) -> FAClassificationParams:
         """
         Apply PATCH request to current metadata.
 
@@ -185,14 +185,14 @@ class AssetMetadataService:
             patch: PATCH request with fields to update
 
         Returns:
-            Updated ClassificationParamsModel
+            Updated FAClassificationParams
 
         Raises:
             ValueError: If validation fails (e.g., invalid geographic_area)
 
         Examples:
-            >>> current = ClassificationParamsModel(investment_type="stock", sector="Technology")
-            >>> patch = PatchAssetMetadataRequest(sector=None)  # Clear sector
+            >>> current = FAClassificationParams(investment_type="stock", sector="Technology")
+            >>> patch = FAPatchMetadataRequest(sector=None)  # Clear sector
             >>> updated = AssetMetadataService.apply_partial_update(current, patch)
             >>> updated.sector
             None
@@ -217,15 +217,15 @@ class AssetMetadataService:
 
         # Validate and return updated model
         try:
-            return ClassificationParamsModel(**current_dict)
+            return FAClassificationParams(**current_dict)
         except Exception as e:
             raise ValueError(f"Validation failed after applying PATCH: {e}")
 
     @staticmethod
     def merge_provider_metadata(
-        current: Optional[ClassificationParamsModel],
+        current: Optional[FAClassificationParams],
         provider_data: dict
-        ) -> ClassificationParamsModel:
+        ) -> FAClassificationParams:
         """
         Merge provider-fetched metadata with current metadata.
 
@@ -239,10 +239,10 @@ class AssetMetadataService:
             provider_data: Raw metadata dict from provider
 
         Returns:
-            Merged ClassificationParamsModel
+            Merged FAClassificationParams
 
         Note:
-            Provider data is already validated by ClassificationParamsModel
+            Provider data is already validated by FAClassificationParams
             when this is called (geo_normalization runs in field_validator)
         """
         # Start with current values
@@ -259,14 +259,14 @@ class AssetMetadataService:
                 current_dict[field] = provider_data[field]
 
         # Validate and return merged model
-        return ClassificationParamsModel(**current_dict)
+        return FAClassificationParams(**current_dict)
 
     @staticmethod
     async def update_asset_metadata(
         asset_id: int,
-        patch: PatchAssetMetadataRequest,
+        patch: FAPatchMetadataRequest,
         session: 'AsyncSession'
-        ) -> 'AssetMetadataResponse':
+        ) -> 'FAAssetMetadataResponse':
         """
         Update asset metadata with PATCH semantics.
 
@@ -278,21 +278,21 @@ class AssetMetadataService:
             session: Database session
 
         Returns:
-            AssetMetadataResponse with updated metadata
+            FAAssetMetadataResponse with updated metadata
 
         Raises:
             ValueError: If asset not found or validation fails
 
         Examples:
-            >>> from backend.app.schemas.assets import PatchAssetMetadataRequest
-            >>> patch = PatchAssetMetadataRequest(sector="Technology")
+            >>> from backend.app.schemas.assets import FAPatchMetadataRequest
+            >>> patch = FAPatchMetadataRequest(sector="Technology")
             >>> response = await AssetMetadataService.update_asset_metadata(1, patch, session)
             >>> response.classification_params.sector
             'Technology'
         """
         from sqlalchemy import select
         from backend.app.db.models import Asset
-        from backend.app.schemas.assets import AssetMetadataResponse
+        from backend.app.schemas.assets import FAAssetMetadataResponse
 
         # Load asset from DB
         result = await session.execute(
@@ -330,7 +330,7 @@ class AssetMetadataService:
         await session.refresh(asset)
 
         # Build response
-        return AssetMetadataResponse(
+        return FAAssetMetadataResponse(
             asset_id=asset.id,
             display_name=asset.display_name,
             identifier=asset.identifier,
