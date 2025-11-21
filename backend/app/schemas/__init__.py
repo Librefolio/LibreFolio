@@ -26,7 +26,7 @@ from backend.app.schemas.assets import (
     PricePointModel,
     HistoricalDataModel,
     AssetProviderAssignmentModel,
-    # Metadata & classification (NEW)
+    # Metadata & classification
     ClassificationParamsModel,
     PatchAssetMetadataRequest,
     AssetMetadataResponse,
@@ -37,6 +37,16 @@ from backend.app.schemas.assets import (
     BulkMetadataRefreshResponse,
     PatchAssetMetadataItem,
     BulkPatchAssetMetadataRequest,
+    # Asset CRUD (NEW)
+    FAAssetCreateItem,
+    FABulkAssetCreateRequest,
+    FAAssetCreateResult,
+    FABulkAssetCreateResponse,
+    FAAssetListFilters,
+    FAAssetListResponse,
+    FABulkAssetDeleteRequest,
+    FAAssetDeleteResult,
+    FABulkAssetDeleteResponse,
     )
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -93,6 +103,16 @@ __all__ = [
     "BulkMetadataRefreshResponse",
     "PatchAssetMetadataItem",
     "BulkPatchAssetMetadataRequest",
+    # Assets: CRUD
+    "FAAssetCreateItem",
+    "FABulkAssetCreateRequest",
+    "FAAssetCreateResult",
+    "FABulkAssetCreateResponse",
+    "FAAssetListFilters",
+    "FAAssetListResponse",
+    "FABulkAssetDeleteRequest",
+    "FAAssetDeleteResult",
+    "FABulkAssetDeleteResponse",
     # Provider
     "FAProviderInfo",
     "FABulkAssignRequest",
