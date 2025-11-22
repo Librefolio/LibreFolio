@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from backend.app.schemas.common import BackwardFillInfo
 from backend.app.utils.datetime_utils import parse_ISO_date
+from backend.app.utils.validation_utils import normalize_currency_code
 
 
 # ============================================================================
@@ -98,10 +99,7 @@ class FXConversionRequest(BaseModel):
     @field_validator('from_currency', 'to_currency', mode='before')
     @classmethod
     def uppercase_currency(cls, v):
-        """Uppercase currency codes."""
-        if isinstance(v, str):
-            return v.upper().strip()
-        return v
+        return normalize_currency_code(v)
 
 
 class FXConvertRequest(BaseModel):
@@ -176,10 +174,7 @@ class FXUpsertItem(BaseModel):
     @field_validator('base', 'quote', mode='before')
     @classmethod
     def uppercase_currency(cls, v):
-        """Uppercase currency codes."""
-        if isinstance(v, str):
-            return v.upper().strip()
-        return v
+        return normalize_currency_code(v)
 
 
 class FXBulkUpsertRequest(BaseModel):
@@ -237,10 +232,7 @@ class FXDeleteItem(BaseModel):
     @field_validator('from_currency', 'to_currency', mode='before')
     @classmethod
     def uppercase_currency(cls, v):
-        """Uppercase currency codes."""
-        if isinstance(v, str):
-            return v.upper().strip()
-        return v
+        return normalize_currency_code(v)
 
 
 class FXBulkDeleteRequest(BaseModel):
@@ -303,10 +295,7 @@ class FXPairSourceItem(BaseModel):
     @field_validator('base', 'quote', mode='before')
     @classmethod
     def uppercase_currency(cls, v):
-        """Uppercase currency codes."""
-        if isinstance(v, str):
-            return v.upper().strip()
-        return v
+        return normalize_currency_code(v)
 
 
 class FXPairSourcesResponse(BaseModel):
@@ -368,7 +357,7 @@ class FXDeletePairSourcesResponse(BaseModel):
 # CURRENCY LIST MODELS
 # ============================================================================
 
-class CurrenciesResponseModel(BaseModel):
+class FXCurrenciesResponse(BaseModel):
     """Response model for available currencies list."""
     currencies: list[str] = Field(..., description="List of available currency codes")
     count: int = Field(..., description="Number of available currencies")

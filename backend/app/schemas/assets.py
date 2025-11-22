@@ -42,6 +42,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # Import from common and prices modules
 from backend.app.schemas.common import BackwardFillInfo
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
+from backend.app.utils.validation_utils import validate_compound_frequency, normalize_currency_code
 
 
 # ============================================================================
@@ -171,13 +172,14 @@ class FAInterestRatePeriod(BaseModel):
 
     @field_validator("compound_frequency")
     @classmethod
-    def validate_compound_frequency(cls, v, info):
-        """Ensure compound_frequency is provided when compounding is COMPOUND."""
+    def validate_compound_frequency_field(cls, v, info):
+        """Ensure compound_frequency is consistent with compounding type."""
         if "compounding" in info.data:
-            if info.data["compounding"] == CompoundingType.COMPOUND and v is None:
-                raise ValueError("compound_frequency is required when compounding is COMPOUND")
-            if info.data["compounding"] == CompoundingType.SIMPLE and v is not None:
-                raise ValueError("compound_frequency should not be set when compounding is SIMPLE")
+            validate_compound_frequency(
+                compounding=info.data["compounding"].value,
+                compound_frequency=v.value if v else None,
+                field_name="compound_frequency"
+            )
         return v
 
 
@@ -230,13 +232,14 @@ class FALateInterestConfig(BaseModel):
 
     @field_validator("compound_frequency")
     @classmethod
-    def validate_compound_frequency(cls, v, info):
-        """Ensure compound_frequency is provided when compounding is COMPOUND."""
+    def validate_compound_frequency_field(cls, v, info):
+        """Ensure compound_frequency is consistent with compounding type."""
         if "compounding" in info.data:
-            if info.data["compounding"] == CompoundingType.COMPOUND and v is None:
-                raise ValueError("compound_frequency is required when compounding is COMPOUND")
-            if info.data["compounding"] == CompoundingType.SIMPLE and v is not None:
-                raise ValueError("compound_frequency should not be set when compounding is SIMPLE")
+            validate_compound_frequency(
+                compounding=info.data["compounding"].value,
+                compound_frequency=v.value if v else None,
+                field_name="compound_frequency"
+            )
         return v
 
 
@@ -379,11 +382,10 @@ class FAScheduledInvestmentParams(BaseModel):
 
     @field_validator("currency")
     @classmethod
-    def validate_currency(cls, v):
-        """Ensure currency is provided and uppercase."""
+    def currency_uppercase(cls, v):
         if not v:
             raise ValueError("currency is required")
-        return v.upper()
+        return normalize_currency_code(v)
 
 
 # ============================================================================
@@ -565,8 +567,7 @@ class FAAssetCreateItem(BaseModel):
     @field_validator('currency')
     @classmethod
     def currency_uppercase(cls, v: str) -> str:
-        """Ensure currency is uppercase."""
-        return v.upper() if v else v
+        return normalize_currency_code(v)
 
     @field_validator('identifier')
     @classmethod
