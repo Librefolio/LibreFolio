@@ -556,6 +556,8 @@ class FAAssetCreateItem(BaseModel):
     valuation_model: Optional[str] = Field("MARKET_PRICE", description="Valuation model (MARKET_PRICE, SCHEDULED_YIELD, MANUAL)")
 
     # Scheduled yield fields (optional, for bonds/loans)
+    # TODO: ho scoperto che face_value è usato 1 sola volta ed è inutile perchè la tabella Asset non la usa più.
+    #  è necessario avviare un attività di pulizia del codice manuale per rimuovere tutti questi residui delle prime versioni da ovunque
     face_value: Optional[Decimal] = Field(None, description="Face value/principal for scheduled yield assets")
     maturity_date: Optional[date] = Field(None, description="Maturity date for scheduled yield assets")
     interest_schedule: Optional[str] = Field(None, description="Interest schedule JSON for scheduled yield assets")
