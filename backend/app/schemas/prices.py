@@ -25,11 +25,12 @@ Covers upsert, delete, and query operations for asset price history.
 """
 from datetime import date as date_type
 from decimal import Decimal
-from typing import List, Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from backend.app.schemas.common import DateRangeModel, BackwardFillInfo
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
+from backend.app.utils.validation_utils import normalize_currency_code
 
 
 # ============================================================================
@@ -50,6 +51,11 @@ class FAUpsertItem(BaseModel):
     close: Decimal = Field(..., description="Closing price (required)")
     volume: Optional[Decimal] = Field(None, description="Trading volume")
     currency: str = Field(..., description="Currency code (ISO 4217)")
+
+    @field_validator("currency")
+    @classmethod
+    def currency_uppercase(cls, v: str) -> str:
+        return normalize_currency_code(v)
 
     @field_validator("open", "high", "low", "close", "volume", mode="before")
     @classmethod

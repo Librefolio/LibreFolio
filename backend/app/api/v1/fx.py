@@ -40,7 +40,7 @@ from backend.app.schemas.fx import (
     FXDeletePairSourceResult,
     FXDeletePairSourcesResponse,
     # Currency list models
-    CurrenciesResponseModel,  # TODO: Rename to FXCurrenciesResponse if exists
+    FXCurrenciesResponse,
     )
 from backend.app.schemas.refresh import FXSyncResponse
 from backend.app.services.fx import (
@@ -103,7 +103,7 @@ async def list_providers():
         raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}")
 
 
-@router.get("/currencies", response_model=CurrenciesResponseModel)
+@router.get("/currencies", response_model=FXCurrenciesResponse)
 async def list_currencies(
     provider: str = Query("ECB", description="Provider code (ECB, FED, BOE, SNB)")
     ):
@@ -126,7 +126,7 @@ async def list_currencies(
                 )
 
         currencies = await provider_instance.get_supported_currencies()
-        return CurrenciesResponseModel(currencies=currencies, count=len(currencies))
+        return FXCurrenciesResponse(currencies=currencies, count=len(currencies))
     except HTTPException:
         raise
     except ValueError as e:
