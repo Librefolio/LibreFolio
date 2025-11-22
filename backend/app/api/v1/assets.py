@@ -358,7 +358,7 @@ async def upsert_prices_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# TODO: rimuovere e usare solo la bulk
+# Convenience wrapper for single-asset price upsert (calls bulk internally)
 @router.post("/{asset_id}/prices")
 async def upsert_prices_single(
     asset_id: int,
@@ -401,7 +401,7 @@ async def delete_prices_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# TODO: rimuovere e usare solo la bulk
+# Convenience wrapper for single-asset price deletion (calls bulk internally)
 @router.delete("/{asset_id}/prices")
 async def delete_prices_single(
     asset_id: int,
@@ -446,12 +446,8 @@ async def get_prices(
         logger.error(f"Error getting prices for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# TODO: aggiungere endpoint per creare Asset bulk, capire endpoint e request/response model e anche per eliminare asset e
-
-# TODO: aggiungere GET /api/v1/assets per avere la lista degli asset
-
-# TODO: rinominare in /bulk
+# Bulk read endpoint (POST to support request body with asset IDs list)
+# Note: Consider renaming to /bulk for consistency with other bulk endpoints
 @router.post("", response_model=List[FAAssetMetadataResponse])
 async def read_assets_bulk(
     request: FABulkAssetReadRequest,
@@ -573,7 +569,7 @@ async def refresh_prices_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# TODO: rimuovere e usare solo la bulk
+# Convenience wrapper for single-asset price refresh (calls bulk internally)
 @router.post("/{asset_id}/prices-refresh")
 async def refresh_prices_single(
     asset_id: int,
@@ -691,7 +687,7 @@ async def update_assets_metadata_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# TODO: rimuovere endpoint singolo e usare solo il bulk
+# Single metadata refresh (frequently used operation, kept for convenience)
 @router.post("/{asset_id}/metadata/refresh", response_model=FAMetadataRefreshResult)
 async def refresh_asset_metadata_single(
     asset_id: int,
