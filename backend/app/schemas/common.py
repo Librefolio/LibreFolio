@@ -19,9 +19,10 @@ from __future__ import annotations
 from datetime import date as date_type
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from backend.app.utils.datetime_utils import parse_ISO_date
+from backend.app.utils.validation_utils import validate_date_range_order
 
 
 class BackwardFillInfo(BaseModel):
@@ -82,7 +83,7 @@ class DateRangeModel(BaseModel):
     Design Notes:
         - If end is None, represents a single day (start only)
         - If end is provided, represents a range [start, end] inclusive
-        - Future enhancement: Add validator to ensure end >= start when provided
+        - Validator ensures end >= start when provided
 
     Examples:
         # Single day
@@ -96,11 +97,8 @@ class DateRangeModel(BaseModel):
     start: date_type = Field(..., description="Start date (inclusive)")
     end: Optional[date_type] = Field(None, description="End date (inclusive, optional = single day)")
 
-    # TODO: Add validator to ensure end >= start when provided
-    # @field_validator('end')
-    # @classmethod
-    # def validate_end_after_start(cls, v, info):
-    #     if v is not None and info.data.get('start') is not None:
-    #         if v < info.data['start']:
-    #             raise ValueError('end date must be >= start date')
-    #     return v
+    @model_validator(mode='after')
+    def validate_end_after_start(self) -> 'DateRangeModel':
+        """Ensure end >= start when end is provided."""
+        validate_date_range_order(self.start, self.end)
+        return self
