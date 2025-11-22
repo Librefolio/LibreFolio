@@ -248,20 +248,29 @@ This checklist breaks down the remediation plan into actionable items with detai
 ### 1.5 Documentation (0.5 hours) ✅ COMPLETE
 
 - [x] **Create docs/api-examples/asset-management.md** (NEW file)
-    - Section: Create Assets (single, multiple, with metadata, scheduled yield)
-    - Section: List Assets with filters (all combinations + search)
-    - Section: Delete Assets (success, partial, CASCADE behavior)
-    - Examples: cURL commands + Python snippets for each endpoint
-    - Common patterns: create→provider→prices workflow, bulk CSV import, cleanup
-    - Tips & best practices section
-    - **Result**: 450+ lines comprehensive API guide
+  - Section: Create Assets (single, multiple, with metadata, scheduled yield)
+  - Section: List Assets with filters (all combinations + search)
+  - Section: Delete Assets (success, partial, CASCADE behavior)
+  - Examples: cURL commands + Python snippets for each endpoint
+  - Common patterns: create→provider→prices workflow, bulk CSV import, cleanup
+  - Tips & best practices section
+  - **Result**: 450+ lines comprehensive API guide
+
+- [x] **Create docs/E2E_TESTING_GUIDE.md** (NEW file - November 22, 2025)
+  - Complete manual testing guide for Asset Management subsystem
+  - 8 test scenarios with step-by-step curl commands
+  - Expected outputs and verification steps
+  - Edge cases and error handling
+  - Troubleshooting section
+  - Success criteria checklist
+  - **Result**: 700+ lines comprehensive E2E testing guide
 
 - [x] **Update FEATURE_COVERAGE_REPORT.md**
-    - Add: Phase 5.1 - Asset CRUD Operations (v2.2 section at top)
-    - Stats: 3 endpoints, 9 schemas, 14 tests, 1 service class, +900 LOC
-    - Bugs fixed: 3 documented (unique_id generation, httpx DELETE, provider_params dict)
-    - Quality metrics: endpoints +9%, schemas +20%, test coverage 100%, 0 regressions
-    - Time spent: ~6 hours
+  - Add: Phase 5.1 - Asset CRUD Operations (v2.2 section at top)
+  - Stats: 3 endpoints, 9 schemas, 14 tests, 1 service class, +900 LOC
+  - Bugs fixed: 3 documented (unique_id generation, httpx DELETE, provider_params dict)
+  - Quality metrics: endpoints +9%, schemas +20%, test coverage 100%, 0 regressions
+  - Time spent: ~6 hours
 
 ---
 
