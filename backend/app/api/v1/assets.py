@@ -224,7 +224,9 @@ async def list_providers():
 
     AssetProviderRegistry.auto_discover()
 
-    for code in AssetProviderRegistry.list_providers():
+    # list_providers() returns list of dicts with 'code' and 'name' keys
+    for provider_info in AssetProviderRegistry.list_providers():
+        code = provider_info['code']  # Extract code from dict
         provider_class = AssetProviderRegistry.get_provider(code)
         if provider_class:
             instance = AssetProviderRegistry.get_provider_instance(code)

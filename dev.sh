@@ -156,6 +156,13 @@ function print_help() {
     echo "                     ./dev.sh test --reset db all"
     echo "                     ./dev.sh test --help"
     echo ""
+    echo "  test:coverage    Run all tests with code coverage tracking"
+    echo "                   Generates HTML report in htmlcov/index.html"
+    echo "                   Shows line-by-line coverage with missing lines"
+    echo "                   Examples:"
+    echo "                     ./dev.sh test:coverage"
+    echo "                     open htmlcov/index.html  # View report"
+    echo ""
     echo "Development:"
     echo "  format           Format code with black"
     echo "  lint             Lint code with ruff"
@@ -600,6 +607,11 @@ case "$COMMAND" in
         ;;
     info:api)
         list_api_endpoints
+        ;;
+    test:coverage)
+        echo -e "${GREEN}Running all tests with coverage tracking...${NC}"
+        echo ""
+        ./test_runner.py --coverage all
         ;;
     info:mk)
         shift

@@ -34,10 +34,16 @@ from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PAT
 # Import test utilities (avoid code duplication)
 from backend.test_scripts.test_utils import (Colors, print_header, print_section, print_success, print_error, print_warning, print_info)
 
+# Global flag for coverage mode (set by main())
+_COVERAGE_MODE = False
+
 
 def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool:
     """
     Run a command and return True if successful.
+
+    If _COVERAGE_MODE is True and the command is a pytest test, automatically
+    adds coverage tracking flags and updates the cumulative coverage database.
 
     Args:
         cmd: Command to run as list
@@ -47,6 +53,26 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
     Returns:
         bool: True if command succeeded
     """
+    # Check if this is a pytest command and coverage is enabled
+    is_pytest = 'pytest' in ' '.join(cmd)
+    use_coverage = _COVERAGE_MODE and is_pytest
+
+    # If coverage mode, enhance pytest command
+    if use_coverage:
+        # Find pytest in command
+        pytest_idx = next((i for i, c in enumerate(cmd) if 'pytest' in c), None)
+        if pytest_idx is not None:
+            # Insert coverage flags after pytest
+            coverage_flags = [
+                '--cov=backend/app',
+                '--cov-append',  # Append to existing coverage data
+                '--cov-report=html',
+                '--cov-report=term-missing:skip-covered',
+            ]
+            # Insert after pytest command
+            cmd = cmd[:pytest_idx+1] + coverage_flags + cmd[pytest_idx+1:]
+            print(f"{Colors.YELLOW}📊 Coverage tracking enabled (appending to .coverage){Colors.NC}")
+
     print(f"\n{Colors.BLUE}Running: {description}{Colors.NC}")
     print(f"Command:\n└─▶ $ {' '.join(cmd)}")
 
@@ -72,9 +98,13 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
 
         if result.returncode == 0:
             print_success(f"{description} - PASSED")
+            if use_coverage:
+                print(f"{Colors.GREEN}✅ Coverage data appended to .coverage database{Colors.NC}")
             return True
         else:
             print_error(f"{description} - FAILED (exit code: {result.returncode})")
+            if use_coverage:
+                print(f"{Colors.YELLOW}⚠️  Coverage data still appended despite test failure{Colors.NC}")
             return False
 
     except Exception as e:
@@ -909,6 +939,20 @@ Examples:
         default=False
         )
 
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help="Run tests with code coverage tracking (generates htmlcov/index.html report)",
+        default=False
+        )
+
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="[db tests only] Reset database before running tests",
+        default=False
+        )
+
     subparsers = parser.add_subparsers(
         dest="category",
         help="Test category to run",
@@ -1203,8 +1247,69 @@ Expected time: 3-7 minutes (depending on network speed for ECB API)
     return parser
 
 
+def run_all_with_coverage(args, verbose: bool = False) -> int:
+    """
+    Run all tests (or specific category) with pytest coverage tracking.
+
+    Args:
+        args: Parsed arguments
+        verbose: Show full output
+
+    Returns:
+        int: 0 if all tests passed, 1 otherwise
+    """
+    print_header("LibreFolio Test Suite - Coverage Mode")
+    print(f"{Colors.YELLOW}📊 Running tests with code coverage tracking{Colors.NC}")
+    print(f"{Colors.BLUE}Coverage report will be saved to: htmlcov/index.html{Colors.NC}")
+    print()
+
+    # Determine which tests to run based on category
+    test_paths = []
+    description = ""
+
+    if args.category == "all":
+        # Run all pytest-compatible tests
+        test_paths = ["backend/test_scripts/"]
+        description = "All Tests"
+    elif args.category == "utils":
+        test_paths = ["backend/test_scripts/test_utilities/"]
+        description = "Utility Tests"
+    elif args.category == "services":
+        test_paths = ["backend/test_scripts/test_services/"]
+        description = "Service Tests"
+    elif args.category == "db":
+        test_paths = ["backend/test_scripts/test_db/"]
+        description = "Database Tests"
+    elif args.category == "api":
+        test_paths = ["backend/test_scripts/test_api/"]
+        description = "API Tests"
+    elif args.category == "external":
+        test_paths = ["backend/test_scripts/test_external/"]
+        description = "External Service Tests"
+    else:
+        print_error(f"Coverage mode not supported for category: {args.category}")
+        print_info("Supported categories: all, utils, services, db, api, external")
+        return 1
+
+    # Run pytest with coverage
+    success = run_pytest_with_coverage(test_paths, description, verbose=verbose)
+
+    if success:
+        print()
+        print_success("✅ All tests passed with coverage tracking!")
+        print(f"{Colors.GREEN}📊 View coverage report: open htmlcov/index.html{Colors.NC}")
+        return 0
+    else:
+        print()
+        print_error("❌ Some tests failed")
+        print(f"{Colors.YELLOW}📊 Coverage report still available: htmlcov/index.html{Colors.NC}")
+        return 1
+
+
 def main():
     """Main entry point."""
+    global _COVERAGE_MODE
+
     parser = create_parser()
 
     argcomplete.autocomplete(parser)
@@ -1215,9 +1320,29 @@ def main():
         parser.print_help()
         return 1
 
-    # Route to appropriate test handler
-    success = False
+    # Extract flags
     verbose = getattr(args, 'verbose', False)
+    coverage = getattr(args, 'coverage', False)
+
+    # Set global coverage flag
+    _COVERAGE_MODE = coverage
+
+    # If coverage mode, clear old coverage data and show message
+    if coverage:
+        print_header("LibreFolio Test Suite - Coverage Mode")
+        print(f"{Colors.YELLOW}📊 Running tests with code coverage tracking{Colors.NC}")
+        print(f"{Colors.BLUE}Coverage will accumulate across all test runs{Colors.NC}")
+        print(f"{Colors.BLUE}Final report: htmlcov/index.html{Colors.NC}")
+        print()
+
+        # Remove old .coverage file to start fresh
+        coverage_file = Path(__file__).parent / '.coverage'
+        if coverage_file.exists():
+            coverage_file.unlink()
+            print(f"{Colors.YELLOW}🗑️  Cleared previous coverage data{Colors.NC}\n")
+
+    # Route to appropriate test handler (normal mode - coverage handled by run_command)
+    success = False
 
     if args.category == "all":
         # Run complete test suite
@@ -1302,6 +1427,30 @@ def main():
             success = api_assets_crud(verbose=verbose)
         elif args.action == "all":
             success = api_test(verbose=verbose)
+
+    # If coverage mode, show final summary
+    if _COVERAGE_MODE:
+        print()
+        print_header("Coverage Report Summary")
+        if success:
+            print_success("✅ All tests passed with coverage tracking!")
+        else:
+            print_warning("⚠️  Some tests failed, but coverage was still tracked")
+
+        print()
+        print(f"{Colors.GREEN}📊 Coverage report generated:{Colors.NC}")
+        print(f"   HTML: {Colors.BLUE}htmlcov/index.html{Colors.NC}")
+        print(f"   Data: {Colors.BLUE}.coverage{Colors.NC}")
+        print()
+        print(f"{Colors.YELLOW}💡 View report with:{Colors.NC}")
+        print(f"   open htmlcov/index.html")
+        print()
+        print(f"{Colors.BLUE}ℹ️  The HTML report shows:{Colors.NC}")
+        print(f"   • Line-by-line coverage (green = covered, red = not covered)")
+        print(f"   • Coverage % for each file")
+        print(f"   • Missing line numbers")
+        print(f"   • Branch coverage")
+        print()
 
     # Exit with appropriate code
     return 0 if success else 1

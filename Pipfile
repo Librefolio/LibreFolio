@@ -35,6 +35,7 @@ pytest-asyncio = "*"
 black = "*"
 ruff = "*"
 mypy = "*"
+pytest-cov = "*"
 
 [requires]
 python_version = "3.13"
