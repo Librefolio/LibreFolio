@@ -2,7 +2,8 @@
 
 **Date**: November 24, 2025  
 **Objective**: Convert all tests to pytest and integrate coverage into test_runner.py  
-**Status**: 🚧 IN PROGRESS
+**Status**: 🚧 Phase 2 - Batch 1 COMPLETE ✅  
+**Last Updated**: November 24, 2025 12:41 PM
 
 ---
 
@@ -262,16 +263,30 @@ For each old-style test file:
 
 ## 📊 Progress Tracking
 
-### Phase 1: test_runner.py Integration
-- [ ] Add --coverage flag to argparse
-- [ ] Implement coverage wrapper for pytest calls
-- [ ] Update non-pytest tests to use pytest discovery
-- [ ] Test with: `./test_runner.py --coverage utilities all`
-- [ ] Update dev.sh to call test_runner
+### Phase 1: test_runner.py Integration ✅ COMPLETE
+- [x] Add --coverage flag to argparse
+- [x] Implement coverage wrapper for pytest calls (in run_command)
+- [x] Coverage appends automatically to .coverage database
+- [x] Test with: `./test_runner.py --coverage utilities all`
+- [x] Update dev.sh to call test_runner
 
 ### Phase 2: Batch Conversions
-- [ ] Batch 1: Utilities (3) - `test_datetime_utils`, `test_financial_math`, `test_geo_normalization`
-- [ ] Batch 2: Services (5) - `test_asset_source*`, `test_fx_conversion`, `test_provider_registry`, `test_synthetic_yield`
+- [x] **Batch 1: Utilities (3)** ✅ COMPLETE
+  - [x] `test_datetime_utils.py` - Already pytest ✅
+  - [x] `test_financial_math.py` - Already pytest ✅
+  - [x] `test_geo_normalization.py` - Converted to pytest ✅
+  - **Result**: All 3 files now use pytest, coverage working
+  
+- [ ] **Batch 2: Services (5)** ⏳ PARTIALLY COMPLETE (2/5)
+  - [x] `test_provider_registry.py` - Converted to pytest ✅
+  - [x] `test_asset_metadata.py` - Already pytest ✅  
+  - [x] `test_synthetic_yield_integration.py` - Already pytest ✅
+  - [ ] `test_asset_source.py` - TODO (complex, needs async fixtures)
+  - [ ] `test_asset_source_refresh.py` - TODO  
+  - [ ] `test_fx_conversion.py` - TODO (async DB)
+  - [ ] `test_synthetic_yield.py` - TODO (complex async, 8 tests)
+  - **Result**: 3/7 service tests now use pytest
+  
 - [ ] Batch 3: API (3) - `test_assets_crud`, `test_assets_metadata`, `test_fx_api`
 - [ ] Batch 4: DB (4) - `test_fx_rates_persistence`, `test_numeric_truncation`, `test_transaction_*`
 - [ ] Batch 5: External (3) - `test_asset_providers`, `test_fx_*`
