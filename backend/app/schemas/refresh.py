@@ -100,6 +100,5 @@ class FXSyncResponse(BaseModel):
     def _parse_date_range(cls, v):
         return parse_ISO_date(v[0]), parse_ISO_date(v[1])
 
-
-    def date_range_str(self)-> str:
+    def date_range_str(self) -> str:
         return self.date_range[0].isoformat() + " to " + self.date_range[1].isoformat()

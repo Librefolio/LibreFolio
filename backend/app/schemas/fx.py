@@ -259,7 +259,7 @@ class FXDeleteResult(BaseModel):
     @field_validator("end_date", mode="before")
     @classmethod
     def _parse_end_date(cls, v):
-        if v is None: # end_date is optional and can be None
+        if v is None:  # end_date is optional and can be None
             return None
         return parse_ISO_date(v)
 

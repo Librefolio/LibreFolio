@@ -40,7 +40,7 @@ class ECBProvider(FXRateProvider):
     @property
     def code(self) -> str:
         return "ECB"
-    
+
     @property
     def provider_code(self) -> str:
         """Alias for code (required by unified registry)."""
@@ -242,4 +242,3 @@ class ECBProvider(FXRateProvider):
                 raise FXServiceError(f"Unexpected ECB response format for {currency}: {e}") from e
 
         return results
-

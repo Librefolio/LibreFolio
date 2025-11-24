@@ -2,8 +2,10 @@
 
 **Date**: November 24, 2025  
 **Objective**: Convert all tests to pytest and integrate coverage into test_runner.py  
-**Status**: 🚧 Phase 2 - Batch 1 COMPLETE ✅  
-**Last Updated**: November 24, 2025 12:41 PM
+**Status**: ✅ Phase 1 COMPLETE | ✅ Batch 1 COMPLETE | ✅ Batch 2 COMPLETE  
+**Last Updated**: November 24, 2025 13:10 PM
+
+**Summary**: Coverage integrated successfully. Batch 1 (utilities) fully converted. Batch 2 (services) COMPLETE - all 7 service test files now use pytest.
 
 ---
 
@@ -261,6 +263,12 @@ For each old-style test file:
 
 ---
 
+per trovare le classi ancora non convertite:
+
+```bash
+find backend/test_scripts -name "*test*.py" -exec grep -l "return" {} \; | xargs grep -L "assert"
+```
+
 ## 📊 Progress Tracking
 
 ### Phase 1: test_runner.py Integration ✅ COMPLETE
@@ -277,17 +285,21 @@ For each old-style test file:
   - [x] `test_geo_normalization.py` - Converted to pytest ✅
   - **Result**: All 3 files now use pytest, coverage working
   
-- [ ] **Batch 2: Services (5)** ⏳ PARTIALLY COMPLETE (2/5)
+- [x] **Batch 2: Services (7)** ✅ COMPLETE
   - [x] `test_provider_registry.py` - Converted to pytest ✅
   - [x] `test_asset_metadata.py` - Already pytest ✅  
   - [x] `test_synthetic_yield_integration.py` - Already pytest ✅
-  - [ ] `test_asset_source.py` - TODO (complex, needs async fixtures)
-  - [ ] `test_asset_source_refresh.py` - TODO  
-  - [ ] `test_fx_conversion.py` - TODO (async DB)
-  - [ ] `test_synthetic_yield.py` - TODO (complex async, 8 tests)
-  - **Result**: 3/7 service tests now use pytest
+  - [x] `test_asset_source.py` - Converted (decorators added, main removed) ✅
+  - [x] `test_asset_source_refresh.py` - Converted to proper test ✅
+  - [x] `test_fx_conversion.py` - Converted (decorators added, main removed) ✅
+  - [x] `test_synthetic_yield.py` - Converted (decorators added, main removed) ✅
+  - **Result**: ALL 7 service tests now use pytest!
   
-- [ ] Batch 3: API (3) - `test_assets_crud`, `test_assets_metadata`, `test_fx_api`
+- [ ] **Batch 3: API (3)** ⏳ NEXT
+  - [ ] `test_assets_crud.py`
+  - [ ] `test_assets_metadata.py`
+  - [ ] `test_fx_api.py`
+  
 - [ ] Batch 4: DB (4) - `test_fx_rates_persistence`, `test_numeric_truncation`, `test_transaction_*`
 - [ ] Batch 5: External (3) - `test_asset_providers`, `test_fx_*`
 
