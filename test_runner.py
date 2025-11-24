@@ -504,7 +504,7 @@ def services_provider_registry(verbose: bool = False) -> bool:
     print_section("Services: Provider Registry")
     print_info("Testing: backend/app/services/provider_registry.py")
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_provider_registry"],
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_provider_registry.py", "-v"],
         "Provider registry tests",
         verbose=verbose
         )
@@ -519,7 +519,7 @@ def services_synthetic_yield(verbose: bool = False) -> bool:
     print_info("Testing: SCHEDULED_YIELD asset valuation (ACT/365 SIMPLE interest)")
     print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration")
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_synthetic_yield"],
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_synthetic_yield.py", "-v"],
         "Synthetic yield tests",
         verbose=verbose
         )
@@ -619,7 +619,7 @@ def utils_geo_normalization(verbose: bool = False) -> bool:
     print_info("Testing: backend/app/utils/geo_normalization.py")
     print_info("Tests: ISO-3166-A3 normalization, weight parsing, validation pipeline")
     return run_command(
-        ["python", "-m", "backend.test_scripts.test_utilities.test_geo_normalization"],
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_utilities/test_geo_normalization.py", "-v"],
         "Geographic area normalization tests",
         verbose=verbose,
         )

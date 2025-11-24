@@ -1,121 +1,46 @@
-from __future__ import annotations
+"""
+Provider Registry Tests
 
-from typing import Dict
-
-from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.test_scripts.test_utils import (
-    print_test_header,
-    print_section,
-    print_info,
-    print_success,
-    print_error,
-    print_test_summary,
-    exit_with_result,
-    )
+Tests provider auto-discovery for Asset and FX providers.
+"""
+import pytest
+from backend.app.services.provider_registry import AssetProviderRegistry, FXProviderRegistry
 
 
-# ---------------------------------------------------------------------------
-# Subtests
-# ---------------------------------------------------------------------------
-
-def test_asset_provider_discovery() -> Dict:
+def test_asset_provider_discovery():
     """Test that asset providers are auto-discovered and listed by the registry."""
-    print_section("Test 1: Asset Provider Auto-Discovery")
+    providers = AssetProviderRegistry.list_providers()
 
-    try:
-        providers = AssetProviderRegistry.list_providers()
-        # Normalize providers to list of codes if registry returns detailed dicts
-        if providers and isinstance(providers[0], dict):
-            provider_codes = [p.get("code") or p.get("provider_code") for p in providers]
-        else:
-            provider_codes = list(providers)
+    # Normalize providers to list of codes if registry returns detailed dicts
+    if providers and isinstance(providers[0], dict):
+        provider_codes = [p.get("code") or p.get("provider_code") for p in providers]
+    else:
+        provider_codes = list(providers)
 
-        print_info(f"Registered asset providers: {provider_codes}")
-
-        # Expect at least yfinance to be present in development workspace
-        if 'yfinance' not in provider_codes:
-            # Log as warning but keep test failing to surface missing auto-discovery
-            raise AssertionError(f"Expected 'yfinance' in providers, got: {provider_codes}")
-
-        print_success(f"✓ Asset providers discovery OK ({len(provider_codes)} providers)")
-        return {"passed": True, "message": f"Found {len(provider_codes)} asset provider(s)", "providers": provider_codes}
-
-    except Exception as e:
-        print_error(f"Asset provider discovery failed: {e}")
-        return {"passed": False, "message": str(e)}
+    # Expect at least yfinance to be present in development workspace
+    assert 'yfinance' in provider_codes, f"Expected 'yfinance' in providers, got: {provider_codes}"
+    assert len(provider_codes) > 0, "Should have at least one provider"
 
 
-def test_fx_provider_discovery() -> Dict:
+def test_fx_provider_discovery():
     """Test that FX providers are auto-discovered and registered correctly.
 
     After Phase 1.4 migration, we expect all 4 central bank providers to be registered.
     """
-    print_section("Test 2: FX Provider Auto-Discovery")
+    providers = FXProviderRegistry.list_providers()
 
-    try:
-        from backend.app.services.provider_registry import FXProviderRegistry
+    # Extract codes from provider dicts
+    if providers and isinstance(providers[0], dict):
+        provider_codes = [p.get("code") or p.get("provider_code") for p in providers]
+    else:
+        provider_codes = list(providers)
 
-        providers = FXProviderRegistry.list_providers()
+    # After Phase 1.4 migration, assert all 4 providers are present
+    expected_providers = {'ECB', 'FED', 'BOE', 'SNB'}
+    provider_set = set(provider_codes)
 
-        # Extract codes from provider dicts
-        if providers and isinstance(providers[0], dict):
-            provider_codes = [p.get("code") or p.get("provider_code") for p in providers]
-        else:
-            provider_codes = list(providers)
-
-        print_info(f"Registered FX providers: {provider_codes}")
-
-        # After Phase 1.4 migration, assert all 4 providers are present
-        expected_providers = {'ECB', 'FED', 'BOE', 'SNB'}
-        missing = expected_providers - set(provider_codes)
-
-        if missing:
-            raise AssertionError(f"Missing expected FX providers: {missing}. Found: {provider_codes}")
-
-        print_success(f"✓ All {len(expected_providers)} FX providers discovered ({', '.join(sorted(provider_codes))})")
-        return {"passed": True, "message": f"Found {len(provider_codes)} FX provider(s)", "providers": provider_codes}
-
-    except Exception as e:
-        print_error(f"FX provider discovery failed: {e}")
-        return {"passed": False, "message": str(e)}
+    assert expected_providers.issubset(provider_set), \
+        f"Missing expected FX providers: {expected_providers - provider_set}. Found: {provider_codes}"
+    assert len(provider_codes) >= 4, f"Expected at least 4 providers, got {len(provider_codes)}"
 
 
-# ---------------------------------------------------------------------------
-# Orchestration
-# ---------------------------------------------------------------------------
-
-def run_all_tests() -> bool:
-    """Run provider registry subtests and print a summary similar to asset_source tests."""
-    print_test_header("Provider Registry Tests", description="Verify provider auto-discovery for Asset and FX providers.")
-
-    # Run subtests
-    results = {}
-
-    res1 = test_asset_provider_discovery()
-    results["Asset Provider Discovery"] = bool(res1.get("passed", False))
-
-    res2 = test_fx_provider_discovery()
-    results["FX Provider Discovery"] = bool(res2.get("passed", False))
-
-    # Print detailed info for each
-    def print_result_detail(name: str, data: Dict):
-        if not isinstance(data, dict):
-            print_info(f"{name}: {data}")
-            return
-        msg = data.get("message")
-        if msg:
-            print_info(f"{name}: {msg}")
-        extra = {k: v for k, v in data.items() if k not in ("passed", "message")}
-        if extra:
-            print_info(f"  details: {extra}")
-
-    print_result_detail("Asset Provider Discovery", res1)
-    print_result_detail("FX Provider Discovery", res2)
-
-    # Summary
-    success = print_test_summary(results, "Provider Registry")
-    return success
-
-
-if __name__ == '__main__':
-    exit_with_result(run_all_tests())
