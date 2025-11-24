@@ -4,6 +4,8 @@ All test is independent of the others, so help use pytest features.
 """
 from datetime import datetime, timezone
 
+import pytest
+
 from backend.app.utils.datetime_utils import utcnow
 
 
@@ -48,3 +50,7 @@ def test_utcnow_tzinfo_is_utc():
     result = utcnow()
     assert result.tzinfo == timezone.utc
     assert result.utcoffset().total_seconds() == 0
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

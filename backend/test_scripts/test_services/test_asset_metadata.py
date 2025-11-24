@@ -78,9 +78,7 @@ def test_apply_partial_update_absent_fields_ignored():
         )
 
     # Patch only updates short_description, other fields should remain
-    patch = FAPatchMetadataRequest(
-        short_description="New description"
-        )
+    patch = FAPatchMetadataRequest(short_description="New description")
 
     updated = AssetMetadataService.apply_partial_update(current, patch)
     assert updated.investment_type == "stock"  # Unchanged
@@ -115,9 +113,7 @@ def test_apply_partial_update_geographic_area_full_replace():
         )
 
     # Replace entire geographic_area
-    patch = FAPatchMetadataRequest(
-        geographic_area={"USA": Decimal("0.7"), "FRA": Decimal("0.3")}
-        )
+    patch = FAPatchMetadataRequest(geographic_area={"USA": Decimal("0.7"), "FRA": Decimal("0.3")})
 
     updated = AssetMetadataService.apply_partial_update(current, patch)
     assert updated.geographic_area == {
@@ -132,9 +128,7 @@ def test_apply_partial_update_geographic_area_full_replace():
 def test_apply_partial_update_invalid_geo_area_raises():
     """Test that invalid geographic_area raises ValueError."""
     current = FAClassificationParams(investment_type="stock")
-    patch = FAPatchMetadataRequest(
-        geographic_area={"INVALID": Decimal("1.0")}
-        )
+    patch = FAPatchMetadataRequest(geographic_area={"INVALID": Decimal("1.0")})
 
     with pytest.raises(ValueError):
         AssetMetadataService.apply_partial_update(current, patch)
@@ -172,9 +166,7 @@ def test_patch_semantic_edge_cases():
         short_description="Tech stock",
         geographic_area={"USA": Decimal("1.0")}
         )
-    patch = FAPatchMetadataRequest(
-        geographic_area={"USA": "0.6", "GBR": "0.4"}
-        )
+    patch = FAPatchMetadataRequest(geographic_area={"USA": "0.6", "GBR": "0.4"})
     updated = AssetMetadataService.apply_partial_update(current, patch)
 
     # Verify: geographic_area changed, other fields unchanged
@@ -186,10 +178,7 @@ def test_patch_semantic_edge_cases():
 
     # Case 2: PATCH geographic_area=null → clears existing geographic_area
     print("\nCase 2: PATCH geographic_area=null clears field")
-    current = FAClassificationParams(
-        investment_type="etf",
-        geographic_area={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}
-        )
+    current = FAClassificationParams(investment_type="etf", geographic_area={"USA": Decimal("0.6"), "ITA": Decimal("0.4")})
     patch = FAPatchMetadataRequest(geographic_area=None)
     updated = AssetMetadataService.apply_partial_update(current, patch)
 
@@ -200,16 +189,10 @@ def test_patch_semantic_edge_cases():
 
     # Case 3: Multiple PATCHes in sequence → final state correct
     print("\nCase 3: Multiple PATCHes in sequence")
-    current = FAClassificationParams(
-        investment_type="stock",
-        sector="Finance"
-        )
+    current = FAClassificationParams(investment_type="stock", sector="Finance")
 
     # First PATCH: Update sector and add geo area
-    patch1 = FAPatchMetadataRequest(
-        sector="Technology",
-        geographic_area={"USA": "1.0"}
-        )
+    patch1 = FAPatchMetadataRequest(sector="Technology", geographic_area={"USA": "1.0"})
     current = AssetMetadataService.apply_partial_update(current, patch1)
     assert current.sector == "Technology"
     assert current.geographic_area == {"USA": Decimal("1.0000")}
@@ -261,14 +244,4 @@ def test_patch_semantic_edge_cases():
 
 
 if __name__ == "__main__":
-    test_parse_classification_params_valid_json()
-    test_parse_classification_params_none()
-    test_serialize_classification_params()
-    test_serialize_classification_params_none()
-    test_compute_metadata_diff()
-    test_apply_partial_update_absent_fields_ignored()
-    test_apply_partial_update_null_clears_field()
-    test_apply_partial_update_geographic_area_full_replace()
-    test_apply_partial_update_invalid_geo_area_raises()
-    test_merge_provider_metadata()
-    test_patch_semantic_edge_cases()
+    pytest.main([__file__, "-v"])

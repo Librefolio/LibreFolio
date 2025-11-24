@@ -449,6 +449,7 @@ async def get_prices(
         logger.error(f"Error getting prices for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # Bulk read endpoint (POST to support request body with asset IDs list)
 # Note: Consider renaming to /bulk for consistency with other bulk endpoints
 @router.post("", response_model=List[FAAssetMetadataResponse])

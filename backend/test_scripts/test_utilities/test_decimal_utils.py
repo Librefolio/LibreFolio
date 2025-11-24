@@ -134,3 +134,7 @@ def test_no_false_update_detection():
 
     # They should match after truncation
     assert truncated == db_value
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

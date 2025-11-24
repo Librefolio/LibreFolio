@@ -35,6 +35,7 @@ TARGET_SUM = Decimal("1.0")
 # Quantization template for 4 decimals
 WEIGHT_QUANTIZER = Decimal("0.0001")
 
+
 # TODO: aggiungere un endpoint API per passare country name e restituire una lista di ISO3,
 #  dico lista perchè nel caso di eur mi aspetto che restituisca DEU, FRA, ITA, ESP, etc. o per ASIA restituire CHN, JPN, IND, KOR, etc.
 def normalize_country_to_iso3(country_input: str) -> str:

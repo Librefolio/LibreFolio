@@ -1,5 +1,6 @@
-import asyncio
 from datetime import date
+
+import pytest
 
 from backend.test_scripts.test_db_config import setup_test_database, initialize_test_database
 
@@ -12,13 +13,11 @@ from backend.app.db.models import Asset, AssetType, ValuationModel
 from backend.app.services.provider_registry import AssetProviderRegistry
 
 
-async def run_refresh_flow():
+@pytest.mark.asyncio
+async def test_bulk_refresh_prices_orchestration():
     """Smoke test for bulk_refresh_prices orchestration using a mocked provider assignment."""
-    # TODO: ripensare test più avanti se serve
-
     # Initialize database with safety checks
-    if not initialize_test_database():
-        return 1
+    assert initialize_test_database(), "Failed to initialize test database"
 
     # Ensure providers discovered (in case modules were created after import)
     AssetProviderRegistry.auto_discover()
@@ -46,10 +45,11 @@ async def run_refresh_flow():
         # Execute refresh - expect prices to be inserted
         payload = [{"asset_id": asset.id, "start_date": date(2025, 1, 1), "end_date": date(2025, 1, 3), "force": False}]
         results = await AssetSourceManager.bulk_refresh_prices(payload, session)
-        print(results)
-        return results
+
+        # Verify results
+        assert results is not None
+        assert len(results) > 0
 
 
 if __name__ == "__main__":
-    res = asyncio.run(run_refresh_flow())
-    print(res)
+    pytest.main([__file__, "-v"])

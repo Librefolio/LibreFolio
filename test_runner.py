@@ -38,6 +38,7 @@ from backend.test_scripts.test_utils import (Colors, print_header, print_section
 _COVERAGE_MODE = False
 
 
+# TODO: riscrivere in maniera sensata questa funzione affinchè per i test si prenda solo il path e aggiunga tutto lei
 def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool:
     """
     Run a command and return True if successful.
@@ -58,21 +59,27 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
     use_coverage = _COVERAGE_MODE and is_pytest
 
     # If coverage mode, enhance pytest command
-    if use_coverage:
+    # If coverage mode or verbose, enhance pytest command
+    if is_pytest:
         # Find pytest in command
         pytest_idx = next((i for i, c in enumerate(cmd) if 'pytest' in c), None)
         if pytest_idx is not None:
-            # Insert coverage flags after pytest
-            coverage_flags = [
-                '--cov=backend/app',
-                '--cov-append',  # Append to existing coverage data
-                '--cov-report=html',
-                '--cov-report=term-missing:skip-covered',
-            ]
+            # Prepare flags to add after pytest
+            flags_to_add = []
+            if verbose:
+                flags_to_add.append('-s')
+            if use_coverage:
+                flags_to_add.extend([
+                    '--cov=backend/app',
+                    '--cov-append',  # Append to existing coverage data
+                    '--cov-report=html',
+                    '--cov-report=term-missing:skip-covered',
+                    ])
             # Insert after pytest command
-            cmd = cmd[:pytest_idx+1] + coverage_flags + cmd[pytest_idx+1:]
-            print(f"{Colors.YELLOW}📊 Coverage tracking enabled (appending to .coverage){Colors.NC}")
-
+            if flags_to_add:
+                cmd = cmd[:pytest_idx + 1] + flags_to_add + cmd[pytest_idx + 1:]
+                if use_coverage:
+                    print(f"{Colors.YELLOW}📊 Coverage tracking enabled (appending to .coverage){Colors.NC}")
     print(f"\n{Colors.BLUE}Running: {description}{Colors.NC}")
     print(f"Command:\n└─▶ $ {' '.join(cmd)}")
 
@@ -87,14 +94,8 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
                 env['DATABASE_URL'] = TEST_DATABASE_URL
         except Exception:
             env = None
-
-        result = subprocess.run(
-            cmd,
-            cwd=Path(__file__).parent,
-            capture_output=not verbose,  # Capture only if not verbose
-            text=True,
-            env=env,
-            )
+        # Capture only if not verbose
+        result = subprocess.run(cmd, cwd=Path(__file__).parent, capture_output=not verbose, text=True, env=env)
 
         if result.returncode == 0:
             print_success(f"{description} - PASSED")
@@ -447,7 +448,7 @@ def services_fx_conversion(verbose: bool = False) -> bool:
     print_info("Note: Mock FX rates automatically inserted for 3 dates")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_fx_conversion"],
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_fx_conversion.py", "-v"],
         "FX conversion service tests",
         verbose=verbose
         )
@@ -476,7 +477,7 @@ def services_asset_source(verbose: bool = False) -> bool:
     print_info("Note: Test assets automatically created and cleaned up")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_asset_source"],
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_asset_source.py", "-v"],
         "Asset source service tests",
         verbose=verbose
         )
@@ -490,7 +491,7 @@ def services_asset_source_refresh(verbose: bool = False) -> bool:
     print_section("Services: Asset Source Refresh (smoke)")
     print_info("Testing: backend/app/services/asset_source bulk refresh orchestration (smoke)")
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_services.test_asset_source_refresh"],
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_asset_source_refresh.py", "-v"],
         "Asset source refresh smoke test",
         verbose=verbose
         )
@@ -788,7 +789,7 @@ def api_test(verbose: bool = False) -> bool:
         ("FX API", lambda: api_fx(verbose)),
         ("Assets Metadata API", lambda: api_assets_metadata(verbose)),
         ("Assets CRUD API", lambda: api_assets_crud(verbose)),
-    ]
+        ]
 
     results = []
     for test_name, test_func in tests:
@@ -1073,7 +1074,7 @@ These tests verify business logic and service layer:
   • Uses data from database
 
 Test commands:
-  fx                   - Test FX conversion service logic (identity, direct, inverse, cross-currency, forward-fill)
+  fx-conversion        - Test FX conversion service logic (identity, direct, inverse, cross-currency, forward-fill)
                          📋 Prerequisites: DB FX rates subsystem (run: db fx-rates)
 
   asset-source         - Test Asset Source service logic (provider assignment, helpers, synthetic yield)
@@ -1109,7 +1110,7 @@ Future: FIFO calculations, portfolio aggregations, loan schedules will be added 
 
     services_parser.add_argument(
         "action",
-        choices=["fx", "asset-source", "asset-metadata", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "all"],
+        choices=["fx-conversion", "asset-source", "asset-metadata", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "all"],
         help="Service test to run"
         )
 
@@ -1247,65 +1248,6 @@ Expected time: 3-7 minutes (depending on network speed for ECB API)
     return parser
 
 
-def run_all_with_coverage(args, verbose: bool = False) -> int:
-    """
-    Run all tests (or specific category) with pytest coverage tracking.
-
-    Args:
-        args: Parsed arguments
-        verbose: Show full output
-
-    Returns:
-        int: 0 if all tests passed, 1 otherwise
-    """
-    print_header("LibreFolio Test Suite - Coverage Mode")
-    print(f"{Colors.YELLOW}📊 Running tests with code coverage tracking{Colors.NC}")
-    print(f"{Colors.BLUE}Coverage report will be saved to: htmlcov/index.html{Colors.NC}")
-    print()
-
-    # Determine which tests to run based on category
-    test_paths = []
-    description = ""
-
-    if args.category == "all":
-        # Run all pytest-compatible tests
-        test_paths = ["backend/test_scripts/"]
-        description = "All Tests"
-    elif args.category == "utils":
-        test_paths = ["backend/test_scripts/test_utilities/"]
-        description = "Utility Tests"
-    elif args.category == "services":
-        test_paths = ["backend/test_scripts/test_services/"]
-        description = "Service Tests"
-    elif args.category == "db":
-        test_paths = ["backend/test_scripts/test_db/"]
-        description = "Database Tests"
-    elif args.category == "api":
-        test_paths = ["backend/test_scripts/test_api/"]
-        description = "API Tests"
-    elif args.category == "external":
-        test_paths = ["backend/test_scripts/test_external/"]
-        description = "External Service Tests"
-    else:
-        print_error(f"Coverage mode not supported for category: {args.category}")
-        print_info("Supported categories: all, utils, services, db, api, external")
-        return 1
-
-    # Run pytest with coverage
-    success = run_pytest_with_coverage(test_paths, description, verbose=verbose)
-
-    if success:
-        print()
-        print_success("✅ All tests passed with coverage tracking!")
-        print(f"{Colors.GREEN}📊 View coverage report: open htmlcov/index.html{Colors.NC}")
-        return 0
-    else:
-        print()
-        print_error("❌ Some tests failed")
-        print(f"{Colors.YELLOW}📊 Coverage report still available: htmlcov/index.html{Colors.NC}")
-        return 1
-
-
 def main():
     """Main entry point."""
     global _COVERAGE_MODE
@@ -1381,7 +1323,7 @@ def main():
 
     elif args.category == "services":
         # Backend services tests
-        if args.action == "fx":
+        if args.action == "fx-conversion":
             success = services_fx_conversion(verbose=verbose)
         elif args.action == "asset-source":
             success = services_asset_source(verbose=verbose)

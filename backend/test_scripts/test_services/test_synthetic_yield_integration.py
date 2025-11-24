@@ -164,5 +164,6 @@ async def test_e2e_mixed_schedule_simple_compound():
     assert q3_end > q2_end  # next rate
     assert q4_end > q3_end  # final growth
 
-# Run all tests with pytest
-# pytest backend/test_scripts/test_services/test_synthetic_yield_integration.py -v
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

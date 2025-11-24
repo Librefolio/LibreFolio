@@ -4,8 +4,9 @@ Tests for geographic area normalization utilities.
 Tests country code normalization, weight parsing, and validation of
 geographic area distributions for asset classification metadata.
 """
-import pytest
 from decimal import Decimal
+
+import pytest
 
 from backend.app.utils.geo_normalization import (
     normalize_country_to_iso3,
@@ -43,6 +44,7 @@ def test_normalize_country_to_iso3():
     # Empty string raises ValueError
     with pytest.raises(ValueError):
         normalize_country_to_iso3("")
+
 
 def test_parse_decimal_weight():
     """Test weight parsing to Decimal."""
@@ -201,3 +203,5 @@ def test_geographic_area_edge_cases():
     assert sum(result.values()) == Decimal("1.0")
 
 
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

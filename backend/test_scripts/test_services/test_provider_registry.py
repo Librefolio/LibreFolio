@@ -4,6 +4,7 @@ Provider Registry Tests
 Tests provider auto-discovery for Asset and FX providers.
 """
 import pytest
+
 from backend.app.services.provider_registry import AssetProviderRegistry, FXProviderRegistry
 
 
@@ -44,3 +45,5 @@ def test_fx_provider_discovery():
     assert len(provider_codes) >= 4, f"Expected at least 4 providers, got {len(provider_codes)}"
 
 
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
