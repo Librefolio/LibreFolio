@@ -50,8 +50,11 @@ curl -X POST "$BASE_URL/assets" -H "Content-Type: application/json" -d "{\"asset
 
 ### 4. PATCH Metadata (Update Geographic Area)
 
+**⚠️ IMPORTANT**: Use ISO 3166-1 alpha-3 codes (USA, CHN, FRA, DEU, GBR, etc.)  
+Avoid ambiguous codes like "eur" or region names like "ASIA" - they may normalize unexpectedly!
+
 ```bash
-curl -X PATCH "$BASE_URL/assets/metadata" -H "Content-Type: application/json" -d "{\"assets\":[{\"asset_id\":$ASSET_ID_2,\"patch\":{\"geographic_area\":{\"USA\":\"0.50\",\"EUR\":\"0.30\",\"ASIA\":\"0.20\"}}}]}" | jq
+curl -X PATCH "$BASE_URL/assets/metadata" -H "Content-Type: application/json" -d "{\"assets\":[{\"asset_id\":$ASSET_ID_2,\"patch\":{\"geographic_area\":{\"USA\":\"0.50\",\"FRA\":\"0.30\",\"CHN\":\"0.20\"}}}]}" | jq
 ```
 
 ### 5. Verify Changes Persisted

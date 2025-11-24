@@ -278,6 +278,51 @@ curl -X POST "$BASE_URL/assets" \
 
 ## ✏️ Test Scenario 3: PATCH Metadata with Geographic Area
 
+### ⚠️ **IMPORTANT: Country Code Normalization**
+
+The system **automatically normalizes** country codes to **ISO 3166-1 alpha-3** format (3-letter uppercase codes).
+
+**✅ Use ISO 3166-1 alpha-3 codes** (recommended):
+```json
+{
+  "geographic_area": {
+    "USA": "0.60",  // United States
+    "CHN": "0.20",  // China
+    "FRA": "0.10",  // France
+    "DEU": "0.05",  // Germany
+    "GBR": "0.05"   // United Kingdom
+  }
+}
+```
+
+**❌ Avoid ambiguous codes** (they may normalize unexpectedly):
+- `"eur"` → May become `"FRA"`, `"CZE"`, or other EU countries (fuzzy match)
+- `"cina"` → Normalizes to `"CHN"` (Italian name)
+- `"usa"` → Normalizes to `"USA"` (lowercase → uppercase)
+- `"ASIA"` → Not a country code! (region, not specific country)
+
+**💡 Common ISO 3166-1 alpha-3 Codes**:
+- USA - United States
+- CHN - China
+- JPN - Japan
+- DEU - Germany
+- GBR - United Kingdom
+- FRA - France
+- ITA - Italy
+- ESP - Spain
+- BRA - Brazil
+- IND - India
+- RUS - Russia
+- CAN - Canada
+
+**Normalization Rules**:
+1. System accepts ISO-2 (US), ISO-3 (USA), or country names (United States)
+2. All inputs are normalized to ISO-3 via `pycountry` fuzzy matching
+3. **Ambiguous inputs** (like "eur") may normalize to unexpected countries
+4. Always use ISO-3 codes for predictable results
+
+---
+
 ### Step 3.1: Update Geographic Area Only
 
 ```bash
@@ -290,8 +335,8 @@ curl -X PATCH "$BASE_URL/assets/metadata" \
         \"patch\": {
           \"geographic_area\": {
             \"USA\": \"0.50\",
-            \"EUR\": \"0.30\",
-            \"ASIA\": \"0.20\"
+            \"FRA\": \"0.30\",
+            \"CHN\": \"0.20\"
           }
         }
       }
@@ -305,12 +350,12 @@ curl -X PATCH "$BASE_URL/assets/metadata" \
   {
     "asset_id": 2,
     "success": true,
-    "message": "updated",
+    "message": "Metadata updated successfully",
     "changes": [
       {
         "field": "geographic_area",
-        "old": "{\"USA\": \"0.6000\", \"CHN\": \"0.2000\", \"EMEA\": \"0.2000\"}",
-        "new": "{\"USA\": \"0.5000\", \"EUR\": \"0.3000\", \"ASIA\": \"0.2000\"}"
+        "old_value": "{\"USA\": \"0.6000\", \"CHN\": \"0.2000\", \"GBR\": \"0.2000\"}",
+        "new_value": "{\"USA\": \"0.5000\", \"FRA\": \"0.3000\", \"CHN\": \"0.2000\"}"
       }
     ]
   }
@@ -319,7 +364,7 @@ curl -X PATCH "$BASE_URL/assets/metadata" \
 
 **✅ Verify**:
 - `success` = true
-- `changes` array shows geographic_area change
+- `changes` array shows geographic_area change with `old_value` and `new_value`
 - Other fields (sector, investment_type) are NOT in changes (PATCH semantics = absent fields ignored)
 
 ### Step 3.2: Verify Changes Persisted
@@ -334,14 +379,15 @@ curl -X POST "$BASE_URL/assets" \
 ```json
 {
   "USA": "0.5000",
-  "EUR": "0.3000",
-  "ASIA": "0.2000"
+  "FRA": "0.3000",
+  "CHN": "0.2000"
 }
 ```
 
 **✅ Verify**:
-- Geographic area matches PATCH request
+- Geographic area matches PATCH request (codes normalized to ISO-3)
 - Sum = 1.0
+- Country codes are uppercase ISO-3
 
 ### Step 3.3: Clear a Field with null
 
