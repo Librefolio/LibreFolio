@@ -266,11 +266,12 @@ class AssetMetadataService:
         asset_id: int,
         patch: FAPatchMetadataRequest,
         session: 'AsyncSession'
-        ) -> 'FAAssetMetadataResponse':
+        ) -> 'FAMetadataRefreshResult':
         """
         Update asset metadata with PATCH semantics.
 
-        Loads asset, applies PATCH update, validates, persists to database.
+        Loads asset, applies PATCH update, validates, persists to database,
+        and computes changes for tracking.
 
         Args:
             asset_id: Asset ID to update
@@ -278,7 +279,7 @@ class AssetMetadataService:
             session: Database session
 
         Returns:
-            FAAssetMetadataResponse with updated metadata
+            FAMetadataRefreshResult with success status and changes
 
         Raises:
             ValueError: If asset not found or validation fails
@@ -286,13 +287,15 @@ class AssetMetadataService:
         Examples:
             >>> from backend.app.schemas.assets import FAPatchMetadataRequest
             >>> patch = FAPatchMetadataRequest(sector="Technology")
-            >>> response = await AssetMetadataService.update_asset_metadata(1, patch, session)
-            >>> response.classification_params.sector
-            'Technology'
+            >>> result = await AssetMetadataService.update_asset_metadata(1, patch, session)
+            >>> result.success
+            True
+            >>> result.changes
+            [FAMetadataChangeDetail(field='sector', old=None, new='"Technology"')]
         """
         from sqlalchemy import select
         from backend.app.db.models import Asset
-        from backend.app.schemas.assets import FAAssetMetadataResponse
+        from backend.app.schemas.assets import FAMetadataRefreshResult
 
         # Load asset from DB
         result = await session.execute(
@@ -318,6 +321,12 @@ class AssetMetadataService:
             # Re-raise validation errors (will become 422 in API layer)
             raise ValueError(f"Validation failed: {e}")
 
+        # Compute changes before persisting
+        changes = AssetMetadataService.compute_metadata_diff(
+            current_params,
+            updated_params
+            )
+
         # Serialize back to JSON
         asset.classification_params = AssetMetadataService.serialize_classification_params(
             updated_params
@@ -329,11 +338,10 @@ class AssetMetadataService:
         # Refresh to get updated data
         await session.refresh(asset)
 
-        # Build response
-        return FAAssetMetadataResponse(
+        # Build response with changes
+        return FAMetadataRefreshResult(
             asset_id=asset.id,
-            display_name=asset.display_name,
-            identifier=asset.identifier,
-            currency=asset.currency,
-            classification_params=updated_params
+            success=True,
+            message="Metadata updated successfully",
+            changes=changes
             )

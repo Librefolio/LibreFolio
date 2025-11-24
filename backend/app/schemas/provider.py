@@ -89,7 +89,11 @@ class FAProviderAssignmentItem(BaseModel):
 
     asset_id: int = Field(..., description="Asset ID")
     provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, etc.)")
+    # TODO: se provider_params ha uno schema noto, usarlo qui come submodel, risalire a partire da provider_code
+    #  Se lo schema non è richiesto, lo si capisce dal return None, e allora si lascia dict generico.
+    #  Se non arriva e non è richiesto, far inserire automaticamente un dict vuoto.
     provider_params: dict = Field(..., description="Provider-specific configuration (JSON)")
+    # TODO: automatizzare il refresh_interval settando il valore di default a 1440 (24h) se NULL
     fetch_interval: Optional[int] = Field(None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)")
 
 

@@ -89,7 +89,7 @@ def test_patch_metadata_bulk(base_url: str, asset_id: int) -> bool:
     print_section("Test 1: PATCH /assets/metadata (bulk)")
 
     try:
-        # Test 1a: Valid geographic_area
+        # Test 1a: Valid geographic_area with changes verification
         print_info("Test 1a: PATCH with valid geographic_area")
         payload = {
             "assets": [
@@ -123,7 +123,41 @@ def test_patch_metadata_bulk(base_url: str, asset_id: int) -> bool:
         assert data[0].get('asset_id') == asset_id, "asset_id mismatch"
         assert data[0].get('success') == True, "success should be True"
 
-        print_success("✓ Test 1a: Valid geographic_area PASSED")
+        # **NEW: Verify changes are returned**
+        changes = data[0].get('changes')
+        assert changes is not None, "changes should not be None"
+        assert isinstance(changes, list), "changes should be a list"
+        assert len(changes) > 0, "changes should contain at least one field change"
+        print_success(f"✓ Changes returned: {len(changes)} field(s) updated")
+
+        # **NEW: Verify database was actually updated by reading back**
+        read_resp = httpx.post(
+            f"{base_url}/assets",
+            json={"asset_ids": [asset_id]},
+            timeout=TIMEOUT
+            )
+
+        if read_resp.status_code != 200:
+            print_error(f"❌ Failed to read back asset: {read_resp.status_code}")
+            return False
+
+        read_data = read_resp.json()
+        assert len(read_data) > 0, "Should return at least one asset"
+
+        updated_params = read_data[0].get('classification_params', {})
+        assert updated_params.get('short_description') == "Updated via API test", \
+            f"short_description not updated: {updated_params.get('short_description')}"
+        assert updated_params.get('investment_type') == "stock", \
+            f"investment_type not updated: {updated_params.get('investment_type')}"
+
+        geo_area = updated_params.get('geographic_area', {})
+        assert "USA" in geo_area, "USA not in geographic_area"
+        assert "FRA" in geo_area, "FRA not in geographic_area"
+        # Check values (as strings due to Decimal serialization)
+        assert geo_area["USA"] == "0.7000", f"USA value mismatch: {geo_area['USA']}"
+        assert geo_area["FRA"] == "0.3000", f"FRA value mismatch: {geo_area['FRA']}"
+
+        print_success("✓ Test 1a: Database verified - all fields updated correctly")
 
         # Test 1b: Invalid geographic_area (should return 422 or per-item error)
         print_info("\nTest 1b: PATCH with invalid geographic_area")
@@ -159,8 +193,17 @@ def test_patch_metadata_bulk(base_url: str, asset_id: int) -> bool:
             print_error(f"❌ Test 1b: Unexpected status {resp.status_code}")
             return False
 
-        # Test 1c: PATCH with absent fields (should be ignored)
+        # Test 1c: PATCH with absent fields (should be ignored - verify DB unchanged)
         print_info("\nTest 1c: PATCH with absent fields (PATCH semantics)")
+
+        # Read current state
+        read_resp = httpx.post(
+            f"{base_url}/assets",
+            json={"asset_ids": [asset_id]},
+            timeout=TIMEOUT
+            )
+        before_params = read_resp.json()[0]['classification_params']
+
         patch_sector_only = {
             "assets": [
                 {
@@ -182,9 +225,23 @@ def test_patch_metadata_bulk(base_url: str, asset_id: int) -> bool:
             print_error(f"❌ PATCH failed: {resp.status_code}")
             return False
 
-        print_success("✓ Test 1c: Absent fields ignored (PATCH semantics)")
+        # Verify only sector changed, other fields intact
+        read_resp = httpx.post(
+            f"{base_url}/assets",
+            json={"asset_ids": [asset_id]},
+            timeout=TIMEOUT
+            )
+        after_params = read_resp.json()[0]['classification_params']
 
-        # Test 1d: PATCH with null (should clear field)
+        assert after_params.get('sector') == "Technology", "sector not updated"
+        assert after_params.get('short_description') == before_params.get('short_description'), \
+            "short_description should not change"
+        assert after_params.get('geographic_area') == before_params.get('geographic_area'), \
+            "geographic_area should not change"
+
+        print_success("✓ Test 1c: Absent fields ignored (PATCH semantics verified)")
+
+        # Test 1d: PATCH with null (should clear field - verify DB cleared)
         print_info("\nTest 1d: PATCH with null (clear field)")
         patch_null = {
             "assets": [
@@ -207,7 +264,23 @@ def test_patch_metadata_bulk(base_url: str, asset_id: int) -> bool:
             print_error(f"❌ PATCH null failed: {resp.status_code}")
             return False
 
-        print_success("✓ Test 1d: Null clears field")
+        # Verify changes show field cleared
+        data = resp.json()
+        changes = data[0].get('changes', [])
+        sector_change = next((c for c in changes if c['field'] == 'sector'), None)
+        assert sector_change is not None, "sector change not in changes list"
+        assert sector_change['new'] == 'null', f"sector should be cleared (null), got: {sector_change['new']}"
+
+        # Verify DB actually cleared
+        read_resp = httpx.post(
+            f"{base_url}/assets",
+            json={"asset_ids": [asset_id]},
+            timeout=TIMEOUT
+            )
+        after_params = read_resp.json()[0]['classification_params']
+        assert after_params.get('sector') is None, "sector should be None in DB"
+
+        print_success("✓ Test 1d: Null clears field (DB verified)")
 
         return True
 

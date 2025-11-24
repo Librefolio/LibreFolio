@@ -269,6 +269,7 @@ async def assign_providers_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# TODO: non può usare lo schema bulk perché l'asset_id è nel path ma deve essere anche nel post, eliminarere questa ridondanza
 @router.post("/{asset_id}/provider")
 async def assign_provider_single(
     asset_id: int,
@@ -661,26 +662,32 @@ async def update_assets_metadata_bulk(
         results = []
         for item in request.assets:
             try:
-                res = await AssetMetadataService.update_asset_metadata(item.asset_id, item.patch, session)
-                results.append({
-                    "asset_id": item.asset_id,
-                    "success": True,
-                    "message": "updated",
-                    "changes": getattr(res, "changes", None)
-                    })
+                result = await AssetMetadataService.update_asset_metadata(
+                    item.asset_id,
+                    item.patch,
+                    session
+                    )
+                # Result is now FAMetadataRefreshResult with changes included
+                results.append(result)
             except ValueError as e:
-                results.append({
-                    "asset_id": item.asset_id,
-                    "success": False,
-                    "message": str(e)
-                    })
+                results.append(
+                    FAMetadataRefreshResult(
+                        asset_id=item.asset_id,
+                        success=False,
+                        message=str(e),
+                        changes=None
+                        )
+                    )
             except Exception as e:
                 logger.error(f"Error updating metadata for asset {item.asset_id}: {e}")
-                results.append({
-                    "asset_id": item.asset_id,
-                    "success": False,
-                    "message": "internal error"
-                    })
+                results.append(
+                    FAMetadataRefreshResult(
+                        asset_id=item.asset_id,
+                        success=False,
+                        message="internal error",
+                        changes=None
+                        )
+                    )
         return results
     except Exception as e:
         logger.error(f"Error in bulk metadata update: {e}")
