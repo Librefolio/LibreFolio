@@ -117,68 +117,62 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
 # EXTERNAL SERVICES TESTS
 # ============================================================================
 
-def external_fx_source(verbose: bool = False) -> bool:
+def external_fx_providers(verbose: bool = False) -> bool:
     """
-    Test all registered FX providers (ECB, FED, BOE, etc.).
-    Tests external integration with central bank APIs.
+    Run FX providers external tests (network-dependent).
+
+    Tests all registered FX providers (ECB, FED, BOE, etc.) with live API calls.
+    Includes multi-unit currency tests (automatically skipped for providers without multi-unit support).
+
+    WARNING: Requires internet connection and may be slow due to rate limiting.
     """
-    print_section("External: FX Providers")
-    print_info("Testing all registered FX rate providers")
-    print_info("Tests: Metadata, API connection, rate fetching, normalization")
+    print_section("External: FX Providers Tests (including multi-unit)")
+    print_info("Testing: All registered FX providers (ECB, FED, BOE, etc.)")
+    print_info("Tests: Metadata, currencies, rate fetching, normalization, multi-unit handling")
+    print_info("Note: Multi-unit tests auto-skip for providers without multi-unit support")
+    print_info("⚠️  WARNING: Requires internet connection")
+    print_info("⚠️  WARNING: May be slow due to API rate limiting")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_external.test_fx_providers"],
-        "FX providers tests",
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_external/test_fx_providers.py", "-v"],
+        "FX providers external tests",
         verbose=verbose
-        )
-
-
-def external_fx_multi_unit(verbose: bool = False) -> bool:
-    """
-    Test multi-unit currency handling (JPY, SEK, NOK, DKK).
-    Validates correct 100x inversion logic.
-    """
-    print_section("External: Multi-Unit Currencies")
-    print_info("Testing multi-unit currency handling (JPY, SEK, NOK, DKK)")
-    print_info("Tests: Identification, rate reasonableness, calculation consistency")
-
-    return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_external.test_fx_multi_unit"],
-        "Multi-unit currency tests",
-        verbose=verbose
-        )
+    )
 
 
 def external_asset_providers(verbose: bool = False) -> bool:
     """
     Test all registered asset pricing providers (yfinance, cssscraper, etc.).
-    Tests external integration with data sources.
+
+    Tests external integration with asset data sources.
+    Includes tests for metadata, current value, historical data, search, error handling.
     """
-    print_section("External: Asset Providers")
-    print_info("Testing all registered asset pricing providers")
-    print_info("Tests: Metadata, API connection, current/historical data fetching, search")
+    print_section("External: Asset Providers Tests")
+    print_info("Testing: All registered asset pricing providers")
+    print_info("Tests: Metadata, current value, historical data, search, error handling")
+    print_info("⚠️  WARNING: Requires internet connection")
+    print_info("⚠️  WARNING: May be slow due to API rate limiting")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_external.test_asset_providers"],
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_external/test_asset_providers.py", "-v"],
         "Asset providers tests",
         verbose=verbose
-        )
+    )
 
 
 def external_all(verbose: bool = False) -> bool:
     """
-    Run all external service tests.
+    Run all external tests (network-dependent).
     """
-    print_header("LibreFolio External Services Tests")
-    print_info("Testing external API integrations")
-    print_info("No backend server required")
+    print_header("LibreFolio External Tests")
+    print_info("Testing external provider integrations")
+    print_info("⚠️  WARNING: Requires internet connection")
+    print_info("⚠️  WARNING: May be slow")
 
     tests = [
-        ("External Forex data import API", lambda: external_fx_source(verbose)),
-        ("Multi-Unit Currency Handling", lambda: external_fx_multi_unit(verbose)),
-        ("Asset Pricing Providers", lambda: external_asset_providers(verbose)),
-        # Future: yfinance, other data sources
-        ]
+        ("FX Providers (including multi-unit)", lambda: external_fx_providers(verbose)),
+        ("Asset Providers", lambda: external_asset_providers(verbose)),
+    ]
 
     results = []
     for test_name, test_func in tests:
@@ -191,7 +185,7 @@ def external_all(verbose: bool = False) -> bool:
             break
 
     # Summary
-    print_section("External Services Test Summary")
+    print_section("External Tests Summary")
     passed = sum(1 for _, success in results if success)
     total = len(results)
 
@@ -202,7 +196,7 @@ def external_all(verbose: bool = False) -> bool:
     print(f"\nResults: {passed}/{total} tests passed")
 
     if passed == total:
-        print_success("All external services tests passed! 🎉")
+        print_success("All external tests passed! 🎉")
         return True
     else:
         print_error(f"{total - passed} test(s) failed")
@@ -971,35 +965,30 @@ External Services Tests
 
 These tests verify external API integrations:
   • No backend server required
-  • Tests connections for Forex data source like ECB, FED, BOE, SNB and other
-  • Tests connections for Asset data source like YahooFinance, CssScraper and other
+  • Tests connections to live external APIs (requires internet)
   • Verifies data availability and format
 
 Test commands:
-  fx-source      - Test all FX providers (ECB, FED, BOE, SNB)
-                   Tests: Metadata, API connection, rate fetching, normalization
-                   📋 Prerequisites: Internet connection
-         
-  fx-multi-unit  - Test multi-unit currency handling (JPY, SEK, NOK, DKK)
-                   Tests: Identification, rate reasonableness, 100x logic
-                   📋 Prerequisites: Internet connection
-         
-  asset-providers - Test all asset pricing providers (yfinance, cssscraper)
-                    Tests: Metadata, API connection, current/historical data fetching, search
+  fx-providers    - Test all FX providers (ECB, FED, BOE, etc.)
+                    Tests: Metadata, API connection, rate fetching, normalization
+                    📋 Prerequisites: Internet connection
+                    💡 Repeats tests for all configured FX providers
+  
+  asset-providers - Test all asset providers (yfinance, cssscraper, etc.)
+                    Tests: Metadata, current value, historical data, search, error handling
+                    Note: Tests auto-skip if provider doesn't support feature (e.g., search)
                     📋 Prerequisites: Internet connection
          
-  all            - Run all external service tests
-  
-Future: yfinance, other data sources will be added here
+  all             - Run all external service tests
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
     external_parser.add_argument(
         "action",
-        choices=["fx-source", "fx-multi-unit", "asset-providers", "all"],
+        choices=["fx-providers", "asset-providers", "all"],
         help="External service test to run"
-        )
+    )
 
     # ========================================================================
     # DATABASE TESTS SUBPARSER
@@ -1292,10 +1281,8 @@ def main():
 
     elif args.category == "external":
         # External services tests
-        if args.action == "fx-source":
-            success = external_fx_source(verbose=verbose)
-        elif args.action == "fx-multi-unit":
-            success = external_fx_multi_unit(verbose=verbose)
+        if args.action == "fx-providers":
+            success = external_fx_providers(verbose=verbose)
         elif args.action == "asset-providers":
             success = external_asset_providers(verbose=verbose)
         elif args.action == "all":
