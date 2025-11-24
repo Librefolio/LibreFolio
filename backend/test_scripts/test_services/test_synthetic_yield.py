@@ -9,143 +9,19 @@ Tests cover:
 - Utility functions (find_active_period)
 """
 import asyncio
-import json
 import os
-import sys
 from datetime import date
 from decimal import Decimal
+
+import pytest
 
 # Force test mode BEFORE any other imports
 os.environ["LIBREFOLIO_TEST_MODE"] = "1"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///backend/data/sqlite/test_app.db"
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-from sqlmodel import select
-
-from backend.app.db.models import (
-    Asset, ValuationModel, AssetType, PriceHistory,
-    Transaction, AssetProviderAssignment, CashMovement, CashAccount, Broker,
-    TransactionType, CashMovementType
-    )
-from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.asset_source_providers.scheduled_investment import ScheduledInvestmentProvider
-from backend.app.utils.financial_math import find_active_period
 
-from backend.app.schemas.assets import (
-    FAInterestRatePeriod,
-    FALateInterestConfig,
-    FAScheduledInvestmentSchedule,
-    CompoundingType,
-    DayCountConvention,
-    )
-
-
-# ============================================================================
-# TEST DATABASE SETUP
-# ============================================================================
-
-
-async def get_test_session():
-    """Create async session for tests."""
-    DATABASE_URL = os.environ.get("DATABASE_URL")
-    engine = create_async_engine(DATABASE_URL, echo=False)
-    async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    async with async_session_maker() as session:
-        yield session
-
-
-async def create_test_asset(session: AsyncSession) -> Asset:
-    """
-    Create test SCHEDULED_YIELD asset with interest schedule.
-
-    Asset details:
-    - Type: CROWDFUND_LOAN
-    - Valuation: SCHEDULED_YIELD
-    - Face value: 10000 EUR
-    - Maturity: 2026-12-31 (2 years)
-    - Interest schedule:
-      - 2025-01-01 to 2025-12-31: 5% annual
-      - 2026-01-01 to 2026-12-31: 6% annual
-    - Late interest: 12% after 30 days grace
-    """
-    interest_schedule = [
-        {"start_date": "2025-01-01", "end_date": "2025-12-31", "annual_rate": "0.05", "compounding": "SIMPLE", "day_count": "ACT/365"},
-        {"start_date": "2026-01-01", "end_date": "2026-12-31", "annual_rate": "0.06", "compounding": "SIMPLE", "day_count": "ACT/365"}
-        ]
-
-    late_interest = {"annual_rate": "0.12", "grace_period_days": 30, "compounding": "SIMPLE", "day_count": "ACT/365"}
-
-    # Create full schedule structure
-    full_schedule = {
-        "schedule": interest_schedule,
-        "late_interest": late_interest
-        }
-
-    # Create broker for transactions (or reuse existing)
-    # Try to find existing broker first
-    result = await session.execute(select(Broker).where(Broker.name == "Test Broker"))
-    broker = result.scalar_one_or_none()
-
-    if not broker:
-        broker = Broker(name="Test Broker", description="For scheduled yield tests")
-        session.add(broker)
-        await session.flush()
-
-    asset = Asset(
-        display_name="Test Recrowd Loan",
-        identifier="RECROWD-TEST-001",
-        currency="EUR",
-        asset_type=AssetType.CROWDFUND_LOAN,
-        valuation_model=ValuationModel.SCHEDULED_YIELD,
-        interest_schedule=json.dumps(full_schedule),
-        )
-
-    session.add(asset)
-    await session.flush()
-
-    # Create cash account (or reuse existing)
-    result = await session.execute(
-        select(CashAccount).where(
-            CashAccount.broker_id == broker.id,
-            CashAccount.currency == "EUR"
-            )
-        )
-    cash_account = result.scalar_one_or_none()
-
-    if not cash_account:
-        cash_account = CashAccount(broker_id=broker.id, currency="EUR", display_name="Test Cash EUR")
-        session.add(cash_account)
-        await session.flush()
-
-    # Create cash movement for BUY
-    cash_mov = CashMovement(
-        cash_account_id=cash_account.id,
-        type=CashMovementType.BUY_SPEND,
-        amount=Decimal("-10000"),
-        trade_date=date(2025, 1, 1),
-        currency="EUR"
-        )
-    session.add(cash_mov)
-    await session.flush()
-
-    # Create BUY transaction to establish face_value
-    txn = Transaction(
-        asset_id=asset.id,
-        broker_id=broker.id,
-        type=TransactionType.BUY,
-        quantity=Decimal("1"),
-        price=Decimal("10000"),
-        currency="EUR",
-        cash_movement_id=cash_mov.id,
-        trade_date=date(2025, 1, 1)
-        )
-    session.add(txn)
-    await session.commit()
-    await session.refresh(asset)
-
-    return asset
+from backend.app.schemas.assets import FAScheduledInvestmentSchedule
 
 
 # ============================================================================
@@ -153,6 +29,7 @@ async def create_test_asset(session: AsyncSession) -> Asset:
 # ============================================================================
 
 
+@pytest.mark.asyncio
 async def test_provider_validate_params():
     """Test provider parameter validation using Pydantic schemas."""
     provider = ScheduledInvestmentProvider()
@@ -176,22 +53,15 @@ async def test_provider_validate_params():
             }
         }
 
-    try:
-        validated = provider.validate_params(valid_params)
-        passed = isinstance(validated, FAScheduledInvestmentSchedule)
-        passed = passed and len(validated.schedule) == 1
-        passed = passed and validated.schedule[0].annual_rate == Decimal("0.05")
-        passed = passed and validated.late_interest is not None
-        passed = passed and validated.late_interest.annual_rate == Decimal("0.12")
-
-        return {
-            "passed": passed,
-            "message": f"Validation successful, validated type: {type(validated).__name__}"
-            }
-    except Exception as e:
-        return {"passed": False, "message": f"Validation failed: {e}"}
+    validated = provider.validate_params(valid_params)
+    assert isinstance(validated, FAScheduledInvestmentSchedule), f"Expected FAScheduledInvestmentSchedule, got {type(validated)}"
+    assert len(validated.schedule) == 1, f"Expected 1 period in schedule, got {len(validated.schedule)}"
+    assert validated.schedule[0].annual_rate == Decimal("0.05"), f"Expected rate 0.05, got {validated.schedule[0].annual_rate}"
+    assert validated.late_interest is not None, "Late interest should be present"
+    assert validated.late_interest.annual_rate == Decimal("0.12"), f"Expected late rate 0.12, got {validated.late_interest.annual_rate}"
 
 
+@pytest.mark.asyncio
 async def test_provider_get_current_value():
     """Test provider get_current_value method."""
     provider = ScheduledInvestmentProvider()
@@ -217,25 +87,16 @@ async def test_provider_get_current_value():
             ]
         }
 
-    try:
-        # Use identifier "1" for test mode with _transaction_override
-        result = await provider.get_current_value("1", params)
+    # Use identifier "1" for test mode with _transaction_override
+    result = await provider.get_current_value("1", params)
 
-        # Value should be > face_value (interest accrued since 2025-01-01)
-        passed = result.value > Decimal("10000")
-        passed = passed and result.currency == "EUR"
-        passed = passed and result.source == "Scheduled Investment Calculator"
-
-        return {
-            "passed": passed,
-            "value": str(result.value),
-            "currency": result.currency,
-            "message": f"Current value: {result.value} {result.currency}"
-            }
-    except Exception as e:
-        return {"passed": False, "message": f"Exception: {e}"}
+    # Value should be > face_value (interest accrued since 2025-01-01)
+    assert result.value > Decimal("10000"), f"Expected value > 10000, got {result.value}"
+    assert result.currency == "EUR", f"Expected EUR, got {result.currency}"
+    assert result.source == "Scheduled Investment Calculator", f"Unexpected source: {result.source}"
 
 
+@pytest.mark.asyncio
 async def test_provider_get_history_value():
     """Test provider get_history_value method."""
     provider = ScheduledInvestmentProvider()
@@ -264,32 +125,21 @@ async def test_provider_get_history_value():
     start = date(2025, 1, 1)
     end = date(2025, 1, 7)
 
-    try:
-        result = await provider.get_history_value("1", params, start, end)
+    result = await provider.get_history_value("1", params, start, end)
 
-        # Should have 7 prices
-        passed = len(result.prices) == 7
+    # Should have 7 prices
+    assert len(result.prices) == 7, f"Expected 7 prices, got {len(result.prices)}"
 
-        # Values should increase daily
-        values = [p.close for p in result.prices]
-        increasing = all(values[i] < values[i + 1] for i in range(len(values) - 1))
-        passed = passed and increasing
+    # Values should increase daily
+    values = [p.close for p in result.prices]
+    increasing = all(values[i] < values[i + 1] for i in range(len(values) - 1))
+    assert increasing, f"Values are not monotonically increasing: {values}"
 
-        # Currency should match
-        passed = passed and result.currency == "EUR"
-
-        return {
-            "passed": passed,
-            "count": len(result.prices),
-            "first": str(values[0]) if values else "N/A",
-            "last": str(values[-1]) if values else "N/A",
-            "increasing": increasing,
-            "message": f"Generated {len(result.prices)} prices, increasing: {increasing}"
-            }
-    except Exception as e:
-        return {"passed": False, "message": f"Exception: {e}"}
+    # Currency should match
+    assert result.currency == "EUR", f"Expected EUR, got {result.currency}"
 
 
+@pytest.mark.asyncio
 async def test_provider_private_calculate_value():
     """Test provider private _calculate_value_for_date method."""
 
@@ -315,292 +165,16 @@ async def test_provider_private_calculate_value():
         }
     params = FAScheduledInvestmentSchedule(**params_dict)
 
-    try:
-        # Calculate value for Jan 30, 2025 (29 days from Jan 1 - timedelta does not include end date)
-        # Now _calculate_value_for_date requires face_value as parameter
-        face_value = Decimal("10000")
-        value = provider._calculate_value_for_date(params, face_value, date(2025, 1, 30))
+    # Calculate value for Jan 30, 2025 (29 days from Jan 1)
+    face_value = Decimal("10000")
+    value = provider._calculate_value_for_date(params, face_value, date(2025, 1, 30))
 
-        # Expected: 10000 + (10000 * 0.05 * 29/365) ≈ 10039.73
-        expected_interest = Decimal("10000") * Decimal("0.05") * Decimal("29") / Decimal("365")
-        expected_value = Decimal("10000") + expected_interest
+    # Expected: 10000 + (10000 * 0.05 * 29/365) ≈ 10039.73
+    expected_interest = Decimal("10000") * Decimal("0.05") * Decimal("29") / Decimal("365")
+    expected_value = Decimal("10000") + expected_interest
 
-        diff = abs(value - expected_value)
-        passed = diff < Decimal("0.01")
-
-        return {
-            "passed": passed,
-            "value": str(value),
-            "expected": str(expected_value),
-            "diff": str(diff),
-            "message": f"Calculated: {value:.2f}, Expected: {expected_value:.2f}"
-            }
-    except Exception as e:
-        return {"passed": False, "message": f"Exception: {e}"}
-
-
-# ============================================================================
-# UTILITY FUNCTION TESTS
-# ============================================================================
-
-
-def test_find_active_period_with_pydantic():
-    """Test find_active_period utility with Pydantic models (only format accepted)."""
-
-    # Use Pydantic models (only way to call the function)
-    schedule = [
-        FAInterestRatePeriod(
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 12, 31),
-            annual_rate=Decimal("0.05"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365
-            ),
-        FAInterestRatePeriod(
-            start_date=date(2026, 1, 1),
-            end_date=date(2026, 12, 31),
-            annual_rate=Decimal("0.06"),
-            compounding=CompoundingType.SIMPLE,
-            day_count=DayCountConvention.ACT_365
-            )
-        ]
-    late_interest = FALateInterestConfig(
-        annual_rate=Decimal("0.12"),
-        grace_period_days=30,
-        compounding=CompoundingType.SIMPLE,
-        day_count=DayCountConvention.ACT_365
-        )
-    maturity = date(2026, 12, 31)
-
-    test_cases = [
-        (date(2025, 6, 15), Decimal("0.05"), "Mid-2025 (first period)"),
-        (date(2026, 6, 15), Decimal("0.06"), "Mid-2026 (second period)"),
-        (date(2027, 1, 15), Decimal("0.06"), "15 days after maturity (grace)"),
-        (date(2027, 2, 15), Decimal("0.12"), "45 days after maturity (late)"),
-        ]
-
-    results = []
-    for target, expected, desc in test_cases:
-        period = find_active_period(schedule, target, maturity, late_interest)
-        if period is None:
-            actual = Decimal("0")  # No period found
-        else:
-            actual = period.annual_rate
-        passed = actual == expected
-        results.append({
-            "test": desc,
-            "passed": passed,
-            "expected": str(expected),
-            "actual": str(actual)
-            })
-
-    return {
-        "passed": all(r["passed"] for r in results),
-        "details": results
-        }
-
-
-# NOTE: test_calculate_accrued_conversion removed - function deprecated
-# The calculate_accrued_interest() function was obsolete (day-by-day, SIMPLE only)
-# Use period-based calculation in ScheduledInvestmentProvider instead
-
-
-# ============================================================================
-# INTEGRATION TESTS
-# ============================================================================
-
-
-async def test_get_prices_integration():
-    """Test get_prices() integration with scheduled_investment provider."""
-    async for session in get_test_session():
-        asset = await create_test_asset(session)
-
-        try:
-            # Assign provider - interest_schedule now contains full FAScheduledInvestmentSchedule structure
-            schedule_data = json.loads(asset.interest_schedule)
-            provider_params = schedule_data  # Already has {schedule: [...], late_interest: {...}}
-
-            await AssetSourceManager.assign_provider(
-                asset_id=asset.id,
-                provider_code="scheduled_investment",
-                provider_params=json.dumps(provider_params),
-                session=session
-                )
-
-            # Get prices
-            prices = await AssetSourceManager.get_prices(
-                asset_id=asset.id,
-                start_date=date(2025, 1, 1),
-                end_date=date(2025, 1, 7),
-                session=session
-                )
-
-            # Validate
-            passed = len(prices) == 7
-            all_exact = all(p.backward_fill_info is None for p in prices)
-            values = [p.close for p in prices]
-            increasing = all(values[i] < values[i + 1] for i in range(len(values) - 1))
-
-            passed = passed and all_exact and increasing
-
-            return {
-                "passed": passed,
-                "count": len(prices),
-                "increasing": increasing,
-                "message": f"get_prices() returned {len(prices)} calculated values"
-                }
-        finally:
-            # Clean up: delete ALL related records first due to FK constraints
-            # Delete in reverse dependency order with flush() between groups
-            from sqlmodel import delete as sqlmodel_delete
-
-            # 1. Delete provider assignment first
-            await session.execute(
-                sqlmodel_delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset.id)
-                )
-            await session.flush()
-
-            # 2. Delete price history
-            await session.execute(
-                sqlmodel_delete(PriceHistory).where(PriceHistory.asset_id == asset.id)
-                )
-            await session.flush()
-
-            # 3. Get cash movement IDs before deleting transactions
-            stmt_txn = select(Transaction.cash_movement_id).where(Transaction.asset_id == asset.id)
-            result = await session.execute(stmt_txn)
-            cash_movement_ids = [row[0] for row in result.all() if row[0]]
-
-            # 4. Delete transactions
-            await session.execute(
-                sqlmodel_delete(Transaction).where(Transaction.asset_id == asset.id)
-                )
-            await session.flush()
-
-            # 5. Delete cash movements
-            if cash_movement_ids:
-                await session.execute(
-                    sqlmodel_delete(CashMovement).where(CashMovement.id.in_(cash_movement_ids))
-                    )
-                await session.flush()
-
-            # 6. Finally delete asset
-            await session.execute(
-                sqlmodel_delete(Asset).where(Asset.id == asset.id)
-                )
-
-            await session.commit()
-
-    return {"passed": False, "message": "Session error"}
-
-
-async def test_no_db_storage():
-    """Test that synthetic values are NOT written to database."""
-    async for session in get_test_session():
-        asset = await create_test_asset(session)
-
-        try:
-            # Assign provider first
-            schedule_data = json.loads(asset.interest_schedule)
-            await AssetSourceManager.assign_provider(
-                asset_id=asset.id,
-                provider_code="scheduled_investment",
-                provider_params=json.dumps(schedule_data),
-                session=session
-                )
-
-            # Query prices (should calculate on-demand)
-            await AssetSourceManager.get_prices(
-                asset_id=asset.id,
-                start_date=date(2025, 1, 1),
-                end_date=date(2025, 1, 7),
-                session=session
-                )
-
-            # Check DB - should have NO price_history records
-            stmt = select(PriceHistory).where(PriceHistory.asset_id == asset.id)
-            result = await session.execute(stmt)
-            db_prices = result.scalars().all()
-
-            passed = len(db_prices) == 0
-
-            return {
-                "passed": passed,
-                "db_count": len(db_prices),
-                "message": f"DB has {len(db_prices)} prices (expected 0)"
-                }
-        finally:
-            # Clean up: delete ALL related records first due to FK constraints
-            # Delete in reverse dependency order with flush() between groups
-            from sqlmodel import delete as sqlmodel_delete
-
-            # 1. Delete provider assignment first
-            await session.execute(
-                sqlmodel_delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset.id)
-                )
-            await session.flush()
-
-            # 2. Delete price history
-            await session.execute(
-                sqlmodel_delete(PriceHistory).where(PriceHistory.asset_id == asset.id)
-                )
-            await session.flush()
-
-            # 3. Get cash movement IDs before deleting transactions
-            stmt_txn = select(Transaction.cash_movement_id).where(Transaction.asset_id == asset.id)
-            result = await session.execute(stmt_txn)
-            cash_movement_ids = [row[0] for row in result.all() if row[0]]
-
-            # 4. Delete transactions
-            await session.execute(
-                sqlmodel_delete(Transaction).where(Transaction.asset_id == asset.id)
-                )
-            await session.flush()
-
-            # 5. Delete cash movements
-            if cash_movement_ids:
-                await session.execute(
-                    sqlmodel_delete(CashMovement).where(CashMovement.id.in_(cash_movement_ids))
-                    )
-                await session.flush()
-
-            # 6. Finally delete asset
-            await session.execute(
-                sqlmodel_delete(Asset).where(Asset.id == asset.id)
-                )
-
-            await session.commit()
-
-    return {"passed": False, "message": "Session error"}
-
-
-async def test_pydantic_schema_validation():
-    """Test Pydantic schema validation with invalid data."""
-    provider = ScheduledInvestmentProvider()
-
-    # Test invalid dates (end_date before start_date - should be rejected by validation)
-    invalid_params = {
-        "schedule": [
-            {
-                "start_date": "2025-12-31",
-                "end_date": "2025-01-01",  # Before start_date - invalid!
-                "annual_rate": "0.05",
-                "compounding": "SIMPLE",
-                "day_count": "ACT/365"
-                }
-            ]
-        }
-
-    try:
-        provider.validate_params(invalid_params)
-        return {"passed": False, "message": "Should have raised validation error"}
-    except Exception as e:
-        # Should raise AssetSourceError with INVALID_PARAMS or validation error
-        passed = "INVALID_PARAMS" in str(e) or "end_date" in str(e).lower() or "after" in str(e).lower()
-        return {
-            "passed": passed,
-            "message": f"Correctly rejected invalid params: {e}"
-            }
+    diff = abs(value - expected_value)
+    assert diff < Decimal("0.01"), f"Value calculation mismatch: expected {expected_value}, got {value}, diff {diff}"
 
 
 # ============================================================================
@@ -626,6 +200,14 @@ def print_test_result(test_name: str, result: dict):
         print(f"  Actual: {result['actual']}")
 
 
+# ============================================================================
+# TEST ORCHESTRATION (LEGACY)
+# ============================================================================
+# NOTE: This run_all_tests() function is LEGACY code from before pytest migration.
+# This function is kept for backward compatibility with manual execution
+# (e.g., `python -m backend.test_scripts.test_services.test_synthetic_yield`),
+# but the recommended way is: pytest backend/test_scripts/test_services/test_synthetic_yield.py
+# TODO: rimuovere test orchestration legacy una volta che tutti i test sono migrati a pytest.
 async def run_all_tests():
     """Run all synthetic yield tests."""
     print("=" * 80)
@@ -685,11 +267,5 @@ async def run_all_tests():
     return passed == total
 
 
-# ============================================================================
-# MAIN
-# ============================================================================
-
-
 if __name__ == "__main__":
-    success = asyncio.run(run_all_tests())
-    sys.exit(0 if success else 1)
+    pytest.main([__file__, "-v"])

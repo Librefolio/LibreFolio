@@ -65,14 +65,14 @@ def validate_date_range_order(start: date_type, end: Optional[date_type]) -> Non
     if end is not None and end < start:
         raise ValueError(
             f"end date ({end}) must be >= start date ({start})"
-        )
+            )
 
 
 def validate_compound_frequency(
     compounding: str,
     compound_frequency: Optional[int],
     field_name: str = "compound_frequency"
-) -> None:
+    ) -> None:
     """
     Validate compound frequency based on compounding type.
 
@@ -103,11 +103,10 @@ def validate_compound_frequency(
             raise ValueError(
                 f"{field_name} is required when compounding=COMPOUND "
                 f"(e.g., 365 for daily, 12 for monthly, 1 for annual)"
-            )
+                )
     elif compounding == "SIMPLE":
         if compound_frequency is not None:
             raise ValueError(
                 f"{field_name} should not be set when compounding=SIMPLE "
                 f"(simple interest does not use compounding frequency)"
-            )
-
+                )

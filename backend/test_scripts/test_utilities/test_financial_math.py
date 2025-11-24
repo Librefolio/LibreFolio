@@ -389,3 +389,7 @@ def test_parse_decimal_value_none():
     """Test parsing None returns None."""
     result = parse_decimal_value(None)
     assert result is None
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

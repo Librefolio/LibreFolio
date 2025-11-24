@@ -179,7 +179,7 @@ class FAInterestRatePeriod(BaseModel):
                 compounding=info.data["compounding"].value,
                 compound_frequency=v.value if v else None,
                 field_name="compound_frequency"
-            )
+                )
         return v
 
 
@@ -239,7 +239,7 @@ class FALateInterestConfig(BaseModel):
                 compounding=info.data["compounding"].value,
                 compound_frequency=v.value if v else None,
                 field_name="compound_frequency"
-            )
+                )
         return v
 
 
