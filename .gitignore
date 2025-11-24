@@ -44,3 +44,12 @@ Pipfile.lock
 
 # MkDocs
 site/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+
