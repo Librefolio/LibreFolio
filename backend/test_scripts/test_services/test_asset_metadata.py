@@ -244,4 +244,4 @@ def test_patch_semantic_edge_cases():
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    pytest.main([__file__, "-v", "-s"])

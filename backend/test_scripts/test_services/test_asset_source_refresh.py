@@ -52,4 +52,4 @@ async def test_bulk_refresh_prices_orchestration():
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    pytest.main([__file__, "-v", "-s"])
