@@ -749,7 +749,7 @@ def api_assets_metadata(verbose: bool = False) -> bool:
     print_info("Note: Server will be automatically started and stopped by test")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_api.test_assets_metadata"],
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_api/test_assets_metadata.py", "-v"],
         "Assets Metadata API tests",
         verbose=verbose
         )

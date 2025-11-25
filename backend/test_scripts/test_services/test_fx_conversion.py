@@ -589,4 +589,4 @@ async def test_bulk_raise_on_error():
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    pytest.main([__file__, "-v", "-s"])

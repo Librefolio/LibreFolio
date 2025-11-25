@@ -71,7 +71,7 @@ async def test_create_single_asset(test_server):
             asset_type="STOCK",
             valuation_model="MARKET_PRICE")
 
-        response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(), timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"), timeout=TIMEOUT)
         assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
 
         data = FABulkAssetCreateResponse(**response.json())
@@ -112,7 +112,7 @@ async def test_create_multiple_assets(test_server):
             asset_type="STOCK",
             valuation_model="MARKET_PRICE")
 
-        response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item1, item2, item3]).model_dump(), timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item1, item2, item3]).model_dump(mode="json"), timeout=TIMEOUT)
 
         assert response.status_code == 201, f"Expected 201, got {response.status_code}"
 
@@ -141,7 +141,7 @@ async def test_create_partial_success(test_server):
             valuation_model="MARKET_PRICE")
         await client.post(
             f"{API_BASE}/assets/bulk",
-            json=FABulkAssetCreateRequest(assets=[item]).model_dump(),
+            json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"),
             timeout=TIMEOUT
             )
 
@@ -164,7 +164,7 @@ async def test_create_partial_success(test_server):
             currency="USD",
             asset_type="STOCK",
             valuation_model="MARKET_PRICE")
-        response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item1, item2, item3]).model_dump(), timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item1, item2, item3]).model_dump(mode="json"), timeout=TIMEOUT)
 
         data = FABulkAssetCreateResponse(**response.json())
         assert data.success_count == 2, f"Expected success_count=2, got {data.success_count}"
@@ -192,10 +192,10 @@ async def test_create_duplicate_identifier(test_server):
             display_name="Original",
             identifier=uniq_id,
             currency="USD")
-        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(), timeout=TIMEOUT)
+        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"), timeout=TIMEOUT)
 
         # Try to create duplicate
-        response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(), timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"), timeout=TIMEOUT)
         data = FABulkAssetCreateResponse(**response.json())
         assert data.success_count == 0, f"Expected success_count=0, got {data.success_count}"
         assert data.failed_count == 1, f"Expected failed_count=1, got {data.failed_count}"
@@ -238,7 +238,7 @@ async def test_list_no_filters(test_server):
             FAAssetCreateItem(display_name="List Test 2", identifier=unique_id("LIST2"), currency="EUR"),
             FAAssetCreateItem(display_name="List Test 3", identifier=unique_id("LIST3"), currency="USD")
             ]
-        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(), timeout=TIMEOUT)
+        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
 
         # List all assets
         response = await client.get(f"{API_BASE}/assets/list", timeout=TIMEOUT)
@@ -260,7 +260,7 @@ async def test_list_filter_currency(test_server):
             FAAssetCreateItem(display_name="USD Asset 2", identifier=unique_id("USD2"), currency="USD"),
             FAAssetCreateItem(display_name="EUR Asset", identifier=unique_id("EUR1"), currency="EUR")
             ]
-        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(), timeout=TIMEOUT)
+        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
         # Filter by USD
         response = await client.get(f"{API_BASE}/assets/list?currency=USD", timeout=TIMEOUT)
         data = [FAinfoResponse(**item) for item in response.json()]
@@ -280,7 +280,7 @@ async def test_list_filter_asset_type(test_server):
             FAAssetCreateItem(display_name="Stock 1", identifier=unique_id("STK1"), currency="USD", asset_type="STOCK"),
             FAAssetCreateItem(display_name="ETF 1", identifier=unique_id("ETF1"), currency="USD", asset_type="ETF")
             ]
-        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(), timeout=TIMEOUT)
+        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
 
         response = await client.get(f"{API_BASE}/assets/list?asset_type=STOCK", timeout=TIMEOUT)
         data = [FAinfoResponse(**item) for item in response.json()]
@@ -302,7 +302,7 @@ async def test_list_search(test_server):
             FAAssetCreateItem(display_name="Apple Inc.", identifier="SEARCHAPPL", currency="USD"),
             FAAssetCreateItem(display_name="Microsoft Corp.", identifier="SEARCHMSFT", currency="USD")
             ]
-        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(), timeout=TIMEOUT)
+        await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
 
         response = await client.get(f"{API_BASE}/assets/list?search=Apple", timeout=TIMEOUT)
         data = [FAinfoResponse(**item) for item in response.json()]
@@ -342,7 +342,7 @@ async def test_list_has_provider(test_server):
     async with httpx.AsyncClient() as client:
         # Create asset with unique identifier
         item = FAAssetCreateItem(display_name="Provider Test", identifier=unique_id("PROVTEST"), currency="USD")
-        create_resp = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(), timeout=TIMEOUT)
+        create_resp = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"), timeout=TIMEOUT)
         data = FABulkAssetCreateResponse(**create_resp.json())
         result = data.results[0]
         assert result.success, f"Asset creation failed: {result.message}"
@@ -352,7 +352,7 @@ async def test_list_has_provider(test_server):
 
         # Assign provider
         item = FAProviderAssignmentItem(asset_id=asset_id, provider_code="yfinance", provider_params={})
-        assign_resp = await client.post(f"{API_BASE}/assets/provider/bulk", json=FABulkAssignRequest(assignments=[item]).model_dump(), timeout=TIMEOUT)
+        assign_resp = await client.post(f"{API_BASE}/assets/provider/bulk", json=FABulkAssignRequest(assignments=[item]).model_dump(mode="json"), timeout=TIMEOUT)
         assert assign_resp.status_code == 200, f"Expected 200, got {assign_resp.status_code}, error message: {assign_resp.text}"
         resp_data = FABulkAssignResponse(**assign_resp.json())
         print_info(f"Provider assignment: {resp_data}")
@@ -378,14 +378,14 @@ async def test_delete_success(test_server):
             FAAssetCreateItem(display_name="Delete 1", identifier=unique_id("DEL1"), currency="USD"),
             FAAssetCreateItem(display_name="Delete 2", identifier=unique_id("DEL2"), currency="USD")
             ]
-        create_resp = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(), timeout=TIMEOUT)
+        create_resp = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
         assert create_resp.status_code == 201, f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
 
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_ids = [r.asset_id for r in create_data.results]
 
         # Delete them
-        response = await client.request("DELETE", f"{API_BASE}/assets/bulk", json=FABulkAssetDeleteRequest(asset_ids=asset_ids).model_dump(), timeout=TIMEOUT)
+        response = await client.request("DELETE", f"{API_BASE}/assets/bulk", json=FABulkAssetDeleteRequest(asset_ids=asset_ids).model_dump(mode="json"), timeout=TIMEOUT)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = FABulkAssetDeleteResponse(**response.json())
         assert data.success_count == 2, f"Expected success_count=2, got {data.success_count}"
@@ -401,7 +401,7 @@ async def test_delete_cascade(test_server):
     async with httpx.AsyncClient() as client:
         # Step 1: Create asset
         item_fa_create = FAAssetCreateItem(display_name="Cascade Test", identifier=unique_id("CASCTEST"), currency="USD")
-        create_resp = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item_fa_create]).model_dump(), timeout=TIMEOUT)
+        create_resp = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item_fa_create]).model_dump(mode="json"), timeout=TIMEOUT)
         assert create_resp.status_code == 201, f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
 
         create_data = FABulkAssetCreateResponse(**create_resp.json())
@@ -411,7 +411,7 @@ async def test_delete_cascade(test_server):
 
         # Step 2: Assign provider
         item_fa_provider = FAProviderAssignmentItem(asset_id=asset_id, provider_code="yfinance", provider_params={})
-        provider_resp = await client.post(f"{API_BASE}/assets/provider/bulk", json=FABulkAssignRequest(assignments=[item_fa_provider]).model_dump(), timeout=TIMEOUT)
+        provider_resp = await client.post(f"{API_BASE}/assets/provider/bulk", json=FABulkAssignRequest(assignments=[item_fa_provider]).model_dump(mode="json"), timeout=TIMEOUT)
         assert provider_resp.status_code == 200, f"Provider assignment failed: {provider_resp.status_code}: {provider_resp.text}"
         provider_data = FABulkAssignResponse(**provider_resp.json())
         assert provider_data.results[0].success, f"Provider assignment failed: {provider_data.results[0].message}"
@@ -425,7 +425,7 @@ async def test_delete_cascade(test_server):
         print_info(f"  Price added for date: {price_item.date}")
 
         # Step 4: Delete asset (should CASCADE delete provider_assignment + price_history)
-        delete_resp = await client.request("DELETE", f"{API_BASE}/assets/bulk", json=FABulkAssetDeleteRequest(asset_ids=[asset_id]).model_dump(), timeout=TIMEOUT)
+        delete_resp = await client.request("DELETE", f"{API_BASE}/assets/bulk", json=FABulkAssetDeleteRequest(asset_ids=[asset_id]).model_dump(mode="json"), timeout=TIMEOUT)
         assert delete_resp.status_code == 200, f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
 
         delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
@@ -444,7 +444,7 @@ async def test_delete_partial_success(test_server):
     async with httpx.AsyncClient() as client:
         # Step 1: Create one valid asset
         item = FAAssetCreateItem(display_name="Delete Partial", identifier=unique_id("DELPART"), currency="USD")
-        create_resp = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(), timeout=TIMEOUT)
+        create_resp = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"), timeout=TIMEOUT)
         assert create_resp.status_code == 201, f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
 
         create_data = FABulkAssetCreateResponse(**create_resp.json())
@@ -456,7 +456,7 @@ async def test_delete_partial_success(test_server):
         print_info(f"  Invalid asset ID: {invalid_id}")
 
         # Step 2: Try to delete both (one valid, one invalid)
-        delete_resp = await client.request("DELETE", f"{API_BASE}/assets/bulk", json=FABulkAssetDeleteRequest(asset_ids=[valid_id, invalid_id]).model_dump(), timeout=TIMEOUT)
+        delete_resp = await client.request("DELETE", f"{API_BASE}/assets/bulk", json=FABulkAssetDeleteRequest(asset_ids=[valid_id, invalid_id]).model_dump(mode="json"), timeout=TIMEOUT)
         assert delete_resp.status_code == 200, f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
 
         delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
@@ -478,4 +478,4 @@ async def test_delete_partial_success(test_server):
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    pytest.main([__file__, "-v", "-s"])
