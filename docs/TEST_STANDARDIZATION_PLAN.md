@@ -301,7 +301,7 @@ For each old-style test file:
 per trovare le classi ancora non convertite:
 
 ```bash
-find backend/test_scripts -name "*test*.py" -exec grep -l "return" {} \; | xargs grep -L "assert"
+find backend/test_scripts -mindepth 2 -name "*test*.py" -exec grep -l "return" {} \; | xargs grep -L "assert"
 ```
 
 ## 📊 Progress Tracking
@@ -330,14 +330,14 @@ find backend/test_scripts -name "*test*.py" -exec grep -l "return" {} \; | xargs
   - [x] `test_synthetic_yield.py` - Converted (decorators added, main removed) ✅
   - **Result**: ALL 7 service tests now use pytest!
   
-- [ ] **Batch 3: API (3)** ⏳ NEXT
+- [x] **Batch 3: API (3)** ✅ COMPLETE
   - [x] `test_assets_crud.py` - Discovered a missing deletion cascade constrain when one asset is deleted and still present price associated. Fixed DB schema.
   - [x] `test_assets_metadata.py`
-  - [ ] `test_fx_api.py`
+  - [x] `test_fx_api.py`
   
 - [ ] Batch 4: DB (4) - `test_fx_rates_persistence`, `test_numeric_truncation`, `test_transaction_*`
 
-- [x] Batch 5: External (2) - `test_asset_providers`, `test_fx_providers` (merged fx tests)
+- [x] Batch 5: External (2) - `test_asset_providers`, `test_fx_providers` (merged fx tests) ✅ COMPLETE
   - [x] `test_asset_providers.py`
   - [x] `test_fx_providers.py`
 ---
