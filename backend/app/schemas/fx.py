@@ -328,6 +328,7 @@ class FXCreatePairSourcesResponse(BaseModel):
     errors: list[str] = Field(default_factory=list, description="Errors encountered")
 
 
+# TODO: trasformare la lista di dict in una lista di un modello dedicato
 class FXDeletePairSourcesRequest(BaseModel):
     """Request model for deleting pair sources."""
     sources: list[dict] = Field(
