@@ -88,7 +88,7 @@ def print_port_occupied_help(port: int, process_info: str):
     print(f"{'=' * 60}\n")
 
 
-class TestServerManager:
+class _TestingServerManager:
     """
     Manages backend server lifecycle for tests.
 

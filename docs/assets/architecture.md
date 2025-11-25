@@ -383,6 +383,7 @@ CREATE TABLE price_history (
 - **close**: Primary field used for portfolio calculations
 - **adjusted_close**: Accounts for splits and dividends (optional)
 - **Daily-point policy**: Exactly one record per (asset_id, date)
+- **Delete cascade**: Prices removed if asset is deleted
 
 ### Table: `asset_provider_assignments`
 

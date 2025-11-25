@@ -765,10 +765,10 @@ def api_assets_crud(verbose: bool = False) -> bool:
     print_info("Note: Server will be automatically started and stopped by test")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_api.test_assets_crud"],
+        ["pipenv", "run", "pytest", "backend/test_scripts/test_api/test_assets_crud.py", "-v"],
         "Assets CRUD API tests",
         verbose=verbose
-        )
+    )
 
 
 def api_test(verbose: bool = False) -> bool:

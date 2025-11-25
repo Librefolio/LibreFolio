@@ -24,7 +24,7 @@ from typing import Any
 
 import pycountry
 
-from backend.app.utils.financial_math import parse_decimal_value
+from backend.app.utils.decimal_utils import parse_decimal_value
 
 # Tolerance for sum validation (1e-6 = 0.000001)
 SUM_TOLERANCE = Decimal("0.000001")
@@ -103,40 +103,7 @@ def normalize_country_to_iso3(country_input: str) -> str:
         pass
 
     # Not found
-    raise ValueError(
-        f"Country '{country_input}' not found. "
-        f"Please use ISO-3166-A2 (e.g., US), ISO-3166-A3 (e.g., USA), or full country name."
-        )
-
-
-def parse_decimal_weight(value: Any) -> Decimal:
-    """
-    Parse weight value to Decimal.
-
-    Wrapper around parse_decimal_value() from financial_math for consistency.
-
-    Args:
-        value: Weight value (int, float, str, or Decimal)
-
-    Returns:
-        Decimal representation
-
-    Raises:
-        ValueError: If value cannot be parsed
-
-    Examples:
-        >>> parse_decimal_weight("0.6")
-        Decimal("0.6")
-        >>> parse_decimal_weight(0.3)
-        Decimal("0.3")
-        >>> parse_decimal_weight(Decimal("0.1"))
-        Decimal("0.1")
-    """
-    try:
-        return parse_decimal_value(value)
-    except Exception as e:
-        raise ValueError(f"Invalid weight value '{value}': {e}")
-
+    raise ValueError(f"Country '{country_input}' not found. Please use ISO-3166-A2 (e.g., US), ISO-3166-A3 (e.g., USA), or full country name.")
 
 def quantize_weight(value: Decimal) -> Decimal:
     """
@@ -208,16 +175,12 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
 
         # Check for duplicates (after normalization)
         if iso3_code in normalized:
-            raise ValueError(
-                f"Duplicate country after normalization: '{country_input}' → {iso3_code} "
-                f"(already present in geographic area)"
-                )
+            raise ValueError(f"Duplicate country after normalization: '{country_input}' → {iso3_code} (already present in geographic area)")
 
         # Parse weight
-        try:
-            weight = parse_decimal_weight(weight_value)
-        except ValueError as e:
-            raise ValueError(f"Invalid weight for country '{country_input}': {e}")
+        weight = parse_decimal_value(weight_value)
+        if weight is None:
+            raise ValueError(f"Weight for country '{country_input}' cannot be '{weight_value}'")
 
         # Validate weight is non-negative
         if weight < 0:
@@ -232,37 +195,28 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
     sum_diff = abs(total_sum - TARGET_SUM)
 
     if sum_diff > SUM_TOLERANCE:
-        raise ValueError(
-            f"Geographic area weights must sum to 1.0 (±{SUM_TOLERANCE}). "
-            f"Current sum: {total_sum} (difference: {sum_diff})"
-            )
+        raise ValueError(f"Geographic area weights must sum to 1.0 (±{SUM_TOLERANCE}). Current sum: {total_sum} (difference: {sum_diff})")
 
     # Step 4: Quantize all weights to 4 decimals
-    quantized: dict[str, Decimal] = {
-        country: quantize_weight(weight)
-        for country, weight in normalized.items()
-        }
+    quantized: dict[str, Decimal] = {country: quantize_weight(weight) for country, weight in normalized.items()}
 
     # Step 5: Renormalize if sum != 1.0 after quantization
     quantized_sum = sum(quantized.values())
 
     if quantized_sum != TARGET_SUM:
-        # Find smallest weight (will be adjusted)
+        # Find the smallest weight (will be adjusted)
         min_country = min(quantized, key=quantized.get)
         min_weight = quantized[min_country]
 
         # Calculate adjustment needed
         adjustment = TARGET_SUM - quantized_sum
 
-        # Apply adjustment to smallest weight
+        # Apply adjustment to the smallest weight
         adjusted_weight = min_weight + adjustment
 
         # Validate adjustment doesn't make weight negative
         if adjusted_weight < 0:
-            raise ValueError(
-                f"Cannot renormalize: adjustment would make weight negative. "
-                f"Country: {min_country}, Original: {min_weight}, Adjustment: {adjustment}"
-                )
+            raise ValueError(f"Cannot renormalize: adjustment would make weight negative. Country: {min_country}, Original: {min_weight}, Adjustment: {adjustment}")
 
         # Apply adjustment
         quantized[min_country] = adjusted_weight
@@ -271,9 +225,6 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
     final_sum = sum(quantized.values())
     if final_sum != TARGET_SUM:
         # This should never happen, but be defensive
-        raise ValueError(
-            f"Internal error: final sum is {final_sum} after renormalization "
-            f"(expected {TARGET_SUM})"
-            )
+        raise ValueError(f"Internal error: final sum is {final_sum} after renormalization (expected {TARGET_SUM})")
 
     return quantized

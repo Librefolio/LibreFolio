@@ -23,6 +23,8 @@ Covers upsert, delete, and query operations for asset price history.
 - FA: 3 levels (Item → Asset → Bulk) - multiple items per asset, multiple assets per request
 - FX: 2 levels (Item → Bulk) - direct item-to-bulk without intermediate grouping
 """
+from __future__ import annotations
+
 from datetime import date as date_type
 from decimal import Decimal
 from typing import Optional, List

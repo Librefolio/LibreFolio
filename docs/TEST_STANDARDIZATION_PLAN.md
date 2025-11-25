@@ -331,7 +331,7 @@ find backend/test_scripts -name "*test*.py" -exec grep -l "return" {} \; | xargs
   - **Result**: ALL 7 service tests now use pytest!
   
 - [ ] **Batch 3: API (3)** ⏳ NEXT
-  - [ ] `test_assets_crud.py`
+  - [x] `test_assets_crud.py` - Discovered a missing deletion cascade constrain when one asset is deleted and still present price associated. Fixed DB schema.
   - [ ] `test_assets_metadata.py`
   - [ ] `test_fx_api.py`
   

@@ -23,8 +23,8 @@ from backend.app.schemas.assets import (
     # Asset CRUD schemas
     FABulkAssetCreateRequest,
     FABulkAssetCreateResponse,
-    FAAssetListFilters,
-    FAAssetListResponse,
+    FAAinfoFiltersRequest,
+    FAinfoResponse,
     FABulkAssetDeleteRequest,
     FABulkAssetDeleteResponse,
     )
@@ -123,7 +123,7 @@ async def create_assets_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/list", response_model=List[FAAssetListResponse])
+@router.get("/list", response_model=List[FAinfoResponse])
 async def list_assets(
     currency: Optional[str] = Query(None, description="Filter by currency (e.g., USD)"),
     asset_type: Optional[str] = Query(None, description="Filter by asset type (e.g., STOCK)"),
@@ -152,7 +152,7 @@ async def list_assets(
     ```
     """
     try:
-        filters = FAAssetListFilters(
+        filters = FAAinfoFiltersRequest(
             currency=currency,
             asset_type=asset_type,
             valuation_model=valuation_model,
@@ -259,15 +259,10 @@ async def assign_providers_bulk(
     try:
         assignments = [item.model_dump() for item in request.assignments]
         results = await AssetSourceManager.bulk_assign_providers(assignments, session)
-
         success_count = sum(1 for r in results if r["success"])
-
-        return FABulkAssignResponse(
-            results=[FAProviderAssignmentResult(**r) for r in results],
-            success_count=success_count
-            )
+        return FABulkAssignResponse(results=[FAProviderAssignmentResult(**r) for r in results],success_count=success_count)
     except Exception as e:
-        logger.error(f"Error in bulk assign providers: {e}")
+        logger.error(f"Error in bulk assign providers: {e}, result: {results}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

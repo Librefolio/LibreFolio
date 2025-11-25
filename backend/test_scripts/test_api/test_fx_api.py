@@ -21,7 +21,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from backend.test_scripts.test_server_helper import TestServerManager, TEST_API_BASE_URL
+from backend.test_scripts.test_server_helper import _TestingServerManager, TEST_API_BASE_URL
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,
@@ -2609,7 +2609,7 @@ def run_all_tests():
         )
 
     # Use context manager for server - will start and stop automatically
-    with TestServerManager() as server_manager:
+    with _TestingServerManager() as server_manager:
         print_section("Backend Server Management")
 
         # Show database and port info
