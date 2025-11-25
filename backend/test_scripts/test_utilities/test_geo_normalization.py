@@ -10,7 +10,6 @@ import pytest
 
 from backend.app.utils.geo_normalization import (
     normalize_country_to_iso3,
-    parse_decimal_weight,
     quantize_weight,
     validate_and_normalize_geographic_area,
     )
@@ -44,26 +43,6 @@ def test_normalize_country_to_iso3():
     # Empty string raises ValueError
     with pytest.raises(ValueError):
         normalize_country_to_iso3("")
-
-
-def test_parse_decimal_weight():
-    """Test weight parsing to Decimal."""
-    # String to Decimal
-    assert parse_decimal_weight("0.6") == Decimal("0.6")
-    assert parse_decimal_weight("0.333333") == Decimal("0.333333")
-
-    # Float to Decimal
-    result = parse_decimal_weight(0.6)
-    assert isinstance(result, Decimal)
-
-    # Int to Decimal
-    assert parse_decimal_weight(1) == Decimal("1")
-    assert parse_decimal_weight(0) == Decimal("0")
-
-    # Decimal passthrough
-    value = Decimal("0.6")
-    assert parse_decimal_weight(value) == value
-
 
 def test_quantize_weight():
     """Test weight quantization to 4 decimals."""

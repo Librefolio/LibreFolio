@@ -23,6 +23,7 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 - Assignment Operations: Assign/remove providers to/from assets
 - Bulk Operations: Batch processing for efficiency
 """
+from __future__ import annotations
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -111,6 +112,8 @@ class FAProviderAssignmentResult(BaseModel):
     asset_id: int
     success: bool
     message: str
+    metadata_updated: Optional[bool] = None
+    metadata_changes: Optional[List[dict]] = None
 
 
 class FABulkAssignResponse(BaseModel):

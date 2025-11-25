@@ -40,8 +40,7 @@ from backend.app.schemas import FACurrentValue, FAHistoricalData
 from backend.app.schemas.assets import FAMetadataRefreshResult
 from backend.app.schemas.assets import FAPricePoint, BackwardFillInfo
 from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.app.utils.decimal_utils import truncate_priceHistory
-from backend.app.utils.financial_math import parse_decimal_value
+from backend.app.utils.decimal_utils import truncate_priceHistory, parse_decimal_value
 
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
@@ -219,7 +218,7 @@ class AssetSourceManager:
     # ========================================================================
     # PROVIDER ASSIGNMENT METHODS
     # ========================================================================
-
+    # TODO: vedere se 1° dict --> FAProviderAssignmentItem e 2° dict --> FAProviderAssignmentResult
     @staticmethod
     async def bulk_assign_providers(
         assignments: list[dict],

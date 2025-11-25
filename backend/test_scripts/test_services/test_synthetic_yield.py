@@ -8,7 +8,6 @@ Tests cover:
 - Integration with get_prices() - automatic provider delegation
 - Utility functions (find_active_period)
 """
-import asyncio
 import os
 from datetime import date
 from decimal import Decimal
@@ -175,96 +174,6 @@ async def test_provider_private_calculate_value():
 
     diff = abs(value - expected_value)
     assert diff < Decimal("0.01"), f"Value calculation mismatch: expected {expected_value}, got {value}, diff {diff}"
-
-
-# ============================================================================
-# TEST RUNNER
-# ============================================================================
-
-
-def print_test_result(test_name: str, result: dict):
-    """Print test result with colored output."""
-    status = "✅ PASSED" if result["passed"] else "❌ FAILED"
-    print(f"\n{status} - {test_name}")
-
-    if "message" in result:
-        print(f"  Message: {result['message']}")
-
-    if "details" in result:
-        for detail in result["details"]:
-            status_icon = "✓" if detail["passed"] else "✗"
-            print(f"    {status_icon} {detail['test']}: expected={detail['expected']}, actual={detail['actual']}")
-
-    if not result["passed"] and "expected" in result and "actual" in result:
-        print(f"  Expected: {result['expected']}")
-        print(f"  Actual: {result['actual']}")
-
-
-# ============================================================================
-# TEST ORCHESTRATION (LEGACY)
-# ============================================================================
-# NOTE: This run_all_tests() function is LEGACY code from before pytest migration.
-# This function is kept for backward compatibility with manual execution
-# (e.g., `python -m backend.test_scripts.test_services.test_synthetic_yield`),
-# but the recommended way is: pytest backend/test_scripts/test_services/test_synthetic_yield.py
-# TODO: rimuovere test orchestration legacy una volta che tutti i test sono migrati a pytest.
-async def run_all_tests():
-    """Run all synthetic yield tests."""
-    print("=" * 80)
-    print("SYNTHETIC YIELD TEST SUITE (Provider-Based)")
-    print("=" * 80)
-
-    tests = {
-        # Provider tests
-        "Test 1: Provider Param Validation (Pydantic)": test_provider_validate_params,
-        "Test 2: Provider get_current_value()": test_provider_get_current_value,
-        "Test 3: Provider get_history_value()": test_provider_get_history_value,
-        "Test 4: Provider _calculate_value_for_date()": test_provider_private_calculate_value,
-
-        # Utility tests (require Pydantic models)
-        "Test 5: find_active_period() with Pydantic": test_find_active_period_with_pydantic,
-
-        # Integration tests
-        "Test 6: get_prices() Integration": test_get_prices_integration,
-        "Test 7: No DB Storage (On-Demand)": test_no_db_storage,
-        "Test 8: Pydantic Schema Validation Error": test_pydantic_schema_validation,
-        }
-
-    results = {}
-
-    for test_name, test_func in tests.items():
-        try:
-            if asyncio.iscoroutinefunction(test_func):
-                result = await test_func()
-            else:
-                result = test_func()
-
-            results[test_name] = result
-            print_test_result(test_name, result)
-
-        except Exception as e:
-            results[test_name] = {"passed": False, "message": f"Exception: {e}"}
-            print_test_result(test_name, results[test_name])
-
-    # Summary
-    print("\n" + "=" * 80)
-    print("SUMMARY")
-    print("=" * 80)
-
-    passed = sum(1 for r in results.values() if r["passed"])
-    total = len(results)
-
-    print(f"Tests passed: {passed}/{total}")
-
-    if passed == total:
-        print("✅ ALL TESTS PASSED")
-    else:
-        print("❌ SOME TESTS FAILED")
-        for name, result in results.items():
-            if not result["passed"]:
-                print(f"  - {name}")
-
-    return passed == total
 
 
 if __name__ == "__main__":

@@ -42,6 +42,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # Import from common and prices modules
 from backend.app.schemas.common import BackwardFillInfo
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
+from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
 from backend.app.utils.validation_utils import validate_compound_frequency, normalize_currency_code
 
 
@@ -425,7 +426,6 @@ class FAClassificationParams(BaseModel):
         """Validate and normalize geographic area distribution."""
         if v is None:
             return None
-        from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
         return validate_and_normalize_geographic_area(v)
 
 
@@ -607,7 +607,7 @@ class FABulkAssetCreateResponse(BaseModel):
     failed_count: int = Field(..., description="Number of failed asset creations")
 
 
-class FAAssetListFilters(BaseModel):
+class FAAinfoFiltersRequest(BaseModel):
     """Filters for asset list query (used internally, not in request body)."""
     model_config = ConfigDict(extra="forbid")
 
@@ -618,8 +618,8 @@ class FAAssetListFilters(BaseModel):
     search: Optional[str] = Field(None, description="Search in display_name or identifier")
 
 
-class FAAssetListResponse(BaseModel):
-    """Single asset in list response."""
+class FAinfoResponse(BaseModel):
+    """Single asset info, near equivalent to Asset DB model. Create new model to decouple from ORM."""
     model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., description="Asset ID")
@@ -692,8 +692,8 @@ __all__ = [
     "FABulkAssetCreateRequest",
     "FAAssetCreateResult",
     "FABulkAssetCreateResponse",
-    "FAAssetListFilters",
-    "FAAssetListResponse",
+    "FAAinfoFiltersRequest",
+    "FAinfoResponse",
     "FABulkAssetDeleteRequest",
     "FAAssetDeleteResult",
     "FABulkAssetDeleteResponse",
