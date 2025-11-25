@@ -166,4 +166,4 @@ async def test_e2e_mixed_schedule_simple_compound():
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    pytest.main([__file__, "-v", "-s"])

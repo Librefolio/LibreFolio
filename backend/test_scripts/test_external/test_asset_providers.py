@@ -359,4 +359,4 @@ async def test_error_handling(provider_code: str):
         raise
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    pytest.main([__file__, "-v", "-s"])

@@ -351,4 +351,4 @@ def test_find_active_period_with_compound_monthly():
     assert period.compound_frequency == CompoundFrequency.MONTHLY
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    pytest.main([__file__, "-v", "-s"])

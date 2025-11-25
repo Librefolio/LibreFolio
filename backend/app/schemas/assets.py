@@ -392,7 +392,7 @@ class FAScheduledInvestmentParams(BaseModel):
 # ============================================================================
 # ASSET METADATA & CLASSIFICATION
 # ============================================================================
-
+# TODO: convertire geographic_area a una classe pydantic e usarla qui
 class FAClassificationParams(BaseModel):
     """
     Asset classification metadata.
@@ -428,7 +428,7 @@ class FAClassificationParams(BaseModel):
             return None
         return validate_and_normalize_geographic_area(v)
 
-
+# TODO: convertire geographic_area a una classe pydantic e usarla qui
 class FAPatchMetadataRequest(BaseModel):
     """
     PATCH metadata request (partial update).
