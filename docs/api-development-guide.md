@@ -1053,7 +1053,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from backend.test_scripts.test_server_helper import TestServerManager, TEST_API_BASE_URL
+from backend.test_scripts.test_server_helper import _TestingServerManager, TEST_API_BASE_URL
 from backend.test_scripts.test_utils import (
     print_error, print_info, print_section, print_success,
     print_test_header, print_test_summary, exit_with_result
@@ -1239,7 +1239,7 @@ def run_all_tests():
         prerequisites=["Test server will be started automatically"]
         )
 
-    with TestServerManager() as server_manager:
+    with _TestingServerManager() as server_manager:
         print_section("Backend Server Management")
 
         print_info("Starting test server...")

@@ -5,12 +5,10 @@ All test is independent of the others, so help use pytest features.
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from backend.app.schemas.assets import FAInterestRatePeriod, FALateInterestConfig, CompoundingType, CompoundFrequency, DayCountConvention
-from backend.app.utils.financial_math import (
-    find_active_period,
-    parse_decimal_value,
-    calculate_day_count_fraction,
-    )
+from backend.app.utils.financial_math import find_active_period,calculate_day_count_fraction
 
 
 # ============================================================================
@@ -351,45 +349,6 @@ def test_find_active_period_with_compound_monthly():
     assert period is not None
     assert period.compounding == CompoundingType.COMPOUND
     assert period.compound_frequency == CompoundFrequency.MONTHLY
-
-
-# ============================================================================
-# TESTS: parse_decimal_value helper
-# ============================================================================
-
-def test_parse_decimal_value_from_decimal():
-    """Test parsing already Decimal value."""
-    value = Decimal("123.456")
-    result = parse_decimal_value(value)
-    assert result == value
-
-
-def test_parse_decimal_value_from_string():
-    """Test parsing string to Decimal."""
-    value = "123.456"
-    result = parse_decimal_value(value)
-    assert result == Decimal("123.456")
-
-
-def test_parse_decimal_value_from_int():
-    """Test parsing int to Decimal."""
-    value = 123
-    result = parse_decimal_value(value)
-    assert result == Decimal("123")
-
-
-def test_parse_decimal_value_from_float():
-    """Test parsing float to Decimal."""
-    value = 123.456
-    result = parse_decimal_value(value)
-    assert isinstance(result, Decimal)
-
-
-def test_parse_decimal_value_none():
-    """Test parsing None returns None."""
-    result = parse_decimal_value(None)
-    assert result is None
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

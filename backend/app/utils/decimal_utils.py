@@ -17,7 +17,7 @@ Usage:
     # Returns: Decimal("175.123456")
 """
 from decimal import Decimal, ROUND_DOWN
-from typing import Type, Tuple
+from typing import Type, Tuple, Optional
 
 from sqlalchemy import Numeric
 from sqlmodel import SQLModel
@@ -127,3 +127,24 @@ def truncate_priceHistory(value: Decimal, column_name: str = "close") -> Decimal
 def truncate_fx_rate(value: Decimal) -> Decimal:
     """Truncate value with the precision used in DB fx_rates.rate column."""
     return truncate_to_db_precision(value, FxRate, "rate")
+
+
+
+def parse_decimal_value(value) -> Optional[Decimal]:
+    """
+    Convert input to Decimal safely.
+
+    Args:
+        value: Input value (Decimal, int, float, str, or None)
+
+    Returns:
+        Decimal or None
+    """
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None

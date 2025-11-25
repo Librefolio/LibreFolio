@@ -12,6 +12,7 @@ from backend.app.utils.decimal_utils import (
     truncate_to_db_precision,
     truncate_priceHistory,
     truncate_fx_rate,
+    parse_decimal_value,
     )
 
 
@@ -134,6 +135,44 @@ def test_no_false_update_detection():
 
     # They should match after truncation
     assert truncated == db_value
+
+# ============================================================================
+# TESTS: parse_decimal_value helper
+# ============================================================================
+
+def test_parse_decimal_value_from_decimal():
+    """Test parsing already Decimal value."""
+    value = Decimal("123.456")
+    result = parse_decimal_value(value)
+    assert result == value
+
+
+def test_parse_decimal_value_from_string():
+    """Test parsing string to Decimal."""
+    value = "123.456"
+    result = parse_decimal_value(value)
+    assert result == Decimal("123.456")
+
+
+def test_parse_decimal_value_from_int():
+    """Test parsing int to Decimal."""
+    value = 123
+    result = parse_decimal_value(value)
+    assert result == Decimal("123")
+
+
+def test_parse_decimal_value_from_float():
+    """Test parsing float to Decimal."""
+    value = 123.456
+    result = parse_decimal_value(value)
+    assert isinstance(result, Decimal)
+
+
+def test_parse_decimal_value_none():
+    """Test parsing None returns None."""
+    result = parse_decimal_value(None)
+    assert result is None
+
 
 
 if __name__ == "__main__":

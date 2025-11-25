@@ -153,7 +153,7 @@ def upgrade() -> None:
                                 currency          VARCHAR  NOT NULL,
                                 source_plugin_key VARCHAR  NOT NULL,
                                 fetched_at        DATETIME NOT NULL,
-                                FOREIGN KEY (asset_id) REFERENCES assets (id),
+                                FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
                                 CONSTRAINT uq_price_history_asset_date UNIQUE (asset_id, date)
                             )"""))
     print("  ✓ Table created")

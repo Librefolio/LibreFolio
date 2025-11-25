@@ -15,8 +15,8 @@ from backend.app.schemas.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
     FAAssetCreateResult,
-    FAAssetListFilters,
-    FAAssetListResponse,
+    FAAinfoFiltersRequest,
+    FAinfoResponse,
     FABulkAssetDeleteResponse,
     FAAssetDeleteResult,
     )
@@ -126,9 +126,9 @@ class AssetCRUDService:
 
     @staticmethod
     async def list_assets(
-        filters: FAAssetListFilters,
+        filters: FAAinfoFiltersRequest,
         session: AsyncSession
-        ) -> List[FAAssetListResponse]:
+        ) -> List[FAinfoResponse]:
         """
         List assets with optional filters.
 
@@ -187,7 +187,7 @@ class AssetCRUDService:
             asset = row[0]  # Asset object
             provider_id = row[1]  # provider_id from join
 
-            assets.append(FAAssetListResponse(
+            assets.append(FAinfoResponse(
                 id=asset.id,
                 display_name=asset.display_name,
                 identifier=asset.identifier,

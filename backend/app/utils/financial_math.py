@@ -349,23 +349,3 @@ def find_active_period(
 
     # Step 3: No applicable period found
     return None
-
-
-def parse_decimal_value(value) -> Optional[Decimal]:
-    """
-    Convert input to Decimal safely.
-
-    Args:
-        value: Input value (Decimal, int, float, str, or None)
-
-    Returns:
-        Decimal or None
-    """
-    if value is None:
-        return None
-    if isinstance(value, Decimal):
-        return value
-    try:
-        return Decimal(str(value))
-    except Exception:
-        return None
