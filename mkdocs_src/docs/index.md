@@ -1,18 +1,23 @@
-# LibreFolio Documentation (WIP)
-> ℹ️ This homepage and its subsections are placeholders. Detailed content will be added during the documentation phase.
+# Welcome to LibreFolio Documentation
 
-- **Build documentation**: `./dev.sh info:mk build`
-- **Run tests**: `./test_runner.py all`
-- **Start backend**: `./dev.sh server`
-- **Install dependencies**: `pipenv install`
+![LibreFolio Logo](static/logo.png)
 
-## Quick Start
+**LibreFolio** is a self-hosted, open-source application designed for private and personal tracking of financial investments.
 
-2. **User Manual** – Guides for end-users to operate the GUI and CLI tooling.
-1. **Developer Manual** – Technical reference for backend and frontend developers.
+This portal contains all the documentation for users, developers, and contributors.
 
-Welcome to the LibreFolio documentation portal. This site is divided into two main sections:
+## 🚀 Quick Links
 
-![LibreFolio Logo](../assets/logo.png){ width=200 }
+- **[Getting Started](./getting-started/introduction.md)**: New to LibreFolio? Start here!
+- **[Developer Manual](./developer/index.md)**: For contributors and developers.
+- **[User Manual](./user/index.md)**: For end-users of the application.
 
+## 🛠️ How to get information about a sub-system
 
+To get information about a specific sub-system an Agent can:
+
+1. Look at the project structure using `ls -R` command
+2. Find the correct documentation page and read it
+3. Read the code of the file of interest
+4. If there are any tests, read them to understand the usage of the file
+5. Run the tests to validate the assumptions
