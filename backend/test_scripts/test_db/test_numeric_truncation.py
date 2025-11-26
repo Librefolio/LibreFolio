@@ -19,11 +19,12 @@ This ensures:
 - Database truncation matches our expectations
 - No false update detections in sync operations
 """
-import asyncio
 import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+
+import pytest
 
 from backend.app.utils.datetime_utils import utcnow
 
@@ -32,7 +33,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup test database BEFORE importing app modules
-from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH
+from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
@@ -43,21 +44,6 @@ from sqlmodel import select
 from backend.app.db import models
 from backend.app.db.session import get_async_engine
 from backend.app.utils.decimal_utils import truncate_to_db_precision, get_model_column_precision, truncate_fx_rate
-from backend.test_scripts.test_db_config import initialize_test_database
-
-
-def print_header(text: str, level: int = 1):
-    """Print formatted header."""
-    if level == 1:
-        print("\n" + "=" * 60)
-        print(f"  {text}")
-        print("=" * 60)
-    elif level == 2:
-        print("\n" + "-" * 60)
-        print(f"  {text}")
-        print("-" * 60)
-    else:
-        print(f"\n{text}")
 
 
 def discover_numeric_columns():
@@ -100,7 +86,7 @@ def discover_numeric_columns():
                         'column_name': column_name,
                         'precision': column.type.precision,
                         'scale': column.type.scale
-                        })
+                    })
 
     return numeric_columns
 
@@ -127,13 +113,10 @@ def generate_test_value(scale: int) -> Decimal:
     return Decimal(f"1.{decimal_part}")
 
 
-async def test_truncation_helpers():
+def test_truncation_helpers():
     """Test that get_column_decimal_precision and truncate_decimal_to_db_precision work correctly."""
-    print_header("Test 1: Truncation Helper Functions", level=2)
-
     columns = discover_numeric_columns()
-    passed = 0
-    failed = 0
+    assert len(columns) > 0, "No numeric columns found"
 
     for col_info in columns:
         model = col_info['model']
@@ -141,51 +124,34 @@ async def test_truncation_helpers():
         expected_precision = col_info['precision']
         expected_scale = col_info['scale']
 
-        try:
-            # Test get_column_decimal_precision
-            precision, scale = get_model_column_precision(model, column_name)
+        # Test get_column_decimal_precision
+        precision, scale = get_model_column_precision(model, column_name)
 
-            if precision != expected_precision or scale != expected_scale:
-                print(f"❌ {model.__name__}.{column_name}: Expected ({expected_precision}, {expected_scale}), "
-                      f"got ({precision}, {scale})")
-                failed += 1
-                continue
+        assert precision == expected_precision, \
+            f"{model.__name__}.{column_name}: Expected precision {expected_precision}, got {precision}"
+        assert scale == expected_scale, \
+            f"{model.__name__}.{column_name}: Expected scale {expected_scale}, got {scale}"
 
-            # Test truncate_decimal_to_db_precision
-            test_value = generate_test_value(scale)
-            truncated = truncate_to_db_precision(test_value, model, column_name)
+        # Test truncate_decimal_to_db_precision
+        test_value = generate_test_value(scale)
+        truncated = truncate_to_db_precision(test_value, model, column_name)
 
-            # Verify truncation
-            truncated_str = str(truncated)
-            if '.' in truncated_str:
-                actual_scale = len(truncated_str.split('.')[1])
-                if actual_scale != scale:
-                    print(f"❌ {model.__name__}.{column_name}: Truncated to {actual_scale} decimals, expected {scale}")
-                    print(f"   Input: {test_value}")
-                    print(f"   Output: {truncated}")
-                    failed += 1
-                    continue
+        # Verify truncation
+        truncated_str = str(truncated)
+        if '.' in truncated_str:
+            actual_scale = len(truncated_str.split('.')[1])
+            assert actual_scale == scale, \
+                f"{model.__name__}.{column_name}: Truncated to {actual_scale} decimals, expected {scale}\n" \
+                f"Input: {test_value}\nOutput: {truncated}"
 
-            print(f"✅ {model.__name__}.{column_name}: Numeric({precision}, {scale}) - Helper functions OK")
-            passed += 1
-
-        except Exception as e:
-            print(f"❌ {model.__name__}.{column_name}: {e}")
-            failed += 1
-
-    print(f"\nHelper Functions Test: {passed} passed, {failed} failed")
-    return failed == 0
+        print(f"✓ {model.__name__}.{column_name}: Numeric({precision}, {scale}) - Helper OK")
 
 
+@pytest.mark.asyncio
 async def test_database_truncation():
     """Test that database actually truncates values as expected."""
-    print_header("Test 2: Database Truncation Behavior", level=2)
-
     # We'll test FxRate.rate as it's easy to insert/read
     # Other tables have complex constraints that make testing harder
-
-    print("\nℹ️  Testing FxRate.rate column (Numeric(24, 10))")
-    print("   This validates that database truncation matches our helper")
 
     test_date = date(2025, 1, 1)
     test_base = "AAA"  # Alphabetically first
@@ -197,10 +163,8 @@ async def test_database_truncation():
     test_value = generate_test_value(scale)
     truncated_expected = truncate_to_db_precision(test_value, models.FxRate, 'rate')
 
-    print(f"\n   Test value (input):    {test_value}")
-    print(f"   Expected (truncated):  {truncated_expected}")
-
-    success = False
+    print(f"\nTest value (input):    {test_value}")
+    print(f"Expected (truncated):  {truncated_expected}")
 
     engine = get_async_engine()
     async with AsyncSession(engine) as session:
@@ -210,7 +174,7 @@ async def test_database_truncation():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote
-                )
+            )
             result = await session.execute(cleanup_stmt)
             existing = result.scalar_one_or_none()
             if existing:
@@ -225,7 +189,7 @@ async def test_database_truncation():
                 rate=test_value,  # Insert with extra precision
                 source=source,
                 fetched_at=utcnow()
-                )
+            )
             session.add(test_rate)
             await session.commit()
 
@@ -234,21 +198,17 @@ async def test_database_truncation():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote
-                )
+            )
             result = await session.execute(stmt)
             stored_rate = result.scalar_one()
 
-            print(f"   Stored in DB:          {stored_rate.rate}")
+            print(f"Stored in DB:          {stored_rate.rate}")
 
             # Verify database truncated correctly
-            if stored_rate.rate == truncated_expected:
-                print("✅ Database truncation matches helper function")
-                success = True
-            else:
-                print(f"❌ Database truncation mismatch!")
-                print(f"   Expected: {truncated_expected}")
-                print(f"   Got:      {stored_rate.rate}")
-                success = False
+            assert stored_rate.rate == truncated_expected, \
+                f"Database truncation mismatch!\n" \
+                f"Expected: {truncated_expected}\n" \
+                f"Got:      {stored_rate.rate}"
 
         finally:
             # Cleanup - make sure we delete even if test fails
@@ -257,7 +217,7 @@ async def test_database_truncation():
                     models.FxRate.date == test_date,
                     models.FxRate.base == test_base,
                     models.FxRate.quote == test_quote
-                    )
+                )
                 result = await session.execute(cleanup_stmt)
                 stored_rate = result.scalar_one_or_none()
                 if stored_rate:
@@ -267,15 +227,10 @@ async def test_database_truncation():
                 print(f"⚠️  Cleanup warning: {e}")
                 await session.rollback()
 
-    return success
 
-
+@pytest.mark.asyncio
 async def test_no_false_updates():
     """Test that identical truncated values don't trigger false updates."""
-    print_header("Test 3: No False Update Detection", level=2)
-
-    print("\nℹ️  Testing that re-syncing identical values doesn't report changes")
-
     test_date = date(2025, 1, 2)
     test_base = "AAA"
     test_quote = "ZZZ"
@@ -286,10 +241,8 @@ async def test_no_false_updates():
     test_value = generate_test_value(scale)
     truncated = truncate_fx_rate(test_value)
 
-    print(f"\n   Test value:       {test_value}")
-    print(f"   Truncated value:  {truncated}")
-
-    success = False
+    print(f"\nTest value:       {test_value}")
+    print(f"Truncated value:  {truncated}")
 
     engine = get_async_engine()
     async with AsyncSession(engine) as session:
@@ -299,7 +252,7 @@ async def test_no_false_updates():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote
-                )
+            )
             result = await session.execute(cleanup_stmt)
             existing = result.scalar_one_or_none()
             if existing:
@@ -314,7 +267,7 @@ async def test_no_false_updates():
                 rate=test_value,
                 source=source,
                 fetched_at=utcnow()
-                )
+            )
             session.add(test_rate)
             await session.commit()
 
@@ -323,28 +276,25 @@ async def test_no_false_updates():
                 models.FxRate.date == test_date,
                 models.FxRate.base == test_base,
                 models.FxRate.quote == test_quote
-                )
+            )
             result = await session.execute(stmt)
             stored_rate_1 = result.scalar_one()
             stored_value_1 = stored_rate_1.rate
 
-            print(f"   First insert:     {stored_value_1}")
+            print(f"First insert:     {stored_value_1}")
 
             # Now simulate a "sync" with a value that has extra precision
-            # but truncates to the SAME value (this is the key test!)
-            # Example: 1.0123456789 (stored) vs 1.01234567891234 (new, with extra decimals)
-            # Both should truncate to 1.0123456789
-            new_value_with_extra_precision = test_value  # This already has 15 decimals
+            # but truncates to the SAME value
+            new_value_with_extra_precision = test_value
 
-            print(f"   Sync new value:   {new_value_with_extra_precision} (has extra precision)")
+            print(f"Sync new value:   {new_value_with_extra_precision} (has extra precision)")
 
-            # IMPORTANT: Our sync code should truncate BEFORE comparing
-            # Let's simulate what our FIXED code does:
+            # Our sync code should truncate BEFORE comparing
             stored_truncated = truncate_fx_rate(stored_value_1)
             new_truncated = truncate_fx_rate(new_value_with_extra_precision)
 
-            print(f"   Stored truncated: {stored_truncated}")
-            print(f"   New truncated:    {new_truncated}")
+            print(f"Stored truncated: {stored_truncated}")
+            print(f"New truncated:    {new_truncated}")
 
             # This is the comparison our sync code should do
             if stored_truncated != new_truncated:
@@ -353,27 +303,19 @@ async def test_no_false_updates():
                 stored_rate_1.fetched_at = utcnow()
                 await session.commit()
                 await session.refresh(stored_rate_1)
-                print(f"   ✓ Update applied (values differ after truncation)")
+                print(f"✓ Update applied (values differ after truncation)")
                 updated = True
             else:
                 # Values are the same after truncation, should NOT update
-                print(f"   ✓ No update (values identical after truncation)")
+                print(f"✓ No update (values identical after truncation)")
                 updated = False
 
             # Verify the logic works correctly
-            if stored_truncated == new_truncated and not updated:
-                print("✅ No false update: Truncation comparison works correctly")
-                print(f"   Both truncate to: {stored_truncated}")
-                success = True
-            elif stored_truncated != new_truncated and updated:
-                print("✅ Update applied correctly: Values were actually different")
-                success = True
+            if stored_truncated == new_truncated:
+                assert not updated, "False update occurred despite values being identical after truncation"
+                print(f"Both truncate to: {stored_truncated}")
             else:
-                print(f"❌ Test logic error!")
-                print(f"   Stored: {stored_truncated}")
-                print(f"   New:    {new_truncated}")
-                print(f"   Updated: {updated}")
-                success = False
+                assert updated, "Update should have been applied for different values"
 
         finally:
             # Cleanup - make sure we delete even if test fails
@@ -382,7 +324,7 @@ async def test_no_false_updates():
                     models.FxRate.date == test_date,
                     models.FxRate.base == test_base,
                     models.FxRate.quote == test_quote
-                    )
+                )
                 result = await session.execute(cleanup_stmt)
                 stored_rate = result.scalar_one_or_none()
                 if stored_rate:
@@ -392,67 +334,5 @@ async def test_no_false_updates():
                 print(f"⚠️  Cleanup warning: {e}")
                 await session.rollback()
 
-    return success
-
-
-async def run_all_tests():
-    """Run all truncation tests."""
-    print_header("LibreFolio - Numeric Column Truncation Tests", level=1)
-
-    # Show prerequisites
-    print("\nℹ️  This test operates on:", TEST_DB_PATH)
-    print("ℹ️  The backend server is NOT used in this test")
-    print()
-
-    # Initialize database with safety checks
-    print("ℹ️  Initializing test database...")
-    if not initialize_test_database(print):
-        print("❌ Failed to initialize test database")
-        return 1
-
-    print()
-    print("This test suite validates:")
-    print("  • Helper functions for precision/truncation work correctly")
-    print("  • Database truncates Numeric columns as expected")
-    print("  • No false update detections when syncing identical values")
-
-    # Discover all Numeric columns
-    columns = discover_numeric_columns()
-    print(f"\n📊 Found {len(columns)} Numeric column(s) across all tables:")
-    for col in columns:
-        print(f"   • {col['table_name']}.{col['column_name']}: "
-              f"Numeric({col['precision']}, {col['scale']})")
-
-    # Run tests
-    results = []
-
-    results.append(await test_truncation_helpers())
-    results.append(await test_database_truncation())
-    results.append(await test_no_false_updates())
-
-    # Summary
-    print_header("Test Summary", level=1)
-    test_names = [
-        "Helper Functions",
-        "Database Truncation",
-        "No False Updates"
-        ]
-
-    all_passed = all(results)
-
-    for name, passed in zip(test_names, results):
-        status = "✅ PASS" if passed else "❌ FAIL"
-        print(f"{status}: {name}")
-
-    print()
-    if all_passed:
-        print("🎉 All truncation tests passed!")
-        return 0
-    else:
-        print("❌ Some tests failed")
-        return 1
-
-
 if __name__ == "__main__":
-    exit_code = asyncio.run(run_all_tests())
-    sys.exit(exit_code)
+    pytest.main([__file__, "-v", "-s"])
