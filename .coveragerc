@@ -1,0 +1,23 @@
+[run]
+source = backend/app
+parallel = true
+# Support async/await coverage in FastAPI endpoints
+# - thread: for uvicorn running in background thread
+# - gevent: for asyncio event loop context switches
+concurrency = thread,gevent
+omit =
+    */test_*
+    */tests/*
+    */__pycache__/*
+    */site-packages/*
+    */virtualenvs/*
+
+[report]
+show_missing = True
+precision = 2
+skip_covered = False
+
+[html]
+directory = htmlcov
+title = LibreFolio Test Coverage Report
+

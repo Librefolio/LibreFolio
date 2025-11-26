@@ -631,6 +631,7 @@ async def convert_currency_bulk(
         converted_amount, actual_rate_date, backward_fill_applied = bulk_result
         conversion = metadata['conversion']
         on_date = metadata['date']
+        # TODO: portare questi upper dentro la classe che astrae la valuta, ancora da fare
         from_cur = conversion.from_currency.upper()
         to_cur = conversion.to_currency.upper()
 
