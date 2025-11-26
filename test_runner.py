@@ -134,10 +134,10 @@ def external_fx_providers(verbose: bool = False) -> bool:
     print_info("⚠️  WARNING: May be slow due to API rate limiting")
 
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_external/test_fx_providers.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_external/test_fx_providers.py", "-v"],
         "FX providers external tests",
         verbose=verbose
-    )
+        )
 
 
 def external_asset_providers(verbose: bool = False) -> bool:
@@ -154,10 +154,10 @@ def external_asset_providers(verbose: bool = False) -> bool:
     print_info("⚠️  WARNING: May be slow due to API rate limiting")
 
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_external/test_asset_providers.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_external/test_asset_providers.py", "-v"],
         "Asset providers tests",
         verbose=verbose
-    )
+        )
 
 
 def external_all(verbose: bool = False) -> bool:
@@ -172,7 +172,7 @@ def external_all(verbose: bool = False) -> bool:
     tests = [
         ("FX Providers (including multi-unit)", lambda: external_fx_providers(verbose)),
         ("Asset Providers", lambda: external_asset_providers(verbose)),
-    ]
+        ]
 
     results = []
     for test_name, test_func in tests:
@@ -264,7 +264,7 @@ def db_validate(verbose: bool = False) -> bool:
     print_info("Testing: Tables, Foreign Keys, Constraints, Indexes, Enums")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.db_schema_validate"],
+        ["pipenv", "run", "python", "-m", "pytest", "-s", "backend/test_scripts/test_db/db_schema_validate.py", "-v"],
         "Schema validation",
         verbose=verbose
         )
@@ -287,7 +287,6 @@ def db_populate(verbose: bool = False, force: bool = False) -> bool:
 
     if force:
         print_warning("--force flag detected: Will DELETE existing data")
-
     cmd = ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.populate_mock_data"]
     if force:
         cmd.append("--force")
@@ -320,7 +319,7 @@ def db_fx_rates(verbose: bool = False) -> bool:
     print_info("Testing: Fetch rates, Persist to DB, Overwrite, Idempotency, Constraints")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_fx_rates_persistence"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_db/test_fx_rates_persistence.py", "-v"],
         "FX rates persistence tests",
         verbose=verbose
         )
@@ -336,39 +335,35 @@ def db_numeric_truncation(verbose: bool = False) -> bool:
     print_info("Tests: Helper functions, DB truncation, No false updates")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_numeric_truncation"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_db/test_numeric_truncation.py", "-v"],
         "Numeric truncation tests",
         verbose=verbose
         )
 
 
-def db_test_transaction_cash_integrity(verbose: bool = False) -> bool:
+def db_test_referential_integrity(verbose: bool = False) -> bool:
     """
-    Test unidirectional relationship between Transaction and CashMovement.
-    Validates Phase 2b remediation (task 1.1b): Transaction -> CashMovement unidirectional.
-    Tests: CASCADE delete, CHECK constraints, relationship integrity.
+    Test ALL database referential integrity constraints.
+
+    Comprehensive test suite covering:
+    - CASCADE delete behaviors (Asset→PriceHistory, Asset→AssetProviderAssignment,
+      CashAccount→CashMovements, CashMovement→Transaction)
+    - RESTRICT behaviors (Asset/Broker deletion blocked by Transactions/CashAccounts)
+    - Transaction ↔ CashMovement unidirectional relationship with CASCADE
+    - All UNIQUE constraints (daily-point policy, one provider per asset,
+      one account per broker/currency)
+    - All CHECK constraints (transaction types require cash_movement_id,
+      FX alphabetical ordering)
+
+    Total: 17 comprehensive integrity tests
     """
-    print_section("DB Test: Transaction → CashMovement Integrity")
-    print_info("Testing unidirectional relationship with CASCADE and CHECK constraints")
-    print_info("Tests: Unidirectional navigation, ON DELETE CASCADE, CHECK constraints")
+    print_section("DB Test: Referential Integrity (CASCADE, RESTRICT, UNIQUE, CHECK)")
+    print_info("Comprehensive test suite for ALL foreign key behaviors and constraints")
+    print_info("Tests: CASCADE (7), Transaction↔CashMovement (3), UNIQUE (4), CHECK (4)")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_transaction_cash_integrity"],
-        "Transaction-CashMovement integrity tests",
-        verbose=verbose
-        )
-
-
-def db_transaction_types(verbose: bool = False) -> bool:
-    """
-    Test tipologie di Transaction (BUY, SELL, DEPOSIT, WITHDRAW, ecc.).
-    Verifica mapping enum, vincoli logici e coerenza con CashMovement.
-    """
-    print_section("DB Test: Transaction Types")
-    print_info(f"Operando su: {TEST_DB_PATH} (test database)")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_db.test_transaction_types"],
-        "Transaction types tests",
+        ["pipenv", "run", "python", "-m", "pytest", "-s", "backend/test_scripts/test_db/test_db_referential_integrity.py", "-v"],
+        "Database referential integrity tests",
         verbose=verbose
         )
 
@@ -391,8 +386,7 @@ def db_all(verbose: bool = False) -> bool:
         ("Validate Schema", lambda: db_validate(verbose)),
         ("Numeric Truncation", lambda: db_numeric_truncation(verbose)),
         ("Populate Mock Data", lambda: db_populate(verbose, force=True)),  # Use force in 'all' mode
-        ("Transaction-CashMovement Integrity", lambda: db_test_transaction_cash_integrity(verbose)),
-        ("Transaction Types", lambda: db_transaction_types(verbose)),
+        ("Referential Integrity (CASCADE/RESTRICT/UNIQUE/CHECK)", lambda: db_test_referential_integrity(verbose)),
         ("FX Rates Persistence", lambda: db_fx_rates(verbose)),
         ]
 
@@ -442,7 +436,7 @@ def services_fx_conversion(verbose: bool = False) -> bool:
     print_info("Note: Mock FX rates automatically inserted for 3 dates")
 
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_fx_conversion.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_fx_conversion.py", "-v"],
         "FX conversion service tests",
         verbose=verbose
         )
@@ -471,7 +465,7 @@ def services_asset_source(verbose: bool = False) -> bool:
     print_info("Note: Test assets automatically created and cleaned up")
 
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_asset_source.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_asset_source.py", "-v"],
         "Asset source service tests",
         verbose=verbose
         )
@@ -485,7 +479,7 @@ def services_asset_source_refresh(verbose: bool = False) -> bool:
     print_section("Services: Asset Source Refresh (smoke)")
     print_info("Testing: backend/app/services/asset_source bulk refresh orchestration (smoke)")
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_asset_source_refresh.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_asset_source_refresh.py", "-v"],
         "Asset source refresh smoke test",
         verbose=verbose
         )
@@ -499,7 +493,7 @@ def services_provider_registry(verbose: bool = False) -> bool:
     print_section("Services: Provider Registry")
     print_info("Testing: backend/app/services/provider_registry.py")
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_provider_registry.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_provider_registry.py", "-v"],
         "Provider registry tests",
         verbose=verbose
         )
@@ -514,7 +508,7 @@ def services_synthetic_yield(verbose: bool = False) -> bool:
     print_info("Testing: SCHEDULED_YIELD asset valuation (ACT/365 SIMPLE interest)")
     print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration")
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_services/test_synthetic_yield.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_synthetic_yield.py", "-v"],
         "Synthetic yield tests",
         verbose=verbose
         )
@@ -614,7 +608,7 @@ def utils_geo_normalization(verbose: bool = False) -> bool:
     print_info("Testing: backend/app/utils/geo_normalization.py")
     print_info("Tests: ISO-3166-A3 normalization, weight parsing, validation pipeline")
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_utilities/test_geo_normalization.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_geo_normalization.py", "-v"],
         "Geographic area normalization tests",
         verbose=verbose,
         )
@@ -733,7 +727,7 @@ def api_fx(verbose: bool = False) -> bool:
     print_info("Note: Server will be automatically started and stopped by test")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "backend.test_scripts.test_api.test_fx_api"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_fx_api.py", "-v"],
         "FX API tests",
         verbose=verbose
         )
@@ -749,7 +743,7 @@ def api_assets_metadata(verbose: bool = False) -> bool:
     print_info("Note: Server will be automatically started and stopped by test")
 
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_api/test_assets_metadata.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_metadata.py", "-v"],
         "Assets Metadata API tests",
         verbose=verbose
         )
@@ -765,10 +759,10 @@ def api_assets_crud(verbose: bool = False) -> bool:
     print_info("Note: Server will be automatically started and stopped by test")
 
     return run_command(
-        ["pipenv", "run", "pytest", "backend/test_scripts/test_api/test_assets_crud.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_crud.py", "-v"],
         "Assets CRUD API tests",
         verbose=verbose
-    )
+        )
 
 
 def api_test(verbose: bool = False) -> bool:
@@ -988,7 +982,7 @@ Test commands:
         "action",
         choices=["fx-providers", "asset-providers", "all"],
         help="External service test to run"
-    )
+        )
 
     # ========================================================================
     # DATABASE TESTS SUBPARSER
@@ -1005,32 +999,29 @@ These tests operate directly on the SQLite database file:
   • Tests schema, constraints, data persistence
 
 Test commands:
-  create                     - Delete existing DB and create fresh from migrations
-                               📋 Prerequisites: None - this is the first test to run
-                       
-  validate                   - Verify all tables, constraints, indexes, foreign keys
-                               📋 Prerequisites: Database created (run: db create)
-                       
-  numeric-truncation          - Test Numeric column truncation for ALL tables
-                               📋 Prerequisites: Database created (run: db create)
-                               💡 Tests helper functions and database precision handling
-                       
-  populate                   - Populate database with MOCK DATA for testing/frontend dev
-                               📋 Prerequisites: Database created (run: db create)
-                               💡 Use --force to delete existing data and recreate
-                       
-  fx-rates                   - Test FX rates persistence (fetch from ECB & persist)
-                               📋 Prerequisites: External ECB API working (run: external ecb)
-                               💡 Can run on database with existing data (uses UPSERT)
-                      
-  transaction-cash-integrity - Test unidirectional relationship between Transaction and CashMovement
-                               📋 Prerequisites: Database created (run: db create)
-                               💡 Validates Transaction -> CashMovement unidirectional properties
-                               
-  transaction-types          - Test Transaction types (BUY, SELL, DEPOSIT, WITHDRAW, etc.)
-                               📋 Prerequisites: Database created (run: db create)
-                               💡 Verifies enum mapping, logical constraints, CashMovement consistency
-              
+  create                - Delete existing DB and create fresh from migrations
+                        📋 Prerequisites: None - this is the first test to run
+    
+  validate              - Verify all tables, constraints, indexes, foreign keys
+                          📋 Prerequisites: Database created (run: db create)
+    
+  numeric-truncation     - Test Numeric column truncation for ALL tables
+                         📋 Prerequisites: Database created (run: db create)
+                         💡 Tests helper functions and database precision handling
+    
+  populate              - Populate database with MOCK DATA for testing/frontend dev
+                          📋 Prerequisites: Database created (run: db create)
+                          💡 Use --force to delete existing data and recreate
+                
+  fx-rates              - Test FX rates persistence (fetch from ECB & persist)
+                          📋 Prerequisites: External ECB API working (run: external ecb)
+                          💡 Can run on database with existing data (uses UPSERT)
+    
+  referential-integrity - Test unidirectional relationship between Transaction and CashMovement
+                          📋 Prerequisites: Database created (run: db create)
+                          💡 Validates referential integrity, CASCADE delete, CHECK constraints between the tables
+                                enum mapping, logical constraints, CashMovement consistency, etc.
+                            
   all               - Run all DB tests (create → validate → numeric-truncation → populate → fx-rates)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
@@ -1038,7 +1029,7 @@ Test commands:
 
     db_parser.add_argument(
         "action",
-        choices=["create", "validate", "numeric-truncation", "fx-rates", "populate", "transaction-cash-integrity", "transaction-types", "all"],
+        choices=["create", "validate", "numeric-truncation", "fx-rates", "populate", "referential-integrity", "all"],
         help="Database test to run"
         )
 
@@ -1301,10 +1292,8 @@ def main():
         elif args.action == "populate":
             force = getattr(args, 'force', False)
             success = db_populate(verbose=verbose, force=force)
-        elif args.action == "transaction-cash-integrity":
-            success = db_test_transaction_cash_integrity(verbose=verbose)
-        elif args.action == "transaction-types":
-            success = db_transaction_types(verbose=verbose)
+        elif args.action == "referential-integrity":
+            success = db_test_referential_integrity(verbose=verbose)
         elif args.action == "all":
             success = db_all(verbose=verbose)
 
