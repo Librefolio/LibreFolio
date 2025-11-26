@@ -36,6 +36,8 @@ black = "*"
 ruff = "*"
 mypy = "*"
 pytest-cov = "*"
+coverage = {extras = ["toml"], version = "*"}
+gevent = "*"
 
 [requires]
 python_version = "3.13"

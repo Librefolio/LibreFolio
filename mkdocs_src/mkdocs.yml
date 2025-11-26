@@ -1,6 +1,5 @@
 site_name: LibreFolio Documentation
 site_description: "Developer and user manuals for LibreFolio"
-#TODO: capire se la porta fissa possa essere un problema
 site_url: http://localhost:8000/mkdocs/
 repo_url: https://github.com/LibreFolio/LibreFolio
 edit_uri: ""
@@ -9,6 +8,7 @@ site_dir: ../site
 
 theme:
   name: material
+  logo: static/logo.png
   features:
     - navigation.instant
     - navigation.tracking
@@ -26,14 +26,44 @@ theme:
   language: en
 
 nav:
-  - Home: index.md
-  - Getting Started: getting-started.md
-  - Examples: examples.md
-  - Developer Manual:
-      - Test Walkthrough: developer/test-walkthrough.md
-      - Architecture Overview: developer/architecture.md
-  - User Manual:
-      - Overview: user/index.md
+  - 'Home': 'index.md'
+  - 'Getting Started':
+    - 'Introduction': 'getting-started/introduction.md'
+    - 'Installation': 'getting-started/installation.md'
+  - 'User Manual':
+    - 'Introduction': 'user/index.md'
+    - 'Installation & Updates': 'user/installation.md'
+  - 'Developer Manual':
+    - 'Introduction': 'developer/index.md'
+    - 'Architecture':
+      - 'Overall Architecture': 'developer/architecture/overview.md'
+      - 'Backend Architecture': 'developer/architecture/backend.md'
+      - 'Frontend Architecture': 'developer/architecture/frontend.md'
+      - 'Async Architecture': 'developer/architecture/async.md'
+      - 'Database Schema': 'developer/architecture/database.md'
+    - 'Backend Development':
+      - 'Getting Started': 'developer/backend/getting-started.md'
+      - 'Plugin System': 'developer/backend/plugins/index.md'
+      - 'Testing Guide': 'developer/backend/testing.md'
+    - 'API Reference':
+      - 'Summary': 'developer/api/index.md'
+      - 'Asset Management': 'developer/api/assets/index.md'
+      - 'FX System': 'developer/api/fx/index.md'
+    - 'Financial Calculations':
+      - 'Overview': 'developer/financial-calculations/index.md'
+      - 'Day Count Conventions': 'developer/financial-calculations/day-count.md'
+      - 'Interest Types': 'developer/financial-calculations/interest-types.md'
+      - 'Compounding Frequencies': 'developer/financial-calculations/compounding.md'
+    - 'Test Walkthrough':
+      - 'Introduction': 'developer/test-walkthrough/index.md'
+      - 'Backend Tests': 'developer/test-walkthrough/backend.md'
+      - 'Frontend Tests': 'developer/test-walkthrough/frontend.md'
+    - 'Contributing':
+      - 'New FX Provider': 'developer/contributing/new-fx-provider.md'
+      - 'New Asset Provider': 'developer/contributing/new-asset-provider.md'
+  - 'Tutorials':
+    - 'Track your first Stock': 'tutorials/track-first-stock.md'
+    - 'Track a P2P Loan': 'tutorials/track-p2p-loan.md'
 
 extra:
   social:

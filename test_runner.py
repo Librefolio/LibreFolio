@@ -92,6 +92,10 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
                 env = os.environ.copy()
                 env['LIBREFOLIO_TEST_MODE'] = '1'
                 env['DATABASE_URL'] = TEST_DATABASE_URL
+
+                # Signal to test server that coverage is enabled
+                if use_coverage:
+                    env['COVERAGE_RUN'] = '1'
         except Exception:
             env = None
         # Capture only if not verbose
@@ -800,6 +804,24 @@ def api_test(verbose: bool = False) -> bool:
 
     print(f"\nResults: {passed}/{total} tests passed")
 
+    # If coverage mode, combine coverage from all processes
+    if _COVERAGE_MODE:
+        print_section("Combining Coverage Data")
+        print_info("Merging coverage from test server subprocess...")
+        try:
+            result = subprocess.run(
+                ["coverage", "combine"],
+                capture_output=True,
+                text=True,
+                cwd=Path(__file__).parent
+            )
+            if result.returncode == 0:
+                print_success("Coverage data combined successfully")
+            else:
+                print_warning(f"Coverage combine had warnings: {result.stderr}")
+        except Exception as e:
+            print_warning(f"Could not combine coverage: {e}")
+
     if passed == total:
         print_success("All API tests passed! 🎉")
         return True
@@ -936,9 +958,16 @@ Examples:
         )
 
     parser.add_argument(
-        "--reset",
+        "--cov-clean",
         action="store_true",
-        help="[db tests only] Reset database before running tests",
+        help="Clean coverage database before running tests (use with --coverage)",
+        default=False
+        )
+
+    parser.add_argument(
+        "--db-reset",
+        action="store_true",
+        help="Reset test database before running db tests",
         default=False
         )
 
@@ -1245,11 +1274,12 @@ def main():
     # Extract flags
     verbose = getattr(args, 'verbose', False)
     coverage = getattr(args, 'coverage', False)
+    cov_clean = getattr(args, 'cov_clean', False)
 
     # Set global coverage flag
     _COVERAGE_MODE = coverage
 
-    # If coverage mode, clear old coverage data and show message
+    # If coverage mode, handle cov-clean and show message
     if coverage:
         print_header("LibreFolio Test Suite - Coverage Mode")
         print(f"{Colors.YELLOW}📊 Running tests with code coverage tracking{Colors.NC}")
@@ -1257,11 +1287,26 @@ def main():
         print(f"{Colors.BLUE}Final report: htmlcov/index.html{Colors.NC}")
         print()
 
-        # Remove old .coverage file to start fresh
-        coverage_file = Path(__file__).parent / '.coverage'
-        if coverage_file.exists():
-            coverage_file.unlink()
-            print(f"{Colors.YELLOW}🗑️  Cleared previous coverage data{Colors.NC}\n")
+        # If --cov-clean flag, erase coverage database
+        if cov_clean:
+            print(f"{Colors.YELLOW}🗑️  Resetting coverage database...{Colors.NC}")
+            result = subprocess.run(
+                ["pipenv", "run", "coverage", "erase"],
+                cwd=os.getcwd(),
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                print(f"{Colors.GREEN}✅ Coverage database reset{Colors.NC}\n")
+            else:
+                print(f"{Colors.RED}❌ Failed to reset coverage database{Colors.NC}")
+                print(f"{Colors.RED}   Error: {result.stderr}{Colors.NC}\n")
+        else:
+            # Just clear old .coverage file (legacy behavior)
+            coverage_file = Path(__file__).parent / '.coverage'
+            if coverage_file.exists():
+                coverage_file.unlink()
+                print(f"{Colors.YELLOW}🗑️  Cleared previous coverage data{Colors.NC}\n")
 
     # Route to appropriate test handler (normal mode - coverage handled by run_command)
     success = False
@@ -1356,12 +1401,24 @@ def main():
             print_warning("⚠️  Some tests failed, but coverage was still tracked")
 
         print()
-        print(f"{Colors.GREEN}📊 Coverage report generated:{Colors.NC}")
+        print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
+        print()
+
+        # Generate final coverage report with table
+        result = subprocess.run(
+            ["pipenv", "run", "coverage", "report", "--skip-covered"],
+            cwd=os.getcwd(),
+            capture_output=False,  # Show output directly
+            text=True
+        )
+
+        print()
+        print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")
         print(f"   HTML: {Colors.BLUE}htmlcov/index.html{Colors.NC}")
         print(f"   Data: {Colors.BLUE}.coverage{Colors.NC}")
         print()
-        print(f"{Colors.YELLOW}💡 View report with:{Colors.NC}")
-        print(f"   open htmlcov/index.html")
+        print(f"{Colors.YELLOW}💡 View HTML report with:{Colors.NC}")
+        print(f"└─▶ $ open htmlcov/index.html")
         print()
         print(f"{Colors.BLUE}ℹ️  The HTML report shows:{Colors.NC}")
         print(f"   • Line-by-line coverage (green = covered, red = not covered)")

@@ -138,6 +138,10 @@ LibreFolio has a comprehensive test suite organized into 4 categories:
 - Your development/production data is **never touched**
 - Test database is automatically created and cleaned up
 
+**📊 Coverage Tracking**
+- Full async/await coverage for FastAPI endpoints (~60% baseline)
+- See [Async Coverage Solution](docs/COVERAGE_ASYNC_SOLUTION.md) for technical details
+
 **External Services Tests** (no server required)
 ```bash
 python test_runner.py external ecb      # Test ECB API connection
