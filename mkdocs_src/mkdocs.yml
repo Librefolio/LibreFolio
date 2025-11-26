@@ -64,6 +64,9 @@ nav:
   - 'Tutorials':
     - 'Track your first Stock': 'tutorials/track-first-stock.md'
     - 'Track a P2P Loan': 'tutorials/track-p2p-loan.md'
+  - 'UI/UX Mockups':
+    - 'Generated Mockups': 'POC_UX/index.md'
+    - 'Prompts for Missing UIs': 'POC_UX/missing_uis.md'
 
 extra:
   social:
