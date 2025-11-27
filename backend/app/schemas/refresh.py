@@ -26,6 +26,7 @@ and update price/rate data from external providers.
   - FA refresh operates on asset-by-asset basis with provider-specific params
 """
 from __future__ import annotations
+
 from datetime import date as date_type
 from typing import List, Optional
 

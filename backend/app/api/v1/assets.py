@@ -29,7 +29,6 @@ from backend.app.schemas.assets import (
     FABulkAssetDeleteRequest,
     FABulkAssetDeleteResponse,
     )
-from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import (
     FAUpsertItem,
     FABulkUpsertRequest,
@@ -41,7 +40,6 @@ from backend.app.schemas.prices import (
     )
 from backend.app.schemas.provider import (
     FAProviderInfo,
-    FAProviderAssignmentItem,
     FABulkAssignRequest,
     FAProviderAssignmentResult,
     FABulkAssignResponse,
@@ -223,8 +221,6 @@ async def list_providers():
     """List all available asset pricing providers."""
     providers = []
 
-    AssetProviderRegistry.auto_discover()
-
     # list_providers() returns list of dicts with 'code' and 'name' keys
     for provider_info in AssetProviderRegistry.list_providers():
         code = provider_info['code']  # Extract code from dict
@@ -260,7 +256,7 @@ async def assign_providers_bulk(
     try:
         results = await AssetSourceManager.bulk_assign_providers(request.assignments, session)
         success_count = sum(1 for r in results if r["success"])
-        return FABulkAssignResponse(results=[FAProviderAssignmentResult(**r) for r in results],success_count=success_count)
+        return FABulkAssignResponse(results=[FAProviderAssignmentResult(**r) for r in results], success_count=success_count)
     except Exception as e:
         logger.error(f"Error in bulk assign providers: {e}, result: {results}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -282,6 +278,7 @@ async def remove_providers_bulk(
     except Exception as e:
         logger.error(f"Error in bulk remove providers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # MANUAL PRICE MANAGEMENT ENDPOINTS
@@ -340,6 +337,7 @@ async def delete_prices_bulk(
     except Exception as e:
         logger.error(f"Error in bulk delete prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # PRICE QUERY ENDPOINTS
@@ -452,7 +450,7 @@ async def read_assets_bulk(
         # Fetch provider assignments for has_provider flag
         provider_stmt = select(AssetProviderAssignment.asset_id).where(
             AssetProviderAssignment.asset_id.in_(request.asset_ids)
-        )
+            )
         provider_result = await session.execute(provider_stmt)
         assets_with_provider = {row[0] for row in provider_result.fetchall()}
 
@@ -471,7 +469,7 @@ async def read_assets_bulk(
                     logger.error(
                         f"Failed to parse classification_params for asset {asset.id}: {e}",
                         extra={"asset_id": asset.id, "error": str(e)}
-                    )
+                        )
                     pass  # Skip invalid JSON
 
             responses.append(
@@ -484,8 +482,8 @@ async def read_assets_bulk(
                     classification_params=classification_params,
                     has_provider=asset.id in assets_with_provider,
                     has_metadata=classification_params is not None
+                    )
                 )
-            )
 
         return responses
     except Exception as e:

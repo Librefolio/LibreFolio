@@ -136,6 +136,7 @@ def test_no_false_update_detection():
     # They should match after truncation
     assert truncated == db_value
 
+
 # ============================================================================
 # TESTS: parse_decimal_value helper
 # ============================================================================
@@ -172,7 +173,6 @@ def test_parse_decimal_value_none():
     """Test parsing None returns None."""
     result = parse_decimal_value(None)
     assert result is None
-
 
 
 if __name__ == "__main__":

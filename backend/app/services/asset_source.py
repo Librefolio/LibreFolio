@@ -37,11 +37,13 @@ from backend.app.db.models import (
     PriceHistory,
     )
 from backend.app.schemas import FACurrentValue, FAHistoricalData
+from backend.app.schemas.assets import FAClassificationParams
 from backend.app.schemas.assets import FAMetadataRefreshResult
 from backend.app.schemas.assets import FAPricePoint, BackwardFillInfo
 from backend.app.schemas.prices import FAUpsert, FAUpsertItem, FAAssetDelete
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.refresh import FARefreshItem
+from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.decimal_utils import truncate_priceHistory
 
@@ -324,10 +326,6 @@ class AssetSourceManager:
                             metadata = await provider.fetch_asset_metadata(asset.identifier, assignment.provider_params)
 
                             if metadata:
-                                # Import metadata service
-                                from backend.app.services.asset_metadata import AssetMetadataService
-                                from backend.app.schemas.assets import FAClassificationParams
-
                                 # Parse current metadata
                                 current_params = None
                                 if asset.classification_params:
@@ -411,7 +409,6 @@ class AssetSourceManager:
         await session.commit()
         return [{"asset_id": aid, "success": True, "message": "Provider removed"} for aid in asset_ids]
 
-
     @staticmethod
     async def refresh_asset_metadata(asset_id: int, session: AsyncSession) -> dict:
         """
@@ -429,8 +426,6 @@ class AssetSourceManager:
             >>> result
             {'asset_id': 1, 'success': True, 'message': '...', 'changes': [...]}
         """
-        from backend.app.services.asset_metadata import AssetMetadataService
-
         try:
             # Load asset and provider assignment
             asset_result = await session.execute(select(Asset).where(Asset.id == asset_id))
@@ -478,7 +473,6 @@ class AssetSourceManager:
             current_params = None
             if asset.classification_params:
                 try:
-                    from backend.app.schemas.assets import FAClassificationParams
                     current_params = FAClassificationParams.model_validate_json(asset.classification_params)
                 except Exception as e:
                     logger.error(

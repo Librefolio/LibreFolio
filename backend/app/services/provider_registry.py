@@ -13,9 +13,10 @@ class AbstractProviderRegistry:
     """
 
     def __init_subclass__(cls, **kwargs):
-        """Ensure each subclass has its own _providers dict."""
+        """Ensure each subclass has its own _providers dict and discovery tracking."""
         super().__init_subclass__(**kwargs)
         cls._providers = {}
+        cls._discovery_done = False
 
     @classmethod
     def register(cls, provider_class: Type) -> None:
@@ -38,6 +39,8 @@ class AbstractProviderRegistry:
 
     @classmethod
     def get_provider(cls, code: str):
+        """Get provider class by code. Triggers auto-discovery if not done yet."""
+        cls.auto_discover()
         return cls._providers.get(code)
 
     @classmethod
@@ -58,12 +61,15 @@ class AbstractProviderRegistry:
 
     @classmethod
     def list_providers(cls) -> List[Dict[str, str]]:
-        """List all registered providers with their metadata.
-
+        """
+        List all registered providers with their metadata.
+        Triggers auto-discovery if not done yet.
         Returns:
             List of dicts with 'code' and 'name' keys
         """
+
         providers = []
+        cls.auto_discover()
         for code, provider_class in cls._providers.items():
             try:
                 instance = provider_class()
@@ -81,19 +87,6 @@ class AbstractProviderRegistry:
         return providers
 
     @classmethod
-    def clear(cls) -> None:
-        cls._providers.clear()
-
-    # --- methods to specialize in subclasses ---
-    @classmethod
-    def _get_provider_folder(cls) -> str:
-        raise NotImplementedError
-
-    @classmethod
-    def _get_provider_code_attr(cls) -> str:
-        return "provider_code"
-
-    @classmethod
     def auto_discover(cls) -> None:
         """Import all modules in the provider folder to trigger registration.
 
@@ -101,6 +94,8 @@ class AbstractProviderRegistry:
         module with importlib.util to avoid executing the package's __init__.py
         which may import other modules and cause circular imports.
         """
+        if cls._discovery_done:
+            return
         folder = cls._get_provider_folder()
         # Resolve to absolute path: project_root/backend/app/services/<folder>
         project_root = Path(__file__).parent.parent.parent
@@ -118,9 +113,21 @@ class AbstractProviderRegistry:
                 if spec and spec.loader:
                     mod = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(mod)
-            except Exception:
+            except Exception as e:
+                # Log error if needed
+                print(f"Error importing provider module {module_name}: {e}")
                 # Don't stop discovery on single-module errors
                 continue
+        cls._discovery_done = True
+
+    # --- methods to specialize in subclasses ---
+    @classmethod
+    def _get_provider_folder(cls) -> str:
+        raise NotImplementedError
+
+    @classmethod
+    def _get_provider_code_attr(cls) -> str:
+        return "provider_code"
 
 
 # Specializations
@@ -154,8 +161,3 @@ def register_provider(registry_class: Type[AbstractProviderRegistry]):
         return provider_class
 
     return decorator
-
-
-# Auto-discover on import
-FXProviderRegistry.auto_discover()
-AssetProviderRegistry.auto_discover()

@@ -32,6 +32,9 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.db.base import SQLModel
+import os
+from sqlalchemy import event
+from pathlib import Path
 
 
 # TODO: più avanti spostare in una libreria comune se serve altrove
@@ -66,10 +69,6 @@ def get_engine_for_check():
     This function carefully avoids importing anything that might create
     the default database (app.db) when we want to work with a test database.
     """
-    import os
-    from sqlalchemy import event
-    from pathlib import Path
-
     # Check for custom override first (won't be overridden by .env loading)
     # This is set by dev.sh when specifying a non-default database
     database_url = os.environ.get('ALEMBIC_DATABASE_URL')
@@ -150,8 +149,6 @@ def get_db_check_constraints(table_name: str) -> List[CheckColumnConstraint]:
 
     # Check if database file exists (for SQLite)
     # If it doesn't exist, return empty list (no constraints to check)
-    from pathlib import Path
-
     db_url = str(engine.url)
     if db_url.startswith('sqlite:///'):
         db_path = db_url.replace('sqlite:///', '')

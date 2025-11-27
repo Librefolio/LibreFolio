@@ -14,6 +14,7 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlmodel import select
 
 from backend.app.db.models import FxRate
+from backend.app.services.provider_registry import FXProviderRegistry
 from backend.app.utils.decimal_utils import truncate_fx_rate
 
 logger = logging.getLogger(__name__)
@@ -330,7 +331,6 @@ async def ensure_rates_multi_source(
         ValueError: If base_currency is not supported by provider
         FXServiceError: If provider not found or API request fails
     """
-    from backend.app.services.provider_registry import FXProviderRegistry
 
     if not provider_code:
         raise FXServiceError("Provider code is required")

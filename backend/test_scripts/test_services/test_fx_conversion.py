@@ -32,6 +32,8 @@ from backend.test_scripts.test_utils import (
     print_section,
     print_success,
     )
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy import func
 
 
 # ============================================================================
@@ -65,9 +67,6 @@ async def setup_mock_fx_rates(session):
     Creates rates for multiple dates (today, yesterday, 7 days ago) to test date handling.
     Uses UPSERT so it's safe to run multiple times.
     """
-    from sqlalchemy.dialects.sqlite import insert
-    from sqlalchemy import func
-
     print_info("Setting up mock FX rates for testing...")
 
     # Mock rates (realistic values as of 2025)

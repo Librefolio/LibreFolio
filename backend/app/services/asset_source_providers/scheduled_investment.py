@@ -173,7 +173,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         result = await session.execute(query)
         return list(result.scalars().all())
 
-    def _calculate_face_value_from_transactions(self,transactions: list[Transaction] | list[dict]) -> Decimal:
+    def _calculate_face_value_from_transactions(self, transactions: list[Transaction] | list[dict]) -> Decimal:
         """
         Calculate current principal (face_value) from transactions.
 
