@@ -38,12 +38,14 @@ async def test_bulk_refresh_prices_orchestration():
         await session.refresh(asset)
 
         # Assign a mock provider that returns deterministic prices
+        from backend.app.schemas.provider import FAProviderAssignmentItem
         await AssetSourceManager.bulk_assign_providers([
-            {"asset_id": asset.id, "provider_code": "mockprov", "provider_params": {"currency": "USD"}}
+            FAProviderAssignmentItem(asset_id=asset.id, provider_code="mockprov", provider_params={})
             ], session)
 
         # Execute refresh - expect prices to be inserted
-        payload = [{"asset_id": asset.id, "start_date": date(2025, 1, 1), "end_date": date(2025, 1, 3), "force": False}]
+        from backend.app.schemas.refresh import FARefreshItem
+        payload = [FARefreshItem(asset_id=asset.id, start_date=date(2025, 1, 1), end_date=date(2025, 1, 3))]
         results = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         # Verify results

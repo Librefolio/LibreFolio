@@ -252,11 +252,14 @@ async def test_bulk_assign_providers():
         for asset in test_assets:
             await session.refresh(asset)
 
+        # Import schema
+        from backend.app.schemas.provider import FAProviderAssignmentItem
+
         # Bulk assign providers
         assignments = [
-            {"asset_id": test_assets[0].id, "provider_code": "yfinance", "provider_params": '{"ticker": "TEST1"}'},
-            {"asset_id": test_assets[1].id, "provider_code": "yfinance", "provider_params": '{"ticker": "TEST2"}'},
-            {"asset_id": test_assets[2].id, "provider_code": "cssscraper", "provider_params": '{"url": "http://example.com"}'},
+            FAProviderAssignmentItem(asset_id=test_assets[0].id, provider_code="yfinance", provider_params={"ticker": "TEST1"}),
+            FAProviderAssignmentItem(asset_id=test_assets[1].id, provider_code="yfinance", provider_params={"ticker": "TEST2"}),
+            FAProviderAssignmentItem(asset_id=test_assets[2].id, provider_code="mockprov", provider_params=None),
             ]
 
         results = await AssetSourceManager.bulk_assign_providers(assignments, session)
@@ -264,7 +267,7 @@ async def test_bulk_assign_providers():
         # Detailed logging of results
         for r in results:
             status = "OK" if r.get("success") else "ERROR"
-            print_info(f"Assignment result: asset_id={r.get('asset_id')} provider={r.get('provider_code')} status={status} message={r.get('message')}")
+            print_info(f"Assignment result: asset_id={r.get('asset_id')} status={status} message={r.get('message')}")
 
         # Verify all succeeded
         for result in results:
@@ -272,36 +275,10 @@ async def test_bulk_assign_providers():
 
         # Verify in DB and print mapping
         for assignment in assignments:
-            provider = await AssetSourceManager.get_asset_provider(assignment["asset_id"], session)
-            assert provider is not None, f"Provider not found for asset {assignment['asset_id']}"
-            assert provider.provider_code == assignment["provider_code"]
-            print_success(f"✓ Verified DB: asset {assignment['asset_id']} -> {provider.provider_code}")
-
-
-@pytest.mark.asyncio
-async def test_single_assign_provider(asset_ids: list[int]):
-    """Test assign_provider() single method (calls bulk)."""
-    print_section("Test 6: Single Assign Provider (calls bulk)")
-
-    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        asset_id = asset_ids[0]
-
-        # Update provider (yfinance → cssscraper)
-        result = await AssetSourceManager.assign_provider(
-            asset_id=asset_id,
-            provider_code="cssscraper",
-            provider_params='{"url": "http://new-url.com"}',
-            session=session,
-            )
-
-        print_info(f"Assign call returned: {result}")
-
-        assert result["success"], f"Assignment failed: {result}"
-
-        # Verify update
-        provider = await AssetSourceManager.get_asset_provider(asset_id, session)
-        assert provider.provider_code == "cssscraper", "Provider not updated"
-        print_success(f"✓ Verified DB: asset {asset_id} -> {provider.provider_code} updated to cssscraper")
+            provider = await AssetSourceManager.get_asset_provider(assignment.asset_id, session)
+            assert provider is not None, f"Provider not found for asset {assignment.asset_id}"
+            assert provider.provider_code == assignment.provider_code
+            print_success(f"✓ Verified DB: asset {assignment.asset_id} -> {provider.provider_code}")
 
 
 @pytest.mark.asyncio
@@ -327,13 +304,18 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
 
         print_info(f"Created test asset {test_asset.id} with no metadata")
 
-        # Assign mockprov provider (has metadata support)
-        result = await AssetSourceManager.assign_provider(
-            asset_id=test_asset.id,
-            provider_code="mockprov",
-            provider_params='{"mock_param": "test"}',
-            session=session,
-            )
+        # Import schema
+        from backend.app.schemas.provider import FAProviderAssignmentItem
+
+        # Bulk assign providers (single item for compatibility)
+        item = FAProviderAssignmentItem(
+                asset_id=test_asset.id,
+                provider_code="mockprov",
+                provider_params={"mock_param": "test"})
+
+        results = await AssetSourceManager.bulk_assign_providers([item], session)
+        # Assuming single result, extract it
+        result = results[0]
 
         print_info(f"Assignment result: {result}")
         assert result["success"], f"Assignment failed: {result}"
@@ -382,33 +364,6 @@ async def test_bulk_remove_providers(asset_ids: list[int]):
             print_success(f"✓ Verified DB: asset {asset_id} has no provider providers successfully removed")
 
 
-@pytest.mark.asyncio
-async def test_single_remove_provider(asset_ids: list[int]):
-    """Test remove_provider() single method (calls bulk)."""
-    print_section("Test 8: Single Remove Provider (calls bulk)")
-
-    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        asset_id = asset_ids[1]
-
-        # First assign a provider
-        await AssetSourceManager.assign_provider(
-            asset_id=asset_id,
-            provider_code="yfinance",
-            provider_params='{"ticker": "TEST"}',
-            session=session,
-            )
-
-        # Remove via single method
-        result = await AssetSourceManager.remove_provider(asset_id, session)
-        print_info(f"Remove call returned: {result}")
-        assert result["success"], f"Removal failed: {result}"
-
-        # Verify removal
-        provider = await AssetSourceManager.get_asset_provider(asset_id, session)
-        assert provider is None, "Provider not removed"
-        print_success(f"✓ Verified DB: asset {asset_id} provider removed provider removed successfully")
-
-
 # ============================================================================
 # PRICE CRUD TESTS
 # ============================================================================
@@ -420,22 +375,25 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
     print_section("Test 9: Bulk Upsert Prices")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        # Import schemas
+        from backend.app.schemas.prices import FAUpsert, FAUpsertItem
+
         # Upsert prices for 2 assets
         data = [
-            {
-                "asset_id": asset_ids[0],
-                "prices": [
-                    {"date": date(2025, 1, 1), "close": Decimal("100.50"), "volume": Decimal("1000"), "currency": "USD"},
-                    {"date": date(2025, 1, 2), "close": Decimal("101.25"), "volume": Decimal("1500"), "currency": "USD"},
-                    ]
-                },
-            {
-                "asset_id": asset_ids[1],
-                "prices": [
-                    {"date": date(2025, 1, 1), "close": Decimal("200.00"), "volume": Decimal("500"), "currency": "USD"},
-                    ]
-                },
-            ]
+            FAUpsert(
+                asset_id=asset_ids[0],
+                prices=[
+                    FAUpsertItem(date=date(2025, 1, 1), close=Decimal("100.50"), volume=Decimal("1000"), currency="USD"),
+                    FAUpsertItem(date=date(2025, 1, 2), close=Decimal("101.25"), volume=Decimal("1500"), currency="USD"),
+                ]
+            ),
+            FAUpsert(
+                asset_id=asset_ids[1],
+                prices=[
+                    FAUpsertItem(date=date(2025, 1, 1), close=Decimal("200.00"), volume=Decimal("500"), currency="USD"),
+                ]
+            ),
+        ]
 
         result = await AssetSourceManager.bulk_upsert_prices(data, session)
 
@@ -445,10 +403,10 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
 
         # Detailed logging of DB state per asset
         for item in data:
-            stmt = select(PriceHistory).where(PriceHistory.asset_id == item["asset_id"])
+            stmt = select(PriceHistory).where(PriceHistory.asset_id == item.asset_id)
             db_result = await session.execute(stmt)
             prices = db_result.scalars().all()
-            print_info(f"Asset {item['asset_id']} prices in DB: {[(p.date, p.close, p.volume) for p in prices]}")
+            print_info(f"Asset {item.asset_id} prices in DB: {[(p.date, p.close, p.volume) for p in prices]}")
 
         # Verify in DB
         stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_ids[0])
@@ -460,44 +418,9 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
 
 
 @pytest.mark.asyncio
-async def test_single_upsert_prices(asset_ids: list[int]):
-    """Test upsert_prices() single method (calls bulk)."""
-    print_section("Test 10: Single Upsert Prices (calls bulk)")
-
-    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        # Update existing price
-        prices = [
-            {"date": date(2025, 1, 1), "close": Decimal("105.00"), "currency": "USD"},
-            ]
-
-        # Read previous value
-        stmt_prev = select(PriceHistory).where(
-            PriceHistory.asset_id == asset_ids[0],
-            PriceHistory.date == date(2025, 1, 1)
-            )
-        prev = (await session.execute(stmt_prev)).scalar_one_or_none()
-        prev_val = prev.close if prev is not None else None
-        print_info(f"Before update: asset {asset_ids[0]} date=2025-01-01 close={prev_val}")
-
-        result = await AssetSourceManager.upsert_prices(asset_ids[0], prices, session)
-
-        # Verify update
-        stmt = select(PriceHistory).where(
-            PriceHistory.asset_id == asset_ids[0],
-            PriceHistory.date == date(2025, 1, 1)
-            )
-        db_result = await session.execute(stmt)
-        price = db_result.scalar_one()
-
-        print_info(f"After update: asset {asset_ids[0]} date=2025-01-01 close={price.close}")
-
-        assert price.close == Decimal("105.00"), "Price not updated"
-
-
-@pytest.mark.asyncio
 async def test_get_prices_with_backfill(asset_ids: list[int]):
     """Test get_prices() with backward-fill logic."""
-    print_section("Test 11: Get Prices with Backward-Fill")
+    print_section("Test 10: Get Prices with Backward-Fill")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         # Query range with gaps
@@ -542,7 +465,7 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
     - volume backfilled equals last known volume
     - Edge case: if no initial data exists, no backfill occurs (empty list or shorter list)
     """
-    print_section("Test 12: Backward-Fill Volume Propagation")
+    print_section("Test 11: Backward-Fill Volume Propagation")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         # Setup: Insert prices for Day 1 and Day 2 WITH volume
@@ -648,7 +571,7 @@ async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
     - Empty list or no backfill (implementation dependent)
     - Should NOT crash
     """
-    print_section("Test 13: Backward-Fill Edge Case (No Initial Data)")
+    print_section("Test 12: Backward-Fill Edge Case (No Initial Data)")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         # Use a different asset to ensure it has no prices
@@ -677,7 +600,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
     """Test provider fallback when invalid/unregistered provider assigned.
 
     Scenario:
-    - Assign an invalid (non-existent) provider to an asset
+    - Insert invalid provider assignment directly in DB (bypass Pydantic validation)
     - Insert some prices in DB as fallback
     - Query prices -> should fallback to DB gracefully
     - Verify warning log is generated (manually via log inspection)
@@ -687,23 +610,32 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
     - Prices returned from DB fallback
     - Warning logged about provider not registered
     """
-    print_section("Test 14: Provider Fallback (Invalid Provider)")
+    print_section("Test 13: Provider Fallback (Invalid Provider)")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         test_asset_id = asset_ids[0]
 
-        # Assign invalid provider (not registered in AssetProviderRegistry)
+        # Insert invalid provider assignment directly in DB (bypass Pydantic validation)
+        # This simulates a legacy provider or corrupted data
         invalid_provider = "invalid_nonexistent_provider"
-        await AssetSourceManager.assign_provider(
+        from backend.app.db.models import AssetProviderAssignment
+
+        # Delete existing assignment if any
+        from sqlalchemy import delete
+        await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == test_asset_id))
+
+        # Insert invalid provider directly
+        invalid_assignment = AssetProviderAssignment(
             asset_id=test_asset_id,
             provider_code=invalid_provider,
-            provider_params='{}',
-            session=session
-            )
-        print_info(f"Assigned invalid provider '{invalid_provider}' to asset {test_asset_id}")
+            provider_params=None,
+            fetch_interval=1440
+        )
+        session.add(invalid_assignment)
+        await session.commit()
+        print_info(f"Inserted invalid provider '{invalid_provider}' directly in DB for asset {test_asset_id}")
 
         # Insert fallback prices in DB
-        from sqlalchemy import delete
         await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == test_asset_id))
         await session.commit()
 
@@ -738,20 +670,24 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
 @pytest.mark.asyncio
 async def test_bulk_delete_prices(asset_ids: list[int]):
     """Test bulk_delete_prices() method."""
-    print_section("Test 15: Bulk Delete Prices")
+    print_section("Test 14: Bulk Delete Prices")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        # Import schemas
+        from backend.app.schemas.prices import FAAssetDelete
+        from backend.app.schemas.common import DateRangeModel
+
         # Delete specific ranges
         data = [
-            {
-                "asset_id": asset_ids[0],
-                "date_ranges": [{"start": date(2025, 1, 1), "end": date(2025, 1, 2)}]
-                },
-            {
-                "asset_id": asset_ids[1],
-                "date_ranges": [{"start": date(2025, 1, 1)}]  # Single day
-                },
-            ]
+            FAAssetDelete(
+                asset_id=asset_ids[0],
+                date_ranges=[DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 2))]
+            ),
+            FAAssetDelete(
+                asset_id=asset_ids[1],
+                date_ranges=[DateRangeModel(start=date(2025, 1, 1), end=None)]  # Single day
+            ),
+        ]
 
         result = await AssetSourceManager.bulk_delete_prices(data, session)
 
