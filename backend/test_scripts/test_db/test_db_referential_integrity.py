@@ -204,20 +204,20 @@ def clean_test_broker():
 )
 def test_asset_deletion_cascades_price_history(clean_test_asset):
     """Verify PriceHistory is CASCADE deleted when Asset is deleted.
-
+    
     NOTE: This test currently fails because Asset deletion is blocked by
     the transactions FK constraint (which doesn't have ON DELETE CASCADE).
     This is actually CORRECT behavior - we want RESTRICT on transactions→assets.
-
+    
     The PriceHistory→Asset CASCADE *is* correctly configured in the migration
     (verified via sqlite3), but we can't test it because Asset deletion is
     blocked by transactions.
-
+    
     To properly test this, we would need to:
     1. Create an asset with ONLY PriceHistory (no transactions)
     2. Or delete transactions first (defeats purpose of cascade test)
     3. Or accept this as xfail with explanation
-
+    
     We choose option 3: mark as xfail with clear explanation.
     """
     with Session(get_sync_engine()) as session:
@@ -389,7 +389,7 @@ def test_broker_deletion_restricted_by_transactions(clean_test_broker, test_data
 )
 def test_cash_account_deletion_cascades_movements(clean_test_broker):
     """Verify CashMovements are CASCADE deleted when CashAccount is deleted.
-
+    
     NOTE: This test currently fails due to FK constraint on CashAccount deletion.
     Need to verify migration has: FOREIGN KEY (cash_account_id) REFERENCES cash_accounts (id) ON DELETE CASCADE
     """

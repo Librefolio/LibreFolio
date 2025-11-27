@@ -18,7 +18,7 @@ from backend.app.schemas import (
     FABulkPatchMetadataRequest, FAPatchMetadataItem, FAPatchMetadataRequest,
     FABulkAssetReadRequest, FAAssetMetadataResponse,
     FAMetadataRefreshResult,
-    FABulkMetadataRefreshRequest, FABulkMetadataRefreshResponse
+    FABulkMetadataRefreshRequest, FABulkMetadataRefreshResponse, FAGeographicArea
     )
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success
@@ -101,7 +101,7 @@ async def test_patch_metadata_valid_geographic_area(test_server):
             asset_id=test_asset,
             patch=FAPatchMetadataRequest(
                 short_description="Updated via API test",
-                geographic_area={"USA": 0.7, "FRA": 0.3},
+                geographic_area=FAGeographicArea(distribution={"USA": 0.7, "FRA": 0.3}),
                 investment_type="stock"
                 )
             )
@@ -138,10 +138,10 @@ async def test_patch_metadata_valid_geographic_area(test_server):
         assert params.short_description == "Updated via API test", "short_description not updated"
         assert params.investment_type == "stock", "investment_type not updated"
         assert params.geographic_area is not None, "geographic_area should exist"
-        assert "USA" in params.geographic_area, "USA not in geographic_area"
-        assert "FRA" in params.geographic_area, "FRA not in geographic_area"
-        assert params.geographic_area["USA"] == Decimal("0.7000"), f"USA value mismatch: {params.geographic_area['USA']}"
-        assert params.geographic_area["FRA"] == Decimal("0.3000"), f"FRA value mismatch: {params.geographic_area['FRA']}"
+        assert "USA" in params.geographic_area.distribution, "USA not in geographic_area"
+        assert "FRA" in params.geographic_area.distribution, "FRA not in geographic_area"
+        assert params.geographic_area.distribution["USA"] == Decimal("0.7000"), f"USA value mismatch: {params.geographic_area.distribution['USA']}"
+        assert params.geographic_area.distribution["FRA"] == Decimal("0.3000"), f"FRA value mismatch: {params.geographic_area.distribution['FRA']}"
 
         print_success("✓ Database verified - all fields updated correctly")
 
@@ -154,26 +154,24 @@ async def test_patch_metadata_invalid_geographic_area(test_server):
     test_asset = await create_test_asset("PATCH2")
 
     async with httpx.AsyncClient() as client:
-        patch_item = FAPatchMetadataItem(
-            asset_id=test_asset,
-            patch=FAPatchMetadataRequest(
-                geographic_area={"INVALID_COUNTRY": "1.0"}  # Use string, not Decimal
-                )
-            )
+        # Write json directly to bypass pydantic validation for invalid country code
+        request = {
+            "assets": [
+                {
+                    "asset_id": test_asset,
+                    "patch": {"geographic_area": {"distribution": {"INVALID_COUNTRY": 1.0}}}
+                    }
+                ]
+            }
 
-        request = FABulkPatchMetadataRequest(assets=[patch_item])
-        response = await client.patch(f"{API_BASE}/assets/metadata", json=request.model_dump(mode="json"), timeout=TIMEOUT)
+        response = await client.patch(f"{API_BASE}/assets/metadata", json=request, timeout=TIMEOUT)
 
         # Should return 200 with per-item error
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-
-        results = [FAMetadataRefreshResult(**r) for r in response.json()]
-        assert len(results) == 1, "Expected 1 result"
-
-        result = results[0]
-        assert not result.success, "Should have failed with invalid country code"
-        assert "INVALID_COUNTRY" in result.message or "invalid" in result.message.lower(), \
-            f"Error message should mention invalid country: {result.message}"
+        assert response.status_code == 422, f"Expected 422, got {response.status_code}, message: {response.text}"
+        data = response.json()
+        assert "detail" in data, "Response should have 'detail' field"
+        assert len(data["detail"]) > 0, "Detail should not be empty"
+        assert "Invalid country" in data["detail"][0]["msg"], f"Expected 'Invalid country' in error message: {data['detail'][0]['msg']}"
 
         print_success("✓ Invalid geographic_area rejected correctly")
 
@@ -396,17 +394,23 @@ async def test_patch_metadata_geographic_area_sum_validation(test_server):
 
     async with httpx.AsyncClient() as client:
         # Try to set geographic_area with sum != 1.0
-        patch_item = FAPatchMetadataItem(asset_id=test_asset, patch=FAPatchMetadataRequest(geographic_area={"USA": 0.5, "FRA": 0.3}))
+        # Write json directly to bypass pydantic validation
+        requests = {
+            "assets": [
+                {
+                    "asset_id": test_asset,
+                    "patch": {"geographic_area": {"distribution": {"USA": 0.5, "CAN": 0.3}}}
+                    }
+                ]
+            }
 
-        response = await client.patch(f"{API_BASE}/assets/metadata", json=FABulkPatchMetadataRequest(assets=[patch_item]).model_dump(mode="json"), timeout=TIMEOUT)
+        response = await client.patch(f"{API_BASE}/assets/metadata", json=requests, timeout=TIMEOUT)
 
-        assert response.status_code == 200, "Should return 200 with per-item error"
-
-        results = [FAMetadataRefreshResult(**r) for r in response.json()]
-        result = results[0]
-
-        assert not result.success, "Should fail with sum != 1.0"
-        assert "sum" in result.message.lower() or "1.0" in result.message, f"Error message should mention sum validation: {result.message}"
+        assert response.status_code == 422, f"Expected 422, got {response.status_code}, message: {response.text}"
+        data = response.json()
+        assert "detail" in data, "La risposta dovrebbe contenere 'detail'"
+        assert len(data["detail"]) > 0, "'detail' non dovrebbe essere vuoto"
+        assert "Geographic area weights must sum" in data["detail"][0]["msg"], f"Il messaggio di errore dovrebbe menzionare la somma: {data['detail'][0]['msg']}"
 
         print_success("✓ Geographic area sum validation works correctly")
 
@@ -439,6 +443,7 @@ async def test_patch_metadata_multiple_assets(test_server):
         assert all(r.success for r in results), "All patches should succeed"
 
         print_success("✓ Multiple assets patched in one request")
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

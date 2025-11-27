@@ -305,10 +305,76 @@ async def test_search(provider_code: str):
         raise
 
 
+def test_validate_params(provider_code: str):
+    """Test provider_params validation using test_cases."""
+    print_section(f"Test 5: {provider_code} - Provider Params Validation")
+
+    try:
+        provider = AssetProviderRegistry.get_provider_instance(provider_code)
+
+        # Test 1: Validate with None (should work for providers that don't require params)
+        print_info("Testing with None params...")
+        try:
+            provider.validate_params(None)
+            print_success(f"  ✓ {provider_code} accepts None params")
+            none_accepted = True
+        except Exception as e:
+            print_info(f"  {provider_code} rejects None params: {str(e)[:80]}")
+            none_accepted = False
+
+        # Test 2: Validate with empty dict (should work for providers that don't require params)
+        print_info("Testing with empty dict params...")
+        try:
+            provider.validate_params({})
+            print_success(f"  ✓ {provider_code} accepts empty dict params")
+            empty_accepted = True
+        except Exception as e:
+            print_info(f"  {provider_code} rejects empty dict: {str(e)[:80]}")
+            empty_accepted = False
+
+        # Test 3: Validate all provider_params from test_cases
+        if provider.test_cases:
+            print_info(f"Testing {len(provider.test_cases)} test case(s) with provider_params...")
+
+            for idx, test_case in enumerate(provider.test_cases, 1):
+                provider_params = test_case.get('provider_params')
+                identifier = test_case.get('identifier', 'N/A')
+
+                print_info(f"  Test case {idx}/{len(provider.test_cases)}: {identifier[:50]}...")
+
+                if provider_params is not None:
+                    # Test case has params - should validate successfully
+                    try:
+                        provider.validate_params(provider_params)
+                        print_success(f"    ✓ Params validated: {list(provider_params.keys())}")
+                    except Exception as e:
+                        print_error(f"    ✗ Validation failed: {e}")
+                        raise
+                else:
+                    # Test case has no params - provider should accept None
+                    print_info(f"    Test case has no provider_params (None)")
+                    if not none_accepted:
+                        print_warning(f"    Provider requires params but test_case has None!")
+
+            # If any test_case has params, ensure None/empty were rejected (provider requires params)
+            any_test_case_has_params = any(tc.get('provider_params') is not None for tc in provider.test_cases)
+            if any_test_case_has_params and none_accepted:
+                print_warning(f"  Provider has test_cases with params but also accepts None - may be intentional")
+        else:
+            print_info(f"  {provider_code} has no test_cases - skipping params validation from test_cases")
+
+        print_success("Provider params validation test passed")
+
+    except Exception as e:
+        print_error(f"Validation test failed: {e}")
+        traceback.print_exc()
+        raise
+
+
 @pytest.mark.asyncio
 async def test_error_handling(provider_code: str):
     """Test error handling with invalid identifier."""
-    print_section(f"Test 5: {provider_code} - Error Handling")
+    print_section(f"Test 6: {provider_code} - Error Handling")
 
     try:
         provider = AssetProviderRegistry.get_provider_instance(provider_code)

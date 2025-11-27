@@ -13,7 +13,7 @@ from backend.app.schemas import (
     FABulkAssetCreateRequest, FAAssetCreateItem, FABulkAssetCreateResponse,
     FAClassificationParams, FAinfoResponse,
     FABulkAssignRequest, FABulkAssignResponse,
-    FABulkAssetDeleteRequest, FABulkAssetDeleteResponse
+    FABulkAssetDeleteRequest, FABulkAssetDeleteResponse, FAGeographicArea
     )
 from backend.app.schemas.prices import FAUpsert, FAUpsertItem, FABulkUpsertRequest
 from backend.app.schemas.provider import FAProviderAssignmentItem
@@ -217,7 +217,8 @@ async def test_create_with_classification_params(test_server):
             classification_params=FAClassificationParams(
                 investment_type="stock",
                 sector="Technology",
-                geographic_area={"USA": 0.8, "CHN": 0.2})
+                geographic_area=FAGeographicArea(distribution={"USA": 0.8, "CHN": 0.2})
+                )
             )
         response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode='json'), timeout=TIMEOUT)
         assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
@@ -351,7 +352,7 @@ async def test_list_has_provider(test_server):
         print_info(f"Created asset with ID: {asset_id}")
 
         # Assign provider
-        item = FAProviderAssignmentItem(asset_id=asset_id, provider_code="yfinance", provider_params={})
+        item = FAProviderAssignmentItem(asset_id=asset_id, provider_code="yfinance", provider_params=None)
         assign_resp = await client.post(f"{API_BASE}/assets/provider/bulk", json=FABulkAssignRequest(assignments=[item]).model_dump(mode="json"), timeout=TIMEOUT)
         assert assign_resp.status_code == 200, f"Expected 200, got {assign_resp.status_code}, error message: {assign_resp.text}"
         resp_data = FABulkAssignResponse(**assign_resp.json())
@@ -410,7 +411,7 @@ async def test_delete_cascade(test_server):
         print_info(f"  Created asset ID: {asset_id}")
 
         # Step 2: Assign provider
-        item_fa_provider = FAProviderAssignmentItem(asset_id=asset_id, provider_code="yfinance", provider_params={})
+        item_fa_provider = FAProviderAssignmentItem(asset_id=asset_id, provider_code="yfinance", provider_params=None)
         provider_resp = await client.post(f"{API_BASE}/assets/provider/bulk", json=FABulkAssignRequest(assignments=[item_fa_provider]).model_dump(mode="json"), timeout=TIMEOUT)
         assert provider_resp.status_code == 200, f"Provider assignment failed: {provider_resp.status_code}: {provider_resp.text}"
         provider_data = FABulkAssignResponse(**provider_resp.json())
@@ -456,7 +457,8 @@ async def test_delete_partial_success(test_server):
         print_info(f"  Invalid asset ID: {invalid_id}")
 
         # Step 2: Try to delete both (one valid, one invalid)
-        delete_resp = await client.request("DELETE", f"{API_BASE}/assets/bulk", json=FABulkAssetDeleteRequest(asset_ids=[valid_id, invalid_id]).model_dump(mode="json"), timeout=TIMEOUT)
+        delete_resp = await client.request("DELETE", f"{API_BASE}/assets/bulk", json=FABulkAssetDeleteRequest(asset_ids=[valid_id, invalid_id]).model_dump(mode="json"),
+                                           timeout=TIMEOUT)
         assert delete_resp.status_code == 200, f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
 
         delete_data = FABulkAssetDeleteResponse(**delete_resp.json())

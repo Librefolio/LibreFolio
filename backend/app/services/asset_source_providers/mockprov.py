@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
 
-from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint
+from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint, FAClassificationParams, FAGeographicArea
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 
@@ -145,9 +145,9 @@ class MockProvider(AssetSourceProvider):
             Mock metadata dict with all fields populated
         """
         # Return mock data for testing
-        return {
-            "investment_type": "stock",
-            "short_description": f"Mock test asset {identifier} - used for testing metadata features",
-            "geographic_area": {"USA": "0.6", "ITA": "0.4"},  # Test string parsing
-            "sector": "Technology"
-            }
+        return FAClassificationParams(
+            investment_type="stock",
+            sector="Technology",
+            short_description=f"Mock test asset {identifier} - used for testing metadata features",
+            geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")})
+            ).model_dump(mode="json")

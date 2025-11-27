@@ -540,24 +540,20 @@ open http://localhost:8000/api/v1/docs#/
 
 **Expected Response** (excerpt):
 ```json
-{
-  "assets": [
-    {
-      "id": 1,
-      "display_name": "Apple Inc.",
-      "identifier": "AAPL",
-      "currency": "USD",
-      "asset_type": "STOCK",
-      "classification_params": {
-        "investment_type": "stock",
-        "short_description": "Apple Inc. from Yahoo Finance",
-        "geographic_area": null
-      },
-      "has_provider": true,
-      "has_metadata": true
-    }
-  ]
-}
+[{
+  "asset_id": 1,
+  "display_name": "Apple Inc.",
+  "identifier": "AAPL",
+  "currency": "USD",
+  "classification_params": {
+    "investment_type": "stock",
+    "short_description": "Apple Inc. from Yahoo Finance",
+    "geographic_area": null,
+    "sector": "Technology"
+  },
+  "has_provider": true,
+  "has_metadata": true
+}]
 ```
 
 **Verifica**:
