@@ -25,7 +25,7 @@ Design principles:
 import asyncio
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta, datetime
-from typing import Optional
+from typing import Optional, List
 
 import structlog
 from sqlalchemy import select, delete, and_, or_
@@ -39,8 +39,11 @@ from backend.app.db.models import (
 from backend.app.schemas import FACurrentValue, FAHistoricalData
 from backend.app.schemas.assets import FAMetadataRefreshResult
 from backend.app.schemas.assets import FAPricePoint, BackwardFillInfo
+from backend.app.schemas.prices import FAUpsert, FAUpsertItem, FAAssetDelete
+from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.schemas.refresh import FARefreshItem
 from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.app.utils.decimal_utils import truncate_priceHistory, parse_decimal_value
+from backend.app.utils.decimal_utils import truncate_priceHistory
 
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
@@ -246,17 +249,17 @@ class AssetSourceManager:
     # ========================================================================
     # PROVIDER ASSIGNMENT METHODS
     # ========================================================================
-    # TODO: vedere se 1° list[dict] --> list[FAProviderAssignmentItem] e 2° dict di ritorno --> FAProviderAssignmentResult
+    # TODO: ritornare FABulkAssignResponse, contando i successi e modificare assign_providers_bulk in v1/assets.py di conseguenza
     @staticmethod
     async def bulk_assign_providers(
-        assignments: list[dict],
+        assignments: List[FAProviderAssignmentItem],
         session: AsyncSession,
         ) -> list[dict]:
         """
         Bulk assign/update providers to assets (PRIMARY bulk method).
 
         Args:
-            assignments: List of {asset_id, provider_code, provider_params}
+            assignments: List of FAProviderAssignmentItem
             session: Database session
 
         Returns:
@@ -268,7 +271,7 @@ class AssetSourceManager:
             return []
 
         results = []
-        asset_ids = [a["asset_id"] for a in assignments]
+        asset_ids = [a.asset_id for a in assignments]
 
         # Delete existing assignments (upsert pattern)
         await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids)))
@@ -277,7 +280,7 @@ class AssetSourceManager:
         new_assignments = []
         import json
         for a in assignments:
-            raw_params = a.get("provider_params")
+            raw_params = a.provider_params
             if isinstance(raw_params, dict):
                 params_to_store = json.dumps(raw_params)
             else:
@@ -285,10 +288,10 @@ class AssetSourceManager:
 
             new_assignments.append(
                 AssetProviderAssignment(
-                    asset_id=a["asset_id"],
-                    provider_code=a["provider_code"],
+                    asset_id=a.asset_id,
+                    provider_code=a.provider_code,
                     provider_params=params_to_store,
-                    fetch_interval=a.get("fetch_interval", 1440),  # Default 1440 (24h)
+                    fetch_interval=a.fetch_interval,  # Already has default from Pydantic
                     last_fetch_at=None,  # Never fetched yet
                     )
                 )
@@ -299,31 +302,26 @@ class AssetSourceManager:
         # Build results and auto-populate metadata
         for assignment in assignments:
             result = {
-                "asset_id": assignment["asset_id"],
+                "asset_id": assignment.asset_id,
                 "success": True,
-                "message": f"Provider {assignment['provider_code']} assigned"
+                "message": f"Provider {assignment.provider_code} assigned"
                 }
 
             # Try to auto-populate metadata from provider
             try:
                 # Get provider instance
-                provider = AssetProviderRegistry.get_provider_instance(assignment["provider_code"])
+                provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
 
                 # Check if provider supports metadata fetch
                 if provider and hasattr(provider, 'fetch_asset_metadata'):
                     # Get asset to fetch identifier
-                    asset_result = await session.execute(
-                        select(Asset).where(Asset.id == assignment["asset_id"])
-                        )
+                    asset_result = await session.execute(select(Asset).where(Asset.id == assignment.asset_id))
                     asset = asset_result.scalar_one_or_none()
 
                     if asset:
                         # Try to fetch metadata
                         try:
-                            metadata = await provider.fetch_asset_metadata(
-                                asset.identifier,
-                                assignment.get("provider_params")
-                                )
+                            metadata = await provider.fetch_asset_metadata(asset.identifier, assignment.provider_params)
 
                             if metadata:
                                 # Import metadata service
@@ -341,7 +339,7 @@ class AssetSourceManager:
                                             asset_id=assignment["asset_id"],
                                             error=str(e),
                                             classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
-                                        )
+                                            )
                                         pass
 
                                 # Merge with provider data
@@ -364,14 +362,11 @@ class AssetSourceManager:
                                 # Add metadata info to result
                                 if changes:
                                     result["metadata_updated"] = True
-                                    result["metadata_changes"] = [
-                                        {"field": c.field, "old": c.old_value, "new": c.new_value}
-                                        for c in changes
-                                        ]
+                                    result["metadata_changes"] = [{"field": c.field, "old": c.old_value, "new": c.new_value} for c in changes]
                                     logger.info(
                                         "Metadata auto-populated from provider",
-                                        asset_id=assignment["asset_id"],
-                                        provider=assignment["provider_code"],
+                                        asset_id=assignment.asset_id,
+                                        provider=assignment.provider_code,
                                         changes_count=len(changes)
                                         )
                                 else:
@@ -380,15 +375,15 @@ class AssetSourceManager:
                             # Log but don't fail assignment
                             logger.warning(
                                 "Failed to fetch metadata from provider",
-                                asset_id=assignment["asset_id"],
-                                provider=assignment["provider_code"],
+                                asset_id=assignment.asset_id,
+                                provider=assignment.provider_code,
                                 error=str(e)
                                 )
             except Exception as e:
                 # Log but don't fail assignment
                 logger.warning(
                     "Error during metadata auto-populate",
-                    asset_id=assignment["asset_id"],
+                    asset_id=assignment.asset_id,
                     error=str(e)
                     )
 
@@ -396,36 +391,8 @@ class AssetSourceManager:
 
         return results
 
-    # TODO: tranne che per session, usare FAProviderAssignmentItem che ha già tutta la logica necessaria per validare i parametri, e se manca, aggiungerla
     @staticmethod
-    async def assign_provider(
-        asset_id: int,
-        provider_code: str,
-        provider_params: Optional[str],
-        session: AsyncSession,
-        fetch_interval: int = 1440,
-        ) -> dict:
-        """
-        Assign provider to single asset (calls bulk with 1 element).
-
-        Args:
-            asset_id: Asset ID
-            provider_code: Provider code
-            provider_params: Provider parameters (JSON string)
-            session: Database session
-            fetch_interval: Refresh frequency in minutes (default: 1440 = 24h)
-
-        Returns:
-            Single result dict
-        """
-        results = await AssetSourceManager.bulk_assign_providers(
-            [{"asset_id": asset_id, "provider_code": provider_code, "provider_params": provider_params, "fetch_interval": fetch_interval}],
-            session
-            )
-        return results[0]
-
-    @staticmethod
-    async def bulk_remove_providers(asset_ids: list[int],session: AsyncSession,) -> list[dict]:
+    async def bulk_remove_providers(asset_ids: list[int], session: AsyncSession, ) -> list[dict]:
         """
         Bulk remove provider assignments (PRIMARY bulk method).
 
@@ -442,26 +409,11 @@ class AssetSourceManager:
             return []
         await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids)))
         await session.commit()
-        return [{"asset_id": aid, "success": True, "message": "Provider removed"}for aid in asset_ids]
+        return [{"asset_id": aid, "success": True, "message": "Provider removed"} for aid in asset_ids]
 
-    # TODO: rimuovere perchè usato solo in un test
-    @staticmethod
-    async def remove_provider(asset_id: int,session: AsyncSession) -> dict:
-        """
-        Remove provider from single asset (calls bulk with 1 element).
-
-        Args:
-            asset_id: Asset ID
-            session: Database session
-
-        Returns:
-            Single result dict
-        """
-        results = await AssetSourceManager.bulk_remove_providers([asset_id], session)
-        return results[0]
 
     @staticmethod
-    async def refresh_asset_metadata(asset_id: int,session: AsyncSession) -> dict:
+    async def refresh_asset_metadata(asset_id: int, session: AsyncSession) -> dict:
         """
         Refresh metadata for single asset from its assigned provider.
 
@@ -485,24 +437,24 @@ class AssetSourceManager:
             asset = asset_result.scalar_one_or_none()
 
             if not asset:
-                return {"asset_id": asset_id,"success": False,"message": f"Asset {asset_id} not found"}
+                return {"asset_id": asset_id, "success": False, "message": f"Asset {asset_id} not found"}
 
             # Get provider assignment
             provider_result = await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))
             provider_assignment = provider_result.scalar_one_or_none()
 
             if not provider_assignment:
-                return {"asset_id": asset_id,"success": False,"message": "No provider assigned to asset"}
+                return {"asset_id": asset_id, "success": False, "message": "No provider assigned to asset"}
 
             # Get provider instance
             provider = AssetProviderRegistry.get_provider_instance(provider_assignment.provider_code)
 
             if not provider:
-                return {"asset_id": asset_id,"success": False,"message": f"Provider {provider_assignment.provider_code} not found"}
+                return {"asset_id": asset_id, "success": False, "message": f"Provider {provider_assignment.provider_code} not found"}
 
             # Check if provider supports metadata fetch
             if not hasattr(provider, 'fetch_asset_metadata'):
-                return {"asset_id": asset_id,"success": False,"message": f"Provider {provider_assignment.provider_code} doesn't support metadata fetch"}
+                return {"asset_id": asset_id, "success": False, "message": f"Provider {provider_assignment.provider_code} doesn't support metadata fetch"}
 
             # Parse provider params
             import json
@@ -515,12 +467,12 @@ class AssetSourceManager:
 
             # Fetch metadata from provider
             try:
-                metadata = await provider.fetch_asset_metadata(asset.identifier,provider_params)
+                metadata = await provider.fetch_asset_metadata(asset.identifier, provider_params)
             except Exception as e:
-                return {"asset_id": asset_id,"success": False,"message": f"Failed to fetch metadata: {str(e)}"}
+                return {"asset_id": asset_id, "success": False, "message": f"Failed to fetch metadata: {str(e)}"}
 
             if not metadata:
-                return {"asset_id": asset_id,"success": False,"message": "Provider returned no metadata"}
+                return {"asset_id": asset_id, "success": False, "message": "Provider returned no metadata"}
 
             # Parse current metadata
             current_params = None
@@ -534,17 +486,17 @@ class AssetSourceManager:
                         asset_id=asset_id,
                         error=str(e),
                         classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
-                    )
+                        )
                     pass
 
             # Merge with provider data
             try:
-                merged = AssetMetadataService.merge_provider_metadata(current_params,metadata)
+                merged = AssetMetadataService.merge_provider_metadata(current_params, metadata)
             except ValueError as e:
-                return {"asset_id": asset_id,"success": False,"message": f"Validation failed: {str(e)}"}
+                return {"asset_id": asset_id, "success": False, "message": f"Validation failed: {str(e)}"}
 
             # Compute diff
-            changes = AssetMetadataService.compute_metadata_diff(current_params,merged)
+            changes = AssetMetadataService.compute_metadata_diff(current_params, merged)
 
             # Update asset
             asset.classification_params = merged.model_dump_json(exclude_none=True)
@@ -559,17 +511,17 @@ class AssetSourceManager:
                 changes_count=len(changes)
                 )
 
-            result = {"asset_id": asset_id,"success": True,"message": f"Metadata refreshed from {provider_assignment.provider_code}"}
+            result = {"asset_id": asset_id, "success": True, "message": f"Metadata refreshed from {provider_assignment.provider_code}"}
             if changes:
-                result["changes"] = [{"field": c.field, "old_value": c.old_value, "new_value": c.new_value}for c in changes]
+                result["changes"] = [{"field": c.field, "old_value": c.old_value, "new_value": c.new_value} for c in changes]
             return result
 
         except Exception as e:
-            logger.error("Error refreshing metadata",asset_id=asset_id,error=str(e))
-            return {"asset_id": asset_id,"success": False,"message": f"Internal error: {str(e)}"}
+            logger.error("Error refreshing metadata", asset_id=asset_id, error=str(e))
+            return {"asset_id": asset_id, "success": False, "message": f"Internal error: {str(e)}"}
 
     @staticmethod
-    async def bulk_refresh_metadata(asset_ids: list[int],session: AsyncSession,) -> dict:
+    async def bulk_refresh_metadata(asset_ids: list[int], session: AsyncSession, ) -> dict:
         """
         Bulk refresh metadata for multiple assets (PRIMARY bulk method).
 
@@ -586,7 +538,7 @@ class AssetSourceManager:
             Can be parallelized with asyncio.gather() for better performance
         """
         if not asset_ids:
-            return {"results": [],"success_count": 0,"failed_count": 0}
+            return {"results": [], "success_count": 0, "failed_count": 0}
 
         # Process each asset (could parallelize with asyncio.gather)
         results = []
@@ -598,7 +550,7 @@ class AssetSourceManager:
         success_count = sum(1 for r in results if r.get("success"))
         failed_count = len(results) - success_count
 
-        return {"results": [FAMetadataRefreshResult(**r) for r in results],"success_count": success_count,"failed_count": failed_count,}
+        return {"results": [FAMetadataRefreshResult(**r) for r in results], "success_count": success_count, "failed_count": failed_count, }
 
     @staticmethod
     async def get_asset_provider(asset_id: int, session: AsyncSession) -> Optional[AssetProviderAssignment]:
@@ -619,15 +571,13 @@ class AssetSourceManager:
     # MANUAL PRICE CRUD METHODS
     # ========================================================================
 
-    # TODO: vedere se usare list[FAUpsertItem] al posto di list[dict], capire se ha già tutta la logica necessaria per validare i parametri,
-    #  e se mancasse, analizzare fattibilità di aggiungerla
     @staticmethod
-    async def bulk_upsert_prices(data: list[dict],session: AsyncSession) -> dict:
+    async def bulk_upsert_prices(data: List[FAUpsert], session: AsyncSession) -> dict:
         """
         Bulk upsert prices manually (PRIMARY bulk method).
 
         Args:
-            data: List of {asset_id, prices: [{date, open?, high?, low?, close, volume?}, ...]}
+            data: List of FAUpsert (asset_id + prices)
             session: Database session
 
         Returns:
@@ -642,18 +592,18 @@ class AssetSourceManager:
         results = []
 
         for item in data:
-            asset_id = item["asset_id"]
-            prices = item.get("prices", [])
+            asset_id = item.asset_id
+            prices = item.prices
 
             if not prices:
-                results.append({"asset_id": asset_id,"count": 0,"message": "No prices to upsert"})
+                results.append({"asset_id": asset_id, "count": 0, "message": "No prices to upsert"})
                 continue
 
             # Get asset currency for prices without explicit currency
             asset_result = await session.execute(select(Asset).where(Asset.id == asset_id))
             asset = asset_result.scalar_one_or_none()
             if not asset:
-                results.append({"asset_id": asset_id,"count": 0,"message": f"Asset {asset_id} not found"})
+                results.append({"asset_id": asset_id, "count": 0, "message": f"Asset {asset_id} not found"})
                 continue
 
             default_currency = asset.currency
@@ -664,32 +614,25 @@ class AssetSourceManager:
             dates_to_upsert = []
 
             for price in prices:
-                dates_to_upsert.append(price["date"])
-
-                # Normalize numeric inputs to Decimal
-                open_v = parse_decimal_value(price.get("open"))
-                high_v = parse_decimal_value(price.get("high"))
-                low_v = parse_decimal_value(price.get("low"))
-                close_v = parse_decimal_value(price.get("close"))
-                volume_v = parse_decimal_value(price.get("volume"))
+                dates_to_upsert.append(price.date)
 
                 price_obj = PriceHistory(
                     asset_id=asset_id,
-                    date=price["date"],
-                    open=truncate_priceHistory(open_v, "open") if open_v is not None else None,
-                    high=truncate_priceHistory(high_v, "high") if high_v is not None else None,
-                    low=truncate_priceHistory(low_v, "low") if low_v is not None else None,
-                    close=truncate_priceHistory(close_v, "close") if close_v is not None else None,
-                    volume=volume_v,
-                    currency=price.get("currency", default_currency),  # Use asset currency as default
-                    source_plugin_key="MANUAL",  # Manual price insert
-                    fetched_at=None,  # Not fetched from external source
+                    date=price.date,
+                    open=truncate_priceHistory(price.open, "open") if price.open is not None else None,
+                    high=truncate_priceHistory(price.high, "high") if price.high is not None else None,
+                    low=truncate_priceHistory(price.low, "low") if price.low is not None else None,
+                    close=truncate_priceHistory(price.close, "close"),
+                    volume=price.volume,
+                    currency=price.currency or default_currency,
+                    source_plugin_key="MANUAL",
+                    fetched_at=None,
                     )
                 price_objects.append(price_obj)
 
             # Delete existing prices for these dates (upsert = delete + insert)
             if dates_to_upsert:
-                delete_stmt = delete(PriceHistory).where(and_(PriceHistory.asset_id == asset_id,PriceHistory.date.in_(dates_to_upsert)))
+                delete_stmt = delete(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates_to_upsert)))
                 await session.execute(delete_stmt)
 
             # Bulk insert new prices
@@ -699,37 +642,17 @@ class AssetSourceManager:
             # Count as inserted
             total_inserted += len(price_objects)
 
-            results.append({"asset_id": asset_id,"count": len(price_objects),"message": f"Upserted {len(price_objects)} prices"})
+            results.append({"asset_id": asset_id, "count": len(price_objects), "message": f"Upserted {len(price_objects)} prices"})
         # update_count = 0 because SQLite doesn't distinguish
-        return {"inserted_count": total_inserted,"updated_count": 0,  "results": results}
+        return {"inserted_count": total_inserted, "updated_count": 0, "results": results}
 
-    # TODO: rimuovere perchè usato solo in un test
     @staticmethod
-    async def upsert_prices(asset_id: int,prices: list[dict],session: AsyncSession,) -> dict:
-        """
-        Upsert prices for single asset (calls bulk with 1 element).
-
-        Args:
-            asset_id: Asset ID
-            prices: List of price dicts
-            session: Database session
-
-        Returns:
-            Single result dict
-        """
-        result = await AssetSourceManager.bulk_upsert_prices([{"asset_id": asset_id, "prices": prices}],session)
-        return result["results"][0]
-
-    # TODO: provare a sostiture con list[FAAssetDelete] al posto di list[dict], capire se ha già tutta la logica necessaria per validare i parametri,
-    #  e se mancasse, analizzare fattibilità di aggiungerla
-    @staticmethod
-    async def bulk_delete_prices(data: list[dict],session: AsyncSession,) -> dict:
+    async def bulk_delete_prices(data: List[FAAssetDelete], session: AsyncSession) -> dict:
         """
         Bulk delete price ranges (PRIMARY bulk method).
 
         Args:
-            data: List of {asset_id, date_ranges: [{start, end?}, ...]}
-                  end is optional (single day if omitted)
+            data: List of FAAssetDelete (asset_id + date_ranges)
             session: Database session
 
         Returns:
@@ -743,20 +666,13 @@ class AssetSourceManager:
         # Build complex OR conditions for all ranges
         conditions = []
         for item in data:
-            asset_id = item["asset_id"]
-            ranges = item.get("date_ranges", [])
+            asset_id = item.asset_id
+            ranges = item.date_ranges
 
             for date_range in ranges:
-                start = date_range["start"]
-                end = date_range.get("end", start)  # Single day if no end
-
-                conditions.append(
-                    and_(
-                        PriceHistory.asset_id == asset_id,
-                        PriceHistory.date >= start,
-                        PriceHistory.date <= end
-                        )
-                    )
+                start = date_range.start
+                end = date_range.end or start  # Single day if no end
+                conditions.append(and_(PriceHistory.asset_id == asset_id, PriceHistory.date >= start, PriceHistory.date <= end))
 
         if not conditions:
             return {"deleted_count": 0, "results": []}
@@ -767,13 +683,13 @@ class AssetSourceManager:
         await session.commit()
 
         deleted_count = result.rowcount
-
+        # TODO: fare prima una SELECT COUNT(*) per asset per range, così da avere il numero esatto di righe cancellate per asset
         # Build results per asset (approximate - we don't track per-asset deletes)
         results = [
             {
-                "asset_id": item["asset_id"],
+                "asset_id": item.asset_id,
                 "deleted": deleted_count // len(data),  # Approximate
-                "message": f"Deleted prices in {len(item.get('date_ranges', []))} range(s)"
+                "message": f"Deleted prices in {len(item.date_ranges)} range(s)"
                 }
             for item in data
             ]
@@ -782,30 +698,6 @@ class AssetSourceManager:
             "deleted_count": deleted_count,
             "results": results
             }
-
-    # TODO: eliminare, chiamato solo da un endpoint singolo che deve essere eliminato
-    @staticmethod
-    async def delete_prices(
-        asset_id: int,
-        date_ranges: list[dict],
-        session: AsyncSession,
-        ) -> dict:
-        """
-        Delete price ranges for single asset (calls bulk with 1 element).
-
-        Args:
-            asset_id: Asset ID
-            date_ranges: List of {start, end?}
-            session: Database session
-
-        Returns:
-            Single result dict
-        """
-        result = await AssetSourceManager.bulk_delete_prices(
-            [{"asset_id": asset_id, "date_ranges": date_ranges}],
-            session
-            )
-        return result["results"][0]
 
     # ========================================================================
     # PRICE QUERY WITH BACKWARD-FILL + Special logic for PROVIDER DELEGATION
@@ -961,11 +853,9 @@ class AssetSourceManager:
     # ========================================================================
     # PRICE REFRESH (PROVIDER) METHODS - NEW
     # ========================================================================
-    # TODO: usare in input, al posto di list[dict], list[FARefreshItem] che ha già tutta la logica necessaria per validare i parametri,
-    #  e se mancasse, analizzare fattibilità di aggiungerla
     @staticmethod
     async def bulk_refresh_prices(
-        requests: list[dict],
+        requests: List[FARefreshItem],
         session: AsyncSession,
         concurrency: int = 5,
         semaphore_timeout: int = 60,
@@ -974,7 +864,7 @@ class AssetSourceManager:
         Refresh prices for multiple assets using their configured providers.
 
         Args:
-            requests: List of {asset_id, start_date, end_date, force: bool=false}
+            requests: List of FARefreshItem (asset_id, start_date, end_date)
             session: Database session
             concurrency: Max concurrent provider calls
             semaphore_timeout: Timeout for acquiring semaphore (seconds)
@@ -988,11 +878,10 @@ class AssetSourceManager:
         results = []
         sem = asyncio.Semaphore(concurrency)
 
-        async def _process_single(item: dict) -> dict:
-            asset_id = item.get("asset_id")
-            start = item.get("start_date")
-            end = item.get("end_date")
-            force = item.get("force", False)
+        async def _process_single(item: FARefreshItem) -> dict:
+            asset_id = item.asset_id
+            start = item.start_date
+            end = item.end_date
 
             result = {
                 "asset_id": asset_id,
@@ -1075,13 +964,24 @@ class AssetSourceManager:
                 result["errors"].append("No prices returned from provider")
                 return result
 
-            # Build upsert payload for DB: we reuse bulk_upsert_prices() which performs delete+insert per asset
-            upsert_payload = [
-                {"asset_id": asset_id, "prices": prices}
-                ]
+            # Convert prices to FAUpsertItem objects
+            price_items = []
+            for p in prices:
+                price_items.append(FAUpsertItem(
+                    date=p["date"],
+                    open=p.get("open"),
+                    high=p.get("high"),
+                    low=p.get("low"),
+                    close=p["close"],
+                    volume=p.get("volume"),
+                    currency=p.get("currency", "USD")
+                    ))
+
+            # Build FAUpsert object
+            upsert_obj = FAUpsert(asset_id=asset_id, prices=price_items)
 
             try:
-                upsert_res = await AssetSourceManager.bulk_upsert_prices(upsert_payload, session)
+                upsert_res = await AssetSourceManager.bulk_upsert_prices([upsert_obj], session)
                 result["fetched_count"] = len(prices)
                 result["inserted_count"] = upsert_res.get("inserted_count", 0)
             except Exception as e:
@@ -1105,25 +1005,3 @@ class AssetSourceManager:
         completed = await asyncio.gather(*tasks)
 
         return completed
-
-    # TODO: rimuovere perchè usato solo in un endpoint singolo
-    @staticmethod
-    async def refresh_price(
-        asset_id: int,
-        start_date: date_type,
-        end_date: date_type,
-        session: AsyncSession,
-        force: bool = False,
-        concurrency: int = 5,
-        ) -> dict:
-        """
-        Refresh prices for single asset (calls bulk with 1 element).
-
-        Returns single result dict as produced by bulk_refresh_prices for one item.
-        """
-        res = await AssetSourceManager.bulk_refresh_prices(
-            [{"asset_id": asset_id, "start_date": start_date, "end_date": end_date, "force": force}],
-            session,
-            concurrency=concurrency,
-            )
-        return res[0] if res else {"asset_id": asset_id, "fetched_count": 0, "inserted_count": 0, "updated_count": 0, "errors": ["no-op"]}
