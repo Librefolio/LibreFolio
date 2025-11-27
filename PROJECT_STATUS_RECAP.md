@@ -574,10 +574,7 @@ open http://localhost:8000/api/v1/docs#/
     {
       "asset_id": 1,
       "patch": {
-        "geographic_area": {
-          "USA": "0.7",
-          "WORLD": "0.3"
-        }
+        "geographic_area": {"distribution": { "USA": "0.7","ita": "0.3"}}
       }
     }
   ]
@@ -619,21 +616,28 @@ open http://localhost:8000/api/v1/docs#/
 
 **Expected Response** (excerpt):
 ```json
-{
-  "assets": [
-    {
-      "id": 1,
-      "classification_params": {
-        "investment_type": "stock",
-        "short_description": "Apple Inc. from Yahoo Finance",
-        "geographic_area": {
-          "USA": "0.7000",
-          "WORLD": "0.3000"
+[
+  {
+    "asset_id": 1,
+    "display_name": "Apple Inc.",
+    "identifier": "AAPL",
+    "currency": "USD",
+    "asset_type": "STOCK",
+    "classification_params": {
+      "investment_type": "stock",
+      "short_description": "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide. The company offers iPhone, a line of smartphones; Mac, a line of personal computers; iPad, a line of multi-purpose tablets; and wearables, home, and accessories comprising AirPods, Apple Vision Pro, Apple TV, Apple Watch, Beats products, and HomePod, as well as Apple branded and third-party accessories. It also provides AppleCare support and cloud services; and operates v",
+      "geographic_area": {
+        "distribution": {
+          "USA": "0.6000",
+          "ITA": "0.4000"
         }
-      }
-    }
-  ]
-}
+      },
+      "sector": "Technology"
+    },
+    "has_provider": true,
+    "has_metadata": true
+  }
+]
 ```
 
 **Verifica**:

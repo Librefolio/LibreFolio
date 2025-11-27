@@ -442,7 +442,7 @@ class FAClassificationParams(BaseModel):
         ... )
     """
     model_config = ConfigDict(extra="forbid")
-
+    # TODO: forzare nella validazione l'appartenenza a uno degli elementi dell'enum models.py::AssetType
     investment_type: Optional[str] = None
     short_description: Optional[str] = None
     geographic_area: Optional[FAGeographicArea] = None
