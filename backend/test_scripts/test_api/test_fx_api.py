@@ -22,16 +22,12 @@ from backend.app.schemas import (
     FXConvertRequest, FXConvertResponse,
     FXBulkUpsertRequest, FXBulkUpsertResponse,
     FXBulkDeleteRequest, FXBulkDeleteResponse,
-)
+    )
 from backend.app.schemas.fx import (
-    FXProvidersResponse, FXProviderInfo,
-    FXConversionRequest, FXConversionResult,
-    FXUpsertItem, FXUpsertResult,
-    FXDeleteItem, FXDeleteResult,
-    FXPairSourceItem, FXPairSourcesResponse,
+    FXProvidersResponse, FXConversionRequest, FXUpsertItem, FXDeleteItem, FXPairSourceItem, FXPairSourcesResponse,
     FXCreatePairSourcesRequest, FXCreatePairSourcesResponse,
     FXDeletePairSourcesRequest,
-)
+    )
 from backend.app.schemas.refresh import FXSyncResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success
@@ -82,7 +78,7 @@ async def test_get_currencies(test_server):
         response = await client.get(
             f"{API_BASE}/fx/currencies",
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -111,7 +107,7 @@ async def test_get_providers(test_server):
         response = await client.get(
             f"{API_BASE}/fx/providers",
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -144,7 +140,7 @@ async def test_pair_sources_crud(test_server):
         response = await client.get(
             f"{API_BASE}/fx/pair-sources",
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 200, f"GET failed: {response.status_code}"
         sources_response = FXPairSourcesResponse(**response.json())
         print_success(f"✓ Listed {sources_response.count} initial sources")
@@ -158,14 +154,14 @@ async def test_pair_sources_crud(test_server):
                     quote="EUR",
                     provider_code="ECB",
                     priority=1
-                )
-            ]
-        )
+                    )
+                ]
+            )
         response = await client.post(
             f"{API_BASE}/fx/pair-sources/bulk",
             json=create_request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 201, f"POST failed: {response.status_code}: {response.text}"
         create_response = FXCreatePairSourcesResponse(**response.json())
         assert create_response.success_count == 1, "Should create 1 source"
@@ -176,11 +172,11 @@ async def test_pair_sources_crud(test_server):
         response = await client.get(
             f"{API_BASE}/fx/pair-sources",
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 200, f"GET failed: {response.status_code}"
         sources_response = FXPairSourcesResponse(**response.json())
         usd_eur_sources = [s for s in sources_response.sources
-                          if s.base == 'USD' and s.quote == 'EUR']
+                           if s.base == 'USD' and s.quote == 'EUR']
         assert len(usd_eur_sources) > 0, "USD/EUR source should exist"
         print_success("✓ Pair source verified")
 
@@ -193,14 +189,14 @@ async def test_pair_sources_crud(test_server):
                     quote="EUR",
                     provider_code="ECB",
                     priority=2
-                )
-            ]
-        )
+                    )
+                ]
+            )
         response = await client.post(
             f"{API_BASE}/fx/pair-sources/bulk",
             json=update_request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 201, f"POST failed: {response.status_code}"
         update_response = FXCreatePairSourcesResponse(**response.json())
         assert update_response.success_count == 1, "Should update 1 source"
@@ -208,19 +204,19 @@ async def test_pair_sources_crud(test_server):
 
         # 3e. Delete pair source
         print_info("3e. Delete pair source")
-        
+
         delete_request = FXDeletePairSourcesRequest(
             sources=[
                 {"base": "USD", "quote": "EUR", "provider_code": "ECB"}
-            ]
-        )
+                ]
+            )
         response = await client.request(
             method="DELETE",
             url=f"{API_BASE}/fx/pair-sources/bulk",
             content=delete_request.model_dump_json(),
             headers={"Content-Type": "application/json"},
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 200, f"DELETE failed: {response.status_code}: {response.text}"
         print_success("✓ Pair source deleted")
 
@@ -240,13 +236,13 @@ async def test_sync_rates(test_server):
             "end": yesterday.isoformat(),
             "currencies": "EUR,GBP",
             "provider": "ECB"
-        }
+            }
 
         response = await client.post(
             f"{API_BASE}/fx/sync/bulk",
             params=params,
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -275,12 +271,12 @@ async def test_convert_currency(test_server):
             "end": today.isoformat(),
             "currencies": "EUR,GBP",
             "provider": "ECB"
-        }
+            }
         await client.post(
             f"{API_BASE}/fx/sync/bulk",
             params=sync_params,
             timeout=TIMEOUT
-        )
+            )
 
         # Now convert (use Pydantic models)
         request = FXConvertRequest(
@@ -289,15 +285,15 @@ async def test_convert_currency(test_server):
                     amount=Decimal("100"),
                     **{"from": "USD", "to": "EUR"},  # Use dict unpacking for aliased fields test
                     start_date=today - timedelta(days=1)
-                )
-            ]
-        )
+                    )
+                ]
+            )
 
         response = await client.post(
             f"{API_BASE}/fx/convert/bulk",
             json=request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -327,15 +323,15 @@ async def test_convert_missing_rate(test_server):
                     amount=Decimal("100"),
                     **{"from": "XXX", "to": "YYY"},  # Invalid currencies
                     start_date=date.today()
-                )
-            ]
-        )
+                    )
+                ]
+            )
 
         response = await client.post(
             f"{API_BASE}/fx/convert/bulk",
             json=request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
 
         # Should either return 200 with errors or 4xx
         if response.status_code == 200:
@@ -366,15 +362,15 @@ async def test_manual_rate_upsert(test_server):
                     quote="USD",
                     rate=Decimal("1.25"),
                     source="MANUAL"
-                )
-            ]
-        )
+                    )
+                ]
+            )
 
         response = await client.post(
             f"{API_BASE}/fx/rate-set/bulk",
             json=request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -406,27 +402,27 @@ async def test_bulk_conversions(test_server):
             rates=[
                 FXUpsertItem(**{"date": today}, base="USD", quote="EUR", rate=Decimal("0.85"), source="MANUAL"),
                 FXUpsertItem(**{"date": today}, base="GBP", quote="USD", rate=Decimal("1.25"), source="MANUAL"),
-            ]
-        )
+                ]
+            )
         await client.post(
             f"{API_BASE}/fx/rate-set/bulk",
             json=upsert_request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
 
         # Bulk convert
         request = FXConvertRequest(
             conversions=[
                 FXConversionRequest(amount=Decimal("100"), **{"from": "USD", "to": "EUR"}, start_date=today),
                 FXConversionRequest(amount=Decimal("200"), **{"from": "GBP", "to": "USD"}, start_date=today),
-            ]
-        )
+                ]
+            )
 
         response = await client.post(
             f"{API_BASE}/fx/convert/bulk",
             json=request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
@@ -450,14 +446,14 @@ async def test_bulk_rate_upserts(test_server):
                 FXUpsertItem(**{"date": today}, base="EUR", quote="USD", rate=Decimal("1.10"), source="MANUAL"),
                 FXUpsertItem(**{"date": today}, base="JPY", quote="USD", rate=Decimal("0.0067"), source="MANUAL"),
                 FXUpsertItem(**{"date": today}, base="CHF", quote="USD", rate=Decimal("1.12"), source="MANUAL"),
-            ]
-        )
+                ]
+            )
 
         response = await client.post(
             f"{API_BASE}/fx/rate-set/bulk",
             json=request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
@@ -482,13 +478,13 @@ async def test_delete_rates(test_server):
             rates=[
                 FXUpsertItem(**{"date": yesterday}, base="AUD", quote="USD", rate=Decimal("0.65"), source="MANUAL"),
                 FXUpsertItem(**{"date": today}, base="AUD", quote="USD", rate=Decimal("0.66"), source="MANUAL"),
-            ]
-        )
+                ]
+            )
         await client.post(
             f"{API_BASE}/fx/rate-set/bulk",
             json=upsert_request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
 
         # Delete rate range
         request = FXBulkDeleteRequest(
@@ -497,9 +493,9 @@ async def test_delete_rates(test_server):
                     **{"from": "AUD", "to": "USD"},  # Use dict unpacking for aliased fields
                     start_date=yesterday,
                     end_date=today
-                )
-            ]
-        )
+                    )
+                ]
+            )
 
         response = await client.request(
             method="DELETE",
@@ -507,7 +503,7 @@ async def test_delete_rates(test_server):
             content=request.model_dump_json(),
             headers={"Content-Type": "application/json"},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -530,91 +526,100 @@ async def test_invalid_requests(test_server):
         # 11a. Invalid currency code (too short)
         print_info("11a. Invalid currency code")
         request = {
-            "conversions": [{
-                "amount": "100",
-                "from": "US",  # Too short
-                "to": "EUR",
-                "start_date": date.today().isoformat()
-            }]
-        }
+            "conversions": [
+                {
+                    "amount": "100",
+                    "from": "US",  # Too short
+                    "to": "EUR",
+                    "start_date": date.today().isoformat()
+                    }
+                ]
+            }
         response = await client.post(
             f"{API_BASE}/fx/convert/bulk",
             json=request,
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 422, f"Expected 422 for invalid currency, got {response.status_code}"
         print_success("✓ Invalid currency rejected with 422")
 
         # 11b. Negative amount
         print_info("11b. Negative amount")
         request = {
-            "conversions": [{
-                "amount": "-100",
-                "from": "USD",
-                "to": "EUR",
-                "start_date": date.today().isoformat()
-            }]
-        }
+            "conversions": [
+                {
+                    "amount": "-100",
+                    "from": "USD",
+                    "to": "EUR",
+                    "start_date": date.today().isoformat()
+                    }
+                ]
+            }
         response = await client.post(
             f"{API_BASE}/fx/convert/bulk",
             json=request,
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 422, f"Expected 422 for negative amount, got {response.status_code}"
         print_success("✓ Negative amount rejected with 422")
 
         # 11c. Missing required field
         print_info("11c. Missing required field")
         request = {
-            "conversions": [{
-                "amount": "100",
-                "from": "USD",
-                # Missing "to" field
-                "start_date": date.today().isoformat()
-            }]
-        }
+            "conversions": [
+                {
+                    "amount": "100",
+                    "from": "USD",
+                    # Missing "to" field
+                    "start_date": date.today().isoformat()
+                    }
+                ]
+            }
         response = await client.post(
             f"{API_BASE}/fx/convert/bulk",
             json=request,
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 422, f"Expected 422 for missing field, got {response.status_code}"
         print_success("✓ Missing field rejected with 422")
 
         # 11d. Invalid rate (zero)
         print_info("11d. Invalid rate (zero)")
         request = {
-            "rates": [{
-                "date": date.today().isoformat(),
-                "base": "USD",
-                "quote": "EUR",
-                "rate": "0",  # Zero rate
-                "source": "MANUAL"
-            }]
-        }
+            "rates": [
+                {
+                    "date": date.today().isoformat(),
+                    "base": "USD",
+                    "quote": "EUR",
+                    "rate": "0",  # Zero rate
+                    "source": "MANUAL"
+                    }
+                ]
+            }
         response = await client.post(
             f"{API_BASE}/fx/rate-set/bulk",
             json=request,
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 422, f"Expected 422 for zero rate, got {response.status_code}"
         print_success("✓ Zero rate rejected with 422")
 
         # 11e. Invalid date format
         print_info("11e. Invalid date format")
         request = {
-            "conversions": [{
-                "amount": "100",
-                "from": "USD",
-                "to": "EUR",
-                "start_date": "invalid-date"
-            }]
-        }
+            "conversions": [
+                {
+                    "amount": "100",
+                    "from": "USD",
+                    "to": "EUR",
+                    "start_date": "invalid-date"
+                    }
+                ]
+            }
         response = await client.post(
             f"{API_BASE}/fx/convert/bulk",
             json=request,
             timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 422, f"Expected 422 for invalid date, got {response.status_code}"
         print_success("✓ Invalid date rejected with 422")
-

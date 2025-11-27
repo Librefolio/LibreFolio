@@ -105,6 +105,7 @@ def normalize_country_to_iso3(country_input: str) -> str:
     # Not found
     raise ValueError(f"Country '{country_input}' not found. Please use ISO-3166-A2 (e.g., US), ISO-3166-A3 (e.g., USA), or full country name.")
 
+
 def quantize_weight(value: Decimal) -> Decimal:
     """
     Quantize weight to 4 decimals using ROUND_HALF_EVEN.

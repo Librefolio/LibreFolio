@@ -44,6 +44,7 @@ def test_normalize_country_to_iso3():
     with pytest.raises(ValueError):
         normalize_country_to_iso3("")
 
+
 def test_quantize_weight():
     """Test weight quantization to 4 decimals."""
     # Quantize to 4 decimals

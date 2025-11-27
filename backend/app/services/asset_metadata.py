@@ -31,11 +31,20 @@ Usage:
 import json
 from typing import Optional
 
+import structlog
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app.db.models import Asset
 from backend.app.schemas.assets import (
     FAClassificationParams,
     FAPatchMetadataRequest,
     FAMetadataChangeDetail,
+    FAMetadataRefreshResult,
     )
+
+# Initialize structured logger
+logger = structlog.get_logger(__name__)
 
 
 class AssetMetadataService:
@@ -44,7 +53,6 @@ class AssetMetadataService:
 
     All methods are static - no instance state required.
     """
-
 
     @staticmethod
     def compute_metadata_diff(
@@ -226,14 +234,9 @@ class AssetMetadataService:
             >>> result.changes
             [FAMetadataChangeDetail(field='sector', old=None, new='"Technology"')]
         """
-        from sqlalchemy import select
-        from backend.app.db.models import Asset
-        from backend.app.schemas.assets import FAMetadataRefreshResult
 
         # Load asset from DB
-        result = await session.execute(
-            select(Asset).where(Asset.id == asset_id)
-            )
+        result = await session.execute(select(Asset).where(Asset.id == asset_id))
         asset = result.scalar_one_or_none()
 
         if not asset:
@@ -250,7 +253,7 @@ class AssetMetadataService:
                     asset_id=asset_id,
                     error=str(e),
                     classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
-                )
+                    )
                 pass  # Treat invalid JSON as None
 
         # Apply PATCH update
@@ -264,7 +267,7 @@ class AssetMetadataService:
             raise ValueError(f"Validation failed: {e}")
 
         # Compute changes before persisting
-        changes = AssetMetadataService.compute_metadata_diff(current_params,updated_params)
+        changes = AssetMetadataService.compute_metadata_diff(current_params, updated_params)
 
         # Serialize back to JSON
         asset.classification_params = updated_params.model_dump_json(exclude_none=True) if updated_params else None

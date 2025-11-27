@@ -5,7 +5,6 @@ Tests all registered asset providers (yfinance, cssscraper, etc.) with uniform t
 Similar pattern to test_fx_providers.py.
 """
 import sys
-import traceback
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -24,9 +23,8 @@ from backend.test_scripts.test_utils import (
     print_section,
     print_success,
     print_warning,
-)
+    )
 import traceback
-
 
 # ============================================================================
 # PYTEST FIXTURES AND PARAMETRIZATION
@@ -423,6 +421,7 @@ async def test_error_handling(provider_code: str):
         print_error(f"Error handling test failed: {e}")
         traceback.print_exc()
         raise
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

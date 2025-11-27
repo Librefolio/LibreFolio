@@ -7,8 +7,6 @@ using Pydantic's native JSON methods.
 import json
 from decimal import Decimal
 
-import pytest
-
 from backend.app.schemas.assets import FAClassificationParams, FAGeographicArea
 
 
@@ -20,7 +18,7 @@ def test_classification_params_with_geographic_area():
         short_description="Test Company",
         geographic_area=geo,
         sector="Technology"
-    )
+        )
 
     assert params.geographic_area is not None
     assert params.geographic_area.distribution["USA"] == Decimal("0.6")
@@ -35,7 +33,7 @@ def test_serialize_classification_params():
         investment_type="stock",
         geographic_area=geo,
         sector="Technology"
-    )
+        )
 
     json_str = params.model_dump_json(exclude_none=True)
     data = json.loads(json_str)
@@ -70,7 +68,7 @@ def test_round_trip_serialization():
         investment_type="etf",
         geographic_area=geo,
         sector="Finance"
-    )
+        )
 
     # Serialize
     json_str1 = original.model_dump_json(exclude_none=True)
@@ -93,7 +91,7 @@ def test_none_geographic_area():
     params = FAClassificationParams(
         investment_type="stock",
         sector="Technology"
-    )
+        )
 
     json_str = params.model_dump_json(exclude_none=True)
     data = json.loads(json_str)
@@ -103,4 +101,3 @@ def test_none_geographic_area():
     # Deserialize
     parsed = FAClassificationParams.model_validate_json(json_str)
     assert parsed.geographic_area is None
-

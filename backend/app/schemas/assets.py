@@ -448,6 +448,7 @@ class FAClassificationParams(BaseModel):
     geographic_area: Optional[FAGeographicArea] = None
     sector: Optional[str] = None
 
+
 class FAPatchMetadataRequest(BaseModel):
     """
     PATCH metadata request (partial update).

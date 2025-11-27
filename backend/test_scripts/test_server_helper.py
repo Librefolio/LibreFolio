@@ -135,7 +135,6 @@ class _TestingServerManager:
 
         # Import app here (inside thread) to ensure coverage tracking
         from backend.app.main import app
-
         # Signal that we're starting
         self.server_started.set()
 
@@ -146,7 +145,7 @@ class _TestingServerManager:
             port=TEST_SERVER_PORT,
             log_level="error",  # Reduce noise
             access_log=False
-        )
+            )
 
     def start_server(self) -> bool:
         """
@@ -166,7 +165,7 @@ class _TestingServerManager:
             target=self._run_server,
             daemon=True,  # Thread dies when main process exits
             name="uvicorn-test-server"
-        )
+            )
         self.server_thread.start()
 
         # Wait for thread to signal start
@@ -198,7 +197,6 @@ class _TestingServerManager:
         self.server_thread = None
         self.server_started.clear()
 
-
     def get_base_url(self) -> str:
         """Get the test server base URL."""
         return TEST_SERVER_URL
@@ -214,5 +212,3 @@ class _TestingServerManager:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - cleanup server."""
         self.stop_server()
-
-

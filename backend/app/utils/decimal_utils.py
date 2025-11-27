@@ -129,7 +129,6 @@ def truncate_fx_rate(value: Decimal) -> Decimal:
     return truncate_to_db_precision(value, FxRate, "rate")
 
 
-
 def parse_decimal_value(value) -> Optional[Decimal]:
     """
     Convert input to Decimal safely.

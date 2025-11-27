@@ -40,7 +40,7 @@ from backend.app.db.models import (
     ValuationModel,
     TransactionType,
     CashMovementType,
-)
+    )
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
 
 
@@ -273,6 +273,7 @@ def test_check_constraints():
         f"Run: python -m backend.alembic.check_constraints_hook"
 
     print(f"✅ All CHECK constraints present in database")
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
