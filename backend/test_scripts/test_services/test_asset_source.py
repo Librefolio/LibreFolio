@@ -49,6 +49,20 @@ from backend.test_scripts.test_utils import (
 
 from backend.app.db.models import PriceHistory
 from sqlalchemy import select
+from backend.app.schemas.assets import (
+    FAInterestRatePeriod,
+    FALateInterestConfig,
+    CompoundingType,
+    DayCountConvention,
+    )
+from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.schemas.prices import FAUpsert, FAUpsertItem
+
+from backend.app.db.models import AssetProviderAssignment
+from sqlalchemy import delete
+
+from backend.app.schemas.prices import FAAssetDelete
+from backend.app.schemas.common import DateRangeModel
 
 
 # ============================================================================
@@ -169,13 +183,6 @@ def test_find_active_period():
     """
     print_section("Test 4: Find Active Period (Synthetic Yield)")
 
-    from backend.app.schemas.assets import (
-        FAInterestRatePeriod,
-        FALateInterestConfig,
-        CompoundingType,
-        DayCountConvention,
-        )
-
     schedule = [
         FAInterestRatePeriod(
             start_date=date(2025, 1, 1),
@@ -252,9 +259,6 @@ async def test_bulk_assign_providers():
         for asset in test_assets:
             await session.refresh(asset)
 
-        # Import schema
-        from backend.app.schemas.provider import FAProviderAssignmentItem
-
         # Bulk assign providers
         assignments = [
             FAProviderAssignmentItem(asset_id=test_assets[0].id, provider_code="yfinance", provider_params={"ticker": "TEST1"}),
@@ -303,15 +307,11 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
         await session.refresh(test_asset)
 
         print_info(f"Created test asset {test_asset.id} with no metadata")
-
-        # Import schema
-        from backend.app.schemas.provider import FAProviderAssignmentItem
-
         # Bulk assign providers (single item for compatibility)
         item = FAProviderAssignmentItem(
-                asset_id=test_asset.id,
-                provider_code="mockprov",
-                provider_params={"mock_param": "test"})
+            asset_id=test_asset.id,
+            provider_code="mockprov",
+            provider_params={"mock_param": "test"})
 
         results = await AssetSourceManager.bulk_assign_providers([item], session)
         # Assuming single result, extract it
@@ -375,9 +375,6 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
     print_section("Test 9: Bulk Upsert Prices")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        # Import schemas
-        from backend.app.schemas.prices import FAUpsert, FAUpsertItem
-
         # Upsert prices for 2 assets
         data = [
             FAUpsert(
@@ -385,15 +382,15 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
                 prices=[
                     FAUpsertItem(date=date(2025, 1, 1), close=Decimal("100.50"), volume=Decimal("1000"), currency="USD"),
                     FAUpsertItem(date=date(2025, 1, 2), close=Decimal("101.25"), volume=Decimal("1500"), currency="USD"),
-                ]
-            ),
+                    ]
+                ),
             FAUpsert(
                 asset_id=asset_ids[1],
                 prices=[
                     FAUpsertItem(date=date(2025, 1, 1), close=Decimal("200.00"), volume=Decimal("500"), currency="USD"),
-                ]
-            ),
-        ]
+                    ]
+                ),
+            ]
 
         result = await AssetSourceManager.bulk_upsert_prices(data, session)
 
@@ -472,7 +469,6 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
         test_asset_id = asset_ids[0]
 
         # Clear existing prices first
-        from sqlalchemy import delete
         await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == test_asset_id))
         await session.commit()
 
@@ -578,7 +574,6 @@ async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
         test_asset_id = asset_ids[1] if len(asset_ids) > 1 else asset_ids[0]
 
         # Clear all prices for this asset
-        from sqlalchemy import delete
         await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == test_asset_id))
         await session.commit()
 
@@ -618,10 +613,8 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
         # Insert invalid provider assignment directly in DB (bypass Pydantic validation)
         # This simulates a legacy provider or corrupted data
         invalid_provider = "invalid_nonexistent_provider"
-        from backend.app.db.models import AssetProviderAssignment
 
         # Delete existing assignment if any
-        from sqlalchemy import delete
         await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == test_asset_id))
 
         # Insert invalid provider directly
@@ -630,7 +623,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             provider_code=invalid_provider,
             provider_params=None,
             fetch_interval=1440
-        )
+            )
         session.add(invalid_assignment)
         await session.commit()
         print_info(f"Inserted invalid provider '{invalid_provider}' directly in DB for asset {test_asset_id}")
@@ -673,21 +666,17 @@ async def test_bulk_delete_prices(asset_ids: list[int]):
     print_section("Test 14: Bulk Delete Prices")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        # Import schemas
-        from backend.app.schemas.prices import FAAssetDelete
-        from backend.app.schemas.common import DateRangeModel
-
         # Delete specific ranges
         data = [
             FAAssetDelete(
                 asset_id=asset_ids[0],
                 date_ranges=[DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 2))]
-            ),
+                ),
             FAAssetDelete(
                 asset_id=asset_ids[1],
                 date_ranges=[DateRangeModel(start=date(2025, 1, 1), end=None)]  # Single day
-            ),
-        ]
+                ),
+            ]
 
         result = await AssetSourceManager.bulk_delete_prices(data, session)
 

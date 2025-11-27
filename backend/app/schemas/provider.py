@@ -24,10 +24,13 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 - Bulk Operations: Batch processing for efficiency
 """
 from __future__ import annotations
+
 from typing import List, Optional, Any
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
+
+# Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
 # ============================================================================
 # FA PROVIDER INFO
@@ -104,6 +107,7 @@ class FAProviderAssignmentItem(BaseModel):
     @model_validator(mode='after')
     def validate_provider_params_with_plugin(self):
         """Validate provider_params using the plugin's validate_params method."""
+        # Lazy import to avoid circular dependency
         from backend.app.services.provider_registry import AssetProviderRegistry
         from backend.app.services.asset_source import AssetSourceError
 

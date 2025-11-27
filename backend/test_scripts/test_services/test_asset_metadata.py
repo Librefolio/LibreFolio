@@ -4,7 +4,6 @@ Test AssetMetadataService utility methods.
 Tests diff computation and partial update PATCH semantics
 for asset classification metadata.
 """
-import json
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -19,7 +18,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.schemas.assets import FAClassificationParams, FAPatchMetadataRequest
 from backend.app.services.asset_metadata import AssetMetadataService
-
 
 
 def test_compute_metadata_diff():
@@ -81,7 +79,7 @@ def test_apply_partial_update_geographic_area_full_replace():
     patch = FAPatchMetadataRequest(geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.7"), "FRA": Decimal("0.3")}))
 
     updated = AssetMetadataService.apply_partial_update(current, patch)
-    assert updated.geographic_area.distribution == {"USA": Decimal("0.7000"),"FRA": Decimal("0.3000")}
+    assert updated.geographic_area.distribution == {"USA": Decimal("0.7000"), "FRA": Decimal("0.3000")}
     # ITA is removed (full replace, not merge)
     assert "ITA" not in updated.geographic_area.distribution
     assert updated.sector == "Technology"  # Unchanged
@@ -89,7 +87,7 @@ def test_apply_partial_update_geographic_area_full_replace():
 
 def test_merge_provider_metadata():
     """Test merging provider-fetched metadata with current metadata."""
-    current = FAClassificationParams(investment_type="stock",short_description="User description")
+    current = FAClassificationParams(investment_type="stock", short_description="User description")
 
     provider_data = {
         "investment_type": "etf",  # Provider overrides

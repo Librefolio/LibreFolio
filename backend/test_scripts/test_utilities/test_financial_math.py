@@ -8,7 +8,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.schemas.assets import FAInterestRatePeriod, FALateInterestConfig, CompoundingType, CompoundFrequency, DayCountConvention
-from backend.app.utils.financial_math import find_active_period,calculate_day_count_fraction
+from backend.app.utils.financial_math import find_active_period, calculate_day_count_fraction
 
 
 # ============================================================================
@@ -349,6 +349,7 @@ def test_find_active_period_with_compound_monthly():
     assert period is not None
     assert period.compounding == CompoundingType.COMPOUND
     assert period.compound_frequency == CompoundFrequency.MONTHLY
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

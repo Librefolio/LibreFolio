@@ -58,7 +58,7 @@ async def test_fetch_and_persist_single_currency():
             FxRate.quote == "USD",
             FxRate.date >= start_date,
             FxRate.date <= end_date
-        )
+            )
         result = await session.execute(existing_stmt)
         existing_count = len(result.scalars().all())
 
@@ -72,7 +72,7 @@ async def test_fetch_and_persist_single_currency():
             FxRate.quote == "USD",
             FxRate.date >= start_date,
             FxRate.date <= end_date
-        )
+            )
         result = await session.execute(all_stmt)
         all_rates = result.scalars().all()
 
@@ -120,7 +120,7 @@ async def test_fetch_multiple_currencies():
                 FxRate.quote == quote,
                 FxRate.date >= start_date,
                 FxRate.date <= end_date
-            )
+                )
             result = await session.execute(stmt)
             rates = result.scalars().all()
 
@@ -156,7 +156,7 @@ async def test_data_overwrite():
             FxRate.date >= start_date,
             FxRate.date <= end_date,
             FxRate.source == "ECB"
-        ).order_by(FxRate.date.desc()).limit(1)
+            ).order_by(FxRate.date.desc()).limit(1)
         result = await session.execute(stmt)
         real_rate = result.scalars().first()
 
@@ -173,7 +173,7 @@ async def test_data_overwrite():
             rate=Decimal("9.9999"),
             source="TEST",
             fetched_at=func.current_timestamp()
-        )
+            )
 
         upsert_stmt = stmt.on_conflict_do_update(
             index_elements=['date', 'base', 'quote'],
@@ -181,8 +181,8 @@ async def test_data_overwrite():
                 'rate': stmt.excluded.rate,
                 'source': stmt.excluded.source,
                 'fetched_at': func.current_timestamp()
-            }
-        )
+                }
+            )
 
         await session.execute(upsert_stmt)
         await session.commit()
@@ -196,7 +196,7 @@ async def test_data_overwrite():
             FxRate.base == "EUR",
             FxRate.quote == "USD",
             FxRate.date == test_date
-        )
+            )
         result = await session.execute(stmt)
         restored_rate = result.scalars().first()
 
@@ -238,7 +238,7 @@ async def test_idempotent_sync():
             FxRate.quote == "USD",
             FxRate.date >= start_date,
             FxRate.date <= end_date
-        )
+            )
         result_db = await session.execute(stmt)
         count_1 = len(result_db.scalars().all())
 
@@ -276,7 +276,7 @@ async def test_rate_inversion_for_alphabetical_ordering():
             FxRate.base == "CHF",
             FxRate.quote == "EUR",
             FxRate.date == test_date
-        )
+            )
         result = await session.execute(stmt)
         stored_rate = result.scalars().first()
 
@@ -298,7 +298,7 @@ async def test_rate_inversion_for_alphabetical_ordering():
             FxRate.base == "EUR",
             FxRate.quote == "USD",
             FxRate.date == test_date
-        )
+            )
         result = await session.execute(stmt)
         usd_rate = result.scalars().first()
 
@@ -323,7 +323,7 @@ async def test_database_constraints():
             FxRate.base == "EUR",
             FxRate.quote == "USD",
             FxRate.date == test_date
-        )
+            )
         result = await session.execute(stmt)
         existing_rate = result.scalars().first()
 
@@ -336,7 +336,7 @@ async def test_database_constraints():
             date=test_date,
             rate=Decimal("1.1234"),  # Different rate, same date/base/quote
             source="TEST"
-        )
+            )
         session.add(duplicate)
 
         with pytest.raises(Exception):  # Should fail due to unique constraint
@@ -352,12 +352,13 @@ async def test_database_constraints():
             date=test_date_check,
             rate=Decimal("0.9"),
             source="TEST"
-        )
+            )
         session.add(invalid)
 
         with pytest.raises(Exception):  # Should fail due to check constraint
             await session.commit()
         await session.rollback()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

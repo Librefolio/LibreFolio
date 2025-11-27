@@ -18,9 +18,9 @@ Test Coverage:
 - All CHECK constraints (using check_constraints_hook)
 """
 import sys
-from pathlib import Path
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -48,9 +48,10 @@ from backend.app.db import (
     CashMovementType,
     AssetType,
     IdentifierType,
-)
+    )
 from backend.app.db.session import get_sync_engine
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
+from backend.app.db.models import FxRate
 
 
 # ============================================================================
@@ -68,7 +69,7 @@ def populate_test_data():
         [sys.executable, "-m", "backend.test_scripts.test_db.populate_mock_data", "--force"],
         capture_output=True,
         text=True
-    )
+        )
 
     if result.returncode != 0:
         print(f"Warning: populate_mock_data failed: {result.stderr}")
@@ -94,7 +95,7 @@ def test_data():
             'broker_id': broker.id,
             'asset_id': asset.id,
             'cash_account_id': cash_account.id
-        }
+            }
 
 
 @pytest.fixture
@@ -107,7 +108,7 @@ def clean_test_asset():
             identifier_type=IdentifierType.TICKER,
             currency="EUR",
             asset_type=AssetType.STOCK
-        )
+            )
         session.add(asset)
         session.commit()
         session.refresh(asset)
@@ -124,7 +125,7 @@ def clean_test_asset():
                 # Delete PriceHistory
                 prices = session.exec(
                     select(PriceHistory).where(PriceHistory.asset_id == asset_id)
-                ).all()
+                    ).all()
                 for price in prices:
                     session.delete(price)
 
@@ -132,8 +133,8 @@ def clean_test_asset():
                 assignment = session.exec(
                     select(AssetProviderAssignment).where(
                         AssetProviderAssignment.asset_id == asset_id
-                    )
-                ).first()
+                        )
+                    ).first()
                 if assignment:
                     session.delete(assignment)
 
@@ -157,7 +158,7 @@ def clean_test_broker():
         broker = Broker(
             name=unique_name,
             description="Temporary broker for testing CASCADE"
-        )
+            )
         session.add(broker)
         session.commit()
         session.refresh(broker)
@@ -174,12 +175,12 @@ def clean_test_broker():
                 # Delete CashAccounts
                 accounts = session.exec(
                     select(CashAccount).where(CashAccount.broker_id == broker_id)
-                ).all()
+                    ).all()
                 for account in accounts:
                     # Delete CashMovements first
                     movements = session.exec(
                         select(CashMovement).where(CashMovement.cash_account_id == account.id)
-                    ).all()
+                        ).all()
                     for movement in movements:
                         session.delete(movement)
                     session.delete(account)
@@ -201,7 +202,7 @@ def clean_test_broker():
            "This is expected behavior (RESTRICT), but prevents testing PriceHistory CASCADE. "
            "PriceHistory→Asset CASCADE is correctly configured in migration (verified).",
     strict=False
-)
+    )
 def test_asset_deletion_cascades_price_history(clean_test_asset):
     """Verify PriceHistory is CASCADE deleted when Asset is deleted.
     
@@ -232,14 +233,14 @@ def test_asset_deletion_cascades_price_history(clean_test_asset):
             close=Decimal("100.00"),
             currency="EUR",
             source_plugin_key="test"
-        )
+            )
         session.add(price)
         session.commit()
 
         # Verify price exists
         price_check = session.exec(
             select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)
-        ).first()
+            ).first()
         assert price_check is not None, "Price should exist before asset deletion"
 
         # Delete asset - PriceHistory should CASCADE delete
@@ -249,7 +250,7 @@ def test_asset_deletion_cascades_price_history(clean_test_asset):
         # Verify price was CASCADE deleted
         price_after = session.exec(
             select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)
-        ).first()
+            ).first()
         assert price_after is None, "PriceHistory should be CASCADE deleted with Asset"
 
 
@@ -261,7 +262,7 @@ def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
             asset_id=clean_test_asset,
             provider_code="yfinance",
             provider_params='{"identifier": "TEST"}'
-        )
+            )
         session.add(assignment)
         session.commit()
 
@@ -269,8 +270,8 @@ def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
         assignment_check = session.exec(
             select(AssetProviderAssignment).where(
                 AssetProviderAssignment.asset_id == clean_test_asset
-            )
-        ).first()
+                )
+            ).first()
         assert assignment_check is not None, "Assignment should exist before asset deletion"
 
         # Delete asset
@@ -282,8 +283,8 @@ def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
         assignment_after = session.exec(
             select(AssetProviderAssignment).where(
                 AssetProviderAssignment.asset_id == clean_test_asset
-            )
-        ).first()
+                )
+            ).first()
         assert assignment_after is None, "AssetProviderAssignment should be CASCADE deleted with Asset"
 
 
@@ -299,7 +300,7 @@ def test_asset_deletion_restricted_by_transactions(clean_test_asset, test_data):
             price=Decimal("100.00"),
             currency="EUR",
             trade_date=date(2025, 1, 15)
-        )
+            )
         session.add(tx)
         session.commit()
 
@@ -329,7 +330,7 @@ def test_broker_deletion_restricted_by_cash_accounts(clean_test_broker):
             broker_id=clean_test_broker,
             currency="EUR",
             display_name="Test EUR Account"
-        )
+            )
         session.add(cash_account)
         session.commit()
         cash_account_id = cash_account.id
@@ -360,7 +361,7 @@ def test_broker_deletion_restricted_by_transactions(clean_test_broker, test_data
             price=Decimal("100.00"),
             currency="EUR",
             trade_date=date(2025, 1, 15)
-        )
+            )
         session.add(tx)
         session.commit()
 
@@ -386,7 +387,7 @@ def test_broker_deletion_restricted_by_transactions(clean_test_broker, test_data
     reason="CashAccount deletion blocked by FK constraint. "
            "Need to verify if CashMovement→CashAccount has CASCADE configured in migration.",
     strict=False
-)
+    )
 def test_cash_account_deletion_cascades_movements(clean_test_broker):
     """Verify CashMovements are CASCADE deleted when CashAccount is deleted.
     
@@ -399,7 +400,7 @@ def test_cash_account_deletion_cascades_movements(clean_test_broker):
             broker_id=clean_test_broker,
             currency="EUR",
             display_name="Test EUR Account"
-        )
+            )
         session.add(cash_account)
         session.flush()
         cash_account_id = cash_account.id
@@ -410,14 +411,14 @@ def test_cash_account_deletion_cascades_movements(clean_test_broker):
             type=CashMovementType.DEPOSIT,
             amount=Decimal("1000.00"),
             trade_date=date(2025, 1, 15)
-        )
+            )
         session.add(movement)
         session.commit()
 
         # Verify movement exists
         movement_check = session.exec(
             select(CashMovement).where(CashMovement.cash_account_id == cash_account_id)
-        ).first()
+            ).first()
         assert movement_check is not None, "CashMovement should exist before account deletion"
 
         # Delete cash account
@@ -427,7 +428,7 @@ def test_cash_account_deletion_cascades_movements(clean_test_broker):
         # Verify movement was CASCADE deleted
         movement_after = session.exec(
             select(CashMovement).where(CashMovement.cash_account_id == cash_account_id)
-        ).first()
+            ).first()
         assert movement_after is None, "CashMovement should be CASCADE deleted with CashAccount"
 
 
@@ -445,7 +446,7 @@ def test_transaction_cashmovement_unidirectional_relationship(test_data):
             amount=Decimal("1000.00"),
             trade_date=date(2025, 1, 15),
             note="Test cash movement"
-        )
+            )
         session.add(cash_mov)
         session.flush()
 
@@ -461,7 +462,7 @@ def test_transaction_cashmovement_unidirectional_relationship(test_data):
             currency="EUR",
             trade_date=date(2025, 1, 15),
             cash_movement_id=cash_mov_id
-        )
+            )
         session.add(tx)
         session.commit()
 
@@ -470,14 +471,14 @@ def test_transaction_cashmovement_unidirectional_relationship(test_data):
         # Verify relationship works: Transaction -> CashMovement
         tx_from_db = session.exec(
             select(Transaction).where(Transaction.id == tx_id)
-        ).first()
+            ).first()
 
         assert tx_from_db is not None
         assert tx_from_db.cash_movement_id == cash_mov_id
 
         cash_mov_via_tx = session.exec(
             select(CashMovement).where(CashMovement.id == tx_from_db.cash_movement_id)
-        ).first()
+            ).first()
 
         assert cash_mov_via_tx is not None, "CashMovement not found via Transaction.cash_movement_id"
         assert cash_mov_via_tx.amount == Decimal("1000.00")
@@ -486,7 +487,7 @@ def test_transaction_cashmovement_unidirectional_relationship(test_data):
         # Verify reverse lookup: CashMovement -> Transaction
         tx_via_cash = session.exec(
             select(Transaction).where(Transaction.cash_movement_id == cash_mov_id)
-        ).first()
+            ).first()
 
         assert tx_via_cash is not None, "Transaction not found via cash_movement_id query"
         assert tx_via_cash.type == TransactionType.BUY
@@ -502,7 +503,7 @@ def test_cash_movement_deletion_cascades_transaction(test_data):
             type=CashMovementType.DIVIDEND_INCOME,
             amount=Decimal("50.00"),
             trade_date=date(2025, 2, 1),
-        )
+            )
         session.add(cash_mov)
         session.flush()
         cash_mov_id = cash_mov.id
@@ -517,7 +518,7 @@ def test_cash_movement_deletion_cascades_transaction(test_data):
             currency="EUR",
             trade_date=date(2025, 2, 1),
             cash_movement_id=cash_mov_id
-        )
+            )
         session.add(tx)
         session.commit()
         tx_id = tx.id
@@ -547,7 +548,7 @@ def test_transaction_deletion_does_not_cascade_to_cashmovement(test_data):
             type=CashMovementType.SALE_PROCEEDS,
             amount=Decimal("500.00"),
             trade_date=date(2025, 5, 1),
-        )
+            )
         session.add(cash_mov)
         session.flush()
         cash_mov_id = cash_mov.id
@@ -562,7 +563,7 @@ def test_transaction_deletion_does_not_cascade_to_cashmovement(test_data):
             currency="EUR",
             trade_date=date(2025, 5, 1),
             cash_movement_id=cash_mov_id
-        )
+            )
         session.add(tx)
         session.commit()
         tx_id = tx.id
@@ -590,8 +591,8 @@ def test_asset_provider_unique_per_asset(test_data):
         existing = session.exec(
             select(AssetProviderAssignment).where(
                 AssetProviderAssignment.asset_id == asset_id
-            )
-        ).first()
+                )
+            ).first()
 
         if existing:
             # Try to add duplicate assignment (should fail)
@@ -599,7 +600,7 @@ def test_asset_provider_unique_per_asset(test_data):
                 asset_id=asset_id,
                 provider_code="different_provider",
                 provider_params='{"test": "duplicate"}'
-            )
+                )
             session.add(duplicate)
 
             with pytest.raises(IntegrityError):
@@ -612,7 +613,7 @@ def test_asset_provider_unique_per_asset(test_data):
                 asset_id=asset_id,
                 provider_code="yfinance",
                 provider_params='{"identifier": "AAPL"}'
-            )
+                )
             session.add(assignment1)
             session.commit()
 
@@ -621,7 +622,7 @@ def test_asset_provider_unique_per_asset(test_data):
                 asset_id=asset_id,
                 provider_code="different_provider",
                 provider_params='{"identifier": "AAPL2"}'
-            )
+                )
             session.add(assignment2)
 
             with pytest.raises(IntegrityError):
@@ -642,7 +643,7 @@ def test_cash_account_unique_per_broker_currency(test_data):
         # Get existing account currency
         existing = session.exec(
             select(CashAccount).where(CashAccount.broker_id == broker_id)
-        ).first()
+            ).first()
 
         if existing:
             currency = existing.currency
@@ -652,7 +653,7 @@ def test_cash_account_unique_per_broker_currency(test_data):
                 broker_id=broker_id,
                 currency=currency,
                 display_name="Duplicate Account"
-            )
+                )
             session.add(duplicate)
 
             with pytest.raises(IntegrityError):
@@ -674,7 +675,7 @@ def test_price_history_unique_per_asset_date(test_data):
             close=Decimal("100.00"),
             currency="EUR",
             source_plugin_key="test"
-        )
+            )
         session.add(price1)
         session.commit()
 
@@ -685,7 +686,7 @@ def test_price_history_unique_per_asset_date(test_data):
             close=Decimal("105.00"),
             currency="EUR",
             source_plugin_key="test"
-        )
+            )
         session.add(price2)
 
         with pytest.raises(IntegrityError):
@@ -700,7 +701,6 @@ def test_price_history_unique_per_asset_date(test_data):
 
 def test_fx_rate_unique_per_date_pair():
     """Verify daily-point policy: only one rate per date/base/quote (UNIQUE constraint)."""
-    from backend.app.db.models import FxRate
 
     with Session(get_sync_engine()) as session:
         test_date = date(2025, 6, 1)
@@ -712,7 +712,7 @@ def test_fx_rate_unique_per_date_pair():
             quote="USD",
             rate=Decimal("1.0850"),
             source="TEST"
-        )
+            )
         session.add(rate1)
         session.commit()
 
@@ -723,7 +723,7 @@ def test_fx_rate_unique_per_date_pair():
             quote="USD",
             rate=Decimal("1.0900"),
             source="TEST"
-        )
+            )
         session.add(rate2)
 
         with pytest.raises(IntegrityError):
@@ -752,7 +752,7 @@ def test_check_constraints_all_present():
     all_present, missing = check_and_add_missing_constraints(
         auto_fix=False,
         log_level=LogLevel.INFO
-    )
+        )
 
     assert all_present, \
         f"Missing CHECK constraints: {', '.join(missing)}\n" \
@@ -773,7 +773,7 @@ def test_transaction_check_cash_movement_required(test_data):
                 currency="EUR",
                 trade_date=date(2025, 3, 1),
                 cash_movement_id=None  # Missing required cash_movement_id
-            )
+                )
             session.add(tx)
             session.commit()
 
@@ -793,7 +793,7 @@ def test_transaction_check_cash_movement_not_required(test_data):
             currency="EUR",
             trade_date=date(2025, 4, 1),
             cash_movement_id=None  # OK for ADD_HOLDING
-        )
+            )
         session.add(tx)
         session.commit()
 
@@ -807,8 +807,6 @@ def test_transaction_check_cash_movement_not_required(test_data):
 
 def test_fx_rate_check_alphabetical_ordering():
     """Test CHECK constraint: FX rates must have base < quote (alphabetical)."""
-    from backend.app.db.models import FxRate
-
     with Session(get_sync_engine()) as session:
         # Try to create rate with USD/EUR (invalid: USD > EUR)
         invalid_rate = FxRate(
@@ -817,13 +815,14 @@ def test_fx_rate_check_alphabetical_ordering():
             quote="EUR",
             rate=Decimal("0.9200"),
             source="TEST"
-        )
+            )
         session.add(invalid_rate)
 
         with pytest.raises(IntegrityError):
             session.commit()
 
         session.rollback()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

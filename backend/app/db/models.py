@@ -325,6 +325,7 @@ class Broker(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
+
 # TODO: Capire come identificare nella realtà asset doppi, e quindi aggiungere un vincolo di unicità (e.g identifier, identifier_type)
 class Asset(SQLModel, table=True):
     """
