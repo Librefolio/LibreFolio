@@ -392,7 +392,35 @@ class FAScheduledInvestmentParams(BaseModel):
 # ============================================================================
 # ASSET METADATA & CLASSIFICATION
 # ============================================================================
-# TODO: convertire geographic_area a una classe pydantic e usarla qui
+
+class FAGeographicArea(BaseModel):
+    """
+    Geographic area distribution model.
+
+    Validates and normalizes geographic distribution weights:
+    - ISO-3166-A3 country codes as keys
+    - Decimal weights that must sum to 1.0 (±1e-6 tolerance)
+    - Weights quantized to 4 decimals (ROUND_HALF_EVEN)
+    - Automatic renormalization if sum != 1.0
+
+    Examples:
+        >>> geo = FAGeographicArea(distribution={"USA": Decimal("0.6"), "EUR": Decimal("0.4")})
+        >>> geo.distribution
+        {'USA': Decimal('0.6000'), 'EUR': Decimal('0.4000')}
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    distribution: dict[str, Decimal] = Field(..., description="Geographic distribution weights (ISO-3166-A3 codes)")
+
+    @field_validator("distribution")
+    @classmethod
+    def validate_distribution(cls, v):
+        """Validate and normalize geographic area distribution."""
+        if not v:
+            raise ValueError("Geographic distribution cannot be empty")
+        return validate_and_normalize_geographic_area(v)
+
+
 class FAClassificationParams(BaseModel):
     """
     Asset classification metadata.
@@ -403,13 +431,13 @@ class FAClassificationParams(BaseModel):
     Validation:
     - geographic_area: ISO-3166-A3 codes, weights must sum to 1.0 (±1e-6)
     - Weights quantized to 4 decimals (ROUND_HALF_EVEN)
-    - Automatic renormalization if sum != 1.0
+    - Automatic renormalization if sum != 1.0 (handled by FAGeographicArea)
 
     Examples:
         >>> params = FAClassificationParams(
         ...     investment_type="stock",
         ...     short_description="Apple Inc. - Technology company",
-        ...     geographic_area={"USA": Decimal("0.6"), "EUR": Decimal("0.4")},
+        ...     geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "EUR": Decimal("0.4")}),
         ...     sector="Technology"
         ... )
     """
@@ -417,18 +445,9 @@ class FAClassificationParams(BaseModel):
 
     investment_type: Optional[str] = None
     short_description: Optional[str] = None
-    geographic_area: Optional[dict[str, Decimal]] = None
+    geographic_area: Optional[FAGeographicArea] = None
     sector: Optional[str] = None
 
-    @field_validator("geographic_area")
-    @classmethod
-    def validate_geo_area(cls, v):
-        """Validate and normalize geographic area distribution."""
-        if v is None:
-            return None
-        return validate_and_normalize_geographic_area(v)
-
-# TODO: convertire geographic_area a una classe pydantic e usarla qui
 class FAPatchMetadataRequest(BaseModel):
     """
     PATCH metadata request (partial update).
@@ -446,16 +465,16 @@ class FAPatchMetadataRequest(BaseModel):
         >>> # Clear sector field
         >>> patch = FAPatchMetadataRequest(sector=None)
 
-        >>> # Update geographic_area (full replace)
+        >>> # Update geographic_area
         >>> patch = FAPatchMetadataRequest(
-        ...     geographic_area={"USA": Decimal("1.0")}
+        ...     geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")})
         ... )
     """
     model_config = ConfigDict(extra="forbid")
 
     investment_type: Optional[str] = None
     short_description: Optional[str] = None
-    geographic_area: Optional[dict[str, Decimal] | None] = None
+    geographic_area: Optional[FAGeographicArea | None] = None
     sector: Optional[str] = None
 
 
@@ -478,7 +497,17 @@ class FAAssetMetadataResponse(BaseModel):
     """
     Asset with metadata fields.
 
-    Used for GET/PATCH responses.
+    Used for GET/PATCH responses and bulk read operations.
+
+    Fields:
+    - asset_id: Asset database ID
+    - display_name: User-friendly asset name
+    - identifier: Asset identifier (ISIN, ticker, etc.)
+    - currency: Asset currency code
+    - asset_type: Asset type (STOCK, BOND, ETF, etc.)
+    - classification_params: Optional classification metadata
+    - has_provider: Whether asset has pricing provider assigned
+    - has_metadata: Whether asset has classification metadata
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -486,7 +515,10 @@ class FAAssetMetadataResponse(BaseModel):
     display_name: str
     identifier: str
     currency: str
+    asset_type: Optional[str] = None
     classification_params: Optional[FAClassificationParams] = None
+    has_provider: bool = False
+    has_metadata: bool = False
 
 
 class FAMetadataChangeDetail(BaseModel):
@@ -677,6 +709,7 @@ __all__ = [
     "FAScheduledInvestmentSchedule",
     "FAScheduledInvestmentParams",
     # Metadata & classification (NEW)
+    "FAGeographicArea",
     "FAClassificationParams",
     "FAPatchMetadataRequest",
     "FAAssetMetadataResponse",

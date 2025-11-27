@@ -24,9 +24,9 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 - Bulk Operations: Batch processing for efficiency
 """
 from __future__ import annotations
-from typing import List, Optional
+from typing import List, Optional, Any
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 
 # ============================================================================
@@ -90,12 +90,37 @@ class FAProviderAssignmentItem(BaseModel):
 
     asset_id: int = Field(..., description="Asset ID")
     provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, etc.)")
-    # TODO: se provider_params ha uno schema noto, usarlo qui come submodel, risalire a partire da provider_code
-    #  Se lo schema non è richiesto, lo si capisce dal return None, e allora si lascia dict generico.
-    #  Se non arriva e non è richiesto, far inserire automaticamente un dict vuoto.
-    provider_params: dict = Field(..., description="Provider-specific configuration (JSON)")
-    # TODO: automatizzare il refresh_interval settando il valore di default a 1440 (24h) se NULL
-    fetch_interval: Optional[int] = Field(None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)")
+    provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific configuration (JSON)")
+    fetch_interval: int = Field(1440, description="Refresh frequency in minutes (default: 1440 = 24h)")
+
+    @field_validator('fetch_interval', mode='before')
+    @classmethod
+    def set_default_fetch_interval(cls, v):
+        """Set default fetch_interval if None or empty."""
+        if v is None or v == "":
+            return 1440
+        return v
+
+    @model_validator(mode='after')
+    def validate_provider_params_with_plugin(self):
+        """Validate provider_params using the plugin's validate_params method."""
+        from backend.app.services.provider_registry import AssetProviderRegistry
+        from backend.app.services.asset_source import AssetSourceError
+
+        # Get provider instance
+        provider = AssetProviderRegistry.get_provider_instance(self.provider_code)
+        if not provider:
+            raise ValueError(f"Unknown provider code: {self.provider_code}")
+
+        # Validate params using plugin's validate_params method
+        try:
+            provider.validate_params(self.provider_params)
+        except AssetSourceError as e:
+            raise ValueError(f"Invalid provider_params for {self.provider_code}: {e.message}")
+        except Exception as e:
+            raise ValueError(f"Provider validation error for {self.provider_code}: {str(e)}")
+
+        return self
 
 
 class FABulkAssignRequest(BaseModel):

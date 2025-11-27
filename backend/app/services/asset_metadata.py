@@ -45,73 +45,6 @@ class AssetMetadataService:
     All methods are static - no instance state required.
     """
 
-    @staticmethod
-    def parse_classification_params(json_str: Optional[str]) -> Optional[FAClassificationParams]:
-        """
-        Parse classification_params JSON string to Pydantic model.
-
-        Args:
-            json_str: JSON string from Asset.classification_params field
-
-        Returns:
-            FAClassificationParams if json_str is not None/empty, else None
-
-        Raises:
-            ValueError: If JSON is malformed or validation fails
-
-        Examples:
-            >>> json_str = '{"investment_type": "stock", "geographic_area": {"USA": 0.6, "ITA": 0.4}}'
-            >>> params = AssetMetadataService.parse_classification_params(json_str)
-            >>> params.investment_type
-            'stock'
-            >>> params.geographic_area
-            {'USA': Decimal('0.6000'), 'ITA': Decimal('0.4000')}
-        """
-        if not json_str or json_str.strip() == "":
-            return None
-
-        try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in classification_params: {e}")
-
-        if not isinstance(data, dict):
-            raise ValueError(f"classification_params must be a JSON object, got {type(data).__name__}")
-
-        try:
-            return FAClassificationParams(**data)
-        except Exception as e:
-            raise ValueError(f"Validation failed for classification_params: {e}")
-
-    @staticmethod
-    def serialize_classification_params(model: Optional[FAClassificationParams]) -> Optional[str]:
-        """
-        Serialize FAClassificationParams to JSON string for database storage.
-
-        Args:
-            model: FAClassificationParams instance or None
-
-        Returns:
-            JSON string if model is not None, else None
-
-        Examples:
-            >>> from decimal import Decimal
-            >>> params = FAClassificationParams(
-            ...     investment_type="etf",
-            ...     geographic_area={"USA": Decimal("0.5"), "EUR": Decimal("0.5")}
-            ... )
-            >>> json_str = AssetMetadataService.serialize_classification_params(params)
-            >>> json_str
-            '{"investment_type":"etf","geographic_area":{"USA":"0.5000","EUR":"0.5000"}}'
-        """
-        if model is None:
-            return None
-
-        # Export model to dict, excluding None values
-        data = model.model_dump(exclude_none=True, mode='json')
-
-        # Serialize to JSON
-        return json.dumps(data, ensure_ascii=False, separators=(',', ':'))
 
     @staticmethod
     def compute_metadata_diff(
@@ -307,9 +240,18 @@ class AssetMetadataService:
             raise ValueError(f"Asset {asset_id} not found")
 
         # Parse current classification_params
-        current_params = AssetMetadataService.parse_classification_params(
-            asset.classification_params
-            )
+        current_params = None
+        if asset.classification_params:
+            try:
+                current_params = FAClassificationParams.model_validate_json(asset.classification_params)
+            except Exception as e:
+                logger.error(
+                    "Failed to parse classification_params from database",
+                    asset_id=asset_id,
+                    error=str(e),
+                    classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
+                )
+                pass  # Treat invalid JSON as None
 
         # Apply PATCH update
         try:
@@ -322,15 +264,10 @@ class AssetMetadataService:
             raise ValueError(f"Validation failed: {e}")
 
         # Compute changes before persisting
-        changes = AssetMetadataService.compute_metadata_diff(
-            current_params,
-            updated_params
-            )
+        changes = AssetMetadataService.compute_metadata_diff(current_params,updated_params)
 
         # Serialize back to JSON
-        asset.classification_params = AssetMetadataService.serialize_classification_params(
-            updated_params
-            )
+        asset.classification_params = updated_params.model_dump_json(exclude_none=True) if updated_params else None
 
         # Commit transaction
         await session.commit()

@@ -618,6 +618,18 @@ def utils_geo_normalization(verbose: bool = False) -> bool:
         )
 
 
+def utils_geographic_area_integration(verbose: bool = False) -> bool:
+    """Test FAGeographicArea integration with FAClassificationParams."""
+    print_section("Utils: FAGeographicArea Integration")
+    print_info("Testing: FAGeographicArea serialization/deserialization")
+    print_info("Tests: Pydantic JSON methods, round-trip, nested structure")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_geographic_area_integration.py", "-v"],
+        "FAGeographicArea integration tests",
+        verbose=verbose,
+        )
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     print_header("LibreFolio Utility Tests")
@@ -631,6 +643,7 @@ def utils_all(verbose: bool = False) -> bool:
         ("Compound Interest", lambda: utils_compound_interest(verbose)),
         ("Scheduled Investment Schemas", lambda: utils_scheduled_investment_schemas(verbose)),
         ("Geographic Area Normalization", lambda: utils_geo_normalization(verbose)),
+        ("FAGeographicArea Integration", lambda: utils_geographic_area_integration(verbose)),
         ]
 
     results = []
@@ -681,8 +694,8 @@ def services_all(verbose: bool = False) -> bool:
 
     tests = [
         ("FX Conversion Logic", lambda: services_fx_conversion(verbose)),
-        ("Asset Metadata Service", lambda: services_asset_metadata(verbose)),
         ("Asset Source Logic", lambda: services_asset_source(verbose)),
+        ("Asset Metadata Service", lambda: services_asset_metadata(verbose)),
         ("Asset Source Refresh (smoke)", lambda: services_asset_source_refresh(verbose)),
         ("Provider Registry", lambda: services_provider_registry(verbose)),
         ("Synthetic Yield Calculation", lambda: services_synthetic_yield(verbose)),
@@ -856,7 +869,7 @@ def run_all_tests(verbose: bool = False) -> bool:
         ("External Services", lambda: external_all(verbose)),
         ("Database Layer", lambda: db_all(verbose)),
         ("Utility Modules", lambda: utils_all(verbose)),
-        ("Backend Services", lambda: services_all(verbose)),
+        ("Services layers", lambda: services_all(verbose)),
         ("API Endpoints", lambda: api_test(verbose)),  # Auto-starts server via TestServerManager
         ]
 
@@ -1166,6 +1179,10 @@ Test commands:
                       📋 Prerequisites: pycountry installed
                       💡 Tests: ISO-3166-A3 conversion, weight validation, sum normalization
   
+  geographic-area-integration - Test FAGeographicArea integration with FAClassificationParams
+                                📋 Prerequisites: None
+                                💡 Tests: Pydantic JSON serialization/deserialization, round-trip, nested structure
+  
   all              - Run all utility tests
   
 These are foundational tests for remediation phases 1 & 2.
@@ -1183,6 +1200,7 @@ These are foundational tests for remediation phases 1 & 2.
             "compound-interest",
             "scheduled-investment-schemas",
             "geo-normalization",
+            "geographic-area-integration",
             "all",
             ],
         help="Utility test to run",
@@ -1377,6 +1395,8 @@ def main():
             success = utils_scheduled_investment_schemas(verbose=verbose)
         elif args.action == "geo-normalization":
             success = utils_geo_normalization(verbose=verbose)
+        elif args.action == "geographic-area-integration":
+            success = utils_geographic_area_integration(verbose=verbose)
         elif args.action == "all":
             success = utils_all(verbose=verbose)
 

@@ -27,6 +27,7 @@ from backend.app.schemas.assets import (
     FAHistoricalData,
     FAAssetProviderAssignment,
     # Metadata & classification
+    FAGeographicArea,
     FAClassificationParams,
     FAPatchMetadataRequest,
     FAAssetMetadataResponse,
@@ -93,6 +94,7 @@ __all__ = [
     "FAHistoricalData",
     "FAAssetProviderAssignment",
     # Assets: Metadata & classification
+    "FAGeographicArea",
     "FAClassificationParams",
     "FAPatchMetadataRequest",
     "FAAssetMetadataResponse",

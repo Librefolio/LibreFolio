@@ -133,9 +133,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         Raises:
             AssetSourceError: If asset not found
         """
-        result = await session.execute(
-            select(Asset).where(Asset.id == asset_id)
-            )
+        result = await session.execute(select(Asset).where(Asset.id == asset_id))
         asset = result.scalar_one_or_none()
 
         if not asset:
@@ -168,21 +166,14 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
         if up_to_date:
             # Use settlement_date if available, otherwise trade_date
-            query = query.where(
-                and_(
-                    Transaction.trade_date <= up_to_date
-                    )
-                )
+            query = query.where(and_(Transaction.trade_date <= up_to_date))
 
         query = query.order_by(Transaction.trade_date, Transaction.id)
 
         result = await session.execute(query)
         return list(result.scalars().all())
 
-    def _calculate_face_value_from_transactions(
-        self,
-        transactions: list[Transaction] | list[dict]
-        ) -> Decimal:
+    def _calculate_face_value_from_transactions(self,transactions: list[Transaction] | list[dict]) -> Decimal:
         """
         Calculate current principal (face_value) from transactions.
 
@@ -642,6 +633,9 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 details={"required": ["schedule"]}
                 )
 
+        if "_transaction_override" in provider_params:
+            # Remove test-only field before validation
+            provider_params = {k: v for k, v in provider_params.items() if k != "_transaction_override"}
         try:
             # Convert dict to Pydantic model (automatic validation)
             return FAScheduledInvestmentSchedule(**provider_params)

@@ -20,7 +20,6 @@ from backend.app.schemas.assets import (
     FABulkAssetDeleteResponse,
     FAAssetDeleteResult,
     )
-from backend.app.services.asset_metadata import AssetMetadataService
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +76,7 @@ class AssetCRUDService:
 
                 # Handle classification_params
                 if item.classification_params:
-                    asset.classification_params = AssetMetadataService.serialize_classification_params(
-                        item.classification_params
-                        )
+                    asset.classification_params = item.classification_params.model_dump_json(exclude_none=True)
 
                 session.add(asset)
                 await session.flush()  # Get ID without committing

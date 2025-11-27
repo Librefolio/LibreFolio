@@ -10,11 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset
+from backend.app.db.models import Asset, AssetProviderAssignment
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.assets import (
     FAPricePoint,
     FAMetadataRefreshResult,
+    FAClassificationParams,
     FABulkPatchMetadataRequest,
     FAAssetMetadataResponse,
     FABulkAssetReadRequest,
@@ -283,7 +284,8 @@ async def assign_provider_single(
             asset_id,
             assignment.provider_code,
             assignment.provider_params,
-            session
+            session,
+            fetch_interval=assignment.fetch_interval
             )
         return result
     except HTTPException:
@@ -399,7 +401,7 @@ async def delete_prices_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Convenience wrapper for single-asset price deletion (calls bulk internally)
+# TODO: rimuovere endpoint singolo, si usano solo api bulk
 @router.delete("/{asset_id}/prices")
 async def delete_prices_single(
     asset_id: int,
@@ -518,27 +520,49 @@ async def read_assets_bulk(
         if not request.asset_ids:
             return []
 
+        # Fetch assets
         stmt = select(Asset).where(Asset.id.in_(request.asset_ids))
         result = await session.execute(stmt)
         assets = result.scalars().all()
         asset_map = {asset.id: asset for asset in assets}
+
+        # Fetch provider assignments for has_provider flag
+        provider_stmt = select(AssetProviderAssignment.asset_id).where(
+            AssetProviderAssignment.asset_id.in_(request.asset_ids)
+        )
+        provider_result = await session.execute(provider_stmt)
+        assets_with_provider = {row[0] for row in provider_result.fetchall()}
 
         responses = []
         for asset_id in request.asset_ids:
             asset = asset_map.get(asset_id)
             if not asset:
                 continue
+
+            # Parse classification params
+            classification_params = None
+            if asset.classification_params:
+                try:
+                    classification_params = FAClassificationParams.model_validate_json(asset.classification_params)
+                except Exception as e:
+                    logger.error(
+                        f"Failed to parse classification_params for asset {asset.id}: {e}",
+                        extra={"asset_id": asset.id, "error": str(e)}
+                    )
+                    pass  # Skip invalid JSON
+
             responses.append(
                 FAAssetMetadataResponse(
                     asset_id=asset.id,
                     display_name=asset.display_name,
                     identifier=asset.identifier,
                     currency=asset.currency,
-                    classification_params=AssetMetadataService.parse_classification_params(
-                        asset.classification_params
-                        )
-                    )
+                    asset_type=asset.asset_type,
+                    classification_params=classification_params,
+                    has_provider=asset.id in assets_with_provider,
+                    has_metadata=classification_params is not None
                 )
+            )
 
         return responses
     except Exception as e:
@@ -568,7 +592,7 @@ async def refresh_prices_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Convenience wrapper for single-asset price refresh (calls bulk internally)
+# TODO: rimuovere endpoint singolo, si usano solo api bulk
 @router.post("/{asset_id}/prices-refresh")
 async def refresh_prices_single(
     asset_id: int,
@@ -579,9 +603,7 @@ async def refresh_prices_single(
     ):
     """Refresh prices for single asset (convenience endpoint, calls bulk internally)."""
     try:
-        result = await AssetSourceManager.refresh_price(
-            asset_id, start_date, end_date, session, force=force
-            )
+        result = await AssetSourceManager.refresh_price(asset_id, start_date, end_date, session, force=force)
         return result
     except Exception as e:
         logger.error(f"Error refreshing prices for asset {asset_id}: {e}")
