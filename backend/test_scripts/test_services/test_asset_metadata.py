@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from backend.app.db import AssetType
 from backend.app.schemas import FAGeographicArea
 
 # Add project root to path
@@ -22,8 +23,8 @@ from backend.app.services.asset_metadata import AssetMetadataService
 
 def test_compute_metadata_diff():
     """Test computing differences between two FAClassificationParams instances."""
-    old = FAClassificationParams(investment_type="stock", sector="Energy")
-    new = FAClassificationParams(investment_type="etf", sector="Technology")
+    old = FAClassificationParams(investment_type=AssetType.STOCK, sector="Energy")
+    new = FAClassificationParams(investment_type=AssetType.ETF, sector="Technology")
 
     changes = AssetMetadataService.compute_metadata_diff(old, new)
     fields = {c.field for c in changes}
@@ -36,7 +37,7 @@ def test_compute_metadata_diff():
 def test_apply_partial_update_absent_fields_ignored():
     """Test that absent fields in patch are ignored (PATCH semantics)."""
     current = FAClassificationParams(
-        investment_type="stock",
+        investment_type=AssetType.STOCK,
         sector="Technology"
         )
 
@@ -44,7 +45,7 @@ def test_apply_partial_update_absent_fields_ignored():
     patch = FAPatchMetadataRequest(short_description="New description")
 
     updated = AssetMetadataService.apply_partial_update(current, patch)
-    assert updated.investment_type == "stock"  # Unchanged
+    assert updated.investment_type == AssetType.STOCK  # Unchanged
     assert updated.sector == "Technology"  # Unchanged
     assert updated.short_description == "New description"  # Updated
 
@@ -52,7 +53,7 @@ def test_apply_partial_update_absent_fields_ignored():
 def test_apply_partial_update_null_clears_field():
     """Test that null in patch clears the field (PATCH semantics)."""
     current = FAClassificationParams(
-        investment_type="stock",
+        investment_type=AssetType.STOCK,
         short_description="Original",
         sector="Technology"
         )
@@ -70,7 +71,7 @@ def test_apply_partial_update_null_clears_field():
 def test_apply_partial_update_geographic_area_full_replace():
     """Test that geographic_area is fully replaced (no merge)."""
     current = FAClassificationParams(
-        investment_type="stock",
+        investment_type=AssetType.STOCK,
         geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}),
         sector="Technology"
         )
@@ -87,15 +88,15 @@ def test_apply_partial_update_geographic_area_full_replace():
 
 def test_merge_provider_metadata():
     """Test merging provider-fetched metadata with current metadata."""
-    current = FAClassificationParams(investment_type="stock", short_description="User description")
+    current = FAClassificationParams(investment_type=AssetType.STOCK, short_description="User description")
 
     provider_data = {
-        "investment_type": "etf",  # Provider overrides
+        "investment_type": AssetType.ETF,  # Provider overrides
         "sector": "Technology"  # Provider adds new field
         }
 
     merged = AssetMetadataService.merge_provider_metadata(current, provider_data)
-    assert merged.investment_type == "etf"  # Provider wins
+    assert merged.investment_type == AssetType.ETF  # Provider wins
     assert merged.sector == "Technology"  # Added by provider
     assert merged.short_description == "User description"  # Unchanged
 
@@ -109,7 +110,7 @@ def test_patch_semantic_edge_cases():
     # Case 1: PATCH with only geographic_area → other fields unchanged
     print("\nCase 1: PATCH only geographic_area, other fields unchanged")
     current = FAClassificationParams(
-        investment_type="stock",
+        investment_type=AssetType.STOCK,
         sector="Technology",
         short_description="Tech stock",
         geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")})
@@ -118,7 +119,7 @@ def test_patch_semantic_edge_cases():
     updated = AssetMetadataService.apply_partial_update(current, patch)
 
     # Verify: geographic_area changed, other fields unchanged
-    assert updated.investment_type == "stock", "investment_type should be unchanged"
+    assert updated.investment_type == AssetType.STOCK, "investment_type should be unchanged"
     assert updated.sector == "Technology", "sector should be unchanged"
     assert updated.short_description == "Tech stock", "short_description should be unchanged"
     assert updated.geographic_area.distribution == {"USA": Decimal("0.6000"), "GBR": Decimal("0.4000")}
@@ -126,18 +127,18 @@ def test_patch_semantic_edge_cases():
 
     # Case 2: PATCH geographic_area=null → clears existing geographic_area
     print("\nCase 2: PATCH geographic_area=null clears field")
-    current = FAClassificationParams(investment_type="etf", geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}))
+    current = FAClassificationParams(investment_type=AssetType.ETF, geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}))
     patch = FAPatchMetadataRequest(geographic_area=None)
     updated = AssetMetadataService.apply_partial_update(current, patch)
 
     # Verify: geographic_area cleared, investment_type unchanged
     assert updated.geographic_area is None, "geographic_area should be None"
-    assert updated.investment_type == "etf", "investment_type should be unchanged"
+    assert updated.investment_type == AssetType.ETF, "investment_type should be unchanged"
     print("✅ geographic_area cleared with null")
 
     # Case 3: Multiple PATCHes in sequence → final state correct
     print("\nCase 3: Multiple PATCHes in sequence")
-    current = FAClassificationParams(investment_type="stock", sector="Finance")
+    current = FAClassificationParams(investment_type=AssetType.STOCK, sector="Finance")
 
     # First PATCH: Update sector and add geo area
     patch1 = FAPatchMetadataRequest(sector="Technology", geographic_area=FAGeographicArea(distribution={"USA": "1.0"}))
@@ -148,7 +149,7 @@ def test_patch_semantic_edge_cases():
     # Second PATCH: Update investment_type, keep others
     patch2 = FAPatchMetadataRequest(investment_type="etf")
     current = AssetMetadataService.apply_partial_update(current, patch2)
-    assert current.investment_type == "etf"
+    assert current.investment_type == AssetType.ETF
     assert current.sector == "Technology"  # Still there
     assert current.geographic_area.distribution == {"USA": Decimal("1.0000")}  # Still there
 
@@ -156,7 +157,7 @@ def test_patch_semantic_edge_cases():
     patch3 = FAPatchMetadataRequest(sector=None)
     current = AssetMetadataService.apply_partial_update(current, patch3)
     assert current.sector is None
-    assert current.investment_type == "etf"  # Still there
+    assert current.investment_type == AssetType.ETF  # Still there
     assert current.geographic_area.distribution == {"USA": Decimal("1.0000")}  # Still there
 
     print("✅ Multiple sequential PATCHes result in correct final state")
@@ -168,7 +169,7 @@ def test_patch_semantic_edge_cases():
     # For testing, we just verify that the last PATCH wins
 
     current = FAClassificationParams(
-        investment_type="stock",
+        investment_type=AssetType.STOCK,
         sector="Technology"
         )
 

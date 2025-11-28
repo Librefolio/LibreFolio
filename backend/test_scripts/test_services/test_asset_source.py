@@ -270,12 +270,12 @@ async def test_bulk_assign_providers():
 
         # Detailed logging of results
         for r in results:
-            status = "OK" if r.get("success") else "ERROR"
-            print_info(f"Assignment result: asset_id={r.get('asset_id')} status={status} message={r.get('message')}")
+            status = "OK" if r.success else "ERROR"
+            print_info(f"Assignment result: asset_id={r.asset_id} status={status} message={r.message}")
 
         # Verify all succeeded
         for result in results:
-            assert result["success"], f"Assignment failed: {result}"
+            assert result.success, f"Assignment failed: {result.message}"
 
         # Verify in DB and print mapping
         for assignment in assignments:
@@ -318,7 +318,7 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
         result = results[0]
 
         print_info(f"Assignment result: {result}")
-        assert result["success"], f"Assignment failed: {result}"
+        assert result.success, f"Assignment failed: {result.message}"
 
         # Refresh asset to get updated metadata
         await session.refresh(test_asset)
@@ -331,14 +331,14 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
         # Parse and verify content
         metadata = json.loads(test_asset.classification_params)
         assert "investment_type" in metadata, "investment_type not populated"
-        assert metadata["investment_type"] == "stock", "investment_type incorrect"
-        print_success("✓ Metadata content verified (investment_type=stock)")
+        assert metadata["investment_type"] == "STOCK", "investment_type incorrect"
+        print_success("✓ Metadata content verified (investment_type=STOCK)")
 
         # Check for metadata_updated flag in result
-        if result.get("metadata_updated"):
+        if result.metadata_updated:
             print_success("✓ Result includes metadata_updated flag")
-            if result.get("metadata_changes"):
-                print_info(f"  Changes: {len(result['metadata_changes'])} fields updated")
+            if result.metadata_changes:
+                print_info(f"  Changes: {len(result.metadata_changes)} fields updated")
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,7 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
-import logging
+from backend.app.logging_config import get_logger
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Dict
@@ -28,7 +28,7 @@ from backend.app.services.provider_registry import register_provider, AssetProvi
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.schemas.assets import FACurrentValue, FAPricePoint, FAHistoricalData
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @register_provider(AssetProviderRegistry)

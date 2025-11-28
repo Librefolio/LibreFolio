@@ -7,6 +7,7 @@ using Pydantic's native JSON methods.
 import json
 from decimal import Decimal
 
+from backend.app.db import AssetType
 from backend.app.schemas.assets import FAClassificationParams, FAGeographicArea
 
 
@@ -14,7 +15,7 @@ def test_classification_params_with_geographic_area():
     """Test FAClassificationParams creation with FAGeographicArea."""
     geo = FAGeographicArea(distribution={"USA": Decimal("0.6"), "EUR": Decimal("0.4")})
     params = FAClassificationParams(
-        investment_type="stock",
+        investment_type=AssetType.STOCK,
         short_description="Test Company",
         geographic_area=geo,
         sector="Technology"
@@ -30,7 +31,7 @@ def test_serialize_classification_params():
     """Test serialization to JSON with FAGeographicArea."""
     geo = FAGeographicArea(distribution={"USA": Decimal("0.7"), "GBR": Decimal("0.3")})
     params = FAClassificationParams(
-        investment_type="stock",
+        investment_type=AssetType.STOCK,
         geographic_area=geo,
         sector="Technology"
         )
@@ -53,7 +54,7 @@ def test_deserialize_classification_params():
     params = FAClassificationParams.model_validate_json(json_str)
 
     assert params is not None
-    assert params.investment_type == "stock"
+    assert params.investment_type == AssetType.STOCK
     assert params.geographic_area is not None
     assert isinstance(params.geographic_area, FAGeographicArea)
     assert params.geographic_area.distribution["USA"] == Decimal("0.6000")
@@ -65,7 +66,7 @@ def test_round_trip_serialization():
     # Create original
     geo = FAGeographicArea(distribution={"USA": Decimal("0.5"), "EUR": Decimal("0.5")})
     original = FAClassificationParams(
-        investment_type="etf",
+        investment_type=AssetType.ETF,
         geographic_area=geo,
         sector="Finance"
         )
@@ -89,7 +90,7 @@ def test_round_trip_serialization():
 def test_none_geographic_area():
     """Test that None geographic_area works correctly."""
     params = FAClassificationParams(
-        investment_type="stock",
+        investment_type=AssetType.STOCK,
         sector="Technology"
         )
 

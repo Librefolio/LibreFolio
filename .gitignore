@@ -18,6 +18,10 @@ backend/data/sqlite/*.db
 backend/data/sqlite/*.db-shm
 backend/data/sqlite/*.db-wal
 
+# Logs
+logs/
+*.log
+
 # IDE
 .vscode/
 .idea/

@@ -37,7 +37,6 @@ from sqlalchemy import event
 from pathlib import Path
 
 
-# TODO: più avanti spostare in una libreria comune se serve altrove
 class LogLevel(str, Enum):
     """Log levels for constraint verification output."""
     INFO = "info"  # Only summary

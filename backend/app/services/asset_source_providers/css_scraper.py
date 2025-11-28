@@ -4,7 +4,7 @@ CSS Web Scraper provider for asset pricing.
 Uses HTTP + BeautifulSoup to extract prices from web pages using CSS selectors.
 Supports both US (1,234.56) and EU (1.234,56) number formats.
 """
-import logging
+from backend.app.logging_config import get_logger
 import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -24,7 +24,7 @@ from backend.app.services.provider_registry import register_provider, AssetProvi
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.schemas.assets import FACurrentValue, FAHistoricalData
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @register_provider(AssetProviderRegistry)
@@ -70,7 +70,7 @@ class CSSScraperProvider(AssetSourceProvider):
     async def get_current_value(
         self,
         identifier: str,
-        provider_params: Dict | None = None,  # TODO: cambiare il parametro per prendere la classe pydantic invece di un dict
+        provider_params: Dict | None = None,
         ) -> FACurrentValue:
         """
         Fetch current price by scraping URL with CSS selector.
@@ -178,7 +178,7 @@ class CSSScraperProvider(AssetSourceProvider):
         identifier: str,
         start_date: date,
         end_date: date,
-        provider_params: Dict | None = None,  # TODO: cambiare il parametro per prendere la classe pydantic invece di un dict, come nel metodo sopra
+        provider_params: Dict | None = None,
         ) -> FAHistoricalData:
         """
         Fetch historical prices (NOT IMPLEMENTED for CSS scraper).
@@ -211,8 +211,6 @@ class CSSScraperProvider(AssetSourceProvider):
         """Search query to use in tests (not supported for CSS scraper)."""
         return None
 
-    # TODO: siccome i parametri devono essere inviati già da API, conviene creare una classe pydantic per i parametri del CSS scraper
-    #  e usarla sia qui che nelle API per validare i parametri in ingresso, non cambiare firma del metodo però, validare appena dopo
     def validate_params(self, params: Dict | None) -> None:
         """
         Validate required parameters.
