@@ -2,7 +2,6 @@
 FX (Foreign Exchange) API endpoints.
 Handles currency conversion and FX rate synchronization.
 """
-import logging
 from datetime import date
 from datetime import timedelta
 from decimal import Decimal
@@ -13,6 +12,7 @@ from sqlmodel import select, delete as sql_delete, and_, or_
 
 from backend.app.db.models import FxCurrencyPairSource
 from backend.app.db.session import get_session_generator
+from backend.app.logging_config import get_logger
 from backend.app.schemas.common import BackwardFillInfo
 from backend.app.schemas.fx import (
     # Provider models
@@ -52,7 +52,7 @@ from backend.app.services.fx import (
     )
 from backend.app.services.provider_registry import FXProviderRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/fx", tags=["FX"])
 
 

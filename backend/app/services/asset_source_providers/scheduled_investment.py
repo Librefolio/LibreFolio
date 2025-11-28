@@ -39,7 +39,7 @@ For detailed parameter structure documentation, see:
 - backend.app.schemas.assets.FALateInterestConfig
 """
 import json
-import logging
+from backend.app.logging_config import get_logger
 from datetime import date as date_type, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -65,7 +65,7 @@ from backend.app.utils.financial_math import (
     calculate_compound_interest,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @register_provider(AssetProviderRegistry)

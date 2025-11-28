@@ -4,6 +4,9 @@ import importlib
 import importlib.util
 from pathlib import Path
 from typing import Type, Dict, List
+from backend.app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class AbstractProviderRegistry:
@@ -114,9 +117,8 @@ class AbstractProviderRegistry:
                     mod = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(mod)
             except Exception as e:
-                # Log error if needed
-                print(f"Error importing provider module {module_name}: {e}")
-                # Don't stop discovery on single-module errors
+                # Log error but don't stop discovery on single-module errors
+                logger.error("Error importing provider module", module_name=module_name, error=str(e))
                 continue
         cls._discovery_done = True
 
