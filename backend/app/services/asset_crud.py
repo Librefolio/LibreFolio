@@ -67,7 +67,7 @@ class AssetCRUDService:
                     currency=item.currency,
                     asset_type=item.asset_type,
                     valuation_model=item.valuation_model,
-                    interest_schedule=item.interest_schedule,
+                    interest_schedule=item.interest_schedule.model_dump_json(exclude_none=True) if item.interest_schedule else None,
                     active=True,
                     )
 
