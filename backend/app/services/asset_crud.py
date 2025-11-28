@@ -4,13 +4,13 @@ Asset CRUD Service.
 Handles Create, Read (List), Update, and Delete operations for assets.
 Supports bulk operations with partial success.
 """
-import logging
 from typing import List
 
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment
+from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
@@ -21,7 +21,7 @@ from backend.app.schemas.assets import (
     FAAssetDeleteResult,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AssetCRUDService:
@@ -67,10 +67,7 @@ class AssetCRUDService:
                     currency=item.currency,
                     asset_type=item.asset_type,
                     valuation_model=item.valuation_model,
-                    face_value=item.face_value,
-                    maturity_date=item.maturity_date,
                     interest_schedule=item.interest_schedule,
-                    late_interest=item.late_interest,
                     active=True,
                     )
 

@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
+from backend.app.db import AssetType
 from backend.app.schemas import (
     FABulkAssetCreateRequest, FAAssetCreateItem, FABulkAssetCreateResponse,
     FAClassificationParams, FAinfoResponse,
@@ -215,7 +216,7 @@ async def test_create_with_classification_params(test_server):
             currency="USD",
             asset_type="STOCK",
             classification_params=FAClassificationParams(
-                investment_type="stock",
+                investment_type=AssetType.STOCK,
                 sector="Technology",
                 geographic_area=FAGeographicArea(distribution={"USA": 0.8, "CHN": 0.2})
                 )

@@ -8,7 +8,7 @@ API Documentation: https://fred.stlouisfed.org/docs/api/fred/
 Data Source: H.10 Foreign Exchange Rates via FRED
 Note: No API key required for basic usage
 """
-import logging
+from backend.app.logging_config import get_logger
 from datetime import date
 from decimal import Decimal
 
@@ -17,7 +17,7 @@ import httpx
 from backend.app.services.fx import FXRateProvider, FXServiceError
 from backend.app.services.provider_registry import register_provider, FXProviderRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @register_provider(FXProviderRegistry)

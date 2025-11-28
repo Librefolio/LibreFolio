@@ -28,7 +28,7 @@ from datetime import date as date_type, timedelta, datetime
 from typing import Optional, List
 
 import structlog
-from sqlalchemy import select, delete, and_, or_
+from sqlalchemy import select, delete, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -36,13 +36,11 @@ from backend.app.db.models import (
     AssetProviderAssignment,
     PriceHistory,
     )
-from backend.app.schemas import FACurrentValue, FAHistoricalData
-from backend.app.schemas.assets import FAClassificationParams
-from backend.app.schemas.assets import FAMetadataRefreshResult
-from backend.app.schemas.assets import FAPricePoint, BackwardFillInfo
-from backend.app.schemas.prices import FAUpsert, FAUpsertItem, FAAssetDelete
-from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.schemas.refresh import FARefreshItem
+from backend.app.schemas import (
+    FACurrentValue, FAHistoricalData, FAClassificationParams,
+    FAMetadataRefreshResult, FAPricePoint, BackwardFillInfo,
+    FAUpsert, FAUpsertItem, FAAssetDelete, FAProviderAssignmentItem,
+    FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse)
 from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -251,26 +249,27 @@ class AssetSourceManager:
     # ========================================================================
     # PROVIDER ASSIGNMENT METHODS
     # ========================================================================
-    # TODO: ritornare FABulkAssignResponse, contando i successi e modificare assign_providers_bulk in v1/assets.py di conseguenza
     @staticmethod
     async def bulk_assign_providers(
         assignments: List[FAProviderAssignmentItem],
         session: AsyncSession,
-        ) -> list[dict]:
+        ) -> list[FAProviderAssignmentResult]:
         """
         Bulk assign/update providers to assets (PRIMARY bulk method).
 
         Args:
             assignments: List of FAProviderAssignmentItem
-            session: Database session
+            session: AsyncSession
 
         Returns:
-            List of results: [{asset_id, success, message}, ...]
+            List of FAProviderAssignmentResult
 
         Optimized: 1 delete + 1 insert query
         """
         if not assignments:
             return []
+
+        from backend.app.schemas.provider import FAProviderAssignmentResult
 
         results = []
         asset_ids = [a.asset_id for a in assignments]
@@ -303,11 +302,13 @@ class AssetSourceManager:
 
         # Build results and auto-populate metadata
         for assignment in assignments:
-            result = {
-                "asset_id": assignment.asset_id,
-                "success": True,
-                "message": f"Provider {assignment.provider_code} assigned"
-                }
+            result = FAProviderAssignmentResult(
+                asset_id=assignment.asset_id,
+                success=True,
+                message=f"Provider {assignment.provider_code} assigned",
+                metadata_updated=None,
+                metadata_changes=None
+                )
 
             # Try to auto-populate metadata from provider
             try:
@@ -334,7 +335,7 @@ class AssetSourceManager:
                                     except Exception as e:
                                         logger.error(
                                             "Failed to parse classification_params during provider assignment",
-                                            asset_id=assignment["asset_id"],
+                                            asset_id=assignment.asset_id,
                                             error=str(e),
                                             classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
                                             )
@@ -359,8 +360,8 @@ class AssetSourceManager:
 
                                 # Add metadata info to result
                                 if changes:
-                                    result["metadata_updated"] = True
-                                    result["metadata_changes"] = [{"field": c.field, "old": c.old_value, "new": c.new_value} for c in changes]
+                                    result.metadata_updated = True
+                                    result.metadata_changes = [{"field": c.field, "old": c.old_value, "new": c.new_value} for c in changes]
                                     logger.info(
                                         "Metadata auto-populated from provider",
                                         asset_id=assignment.asset_id,
@@ -368,7 +369,7 @@ class AssetSourceManager:
                                         changes_count=len(changes)
                                         )
                                 else:
-                                    result["metadata_updated"] = False
+                                    result.metadata_updated = False
                         except Exception as e:
                             # Log but don't fail assignment
                             logger.warning(
@@ -409,22 +410,18 @@ class AssetSourceManager:
         await session.commit()
         return [{"asset_id": aid, "success": True, "message": "Provider removed"} for aid in asset_ids]
 
+    # TODO: modificare il tipo di ritorno con un pydantic model, credo FABulkMetadataRefreshResponse e parallelizzare con gather
     @staticmethod
-    async def refresh_asset_metadata(asset_id: int, session: AsyncSession) -> dict:
+    async def _refresh_single_metadata(asset_id: int, session: AsyncSession) -> FAMetadataRefreshResult:
         """
-        Refresh metadata for single asset from its assigned provider.
+        Refresh metadata for a single asset (internal helper).
 
         Args:
             asset_id: Asset ID
             session: Database session
 
         Returns:
-            Dict with: {asset_id, success, message, changes?, warnings?}
-
-        Examples:
-            >>> result = await AssetSourceManager.refresh_asset_metadata(1, session)
-            >>> result
-            {'asset_id': 1, 'success': True, 'message': '...', 'changes': [...]}
+            FAMetadataRefreshResult
         """
         try:
             # Load asset and provider assignment
@@ -432,24 +429,24 @@ class AssetSourceManager:
             asset = asset_result.scalar_one_or_none()
 
             if not asset:
-                return {"asset_id": asset_id, "success": False, "message": f"Asset {asset_id} not found"}
+                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Asset {asset_id} not found")
 
             # Get provider assignment
             provider_result = await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))
             provider_assignment = provider_result.scalar_one_or_none()
 
             if not provider_assignment:
-                return {"asset_id": asset_id, "success": False, "message": "No provider assigned to asset"}
+                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message="No provider assigned to asset")
 
             # Get provider instance
             provider = AssetProviderRegistry.get_provider_instance(provider_assignment.provider_code)
 
             if not provider:
-                return {"asset_id": asset_id, "success": False, "message": f"Provider {provider_assignment.provider_code} not found"}
+                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Provider {provider_assignment.provider_code} not found")
 
             # Check if provider supports metadata fetch
             if not hasattr(provider, 'fetch_asset_metadata'):
-                return {"asset_id": asset_id, "success": False, "message": f"Provider {provider_assignment.provider_code} doesn't support metadata fetch"}
+                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Provider {provider_assignment.provider_code} doesn't support metadata fetch")
 
             # Parse provider params
             import json
@@ -464,10 +461,10 @@ class AssetSourceManager:
             try:
                 metadata = await provider.fetch_asset_metadata(asset.identifier, provider_params)
             except Exception as e:
-                return {"asset_id": asset_id, "success": False, "message": f"Failed to fetch metadata: {str(e)}"}
+                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Failed to fetch metadata: {str(e)}")
 
             if not metadata:
-                return {"asset_id": asset_id, "success": False, "message": "Provider returned no metadata"}
+                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message="Provider returned no metadata")
 
             # Parse current metadata
             current_params = None
@@ -481,13 +478,12 @@ class AssetSourceManager:
                         error=str(e),
                         classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
                         )
-                    pass
 
             # Merge with provider data
             try:
                 merged = AssetMetadataService.merge_provider_metadata(current_params, metadata)
             except ValueError as e:
-                return {"asset_id": asset_id, "success": False, "message": f"Validation failed: {str(e)}"}
+                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Validation failed: {str(e)}")
 
             # Compute diff
             changes = AssetMetadataService.compute_metadata_diff(current_params, merged)
@@ -505,46 +501,49 @@ class AssetSourceManager:
                 changes_count=len(changes)
                 )
 
-            result = {"asset_id": asset_id, "success": True, "message": f"Metadata refreshed from {provider_assignment.provider_code}"}
+            # Build result
+            changes_list = None
             if changes:
-                result["changes"] = [{"field": c.field, "old_value": c.old_value, "new_value": c.new_value} for c in changes]
-            return result
+                changes_list = [{"field": c.field, "old_value": c.old_value, "new_value": c.new_value} for c in changes]
+
+            return FAMetadataRefreshResult(
+                asset_id=asset_id,
+                success=True,
+                message=f"Metadata refreshed from {provider_assignment.provider_code}",
+                changes=changes_list
+                )
 
         except Exception as e:
             logger.error("Error refreshing metadata", asset_id=asset_id, error=str(e))
-            return {"asset_id": asset_id, "success": False, "message": f"Internal error: {str(e)}"}
+            return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Internal error: {str(e)}")
 
     @staticmethod
-    async def bulk_refresh_metadata(asset_ids: list[int], session: AsyncSession, ) -> dict:
+    async def bulk_refresh_metadata(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:
         """
         Bulk refresh metadata for multiple assets (PRIMARY bulk method).
 
         Supports partial success - each asset refresh is independent.
+        Uses asyncio.gather for parallel processing.
 
         Args:
             asset_ids: List of asset IDs
             session: Database session
 
         Returns:
-            Dict with: {results: [...], success_count: N, failed_count: M}
-
-        Note:
-            Can be parallelized with asyncio.gather() for better performance
+            FABulkMetadataRefreshResponse with results and counts
         """
         if not asset_ids:
-            return {"results": [], "success_count": 0, "failed_count": 0}
+            return FABulkMetadataRefreshResponse(results=[], success_count=0, failed_count=0)
 
-        # Process each asset (could parallelize with asyncio.gather)
-        results = []
-        for asset_id in asset_ids:
-            result = await AssetSourceManager.refresh_asset_metadata(asset_id, session)
-            results.append(result)
+        # Process all assets in parallel
+        tasks = [AssetSourceManager._refresh_single_metadata(asset_id, session) for asset_id in asset_ids]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
 
         # Count successes
-        success_count = sum(1 for r in results if r.get("success"))
+        success_count = sum(1 for r in results if r.success)
         failed_count = len(results) - success_count
 
-        return {"results": [FAMetadataRefreshResult(**r) for r in results], "success_count": success_count, "failed_count": failed_count, }
+        return FABulkMetadataRefreshResponse(results=list(results), success_count=success_count, failed_count=failed_count)
 
     @staticmethod
     async def get_asset_provider(asset_id: int, session: AsyncSession) -> Optional[AssetProviderAssignment]:
@@ -652,10 +651,35 @@ class AssetSourceManager:
         Returns:
             {deleted_count, results: [{asset_id, deleted, message}, ...]}
 
-        Optimized: 1 DELETE query with complex WHERE
+        Optimized: 1 SELECT COUNT + 1 DELETE query with complex WHERE
         """
         if not data:
             return {"deleted_count": 0, "results": []}
+
+        # Build count per asset before deletion
+        asset_delete_counts = {}
+
+        for item in data:
+            asset_id = item.asset_id
+            ranges = item.date_ranges
+            count = 0
+
+            for date_range in ranges:
+                start = date_range.start
+                end = date_range.end or start  # Single day if no end
+
+                # Count rows for this specific range
+                count_stmt = select(func.count()).select_from(PriceHistory).where(
+                    and_(
+                        PriceHistory.asset_id == asset_id,
+                        PriceHistory.date >= start,
+                        PriceHistory.date <= end
+                        )
+                    )
+                result = await session.execute(count_stmt)
+                count += result.scalar()
+
+            asset_delete_counts[asset_id] = count
 
         # Build complex OR conditions for all ranges
         conditions = []
@@ -677,12 +701,12 @@ class AssetSourceManager:
         await session.commit()
 
         deleted_count = result.rowcount
-        # TODO: fare prima una SELECT COUNT(*) per asset per range, così da avere il numero esatto di righe cancellate per asset
-        # Build results per asset (approximate - we don't track per-asset deletes)
+
+        # Build results per asset with exact counts
         results = [
             {
                 "asset_id": item.asset_id,
-                "deleted": deleted_count // len(data),  # Approximate
+                "deleted": asset_delete_counts.get(item.asset_id, 0),
                 "message": f"Deleted prices in {len(item.date_ranges)} range(s)"
                 }
             for item in data

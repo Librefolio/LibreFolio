@@ -3,7 +3,6 @@ FX (Foreign Exchange) service.
 Handles currency conversion and FX rate management with support for multiple providers.
 """
 import asyncio
-import logging
 from abc import ABC, abstractmethod
 from datetime import date
 from decimal import Decimal
@@ -14,10 +13,11 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlmodel import select
 
 from backend.app.db.models import FxRate
+from backend.app.logging_config import get_logger
 from backend.app.services.provider_registry import FXProviderRegistry
 from backend.app.utils.decimal_utils import truncate_fx_rate
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ============================================================================

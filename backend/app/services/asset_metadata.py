@@ -72,8 +72,8 @@ class AssetMetadataService:
             List of FAMetadataChangeDetail objects describing changes
 
         Examples:
-            >>> old = FAClassificationParams(investment_type="stock")
-            >>> new = FAClassificationParams(investment_type="etf", sector="Technology")
+            >>> old = FAClassificationParams(investment_type=AssetType.STOCK)
+            >>> new = FAClassificationParams(investment_type=AssetType.ETF, sector="Technology")
             >>> changes = AssetMetadataService.compute_metadata_diff(old, new)
             >>> len(changes)
             2
@@ -132,7 +132,7 @@ class AssetMetadataService:
             ValueError: If validation fails (e.g., invalid geographic_area)
 
         Examples:
-            >>> current = FAClassificationParams(investment_type="stock", sector="Technology")
+            >>> current = FAClassificationParams(investment_type=AssetType.STOCK, sector="Technology")
             >>> patch = FAPatchMetadataRequest(sector=None)  # Clear sector
             >>> updated = AssetMetadataService.apply_partial_update(current, patch)
             >>> updated.sector

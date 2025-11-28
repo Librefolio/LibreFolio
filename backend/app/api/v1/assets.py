@@ -2,7 +2,6 @@
 Asset Provider API endpoints.
 Handles provider assignment, price management, and price refresh operations.
 """
-import logging
 from datetime import date
 from typing import List, Optional
 
@@ -12,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment
 from backend.app.db.session import get_session_generator
+from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
     FAPricePoint,
     FAMetadataRefreshResult,
@@ -41,7 +41,6 @@ from backend.app.schemas.prices import (
 from backend.app.schemas.provider import (
     FAProviderInfo,
     FABulkAssignRequest,
-    FAProviderAssignmentResult,
     FABulkAssignResponse,
     FABulkRemoveRequest,
     FAProviderRemovalResult,
@@ -57,7 +56,7 @@ from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.provider_registry import AssetProviderRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/assets", tags=["Assets"])
 
@@ -255,10 +254,10 @@ async def assign_providers_bulk(
     """Bulk assign providers to assets (PRIMARY bulk endpoint)."""
     try:
         results = await AssetSourceManager.bulk_assign_providers(request.assignments, session)
-        success_count = sum(1 for r in results if r["success"])
-        return FABulkAssignResponse(results=[FAProviderAssignmentResult(**r) for r in results], success_count=success_count)
+        success_count = sum(1 for r in results if r.success)
+        return FABulkAssignResponse(results=results, success_count=success_count)
     except Exception as e:
-        logger.error(f"Error in bulk assign providers: {e}, result: {results}")
+        logger.error(f"Error in bulk assign providers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -616,74 +615,6 @@ async def update_assets_metadata_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Single metadata refresh (frequently used operation, kept for convenience)
-@router.post("/{asset_id}/metadata/refresh", response_model=FAMetadataRefreshResult)
-async def refresh_asset_metadata_single(
-    asset_id: int,
-    session: AsyncSession = Depends(get_session_generator)
-    ):
-    """
-    Refresh classification metadata for a single asset from its assigned provider.
-
-    Fetches fresh metadata from the asset's pricing provider (if it supports
-    metadata) and merges it with existing classification_params. Provider data
-    takes precedence over existing user-entered data.
-
-    **Provider Requirements**:
-    - Asset must have a provider assigned
-    - Provider must support metadata fetching
-    - Provider must return valid classification data
-
-    **Response Examples**:
-
-    Success with metadata updated:
-    ```json
-    {
-      "asset_id": 1,
-      "success": true,
-      "message": "Metadata refreshed from yfinance",
-      "changes": [
-        {"field": "sector", "old": null, "new": "Technology"},
-        {"field": "investment_type", "old": "stock", "new": "etf"}
-      ]
-    }
-    ```
-
-    No provider assigned:
-    ```json
-    {
-      "asset_id": 1,
-      "success": false,
-      "message": "No provider assigned to asset"
-    }
-    ```
-
-    Provider doesn't support metadata:
-    ```json
-    {
-      "asset_id": 1,
-      "success": false,
-      "message": "Provider cssscraper does not support metadata"
-    }
-    ```
-
-    Args:
-        asset_id: ID of the asset to refresh metadata for
-        session: Database session
-
-    Returns:
-        FAMetadataRefreshResult with success status and changes
-
-    Raises:
-        HTTPException: 500 if unexpected error occurs
-    """
-    try:
-        result = await AssetSourceManager.refresh_asset_metadata(asset_id, session)
-        return FAMetadataRefreshResult(**result)
-    except Exception as e:
-        logger.error(f"Error refreshing metadata for asset {asset_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/metadata/refresh/bulk", response_model=FABulkMetadataRefreshResponse)
 async def refresh_asset_metadata_bulk(
@@ -745,7 +676,7 @@ async def refresh_asset_metadata_bulk(
     """
     try:
         result = await AssetSourceManager.bulk_refresh_metadata(request.asset_ids, session)
-        return FABulkMetadataRefreshResponse(**result)
+        return result
     except Exception as e:
         logger.error(f"Error in bulk metadata refresh: {e}")
         raise HTTPException(status_code=500, detail=str(e))

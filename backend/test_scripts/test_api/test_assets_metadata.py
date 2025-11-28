@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
+from backend.app.db import AssetType
 from backend.app.schemas import (
     FABulkAssetCreateRequest, FAAssetCreateItem, FABulkAssetCreateResponse,
     FABulkPatchMetadataRequest, FAPatchMetadataItem, FAPatchMetadataRequest,
@@ -136,7 +137,7 @@ async def test_patch_metadata_valid_geographic_area(test_server):
 
         params = updated_asset.classification_params
         assert params.short_description == "Updated via API test", "short_description not updated"
-        assert params.investment_type == "stock", "investment_type not updated"
+        assert params.investment_type == AssetType.STOCK, "investment_type not updated"
         assert params.geographic_area is not None, "geographic_area should exist"
         assert "USA" in params.geographic_area.distribution, "USA not in geographic_area"
         assert "FRA" in params.geographic_area.distribution, "FRA not in geographic_area"
@@ -232,10 +233,8 @@ async def test_patch_metadata_absent_fields(test_server):
         print_info(f"  After PATCH: {after_params}")
 
         assert after_params.sector == "Finance", "sector not updated"
-        assert after_params.short_description == before_params.short_description, \
-            "short_description should not change"
-        assert after_params.investment_type == before_params.investment_type, \
-            "investment_type should not change"
+        assert after_params.short_description == before_params.short_description, "short_description should not change"
+        assert after_params.investment_type == before_params.investment_type, "investment_type should not change"
 
         print_success("✓ Absent fields ignored (PATCH semantics verified)")
 
@@ -339,17 +338,22 @@ async def test_bulk_read_multiple_assets(test_server):
 
 @pytest.mark.asyncio
 async def test_metadata_refresh_single_no_provider(test_server):
-    """Test 7: POST /assets/{asset_id}/metadata/refresh (no provider assigned)."""
-    print_section("Test 7: POST /assets/{asset_id}/metadata/refresh - No Provider")
+    """Test 7: POST /assets/metadata/refresh/bulk (single asset, no provider assigned)."""
+    print_section("Test 7: POST /assets/metadata/refresh/bulk - Single Asset, No Provider")
 
     test_asset = await create_test_asset("REFRESH1")
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{API_BASE}/assets/{test_asset}/metadata/refresh", timeout=TIMEOUT)
+        # Use bulk endpoint with single asset
+        request = FABulkMetadataRefreshRequest(asset_ids=[test_asset])
+        response = await client.post(f"{API_BASE}/assets/metadata/refresh/bulk", json=request.model_dump(mode="json"), timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Refresh failed: {response.status_code}: {response.text}"
 
-        result = FAMetadataRefreshResult(**response.json())
+        bulk_result = FABulkMetadataRefreshResponse(**response.json())
+        assert len(bulk_result.results) == 1, "Should have 1 result"
+
+        result = bulk_result.results[0]
         assert result.asset_id == test_asset, "Asset ID mismatch"
         assert "success" in result.model_dump(mode="json"), "Response should have success field"
         assert "message" in result.model_dump(mode="json"), "Response should have message field"

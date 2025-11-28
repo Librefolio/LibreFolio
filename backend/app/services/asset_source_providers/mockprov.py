@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
 
+from backend.app.db import AssetType
 from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint, FAClassificationParams, FAGeographicArea
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
@@ -146,7 +147,7 @@ class MockProvider(AssetSourceProvider):
         """
         # Return mock data for testing
         return FAClassificationParams(
-            investment_type="stock",
+            investment_type=AssetType.STOCK,
             sector="Technology",
             short_description=f"Mock test asset {identifier} - used for testing metadata features",
             geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")})
