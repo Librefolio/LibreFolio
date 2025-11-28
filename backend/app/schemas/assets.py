@@ -614,7 +614,7 @@ class FAAssetCreateItem(BaseModel):
     valuation_model: Optional[str] = Field("MARKET_PRICE", description="Valuation model (MARKET_PRICE, SCHEDULED_YIELD, MANUAL)")
 
     # Scheduled yield configuration (optional, for bonds/loans)
-    interest_schedule: Optional[str] = Field(None, description="Interest schedule JSON for scheduled yield assets (FAScheduledInvestmentSchedule)")
+    interest_schedule: Optional[FAScheduledInvestmentSchedule] = Field(None, description="Interest scheduled yield assets")
 
     # Classification metadata (optional)
     classification_params: Optional[FAClassificationParams] = Field(None, description="Asset classification metadata")
