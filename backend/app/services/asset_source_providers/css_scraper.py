@@ -176,9 +176,9 @@ class CSSScraperProvider(AssetSourceProvider):
     async def get_history_value(
         self,
         identifier: str,
+        provider_params: Dict | None,
         start_date: date,
         end_date: date,
-        provider_params: Dict | None = None,
         ) -> FAHistoricalData:
         """
         Fetch historical prices (NOT IMPLEMENTED for CSS scraper).

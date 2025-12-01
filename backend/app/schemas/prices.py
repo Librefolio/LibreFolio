@@ -119,7 +119,7 @@ class FAAssetDelete(BaseModel):
     date_ranges: List[DateRangeModel] = Field(..., min_length=1, description="List of date ranges to delete")
 
 
-class FABulkDeleteRequest(BaseModel):
+class FAPriceBulkDeleteRequest(BaseModel):
     """Request for bulk price deletion across multiple assets."""
     model_config = ConfigDict(extra="forbid")
 

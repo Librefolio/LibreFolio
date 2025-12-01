@@ -357,16 +357,18 @@ def bulk_refresh_prices(...) -> dict:
 ```
 
 **After**:
+
 ```python
 from backend.app.schemas.refresh import (
     FAPriceRefreshResult,
     FABulkPriceRefreshResponse
-)
+    )
+
 
 def bulk_refresh_prices(...) -> FABulkPriceRefreshResponse:
     results = []
     error_count = 0
-    
+
     for request in requests:
         results.append(FAPriceRefreshResult(
             asset_id=request.asset_id,
@@ -374,13 +376,13 @@ def bulk_refresh_prices(...) -> FABulkPriceRefreshResponse:
             inserted=5,
             updated=3,
             message="Prices refreshed"
-        ))
-    
+            ))
+
     return FABulkPriceRefreshResponse(
         results=results,
         success_count=len([r for r in results if r.success]),
         error_count=error_count
-    )
+        )
 ```
 
 ---
