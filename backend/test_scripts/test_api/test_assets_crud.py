@@ -16,8 +16,17 @@ from backend.app.schemas import (
     FABulkAssignRequest, FABulkAssignResponse,
     FABulkAssetDeleteRequest, FABulkAssetDeleteResponse, FAGeographicArea
     )
-from backend.app.schemas.prices import FAUpsert, FAUpsertItem, FABulkUpsertRequest
-from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.schemas.prices import (
+    FAUpsert, FAUpsertItem, FABulkUpsertRequest,
+    FAPriceBulkDeleteRequest, FAAssetDelete, FABulkDeleteResponse
+)
+from backend.app.schemas.provider import (
+    FAProviderAssignmentItem, FABulkRemoveRequest, FABulkRemoveResponse
+)
+from backend.app.schemas.refresh import (
+    FABulkRefreshRequest, FARefreshItem, FABulkRefreshResponse
+)
+from backend.app.schemas.common import DateRangeModel
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success
 
@@ -478,6 +487,290 @@ async def test_delete_partial_success(test_server):
         print_success("✓ Partial success on delete works")
         print_info(f"  Valid ID deleted: {valid_result.success}")
         print_info(f"  Invalid ID failed: {not invalid_result.success}")
+
+
+@pytest.mark.asyncio
+async def test_list_asset_providers(test_server):
+    """Test 16: GET /assets/providers - List all available asset pricing providers."""
+    print_section("Test 16: GET /assets/providers - List Providers")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{API_BASE}/assets/providers", timeout=TIMEOUT)
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+
+        providers = response.json()
+        assert isinstance(providers, list), "Response should be a list"
+        assert len(providers) > 0, "Should have at least one provider"
+
+        # Check provider structure
+        for provider in providers:
+            assert "code" in provider, "Provider should have 'code'"
+            assert "name" in provider, "Provider should have 'name'"
+            assert "description" in provider, "Provider should have 'description'"
+            assert "supports_search" in provider, "Provider should have 'supports_search'"
+
+        # Check that mockprov exists (used for testing)
+        mock_provider = next((p for p in providers if p["code"] == "mockprov"), None)
+        assert mock_provider is not None, "mockprov should be available for testing"
+
+        print_success(f"✓ Listed {len(providers)} providers")
+        print_info(f"  Providers: {', '.join([p['code'] for p in providers])}")
+
+
+@pytest.mark.asyncio
+async def test_bulk_remove_providers(test_server):
+    """Test 17: DELETE /assets/provider/bulk - Remove provider assignments."""
+    print_section("Test 17: DELETE /assets/provider/bulk - Bulk Remove Providers")
+
+    async with httpx.AsyncClient() as client:
+        # Step 1: Create asset
+        item = FAAssetCreateItem(
+            display_name="Provider Remove Test",
+            identifier=unique_id("PROVREM"),
+            currency="USD"
+        )
+        create_resp = await client.post(
+            f"{API_BASE}/assets/bulk",
+            json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        assert create_resp.status_code == 201, f"Asset creation failed: {create_resp.status_code}"
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+        print_info(f"  Created asset ID: {asset_id}")
+
+        # Step 2: Assign provider
+        assignment = FAProviderAssignmentItem(
+            asset_id=asset_id,
+            provider_code="mockprov",
+            provider_params=None
+        )
+        assign_resp = await client.post(
+            f"{API_BASE}/assets/provider/bulk",
+            json=FABulkAssignRequest(assignments=[assignment]).model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        assert assign_resp.status_code == 200, f"Provider assignment failed: {assign_resp.status_code}"
+        print_info(f"  Assigned provider: mockprov")
+
+        # Step 3: Remove provider
+        from backend.app.schemas.provider import FABulkRemoveRequest
+        remove_resp = await client.request(
+            "DELETE",
+            f"{API_BASE}/assets/provider/bulk",
+            json=FABulkRemoveRequest(asset_ids=[asset_id]).model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        assert remove_resp.status_code == 200, f"Expected 200, got {remove_resp.status_code}: {remove_resp.text}"
+
+        remove_data = remove_resp.json()
+        assert remove_data["success_count"] == 1, f"Expected success_count=1, got {remove_data['success_count']}"
+        assert len(remove_data["results"]) == 1, "Should have 1 result"
+        assert remove_data["results"][0]["asset_id"] == asset_id, "Result should be for correct asset"
+
+        print_success("✓ Provider removed successfully")
+
+        # Step 4: Verify provider removed (list assets and check has_provider)
+        list_resp = await client.get(f"{API_BASE}/assets/list", timeout=TIMEOUT)
+        assets = [FAinfoResponse(**a) for a in list_resp.json()]
+        asset = next((a for a in assets if a.id == asset_id), None)
+        assert asset is not None, f"Asset {asset_id} not found"
+        assert not asset.has_provider, "Asset should not have provider after removal"
+        print_info(f"  Verified: has_provider=False")
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_prices(test_server):
+    """Test 18: DELETE /assets/prices/bulk - Delete price ranges."""
+    print_section("Test 18: DELETE /assets/prices/bulk - Bulk Delete Prices")
+
+    async with httpx.AsyncClient() as client:
+        # Step 1: Create asset
+        item = FAAssetCreateItem(
+            display_name="Price Delete Test",
+            identifier=unique_id("PRICEDEL"),
+            currency="USD"
+        )
+        create_resp = await client.post(
+            f"{API_BASE}/assets/bulk",
+            json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+        print_info(f"  Created asset ID: {asset_id}")
+
+        # Step 2: Insert prices
+        prices = [
+            FAUpsertItem(date="2025-01-01", close=100.0, currency="USD"),
+            FAUpsertItem(date="2025-01-02", close=101.0, currency="USD"),
+            FAUpsertItem(date="2025-01-03", close=102.0, currency="USD"),
+            FAUpsertItem(date="2025-01-10", close=110.0, currency="USD"),
+        ]
+        upsert = FAUpsert(asset_id=asset_id, prices=prices)
+        price_resp = await client.post(
+            f"{API_BASE}/assets/prices/bulk",
+            json=FABulkUpsertRequest(assets=[upsert]).model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        assert price_resp.status_code == 200, f"Price insert failed: {price_resp.status_code}"
+        print_info(f"  Inserted {len(prices)} prices")
+
+        # Step 3: Delete price range (2025-01-02 to 2025-01-03)
+        from backend.app.schemas.prices import FAPriceBulkDeleteRequest, FAAssetDelete
+        delete_request = FAPriceBulkDeleteRequest(
+            assets=[
+                FAAssetDelete(
+                    asset_id=asset_id,
+                    date_ranges=[
+                        DateRangeModel(start="2025-01-02", end="2025-01-03")
+                    ]
+                )
+            ]
+        )
+        delete_resp = await client.request(
+            "DELETE",
+            f"{API_BASE}/assets/prices/bulk",
+            json=delete_request.model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        assert delete_resp.status_code == 200, f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
+
+        delete_data = delete_resp.json()
+        assert delete_data["deleted_count"] == 2, f"Expected deleted_count=2, got {delete_data['deleted_count']}"
+        print_success(f"✓ Deleted {delete_data['deleted_count']} prices")
+
+        # Step 4: Verify prices deleted (query remaining prices)
+        # Note: GET endpoint does backward-fill, so we need to check only exact dates
+        query_resp = await client.get(
+            f"{API_BASE}/assets/{asset_id}/prices?start_date=2025-01-01&end_date=2025-01-10",
+            timeout=TIMEOUT
+        )
+        assert query_resp.status_code == 200, f"Price query failed: {query_resp.status_code}"
+        remaining_prices = query_resp.json()
+
+        # Check that deleted dates show backward-fill info (not exact matches)
+        exact_dates = [p["date"] for p in remaining_prices if p["backward_fill_info"] is None]
+        backfilled_dates = [p["date"] for p in remaining_prices if p["backward_fill_info"] is not None]
+
+        # Only 2025-01-01 and 2025-01-10 should be exact (not backfilled)
+        assert "2025-01-01" in exact_dates, "2025-01-01 should have exact data"
+        assert "2025-01-10" in exact_dates, "2025-01-10 should have exact data"
+        assert "2025-01-02" not in exact_dates, "2025-01-02 should not have exact data (deleted)"
+        assert "2025-01-03" not in exact_dates, "2025-01-03 should not have exact data (deleted)"
+
+        print_info(f"  Verified: {len(exact_dates)} exact prices, {len(backfilled_dates)} backfilled")
+
+
+@pytest.mark.asyncio
+async def test_bulk_refresh_prices(test_server):
+    """Test 19: POST /assets/prices-refresh/bulk - Refresh prices from providers."""
+    print_section("Test 19: POST /assets/prices-refresh/bulk - Bulk Refresh Prices")
+
+    async with httpx.AsyncClient() as client:
+        # Step 1: Create asset
+        item = FAAssetCreateItem(
+            display_name="Price Refresh Test",
+            identifier=unique_id("REFRESH"),
+            currency="USD"
+        )
+        create_resp = await client.post(
+            f"{API_BASE}/assets/bulk",
+            json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+        print_info(f"  Created asset ID: {asset_id}")
+
+        # Step 2: Assign mockprov provider (for deterministic results)
+        assignment = FAProviderAssignmentItem(
+            asset_id=asset_id,
+            provider_code="mockprov",
+            provider_params={"symbol": "MOCK"}
+        )
+        assign_resp = await client.post(
+            f"{API_BASE}/assets/provider/bulk",
+            json=FABulkAssignRequest(assignments=[assignment]).model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        assert assign_resp.status_code == 200, f"Provider assignment failed: {assign_resp.status_code}"
+        print_info(f"  Assigned provider: mockprov")
+
+        # Step 3: Refresh prices
+        from backend.app.schemas.refresh import FABulkRefreshRequest, FARefreshItem
+        from datetime import date
+        refresh_request = FABulkRefreshRequest(
+            requests=[
+                FARefreshItem(
+                    asset_id=asset_id,
+                    start_date=date(2025, 1, 1),
+                    end_date=date(2025, 1, 5)
+                )
+            ]
+        )
+        refresh_resp = await client.post(
+            f"{API_BASE}/assets/prices-refresh/bulk",
+            json=refresh_request.model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        assert refresh_resp.status_code == 200, f"Expected 200, got {refresh_resp.status_code}: {refresh_resp.text}"
+
+        refresh_data = FABulkRefreshResponse(**refresh_resp.json())
+        assert len(refresh_data.results) == 1, "Should have 1 result"
+        result = refresh_data.results[0]
+        assert result.asset_id == asset_id, "Result should be for correct asset"
+
+        # Debug: print result details
+        if len(result.errors) > 0:
+            print_info(f"  Errors: {result.errors}")
+            print_info(f"  Fetched: {result.fetched_count}, Inserted: {result.inserted_count}, Updated: {result.updated_count}")
+
+        assert len(result.errors) == 0, f"Refresh should succeed without errors: {result.errors}"
+        assert result.fetched_count > 0, "Should have fetched prices"
+        print_success(f"✓ Refreshed {result.fetched_count} prices")
+
+        # Step 4: Test partial failure (asset without provider)
+        item2 = FAAssetCreateItem(
+            display_name="No Provider",
+            identifier=unique_id("NOPROV"),
+            currency="USD"
+        )
+        create_resp2 = await client.post(
+            f"{API_BASE}/assets/bulk",
+            json=FABulkAssetCreateRequest(assets=[item2]).model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        create_data2 = FABulkAssetCreateResponse(**create_resp2.json())
+        asset_id2 = create_data2.results[0].asset_id
+
+        refresh_request2 = FABulkRefreshRequest(
+            requests=[
+                FARefreshItem(
+                    asset_id=asset_id,  # Has provider
+                    start_date=date(2025, 1, 1),
+                    end_date=date(2025, 1, 2)
+                ),
+                FARefreshItem(
+                    asset_id=asset_id2,  # No provider
+                    start_date=date(2025, 1, 1),
+                    end_date=date(2025, 1, 2)
+                )
+            ]
+        )
+        refresh_resp2 = await client.post(
+            f"{API_BASE}/assets/prices-refresh/bulk",
+            json=refresh_request2.model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+        refresh_data2 = refresh_resp2.json()
+
+        # Check results: one success (no errors), one failure (has errors)
+        success_results = [r for r in refresh_data2["results"] if len(r["errors"]) == 0]
+        failed_results = [r for r in refresh_data2["results"] if len(r["errors"]) > 0]
+        assert len(success_results) >= 1, "Should have at least 1 success"
+        assert len(failed_results) >= 1, "Should have at least 1 failure"
+        print_info(f"  Partial success: {len(success_results)} succeeded, {len(failed_results)} failed")
 
 
 if __name__ == "__main__":

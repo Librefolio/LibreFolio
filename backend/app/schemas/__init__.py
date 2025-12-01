@@ -70,7 +70,7 @@ from backend.app.schemas.prices import (
     FAAssetDelete,
     FABulkUpsertRequest,
     FABulkUpsertResponse,
-    FABulkDeleteRequest,
+    FAPriceBulkDeleteRequest,
     FABulkDeleteResponse,
     )
 from backend.app.schemas.provider import (
@@ -134,7 +134,7 @@ __all__ = [
     "FAUpsertItem",
     "FABulkUpsertRequest",
     "FABulkUpsertResponse",
-    "FABulkDeleteRequest",
+    "FAPriceBulkDeleteRequest",
     "FABulkDeleteResponse",
     # Refresh
     "FARefreshItem",

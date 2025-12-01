@@ -34,7 +34,7 @@ from backend.app.schemas.prices import (
     FABulkUpsertRequest,
     FAUpsertResult,
     FABulkUpsertResponse,
-    FABulkDeleteRequest,
+    FAPriceBulkDeleteRequest,
     FAAssetDeleteResult,
     FABulkDeleteResponse,
     )
@@ -302,37 +302,15 @@ async def upsert_prices_bulk(
         logger.error(f"Error in bulk upsert prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# Convenience wrapper for single-asset price upsert (calls bulk internally)
-@router.post("/{asset_id}/prices")
-async def upsert_prices_single(
-    asset_id: int,
-    prices: List[FAUpsertItem],
-    session: AsyncSession = Depends(get_session_generator)
-    ):
-    """Upsert prices for single asset (convenience endpoint, calls bulk internally)."""
-    try:
-        prices_dict = [p.model_dump() for p in prices]
-        result = await AssetSourceManager.upsert_prices(asset_id, prices_dict, session)
-        return result
-    except Exception as e:
-        logger.error(f"Error upserting prices for asset {asset_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.delete("/prices/bulk", response_model=FABulkDeleteResponse)
 async def delete_prices_bulk(
-    request: FABulkDeleteRequest,
+    request: FAPriceBulkDeleteRequest,
     session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk delete price ranges (PRIMARY bulk endpoint)."""
     try:
         result = await AssetSourceManager.bulk_delete_prices(request.assets, session)
-
-        return FABulkDeleteResponse(
-            deleted_count=result["deleted_count"],
-            results=[FAAssetDeleteResult(**r) for r in result["results"]]
-            )
+        return FABulkDeleteResponse(deleted_count=result["deleted_count"],results=[FAAssetDeleteResult(**r) for r in result["results"]])
     except Exception as e:
         logger.error(f"Error in bulk delete prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -342,6 +320,8 @@ async def delete_prices_bulk(
 # PRICE QUERY ENDPOINTS
 # ============================================================================
 
+# Use single asset price history with backward-fill support because
+# create a POST and encapsulate params is too much overhead and complexity
 @router.get("/{asset_id}/prices", response_model=List[FAPricePoint])
 async def get_prices(
     asset_id: int,
@@ -447,9 +427,7 @@ async def read_assets_bulk(
         asset_map = {asset.id: asset for asset in assets}
 
         # Fetch provider assignments for has_provider flag
-        provider_stmt = select(AssetProviderAssignment.asset_id).where(
-            AssetProviderAssignment.asset_id.in_(request.asset_ids)
-            )
+        provider_stmt = select(AssetProviderAssignment.asset_id).where(AssetProviderAssignment.asset_id.in_(request.asset_ids))
         provider_result = await session.execute(provider_stmt)
         assets_with_provider = {row[0] for row in provider_result.fetchall()}
 
@@ -465,10 +443,7 @@ async def read_assets_bulk(
                 try:
                     classification_params = FAClassificationParams.model_validate_json(asset.classification_params)
                 except Exception as e:
-                    logger.error(
-                        f"Failed to parse classification_params for asset {asset.id}: {e}",
-                        extra={"asset_id": asset.id, "error": str(e)}
-                        )
+                    logger.error(f"Failed to parse classification_params for asset {asset.id}: {e}",extra={"asset_id": asset.id, "error": str(e)})
                     pass  # Skip invalid JSON
 
             responses.append(
@@ -503,9 +478,7 @@ async def refresh_prices_bulk(
     try:
         results = await AssetSourceManager.bulk_refresh_prices(request.requests, session)
 
-        return FABulkRefreshResponse(
-            results=[FARefreshResult(**r) for r in results]
-            )
+        return FABulkRefreshResponse(results=[FARefreshResult(**r) for r in results])
     except Exception as e:
         logger.error(f"Error in bulk refresh prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -583,32 +556,14 @@ async def update_assets_metadata_bulk(
         results = []
         for item in request.assets:
             try:
-                result = await AssetMetadataService.update_asset_metadata(
-                    item.asset_id,
-                    item.patch,
-                    session
-                    )
+                result = await AssetMetadataService.update_asset_metadata(item.asset_id,item.patch,session)
                 # Result is now FAMetadataRefreshResult with changes included
                 results.append(result)
             except ValueError as e:
-                results.append(
-                    FAMetadataRefreshResult(
-                        asset_id=item.asset_id,
-                        success=False,
-                        message=str(e),
-                        changes=None
-                        )
-                    )
+                results.append(FAMetadataRefreshResult(asset_id=item.asset_id,success=False,message=str(e),changes=None))
             except Exception as e:
                 logger.error(f"Error updating metadata for asset {item.asset_id}: {e}")
-                results.append(
-                    FAMetadataRefreshResult(
-                        asset_id=item.asset_id,
-                        success=False,
-                        message="internal error",
-                        changes=None
-                        )
-                    )
+                results.append(FAMetadataRefreshResult(asset_id=item.asset_id,success=False,message="internal error",changes=None))
         return results
     except Exception as e:
         logger.error(f"Error in bulk metadata update: {e}")

@@ -25,7 +25,7 @@ Design principles:
 import asyncio
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta, datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 import structlog
 from sqlalchemy import select, delete, and_, or_, func
@@ -40,7 +40,7 @@ from backend.app.schemas import (
     FACurrentValue, FAHistoricalData, FAClassificationParams,
     FAMetadataRefreshResult, FAPricePoint, BackwardFillInfo,
     FAUpsert, FAUpsertItem, FAAssetDelete, FAProviderAssignmentItem,
-    FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse)
+    FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse, FABulkDeleteResponse, FAAssetDeleteResult)
 from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -137,7 +137,7 @@ class AssetSourceProvider(ABC):
     async def get_history_value(
         self,
         identifier: str,
-        provider_params: dict,
+        provider_params: Dict | None,
         start_date: date_type,
         end_date: date_type,
         ) -> FAHistoricalData:
@@ -645,7 +645,7 @@ class AssetSourceManager:
         Bulk delete price ranges (PRIMARY bulk method).
 
         Args:
-            data: List of FAAssetDelete (asset_id + date_ranges)
+            data: List of FAPriceDelete (asset_id + date_ranges)
             session: Database session
 
         Returns:
@@ -669,13 +669,7 @@ class AssetSourceManager:
                 end = date_range.end or start  # Single day if no end
 
                 # Count rows for this specific range
-                count_stmt = select(func.count()).select_from(PriceHistory).where(
-                    and_(
-                        PriceHistory.asset_id == asset_id,
-                        PriceHistory.date >= start,
-                        PriceHistory.date <= end
-                        )
-                    )
+                count_stmt = select(func.count()).select_from(PriceHistory).where(and_(PriceHistory.asset_id == asset_id,PriceHistory.date >= start,PriceHistory.date <= end))
                 result = await session.execute(count_stmt)
                 count += result.scalar()
 
@@ -918,8 +912,18 @@ class AssetSourceManager:
 
                 provider_code = assignment.provider_code
                 provider_params = assignment.provider_params or {}
+
+                # Fetch asset to get identifier
+                asset_stmt = select(Asset).where(Asset.id == asset_id)
+                asset_res = await session.execute(asset_stmt)
+                asset = asset_res.scalar_one_or_none()
+                if not asset:
+                    result["errors"].append(f"Asset {asset_id} not found")
+                    return result
+
+                identifier = asset.identifier
             except Exception as e:
-                result["errors"].append(f"Failed to resolve provider: {str(e)}")
+                result["errors"].append(f"Failed to resolve provider or asset: {str(e)}")
                 return result
 
             # Instantiate provider from registry
@@ -960,7 +964,12 @@ class AssetSourceManager:
             # Provider fetch coroutine
             async def _fetch_remote():
                 try:
-                    return await prov.get_history_value(provider_params, start, end, session)
+                    hist_data = await prov.get_history_value(identifier, provider_params, start, end)
+                    # Convert FAHistoricalData to dict for compatibility
+                    return {
+                        "prices": [p.model_dump() for p in hist_data.prices],
+                        "source": hist_data.source
+                    }
                 except Exception as e:
                     raise AssetSourceError(f"Provider fetch failed: {str(e)}", "PROVIDER_FETCH_ERROR", {})
 

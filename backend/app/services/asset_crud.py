@@ -42,7 +42,7 @@ class AssetCRUDService:
         Returns:
             FABulkAssetCreateResponse with per-item results
         """
-        results = []
+        results: list[FAAssetCreateResult] = []
 
         for item in assets:
             try:
@@ -134,12 +134,9 @@ class AssetCRUDService:
             List of assets matching filters
         """
         # Build base query with LEFT JOIN to check provider assignment
-        stmt = select(
-            Asset,
-            AssetProviderAssignment.id.label('provider_id')
-            ).outerjoin(
-            AssetProviderAssignment,
-            Asset.id == AssetProviderAssignment.asset_id
+        stmt = select(Asset,AssetProviderAssignment.id.label('provider_id')).outerjoin(
+                AssetProviderAssignment,
+                Asset.id == AssetProviderAssignment.asset_id
             )
 
         # Apply filters
