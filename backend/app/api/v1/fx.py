@@ -880,31 +880,21 @@ async def delete_pair_sources_bulk(
     - If a pair doesn't exist, logs a warning but continues
 
     Args:
-        request: List of pair sources to delete: [{base, quote, priority?}, ...]
+        request: FXDeletePairSourcesRequest with list of FXDeletePairSourceItem
         session: Database session
 
     Returns:
-        Results for each deletion operation
+        FXDeletePairSourcesResponse with results for each deletion operation
     """
     results = []
     total_deleted = 0
 
     try:
-        for source_dict in request.sources:
-            base = source_dict.get("base", "").upper()
-            quote = source_dict.get("quote", "").upper()
-            priority = source_dict.get("priority")
-
-            if not base or not quote:
-                results.append(FXDeletePairSourceResult(
-                    success=False,
-                    base=base or "MISSING",
-                    quote=quote or "MISSING",
-                    priority=priority,
-                    deleted_count=0,
-                    message="Missing base or quote currency"
-                    ))
-                continue
+        for source_item in request.sources:
+            # Now we have a proper Pydantic model with validation
+            base = source_item.base  # Already uppercase from validator
+            quote = source_item.quote  # Already uppercase from validator
+            priority = source_item.priority
 
             # Build delete query
             if priority is not None:

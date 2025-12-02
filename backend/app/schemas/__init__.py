@@ -63,6 +63,9 @@ from backend.app.schemas.fx import (
     FXBulkDeleteResponse,
     FXPairSourcesResponse,
     FXCreatePairSourcesRequest,
+    FXDeletePairSourceItem,
+    FXDeletePairSourcesRequest,
+    FXDeletePairSourcesResponse,
     )
 from backend.app.schemas.prices import (
     FAUpsert,
@@ -72,6 +75,7 @@ from backend.app.schemas.prices import (
     FABulkUpsertResponse,
     FAPriceBulkDeleteRequest,
     FABulkDeleteResponse,
+    FAPriceDeleteResult,
     )
 from backend.app.schemas.provider import (
     FAProviderInfo,
@@ -81,11 +85,13 @@ from backend.app.schemas.provider import (
     FABulkRemoveResponse,
     FAProviderAssignmentItem,
     FAProviderAssignmentResult,
+    FAProviderRemovalResult,
     )
 from backend.app.schemas.refresh import (
     FARefreshItem,
     FABulkRefreshRequest,
     FABulkRefreshResponse,
+    FARefreshResult,
     FXSyncResponse,
     )
 
@@ -128,7 +134,8 @@ __all__ = [
     "FABulkRemoveRequest",
     "FABulkRemoveResponse",
     "FAProviderAssignmentItem",
-    "FAProviderAssignmentResult"
+    "FAProviderAssignmentResult",
+    "FAProviderRemovalResult",
     # Prices
     "FAUpsert",
     "FAUpsertItem",
@@ -136,10 +143,12 @@ __all__ = [
     "FABulkUpsertResponse",
     "FAPriceBulkDeleteRequest",
     "FABulkDeleteResponse",
+    "FAPriceDeleteResult",
     # Refresh
     "FARefreshItem",
     "FABulkRefreshRequest",
     "FABulkRefreshResponse",
+    "FARefreshResult",
     "FXSyncResponse",
     # FX
     "FXProviderInfo",
@@ -151,4 +160,7 @@ __all__ = [
     "FXBulkDeleteResponse",
     "FXPairSourcesResponse",
     "FXCreatePairSourcesRequest",
+    "FXDeletePairSourceItem",
+    "FXDeletePairSourcesRequest",
+    "FXDeletePairSourcesResponse",
     ]

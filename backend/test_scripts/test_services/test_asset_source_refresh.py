@@ -50,7 +50,7 @@ async def test_bulk_refresh_prices_orchestration():
 
         # Verify results
         assert results is not None
-        assert len(results) > 0
+        assert len(results.results) > 0
 
 
 if __name__ == "__main__":

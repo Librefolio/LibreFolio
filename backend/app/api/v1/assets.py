@@ -30,12 +30,10 @@ from backend.app.schemas.assets import (
     FABulkAssetDeleteResponse,
     )
 from backend.app.schemas.prices import (
-    FAUpsertItem,
     FABulkUpsertRequest,
     FAUpsertResult,
     FABulkUpsertResponse,
     FAPriceBulkDeleteRequest,
-    FAAssetDeleteResult,
     FABulkDeleteResponse,
     )
 from backend.app.schemas.provider import (
@@ -43,12 +41,10 @@ from backend.app.schemas.provider import (
     FABulkAssignRequest,
     FABulkAssignResponse,
     FABulkRemoveRequest,
-    FAProviderRemovalResult,
     FABulkRemoveResponse,
     )
 from backend.app.schemas.refresh import (
     FABulkRefreshRequest,
-    FARefreshResult,
     FABulkRefreshResponse,
     )
 from backend.app.services.asset_crud import AssetCRUDService
@@ -268,12 +264,7 @@ async def remove_providers_bulk(
     ):
     """Bulk remove provider assignments (PRIMARY bulk endpoint)."""
     try:
-        results = await AssetSourceManager.bulk_remove_providers(request.asset_ids, session)
-
-        return FABulkRemoveResponse(
-            results=[FAProviderRemovalResult(**r) for r in results],
-            success_count=len(results)
-            )
+        return await AssetSourceManager.bulk_remove_providers(request.asset_ids, session)
     except Exception as e:
         logger.error(f"Error in bulk remove providers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -309,8 +300,7 @@ async def delete_prices_bulk(
     ):
     """Bulk delete price ranges (PRIMARY bulk endpoint)."""
     try:
-        result = await AssetSourceManager.bulk_delete_prices(request.assets, session)
-        return FABulkDeleteResponse(deleted_count=result["deleted_count"],results=[FAAssetDeleteResult(**r) for r in result["results"]])
+        return await AssetSourceManager.bulk_delete_prices(request.assets, session)
     except Exception as e:
         logger.error(f"Error in bulk delete prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -476,9 +466,7 @@ async def refresh_prices_bulk(
     ):
     """Bulk refresh prices via providers (PRIMARY bulk endpoint)."""
     try:
-        results = await AssetSourceManager.bulk_refresh_prices(request.requests, session)
-
-        return FABulkRefreshResponse(results=[FARefreshResult(**r) for r in results])
+        return await AssetSourceManager.bulk_refresh_prices(request.requests, session)
     except Exception as e:
         logger.error(f"Error in bulk refresh prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))

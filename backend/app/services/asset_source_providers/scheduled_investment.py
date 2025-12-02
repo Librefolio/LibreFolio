@@ -173,6 +173,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         result = await session.execute(query)
         return list(result.scalars().all())
 
+    # Type is list[dict] when _transaction_override is used by tests
     def _calculate_face_value_from_transactions(self, transactions: list[Transaction] | list[dict]) -> Decimal:
         """
         Calculate current principal (face_value) from transactions.

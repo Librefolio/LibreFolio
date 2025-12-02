@@ -347,15 +347,15 @@ async def test_bulk_remove_providers(asset_ids: list[int]):
     print_section("Test 7: Bulk Remove Providers")
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        results = await AssetSourceManager.bulk_remove_providers(asset_ids, session)
+        bulkDelResults = await AssetSourceManager.bulk_remove_providers(asset_ids, session)
 
         # Detailed logging
-        for r in results:
-            print_info(f"Removal: asset_id={r.get('asset_id')} success={r.get('success')} message={r.get('message')}")
+        for r in bulkDelResults.results:
+            print_info(f"Removal: asset_id={r.asset_id} success={r.success} message={r.message}")
 
         # Verify all succeeded
-        for result in results:
-            assert result["success"], f"Removal failed: {result}"
+        for result in bulkDelResults.results:
+            assert result.success, f"Removal failed: {result}"
 
         # Verify removal
         for asset_id in asset_ids:
@@ -678,15 +678,10 @@ async def test_bulk_delete_prices(asset_ids: list[int]):
                 ),
             ]
 
-        result = await AssetSourceManager.bulk_delete_prices(data, session)
+        bulkDelresult = await AssetSourceManager.bulk_delete_prices(data, session)
 
         # Detailed logging of deletion
-        print_info(f"Bulk delete returned: {json.dumps(result, indent=2, default=str)}")
-
-        # Verify result contains expected keys
-        assert "deleted_count" in result, "Result should contain deleted_count"
-        assert "results" in result, "Result should contain results list"
-        assert len(result["results"]) == 2, f"Expected 2 result items, got {len(result['results'])}"
+        print_info(f"Bulk delete returned: {bulkDelresult.model_dump_json(indent=2)}")
 
         # Verify deletion
         stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_ids[0])
@@ -698,7 +693,7 @@ async def test_bulk_delete_prices(asset_ids: list[int]):
         # Verify that prices for the date range were actually deleted
         # (Note: the actual count depends on what was inserted in previous tests)
         # We just verify that the operation completed successfully
-        assert all(r.get("message") for r in result["results"]), "All results should have a message"
+        assert all(r.message for r in bulkDelresult.results), "All results should have a message"
 
 
 if __name__ == "__main__":

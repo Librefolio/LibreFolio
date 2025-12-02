@@ -26,7 +26,7 @@ from backend.app.schemas import (
 from backend.app.schemas.fx import (
     FXProvidersResponse, FXConversionRequest, FXUpsertItem, FXDeleteItem, FXPairSourceItem, FXPairSourcesResponse,
     FXCreatePairSourcesRequest, FXCreatePairSourcesResponse,
-    FXDeletePairSourcesRequest,
+    FXDeletePairSourceItem, FXDeletePairSourcesRequest,
     )
 from backend.app.schemas.refresh import FXSyncResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -207,7 +207,7 @@ async def test_pair_sources_crud(test_server):
 
         delete_request = FXDeletePairSourcesRequest(
             sources=[
-                {"base": "USD", "quote": "EUR", "provider_code": "ECB"}
+                FXDeletePairSourceItem(base="USD", quote="EUR")
                 ]
             )
         response = await client.request(
@@ -254,6 +254,115 @@ async def test_sync_rates(test_server):
 
         print_success(f"✓ Sync completed: {sync_response.synced} rates synced")
         print_info(f"  Currencies: {', '.join(sync_response.currencies)}")
+
+
+@pytest.mark.asyncio
+async def test_sync_rates_auto_config(test_server):
+    """Test 4b: POST /fx/sync/bulk - Auto-config mode (no provider parameter)."""
+    print_section("Test 4b: POST /fx/sync/bulk - Auto-config")
+
+    async with httpx.AsyncClient() as client:
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+
+        # Step 1: Create pair source configuration in DB
+        print_info("Step 1: Configure pair sources in DB")
+
+        pair_sources_request = FXCreatePairSourcesRequest(
+            sources=[
+                FXPairSourceItem(
+                    base="EUR",
+                    quote="USD",
+                    provider_code="ECB",
+                    priority=1
+                ),
+                FXPairSourceItem(
+                    base="GBP",
+                    quote="USD",
+                    provider_code="ECB",  # ECB also provides GBP rates
+                    priority=1
+                ),
+            ]
+        )
+
+        create_response = await client.post(
+            f"{API_BASE}/fx/pair-sources/bulk",
+            json=pair_sources_request.model_dump(mode="json"),
+            timeout=TIMEOUT
+        )
+
+        assert create_response.status_code == 201, f"Expected 201, got {create_response.status_code}: {create_response.text}"
+
+        create_data = FXCreatePairSourcesResponse(**create_response.json())
+        assert create_data.success_count >= 2, "Should create at least 2 pair sources"
+        print_success(f"✓ Created {create_data.success_count} pair sources")
+
+        # Step 2: Sync rates WITHOUT provider parameter (auto-config mode)
+        print_info("Step 2: Sync rates using auto-config (no provider param)")
+
+        # Important: Do NOT pass "provider" parameter
+        params = {
+            "start": yesterday.isoformat(),
+            "end": yesterday.isoformat(),
+            "currencies": "EUR,GBP"  # These currencies are configured in DB
+        }
+
+        sync_response = await client.post(
+            f"{API_BASE}/fx/sync/bulk",
+            params=params,
+            timeout=TIMEOUT
+        )
+
+        assert sync_response.status_code == 200, f"Expected 200, got {sync_response.status_code}: {sync_response.text}"
+
+        sync_data = FXSyncResponse(**sync_response.json())
+
+        assert sync_data.synced >= 0, "Synced count should be non-negative"
+        assert sync_data.date_range[0] == yesterday, "Start date should match"
+        assert sync_data.date_range[1] == yesterday, "End date should match"
+        assert len(sync_data.currencies) > 0, "Should have synced at least one currency"
+
+        print_success(f"✓ Auto-config sync completed: {sync_data.synced} rates synced")
+        print_info(f"  Currencies: {', '.join(sync_data.currencies)}")
+
+        # Step 3: Test error case - currency not configured
+        print_info("Step 3: Test missing currency configuration")
+
+        params_missing = {
+            "start": yesterday.isoformat(),
+            "end": yesterday.isoformat(),
+            "currencies": "JPY"  # NOT configured in DB
+        }
+
+        error_response = await client.post(
+            f"{API_BASE}/fx/sync/bulk",
+            params=params_missing,
+            timeout=TIMEOUT
+        )
+
+        assert error_response.status_code == 400, f"Expected 400 for missing config, got {error_response.status_code}"
+        error_data = error_response.json()
+        assert "No configuration found" in error_data["detail"], "Should mention missing configuration"
+        print_success("✓ Missing currency config properly rejected with 400")
+
+        # Step 4: Cleanup - delete pair sources
+        print_info("Step 4: Cleanup pair sources")
+
+        delete_request = FXDeletePairSourcesRequest(
+            sources=[
+                FXDeletePairSourceItem(base="EUR", quote="USD"),
+                FXDeletePairSourceItem(base="GBP", quote="USD"),
+            ]
+        )
+        delete_response = await client.request(
+            method="DELETE",
+            url=f"{API_BASE}/fx/pair-sources/bulk",
+            json=delete_request.model_dump(mode="json"),
+            timeout=TIMEOUT
+            )
+
+        assert delete_response.status_code == 200, f"Expected 200, got {delete_response.status_code}"
+        print_success("✓ Cleanup completed")
 
 
 @pytest.mark.asyncio
