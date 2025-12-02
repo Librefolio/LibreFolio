@@ -293,6 +293,7 @@ async def upsert_prices_bulk(
         logger.error(f"Error in bulk upsert prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.delete("/prices/bulk", response_model=FABulkDeleteResponse)
 async def delete_prices_bulk(
     request: FAPriceBulkDeleteRequest,
@@ -433,7 +434,7 @@ async def read_assets_bulk(
                 try:
                     classification_params = FAClassificationParams.model_validate_json(asset.classification_params)
                 except Exception as e:
-                    logger.error(f"Failed to parse classification_params for asset {asset.id}: {e}",extra={"asset_id": asset.id, "error": str(e)})
+                    logger.error(f"Failed to parse classification_params for asset {asset.id}: {e}", extra={"asset_id": asset.id, "error": str(e)})
                     pass  # Skip invalid JSON
 
             responses.append(
@@ -544,19 +545,18 @@ async def update_assets_metadata_bulk(
         results = []
         for item in request.assets:
             try:
-                result = await AssetMetadataService.update_asset_metadata(item.asset_id,item.patch,session)
+                result = await AssetMetadataService.update_asset_metadata(item.asset_id, item.patch, session)
                 # Result is now FAMetadataRefreshResult with changes included
                 results.append(result)
             except ValueError as e:
-                results.append(FAMetadataRefreshResult(asset_id=item.asset_id,success=False,message=str(e),changes=None))
+                results.append(FAMetadataRefreshResult(asset_id=item.asset_id, success=False, message=str(e), changes=None))
             except Exception as e:
                 logger.error(f"Error updating metadata for asset {item.asset_id}: {e}")
-                results.append(FAMetadataRefreshResult(asset_id=item.asset_id,success=False,message="internal error",changes=None))
+                results.append(FAMetadataRefreshResult(asset_id=item.asset_id, success=False, message="internal error", changes=None))
         return results
     except Exception as e:
         logger.error(f"Error in bulk metadata update: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @router.post("/metadata/refresh/bulk", response_model=FABulkMetadataRefreshResponse)

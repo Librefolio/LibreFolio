@@ -6,12 +6,12 @@ BOE provides daily rates with GBP as base currency.
 
 API Documentation: https://www.bankofengland.co.uk/boeapps/database/
 """
-from backend.app.logging_config import get_logger
 from datetime import datetime, date
 from decimal import Decimal
 
 import httpx
 
+from backend.app.logging_config import get_logger
 from backend.app.services.fx import FXRateProvider, FXServiceError
 from backend.app.services.provider_registry import register_provider, FXProviderRegistry
 

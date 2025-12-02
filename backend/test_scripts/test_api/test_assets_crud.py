@@ -16,17 +16,16 @@ from backend.app.schemas import (
     FABulkAssignRequest, FABulkAssignResponse,
     FABulkAssetDeleteRequest, FABulkAssetDeleteResponse, FAGeographicArea
     )
-from backend.app.schemas.prices import (
-    FAUpsert, FAUpsertItem, FABulkUpsertRequest,
-    FAPriceBulkDeleteRequest, FAAssetDelete, FABulkDeleteResponse
-)
-from backend.app.schemas.provider import (
-    FAProviderAssignmentItem, FABulkRemoveRequest, FABulkRemoveResponse
-)
-from backend.app.schemas.refresh import (
-    FABulkRefreshRequest, FARefreshItem, FABulkRefreshResponse
-)
 from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.prices import (
+    FAUpsert, FAUpsertItem, FABulkUpsertRequest
+    )
+from backend.app.schemas.provider import (
+    FAProviderAssignmentItem
+    )
+from backend.app.schemas.refresh import (
+    FABulkRefreshResponse
+    )
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success
 
@@ -528,12 +527,12 @@ async def test_bulk_remove_providers(test_server):
             display_name="Provider Remove Test",
             identifier=unique_id("PROVREM"),
             currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets/bulk",
             json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         assert create_resp.status_code == 201, f"Asset creation failed: {create_resp.status_code}"
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -544,12 +543,12 @@ async def test_bulk_remove_providers(test_server):
             asset_id=asset_id,
             provider_code="mockprov",
             provider_params=None
-        )
+            )
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider/bulk",
             json=FABulkAssignRequest(assignments=[assignment]).model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         assert assign_resp.status_code == 200, f"Provider assignment failed: {assign_resp.status_code}"
         print_info(f"  Assigned provider: mockprov")
 
@@ -560,7 +559,7 @@ async def test_bulk_remove_providers(test_server):
             f"{API_BASE}/assets/provider/bulk",
             json=FABulkRemoveRequest(asset_ids=[asset_id]).model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         assert remove_resp.status_code == 200, f"Expected 200, got {remove_resp.status_code}: {remove_resp.text}"
 
         remove_data = remove_resp.json()
@@ -590,12 +589,12 @@ async def test_bulk_delete_prices(test_server):
             display_name="Price Delete Test",
             identifier=unique_id("PRICEDEL"),
             currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets/bulk",
             json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id}")
@@ -606,13 +605,13 @@ async def test_bulk_delete_prices(test_server):
             FAUpsertItem(date="2025-01-02", close=101.0, currency="USD"),
             FAUpsertItem(date="2025-01-03", close=102.0, currency="USD"),
             FAUpsertItem(date="2025-01-10", close=110.0, currency="USD"),
-        ]
+            ]
         upsert = FAUpsert(asset_id=asset_id, prices=prices)
         price_resp = await client.post(
             f"{API_BASE}/assets/prices/bulk",
             json=FABulkUpsertRequest(assets=[upsert]).model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         assert price_resp.status_code == 200, f"Price insert failed: {price_resp.status_code}"
         print_info(f"  Inserted {len(prices)} prices")
 
@@ -624,16 +623,16 @@ async def test_bulk_delete_prices(test_server):
                     asset_id=asset_id,
                     date_ranges=[
                         DateRangeModel(start="2025-01-02", end="2025-01-03")
-                    ]
-                )
-            ]
-        )
+                        ]
+                    )
+                ]
+            )
         delete_resp = await client.request(
             "DELETE",
             f"{API_BASE}/assets/prices/bulk",
             json=delete_request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         assert delete_resp.status_code == 200, f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
 
         delete_data = delete_resp.json()
@@ -645,7 +644,7 @@ async def test_bulk_delete_prices(test_server):
         query_resp = await client.get(
             f"{API_BASE}/assets/{asset_id}/prices?start_date=2025-01-01&end_date=2025-01-10",
             timeout=TIMEOUT
-        )
+            )
         assert query_resp.status_code == 200, f"Price query failed: {query_resp.status_code}"
         remaining_prices = query_resp.json()
 
@@ -673,12 +672,12 @@ async def test_bulk_refresh_prices(test_server):
             display_name="Price Refresh Test",
             identifier=unique_id("REFRESH"),
             currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets/bulk",
             json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id}")
@@ -688,12 +687,12 @@ async def test_bulk_refresh_prices(test_server):
             asset_id=asset_id,
             provider_code="mockprov",
             provider_params={"symbol": "MOCK"}
-        )
+            )
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider/bulk",
             json=FABulkAssignRequest(assignments=[assignment]).model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         assert assign_resp.status_code == 200, f"Provider assignment failed: {assign_resp.status_code}"
         print_info(f"  Assigned provider: mockprov")
 
@@ -706,14 +705,14 @@ async def test_bulk_refresh_prices(test_server):
                     asset_id=asset_id,
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 1, 5)
-                )
-            ]
-        )
+                    )
+                ]
+            )
         refresh_resp = await client.post(
             f"{API_BASE}/assets/prices-refresh/bulk",
             json=refresh_request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         assert refresh_resp.status_code == 200, f"Expected 200, got {refresh_resp.status_code}: {refresh_resp.text}"
 
         refresh_data = FABulkRefreshResponse(**refresh_resp.json())
@@ -735,12 +734,12 @@ async def test_bulk_refresh_prices(test_server):
             display_name="No Provider",
             identifier=unique_id("NOPROV"),
             currency="USD"
-        )
+            )
         create_resp2 = await client.post(
             f"{API_BASE}/assets/bulk",
             json=FABulkAssetCreateRequest(assets=[item2]).model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         create_data2 = FABulkAssetCreateResponse(**create_resp2.json())
         asset_id2 = create_data2.results[0].asset_id
 
@@ -750,19 +749,19 @@ async def test_bulk_refresh_prices(test_server):
                     asset_id=asset_id,  # Has provider
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 1, 2)
-                ),
+                    ),
                 FARefreshItem(
                     asset_id=asset_id2,  # No provider
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 1, 2)
-                )
-            ]
-        )
+                    )
+                ]
+            )
         refresh_resp2 = await client.post(
             f"{API_BASE}/assets/prices-refresh/bulk",
             json=refresh_request2.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
         refresh_data2 = refresh_resp2.json()
 
         # Check results: one success (no errors), one failure (has errors)

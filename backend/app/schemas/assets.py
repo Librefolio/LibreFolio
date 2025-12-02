@@ -473,7 +473,6 @@ class FAClassificationParams(BaseModel):
             raise ValueError(f"investment_type must be one of: {', '.join(valid_values)}")
 
 
-
 class FAPatchMetadataRequest(BaseModel):
     """
     PATCH metadata request (partial update).
