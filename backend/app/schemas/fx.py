@@ -328,14 +328,29 @@ class FXCreatePairSourcesResponse(BaseModel):
     errors: list[str] = Field(default_factory=list, description="Errors encountered")
 
 
-# TODO: trasformare la lista di dict in una lista di un modello dedicato
+class FXDeletePairSourceItem(BaseModel):
+    """Single pair source to delete."""
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+    )
+
+    base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
+    quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
+    priority: Optional[int] = Field(None, ge=1, description="Priority level (optional, if not provided deletes all priorities)")
+
+    @field_validator('base', 'quote', mode='before')
+    @classmethod
+    def uppercase_currency(cls, v):
+        return normalize_currency_code(v)
+
+
 class FXDeletePairSourcesRequest(BaseModel):
     """Request model for deleting pair sources."""
-    sources: list[dict] = Field(
+    sources: list[FXDeletePairSourceItem] = Field(
         ...,
         min_length=1,
-        description="Pair sources to delete: [{base, quote, priority?}, ...]"
-        )
+        description="Pair sources to delete"
+    )
 
 
 class FXDeletePairSourceResult(BaseModel):

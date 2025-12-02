@@ -126,7 +126,7 @@ class FAPriceBulkDeleteRequest(BaseModel):
     assets: List[FAAssetDelete] = Field(..., min_length=1, description="List of asset price deletions")
 
 
-class FAAssetDeleteResult(BaseModel):
+class FAPriceDeleteResult(BaseModel):
     """Result of price deletion for single asset."""
     model_config = ConfigDict(extra="forbid")
 
@@ -139,7 +139,7 @@ class FABulkDeleteResponse(BaseModel):
     """Response for bulk price deletion."""
     model_config = ConfigDict(extra="forbid")
 
-    results: List[FAAssetDeleteResult]
+    results: List[FAPriceDeleteResult]
     deleted_count: int
 
 

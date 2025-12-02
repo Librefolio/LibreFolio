@@ -64,9 +64,15 @@ async def test_bulk_delete_prices():
 ---
 
 
-### 1.5 POST `/api/v1/assets/prices-refresh/bulk` ⚠️ TESTED, but need reorganization for return information
-**Status**: Never called in tests  
-**Action**: Add test in `test_assets_crud.py`
+### 1.5 POST `/api/v1/assets/prices-refresh/bulk` ✅ COMPLETED
+**Status**: Tested and refactored  
+**Action Taken**: 
+- ✅ Added comprehensive test in `test_assets_crud.py`
+- ✅ Refactored service method to return `FABulkRefreshResponse` (Pydantic model) instead of `list[dict]`
+- ✅ Fixed endpoint to use Pydantic response directly (no manual conversion)
+- ✅ Fixed deprecation warning for `datetime.utcnow()` → `datetime.now(timezone.utc)`
+
+**Test Coverage**:
 ```python
 async def test_bulk_refresh_prices():
     """Test POST /assets/prices-refresh/bulk - Refresh prices from providers."""
@@ -77,13 +83,13 @@ async def test_bulk_refresh_prices():
     # 5. Test partial failure (asset without provider)
 ```
 
-**Priority**: High (provider integration)
+**Priority**: ✅ DONE
 
 ---
 
 ## 2. FX API - Uncovered Scenarios
 
-### 2.1 POST `/api/v1/fx/sync/bulk` - Auto-config branch ❌ NOT TESTED
+### 2.1 POST `/api/v1/fx/sync/bulk` - Auto-config branch ✅ COMPLETED
 **Status**: Only manual config tested, auto-config branch never executed  
 **Current test**: Passes explicit `pair_sources` list inside test_fx_api.py
 **Missing test**: Call without `pair_sources` → should use auto-discovery

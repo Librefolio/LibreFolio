@@ -40,9 +40,12 @@ from backend.app.schemas import (
     FACurrentValue, FAHistoricalData, FAClassificationParams,
     FAMetadataRefreshResult, FAPricePoint, BackwardFillInfo,
     FAUpsert, FAUpsertItem, FAAssetDelete, FAProviderAssignmentItem,
-    FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse, FABulkDeleteResponse, FAAssetDeleteResult)
+    FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse,
+    FABulkDeleteResponse, FAPriceDeleteResult, FABulkRemoveResponse,
+    FAProviderRemovalResult, FABulkRefreshResponse, FARefreshResult)
 from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
 
 # Initialize structured logger
@@ -391,7 +394,7 @@ class AssetSourceManager:
         return results
 
     @staticmethod
-    async def bulk_remove_providers(asset_ids: list[int], session: AsyncSession, ) -> list[dict]:
+    async def bulk_remove_providers(asset_ids: list[int], session: AsyncSession) -> FABulkRemoveResponse:
         """
         Bulk remove provider assignments (PRIMARY bulk method).
 
@@ -400,17 +403,17 @@ class AssetSourceManager:
             session: Database session
 
         Returns:
-            List of results: [{asset_id, success, message}, ...]
+            FABulkRemoveResponse with results and success count
 
         Optimized: 1 DELETE query with WHERE IN
         """
         if not asset_ids:
-            return []
+            return FABulkRemoveResponse(results=[], success_count=0)
         await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids)))
         await session.commit()
-        return [{"asset_id": aid, "success": True, "message": "Provider removed"} for aid in asset_ids]
+        results = [FAProviderRemovalResult(asset_id=aid, success=True, message="Provider removed") for aid in asset_ids]
+        return FABulkRemoveResponse(results=results, success_count=len(results))
 
-    # TODO: modificare il tipo di ritorno con un pydantic model, credo FABulkMetadataRefreshResponse e parallelizzare con gather
     @staticmethod
     async def _refresh_single_metadata(asset_id: int, session: AsyncSession) -> FAMetadataRefreshResult:
         """
@@ -640,21 +643,22 @@ class AssetSourceManager:
         return {"inserted_count": total_inserted, "updated_count": 0, "results": results}
 
     @staticmethod
-    async def bulk_delete_prices(data: List[FAAssetDelete], session: AsyncSession) -> dict:
+    async def bulk_delete_prices(data: List[FAAssetDelete], session: AsyncSession) -> FABulkDeleteResponse:
         """
         Bulk delete price ranges (PRIMARY bulk method).
 
         Args:
-            data: List of FAPriceDelete (asset_id + date_ranges)
+            data: List of FAAssetDelete (asset_id + date_ranges)
             session: Database session
 
         Returns:
-            {deleted_count, results: [{asset_id, deleted, message}, ...]}
+            FABulkDeleteResponse with results and deleted count
 
         Optimized: 1 SELECT COUNT + 1 DELETE query with complex WHERE
+        Note: Cannot parallelize with gather - DB operations are sequential and interdependent
         """
         if not data:
-            return {"deleted_count": 0, "results": []}
+            return FABulkDeleteResponse(deleted_count=0, results=[])
 
         # Build count per asset before deletion
         asset_delete_counts = {}
@@ -687,7 +691,7 @@ class AssetSourceManager:
                 conditions.append(and_(PriceHistory.asset_id == asset_id, PriceHistory.date >= start, PriceHistory.date <= end))
 
         if not conditions:
-            return {"deleted_count": 0, "results": []}
+            return FABulkDeleteResponse(deleted_count=0, results=[])
 
         # Execute single DELETE with OR of all conditions
         stmt = delete(PriceHistory).where(or_(*conditions))
@@ -698,18 +702,15 @@ class AssetSourceManager:
 
         # Build results per asset with exact counts
         results = [
-            {
-                "asset_id": item.asset_id,
-                "deleted": asset_delete_counts.get(item.asset_id, 0),
-                "message": f"Deleted prices in {len(item.date_ranges)} range(s)"
-                }
+            FAPriceDeleteResult(
+                asset_id=item.asset_id,
+                deleted=asset_delete_counts.get(item.asset_id, 0),
+                message=f"Deleted prices in {len(item.date_ranges)} range(s)"
+                )
             for item in data
             ]
 
-        return {
-            "deleted_count": deleted_count,
-            "results": results
-            }
+        return FABulkDeleteResponse(deleted_count=deleted_count, results=results)
 
     # ========================================================================
     # PRICE QUERY WITH BACKWARD-FILL + Special logic for PROVIDER DELEGATION
@@ -865,13 +866,14 @@ class AssetSourceManager:
     # ========================================================================
     # PRICE REFRESH (PROVIDER) METHODS - NEW
     # ========================================================================
+
     @staticmethod
     async def bulk_refresh_prices(
         requests: List[FARefreshItem],
         session: AsyncSession,
         concurrency: int = 5,
         semaphore_timeout: int = 60,
-        ) -> list[dict]:
+        ) -> FABulkRefreshResponse:
         """
         Refresh prices for multiple assets using their configured providers.
 
@@ -882,33 +884,38 @@ class AssetSourceManager:
             semaphore_timeout: Timeout for acquiring semaphore (seconds)
 
         Returns:
-            List of per-item results: {asset_id, fetched_count, inserted_count, updated_count, errors}
+            FABulkRefreshResponse with per-item results
+
+        Note: Already parallelized with asyncio.gather and semaphore
         """
         if not requests:
-            return []
+            return FABulkRefreshResponse(results=[])
 
         results = []
         sem = asyncio.Semaphore(concurrency)
 
-        async def _process_single(item: FARefreshItem) -> dict:
+        async def _process_single(item: FARefreshItem) -> FARefreshResult:
             asset_id = item.asset_id
             start = item.start_date
             end = item.end_date
 
-            result = {
-                "asset_id": asset_id,
-                "fetched_count": 0,
-                "inserted_count": 0,
-                "updated_count": 0,
-                "errors": []
-                }
+            fetched_count = 0
+            inserted_count = 0
+            updated_count = 0
+            errors = []
 
             # Resolve provider assignment
             try:
                 assignment = await AssetSourceManager.get_asset_provider(asset_id, session)
                 if not assignment:
-                    result["errors"].append("No provider assigned for asset")
-                    return result
+                    errors.append("No provider assigned for asset")
+                    return FARefreshResult(
+                        asset_id=asset_id,
+                        fetched_count=fetched_count,
+                        inserted_count=inserted_count,
+                        updated_count=updated_count,
+                        errors=errors
+                    )
 
                 provider_code = assignment.provider_code
                 provider_params = assignment.provider_params or {}
@@ -918,19 +925,37 @@ class AssetSourceManager:
                 asset_res = await session.execute(asset_stmt)
                 asset = asset_res.scalar_one_or_none()
                 if not asset:
-                    result["errors"].append(f"Asset {asset_id} not found")
-                    return result
+                    errors.append(f"Asset {asset_id} not found")
+                    return FARefreshResult(
+                        asset_id=asset_id,
+                        fetched_count=fetched_count,
+                        inserted_count=inserted_count,
+                        updated_count=updated_count,
+                        errors=errors
+                    )
 
                 identifier = asset.identifier
             except Exception as e:
-                result["errors"].append(f"Failed to resolve provider or asset: {str(e)}")
-                return result
+                errors.append(f"Failed to resolve provider or asset: {str(e)}")
+                return FARefreshResult(
+                    asset_id=asset_id,
+                    fetched_count=fetched_count,
+                    inserted_count=inserted_count,
+                    updated_count=updated_count,
+                    errors=errors
+                )
 
             # Instantiate provider from registry
             prov = AssetProviderRegistry.get_provider_instance(provider_code)
             if not prov:
-                result["errors"].append(f"Provider not found: {provider_code}")
-                return result
+                errors.append(f"Provider not found: {provider_code}")
+                return FARefreshResult(
+                    asset_id=asset_id,
+                    fetched_count=fetched_count,
+                    inserted_count=inserted_count,
+                    updated_count=updated_count,
+                    errors=errors
+                )
 
             # Parse provider_params if stored as JSON string
             try:
@@ -945,8 +970,14 @@ class AssetSourceManager:
             try:
                 prov.validate_params(provider_params)
             except Exception as e:
-                result["errors"].append(f"Invalid provider params: {str(e)}")
-                return result
+                errors.append(f"Invalid provider params: {str(e)}")
+                return FARefreshResult(
+                    asset_id=asset_id,
+                    fetched_count=fetched_count,
+                    inserted_count=inserted_count,
+                    updated_count=updated_count,
+                    errors=errors
+                )
 
             # Fetch existing DB entries (prefetch) while calling remote
             async def _fetch_db_existing():
@@ -982,14 +1013,26 @@ class AssetSourceManager:
 
                         db_existing, remote_data = await asyncio.gather(db_task, fetch_task)
             except Exception as e:
-                result["errors"].append(str(e))
-                return result
+                errors.append(str(e))
+                return FARefreshResult(
+                    asset_id=asset_id,
+                    fetched_count=fetched_count,
+                    inserted_count=inserted_count,
+                    updated_count=updated_count,
+                    errors=errors
+                )
 
             # remote_data expected shape: {"prices": [ {date, open?, high?, low?, close, volume?, currency}, ... ], "source": "..."}
             prices = remote_data.get("prices", []) if isinstance(remote_data, dict) else []
             if not prices:
-                result["errors"].append("No prices returned from provider")
-                return result
+                errors.append("No prices returned from provider")
+                return FARefreshResult(
+                    asset_id=asset_id,
+                    fetched_count=fetched_count,
+                    inserted_count=inserted_count,
+                    updated_count=updated_count,
+                    errors=errors
+                )
 
             # Convert prices to FAUpsertItem objects
             price_items = []
@@ -1009,21 +1052,27 @@ class AssetSourceManager:
 
             try:
                 upsert_res = await AssetSourceManager.bulk_upsert_prices([upsert_obj], session)
-                result["fetched_count"] = len(prices)
-                result["inserted_count"] = upsert_res.get("inserted_count", 0)
+                fetched_count = len(prices)
+                inserted_count = upsert_res.get("inserted_count", 0)
             except Exception as e:
-                result["errors"].append(f"DB upsert failed: {str(e)}")
+                errors.append(f"DB upsert failed: {str(e)}")
 
             # Update last_fetch_at on assignment
             try:
-                assignment.last_fetch_at = datetime.utcnow()
+                assignment.last_fetch_at = utcnow()
                 session.add(assignment)
                 await session.commit()
             except Exception:
                 # Not critical, skip
                 pass
 
-            return result
+            return FARefreshResult(
+                asset_id=asset_id,
+                fetched_count=fetched_count,
+                inserted_count=inserted_count,
+                updated_count=updated_count,
+                errors=errors
+            )
 
         # Create tasks for all items
         tasks = [asyncio.create_task(_process_single(item)) for item in requests]
@@ -1031,4 +1080,4 @@ class AssetSourceManager:
         # Wait for all to complete
         completed = await asyncio.gather(*tasks)
 
-        return completed
+        return FABulkRefreshResponse(results=list(completed))
