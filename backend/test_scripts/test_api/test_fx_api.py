@@ -275,21 +275,21 @@ async def test_sync_rates_auto_config(test_server):
                     quote="USD",
                     provider_code="ECB",
                     priority=1
-                ),
+                    ),
                 FXPairSourceItem(
                     base="GBP",
                     quote="USD",
                     provider_code="ECB",  # ECB also provides GBP rates
                     priority=1
-                ),
-            ]
-        )
+                    ),
+                ]
+            )
 
         create_response = await client.post(
             f"{API_BASE}/fx/pair-sources/bulk",
             json=pair_sources_request.model_dump(mode="json"),
             timeout=TIMEOUT
-        )
+            )
 
         assert create_response.status_code == 201, f"Expected 201, got {create_response.status_code}: {create_response.text}"
 
@@ -305,13 +305,13 @@ async def test_sync_rates_auto_config(test_server):
             "start": yesterday.isoformat(),
             "end": yesterday.isoformat(),
             "currencies": "EUR,GBP"  # These currencies are configured in DB
-        }
+            }
 
         sync_response = await client.post(
             f"{API_BASE}/fx/sync/bulk",
             params=params,
             timeout=TIMEOUT
-        )
+            )
 
         assert sync_response.status_code == 200, f"Expected 200, got {sync_response.status_code}: {sync_response.text}"
 
@@ -332,13 +332,13 @@ async def test_sync_rates_auto_config(test_server):
             "start": yesterday.isoformat(),
             "end": yesterday.isoformat(),
             "currencies": "JPY"  # NOT configured in DB
-        }
+            }
 
         error_response = await client.post(
             f"{API_BASE}/fx/sync/bulk",
             params=params_missing,
             timeout=TIMEOUT
-        )
+            )
 
         assert error_response.status_code == 400, f"Expected 400 for missing config, got {error_response.status_code}"
         error_data = error_response.json()
@@ -352,8 +352,8 @@ async def test_sync_rates_auto_config(test_server):
             sources=[
                 FXDeletePairSourceItem(base="EUR", quote="USD"),
                 FXDeletePairSourceItem(base="GBP", quote="USD"),
-            ]
-        )
+                ]
+            )
         delete_response = await client.request(
             method="DELETE",
             url=f"{API_BASE}/fx/pair-sources/bulk",

@@ -7,11 +7,11 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
-from backend.app.logging_config import get_logger
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Dict
 
+from backend.app.logging_config import get_logger
 from backend.app.utils.datetime_utils import utcnow
 
 try:

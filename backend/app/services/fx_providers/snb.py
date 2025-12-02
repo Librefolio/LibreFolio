@@ -6,12 +6,12 @@ SNB provides daily rates with CHF as base currency.
 
 API Documentation: https://data.snb.ch/en/topics/uvo#!/doc/explanations
 """
-from backend.app.logging_config import get_logger
 from datetime import date
 from decimal import Decimal
 
 import httpx
 
+from backend.app.logging_config import get_logger
 from backend.app.services.fx import FXRateProvider, FXServiceError
 from backend.app.services.provider_registry import register_provider, FXProviderRegistry
 

@@ -332,7 +332,7 @@ class FXDeletePairSourceItem(BaseModel):
     """Single pair source to delete."""
     model_config = ConfigDict(
         str_strip_whitespace=True,
-    )
+        )
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
@@ -350,7 +350,7 @@ class FXDeletePairSourcesRequest(BaseModel):
         ...,
         min_length=1,
         description="Pair sources to delete"
-    )
+        )
 
 
 class FXDeletePairSourceResult(BaseModel):

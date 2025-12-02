@@ -6,12 +6,12 @@ ECB provides daily rates with EUR as base currency.
 
 API Documentation: https://data.ecb.europa.eu/help/api/overview
 """
-from backend.app.logging_config import get_logger
 from datetime import date
 from decimal import Decimal
 
 import httpx
 
+from backend.app.logging_config import get_logger
 from backend.app.services.fx import FXRateProvider, FXServiceError
 from backend.app.services.provider_registry import register_provider, FXProviderRegistry
 
@@ -40,7 +40,7 @@ class ECBProvider(FXRateProvider):
     @property
     def code(self) -> str:
         return "ECB"
-    
+
     @property
     def provider_code(self) -> str:
         """Alias for code (required by unified registry)."""
@@ -242,4 +242,3 @@ class ECBProvider(FXRateProvider):
                 raise FXServiceError(f"Unexpected ECB response format for {currency}: {e}") from e
 
         return results
-

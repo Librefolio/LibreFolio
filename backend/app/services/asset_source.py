@@ -24,7 +24,7 @@ Design principles:
 """
 import asyncio
 from abc import ABC, abstractmethod
-from datetime import date as date_type, timedelta, datetime
+from datetime import date as date_type, timedelta
 from typing import Optional, List, Dict
 
 import structlog
@@ -673,7 +673,7 @@ class AssetSourceManager:
                 end = date_range.end or start  # Single day if no end
 
                 # Count rows for this specific range
-                count_stmt = select(func.count()).select_from(PriceHistory).where(and_(PriceHistory.asset_id == asset_id,PriceHistory.date >= start,PriceHistory.date <= end))
+                count_stmt = select(func.count()).select_from(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date >= start, PriceHistory.date <= end))
                 result = await session.execute(count_stmt)
                 count += result.scalar()
 
@@ -915,7 +915,7 @@ class AssetSourceManager:
                         inserted_count=inserted_count,
                         updated_count=updated_count,
                         errors=errors
-                    )
+                        )
 
                 provider_code = assignment.provider_code
                 provider_params = assignment.provider_params or {}
@@ -932,7 +932,7 @@ class AssetSourceManager:
                         inserted_count=inserted_count,
                         updated_count=updated_count,
                         errors=errors
-                    )
+                        )
 
                 identifier = asset.identifier
             except Exception as e:
@@ -943,7 +943,7 @@ class AssetSourceManager:
                     inserted_count=inserted_count,
                     updated_count=updated_count,
                     errors=errors
-                )
+                    )
 
             # Instantiate provider from registry
             prov = AssetProviderRegistry.get_provider_instance(provider_code)
@@ -955,7 +955,7 @@ class AssetSourceManager:
                     inserted_count=inserted_count,
                     updated_count=updated_count,
                     errors=errors
-                )
+                    )
 
             # Parse provider_params if stored as JSON string
             try:
@@ -977,7 +977,7 @@ class AssetSourceManager:
                     inserted_count=inserted_count,
                     updated_count=updated_count,
                     errors=errors
-                )
+                    )
 
             # Fetch existing DB entries (prefetch) while calling remote
             async def _fetch_db_existing():
@@ -1000,7 +1000,7 @@ class AssetSourceManager:
                     return {
                         "prices": [p.model_dump() for p in hist_data.prices],
                         "source": hist_data.source
-                    }
+                        }
                 except Exception as e:
                     raise AssetSourceError(f"Provider fetch failed: {str(e)}", "PROVIDER_FETCH_ERROR", {})
 
@@ -1020,7 +1020,7 @@ class AssetSourceManager:
                     inserted_count=inserted_count,
                     updated_count=updated_count,
                     errors=errors
-                )
+                    )
 
             # remote_data expected shape: {"prices": [ {date, open?, high?, low?, close, volume?, currency}, ... ], "source": "..."}
             prices = remote_data.get("prices", []) if isinstance(remote_data, dict) else []
@@ -1032,7 +1032,7 @@ class AssetSourceManager:
                     inserted_count=inserted_count,
                     updated_count=updated_count,
                     errors=errors
-                )
+                    )
 
             # Convert prices to FAUpsertItem objects
             price_items = []
@@ -1072,7 +1072,7 @@ class AssetSourceManager:
                 inserted_count=inserted_count,
                 updated_count=updated_count,
                 errors=errors
-            )
+                )
 
         # Create tasks for all items
         tasks = [asyncio.create_task(_process_single(item)) for item in requests]

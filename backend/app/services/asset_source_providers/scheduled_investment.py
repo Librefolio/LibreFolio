@@ -39,7 +39,6 @@ For detailed parameter structure documentation, see:
 - backend.app.schemas.assets.FALateInterestConfig
 """
 import json
-from backend.app.logging_config import get_logger
 from datetime import date as date_type, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -49,6 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Transaction, TransactionType
 from backend.app.db.session import get_session_generator
+from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
     FACurrentValue,
     FAHistoricalData,

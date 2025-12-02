@@ -4,11 +4,12 @@ CSS Web Scraper provider for asset pricing.
 Uses HTTP + BeautifulSoup to extract prices from web pages using CSS selectors.
 Supports both US (1,234.56) and EU (1.234,56) number formats.
 """
-from backend.app.logging_config import get_logger
 import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Dict
+
+from backend.app.logging_config import get_logger
 
 try:
     import httpx
