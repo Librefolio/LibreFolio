@@ -32,7 +32,6 @@ from backend.app.utils.datetime_utils import utcnow
 # ENUMS
 # ============================================================================
 
-# TODO: aggiungere un identificatore per i sintetici (es. "SYNTHETIC")?
 # TODO: capire se c'è un modo standard per convertire qualsiasi asset in un ID univoco, indipendente dal tipo (es. hash di qualcosa o db mondiale)
 class IdentifierType(str, Enum):
     """
@@ -96,38 +95,6 @@ class AssetType(str, Enum):
     HOLD = "HOLD"
     OTHER = "OTHER"
 
-# TODO: da rimuovere perchè con la tabella asset_provider_assignments si gestisce in modo più flessibile
-class ValuationModel(str, Enum):
-    """
-    Valuation model for assets.
-
-    Usage: Determines how the asset's current value is calculated.
-
-    - MARKET_PRICE: Uses market prices from price_history table
-      When to use: Stocks, ETFs, crypto, traded bonds - any asset with a market price
-      Requires: price_history records with daily prices
-      Example: Apple stock valued at current market price
-    - SCHEDULED_YIELD: Computes NPV from interest_schedule for loans/bonds
-      When to use: Crowdfunding loans, bonds with fixed schedules
-      Requires: interest_schedule JSON with payment terms
-      Example: Recrowd loan valued by remaining principal + accrued interest
-    - MANUAL: User-provided valuations only
-      When to use: Assets without market prices (real estate, art, unlisted companies, collectibles)
-      Requires: User manually enters prices in price_history (source_plugin_key="manual")
-      Default value: Purchase price from first BUY transaction
-      Example: Private company shares, real estate property, art collection
-      Note: User can update valuation anytime by adding new price_history record
-
-    Impact:
-    - MARKET_PRICE -> runtime service fetches latest price from price_history (automated)
-    - SCHEDULED_YIELD -> runtime service computes NPV from interest_schedule (calculated)
-    - MANUAL -> runtime service uses latest price_history with source="manual", if not set by user, use last Buy transaction (user-provided)
-    - Affects which data plugins are used (market data vs synthetic vs manual)
-    - Changes how portfolio value is computed in aggregation services
-    """
-    MARKET_PRICE = "MARKET_PRICE"
-    SCHEDULED_YIELD = "SCHEDULED_YIELD"
-    MANUAL = "MANUAL"
 
 
 class TransactionType(str, Enum):
@@ -326,39 +293,19 @@ class Broker(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-# TODO: Capire come identificare nella realtà asset doppi, e quindi aggiungere un vincolo di unicità (e.g identifier, identifier_type)
+# Asset definition
 class Asset(SQLModel, table=True):
     """
-    Asset definition with interest schedule support for scheduled-yield assets.
+    Asset definition - core metadata container.
+
+    This model stores fundamental asset information independent of pricing logic.
+    Provider-specific identification and valuation is handled via asset_provider_assignments table.
 
     Provider assignments:
     - Use asset_provider_assignments table (1-to-1 relationship)
     - Each asset can have at most one provider for pricing data
     - Provider handles both current and historical data fetching
-
-    Scheduled-yield fields (for CROWDFUND_LOAN, BOND, etc.):
-    - interest_schedule: JSON containing complete FAScheduledInvestmentSchedule
-
-    The interest_schedule JSON should conform to FAScheduledInvestmentSchedule schema:
-    {
-      "schedule": [
-        {
-          "start_date": "YYYY-MM-DD",
-          "end_date": "YYYY-MM-DD",
-          "annual_rate": 0.085,
-          "compounding": "SIMPLE" | "COMPOUND",
-          "compound_frequency": "DAILY" | "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL" | "CONTINUOUS",
-          "day_count": "ACT/365" | "ACT/360" | "ACT/ACT" | "30/360"
-        },
-        ...
-      ],
-      "late_interest": {
-        "annual_rate": 0.12,
-        "grace_period_days": 30,
-        "compounding": "SIMPLE",
-        "day_count": "ACT/365"
-      }
-    }
+    - Provider assignment includes identifier, identifier_type, and provider_params
 
     Classification and metadata fields:
     - classification_params: JSON containing ClassificationParamsModel structure
@@ -381,32 +328,18 @@ class Asset(SQLModel, table=True):
     - Renormalization applied if sum != 1.0 (adjusts smallest weight)
 
     Notes:
-    - face_value (principal) is calculated from transactions (BUY - SELL)
-    - maturity_date is the last period's end_date in the schedule
-    - Validation is done via FAScheduledInvestmentSchedule Pydantic model
-    - Classification validation done via ClassificationParamsModel Pydantic model
+    - display_name must be unique to avoid user confusion
+    - Validation is done via ClassificationParamsModel Pydantic model when loaded
     """
     __tablename__ = "assets"
+    __table_args__ = (
+        UniqueConstraint("display_name", name="uq_assets_display_name"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     display_name: str = Field(nullable=False)
 
-    # TODO: spostare identifier e identifier_type nella tabella asset_provider_assignments perchè l'identificazione è legata al provider usato
-    identifier: str = Field(nullable=False, index=True)
-    identifier_type: IdentifierType = Field(default=IdentifierType.OTHER)
-
     currency: str = Field(nullable=False, description="Asset original currency")  # ISO 4217
-
-    # Valuation model
-    valuation_model: ValuationModel = Field(default=ValuationModel.MARKET_PRICE)
-
-    # TODO: spostare interest_schedule e la logica associata, al asset_provider_assignments.provider_params perchè
-    #  quando viene usato come provider scheduled_investment è il parametro su cui fare i calcoli,
-    #  inutile qui, è None sempre eccetto per quel tipo di asset
-    # Scheduled-yield configuration (JSON)
-    # Should contain FAScheduledInvestmentSchedule structure
-    # Validated when loaded using FAScheduledInvestmentSchedule(**json.loads(interest_schedule))
-    interest_schedule: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     # Classification and metadata (JSON TEXT)
     # Structure: {
@@ -416,7 +349,7 @@ class Asset(SQLModel, table=True):
     # }
     # Validation is done via ClassificationParamsModel Pydantic model when loaded
     classification_params: Optional[str] = Field(default=None, sa_column=Column(Text))
-    asset_type: AssetType = Field(default=AssetType.OTHER) # Store outside classification_params for easier querying
+    asset_type: AssetType = Field(default=AssetType.OTHER)  # Store outside classification_params for easier querying
 
     active: bool = Field(default=True)
 
@@ -719,20 +652,50 @@ class AssetProviderAssignment(SQLModel, table=True):
     This table assigns pricing providers to assets. Each asset can have
     at most one provider assigned for fetching current and historical prices.
 
-    Provider types:
-    - yfinance: Yahoo Finance for stocks/ETFs/funds
-    - cssscraper: Custom CSS-based web scraper
-    - (future): Alpha Vantage, Polygon.io, custom providers
+    Fields:
+    - identifier: How the provider identifies this asset (ticker, ISIN, UUID, URL, etc.)
+    - identifier_type: Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)
+    - provider_params: JSON configuration specific to the provider
 
-    Special cases:
-    - Assets with valuation_model=MANUAL: No provider assignment needed
-    - Assets with valuation_model=SCHEDULED_YIELD: No provider assignment needed
-      (values calculated runtime from interest_schedule)
-    - Assets with valuation_model=MARKET_PRICE: Provider assignment recommended
+    Provider types and their configurations:
 
-    provider_params: JSON configuration for the provider
-    Example (yfinance): {"identifier": "AAPL", "type": "Stock"}
-    Example (cssscraper): {"url": "https://...", "selector": ".price", "currency": "EUR"}
+    1. yfinance (Yahoo Finance):
+       - identifier: Stock ticker (e.g., "AAPL", "MSFT")
+       - identifier_type: TICKER or ISIN
+       - provider_params: {} or {"some_config": "value"}
+
+    2. cssscraper (Custom CSS-based web scraper):
+       - identifier: Full URL to scrape
+       - identifier_type: OTHER
+       - provider_params: {"selector": ".price", "currency": "EUR"}
+
+    3. scheduled_investment (Synthetic yield calculator):
+       - identifier: Asset ID as string or UUID
+       - identifier_type: UUID
+       - provider_params: FAScheduledInvestmentSchedule JSON
+         Example:
+         {
+           "schedule": [
+             {
+               "start_date": "2025-01-01",
+               "end_date": "2025-12-31",
+               "annual_rate": 0.085,
+               "compounding": "SIMPLE",
+               "day_count": "ACT/365"
+             }
+           ],
+           "late_interest": {
+             "annual_rate": 0.12,
+             "grace_period_days": 30,
+             "compounding": "SIMPLE",
+             "day_count": "ACT/365"
+           }
+         }
+
+    Notes:
+    - provider_params validation is done by plugin's validate_params method
+    - Each provider may support different identifier types
+    - Relationship is 1-to-1 (one asset = one provider)
     """
     __tablename__ = "asset_provider_assignments"
     __table_args__ = (
@@ -752,13 +715,23 @@ class AssetProviderAssignment(SQLModel, table=True):
     provider_code: str = Field(
         max_length=50,
         nullable=False,
-        description="Provider code (yfinance, cssscraper, etc.)"
+        description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)"
+        )
+
+    identifier: str = Field(
+        nullable=False,
+        description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)"
+        )
+
+    identifier_type: IdentifierType = Field(
+        nullable=False,
+        description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
         )
 
     provider_params: Optional[str] = Field(
         default=None,
         sa_column=Column(Text),
-        description="JSON configuration for provider"
+        description="JSON configuration for provider (validated by plugin)"
         )
 
     last_fetch_at: Optional[datetime] = Field(

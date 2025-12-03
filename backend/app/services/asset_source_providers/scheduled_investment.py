@@ -46,7 +46,7 @@ from typing import Optional
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, Transaction, TransactionType
+from backend.app.db.models import Asset, Transaction, TransactionType, AssetProviderAssignment, IdentifierType
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
@@ -220,6 +220,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
     async def get_current_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: dict,
         ) -> FACurrentValue:
         """
@@ -234,7 +235,9 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
         Args:
             identifier: Asset ID (as string)
-            provider_params: Can include "_transaction_override" for testing
+            identifier_type: Type of identifier (typically UUID for scheduled investments)
+            provider_params: Must include schedule (FAScheduledInvestmentSchedule JSON).
+                           Can include "_transaction_override" for testing.
 
         Returns:
             FACurrentValue with calculated value
@@ -260,7 +263,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 # Remove _transaction_override from params before validation
                 params_copy = {k: v for k, v in provider_params.items() if k != "_transaction_override"}
 
-                # Validate and extract schedule
+                # Validate and extract schedule from provider_params
                 schedule = self.validate_params(params_copy)
                 currency = "EUR"  # Default for tests
             else:
@@ -272,16 +275,20 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     # Get transactions
                     transactions = await self._get_transactions_from_db(asset_id, session)
 
-                    # Parse interest schedule from asset
-                    if not asset.interest_schedule:
+                    # Get provider assignment to read schedule from provider_params
+                    assignment_result = await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))
+                    assignment = assignment_result.scalar_one_or_none()
+
+                    if not assignment or not assignment.provider_params:
                         raise AssetSourceError(
-                            f"Asset {asset_id} has no interest_schedule configured",
-                            error_code="MISSING_SCHEDULE",
+                            f"Asset {asset_id} has no provider_params configured",
+                            error_code="MISSING_PARAMS",
                             details={"asset_id": asset_id}
                             )
 
-                    schedule_data = json.loads(asset.interest_schedule)
-                    schedule = FAScheduledInvestmentSchedule(**schedule_data)
+                    # Parse schedule from provider_params
+                    params_data = json.loads(assignment.provider_params)
+                    schedule = self.validate_params(params_data)
                     currency = asset.currency
                     break  # Exit after first iteration
 
@@ -338,6 +345,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
     async def get_history_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: dict,
         start_date: date_type,
         end_date: date_type,
@@ -350,7 +358,9 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
         Args:
             identifier: Asset ID (as string)
-            provider_params: Can include "_transaction_override" for testing
+            identifier_type: Type of identifier (typically UUID for scheduled investments)
+            provider_params: Must include schedule (FAScheduledInvestmentSchedule JSON).
+                           Can include "_transaction_override" for testing.
             start_date: Start date (inclusive)
             end_date: End date (inclusive)
 
@@ -388,15 +398,20 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                         asset_id, session, up_to_date=end_date
                         )
 
-                    if not asset.interest_schedule:
+                    # Get provider assignment to read schedule from provider_params
+                    assignment_result = await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))
+                    assignment = assignment_result.scalar_one_or_none()
+
+                    if not assignment or not assignment.provider_params:
                         raise AssetSourceError(
-                            f"Asset {asset_id} has no interest_schedule configured",
-                            error_code="MISSING_SCHEDULE",
+                            f"Asset {asset_id} has no provider_params configured",
+                            error_code="MISSING_PARAMS",
                             details={"asset_id": asset_id}
                             )
 
-                    schedule_data = json.loads(asset.interest_schedule)
-                    schedule = FAScheduledInvestmentSchedule(**schedule_data)
+                    # Parse schedule from provider_params
+                    params_data = json.loads(assignment.provider_params)
+                    schedule = self.validate_params(params_data)
                     currency = asset.currency
                     break
 
@@ -506,7 +521,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         periods_to_process: list[FAInterestRatePeriod] = []
 
         # 1. Real scheduled periods (truncate to target_date)
-        for p in schedule.schedule:
+        for p in schedule.schedule:  # type: FAInterestRatePeriod
             if p.start_date > target_date:
                 break
             eff_start = p.start_date

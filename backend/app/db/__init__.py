@@ -6,7 +6,6 @@ from backend.app.db.base import (
     # Enums
     IdentifierType,
     AssetType,
-    ValuationModel,
     TransactionType,
     CashMovementType,
     # Models
@@ -30,7 +29,6 @@ __all__ = [
     # Enums
     "IdentifierType",
     "AssetType",
-    "ValuationModel",
     "TransactionType",
     "CashMovementType",
     # Models

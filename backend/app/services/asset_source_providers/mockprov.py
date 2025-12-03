@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
 
-from backend.app.db import AssetType
+from backend.app.db import IdentifierType
 from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint, FAClassificationParams, FAGeographicArea
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
@@ -46,6 +46,7 @@ class MockProvider(AssetSourceProvider):
     async def get_current_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: Dict | None = None,
         ) -> FACurrentValue:
         """
@@ -70,6 +71,7 @@ class MockProvider(AssetSourceProvider):
     async def get_history_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: Dict | None,
         start_date: date,
         end_date: date,
@@ -130,6 +132,7 @@ class MockProvider(AssetSourceProvider):
     async def fetch_asset_metadata(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: Dict | None = None,
         ) -> FAClassificationParams | None:
         """
@@ -140,6 +143,7 @@ class MockProvider(AssetSourceProvider):
 
         Args:
             identifier: Asset identifier
+            identifier_type: Type of the identifier
             provider_params: Optional parameters (unused)
 
         Returns:
@@ -148,6 +152,6 @@ class MockProvider(AssetSourceProvider):
         # Return mock data for testing
         return FAClassificationParams(
             sector="Technology",
-            short_description=f"Mock test asset {identifier} - used for testing metadata features",
+            short_description=f"Mock test asset {identifier} - type: {identifier_type} - used for testing metadata features",
             geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")})
             ).model_dump(mode="json")

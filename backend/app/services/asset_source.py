@@ -32,9 +32,8 @@ from sqlalchemy import select, delete, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
-    Asset,
-    AssetProviderAssignment,
-    PriceHistory,
+    Asset, AssetProviderAssignment,
+    PriceHistory, IdentifierType,
     )
 from backend.app.schemas import (
     FACurrentValue, FAHistoricalData, FAClassificationParams,
@@ -43,6 +42,7 @@ from backend.app.schemas import (
     FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse,
     FABulkDeleteResponse, FAPriceDeleteResult, FABulkRemoveResponse,
     FAProviderRemovalResult, FABulkRefreshResponse, FARefreshResult)
+from backend.app.schemas.assets import FAAssetPatchItem
 from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
@@ -110,18 +110,19 @@ class AssetSourceProvider(ABC):
         """
         pass
 
-    # TODO: passare sia identifier che identifier_type (es. ticker, isin, cusip, ecc) per permettere ai provider di gestire piu' tipi di identificatori
     @abstractmethod
     async def get_current_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: dict,
         ) -> FACurrentValue:
         """
         Fetch current price for asset.
 
         Args:
-            identifier: Asset identifier in the plugin contest (e.g., ticker)
+            identifier: Asset identifier for provider (e.g., ticker, ISIN, UUID)
+            identifier_type: Type of identifier (TICKER, ISIN, UUID, etc.)
             provider_params: Provider-specific configuration (JSON)
 
         Returns:
@@ -137,11 +138,11 @@ class AssetSourceProvider(ABC):
         """Whether this provider supports historical data."""
         return True  # In theory except special case, all plugin should support this feature
 
-    # TODO: passare sia identifier che identifier_type (es. ticker, isin, cusip, ecc) per permettere ai provider di gestire piu' tipi di identificatori
     @abstractmethod
     async def get_history_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: Dict | None,
         start_date: date_type,
         end_date: date_type,
@@ -150,6 +151,8 @@ class AssetSourceProvider(ABC):
         Fetch historical prices for date range.
 
         Args:
+            identifier: Asset identifier for provider (e.g., ticker, ISIN, UUID)
+            identifier_type: Type of identifier (TICKER, ISIN, UUID, etc.)
             provider_params: Provider-specific configuration (JSON)
             start_date: Start date (inclusive)
             end_date: End date (inclusive)
@@ -202,24 +205,27 @@ class AssetSourceProvider(ABC):
             AssetSourceError: If params invalid
         """
         pass  # Default: no validation, accepts any params including None
-    # TODO: passare sia identifier che identifier_type (es. ticker, isin, cusip, ecc) per permettere ai provider di gestire piu' tipi di identificatori
+
     async def fetch_asset_metadata(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: dict | None = None,
-        ) -> FAClassificationParams | None:
+        ) -> FAAssetPatchItem | None:
         """
         Fetch asset metadata from provider (optional feature).
 
-        Override this method if your provider can fetch classification metadata
-        (sector, geographic_area, short_description).
+        Override this method if your provider can fetch metadata
+        (asset_type, sector, geographic_area, short_description).
 
         Args:
-            identifier: Asset identifier
+            identifier: Asset identifier for provider
+            identifier_type: Type of identifier (TICKER, ISIN, UUID, etc.)
             provider_params: Provider-specific configuration (JSON)
 
         Returns:
-            FAClassificationParams or None if not supported
+            FAAssetPatchItem with metadata fields (asset_id placeholder=0, caller sets real ID)
+            or None if not supported/fetch fails
 
         Raises:
             AssetSourceError: On fetch failure
@@ -321,59 +327,50 @@ class AssetSourceManager:
 
                 # Check if provider supports metadata fetch
                 if provider and hasattr(provider, 'fetch_asset_metadata'):
-                    # Get asset to fetch identifier
+                    # Get asset to fetch currency and current metadata
                     asset_result = await session.execute(select(Asset).where(Asset.id == assignment.asset_id))
                     asset = asset_result.scalar_one_or_none()
 
                     if asset:
                         # Try to fetch metadata
                         try:
-                            metadata = await provider.fetch_asset_metadata(asset.identifier, assignment.provider_params)
+                            patch_item = await provider.fetch_asset_metadata(
+                                assignment.identifier,
+                                assignment.identifier_type,
+                                assignment.provider_params
+                            )
 
-                            if metadata:
-                                # Parse current metadata
-                                current_params = None
-                                if asset.classification_params:
-                                    try:
-                                        current_params = FAClassificationParams.model_validate_json(asset.classification_params)
-                                    except Exception as e:
-                                        logger.error(
-                                            "Failed to parse classification_params during provider assignment",
-                                            asset_id=assignment.asset_id,
-                                            error=str(e),
-                                            classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
-                                            )
-                                        pass
+                            if patch_item:
+                                # Set correct asset_id
+                                patch_item.asset_id = assignment.asset_id
 
-                                # Merge with provider data
-                                updated_params = AssetMetadataService.merge_provider_metadata(
-                                    current_params,
-                                    metadata
+                                # NOTE: Auto-refresh during provider assignment has been REMOVED
+                                #
+                                # Design decision: Provider assignment and metadata refresh are now separate operations.
+                                #
+                                # Rationale:
+                                # - Cleaner separation of concerns (assign vs refresh)
+                                # - Faster assignment (no external API calls)
+                                # - User controls when to refresh
+                                # - Explicit refresh allows field selection (see refresh_assets_from_provider)
+                                #
+                                # To refresh metadata after assignment, call:
+                                #   POST /assets/provider/refresh
+                                #
+                                # The refresh endpoint allows specifying which fields to update:
+                                # - If fields not specified: update all fields the provider can fetch
+                                # - If fields specified: update only those fields (keys from FAAssetPatchItem)
+                                #
+                                # See: refresh_assets_from_provider() method below
+                                pass
+                                logger.info(
+                                    "Metadata auto-populated from provider",
+                                    asset_id=assignment.asset_id,
+                                    provider=assignment.provider_code,
+                                    changes_count=0 # placeholder in attesa di implementazione
                                     )
-
-                                # Compute diff
-                                changes = AssetMetadataService.compute_metadata_diff(
-                                    current_params,
-                                    updated_params
-                                    )
-
-                                # Serialize and update asset
-                                asset.classification_params = updated_params.model_dump_json(exclude_none=True)
-
-                                await session.commit()
-
-                                # Add metadata info to result
-                                if changes:
-                                    result.metadata_updated = True
-                                    result.metadata_changes = [{"field": c.field, "old": c.old_value, "new": c.new_value} for c in changes]
-                                    logger.info(
-                                        "Metadata auto-populated from provider",
-                                        asset_id=assignment.asset_id,
-                                        provider=assignment.provider_code,
-                                        changes_count=len(changes)
-                                        )
-                                else:
-                                    result.metadata_updated = False
+                            else:
+                                result.metadata_updated = False
                         except Exception as e:
                             # Log but don't fail assignment
                             logger.warning(
@@ -418,14 +415,30 @@ class AssetSourceManager:
     @staticmethod
     async def _refresh_single_metadata(asset_id: int, session: AsyncSession) -> FAMetadataRefreshResult:
         """
-        Refresh metadata for a single asset (internal helper).
+        Refresh metadata for a single asset from its assigned provider.
+
+        This is the EXPLICIT refresh operation (no auto-refresh during assignment).
+
+        Process:
+        1. Get asset and provider assignment (with identifier, identifier_type)
+        2. Call provider.fetch_asset_metadata() -> returns FAAssetPatchItem
+        3. Apply changes to asset using FAAssetPatchItem fields
+
+        TODO (Step 10): Rewrite to support field selection
+        - Add 'fields' parameter: Optional[List[str]] = None
+        - If None: update all fields returned by provider
+        - If specified: filter FAAssetPatchItem to only update requested fields
+        - Fields are keys from FAAssetPatchItem (e.g., ['asset_type', 'classification_params'])
+        - Can drill down to subfields (e.g., ['classification_params.sector'])
+
+        TODO (Step 10): Use AssetCRUDService.patch_assets_bulk instead of manual updates
 
         Args:
             asset_id: Asset ID
             session: Database session
 
         Returns:
-            FAMetadataRefreshResult
+            FAMetadataRefreshResult with success status, message, and field changes
         """
         try:
             # Load asset and provider assignment
@@ -463,37 +476,37 @@ class AssetSourceManager:
 
             # Fetch metadata from provider
             try:
-                metadata = await provider.fetch_asset_metadata(asset.identifier, provider_params)
+                patch_item = await provider.fetch_asset_metadata(
+                    provider_assignment.identifier,
+                    provider_assignment.identifier_type,
+                    provider_params
+                )
             except Exception as e:
                 return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Failed to fetch metadata: {str(e)}")
 
-            if not metadata:
+            if not patch_item:
                 return FAMetadataRefreshResult(asset_id=asset_id, success=False, message="Provider returned no metadata")
 
-            # Parse current metadata
-            current_params = None
-            if asset.classification_params:
-                try:
-                    current_params = FAClassificationParams.model_validate_json(asset.classification_params)
-                except Exception as e:
-                    logger.error(
-                        "Failed to parse classification_params during metadata refresh",
-                        asset_id=asset_id,
-                        error=str(e),
-                        classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
-                        )
+            # Set correct asset_id
+            patch_item.asset_id = asset_id
 
-            # Merge with provider data
-            try:
-                merged = AssetMetadataService.merge_provider_metadata(current_params, metadata)
-            except ValueError as e:
-                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Validation failed: {str(e)}")
+            # TODO: Riscrivere questa funzione per usare il nuovo AssetCRUDService.patch_assets_bulk
+            # Per ora, applico i campi manualmente
 
-            # Compute diff
-            changes = AssetMetadataService.compute_metadata_diff(current_params, merged)
+            changes = []
 
-            # Update asset
-            asset.classification_params = merged.model_dump_json(exclude_none=True)
+            # Update asset_type if present
+            if patch_item.asset_type is not None and patch_item.asset_type != asset.asset_type:
+                changes.append({"field": "asset_type", "old": str(asset.asset_type), "new": str(patch_item.asset_type)})
+                asset.asset_type = patch_item.asset_type
+
+            # Update classification_params if present
+            if patch_item.classification_params is not None:
+                old_params = asset.classification_params
+                new_params_json = patch_item.classification_params.model_dump_json(exclude_none=True)
+                if old_params != new_params_json:
+                    changes.append({"field": "classification_params", "old": old_params, "new": new_params_json})
+                    asset.classification_params = new_params_json
 
             await session.commit()
 

@@ -32,20 +32,16 @@ def upgrade() -> None:
     conn.execute(sa.text("""CREATE TABLE assets
                             (
                                 id                    INTEGER PRIMARY KEY,
-                                display_name          VARCHAR     NOT NULL,
-                                identifier            VARCHAR     NOT NULL,
-                                identifier_type       VARCHAR(6)  NOT NULL,
+                                display_name          VARCHAR     NOT NULL UNIQUE,
                                 currency              VARCHAR     NOT NULL,
-                                asset_type            VARCHAR(14) NOT NULL,
-                                valuation_model       VARCHAR(15) NOT NULL,
-                                interest_schedule     TEXT,
                                 classification_params TEXT,
+                                asset_type            VARCHAR(14) NOT NULL,
                                 active                BOOLEAN     NOT NULL,
                                 created_at            DATETIME    NOT NULL,
                                 updated_at            DATETIME    NOT NULL
                             )"""))
     print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX ix_assets_identifier ON assets (identifier)"))
+    conn.execute(sa.text("CREATE UNIQUE INDEX uq_assets_display_name ON assets (display_name)"))
     print("  ✓ Index created")
 
     # Brokers table
@@ -108,6 +104,8 @@ def upgrade() -> None:
                                 id              INTEGER PRIMARY KEY,
                                 asset_id        INTEGER     NOT NULL,
                                 provider_code   VARCHAR(50) NOT NULL,
+                                identifier      VARCHAR     NOT NULL,
+                                identifier_type VARCHAR(6)  NOT NULL,
                                 provider_params TEXT,
                                 last_fetch_at   DATETIME,
                                 fetch_interval  INTEGER,
