@@ -755,7 +755,7 @@ async def convert_bulk(
                 # No rate found at all for this pair
                 error_msg = (
                     f"No FX rate found for {meta['base']}/{meta['quote']} on or before {meta['date']}. "
-                    f"Please sync rates using POST /api/v1/fx/sync/bulk"
+                    f"Please sync rates using POST /api/v1/fx/currencies/sync"
                 )
                 if raise_on_error:
                     raise RateNotFoundError(f"Conversion failed at index {idx}: {error_msg}")

@@ -53,14 +53,15 @@ from backend.app.services.fx import (
 from backend.app.services.provider_registry import FXProviderRegistry
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/fx", tags=["FX"])
-
+fx_router = APIRouter(prefix="/fx", tags=["FX"])
+router_providers = APIRouter(prefix="/providers", tags=["FX Providers"])
+router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
 
-@router.get("/providers", response_model=FXProvidersResponse)
+@router_providers.get("", response_model=FXProvidersResponse)
 async def list_providers():
     """
     Get the list of all available FX rate providers.
@@ -103,7 +104,7 @@ async def list_providers():
         raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}")
 
 
-@router.get("/currencies", response_model=FXCurrenciesResponse)
+@router_currencies.get("", response_model=FXCurrenciesResponse)
 async def list_currencies(
     provider: str = Query("ECB", description="Provider code (ECB, FED, BOE, SNB)")
     ):
@@ -135,7 +136,7 @@ async def list_currencies(
         raise HTTPException(status_code=502, detail=f"Failed to fetch currencies: {str(e)}")
 
 
-@router.post("/sync/bulk", response_model=FXSyncResponse)
+@router_currencies.get("/sync", response_model=FXSyncResponse)
 async def sync_rates(
     start: date = Query(..., description="Start date (inclusive)"),
     end: date = Query(..., description="End date (inclusive)"),
@@ -342,7 +343,7 @@ async def sync_rates(
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
 
 
-@router.post("/rate-set/bulk", response_model=FXBulkUpsertResponse, status_code=200)
+@router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)
 async def upsert_rates_endpoint(
     request: FXBulkUpsertRequest,
     session: AsyncSession = Depends(get_session_generator)
@@ -423,7 +424,7 @@ async def upsert_rates_endpoint(
         )
 
 
-@router.delete("/rate-set/bulk", response_model=FXBulkDeleteResponse)
+@router_currencies.delete("/rate", response_model=FXBulkDeleteResponse)
 async def delete_rates_endpoint(
     request: FXBulkDeleteRequest,
     session: AsyncSession = Depends(get_session_generator)
@@ -555,7 +556,7 @@ async def delete_rates_endpoint(
         )
 
 
-@router.post("/convert/bulk", response_model=FXConvertResponse)
+@router_currencies.post("/convert", response_model=FXConvertResponse)
 async def convert_currency_bulk(
     request: FXConvertRequest,
     session: AsyncSession = Depends(get_session_generator)
@@ -673,7 +674,7 @@ async def convert_currency_bulk(
 # PROVIDER CONFIGURATION ENDPOINTS
 # ============================================================================
 
-@router.get("/pair-sources", response_model=FXPairSourcesResponse)
+@router_providers.get("/pair-sources", response_model=FXPairSourcesResponse)
 async def list_pair_sources(session: AsyncSession = Depends(get_session_generator)):
     """
     Get the list of configured currency pair sources.
@@ -708,7 +709,7 @@ async def list_pair_sources(session: AsyncSession = Depends(get_session_generato
         raise HTTPException(status_code=500, detail=f"Failed to fetch pair sources: {str(e)}")
 
 
-@router.post("/pair-sources/bulk", response_model=FXCreatePairSourcesResponse, status_code=201)
+@router_providers.post("/pair-sources", response_model=FXCreatePairSourcesResponse, status_code=201)
 async def create_pair_sources_bulk(
     request: FXCreatePairSourcesRequest,
     session: AsyncSession = Depends(get_session_generator)
@@ -846,7 +847,7 @@ async def create_pair_sources_bulk(
                 status_code=400,
                 detail={
                     "message": f"Validation failed for {error_count} source(s). Transaction rolled back.",
-                    "results": [r.dict() for r in results]
+                    "results": [r.model_dump() for r in results]
                     }
                 )
 
@@ -865,7 +866,7 @@ async def create_pair_sources_bulk(
         raise HTTPException(status_code=500, detail=f"Failed to create pair sources: {str(e)}")
 
 
-@router.delete("/pair-sources/bulk", response_model=FXDeletePairSourcesResponse)
+@router_providers.delete("/pair-sources", response_model=FXDeletePairSourcesResponse)
 async def delete_pair_sources_bulk(
     request: FXDeletePairSourcesRequest,
     session: AsyncSession = Depends(get_session_generator)
@@ -946,3 +947,9 @@ async def delete_pair_sources_bulk(
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete pair sources: {str(e)}")
+
+# ============================================================================
+# Include sub-route in main router
+# ============================================================================
+fx_router.include_router(router_providers)
+fx_router.include_router(router_currencies)

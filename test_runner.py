@@ -233,7 +233,7 @@ def db_create(verbose: bool = False) -> bool:
 
     # Create fresh test database
     print("\nCreating fresh test database from migrations...")
-
+    # TODO: aggiungere le variabili di ambiente per fargli capire che siamo in modalitá test e quindi deve guardare l'altra porta
     # Pass database path directly to dev.sh (it will convert to URL internally)
     success = run_command(
         ["./dev.sh", "db:upgrade", str(TEST_DB_PATH)],

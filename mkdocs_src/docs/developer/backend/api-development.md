@@ -603,8 +603,8 @@ from backend.app.api.v1 import fx, your_module  # Add your module
 router = APIRouter()
 
 # Include sub-routers
-router.include_router(fx.router)
-router.include_router(your_module.router)  # Add this line
+router.include_router(fx.fx_router)
+router.include_router(your_module.asset_router)  # Add this line
 ```
 
 > **📚 Technical Note - FastAPI Router & Dependency Injection**:
@@ -628,7 +628,7 @@ router.include_router(your_module.router)  # Add this line
 >
 > # In backend/app/api/v1/router.py:
 > router = APIRouter()
-> router.include_router(fx.router)  # All fx.py routes now included
+> router.include_router(fx.asset_router)  # All fx.py routes now included
 >
 > # In backend/app/main.py:
 > app.include_router(router, prefix="/api/v1")  # Final path prefix

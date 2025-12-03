@@ -106,7 +106,7 @@ async def test_fetch_multiple_currencies():
         # Fetch rates
         result = await ensure_rates_multi_source(session, (start_date, end_date), test_currencies, provider_code="ECB")
         synced_count = result['total_changed']
-
+        assert synced_count > 0, "No rates were synced for multiple currencies"
         # Verify each currency
         for currency in test_currencies:
             # Determine alphabetical pair

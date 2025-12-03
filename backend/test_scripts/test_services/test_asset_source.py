@@ -325,14 +325,12 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
 
         # Verify metadata was populated (mockprov MUST populate metadata)
         assert test_asset.classification_params is not None, "Metadata should be populated by mockprov provider"
-
         print_success(f"✓ Metadata auto-populated: {test_asset.classification_params[:100]}")
 
         # Parse and verify content
         metadata = json.loads(test_asset.classification_params)
-        assert "investment_type" in metadata, "investment_type not populated"
-        assert metadata["investment_type"] == "STOCK", "investment_type incorrect"
-        print_success("✓ Metadata content verified (investment_type=STOCK)")
+        assert metadata["sector"] == "Technology", "sector incorrect"
+        print_success("✓ Metadata content verified (sector=Technology)")
 
         # Check for metadata_updated flag in result
         if result.metadata_updated:

@@ -25,21 +25,19 @@ for route in app.routes:
         if route.endpoint and route.endpoint.__doc__:
             description = route.endpoint.__doc__.strip().split('\n')[0]
 
-        # Get tags (or use 'default' if none)
-        tags = getattr(route, 'tags', ['default'])
-        tag = tags[0] if tags else 'default'
-
-        if tag not in routes_by_tag:
-            routes_by_tag[tag] = []
-
         # Get methods (exclude HEAD, OPTIONS)
         methods = [m for m in route.methods if m not in ['HEAD', 'OPTIONS']]
 
-        routes_by_tag[tag].append({
-            'methods': methods,
-            'path': route.path,
-            'description': description
-            })
+        # Get tags (or use 'default' if none)
+        tags = getattr(route, 'tags', ['default'])
+        for t in tags:
+            if t not in routes_by_tag:
+                routes_by_tag[t] = []
+            routes_by_tag[t].append({
+                'methods': methods,
+                'path': route.path,
+                'description': description
+                })
 
 # Print routes grouped by tag
 for tag in sorted(routes_by_tag.keys()):
@@ -56,5 +54,5 @@ for tag in sorted(routes_by_tag.keys()):
     print()
 
 print('=' * 80)
-print(f'Total endpoints: {sum(len(routes) for routes in routes_by_tag.values())}')
+print(f'Total endpoints: {len(app.routes)}')
 print('=' * 80)

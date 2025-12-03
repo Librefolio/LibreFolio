@@ -96,7 +96,7 @@ class AssetType(str, Enum):
     HOLD = "HOLD"
     OTHER = "OTHER"
 
-
+# TODO: da rimuovere perchè con la tabella asset_provider_assignments si gestisce in modo più flessibile
 class ValuationModel(str, Enum):
     """
     Valuation model for assets.
@@ -365,7 +365,6 @@ class Asset(SQLModel, table=True):
     
     The classification_params JSON should conform to ClassificationParamsModel schema:
     {
-      "investment_type": "stock" | "etf" | "bond" | etc.,
       "short_description": "Brief asset description (max 500 chars)",
       "geographic_area": {
         "USA": 0.60,    # ISO-3166-A3 codes
@@ -390,16 +389,20 @@ class Asset(SQLModel, table=True):
     __tablename__ = "assets"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-
     display_name: str = Field(nullable=False)
+
+    # TODO: spostare identifier e identifier_type nella tabella asset_provider_assignments perchè l'identificazione è legata al provider usato
     identifier: str = Field(nullable=False, index=True)
     identifier_type: IdentifierType = Field(default=IdentifierType.OTHER)
+
     currency: str = Field(nullable=False, description="Asset original currency")  # ISO 4217
-    asset_type: AssetType = Field(default=AssetType.OTHER)
 
     # Valuation model
     valuation_model: ValuationModel = Field(default=ValuationModel.MARKET_PRICE)
 
+    # TODO: spostare interest_schedule e la logica associata, al asset_provider_assignments.provider_params perchè
+    #  quando viene usato come provider scheduled_investment è il parametro su cui fare i calcoli,
+    #  inutile qui, è None sempre eccetto per quel tipo di asset
     # Scheduled-yield configuration (JSON)
     # Should contain FAScheduledInvestmentSchedule structure
     # Validated when loaded using FAScheduledInvestmentSchedule(**json.loads(interest_schedule))
@@ -407,13 +410,13 @@ class Asset(SQLModel, table=True):
 
     # Classification and metadata (JSON TEXT)
     # Structure: {
-    #   "investment_type": "stock" | "etf" | "bond" | etc.,
     #   "short_description": "Brief asset description",
     #   "geographic_area": {"USA": 0.60, "EUR": 0.30, "GBR": 0.10},  # ISO-3166-A3, sum=1.0
     #   "sector": "Technology" | "Healthcare" | etc.  # Optional
     # }
     # Validation is done via ClassificationParamsModel Pydantic model when loaded
     classification_params: Optional[str] = Field(default=None, sa_column=Column(Text))
+    asset_type: AssetType = Field(default=AssetType.OTHER) # Store outside classification_params for easier querying
 
     active: bool = Field(default=True)
 

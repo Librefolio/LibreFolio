@@ -429,14 +429,12 @@ class FAClassificationParams(BaseModel):
     geographic_area is indivisible block (full replace on update, no merge).
 
     Validation:
-    - investment_type: Must be a valid AssetType enum value
     - geographic_area: ISO-3166-A3 codes, weights must sum to 1.0 (±1e-6)
     - Weights quantized to 4 decimals (ROUND_HALF_EVEN)
     - Automatic renormalization if sum != 1.0 (handled by FAGeographicArea)
 
     Examples:
         >>> params = FAClassificationParams(
-        ...     investment_type=AssetType.STOCK,
         ...     short_description="Apple Inc. - Technology company",
         ...     geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "EUR": Decimal("0.4")}),
         ...     sector="Technology"
@@ -444,71 +442,16 @@ class FAClassificationParams(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
 
-    investment_type: Optional[str] = None
     short_description: Optional[str] = None
     geographic_area: Optional[FAGeographicArea] = None
     sector: Optional[str] = None
-
-    @field_validator('investment_type')
-    @classmethod
-    def validate_investment_type(cls, v: Optional[str]) -> Optional[str]:
-        """Validate that investment_type matches one of the AssetType enum values."""
-        if v is None:
-            return v
-
-        # Import here to avoid circular dependency
-        from backend.app.db.models import AssetType
-
-        # Convert to uppercase for case-insensitive comparison
-        v_upper = v.upper()
-
-        # Check if value is in AssetType enum
-        try:
-            # Try to get the enum member
-            AssetType(v_upper)
-            return v_upper
-        except ValueError:
-            # If not found, list valid values
-            valid_values = [asset_type.value for asset_type in AssetType]
-            raise ValueError(f"investment_type must be one of: {', '.join(valid_values)}")
-
-
-class FAPatchMetadataRequest(BaseModel):
-    """
-    PATCH metadata request (partial update).
-
-    Rules:
-    - **Absent fields** (not in request JSON): ignored (no update)
-    - **null in JSON** (None in Python): clear field
-    - **Value present**: update field
-    - **geographic_area**: full block replace (no merge)
-
-    Examples:
-        >>> # Update only short_description
-        >>> patch = FAPatchMetadataRequest(short_description="New description")
-
-        >>> # Clear sector field
-        >>> patch = FAPatchMetadataRequest(sector=None)
-
-        >>> # Update geographic_area
-        >>> patch = FAPatchMetadataRequest(
-        ...     geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")})
-        ... )
-    """
-    model_config = ConfigDict(extra="forbid")
-
-    investment_type: Optional[str] = None
-    short_description: Optional[str] = None
-    geographic_area: Optional[FAGeographicArea | None] = None
-    sector: Optional[str] = None
-
 
 class FAPatchMetadataItem(BaseModel):
     """Single asset metadata patch item for bulk requests."""
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    patch: FAPatchMetadataRequest
+    patch: FAClassificationParams
 
 
 class FABulkPatchMetadataRequest(BaseModel):
@@ -543,7 +486,6 @@ class FAAssetMetadataResponse(BaseModel):
     asset_type: Optional[str] = None
     classification_params: Optional[FAClassificationParams] = None
     has_provider: bool = False
-    has_metadata: bool = False
 
 
 class FAMetadataChangeDetail(BaseModel):
@@ -568,21 +510,6 @@ class FAMetadataRefreshResult(BaseModel):
     message: str
     changes: Optional[List[FAMetadataChangeDetail]] = None
     warnings: Optional[List[str]] = None
-
-
-class FABulkAssetReadRequest(BaseModel):
-    """Request to read multiple assets by IDs."""
-    model_config = ConfigDict(extra="forbid")
-
-    asset_ids: List[int]
-
-
-class FABulkMetadataRefreshRequest(BaseModel):
-    """Bulk metadata refresh request."""
-    model_config = ConfigDict(extra="forbid")
-
-    asset_ids: List[int]
-
 
 class FABulkMetadataRefreshResponse(BaseModel):
     """
@@ -731,12 +658,10 @@ __all__ = [
     # Metadata & classification (NEW)
     "FAGeographicArea",
     "FAClassificationParams",
-    "FAPatchMetadataRequest",
+    "FAClassificationParams",
     "FAAssetMetadataResponse",
     "FAMetadataChangeDetail",
     "FAMetadataRefreshResult",
-    "FABulkAssetReadRequest",
-    "FABulkMetadataRefreshRequest",
     "FABulkMetadataRefreshResponse",
     "FAPatchMetadataItem",
     "FABulkPatchMetadataRequest",

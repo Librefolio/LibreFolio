@@ -13,13 +13,11 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.db import AssetType
 from backend.app.schemas import (
     FABulkAssetCreateRequest, FAAssetCreateItem, FABulkAssetCreateResponse,
-    FABulkPatchMetadataRequest, FAPatchMetadataItem, FAPatchMetadataRequest,
-    FABulkAssetReadRequest, FAAssetMetadataResponse,
-    FAMetadataRefreshResult,
-    FABulkMetadataRefreshRequest, FABulkMetadataRefreshResponse, FAGeographicArea
+    FABulkPatchMetadataRequest, FAPatchMetadataItem, FAClassificationParams,
+    FAAssetMetadataResponse, FAMetadataRefreshResult,
+    FABulkMetadataRefreshResponse, FAGeographicArea
     )
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success
@@ -74,7 +72,7 @@ async def create_test_asset(name_prefix: str = "META") -> int:
             )
 
         response = await client.post(
-            f"{API_BASE}/assets/bulk",
+            f"{API_BASE}/assets",
             json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"),
             timeout=TIMEOUT
             )
@@ -100,10 +98,9 @@ async def test_patch_metadata_valid_geographic_area(test_server):
         # Prepare patch request
         patch_item = FAPatchMetadataItem(
             asset_id=test_asset,
-            patch=FAPatchMetadataRequest(
+            patch=FAClassificationParams(
                 short_description="Updated via API test",
                 geographic_area=FAGeographicArea(distribution={"USA": 0.7, "FRA": 0.3}),
-                investment_type="stock"
                 )
             )
 
@@ -125,8 +122,7 @@ async def test_patch_metadata_valid_geographic_area(test_server):
         print_success(f"✓ Metadata patched successfully with {len(result.changes)} change(s)")
 
         # Verify database was actually updated
-        read_request = FABulkAssetReadRequest(asset_ids=[test_asset])
-        read_response = await client.post(f"{API_BASE}/assets", json=read_request.model_dump(mode="json"), timeout=TIMEOUT)
+        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
 
         assert read_response.status_code == 200, "Failed to read back asset"
         assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
@@ -137,7 +133,6 @@ async def test_patch_metadata_valid_geographic_area(test_server):
 
         params = updated_asset.classification_params
         assert params.short_description == "Updated via API test", "short_description not updated"
-        assert params.investment_type == AssetType.STOCK, "investment_type not updated"
         assert params.geographic_area is not None, "geographic_area should exist"
         assert "USA" in params.geographic_area.distribution, "USA not in geographic_area"
         assert "FRA" in params.geographic_area.distribution, "FRA not in geographic_area"
@@ -188,9 +183,8 @@ async def test_patch_metadata_absent_fields(test_server):
         # First, set some initial metadata
         patch_item = FAPatchMetadataItem(
             asset_id=test_asset,
-            patch=FAPatchMetadataRequest(
+            patch=FAClassificationParams(
                 short_description="Initial description",
-                investment_type="stock",
                 sector="Technology"
                 )
             )
@@ -198,8 +192,7 @@ async def test_patch_metadata_absent_fields(test_server):
         await client.patch(f"{API_BASE}/assets/metadata", json=initial_patch.model_dump(mode="json"), timeout=TIMEOUT)
 
         # Read current state
-        read_request = FABulkAssetReadRequest(asset_ids=[test_asset])
-        read_response = await client.post(f"{API_BASE}/assets", json=read_request.model_dump(mode="json"), timeout=TIMEOUT)
+        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
         before_assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
         before_params = before_assets[0].classification_params
 
@@ -226,7 +219,7 @@ async def test_patch_metadata_absent_fields(test_server):
         assert response.status_code == 200, f"PATCH failed: {response.status_code}"
 
         # Verify only sector changed, other fields intact
-        read_response = await client.post(f"{API_BASE}/assets", json=read_request.model_dump(mode="json"), timeout=TIMEOUT)
+        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
         after_assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
         after_params = after_assets[0].classification_params
 
@@ -234,7 +227,6 @@ async def test_patch_metadata_absent_fields(test_server):
 
         assert after_params.sector == "Finance", "sector not updated"
         assert after_params.short_description == before_params.short_description, "short_description should not change"
-        assert after_params.investment_type == before_params.investment_type, "investment_type should not change"
 
         print_success("✓ Absent fields ignored (PATCH semantics verified)")
 
@@ -248,11 +240,11 @@ async def test_patch_metadata_null_clears_field(test_server):
 
     async with httpx.AsyncClient() as client:
         # First, set sector
-        patch_item = FAPatchMetadataItem(asset_id=test_asset, patch=FAPatchMetadataRequest(sector="Technology"))
+        patch_item = FAPatchMetadataItem(asset_id=test_asset, patch=FAClassificationParams(sector="Technology"))
         await client.patch(f"{API_BASE}/assets/metadata", json=FABulkPatchMetadataRequest(assets=[patch_item]).model_dump(mode="json"), timeout=TIMEOUT)
 
         # Now clear it with null
-        patch_null = FAPatchMetadataItem(asset_id=test_asset, patch=FAPatchMetadataRequest(sector=None))
+        patch_null = FAPatchMetadataItem(asset_id=test_asset, patch=FAClassificationParams(sector=None))
 
         response = await client.patch(f"{API_BASE}/assets/metadata", json=FABulkPatchMetadataRequest(assets=[patch_null]).model_dump(mode="json"), timeout=TIMEOUT)
 
@@ -270,8 +262,7 @@ async def test_patch_metadata_null_clears_field(test_server):
             f"sector should be cleared (null), got: {sector_change.new_value}"
 
         # Verify DB actually cleared
-        read_request = FABulkAssetReadRequest(asset_ids=[test_asset])
-        read_response = await client.post(f"{API_BASE}/assets", json=read_request.model_dump(mode="json"), timeout=TIMEOUT)
+        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
         after_assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
         after_params = after_assets[0].classification_params
         assert after_params.sector is None, "sector should be None in DB"
@@ -287,9 +278,7 @@ async def test_bulk_read_assets(test_server):
     test_asset = await create_test_asset("READ1")
 
     async with httpx.AsyncClient() as client:
-        request = FABulkAssetReadRequest(asset_ids=[test_asset])
-
-        response = await client.post(f"{API_BASE}/assets", json=request.model_dump(mode="json"), timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Bulk read failed: {response.status_code}: {response.text}"
 
@@ -314,15 +303,14 @@ async def test_bulk_read_multiple_assets(test_server):
         # Create multiple test assets
         items = [FAAssetCreateItem(display_name=f"Test Asset {i}", identifier=unique_id(f"BULK{i}"), currency="USD") for i in range(3)]
 
-        create_response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
+        create_response = await client.post(f"{API_BASE}/assets", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_response.json())
         asset_ids = [r.asset_id for r in create_data.results if r.success]
 
         assert len(asset_ids) == 3, "Should have created 3 assets"
 
         # Bulk read
-        request = FABulkAssetReadRequest(asset_ids=asset_ids)
-        response = await client.post(f"{API_BASE}/assets", json=request.model_dump(mode="json"), timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/assets", params={"asset_ids":asset_ids}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Bulk read failed: {response.status_code}"
 
@@ -338,15 +326,14 @@ async def test_bulk_read_multiple_assets(test_server):
 
 @pytest.mark.asyncio
 async def test_metadata_refresh_single_no_provider(test_server):
-    """Test 7: POST /assets/metadata/refresh/bulk (single asset, no provider assigned)."""
-    print_section("Test 7: POST /assets/metadata/refresh/bulk - Single Asset, No Provider")
+    """Test 7: POST /assets/metadata/refresh (single asset, no provider assigned)."""
+    print_section("Test 7: POST /assets/metadata/refresh - Single Asset, No Provider")
 
     test_asset = await create_test_asset("REFRESH1")
 
     async with httpx.AsyncClient() as client:
         # Use bulk endpoint with single asset
-        request = FABulkMetadataRefreshRequest(asset_ids=[test_asset])
-        response = await client.post(f"{API_BASE}/assets/metadata/refresh/bulk", json=request.model_dump(mode="json"), timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/assets/metadata/refresh", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Refresh failed: {response.status_code}: {response.text}"
 
@@ -369,15 +356,13 @@ async def test_metadata_refresh_single_no_provider(test_server):
 
 @pytest.mark.asyncio
 async def test_metadata_refresh_bulk(test_server):
-    """Test 8: POST /assets/metadata/refresh/bulk."""
-    print_section("Test 8: POST /assets/metadata/refresh/bulk")
+    """Test 8: POST /assets/metadata/refresh."""
+    print_section("Test 8: POST /assets/metadata/refresh")
 
     test_asset = await create_test_asset("REFRESH2")
 
     async with httpx.AsyncClient() as client:
-        request = FABulkMetadataRefreshRequest(asset_ids=[test_asset])
-
-        response = await client.post(f"{API_BASE}/assets/metadata/refresh/bulk", json=request.model_dump(mode="json"), timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/assets/metadata/refresh", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Bulk refresh failed: {response.status_code}: {response.text}"
 
@@ -428,14 +413,14 @@ async def test_patch_metadata_multiple_assets(test_server):
         # Create 2 test assets
         items = [FAAssetCreateItem(display_name=f"Multi Patch {i}", identifier=unique_id(f"MULTI{i}"), currency="USD") for i in range(2)]
 
-        create_response = await client.post(f"{API_BASE}/assets/bulk", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
+        create_response = await client.post(f"{API_BASE}/assets", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_response.json())
         asset_ids = [r.asset_id for r in create_data.results if r.success]
 
         # Patch both assets
         patch_items = [
-            FAPatchMetadataItem(asset_id=asset_ids[0], patch=FAPatchMetadataRequest(sector="Technology")),
-            FAPatchMetadataItem(asset_id=asset_ids[1], patch=FAPatchMetadataRequest(sector="Finance"))
+            FAPatchMetadataItem(asset_id=asset_ids[0], patch=FAClassificationParams(sector="Technology")),
+            FAPatchMetadataItem(asset_id=asset_ids[1], patch=FAClassificationParams(sector="Finance"))
             ]
 
         response = await client.patch(f"{API_BASE}/assets/metadata", json=FABulkPatchMetadataRequest(assets=patch_items).model_dump(mode="json"), timeout=TIMEOUT)
