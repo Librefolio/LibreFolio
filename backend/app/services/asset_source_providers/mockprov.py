@@ -131,7 +131,7 @@ class MockProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-        ) -> dict | None:
+        ) -> FAClassificationParams | None:
         """
         Fetch mock asset metadata for testing.
 
@@ -147,7 +147,6 @@ class MockProvider(AssetSourceProvider):
         """
         # Return mock data for testing
         return FAClassificationParams(
-            investment_type=AssetType.STOCK,
             sector="Technology",
             short_description=f"Mock test asset {identifier} - used for testing metadata features",
             geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")})

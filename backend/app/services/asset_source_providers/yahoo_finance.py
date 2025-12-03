@@ -26,7 +26,7 @@ except ImportError:
 
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
-from backend.app.schemas.assets import FACurrentValue, FAPricePoint, FAHistoricalData
+from backend.app.schemas.assets import FACurrentValue, FAPricePoint, FAHistoricalData, FAClassificationParams
 
 logger = get_logger(__name__)
 
@@ -316,7 +316,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         self,
         identifier: str,
         provider_params: Dict | None = None,
-        ) -> dict | None:
+        ) -> FAClassificationParams | None:
         """
         Fetch asset metadata from Yahoo Finance.
 
@@ -330,7 +330,6 @@ class YahooFinanceProvider(AssetSourceProvider):
         Returns:
             Dict with metadata fields or None if fetch fails:
             {
-                "investment_type": str,
                 "short_description": str,
                 "sector": str,
                 "geographic_area": None  # Not available
@@ -351,6 +350,8 @@ class YahooFinanceProvider(AssetSourceProvider):
                 logger.warning(f"No info data returned from yfinance for {identifier}")
                 return None
 
+            # TODO: da ora investment_type non è più un metadato, ma un campo primario di Asset,
+            #  è stato commentato qui, ma in futuro bisogna farlo scrivere alla creazione dell'asset
             # Map quoteType to investment_type
             quote_type = info.get('quoteType', '').lower()
             investment_type_map = {
@@ -382,13 +383,7 @@ class YahooFinanceProvider(AssetSourceProvider):
             # Get sector
             sector = info.get('sector')
 
-            metadata = {
-                "investment_type": investment_type,
-                "short_description": short_description,
-                "sector": sector,
-                # geographic_area not available from Yahoo Finance
-                }
-
+            metadata = FAClassificationParams(sector=sector, short_description=short_description)
             logger.info(f"Fetched metadata from yfinance for {identifier}: type={investment_type}, sector={sector}")
             return metadata
 

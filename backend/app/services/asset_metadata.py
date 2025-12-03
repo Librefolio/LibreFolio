@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset
 from backend.app.schemas.assets import (
     FAClassificationParams,
-    FAPatchMetadataRequest,
+    FAClassificationParams,
     FAMetadataChangeDetail,
     FAMetadataRefreshResult,
     )
@@ -72,13 +72,13 @@ class AssetMetadataService:
             List of FAMetadataChangeDetail objects describing changes
 
         Examples:
-            >>> old = FAClassificationParams(investment_type=AssetType.STOCK)
-            >>> new = FAClassificationParams(investment_type=AssetType.ETF, sector="Technology")
+            >>> old = FAClassificationParams(sector="Energy")
+            >>> new = FAClassificationParams(sector="Technology")
             >>> changes = AssetMetadataService.compute_metadata_diff(old, new)
             >>> len(changes)
             2
             >>> changes[0].field
-            'investment_type'
+            'sector'
         """
         changes = []
 
@@ -110,7 +110,7 @@ class AssetMetadataService:
     @staticmethod
     def apply_partial_update(
         current: Optional[FAClassificationParams],
-        patch: FAPatchMetadataRequest
+        patch: FAClassificationParams
         ) -> FAClassificationParams:
         """
         Apply PATCH request to current metadata.
@@ -132,17 +132,14 @@ class AssetMetadataService:
             ValueError: If validation fails (e.g., invalid geographic_area)
 
         Examples:
-            >>> current = FAClassificationParams(investment_type=AssetType.STOCK, sector="Technology")
-            >>> patch = FAPatchMetadataRequest(sector=None)  # Clear sector
+            >>> current = FAClassificationParams(sector="Technology")
+            >>> patch = FAClassificationParams(sector=None)  # Clear sector
             >>> updated = AssetMetadataService.apply_partial_update(current, patch)
             >>> updated.sector
             None
-            >>> updated.investment_type  # Unchanged
-            'stock'
         """
         # Start with current values (or empty dict)
         current_dict = current.model_dump(exclude_none=False) if current else {
-            'investment_type': None,
             'short_description': None,
             'geographic_area': None,
             'sector': None,
@@ -188,14 +185,13 @@ class AssetMetadataService:
         """
         # Start with current values
         current_dict = current.model_dump(exclude_none=False) if current else {
-            'investment_type': None,
             'short_description': None,
             'geographic_area': None,
             'sector': None,
             }
 
         # Update with provider data (only non-None values)
-        for field in ['investment_type', 'short_description', 'geographic_area', 'sector']:
+        for field in ['short_description', 'geographic_area', 'sector']:
             if field in provider_data and provider_data[field] is not None:
                 current_dict[field] = provider_data[field]
 
@@ -205,7 +201,7 @@ class AssetMetadataService:
     @staticmethod
     async def update_asset_metadata(
         asset_id: int,
-        patch: FAPatchMetadataRequest,
+        patch: FAClassificationParams,
         session: 'AsyncSession'
         ) -> 'FAMetadataRefreshResult':
         """
@@ -226,8 +222,8 @@ class AssetMetadataService:
             ValueError: If asset not found or validation fails
 
         Examples:
-            >>> from backend.app.schemas.assets import FAPatchMetadataRequest
-            >>> patch = FAPatchMetadataRequest(sector="Technology")
+            >>> from backend.app.schemas.assets import FAClassificationParams
+            >>> patch = FAClassificationParams(sector="Technology")
             >>> result = await AssetMetadataService.update_asset_metadata(1, patch, session)
             >>> result.success
             True

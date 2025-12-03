@@ -12,8 +12,8 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Include sub-routers
-router.include_router(fx.router)
-router.include_router(assets.router)
+router.include_router(fx.fx_router)
+router.include_router(assets.asset_router)
 
 
 @router.get("/health")

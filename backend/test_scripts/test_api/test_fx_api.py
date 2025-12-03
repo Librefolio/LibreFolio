@@ -4,7 +4,7 @@ FX API Tests.
 Tests for Foreign Exchange (FX) endpoints:
 - GET /fx/currencies (list supported currencies)
 - GET /fx/providers (list FX providers)
-- POST /fx/pair-sources (CRUD for pair sources)
+- POST /fx/providers/pair-sources (CRUD for pair sources)
 - POST /fx/sync (sync rates from providers)
 - POST /fx/convert (currency conversion)
 - POST /fx/rates (manual rate upsert)
@@ -75,10 +75,7 @@ async def test_get_currencies(test_server):
     print_section("Test 1: GET /fx/currencies")
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{API_BASE}/fx/currencies",
-            timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/fx/currencies",timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -104,10 +101,7 @@ async def test_get_providers(test_server):
     print_section("Test 2: GET /fx/providers")
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{API_BASE}/fx/providers",
-            timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/fx/providers",timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -131,16 +125,13 @@ async def test_get_providers(test_server):
 
 @pytest.mark.asyncio
 async def test_pair_sources_crud(test_server):
-    """Test 3: POST /fx/pair-sources/bulk - CRUD operations for pair sources."""
-    print_section("Test 3: POST /fx/pair-sources/bulk - CRUD")
+    """Test 3: POST /fx/providers/pair-sources - CRUD operations for pair sources."""
+    print_section("Test 3: POST /fx/providers/pair-sources - CRUD")
 
     async with httpx.AsyncClient() as client:
         # 3a. List all pair sources (empty or existing)
         print_info("3a. List pair sources")
-        response = await client.get(
-            f"{API_BASE}/fx/pair-sources",
-            timeout=TIMEOUT
-            )
+        response = await client.get(f"{API_BASE}/fx/providers/pair-sources",timeout=TIMEOUT)
         assert response.status_code == 200, f"GET failed: {response.status_code}"
         sources_response = FXPairSourcesResponse(**response.json())
         print_success(f"✓ Listed {sources_response.count} initial sources")
@@ -158,7 +149,7 @@ async def test_pair_sources_crud(test_server):
                 ]
             )
         response = await client.post(
-            f"{API_BASE}/fx/pair-sources/bulk",
+            f"{API_BASE}/fx/providers/pair-sources",
             json=create_request.model_dump(mode="json"),
             timeout=TIMEOUT
             )
@@ -170,13 +161,12 @@ async def test_pair_sources_crud(test_server):
         # 3c. Read back to verify
         print_info("3c. Read back to verify")
         response = await client.get(
-            f"{API_BASE}/fx/pair-sources",
+            f"{API_BASE}/fx/providers/pair-sources",
             timeout=TIMEOUT
             )
         assert response.status_code == 200, f"GET failed: {response.status_code}"
         sources_response = FXPairSourcesResponse(**response.json())
-        usd_eur_sources = [s for s in sources_response.sources
-                           if s.base == 'USD' and s.quote == 'EUR']
+        usd_eur_sources = [s for s in sources_response.sources if s.base == 'USD' and s.quote == 'EUR']
         assert len(usd_eur_sources) > 0, "USD/EUR source should exist"
         print_success("✓ Pair source verified")
 
@@ -193,7 +183,7 @@ async def test_pair_sources_crud(test_server):
                 ]
             )
         response = await client.post(
-            f"{API_BASE}/fx/pair-sources/bulk",
+            f"{API_BASE}/fx/providers/pair-sources",
             json=update_request.model_dump(mode="json"),
             timeout=TIMEOUT
             )
@@ -212,7 +202,7 @@ async def test_pair_sources_crud(test_server):
             )
         response = await client.request(
             method="DELETE",
-            url=f"{API_BASE}/fx/pair-sources/bulk",
+            url=f"{API_BASE}/fx/providers/pair-sources",
             content=delete_request.model_dump_json(),
             headers={"Content-Type": "application/json"},
             timeout=TIMEOUT
@@ -223,8 +213,8 @@ async def test_pair_sources_crud(test_server):
 
 @pytest.mark.asyncio
 async def test_sync_rates(test_server):
-    """Test 4: POST /fx/sync/bulk - Sync rates from providers."""
-    print_section("Test 4: POST /fx/sync/bulk")
+    """Test 4: POST /fx/currencies/sync - Sync rates from providers."""
+    print_section("Test 4: POST /fx/currencies/sync")
 
     async with httpx.AsyncClient() as client:
         today = date.today()
@@ -238,8 +228,8 @@ async def test_sync_rates(test_server):
             "provider": "ECB"
             }
 
-        response = await client.post(
-            f"{API_BASE}/fx/sync/bulk",
+        response = await client.get(
+            f"{API_BASE}/fx/currencies/sync",
             params=params,
             timeout=TIMEOUT
             )
@@ -258,8 +248,8 @@ async def test_sync_rates(test_server):
 
 @pytest.mark.asyncio
 async def test_sync_rates_auto_config(test_server):
-    """Test 4b: POST /fx/sync/bulk - Auto-config mode (no provider parameter)."""
-    print_section("Test 4b: POST /fx/sync/bulk - Auto-config")
+    """Test 4b: POST /fx/currencies/sync - Auto-config mode (no provider parameter)."""
+    print_section("Test 4b: POST /fx/currencies/sync - Auto-config")
 
     async with httpx.AsyncClient() as client:
         today = date.today()
@@ -285,12 +275,7 @@ async def test_sync_rates_auto_config(test_server):
                 ]
             )
 
-        create_response = await client.post(
-            f"{API_BASE}/fx/pair-sources/bulk",
-            json=pair_sources_request.model_dump(mode="json"),
-            timeout=TIMEOUT
-            )
-
+        create_response = await client.post(f"{API_BASE}/fx/providers/pair-sources",json=pair_sources_request.model_dump(mode="json"),timeout=TIMEOUT)
         assert create_response.status_code == 201, f"Expected 201, got {create_response.status_code}: {create_response.text}"
 
         create_data = FXCreatePairSourcesResponse(**create_response.json())
@@ -307,11 +292,7 @@ async def test_sync_rates_auto_config(test_server):
             "currencies": "EUR,GBP"  # These currencies are configured in DB
             }
 
-        sync_response = await client.post(
-            f"{API_BASE}/fx/sync/bulk",
-            params=params,
-            timeout=TIMEOUT
-            )
+        sync_response = await client.get(f"{API_BASE}/fx/currencies/sync",params=params,timeout=TIMEOUT)
 
         assert sync_response.status_code == 200, f"Expected 200, got {sync_response.status_code}: {sync_response.text}"
 
@@ -331,14 +312,10 @@ async def test_sync_rates_auto_config(test_server):
         params_missing = {
             "start": yesterday.isoformat(),
             "end": yesterday.isoformat(),
-            "currencies": "JPY"  # NOT configured in DB
+            "currencies": "FALSE_CURRENCY"  # NOT configured in DB
             }
 
-        error_response = await client.post(
-            f"{API_BASE}/fx/sync/bulk",
-            params=params_missing,
-            timeout=TIMEOUT
-            )
+        error_response = await client.get(f"{API_BASE}/fx/currencies/sync",params=params_missing,timeout=TIMEOUT)
 
         assert error_response.status_code == 400, f"Expected 400 for missing config, got {error_response.status_code}"
         error_data = error_response.json()
@@ -356,7 +333,7 @@ async def test_sync_rates_auto_config(test_server):
             )
         delete_response = await client.request(
             method="DELETE",
-            url=f"{API_BASE}/fx/pair-sources/bulk",
+            url=f"{API_BASE}/fx/providers/pair-sources",
             json=delete_request.model_dump(mode="json"),
             timeout=TIMEOUT
             )
@@ -367,8 +344,8 @@ async def test_sync_rates_auto_config(test_server):
 
 @pytest.mark.asyncio
 async def test_convert_currency(test_server):
-    """Test 5: POST /fx/convert/bulk - Currency conversion."""
-    print_section("Test 5: POST /fx/convert/bulk")
+    """Test 5: POST /fx/currencies/convert - Currency conversion."""
+    print_section("Test 5: POST /fx/currencies/convert")
 
     async with httpx.AsyncClient() as client:
         today = date.today()
@@ -382,7 +359,7 @@ async def test_convert_currency(test_server):
             "provider": "ECB"
             }
         await client.post(
-            f"{API_BASE}/fx/sync/bulk",
+            f"{API_BASE}/fx/currencies/sync",
             params=sync_params,
             timeout=TIMEOUT
             )
@@ -398,11 +375,7 @@ async def test_convert_currency(test_server):
                 ]
             )
 
-        response = await client.post(
-            f"{API_BASE}/fx/convert/bulk",
-            json=request.model_dump(mode="json"),
-            timeout=TIMEOUT
-            )
+        response = await client.post(f"{API_BASE}/fx/currencies/convert",json=request.model_dump(mode="json"),timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -421,8 +394,8 @@ async def test_convert_currency(test_server):
 
 @pytest.mark.asyncio
 async def test_convert_missing_rate(test_server):
-    """Test 6: POST /fx/convert/bulk - Conversion with missing rate."""
-    print_section("Test 6: POST /fx/convert/bulk - Missing Rate")
+    """Test 6: POST /fx/currencies/convert - Conversion with missing rate."""
+    print_section("Test 6: POST /fx/currencies/convert - Missing Rate")
 
     async with httpx.AsyncClient() as client:
         # Use a fake currency pair that definitely doesn't exist
@@ -437,7 +410,7 @@ async def test_convert_missing_rate(test_server):
             )
 
         response = await client.post(
-            f"{API_BASE}/fx/convert/bulk",
+            f"{API_BASE}/fx/currencies/convert",
             json=request.model_dump(mode="json"),
             timeout=TIMEOUT
             )
@@ -456,8 +429,8 @@ async def test_convert_missing_rate(test_server):
 
 @pytest.mark.asyncio
 async def test_manual_rate_upsert(test_server):
-    """Test 7: POST /fx/rate-set/bulk - Manual rate upsert."""
-    print_section("Test 7: POST /fx/rate-set/bulk - Manual Upsert")
+    """Test 7: POST /fx/currencies/rate - Manual rate upsert."""
+    print_section("Test 7: POST /fx/currencies/rate - Manual Upsert")
 
     async with httpx.AsyncClient() as client:
         today = date.today()
@@ -476,7 +449,7 @@ async def test_manual_rate_upsert(test_server):
             )
 
         response = await client.post(
-            f"{API_BASE}/fx/rate-set/bulk",
+            f"{API_BASE}/fx/currencies/rate",
             json=request.model_dump(mode="json"),
             timeout=TIMEOUT
             )
@@ -500,8 +473,8 @@ async def test_manual_rate_upsert(test_server):
 
 @pytest.mark.asyncio
 async def test_bulk_conversions(test_server):
-    """Test 8: POST /fx/convert/bulk - Bulk conversions."""
-    print_section("Test 8: POST /fx/convert/bulk - Bulk")
+    """Test 8: POST /fx/currencies/convert - Bulk conversions."""
+    print_section("Test 8: POST /fx/currencies/convert - Bulk")
 
     async with httpx.AsyncClient() as client:
         today = date.today()
@@ -514,7 +487,7 @@ async def test_bulk_conversions(test_server):
                 ]
             )
         await client.post(
-            f"{API_BASE}/fx/rate-set/bulk",
+            f"{API_BASE}/fx/currencies/rate",
             json=upsert_request.model_dump(mode="json"),
             timeout=TIMEOUT
             )
@@ -527,12 +500,7 @@ async def test_bulk_conversions(test_server):
                 ]
             )
 
-        response = await client.post(
-            f"{API_BASE}/fx/convert/bulk",
-            json=request.model_dump(mode="json"),
-            timeout=TIMEOUT
-            )
-
+        response = await client.post(f"{API_BASE}/fx/currencies/convert",json=request.model_dump(mode="json"),timeout=TIMEOUT)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
         convert_response = FXConvertResponse(**response.json())
@@ -543,8 +511,8 @@ async def test_bulk_conversions(test_server):
 
 @pytest.mark.asyncio
 async def test_bulk_rate_upserts(test_server):
-    """Test 9: POST /fx/rate-set/bulk - Bulk rate upserts."""
-    print_section("Test 9: POST /fx/rate-set/bulk - Bulk Upserts")
+    """Test 9: POST /fx/currencies/rate - Bulk rate upserts."""
+    print_section("Test 9: POST /fx/currencies/rate - Bulk Upserts")
 
     async with httpx.AsyncClient() as client:
         today = date.today()
@@ -558,11 +526,7 @@ async def test_bulk_rate_upserts(test_server):
                 ]
             )
 
-        response = await client.post(
-            f"{API_BASE}/fx/rate-set/bulk",
-            json=request.model_dump(mode="json"),
-            timeout=TIMEOUT
-            )
+        response = await client.post(f"{API_BASE}/fx/currencies/rate",json=request.model_dump(mode="json"),timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
@@ -575,8 +539,8 @@ async def test_bulk_rate_upserts(test_server):
 
 @pytest.mark.asyncio
 async def test_delete_rates(test_server):
-    """Test 10: DELETE /fx/rate-set/bulk - Rate deletion."""
-    print_section("Test 10: DELETE /fx/rate-set/bulk")
+    """Test 10: DELETE /fx/currencies/rate - Rate deletion."""
+    print_section("Test 10: DELETE /fx/currencies/rate")
 
     async with httpx.AsyncClient() as client:
         today = date.today()
@@ -590,7 +554,7 @@ async def test_delete_rates(test_server):
                 ]
             )
         await client.post(
-            f"{API_BASE}/fx/rate-set/bulk",
+            f"{API_BASE}/fx/currencies/rate",
             json=upsert_request.model_dump(mode="json"),
             timeout=TIMEOUT
             )
@@ -608,7 +572,7 @@ async def test_delete_rates(test_server):
 
         response = await client.request(
             method="DELETE",
-            url=f"{API_BASE}/fx/rate-set/bulk",
+            url=f"{API_BASE}/fx/currencies/rate",
             content=request.model_dump_json(),
             headers={"Content-Type": "application/json"},
             timeout=TIMEOUT
@@ -645,7 +609,7 @@ async def test_invalid_requests(test_server):
                 ]
             }
         response = await client.post(
-            f"{API_BASE}/fx/convert/bulk",
+            f"{API_BASE}/fx/currencies/convert",
             json=request,
             timeout=TIMEOUT
             )
@@ -664,11 +628,7 @@ async def test_invalid_requests(test_server):
                     }
                 ]
             }
-        response = await client.post(
-            f"{API_BASE}/fx/convert/bulk",
-            json=request,
-            timeout=TIMEOUT
-            )
+        response = await client.post(f"{API_BASE}/fx/currencies/convert",json=request,timeout=TIMEOUT)
         assert response.status_code == 422, f"Expected 422 for negative amount, got {response.status_code}"
         print_success("✓ Negative amount rejected with 422")
 
@@ -685,7 +645,7 @@ async def test_invalid_requests(test_server):
                 ]
             }
         response = await client.post(
-            f"{API_BASE}/fx/convert/bulk",
+            f"{API_BASE}/fx/currencies/convert",
             json=request,
             timeout=TIMEOUT
             )
@@ -706,7 +666,7 @@ async def test_invalid_requests(test_server):
                 ]
             }
         response = await client.post(
-            f"{API_BASE}/fx/rate-set/bulk",
+            f"{API_BASE}/fx/currencies/rate",
             json=request,
             timeout=TIMEOUT
             )
@@ -726,7 +686,7 @@ async def test_invalid_requests(test_server):
                 ]
             }
         response = await client.post(
-            f"{API_BASE}/fx/convert/bulk",
+            f"{API_BASE}/fx/currencies/convert",
             json=request,
             timeout=TIMEOUT
             )

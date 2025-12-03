@@ -110,6 +110,7 @@ class AssetSourceProvider(ABC):
         """
         pass
 
+    # TODO: passare sia identifier che identifier_type (es. ticker, isin, cusip, ecc) per permettere ai provider di gestire piu' tipi di identificatori
     @abstractmethod
     async def get_current_value(
         self,
@@ -136,6 +137,7 @@ class AssetSourceProvider(ABC):
         """Whether this provider supports historical data."""
         return True  # In theory except special case, all plugin should support this feature
 
+    # TODO: passare sia identifier che identifier_type (es. ticker, isin, cusip, ecc) per permettere ai provider di gestire piu' tipi di identificatori
     @abstractmethod
     async def get_history_value(
         self,
@@ -200,25 +202,24 @@ class AssetSourceProvider(ABC):
             AssetSourceError: If params invalid
         """
         pass  # Default: no validation, accepts any params including None
-
+    # TODO: passare sia identifier che identifier_type (es. ticker, isin, cusip, ecc) per permettere ai provider di gestire piu' tipi di identificatori
     async def fetch_asset_metadata(
         self,
         identifier: str,
         provider_params: dict | None = None,
-        ) -> dict | None:
+        ) -> FAClassificationParams | None:
         """
         Fetch asset metadata from provider (optional feature).
 
         Override this method if your provider can fetch classification metadata
-        (investment_type, sector, geographic_area, short_description).
+        (sector, geographic_area, short_description).
 
         Args:
             identifier: Asset identifier
             provider_params: Provider-specific configuration (JSON)
 
         Returns:
-            dict with metadata fields or None if not supported/available
-            Expected keys: investment_type, sector, geographic_area, short_description
+            FAClassificationParams or None if not supported
 
         Raises:
             AssetSourceError: On fetch failure
