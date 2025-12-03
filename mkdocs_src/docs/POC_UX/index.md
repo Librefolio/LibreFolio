@@ -24,6 +24,21 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 
 ![Logo Concept A2](./logo/Gemini_Generated_Image_LogoA2.png)
 
+### Refined Logo
+
+![LibreFolio Logo](./logo/Librefolio_logo_new.png)
+
+---
+
+## Authentication
+
+### Login Screen
+
+> Login screen for LibreFolio. Clean cream background with a centered card. The card contains the LibreFolio logo, and input fields for 'Username' and 'Password', along with a 'Login' button in dark forest green.
+
+![Login Screen 1](./login/login_screen_1.jpg)
+![Login Screen 2](./login/login_screen_2.jpg)
+
 ---
 
 ## Main Application Screens
@@ -48,6 +63,12 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 
 ![Portfolio Detail](./portfolio/Gemini_Generated_Image_portafoglio_detail.png)
 
+### Asset Detail (Stock/ETF)
+
+> UI mockup for a specific asset detail page within the 'LibreFolio' desktop app, focusing on a Stock investment (e.g., Apple, AAPL). The page has a cream background. The title at the top says 'Apple Inc. (AAPL)'. Below the title, a large, clean line chart shows the stock's price history for the last year.
+
+![Asset Detail Stock](./portfolio/asset_detail_stock.jpg)
+
 ### Transactions Page
 
 > Desktop UI mockup for the 'Transazioni' (Transactions) page of the LibreFolio app. Cream background, dark green sidebar. At the top of the main content, a filter bar with inputs for date range, transaction type, and asset search. Below it, a long, clean chronological list or table of financial transactions. Each row has an icon indicating type, date, description, and amount. Examples: A row with a green arrow up icon for 'BUY - VWCE ETF - 10 units @ €95.00 - Total -€950.00'; A row with a coin icon for 'DIVIDEND - Coca Cola - +€32.50'; A row with a red arrow down for 'SELL - Bitcoin - 0.1 BTC - Total +€3,800.00'. The amounts are colored green for inflows and grey/red for outflows.
@@ -56,11 +77,15 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 ![Transaction 2](./transactions/Gemini_Generated_Image_transaction2.png)
 ![Transaction 3](./transactions/Gemini_Generated_Image_transaction3.png)
 
+#### Transaction Detail / Modal
+![Asset Transaction](./transactions/asset_transaction_modal.jpg)
+
 ### Cash Management Page
 
 > Desktop UI mockup for the 'Cassa' (Cash) page of the LibreFolio app. Cream background, dark green sidebar. The top of the main area features two prominent rectangular cards with rounded corners displaying cash balances: one titled 'Euro Balance (Base)' showing '€ 5,300.00' and another titled 'USD Balance' showing '$ 1,250.50'. Below these cards, two large action buttons: a solid dark green one 'Add Funds (Deposit)' and an outlined one 'Withdraw Funds'. Below the buttons, a specific table titled 'Cash Movements Ledger' showing only money transfers, e.g., 'Date: 2023-11-20, Type: DEPOSIT, Amount: +€1,000', 'Date: 2023-11-15, Type: SETTLEMENT (Buy AAPL), Amount: -$450.00'.
 
 ![Cash Page](./cash/Gemini_Generated_Image_cassa.png)
+![Cash Transaction](./cash/cash_transaction.jpg)
 
 ### P2P Loan Asset Detail
 
@@ -78,12 +103,30 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 ![Report Income/Dividends](./reports/Gemini_Generated_Image_report-income-and-dividends.png)
 ![Report Realized Gains](./reports/Gemini_Generated_Image_report-realized-gains-(tax).png)
 
+### Broker Management
+
+> Desktop UI mockup for a 'Broker Management' page in the LibreFolio app. Cream background, dark green sidebar. The title is 'My Brokers'. The main content area displays a grid of cards, where each card represents a broker.
+
+![Broker Management 1](./brokers/broker_management_1.jpg)
+![Broker Management 2](./brokers/broker_management_2.jpg)
+![Add/Edit Broker Modal](./brokers/add-edit_broker_modal.jpg)
+
+### FX Provider Management
+
+> Desktop UI mockup for the 'Fx Provider Priorities' page in the LibreFolio app. Cream background, dark green sidebar. The page title is 'Gestione Priorità Tassi di Cambio (FX)'.
+
+![FX Pair List 1](./fx/fx_pair_list_1.jpg)
+![FX Pair List 2](./fx/fx_pair_list_2.jpg)
+![FX Add Pair Modal 1](./fx/fx_pair_add_modal_1.jpg)
+![FX Add Pair Modal 2](./fx/fx_pair_add_modal_2.jpg)
+
 ### Settings
 
-_(No specific prompts were provided for these, but they appear to be settings screens)_
+> Desktop UI mockup for the 'Settings' page of the LibreFolio app. Cream background, dark green sidebar. The main content area is divided into sections with clear headings for User Profile, Application, API Access, and Data Management.
 
 ![Settings 1](./settings/Gemini_Generated_Image_setting1.png)
 ![Settings 2](./settings/Gemini_Generated_Image_setting2.png)
+![Settings Page New](./settings/settings_page_new.jpg)
 
 ---
 
@@ -91,20 +134,30 @@ _(No specific prompts were provided for these, but they appear to be settings sc
 
 ### Add Transaction Modal
 
-> UI design of a modal window overlay for 'Add Transaction' in the LibreFolio web app. The modal appears centered over a slightly blurred background of the dashboard. The modal itself has a clean cream background with rounded corners and a dark green title 'New Transaction'. It contains clean form inputs with distinct labels: a dropdown selector for 'Transaction Type' showing 'BUY', a search input field for 'Asset' showing 'Apple (AAPL)', numerical input fields for 'Price' and 'Quantity', and a date picker field. Below the inputs, a toggle switch option for 'Deduct from Cash balance'. At the bottom right of the modal, two buttons: an outlined dark green button for 'Cancel' and a solid dark forest green button for 'Save Transaction'.
+> UI design of a modal window overlay for 'Add Transaction' in the LibreFolio web app.
 
-*(This prompt likely corresponds to the transaction images under "Main Application Screens")*
+*(See "Main Application Screens" above)*
 
 ### Add New Asset Modal (with Provider Search)
 
-> Desktop UI mockup of a modal window for 'Aggiungi Nuovo Asset' in the LibreFolio app, on a cream background. The title is 'Aggiungi Nuovo Asset' in dark forest green. The form is designed for smart searching. Field 1 (Search & Provider Select): A horizontal group. On the left, a search input field with a magnifying glass icon and placeholder 'Cerca per Simbolo o Nome (es. AAPL)'. On the right, a multi-select dropdown button labeled 'Provider Ricerca: 2 selezionati'. When clicked, it shows a list with checkboxes: '[x] yfinance (Yahoo Finance)', '[x] Alpha Vantage', '[ ] Altro Provider'. Field 2 (Auto-filled): Label 'Simbolo (Ticker)', input type text, value 'AAPL', state is read-only (greyed out, auto-filled after search). Field 3 (Auto-filled): Label 'Nome Asset', input type text, value 'Apple Inc.', state is editable. Field 4 (Auto-filled): Label 'Tipo di Asset', input type dropdown selector showing value 'Stock'. At the bottom right, two buttons: a dark green outlined 'Annulla' and a solid dark forest green 'Salva Asset'. A small help text below the search field says: "I dati verranno precompilati dai provider selezionati.".
+> Desktop UI mockup of a modal window for 'Aggiungi Nuovo Asset' in the LibreFolio app, on a cream background.
 
 ![Add Asset Plugin 1](./modals/Gemini_Generated_Image_plugin1.png)
 ![Add Asset Plugin 2](./modals/Gemini_Generated_Image_plugin2.png)
 ![Add Asset Plugin 3](./modals/Gemini_Generated_Image_plugin3.png)
 
-### Edit Asset Modal
+---
 
-> Desktop UI mockup of a modal window for 'Modifica Asset' in the LibreFolio app, on a cream background. The title is 'Modifica Asset: Vanguard World'. Top Section (Core Data): Field 1: Label 'Simbolo (Ticker)', input type text, value 'VWCE', state is disabled/read-only (greyed out text). Field 2: Label 'Nome Asset', input type text, value 'Vanguard FTSE All-World UCITS ETF'. Field 3: Label 'Tipo di Asset', input type dropdown selector showing current value 'ETF'. Middle Section (Additional Details - separated by a subtle divider line): Subheader: 'Dettagli Aggiuntivi (Note)' in dark green. Field 4: Label 'Valuta Base dell'Asset', input type dropdown selector showing value 'EUR' (allows choosing the currency the asset is traded in). Field 5: Label 'Allocazione Geografica / Note', input type text field showing value 'Globale / Paesi Sviluppati' (free text for context). At the bottom right, two buttons: a dark green outlined button 'Annulla' and a solid dark forest green button 'Salva Modifiche'. The style is consistent with the LibreFolio design.
+## Design Elements
 
-*(No specific image seems to match this prompt directly, but it's related to asset management modals.)*
+### Color Palette
+
+![Color Palette](./design/palette.jpg)
+
+### Asset Icons
+
+![Asset Icons 1](./design/icons_asset_type_1.jpg)
+![Asset Icons 2](./design/icons_asset_type_2.jpg)
+![Asset Icons 3](./design/icons_asset_type_3.jpg)
+![Asset Icons 4](./design/icons_asset_type_4.jpg)
+![Asset Icons 5](./design/icons_asset_type_5.jpg)
