@@ -44,7 +44,7 @@ from backend.app.schemas.common import BackwardFillInfo
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
 from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
 from backend.app.utils.validation_utils import validate_compound_frequency, normalize_currency_code
-
+from backend.app.db.models import AssetType
 
 # ============================================================================
 # ENUMS FOR FINANCIAL CALCULATIONS
@@ -529,18 +529,16 @@ class FABulkMetadataRefreshResponse(BaseModel):
 # ============================================================================
 
 class FAAssetCreateItem(BaseModel):
-    """Single asset to create in bulk operation."""
+    """Single asset to create in bulk operation.
+
+    Note: identifier, identifier_type are now part of AssetProviderAssignment.
+    Create asset first, then assign provider separately via POST /assets/provider.
+    """
     model_config = ConfigDict(extra="forbid")
 
-    display_name: str = Field(..., description="Human-readable asset name")
-    identifier: str = Field(..., min_length=1, description="Asset identifier (ticker, ISIN, etc.)")
-    identifier_type: Optional[str] = Field(None, description="Identifier type (TICKER, ISIN, CUSIP, etc.)")
+    display_name: str = Field(..., description="Human-readable asset name (must be unique)")
     currency: str = Field(..., min_length=3, max_length=3, description="Asset currency (ISO 4217)")
-    asset_type: Optional[str] = Field(None, description="Asset type (STOCK, ETF, BOND, etc.)")
-    valuation_model: Optional[str] = Field("MARKET_PRICE", description="Valuation model (MARKET_PRICE, SCHEDULED_YIELD, MANUAL)")
-
-    # Scheduled yield configuration (optional, for bonds/loans)
-    interest_schedule: Optional[FAScheduledInvestmentSchedule] = Field(None, description="Interest scheduled yield assets")
+    asset_type: Optional[AssetType] = Field(None, description="Asset type (STOCK, ETF, BOND, CROWDFUND_LOAN, etc.)")
 
     # Classification metadata (optional)
     classification_params: Optional[FAClassificationParams] = Field(None, description="Asset classification metadata")
@@ -549,14 +547,6 @@ class FAAssetCreateItem(BaseModel):
     @classmethod
     def currency_uppercase(cls, v: str) -> str:
         return normalize_currency_code(v)
-
-    @field_validator('identifier')
-    @classmethod
-    def identifier_not_empty(cls, v: str) -> str:
-        """Ensure identifier is not empty after stripping."""
-        if not v or not v.strip():
-            raise ValueError("identifier cannot be empty")
-        return v.strip()
 
 
 class FABulkAssetCreateRequest(BaseModel):
@@ -638,6 +628,65 @@ class FABulkAssetDeleteResponse(BaseModel):
     failed_count: int = Field(..., description="Number of failed asset deletions")
 
 
+# ============================================================================
+# ASSET PATCH SCHEMAS (for PATCH /assets endpoint)
+# ============================================================================
+
+class FAAssetPatchItem(BaseModel):
+    """Single asset patch item for bulk update operations.
+
+    Merge logic:
+    - Field present in patch (even if None): UPDATE or BLANK
+    - Field absent in patch: IGNORE (keep existing value)
+
+    For classification_params:
+    - If None: Set DB column to NULL
+    - If present: Full replace (no merge of subfields)
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(..., description="Asset ID to update")
+
+    # Optional fields - if present (even if None), they will be updated
+    display_name: Optional[str] = Field(None, description="Update display name")
+    currency: Optional[str] = Field(None, min_length=3, max_length=3, description="Update currency (ISO 4217)")
+    asset_type: Optional[AssetType] = Field(None, description="Update asset type (STOCK, ETF, BOND, etc.)")
+    classification_params: Optional[FAClassificationParams] = Field(None, description="Update classification (None = clear)")
+    active: Optional[bool] = Field(None, description="Update active status")
+
+    @field_validator('currency')
+    @classmethod
+    def currency_uppercase(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize currency to uppercase."""
+        return normalize_currency_code(v) if v else None
+
+
+class FABulkAssetPatchRequest(BaseModel):
+    """Bulk asset patch request."""
+    model_config = ConfigDict(extra="forbid")
+
+    assets: List[FAAssetPatchItem] = Field(..., min_length=1, description="List of assets to patch")
+
+
+class FAAssetPatchResult(BaseModel):
+    """Result of single asset patch in bulk operation."""
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(..., description="Asset ID")
+    success: bool = Field(..., description="Whether patch succeeded")
+    message: str = Field(..., description="Success message or error description")
+    updated_fields: Optional[List[str]] = Field(None, description="List of fields updated")
+
+
+class FABulkAssetPatchResponse(BaseModel):
+    """Bulk asset patch response (partial success allowed)."""
+    model_config = ConfigDict(extra="forbid")
+
+    results: List[FAAssetPatchResult] = Field(..., description="Per-asset patch results")
+    success_count: int = Field(..., description="Number of successfully patched assets")
+    failed_count: int = Field(..., description="Number of failed asset patches")
+
+
 # Export convenience
 __all__ = [
     # Enums
@@ -670,6 +719,16 @@ __all__ = [
     "FABulkAssetCreateRequest",
     "FAAssetCreateResult",
     "FABulkAssetCreateResponse",
+    "FAAinfoFiltersRequest",
+    "FAinfoResponse",
+    "FABulkAssetDeleteRequest",
+    "FAAssetDeleteResult",
+    "FABulkAssetDeleteResponse",
+    # Asset PATCH schemas
+    "FAAssetPatchItem",
+    "FABulkAssetPatchRequest",
+    "FAAssetPatchResult",
+    "FABulkAssetPatchResponse",
     "FAAinfoFiltersRequest",
     "FAinfoResponse",
     "FABulkAssetDeleteRequest",

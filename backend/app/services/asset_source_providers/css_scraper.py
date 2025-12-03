@@ -9,6 +9,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Dict
 
+from backend.app.db import IdentifierType
 from backend.app.logging_config import get_logger
 
 try:
@@ -23,7 +24,7 @@ except ImportError:
 
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
-from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAClassificationParams
+from backend.app.schemas.assets import FACurrentValue, FAHistoricalData
 
 logger = get_logger(__name__)
 
@@ -71,6 +72,7 @@ class CSSScraperProvider(AssetSourceProvider):
     async def get_current_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: Dict | None = None,
         ) -> FACurrentValue:
         """
@@ -78,6 +80,7 @@ class CSSScraperProvider(AssetSourceProvider):
 
         Args:
             identifier: URL to scrape (e.g., "https://example.com/price")
+            identifier_type: Type of identifier (should be URL)
             provider_params: see self.validate_params()
 
         Returns:
@@ -177,6 +180,7 @@ class CSSScraperProvider(AssetSourceProvider):
     async def get_history_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: Dict | None,
         start_date: date,
         end_date: date,

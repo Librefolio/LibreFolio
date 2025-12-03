@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Dict
 
+from backend.app.db import IdentifierType
 from backend.app.logging_config import get_logger
 from backend.app.utils.datetime_utils import utcnow
 
@@ -26,7 +27,7 @@ except ImportError:
 
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
-from backend.app.schemas.assets import FACurrentValue, FAPricePoint, FAHistoricalData, FAClassificationParams
+from backend.app.schemas.assets import FACurrentValue, FAPricePoint, FAHistoricalData, FAAssetPatchItem, FAClassificationParams
 
 logger = get_logger(__name__)
 
@@ -62,6 +63,7 @@ class YahooFinanceProvider(AssetSourceProvider):
     async def get_current_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: Dict | None = None,
         ) -> FACurrentValue:
         """
@@ -71,14 +73,23 @@ class YahooFinanceProvider(AssetSourceProvider):
 
         Args:
             identifier: Yahoo Finance ticker symbol (e.g., "AAPL", "BTC-USD")
+            identifier_type: Type of identifier (must be TICKER or ISIN)
             provider_params: Optional parameters (unused for Yahoo Finance)
 
         Returns:
             FACurrentValue with value, currency, as_of_date, source
 
         Raises:
-            AssetSourceError: If yfinance not available or data fetch fails
+            AssetSourceError: If yfinance not available, identifier_type invalid, or data fetch fails
         """
+        # Validate identifier_type
+        if identifier_type not in [IdentifierType.TICKER, IdentifierType.ISIN]:
+            raise AssetSourceError(
+                f"Yahoo Finance only supports TICKER and ISIN, got {identifier_type}",
+                "INVALID_IDENTIFIER_TYPE",
+                {"identifier": identifier, "identifier_type": identifier_type}
+                )
+
         if not YFINANCE_AVAILABLE:
             raise AssetSourceError(
                 "yfinance library not available - install with: pipenv install yfinance",
@@ -142,6 +153,7 @@ class YahooFinanceProvider(AssetSourceProvider):
     async def get_history_value(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: Dict | None,
         start_date: date,
         end_date: date,
@@ -151,6 +163,7 @@ class YahooFinanceProvider(AssetSourceProvider):
 
         Args:
             identifier: Yahoo Finance ticker symbol
+            identifier_type: Type of identifier (must be TICKER or ISIN)
             start_date: Start date (inclusive)
             end_date: End date (inclusive)
             provider_params: Optional parameters (unused)
@@ -159,8 +172,16 @@ class YahooFinanceProvider(AssetSourceProvider):
             FAHistoricalData with prices list, currency, source
 
         Raises:
-            AssetSourceError: If yfinance not available or data fetch fails
+            AssetSourceError: If yfinance not available, identifier_type invalid, or data fetch fails
         """
+        # Validate identifier_type
+        if identifier_type not in [IdentifierType.TICKER, IdentifierType.ISIN]:
+            raise AssetSourceError(
+                f"Yahoo Finance only supports TICKER and ISIN, got {identifier_type}",
+                "INVALID_IDENTIFIER_TYPE",
+                {"identifier": identifier, "identifier_type": identifier_type}
+                )
+
         if not YFINANCE_AVAILABLE:
             raise AssetSourceError(
                 "yfinance library not available - install with: pipenv install yfinance",
@@ -315,8 +336,9 @@ class YahooFinanceProvider(AssetSourceProvider):
     async def fetch_asset_metadata(
         self,
         identifier: str,
+        identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-        ) -> FAClassificationParams | None:
+        ) -> FAAssetPatchItem | None:
         """
         Fetch asset metadata from Yahoo Finance.
 
@@ -325,19 +347,25 @@ class YahooFinanceProvider(AssetSourceProvider):
 
         Args:
             identifier: Yahoo Finance ticker symbol
+            identifier_type: Type of identifier (must be TICKER or ISIN)
             provider_params: Optional parameters (unused)
 
         Returns:
-            Dict with metadata fields or None if fetch fails:
-            {
-                "short_description": str,
-                "sector": str,
-                "geographic_area": None  # Not available
-            }
+            FAAssetPatchItem with metadata fields (asset_id will be None, filled by caller)
+            or None if fetch fails.
+            Contains: asset_type, classification_params (sector, short_description)
 
         Note:
             Returns RAW data - normalization happens in core service layer.
         """
+        # Validate identifier_type
+        if identifier_type not in [IdentifierType.TICKER, IdentifierType.ISIN]:
+            raise AssetSourceError(
+                f"Yahoo Finance only supports TICKER and ISIN, got {identifier_type}",
+                "INVALID_IDENTIFIER_TYPE",
+                {"identifier": identifier, "identifier_type": identifier_type}
+                )
+
         if not YFINANCE_AVAILABLE:
             logger.warning(f"yfinance not available, cannot fetch metadata for {identifier}")
             return None
@@ -350,20 +378,18 @@ class YahooFinanceProvider(AssetSourceProvider):
                 logger.warning(f"No info data returned from yfinance for {identifier}")
                 return None
 
-            # TODO: da ora investment_type non è più un metadato, ma un campo primario di Asset,
-            #  è stato commentato qui, ma in futuro bisogna farlo scrivere alla creazione dell'asset
-            # Map quoteType to investment_type
+            # Map quoteType to asset_type
             quote_type = info.get('quoteType', '').lower()
-            investment_type_map = {
-                'equity': 'stock',
-                'etf': 'etf',
-                'mutualfund': 'mutual_fund',
-                'cryptocurrency': 'crypto',
-                'currency': 'currency',
-                'future': 'future',
-                'option': 'option',
+            asset_type_map = {
+                'equity': 'STOCK',
+                'etf': 'ETF',
+                'mutualfund': 'FUND',
+                'cryptocurrency': 'CRYPTO',
+                'currency': 'OTHER',
+                'future': 'OTHER',
+                'option': 'OTHER',
                 }
-            investment_type = investment_type_map.get(quote_type, 'stock')
+            asset_type = asset_type_map.get(quote_type, 'OTHER')
 
             # Get description (truncate to 500 chars)
             long_business_summary = info.get('longBusinessSummary', '')
@@ -383,9 +409,23 @@ class YahooFinanceProvider(AssetSourceProvider):
             # Get sector
             sector = info.get('sector')
 
-            metadata = FAClassificationParams(sector=sector, short_description=short_description)
-            logger.info(f"Fetched metadata from yfinance for {identifier}: type={investment_type}, sector={sector}")
-            return metadata
+            # Build FAClassificationParams
+
+            classification_data = {'short_description': short_description}
+            if sector:
+                classification_data['sector'] = sector
+
+            classification = FAClassificationParams(**classification_data)
+
+            # Build FAAssetPatchItem (asset_id will be filled by caller)
+            patch_item = FAAssetPatchItem(
+                asset_id=0,  # Placeholder, will be set by caller
+                asset_type=asset_type,
+                classification_params=classification
+            )
+
+            logger.info(f"Fetched metadata from yfinance for {identifier}: asset_type={asset_type}, sector={sector}")
+            return patch_item
 
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {identifier}: {e}")

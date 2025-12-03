@@ -24,11 +24,9 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 - Bulk Operations: Batch processing for efficiency
 """
 from __future__ import annotations
-
 from typing import List, Optional, Any
-
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
-
+from backend.app.db.models import IdentifierType
 
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
@@ -87,12 +85,19 @@ class FXProvidersResponse(BaseModel):
 class FAProviderAssignmentItem(BaseModel):
     """Single FA provider assignment configuration.
 
-    Links an asset to a pricing provider with optional parameters.
+    Links an asset to a pricing provider with identifier and parameters.
+
+    Fields:
+    - identifier: How the provider identifies this asset (ticker, ISIN, UUID, URL, etc.)
+    - identifier_type: Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)
+    - provider_params: Provider-specific configuration (e.g., FAScheduledInvestmentSchedule for scheduled_investment)
     """
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, etc.)")
+    provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)")
+    identifier: str = Field(..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)")
+    identifier_type: IdentifierType = Field(..., description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific configuration (JSON)")
     fetch_interval: int = Field(1440, description="Refresh frequency in minutes (default: 1440 = 24h)")
 
@@ -110,7 +115,7 @@ class FAProviderAssignmentItem(BaseModel):
         # Lazy import to avoid circular dependency
         from backend.app.services.provider_registry import AssetProviderRegistry
         from backend.app.services.asset_source import AssetSourceError
-
+        
         # Get provider instance
         provider = AssetProviderRegistry.get_provider_instance(self.provider_code)
         if not provider:
@@ -127,6 +132,24 @@ class FAProviderAssignmentItem(BaseModel):
         return self
 
 
+class FAProviderAssignmentReadItem(BaseModel):
+    """Provider assignment read response (includes all fields).
+
+    Used for GET /assets/provider/assignments endpoint.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(..., description="Asset ID")
+    provider_code: str = Field(..., description="Provider code")
+    identifier: str = Field(..., description="Asset identifier for provider")
+    identifier_type: IdentifierType = Field(..., description="Type of identifier")
+    provider_params: Optional[dict[str, Any]] = Field(None, description="Provider configuration")
+    fetch_interval: Optional[int] = Field(None, description="Refresh frequency in minutes")
+    last_fetch_at: Optional[str] = Field(None, description="Last fetch timestamp (ISO format)")
+
+
+
+
 class FABulkAssignRequest(BaseModel):
     """Request for bulk FA provider assignment."""
     model_config = ConfigDict(extra="forbid")
@@ -134,15 +157,26 @@ class FABulkAssignRequest(BaseModel):
     assignments: List[FAProviderAssignmentItem] = Field(..., min_length=1, description="List of provider assignments")
 
 
+class FAProviderRefreshFieldsDetail(BaseModel):
+    """Field-level details for provider refresh operation.
+
+    Provides granular information about which fields were updated during refresh.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    refreshed_fields: List[str] = Field(..., description="Fields successfully refreshed from provider")
+    missing_data_fields: List[str] = Field(..., description="Fields provider couldn't fetch (no data available)")
+    ignored_fields: List[str] = Field(..., description="Fields ignored (not requested when using field selection)")
+
+
 class FAProviderAssignmentResult(BaseModel):
-    """Result of single FA provider assignment."""
+    """Result of single FA provider assignment or refresh."""
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     success: bool
     message: str
-    metadata_updated: Optional[bool] = None
-    metadata_changes: Optional[List[dict]] = None
+    fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(None, description="Field-level refresh details (for refresh operations)")
 
 
 class FABulkAssignResponse(BaseModel):
