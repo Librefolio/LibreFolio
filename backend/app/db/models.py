@@ -340,6 +340,7 @@ class Asset(SQLModel, table=True):
     display_name: str = Field(nullable=False)
 
     currency: str = Field(nullable=False, description="Asset original currency")  # ISO 4217
+    icon_url: Optional[str] = Field(default=None, description="URL to asset icon (local or remote)")
 
     # Classification and metadata (JSON TEXT)
     # Structure: {
@@ -658,17 +659,17 @@ class AssetProviderAssignment(SQLModel, table=True):
     - provider_params: JSON configuration specific to the provider
 
     Provider types and their configurations:
-
+    
     1. yfinance (Yahoo Finance):
        - identifier: Stock ticker (e.g., "AAPL", "MSFT")
        - identifier_type: TICKER or ISIN
        - provider_params: {} or {"some_config": "value"}
-
+    
     2. cssscraper (Custom CSS-based web scraper):
        - identifier: Full URL to scrape
        - identifier_type: OTHER
        - provider_params: {"selector": ".price", "currency": "EUR"}
-
+    
     3. scheduled_investment (Synthetic yield calculator):
        - identifier: Asset ID as string or UUID
        - identifier_type: UUID

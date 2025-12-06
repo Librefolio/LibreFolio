@@ -2,6 +2,7 @@
 Asset Provider API endpoints.
 Handles provider assignment, price management, and price refresh operations.
 """
+import json
 from datetime import date
 from typing import List, Optional
 
@@ -16,19 +17,21 @@ from backend.app.schemas.assets import (
     FAPricePoint,
     FAMetadataRefreshResult,
     FAClassificationParams,
-    FABulkPatchMetadataRequest,
+    FAPatchMetadataItem,
     FAAssetMetadataResponse,
     FABulkMetadataRefreshResponse,
     # Asset CRUD schemas
-    FABulkAssetCreateRequest,
+    FAAssetCreateItem,
     FABulkAssetCreateResponse,
     FAAinfoFiltersRequest,
     FAinfoResponse,
     FABulkAssetDeleteRequest,
     FABulkAssetDeleteResponse,
+    # Asset PATCH schemas
+    FAAssetPatchItem,
+    FABulkAssetPatchResponse,
     )
 from backend.app.schemas.prices import (
-    FABulkUpsertRequest,
     FAUpsertResult,
     FABulkUpsertResponse,
     FAPriceBulkDeleteRequest,
@@ -36,15 +39,12 @@ from backend.app.schemas.prices import (
     )
 from backend.app.schemas.provider import (
     FAProviderInfo,
-    FABulkAssignRequest,
+    FAProviderAssignmentItem,
     FABulkAssignResponse,
-    FABulkRemoveRequest,
     FABulkRemoveResponse,
+    FAProviderAssignmentReadItem,
     )
-from backend.app.schemas.refresh import (
-    FABulkRefreshRequest,
-    FABulkRefreshResponse,
-    )
+from backend.app.schemas.refresh import FABulkRefreshResponse
 from backend.app.services.asset_crud import AssetCRUDService
 from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.asset_source import AssetSourceManager
@@ -64,7 +64,7 @@ provider_router = APIRouter(prefix="/provider", tags=["FA Provider"])
 
 @asset_router.post("", response_model=FABulkAssetCreateResponse, status_code=201, tags=["FA CRUD"])
 async def create_assets_bulk(
-    request: FABulkAssetCreateRequest,
+    assets: List[FAAssetCreateItem],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -75,22 +75,18 @@ async def create_assets_bulk(
 
     **Request Example**:
     ```json
-    {
-      "assets": [
-        {
-          "display_name": "Apple Inc.",
-          "identifier": "AAPL",
-          "identifier_type": "TICKER",
-          "currency": "USD",
-          "asset_type": "STOCK",
-          "valuation_model": "MARKET_PRICE",
-          "classification_params": {
-            "sector": "Technology",
-            "geographic_area": {"USA": "1.0"}
-          }
+    [
+      {
+        "display_name": "Apple Inc.",
+        "currency": "USD",
+        "asset_type": "STOCK",
+        "icon_url": "https://example.com/aapl.png",
+        "classification_params": {
+          "sector": "Technology",
+          "geographic_area": {"USA": "1.0"}
         }
-      ]
-    }
+      }
+    ]
     ```
 
     **Response Example**:
@@ -101,8 +97,7 @@ async def create_assets_bulk(
           "asset_id": 1,
           "success": true,
           "message": "Asset created successfully",
-          "display_name": "Apple Inc.",
-          "identifier": "AAPL"
+          "display_name": "Apple Inc."
         }
       ],
       "success_count": 1,
@@ -111,27 +106,57 @@ async def create_assets_bulk(
     ```
     """
     try:
-        return await AssetCRUDService.create_assets_bulk(request.assets, session)
+        return await AssetCRUDService.create_assets_bulk(assets, session)
     except Exception as e:
         logger.error(f"Error in bulk asset creation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# TODO: creare un endpoint per aggiornare gli asset (PATCH /assets), che sia bulk e supporti successi partiali.
-#  Nella richiesta di modifica bisogna direre l'asset_id che si sta toccando, e poi i campi da modificare.
-#  Bisogna eliminare il patch di metadata, e usare quella struttura, estendendola, per modificare tutti i campi sotto il controllo dell'utente:
-#  - display_name
-#  - currency
-#  - asset_type
-#  - valuation-model
-#  - classification_params (riprendendo la logica del patch di metadata)
-#  - active
-#  - interest_schedule
-#
-#  TODO: con la stessa logica, trasformare il metadata/refresh in un provider/refresh, che ricarica dal provider i dati e aggiorna l'asset associato.
-#  TODO: aggiungere anche vari endpoint /api/v1/assets/provider per:
-#   - GET: /api/v1/assets/provider/assets prende lista di asset_id e ritorna i dati quali provider_params, identifier, identifier_type
-#   - PATCH: prende lista di asset_id e vari altri parametri da aggiornare (dovrebbe prendere gli stessi dati che una search, quando ci sarò, dovrebbe ritornare i dati che servono per fare l'assign)
-#   - DELETE: In teoria già come ora, cancella
+
+@asset_router.patch("", response_model=FABulkAssetPatchResponse, tags=["FA CRUD"])
+async def patch_assets_bulk(
+    assets: List[FAAssetPatchItem],
+    session: AsyncSession = Depends(get_session_generator)
+    ):
+    """
+    Update multiple assets in bulk (partial success allowed).
+
+    **Merge Logic**:
+    - Field present (even if None): UPDATE or BLANK value
+    - Field absent: IGNORE (keep existing value)
+
+    **Example Request**:
+    ```json
+    [
+      {
+        "asset_id": 1,
+        "display_name": "Apple Inc. - Updated",
+        "classification_params": {
+          "sector": "Technology",
+          "short_description": "New description"
+        }
+      },
+      {
+        "asset_id": 2,
+        "classification_params": null,
+        "active": false
+      }
+    ]
+    ```
+
+    **Classification Params Optimization**:
+    - If None: Clears metadata (DB column set to NULL)
+    - If present: Only non-null subfields saved to DB (JSON optimization)
+
+    **Response Fields**:
+    - `updated_fields`: List of field names actually changed
+    - Per-item success/failure status
+    """
+    try:
+        return await AssetCRUDService.patch_assets_bulk(assets, session)
+    except Exception as e:
+        logger.error(f"Error in bulk asset patch: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @asset_router.get("/query", response_model=List[FAinfoResponse], tags=["FA CRUD"])
 async def list_assets(
@@ -252,6 +277,7 @@ async def list_providers():
                     code=instance.provider_code,
                     name=instance.provider_name,
                     description=f"{instance.provider_name} pricing provider",
+                    icon_url=instance.get_icon(),
                     supports_search=supports_search
                     ))
 
@@ -260,12 +286,12 @@ async def list_providers():
 
 @provider_router.post("", response_model=FABulkAssignResponse)
 async def assign_providers_bulk(
-    request: FABulkAssignRequest,
+    assignments: List[FAProviderAssignmentItem],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk assign providers to assets (PRIMARY bulk endpoint)."""
     try:
-        results = await AssetSourceManager.bulk_assign_providers(request.assignments, session)
+        results = await AssetSourceManager.bulk_assign_providers(assignments, session)
         success_count = sum(1 for r in results if r.success)
         return FABulkAssignResponse(results=results, success_count=success_count)
     except Exception as e:
@@ -275,14 +301,70 @@ async def assign_providers_bulk(
 
 @provider_router.delete("", response_model=FABulkRemoveResponse)
 async def remove_providers_bulk(
-    request: FABulkRemoveRequest,
+    asset_ids: List[int],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk remove provider assignments (PRIMARY bulk endpoint)."""
     try:
-        return await AssetSourceManager.bulk_remove_providers(request.asset_ids, session)
+        return await AssetSourceManager.bulk_remove_providers(asset_ids, session)
     except Exception as e:
         logger.error(f"Error in bulk remove providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@provider_router.get("/assignments", response_model=List[FAProviderAssignmentReadItem])
+async def get_provider_assignments(
+    asset_ids: List[int] = Query(..., description="List of asset IDs"),
+    session: AsyncSession = Depends(get_session_generator)
+    ):
+    """
+    Get provider assignments for multiple assets.
+
+    Returns identifier, identifier_type, and provider_params for each assigned asset.
+
+    **Example**:
+    ```
+    GET /api/v1/assets/provider/assignments?asset_ids=1&asset_ids=2&asset_ids=3
+    ```
+
+    **Response**:
+    ```json
+    [
+      {
+        "asset_id": 1,
+        "provider_code": "yfinance",
+        "identifier": "AAPL",
+        "identifier_type": "TICKER",
+        "provider_params": {},
+        "fetch_interval": 1440,
+        "last_fetch_at": "2025-01-15T10:30:00Z"
+      }
+    ]
+    ```
+    """
+    try:
+        # Query with WHERE IN for efficiency
+        stmt = select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids))
+        result = await session.execute(stmt)
+        assignments = result.scalars().all()
+
+        # Convert to response schema
+        items = []
+        for a in assignments:
+            params = json.loads(a.provider_params) if a.provider_params else None
+            items.append(FAProviderAssignmentReadItem(
+                asset_id=a.asset_id,
+                provider_code=a.provider_code,
+                identifier=a.identifier,
+                identifier_type=a.identifier_type,
+                provider_params=params,
+                fetch_interval=a.fetch_interval,
+                last_fetch_at=a.last_fetch_at.isoformat() if a.last_fetch_at else None
+            ))
+
+        return items
+    except Exception as e:
+        logger.error(f"Error getting provider assignments: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -456,8 +538,8 @@ async def read_assets_bulk(
                 FAAssetMetadataResponse(
                     asset_id=asset.id,
                     display_name=asset.display_name,
-                    identifier=asset.identifier,
                     currency=asset.currency,
+                    icon_url=asset.icon_url,
                     asset_type=asset.asset_type,
                     classification_params=classification_params,
                     has_provider=asset.id in assets_with_provider,
@@ -489,7 +571,7 @@ async def refresh_prices_bulk(
 
 @metadata_router.patch("", response_model=list[FAMetadataRefreshResult])
 async def update_assets_metadata_bulk(
-    request: FABulkPatchMetadataRequest,
+    patches: List[FAPatchMetadataItem],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -508,20 +590,18 @@ async def update_assets_metadata_bulk(
 
     **Request Body**:
     ```json
-    {
-      "assets": [
-        {
-          "asset_id": 1,
-          "patch": {
-            "sector": "Technology",
-            "geographic_area": {
-              "USA": "0.6",
-              "GBR": "0.4"
-            }
+    [
+      {
+        "asset_id": 1,
+        "patch": {
+          "sector": "Technology",
+          "geographic_area": {
+            "USA": "0.6",
+            "GBR": "0.4"
           }
         }
-      ]
-    }
+      }
+    ]
     ```
 
     **Response** (per-item results):
@@ -544,7 +624,7 @@ async def update_assets_metadata_bulk(
     - Negative weights → success=false
 
     Args:
-        request: Bulk PATCH request with list of asset patches
+        patches: List of metadata patches
         session: Database session
 
     Returns:
@@ -555,7 +635,7 @@ async def update_assets_metadata_bulk(
     """
     try:
         results = []
-        for item in request.assets:
+        for item in patches:
             try:
                 result = await AssetMetadataService.update_asset_metadata(item.asset_id, item.patch, session)
                 # Result is now FAMetadataRefreshResult with changes included
@@ -571,47 +651,47 @@ async def update_assets_metadata_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@metadata_router.get("/refresh", response_model=FABulkMetadataRefreshResponse)
-async def refresh_asset_metadata_bulk(
+@provider_router.post("/refresh", response_model=FABulkMetadataRefreshResponse, tags=["FA Provider"])
+async def refresh_assets_from_provider(
     asset_ids: List[int] = Query(..., description="List of asset IDs to refresh metadata for"),
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
-    Bulk refresh classification metadata from providers (partial success allowed).
+    Refresh asset data from assigned providers (bulk operation).
 
-    Refreshes metadata for multiple assets in a single request. Each asset is
-    processed independently, and partial failures are reported per-item.
+    **EXPLICIT REFRESH** - No auto-refresh during provider assignment.
 
-    **Request Body**:
-    ```json
-    {
-      "asset_ids": [1, 2, 3]
-    }
+    Fetches latest metadata from provider and updates:
+    - asset_type (if provider supports)
+    - classification_params (sector, short_description, geographic_area)
+
+    **Field-level response**:
+    - refreshed_fields: Successfully updated from provider
+    - missing_data_fields: Provider couldn't fetch (no data available)
+    - ignored_fields: Provider doesn't support these fields
+
+    **Example Request**:
+    ```
+    POST /api/v1/assets/provider/refresh?asset_ids=1&asset_ids=2
     ```
 
-    **Response**:
+    **Example Response**:
     ```json
     {
       "results": [
         {
           "asset_id": 1,
           "success": true,
-          "message": "Metadata refreshed from yfinance",
-          "changes": [{"field": "sector", "old": null, "new": "Technology"}]
-        },
-        {
-          "asset_id": 2,
-          "success": false,
-          "message": "No provider assigned to asset"
-        },
-        {
-          "asset_id": 3,
-          "success": true,
-          "message": "No metadata changes"
+          "message": "Refreshed from yfinance",
+          "fields_detail": {
+            "refreshed_fields": ["asset_type", "sector", "short_description"],
+            "missing_data_fields": ["geographic_area"],
+            "ignored_fields": []
+          }
         }
       ],
-      "success_count": 2,
-      "failed_count": 1
+      "success_count": 1,
+      "failed_count": 0
     }
     ```
 
@@ -620,21 +700,22 @@ async def refresh_asset_metadata_bulk(
     - success=false: No provider, provider doesn't support metadata, or error
 
     Args:
-        request: Bulk refresh request with list of asset IDs
+        asset_ids: List of asset IDs to refresh
         session: Database session
 
     Returns:
-        FABulkMetadataRefreshResponse with per-item results and counts
+        FABulkMetadataRefreshResponse with per-item results and field-level details
 
     Raises:
         HTTPException: 500 if unexpected error occurs
     """
     try:
-        result = await AssetSourceManager.bulk_refresh_metadata(asset_ids, session)
+        result = await AssetSourceManager.refresh_assets_from_provider(asset_ids, session)
         return result
     except Exception as e:
-        logger.error(f"Error in bulk metadata refresh: {e}")
+        logger.error(f"Error refreshing assets from provider: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # Include sub-route in main router

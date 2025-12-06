@@ -96,7 +96,8 @@ async def list_providers():
                 name=provider_dict['name'],
                 base_currency=instance.base_currency,
                 base_currencies=base_currencies,
-                description=getattr(instance, 'description', f'{provider_dict["name"]} FX rate provider')
+                description=getattr(instance, 'description', f'{provider_dict["name"]} FX rate provider'),
+                icon_url=instance.get_icon()
                 ))
 
         return FXProvidersResponse(providers=providers, count=len(providers))

@@ -50,6 +50,10 @@ class ECBProvider(FXRateProvider):
     def name(self) -> str:
         return "European Central Bank"
 
+    def get_icon(self) -> str | None:
+        """ Returns the icon for the ECB provider """
+        return "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Logo_European_Central_Bank.svg/2484px-Logo_European_Central_Bank.svg.png"  # Default: no icon
+
     @property
     def base_currency(self) -> str:
         return "EUR"

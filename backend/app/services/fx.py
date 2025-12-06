@@ -1,6 +1,22 @@
 """
 FX (Foreign Exchange) service.
 Handles currency conversion and FX rate management with support for multiple providers.
+
+TODO (Plan 05b - Step 12): Schema changes to implement
+1. Update convert_currency methods to handle FXConversionRequest.date_range (DateRangeModel)
+   - Replace start_date/end_date parameters with date_range: DateRangeModel
+   - Extract date_range.start and date_range.end for internal logic
+2. Update delete_rates_bulk to handle FXDeleteItem.date_range (DateRangeModel)
+   - Replace start_date/end_date with date_range access
+3. Update FXDeleteResult construction to use DateRangeModel:
+   - Replace (start_date, end_date) with DateRangeModel(start=..., end=...)
+4. Update FXSyncResponse construction:
+   - Replace tuple date_range=(start, end) with DateRangeModel(start=start, end=end)
+5. Update FXConvertResponse construction:
+   - Add success_count calculation (required by BaseBulkResponse)
+   - Count successful conversions in results
+6. Update FXBulkDeleteResponse construction:
+   - Rename 'deleted_count' to 'total_deleted' (from BaseBulkDeleteResponse)
 """
 import asyncio
 from abc import ABC, abstractmethod
@@ -59,6 +75,15 @@ class FXRateProvider(ABC):
     def name(self) -> str:
         """Human-readable provider name (e.g., 'European Central Bank')."""
         pass
+
+    def get_icon(self) -> str | None:
+        """
+        Return provider icon URL (hardcoded).
+
+        Returns:
+            Optional icon URL string (can be remote or local path)
+        """
+        return None  # Default: no icon
 
     @property
     @abstractmethod

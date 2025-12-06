@@ -32,6 +32,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+from backend.app.schemas.common import DateRangeModel, BaseBulkResponse
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 
@@ -47,17 +48,7 @@ class FARefreshItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    start_date: date_type = Field(..., description="Start date for refresh")
-    end_date: date_type = Field(..., description="End date for refresh")
-
-
-class FABulkRefreshRequest(BaseModel):
-    """Request for bulk asset price refresh."""
-    model_config = ConfigDict(extra="forbid")
-
-    requests: List[FARefreshItem] = Field(..., min_length=1, description="List of refresh requests")
-    timeout: Optional[int] = Field(60, description="Timeout in seconds per provider call")
-
+    date_range: DateRangeModel = Field(..., description="Date range for refresh")
 
 class FARefreshResult(BaseModel):
     """Result of refresh for single asset."""
@@ -69,12 +60,9 @@ class FARefreshResult(BaseModel):
     updated_count: int = Field(..., description="Number of prices updated in DB")
     errors: List[str] = Field(default_factory=list)
 
-
-class FABulkRefreshResponse(BaseModel):
+class FABulkRefreshResponse(BaseBulkResponse[FARefreshResult]):
     """Response for bulk asset price refresh."""
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[FARefreshResult]
+    pass
 
 
 # ============================================================================
@@ -94,13 +82,6 @@ class FXSyncResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     synced: int = Field(..., description="Number of new rates inserted/updated")
-    date_range: tuple[date_type, date_type] = Field(..., description="Date range synced (ISO format)")
+    date_range: DateRangeModel = Field(..., description="Date range synced")
     currencies: List[str] = Field(..., description="Currencies synced")
 
-    @field_validator("date_range", mode="before")
-    @classmethod
-    def _parse_date_range(cls, v):
-        return parse_ISO_date(v[0]), parse_ISO_date(v[1])
-
-    def date_range_str(self) -> str:
-        return self.date_range[0].isoformat() + " to " + self.date_range[1].isoformat()

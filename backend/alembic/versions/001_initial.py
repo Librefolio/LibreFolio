@@ -34,6 +34,7 @@ def upgrade() -> None:
                                 id                    INTEGER PRIMARY KEY,
                                 display_name          VARCHAR     NOT NULL UNIQUE,
                                 currency              VARCHAR     NOT NULL,
+                                icon_url              VARCHAR,
                                 classification_params TEXT,
                                 asset_type            VARCHAR(14) NOT NULL,
                                 active                BOOLEAN     NOT NULL,

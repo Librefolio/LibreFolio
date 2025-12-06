@@ -50,6 +50,10 @@ class YahooFinanceProvider(AssetSourceProvider):
     def provider_name(self) -> str:
         return "Yahoo Finance"
 
+    def get_icon(self) -> str:
+        """ Return provider icon URL (hardcoded) """
+        return "https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" # Yahoo Finance logo
+
     @property
     def test_cases(self) -> list[dict]:
         """Test cases with identifier and provider_params."""
