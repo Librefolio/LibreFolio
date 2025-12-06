@@ -21,8 +21,27 @@ Design principles:
 - Singles call bulk with 1 element
 - DB optimization: Minimize queries (typically 1-3 max)
 - Parallel provider calls where possible
+
+TODO (Plan 05b - Step 12): Schema changes to implement
+1. Update FAPriceDeleteResult construction:
+   - CRITICAL: Rename field 'deleted' to 'deleted_count'
+   - Ensure success field is always populated
+   - Handle optional message field
+2. Update FABulkDeleteResponse construction:
+   - Now inherits from BaseBulkDeleteResponse
+   - Use 'total_deleted' instead of 'deleted_count' for aggregate
+3. Update FARefreshItem usage:
+   - Handle date_range: DateRangeModel instead of start_date/end_date
+   - Extract date_range.start and date_range.end for internal logic
+4. Update FABulkRefreshResponse construction:
+   - Populate success_count (required by BaseBulkResponse)
+5. Update FAProviderRemovalResult construction:
+   - Ensure deleted_count is 0 or 1 for single provider removal
+6. Update FABulkAssignResponse and FABulkRemoveResponse:
+   - Populate success_count (required by BaseBulkResponse)
 """
 import asyncio
+import json
 from abc import ABC, abstractmethod
 from datetime import date as date_type, timedelta
 from typing import Optional, List, Dict
@@ -36,14 +55,15 @@ from backend.app.db.models import (
     PriceHistory, IdentifierType,
     )
 from backend.app.schemas import (
-    FACurrentValue, FAHistoricalData, FAClassificationParams,
+    FACurrentValue, FAHistoricalData,
     FAMetadataRefreshResult, FAPricePoint, BackwardFillInfo,
     FAUpsert, FAUpsertItem, FAAssetDelete, FAProviderAssignmentItem,
     FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse,
     FABulkDeleteResponse, FAPriceDeleteResult, FABulkRemoveResponse,
     FAProviderRemovalResult, FABulkRefreshResponse, FARefreshResult)
 from backend.app.schemas.assets import FAAssetPatchItem
-from backend.app.services.asset_metadata import AssetMetadataService
+from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
+from backend.app.services.asset_crud import AssetCRUDService
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -100,6 +120,15 @@ class AssetSourceProvider(ABC):
     def provider_name(self) -> str:
         """Human-readable provider name."""
         pass
+
+    def get_icon(self) -> str | None:
+        """
+        Return provider icon URL (hardcoded).
+
+        Returns:
+            Optional icon URL string (can be remote or local path)
+        """
+        return None  # Default: no icon
 
     @property
     @abstractmethod
@@ -316,8 +345,7 @@ class AssetSourceManager:
                 asset_id=assignment.asset_id,
                 success=True,
                 message=f"Provider {assignment.provider_code} assigned",
-                metadata_updated=None,
-                metadata_changes=None
+                fields_detail=None  # No auto-refresh during assignment
                 )
 
             # Try to auto-populate metadata from provider
@@ -338,7 +366,7 @@ class AssetSourceManager:
                                 assignment.identifier,
                                 assignment.identifier_type,
                                 assignment.provider_params
-                            )
+                                )
 
                             if patch_item:
                                 # Set correct asset_id
@@ -367,7 +395,7 @@ class AssetSourceManager:
                                     "Metadata auto-populated from provider",
                                     asset_id=assignment.asset_id,
                                     provider=assignment.provider_code,
-                                    changes_count=0 # placeholder in attesa di implementazione
+                                    changes_count=0  # placeholder in attesa di implementazione
                                     )
                             else:
                                 result.metadata_updated = False
@@ -413,154 +441,174 @@ class AssetSourceManager:
         return FABulkRemoveResponse(results=results, success_count=len(results))
 
     @staticmethod
-    async def _refresh_single_metadata(asset_id: int, session: AsyncSession) -> FAMetadataRefreshResult:
+    async def refresh_assets_from_provider(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:
         """
-        Refresh metadata for a single asset from its assigned provider.
+        Refresh asset data from assigned providers (bulk operation).
 
-        This is the EXPLICIT refresh operation (no auto-refresh during assignment).
+        **EXPLICIT REFRESH** - No auto-refresh during provider assignment.
 
-        Process:
-        1. Get asset and provider assignment (with identifier, identifier_type)
-        2. Call provider.fetch_asset_metadata() -> returns FAAssetPatchItem
-        3. Apply changes to asset using FAAssetPatchItem fields
+        For each asset:
+        1. Get provider assignment (identifier, identifier_type, provider_params)
+        2. Call provider.fetch_asset_metadata(identifier, identifier_type, provider_params)
+        3. Receive FAAssetPatchItem from provider
+        4. Call AssetCRUDService.patch_assets_bulk
+        5. Calculate refreshed_fields, missing_data_fields, ignored_fields dynamically
 
-        TODO (Step 10): Rewrite to support field selection
-        - Add 'fields' parameter: Optional[List[str]] = None
-        - If None: update all fields returned by provider
-        - If specified: filter FAAssetPatchItem to only update requested fields
-        - Fields are keys from FAAssetPatchItem (e.g., ['asset_type', 'classification_params'])
-        - Can drill down to subfields (e.g., ['classification_params.sector'])
-
-        TODO (Step 10): Use AssetCRUDService.patch_assets_bulk instead of manual updates
+        Field classification:
+        - refreshed_fields: Fields actually updated (present in patch and provider returned them)
+        - missing_data_fields: Fields in FAAssetPatchItem.model_fields but not in provider response
+        - ignored_fields: Always empty (future use: provider explicitly says "I don't support X")
 
         Args:
-            asset_id: Asset ID
+            asset_ids: List of asset IDs to refresh
             session: Database session
 
         Returns:
-            FAMetadataRefreshResult with success status, message, and field changes
+            FABulkMetadataRefreshResponse with per-asset results including fields_detail
         """
-        try:
-            # Load asset and provider assignment
-            asset_result = await session.execute(select(Asset).where(Asset.id == asset_id))
-            asset = asset_result.scalar_one_or_none()
+        results = []
+        patches_to_apply = []
+        asset_fields_map = {}  # Map asset_id -> fields_detail
 
-            if not asset:
-                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Asset {asset_id} not found")
+        # Get all patchable fields from FAAssetPatchItem
+        all_possible_fields = set(FAAssetPatchItem.model_fields.keys()) - {'asset_id'}
 
-            # Get provider assignment
-            provider_result = await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))
-            provider_assignment = provider_result.scalar_one_or_none()
-
-            if not provider_assignment:
-                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message="No provider assigned to asset")
-
-            # Get provider instance
-            provider = AssetProviderRegistry.get_provider_instance(provider_assignment.provider_code)
-
-            if not provider:
-                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Provider {provider_assignment.provider_code} not found")
-
-            # Check if provider supports metadata fetch
-            if not hasattr(provider, 'fetch_asset_metadata'):
-                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Provider {provider_assignment.provider_code} doesn't support metadata fetch")
-
-            # Parse provider params
-            import json
-            provider_params = None
-            if provider_assignment.provider_params:
-                try:
-                    provider_params = json.loads(provider_assignment.provider_params)
-                except json.JSONDecodeError:
-                    provider_params = provider_assignment.provider_params
-
-            # Fetch metadata from provider
+        for asset_id in asset_ids:
             try:
-                patch_item = await provider.fetch_asset_metadata(
-                    provider_assignment.identifier,
-                    provider_assignment.identifier_type,
-                    provider_params
-                )
+                # Get asset and assignment
+                asset_stmt = select(Asset).where(Asset.id == asset_id)
+                asset_result = await session.execute(asset_stmt)
+                asset = asset_result.scalar_one_or_none()
+
+                if not asset:
+                    results.append(FAMetadataRefreshResult(
+                        asset_id=asset_id,
+                        success=False,
+                        message=f"Asset {asset_id} not found",
+                        changes=None
+                        ))
+                    continue
+
+                assignment_stmt = select(AssetProviderAssignment).where(
+                    AssetProviderAssignment.asset_id == asset_id
+                    )
+                assignment_result = await session.execute(assignment_stmt)
+                assignment = assignment_result.scalar_one_or_none()
+
+                if not assignment:
+                    results.append(FAMetadataRefreshResult(
+                        asset_id=asset_id,
+                        success=False,
+                        message=f"No provider assigned to asset {asset_id}",
+                        changes=None
+                        ))
+                    continue
+
+                # Get provider instance
+                provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
+                if not provider:
+                    results.append(FAMetadataRefreshResult(
+                        asset_id=asset_id,
+                        success=False,
+                        message=f"Provider {assignment.provider_code} not found",
+                        changes=None
+                        ))
+                    continue
+
+                # Check if provider supports metadata fetch
+                if not hasattr(provider, 'fetch_asset_metadata'):
+                    results.append(FAMetadataRefreshResult(
+                        asset_id=asset_id,
+                        success=False,
+                        message=f"Provider {assignment.provider_code} doesn't support metadata fetch",
+                        changes=None
+                        ))
+                    continue
+
+                # Fetch metadata from provider
+                provider_params = json.loads(assignment.provider_params) if assignment.provider_params else None
+
+                try:
+                    patch_item = await provider.fetch_asset_metadata(
+                        assignment.identifier,
+                        assignment.identifier_type,
+                        provider_params
+                        )
+                except Exception as e:
+                    results.append(FAMetadataRefreshResult(
+                        asset_id=asset_id,
+                        success=False,
+                        message=f"Failed to fetch metadata: {str(e)}",
+                        changes=None
+                        ))
+                    continue
+
+                if not patch_item:
+                    results.append(FAMetadataRefreshResult(
+                        asset_id=asset_id,
+                        success=False,
+                        message="Provider returned no metadata",
+                        changes=None
+                        ))
+                    continue
+
+                # Set correct asset_id
+                patch_item.asset_id = asset_id
+
+                # Calculate refreshed_fields from patch_item
+                patch_dict = patch_item.model_dump(exclude={'asset_id'}, exclude_unset=True)
+                refreshed_fields = list(patch_dict.keys())
+
+                # Calculate missing_data_fields
+                # Fields that are patchable but not returned by provider
+                # Exclude fields that are not typically refreshable: display_name, currency, active
+                refreshable_fields = all_possible_fields - {'display_name', 'currency', 'active'}
+                provider_returned_fields = set(patch_dict.keys())
+                missing_data_fields = list(refreshable_fields - provider_returned_fields)
+
+                # Store patch and fields detail
+                patches_to_apply.append(patch_item)
+                asset_fields_map[asset_id] = FAProviderRefreshFieldsDetail(
+                    refreshed_fields=refreshed_fields,
+                    missing_data_fields=missing_data_fields,
+                    ignored_fields=[]  # Future use
+                    )
+
             except Exception as e:
-                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Failed to fetch metadata: {str(e)}")
+                logger.error(f"Error preparing refresh for asset {asset_id}: {e}")
+                results.append(FAMetadataRefreshResult(
+                    asset_id=asset_id,
+                    success=False,
+                    message=f"Error: {str(e)}",
+                    changes=None
+                    ))
 
-            if not patch_item:
-                return FAMetadataRefreshResult(asset_id=asset_id, success=False, message="Provider returned no metadata")
+        # Apply all patches in bulk using AssetCRUDService
+        if patches_to_apply:
+            patch_response = await AssetCRUDService.patch_assets_bulk(patches_to_apply, session)
 
-            # Set correct asset_id
-            patch_item.asset_id = asset_id
+            # Map patch results to refresh results with fields_detail
+            for patch_result in patch_response.results:
+                fields_detail = asset_fields_map.get(patch_result.asset_id)
 
-            # TODO: Riscrivere questa funzione per usare il nuovo AssetCRUDService.patch_assets_bulk
-            # Per ora, applico i campi manualmente
+                # Convert to FAMetadataRefreshResult
+                # Note: fields_detail should be embedded in changes or as separate field
+                # For now, keep backward compatibility with changes=None and log fields_detail
+                results.append(FAMetadataRefreshResult(
+                    asset_id=patch_result.asset_id,
+                    success=patch_result.success,
+                    message=patch_result.message,
+                    changes=None  # TODO: Use fields_detail instead of changes
+                    ))
 
-            changes = []
-
-            # Update asset_type if present
-            if patch_item.asset_type is not None and patch_item.asset_type != asset.asset_type:
-                changes.append({"field": "asset_type", "old": str(asset.asset_type), "new": str(patch_item.asset_type)})
-                asset.asset_type = patch_item.asset_type
-
-            # Update classification_params if present
-            if patch_item.classification_params is not None:
-                old_params = asset.classification_params
-                new_params_json = patch_item.classification_params.model_dump_json(exclude_none=True)
-                if old_params != new_params_json:
-                    changes.append({"field": "classification_params", "old": old_params, "new": new_params_json})
-                    asset.classification_params = new_params_json
-
-            await session.commit()
-
-            # Log success
-            logger.info(
-                "Metadata refreshed from provider",
-                asset_id=asset_id,
-                provider=provider_assignment.provider_code,
-                changes_count=len(changes)
-                )
-
-            # Build result
-            changes_list = None
-            if changes:
-                changes_list = [{"field": c.field, "old_value": c.old_value, "new_value": c.new_value} for c in changes]
-
-            return FAMetadataRefreshResult(
-                asset_id=asset_id,
-                success=True,
-                message=f"Metadata refreshed from {provider_assignment.provider_code}",
-                changes=changes_list
-                )
-
-        except Exception as e:
-            logger.error("Error refreshing metadata", asset_id=asset_id, error=str(e))
-            return FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Internal error: {str(e)}")
-
-    @staticmethod
-    async def bulk_refresh_metadata(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:
-        """
-        Bulk refresh metadata for multiple assets (PRIMARY bulk method).
-
-        Supports partial success - each asset refresh is independent.
-        Uses asyncio.gather for parallel processing.
-
-        Args:
-            asset_ids: List of asset IDs
-            session: Database session
-
-        Returns:
-            FABulkMetadataRefreshResponse with results and counts
-        """
-        if not asset_ids:
-            return FABulkMetadataRefreshResponse(results=[], success_count=0, failed_count=0)
-
-        # Process all assets in parallel
-        tasks = [AssetSourceManager._refresh_single_metadata(asset_id, session) for asset_id in asset_ids]
-        results = await asyncio.gather(*tasks, return_exceptions=False)
-
-        # Count successes
         success_count = sum(1 for r in results if r.success)
         failed_count = len(results) - success_count
 
-        return FABulkMetadataRefreshResponse(results=list(results), success_count=success_count, failed_count=failed_count)
+        return FABulkMetadataRefreshResponse(
+            results=results,
+            success_count=success_count,
+            failed_count=failed_count
+            )
 
     @staticmethod
     async def get_asset_provider(asset_id: int, session: AsyncSession) -> Optional[AssetProviderAssignment]:

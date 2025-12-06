@@ -40,7 +40,7 @@ from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Import from common and prices modules
-from backend.app.schemas.common import BackwardFillInfo
+from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
 from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
 from backend.app.utils.validation_utils import validate_compound_frequency, normalize_currency_code
@@ -453,14 +453,6 @@ class FAPatchMetadataItem(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     patch: FAClassificationParams
 
-
-class FABulkPatchMetadataRequest(BaseModel):
-    """Bulk metadata patch payload matching FA bulk patterns."""
-    model_config = ConfigDict(extra="forbid")
-
-    assets: List[FAPatchMetadataItem] = Field(..., min_length=1, description="List of metadata patches")
-
-
 class FAAssetMetadataResponse(BaseModel):
     """
     Asset with metadata fields.
@@ -470,19 +462,18 @@ class FAAssetMetadataResponse(BaseModel):
     Fields:
     - asset_id: Asset database ID
     - display_name: User-friendly asset name
-    - identifier: Asset identifier (ISIN, ticker, etc.)
     - currency: Asset currency code
+    - icon_url: Asset icon URL (optional)
     - asset_type: Asset type (STOCK, BOND, ETF, etc.)
     - classification_params: Optional classification metadata
     - has_provider: Whether asset has pricing provider assigned
-    - has_metadata: Whether asset has classification metadata
     """
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     display_name: str
-    identifier: str
     currency: str
+    icon_url: Optional[str] = None
     asset_type: Optional[str] = None
     classification_params: Optional[FAClassificationParams] = None
     has_provider: bool = False
@@ -511,18 +502,9 @@ class FAMetadataRefreshResult(BaseModel):
     changes: Optional[List[FAMetadataChangeDetail]] = None
     warnings: Optional[List[str]] = None
 
-class FABulkMetadataRefreshResponse(BaseModel):
-    """
-    Bulk metadata refresh response (partial success).
-
-    Follows FA pattern: { results, success_count, failed_count }
-    """
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[FAMetadataRefreshResult]
-    success_count: int
-    failed_count: int
-
+class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
+    """Bulk metadata refresh response (partial success)."""
+    pass
 
 # ============================================================================
 # ASSET CRUD SCHEMAS
@@ -539,6 +521,7 @@ class FAAssetCreateItem(BaseModel):
     display_name: str = Field(..., description="Human-readable asset name (must be unique)")
     currency: str = Field(..., min_length=3, max_length=3, description="Asset currency (ISO 4217)")
     asset_type: Optional[AssetType] = Field(None, description="Asset type (STOCK, ETF, BOND, CROWDFUND_LOAN, etc.)")
+    icon_url: Optional[str] = Field(None, description="URL to asset icon (local or remote)")
 
     # Classification metadata (optional)
     classification_params: Optional[FAClassificationParams] = Field(None, description="Asset classification metadata")
@@ -549,12 +532,6 @@ class FAAssetCreateItem(BaseModel):
         return normalize_currency_code(v)
 
 
-class FABulkAssetCreateRequest(BaseModel):
-    """Bulk asset creation request."""
-    model_config = ConfigDict(extra="forbid")
-
-    assets: List[FAAssetCreateItem] = Field(..., min_length=1, description="List of assets to create")
-
 
 class FAAssetCreateResult(BaseModel):
     """Result of single asset creation in bulk operation."""
@@ -564,16 +541,18 @@ class FAAssetCreateResult(BaseModel):
     success: bool = Field(..., description="Whether creation succeeded")
     message: str = Field(..., description="Success message or error description")
     display_name: str = Field(..., description="Asset display name (for identification)")
-    identifier: str = Field(..., description="Asset identifier (for identification)")
 
 
-class FABulkAssetCreateResponse(BaseModel):
+class FABulkAssetCreateResponse(BaseBulkResponse[FAAssetCreateResult]):
     """Bulk asset creation response (partial success allowed)."""
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[FAAssetCreateResult] = Field(..., description="Per-asset creation results")
-    success_count: int = Field(..., description="Number of successfully created assets")
-    failed_count: int = Field(..., description="Number of failed asset creations")
+    # Inherits from BaseBulkResponse:
+    # - results: List[FAAssetCreateResult]
+    # - success_count: int
+    # - errors: List[str]
+    # Computed properties:
+    # - failed_count: int (computed from len(results) - success_count)
+    # - total_count: int
+    pass
 
 
 class FAAinfoFiltersRequest(BaseModel):
@@ -593,11 +572,9 @@ class FAinfoResponse(BaseModel):
 
     id: int = Field(..., description="Asset ID")
     display_name: str = Field(..., description="Asset display name")
-    identifier: str = Field(..., description="Asset identifier")
-    identifier_type: Optional[str] = Field(None, description="Identifier type")
     currency: str = Field(..., description="Asset currency")
+    icon_url: Optional[str] = Field(None, description="Asset icon URL")
     asset_type: Optional[str] = Field(None, description="Asset type")
-    valuation_model: Optional[str] = Field(None, description="Valuation model")
     active: bool = Field(..., description="Whether asset is active")
     has_provider: bool = Field(..., description="Whether asset has a provider assigned")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
@@ -610,22 +587,19 @@ class FABulkAssetDeleteRequest(BaseModel):
     asset_ids: List[int] = Field(..., min_length=1, description="List of asset IDs to delete")
 
 
-class FAAssetDeleteResult(BaseModel):
+class FAAssetDeleteResult(BaseDeleteResult):
     """Result of single asset deletion in bulk operation."""
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    success: bool = Field(..., description="Whether deletion succeeded")
-    message: str = Field(..., description="Success message or error description")
+    # Inherits from BaseDeleteResult:
+    # - success: bool
+    # - deleted_count: int (always 0 or 1 for single asset)
+    # - message: Optional[str]
 
-
-class FABulkAssetDeleteResponse(BaseModel):
+class FABulkAssetDeleteResponse(BaseBulkResponse[FAAssetDeleteResult]):
     """Bulk asset deletion response (partial success allowed)."""
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[FAAssetDeleteResult] = Field(..., description="Per-asset deletion results")
-    success_count: int = Field(..., description="Number of successfully deleted assets")
-    failed_count: int = Field(..., description="Number of failed asset deletions")
+    pass
 
 
 # ============================================================================
@@ -651,6 +625,7 @@ class FAAssetPatchItem(BaseModel):
     display_name: Optional[str] = Field(None, description="Update display name")
     currency: Optional[str] = Field(None, min_length=3, max_length=3, description="Update currency (ISO 4217)")
     asset_type: Optional[AssetType] = Field(None, description="Update asset type (STOCK, ETF, BOND, etc.)")
+    icon_url: Optional[str] = Field(None, description="Update icon URL (None = clear)")
     classification_params: Optional[FAClassificationParams] = Field(None, description="Update classification (None = clear)")
     active: Optional[bool] = Field(None, description="Update active status")
 
@@ -660,12 +635,6 @@ class FAAssetPatchItem(BaseModel):
         """Normalize currency to uppercase."""
         return normalize_currency_code(v) if v else None
 
-
-class FABulkAssetPatchRequest(BaseModel):
-    """Bulk asset patch request."""
-    model_config = ConfigDict(extra="forbid")
-
-    assets: List[FAAssetPatchItem] = Field(..., min_length=1, description="List of assets to patch")
 
 
 class FAAssetPatchResult(BaseModel):
@@ -677,14 +646,9 @@ class FAAssetPatchResult(BaseModel):
     message: str = Field(..., description="Success message or error description")
     updated_fields: Optional[List[str]] = Field(None, description="List of fields updated")
 
-
-class FABulkAssetPatchResponse(BaseModel):
+class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
     """Bulk asset patch response (partial success allowed)."""
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[FAAssetPatchResult] = Field(..., description="Per-asset patch results")
-    success_count: int = Field(..., description="Number of successfully patched assets")
-    failed_count: int = Field(..., description="Number of failed asset patches")
+    pass
 
 
 # Export convenience
@@ -713,23 +677,18 @@ __all__ = [
     "FAMetadataRefreshResult",
     "FABulkMetadataRefreshResponse",
     "FAPatchMetadataItem",
-    "FABulkPatchMetadataRequest",
     # Asset CRUD schemas
     "FAAssetCreateItem",
-    "FABulkAssetCreateRequest",
     "FAAssetCreateResult",
     "FABulkAssetCreateResponse",
     "FAAinfoFiltersRequest",
     "FAinfoResponse",
-    "FABulkAssetDeleteRequest",
     "FAAssetDeleteResult",
     "FABulkAssetDeleteResponse",
     # Asset PATCH schemas
     "FAAssetPatchItem",
-    "FABulkAssetPatchRequest",
-    "FAAssetPatchResult",
     "FABulkAssetPatchResponse",
-    "FAAinfoFiltersRequest",
+    "FAAssetPatchResult",
     "FAinfoResponse",
     "FABulkAssetDeleteRequest",
     "FAAssetDeleteResult",

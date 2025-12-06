@@ -35,7 +35,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from backend.app.schemas.common import BackwardFillInfo
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, BaseDeleteResult, BaseBulkResponse, BaseBulkDeleteResponse
 from backend.app.utils.datetime_utils import parse_ISO_date
 from backend.app.utils.validation_utils import normalize_currency_code
 
@@ -55,14 +55,8 @@ class FXProviderInfo(BaseModel):
     base_currency: str = Field(..., description="Default base currency")
     base_currencies: list[str] = Field(..., description="All supported base currencies")
     description: str = Field(..., description="Provider description")
+    icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
 
-
-class FXProvidersResponse(BaseModel):
-    """Response model for listing FX providers."""
-    model_config = ConfigDict()
-
-    providers: list[FXProviderInfo] = Field(..., description="List of available providers")
-    count: int = Field(..., description="Number of providers")
 
 
 # ============================================================================
@@ -73,9 +67,8 @@ class FXProvidersResponse(BaseModel):
 # ============================================================================
 
 class FXConversionRequest(BaseModel):
-    """Single conversion request with optional date range."""
+    """Single conversion request with date range."""
     model_config = ConfigDict(
-
         populate_by_name=True,
         str_strip_whitespace=True,
         )
@@ -83,8 +76,7 @@ class FXConversionRequest(BaseModel):
     amount: Decimal = Field(..., gt=0, description="Amount to convert (must be positive)")
     from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
-    start_date: date_type = Field(..., description="Start date (required). If end_date is not provided, only this date is used")
-    end_date: Optional[date_type] = Field(None, description="End date (optional). If provided, converts for all dates from start_date to end_date (inclusive)")
+    date_range: DateRangeModel = Field(..., description="Date range for conversion (start required, end optional for single day)")
 
     @field_validator('amount', mode='before')
     @classmethod
@@ -100,13 +92,6 @@ class FXConversionRequest(BaseModel):
     @classmethod
     def uppercase_currency(cls, v):
         return normalize_currency_code(v)
-
-
-class FXConvertRequest(BaseModel):
-    """Request model for bulk currency conversion."""
-    model_config = ConfigDict()
-
-    conversions: list[FXConversionRequest] = Field(..., min_length=1, description="List of conversions to perform")
 
 
 class FXConversionResult(BaseModel):
@@ -135,12 +120,11 @@ class FXConversionResult(BaseModel):
         return self.conversion_date.isoformat()
 
 
-class FXConvertResponse(BaseModel):
+class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
     """Response model for bulk currency conversion."""
-    model_config = ConfigDict()
-
-    results: list[FXConversionResult] = Field(..., description="Conversion results in order")
-    errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
+    # Inherits: results, success_count, errors
+    # Note: success_count should be populated by service layer
+    pass
 
 
 # ============================================================================
@@ -177,12 +161,6 @@ class FXUpsertItem(BaseModel):
         return normalize_currency_code(v)
 
 
-class FXBulkUpsertRequest(BaseModel):
-    """Request model for bulk rate upsert."""
-    model_config = ConfigDict()
-
-    rates: list[FXUpsertItem] = Field(..., min_length=1, description="List of rates to insert/update")
-
 
 class FXUpsertResult(BaseModel):
     """Single rate upsert result."""
@@ -203,14 +181,9 @@ class FXUpsertResult(BaseModel):
     def date_str(self) -> str:
         return self.date.isoformat()
 
-
-class FXBulkUpsertResponse(BaseModel):
+class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
     """Response model for bulk rate upsert."""
-    model_config = ConfigDict()
-
-    results: list[FXUpsertResult] = Field(..., description="Upsert results in order")
-    success_count: int = Field(..., description="Number of successful operations")
-    errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
+    pass
 
 
 # ============================================================================
@@ -226,8 +199,7 @@ class FXDeleteItem(BaseModel):
 
     from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
-    start_date: date_type = Field(..., description="Start date (required). If end_date is not provided, only this date is deleted")
-    end_date: Optional[date_type] = Field(None, description="End date (optional). If provided, deletes all dates from start_date to end_date (inclusive)")
+    date_range: DateRangeModel = Field(..., description="Date range to delete (start required, end optional for single day)")
 
     @field_validator('from_currency', 'to_currency', mode='before')
     @classmethod
@@ -235,47 +207,26 @@ class FXDeleteItem(BaseModel):
         return normalize_currency_code(v)
 
 
-class FXBulkDeleteRequest(BaseModel):
-    """Request model for bulk rate deletion."""
-    deletions: list[FXDeleteItem] = Field(..., min_length=1, description="List of rates to delete")
+class FXDeleteResult(BaseDeleteResult):
+    """Single FX rate deletion result."""
 
-
-class FXDeleteResult(BaseModel):
-    """Single rate deletion result."""
-    success: bool = Field(..., description="Whether the operation succeeded (always True, errors are graceful)")
     base: str = Field(..., description="Base currency (normalized)")
     quote: str = Field(..., description="Quote currency (normalized)")
-    start_date: date_type = Field(..., description="Start date (ISO format)")
-    end_date: Optional[date_type] = Field(None, description="End date (ISO format) if range deletion")
+    date_range: DateRangeModel = Field(..., description="Date range deleted")
     existing_count: int = Field(..., description="Number of rates present before deletion")
-    deleted_count: int = Field(..., description="Number of rates actually deleted")
-    message: Optional[str] = Field(None, description="Warning/info message (e.g., 'no rates found')")
+    # Inherits from BaseDeleteResult:
+    # - success: bool
+    # - deleted_count: int (number of FX rates actually deleted)
+    # - message: Optional[str] (e.g., 'no rates found')
 
-    @field_validator("start_date", mode="before")
-    @classmethod
-    def _parse_start_date(cls, v):
-        return parse_ISO_date(v)
-
-    @field_validator("end_date", mode="before")
-    @classmethod
-    def _parse_end_date(cls, v):
-        if v is None:  # end_date is optional and can be None
-            return None
-        return parse_ISO_date(v)
-
-    def start_date_str(self) -> str:
-        return self.start_date.isoformat()
-
-    def end_date_str(self) -> Optional[str]:
-        return self.end_date.isoformat() if self.end_date else None
-
-
-class FXBulkDeleteResponse(BaseModel):
-    """Response model for bulk rate deletion."""
-    results: list[FXDeleteResult] = Field(..., description="Deletion results in order")
-    total_deleted: int = Field(..., description="Total number of rates deleted across all requests")
-    errors: list[str] = Field(default_factory=list, description="Errors encountered (if any)")
-
+class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
+    """Response model for bulk FX rate deletion."""
+    # Inherits from BaseBulkDeleteResponse:
+    # - results: List[FXDeleteResult]
+    # - success_count: int
+    # - errors: List[str]
+    # - total_deleted: int (total FX rates deleted)
+    pass
 
 # ============================================================================
 # PAIR SOURCE CONFIGURATION MODELS
@@ -283,9 +234,7 @@ class FXBulkDeleteResponse(BaseModel):
 
 class FXPairSourceItem(BaseModel):
     """Configuration for a currency pair source."""
-    model_config = ConfigDict(
-        str_strip_whitespace=True,
-        )
+    model_config = ConfigDict(str_strip_whitespace=True,)
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
@@ -304,9 +253,6 @@ class FXPairSourcesResponse(BaseModel):
     count: int = Field(..., description="Number of configured sources")
 
 
-class FXCreatePairSourcesRequest(BaseModel):
-    """Request model for creating/updating pair sources."""
-    sources: list[FXPairSourceItem] = Field(..., min_length=1, description="Pair sources to create/update")
 
 
 class FXPairSourceResult(BaseModel):
@@ -320,19 +266,15 @@ class FXPairSourceResult(BaseModel):
     message: Optional[str] = Field(None, description="Additional info/warning")
 
 
-class FXCreatePairSourcesResponse(BaseModel):
+class FXCreatePairSourcesResponse(BaseBulkResponse[FXPairSourceResult]):
     """Response model for bulk pair source creation."""
-    results: list[FXPairSourceResult] = Field(..., description="Results for each source")
-    success_count: int = Field(..., description="Number of successful operations")
+    # Operation-specific field
     error_count: int = Field(default=0, description="Number of failed operations")
-    errors: list[str] = Field(default_factory=list, description="Errors encountered")
 
 
 class FXDeletePairSourceItem(BaseModel):
     """Single pair source to delete."""
-    model_config = ConfigDict(
-        str_strip_whitespace=True,
-        )
+    model_config = ConfigDict(str_strip_whitespace=True,)
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
@@ -344,29 +286,26 @@ class FXDeletePairSourceItem(BaseModel):
         return normalize_currency_code(v)
 
 
-class FXDeletePairSourcesRequest(BaseModel):
-    """Request model for deleting pair sources."""
-    sources: list[FXDeletePairSourceItem] = Field(
-        ...,
-        min_length=1,
-        description="Pair sources to delete"
-        )
-
-
-class FXDeletePairSourceResult(BaseModel):
+# TODO: approfondire se questo tipo di dettagli serve nel risultato di delete
+class FXDeletePairSourceResult(BaseDeleteResult):
     """Result of a single pair source deletion."""
-    success: bool = Field(..., description="Whether the operation succeeded")
+
     base: str = Field(..., description="Base currency")
     quote: str = Field(..., description="Quote currency")
     priority: Optional[int] = Field(None, description="Priority level (if specified)")
-    deleted_count: int = Field(..., description="Number of records deleted")
-    message: Optional[str] = Field(None, description="Warning/error message if any")
+    # Inherits from BaseDeleteResult:
+    # - success: bool
+    # - deleted_count: int (number of pair source records deleted)
+    # - message: Optional[str]
 
-
-class FXDeletePairSourcesResponse(BaseModel):
+class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResult]):
     """Response model for DELETE /pair-sources/bulk."""
-    results: list[FXDeletePairSourceResult] = Field(..., description="Results for each deletion")
-    total_deleted: int = Field(..., description="Total number of records deleted")
+    # Inherits from BaseBulkDeleteResponse:
+    # - results: List[FXDeletePairSourceResult]
+    # - success_count: int
+    # - errors: List[str]
+    # - total_deleted: int (total pair source records deleted)
+    pass
 
 
 # ============================================================================

@@ -27,6 +27,11 @@ Usage:
 
     # Compute diff
     changes = AssetMetadataService.compute_metadata_diff(old, new)
+
+TODO (Plan 05b - Step 12): Schema changes to implement
+1. Update FABulkMetadataRefreshResponse construction:
+   - Populate success_count (required by BaseBulkResponse)
+   - Ensure errors list is properly populated
 """
 import json
 from typing import Optional

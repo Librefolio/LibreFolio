@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from backend.app.db.models import IdentifierType
+from backend.app.schemas.common import BaseDeleteResult, BaseBulkResponse
 
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
@@ -44,14 +45,8 @@ class FAProviderInfo(BaseModel):
     code: str = Field(..., description="Provider code (e.g., yfinance, cssscraper)")
     name: str = Field(..., description="Provider full name")
     description: str = Field(..., description="Provider description")
+    icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
     supports_search: bool = Field(..., description="Whether provider supports asset search")
-
-
-class FAProvidersResponse(BaseModel):
-    """Response containing list of available FA providers."""
-    model_config = ConfigDict(extra="forbid")
-
-    providers: List[FAProviderInfo]
 
 
 # ============================================================================
@@ -70,12 +65,6 @@ class FXProviderInfo(BaseModel):
     base_currencies: List[str] = Field(..., description="Supported base currencies")
     description: Optional[str] = Field(None, description="Provider description")
 
-
-class FXProvidersResponse(BaseModel):
-    """Response containing list of available FX providers."""
-    model_config = ConfigDict(extra="forbid")
-
-    providers: List[FXProviderInfo]
 
 
 # ============================================================================
@@ -149,14 +138,6 @@ class FAProviderAssignmentReadItem(BaseModel):
 
 
 
-
-class FABulkAssignRequest(BaseModel):
-    """Request for bulk FA provider assignment."""
-    model_config = ConfigDict(extra="forbid")
-
-    assignments: List[FAProviderAssignmentItem] = Field(..., min_length=1, description="List of provider assignments")
-
-
 class FAProviderRefreshFieldsDetail(BaseModel):
     """Field-level details for provider refresh operation.
 
@@ -178,38 +159,27 @@ class FAProviderAssignmentResult(BaseModel):
     message: str
     fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(None, description="Field-level refresh details (for refresh operations)")
 
-
-class FABulkAssignResponse(BaseModel):
+class FABulkAssignResponse(BaseBulkResponse[FAProviderAssignmentResult]):
     """Response for bulk FA provider assignment."""
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[FAProviderAssignmentResult]
-    success_count: int
+    pass
 
 
 # ============================================================================
 # FA PROVIDER REMOVAL
 # ============================================================================
 
-class FABulkRemoveRequest(BaseModel):
-    """Request for bulk FA provider removal."""
-    model_config = ConfigDict(extra="forbid")
 
-    asset_ids: List[int] = Field(..., min_length=1, description="List of asset IDs to remove providers from")
-
-
-class FAProviderRemovalResult(BaseModel):
+class FAProviderRemovalResult(BaseDeleteResult):
     """Result of single FA provider removal."""
     model_config = ConfigDict(extra="forbid")
 
-    asset_id: int
-    success: bool
-    message: str
+    asset_id: int = Field(..., description="Asset ID")
+    # Inherits from BaseDeleteResult:
+    # - success: bool
+    # - deleted_count: int (always 0 or 1 for single provider removal)
+    # - message: Optional[str]
 
 
-class FABulkRemoveResponse(BaseModel):
+class FABulkRemoveResponse(BaseBulkResponse[FAProviderRemovalResult]):
     """Response for bulk FA provider removal."""
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[FAProviderRemovalResult]
-    success_count: int
+    pass

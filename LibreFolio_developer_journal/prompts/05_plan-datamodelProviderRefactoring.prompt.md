@@ -375,7 +375,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 
 ---
 
-### 9. Riorganizzare API endpoints in assets.py
+### ✅ 9. Riorganizzare API endpoints in assets.py - COMPLETATO
 
 **File**: `backend/app/api/v1/assets.py`
 
@@ -533,11 +533,12 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 
 ---
 
-### 10. Implementare merge logic PATCH in asset_crud.py
+### ✅ 10. Implementare merge logic PATCH in asset_crud.py - COMPLETATO
 
 **File**: `backend/app/services/asset_crud.py`
 
 **Changes**:
+- Completare i pending TODO in asset_source.py e asset_providers che sono stati lasciati in attesa di questo step
 - Aggiungere metodo `patch_assets_bulk` dopo `delete_assets_bulk`:
   ```python
   @staticmethod
@@ -653,7 +654,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 
 ---
 
-### 11. Aggiornare AssetSourceManager in asset_source.py
+### ✅ 11. Aggiornare AssetSourceManager in asset_source.py - COMPLETATO
 
 **File**: `backend/app/services/asset_source.py`
 
@@ -924,7 +925,53 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 
 ---
 
-### 12. Adattare tutti i test
+## 🧹 BEFORE STEP 12: Execute Schema Cleanup Plan
+
+**⚠️ IMPORTANTE**: Prima di procedere con Step 12 (test updates), eseguire il piano di pulizia schema:
+
+📄 **Vedere**: `05b_plan-datamodelProviderRefactoring.prompt.md`
+
+**Motivo**: Durante la review del codice sono stati identificati:
+- 16 classi wrapper inutili che contengono solo `List[...]`
+- 5 classi che dovrebbero usare `DateRangeModel`
+- 2 coppie di classi duplicate/simili da consolidare
+
+Eseguendo la pulizia **prima** di aggiornare i test, si evita di dover modificare i test due volte.
+
+**Contenuto del piano 05b**:
+- Rimozione wrapper classes (FABulkAssignRequest, FXConvertRequest, etc.)
+- Integrazione DateRangeModel in FXConversionRequest, FXDeleteItem, FARefreshItem
+- Consolidamento FAPricePoint + FAUpsertItem
+- Standardizzazione pattern response bulk operations con `BaseBulkResponse[TResult]`
+- Aggiornamento endpoint per accettare `List[ItemType]` direttamente
+
+Una volta completato il piano 05b, procedere con Step 12.
+
+---
+
+### 12. Adattare tutti i test - VEDERE PIANO UNIFICATO
+
+**⚠️ IMPORTANTE**: I test vanno aggiornati DOPO aver completato sia il piano 05 che il piano 05b.
+
+📄 **Piano Unificato Test**: `05c_plan-testUpdates.prompt.md`
+
+**Perché un piano separato?**
+- Evita di aggiornare i test due volte
+- Consolida tutti i cambi necessari da piano 05 + 05b
+- Fornisce checklist completa di validazione
+
+**Contenuto piano test**:
+- Step 1-10: Aggiornamenti per fixture, CRUD, provider, prices, FX, etc.
+- Validazione wrapper classes removal
+- Validazione DateRangeModel integration
+- Validazione BaseBulkResponse structure
+- Checklist finale di validazione
+
+**Non procedere con Step 12** senza aver consultato il piano unificato test.
+
+---
+
+## Riepilogo Ordine Esecuzione
 
 **File**: `backend/test_scripts/**/*.py`
 

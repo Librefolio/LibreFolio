@@ -20,4 +20,7 @@ Before we continue with the next step, please:
 ✅ Let me know if anything looks inconsistent or needs cleanup
 ✅ Then I’ll send you the next prompt to continue development
 
+And remeber, actualy this project exist only on this machine, so is always preferable change code without keep backward compatibility or legacy code.
+Our goal is to have a clean and maintainable codebase to share with the user when the project will be finishing.
+
 Thanks!

@@ -31,7 +31,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, BaseDeleteResult, BaseBulkResponse, BaseBulkDeleteResponse
 from backend.app.utils.validation_utils import normalize_currency_code
 
 
@@ -39,10 +39,12 @@ from backend.app.utils.validation_utils import normalize_currency_code
 # FA PRICE UPSERT
 # ============================================================================
 
-class FAUpsertItem(BaseModel):
-    """Single price point for upsert (OHLC + volume).
+class FAPricePoint(BaseModel):
+    """Single price point with OHLC data.
 
-    Represents one day's price data for an asset.
+    Used for both:
+    - Upsert operations (backward_fill_info is None)
+    - Query results (backward_fill_info may be present)
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -53,6 +55,7 @@ class FAUpsertItem(BaseModel):
     close: Decimal = Field(..., description="Closing price (required)")
     volume: Optional[Decimal] = Field(None, description="Trading volume")
     currency: str = Field(..., description="Currency code (ISO 4217)")
+    backward_fill_info: Optional[BackwardFillInfo] = Field(None, description="Backward-fill info (only in query results)")
 
     @field_validator("currency")
     @classmethod
@@ -75,14 +78,7 @@ class FAUpsert(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    prices: List[FAUpsertItem] = Field(..., min_length=1, description="List of price points")
-
-
-class FABulkUpsertRequest(BaseModel):
-    """Request for bulk price upsert across multiple assets."""
-    model_config = ConfigDict(extra="forbid")
-
-    assets: List[FAUpsert] = Field(..., min_length=1, description="List of asset price upserts")
+    prices: List[FAPricePoint] = Field(..., min_length=1, description="List of price points")
 
 
 class FAUpsertResult(BaseModel):
@@ -93,14 +89,11 @@ class FAUpsertResult(BaseModel):
     count: int
     message: str
 
-
-class FABulkUpsertResponse(BaseModel):
+class FABulkUpsertResponse(BaseBulkResponse[FAUpsertResult]):
     """Response for bulk price upsert."""
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[FAUpsertResult]
-    inserted_count: int
-    updated_count: int
+    # Operation-specific fields
+    inserted_count: int = Field(..., description="Number of prices inserted")
+    updated_count: int = Field(..., description="Number of prices updated")
 
 
 # ============================================================================
@@ -119,28 +112,27 @@ class FAAssetDelete(BaseModel):
     date_ranges: List[DateRangeModel] = Field(..., min_length=1, description="List of date ranges to delete")
 
 
-class FAPriceBulkDeleteRequest(BaseModel):
-    """Request for bulk price deletion across multiple assets."""
-    model_config = ConfigDict(extra="forbid")
-
-    assets: List[FAAssetDelete] = Field(..., min_length=1, description="List of asset price deletions")
 
 
-class FAPriceDeleteResult(BaseModel):
+class FAPriceDeleteResult(BaseDeleteResult):
     """Result of price deletion for single asset."""
     model_config = ConfigDict(extra="forbid")
 
-    asset_id: int
-    deleted: int
-    message: str
+    asset_id: int = Field(..., description="Asset ID")
+    # Inherits from BaseDeleteResult:
+    # - success: bool
+    # - deleted_count: int (number of price records deleted)
+    # - message: Optional[str]
 
 
-class FABulkDeleteResponse(BaseModel):
+class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
     """Response for bulk price deletion."""
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[FAPriceDeleteResult]
-    deleted_count: int
+    # Inherits from BaseBulkDeleteResponse:
+    # - results: List[FAPriceDeleteResult]
+    # - success_count: int
+    # - errors: List[str]
+    # - total_deleted: int (total price records deleted)
+    pass
 
 
 # ============================================================================
@@ -159,27 +151,6 @@ class FACurrentValue(BaseModel):
     @field_validator("value", mode="before")
     @classmethod
     def parse_decimal(cls, v):
-        return Decimal(str(v))
-
-
-class FAPricePoint(BaseModel):
-    """Single price point with OHLC data and optional backward-fill info."""
-    model_config = ConfigDict(extra="forbid")
-
-    date: date_type
-    open: Optional[Decimal] = None
-    high: Optional[Decimal] = None
-    low: Optional[Decimal] = None
-    close: Decimal
-    volume: Optional[Decimal] = None
-    currency: Optional[str] = None
-    backward_fill_info: Optional[BackwardFillInfo] = None
-
-    @field_validator("open", "high", "low", "close", "volume", mode="before")
-    @classmethod
-    def parse_optional_decimal(cls, v):
-        if v is None:
-            return None
         return Decimal(str(v))
 
 
