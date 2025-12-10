@@ -324,7 +324,11 @@ class AssetCRUDService:
                     # TODO: trasforma il log in debug una volta testato
                     logger.info(f"Patching field '{field}': '{value}'")
                     if field == "classification_params": # merge new sub-field with old ones
-                        value = mergedeep.merge({}, asset_classification_params_before, value)
+                        # Empty dict = clear all classification_params
+                        if not value:  # Empty dict or None
+                            value = {}
+                        else:
+                            value = mergedeep.merge({}, asset_classification_params_before, value)
                         # Set empty strings to None to allow exclusion
                         value = {k: v if v != "" else None for k, v in value.items()}
                         # Store only setted params, delete
