@@ -16,6 +16,7 @@ from decimal import Decimal
 
 import pytest
 
+from backend.app.db import TransactionType
 from backend.app.schemas.assets import (
     FAInterestRatePeriod,
     FALateInterestConfig,
@@ -29,15 +30,17 @@ from backend.app.services.asset_source_providers.scheduled_investment import Sch
 
 # Helper to run provider current value with override
 async def _current_value(params: dict) -> Decimal:
+    from backend.app.db.models import IdentifierType
     provider = ScheduledInvestmentProvider()
-    result = await provider.get_current_value("1", params)
+    result = await provider.get_current_value("1", IdentifierType.OTHER, params)
     return result.value
 
 
 # Helper to run provider history with override
 async def _history_values(params: dict, start: date, end: date):
+    from backend.app.db.models import IdentifierType
     provider = ScheduledInvestmentProvider()
-    result = await provider.get_history_value("1", params, start, end)
+    result = await provider.get_history_value("1", IdentifierType.OTHER, params, start, end)
     return [p.close for p in result.prices]
 
 
@@ -65,7 +68,7 @@ async def test_e2e_p2p_loan_two_periods_late_interest():
 
     params = json.loads(schedule_model.model_dump_json())
     params["_transaction_override"] = [
-        {"type": "BUY", "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
+        {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
         ]
 
     # Helper to get single-day value
@@ -111,7 +114,7 @@ async def test_e2e_bond_quarterly_compound():
 
     params = json.loads(schedule_model.model_dump_json())
     params["_transaction_override"] = [
-        {"type": "BUY", "quantity": 1, "price": "20000", "trade_date": "2025-01-01"}
+        {"type": TransactionType.BUY, "quantity": 1, "price": "20000", "trade_date": "2025-01-01"}
         ]
 
     # Value end of Q1 vs start
@@ -150,7 +153,7 @@ async def test_e2e_mixed_schedule_simple_compound():
 
     params = json.loads(schedule_model.model_dump_json())
     params["_transaction_override"] = [
-        {"type": "BUY", "quantity": 1, "price": "5000", "trade_date": "2025-01-01"}
+        {"type": TransactionType.BUY, "quantity": 1, "price": "5000", "trade_date": "2025-01-01"}
         ]
 
     # Collect quarterly snapshots

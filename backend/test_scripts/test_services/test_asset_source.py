@@ -33,7 +33,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.db.models import (
     Asset,
     AssetType,
-    ValuationModel,
+    IdentifierType,
     )
 from backend.app.services.asset_source import AssetSourceManager
 
@@ -56,7 +56,7 @@ from backend.app.schemas.assets import (
     DayCountConvention,
     )
 from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.schemas.prices import FAUpsert, FAUpsertItem
+from backend.app.schemas.prices import FAUpsert, FAPricePoint
 
 from backend.app.db.models import AssetProviderAssignment
 from sqlalchemy import delete
@@ -76,19 +76,20 @@ def asset_ids():
 
     Creates 3 test assets synchronously using asyncio.run().
     Returns list of asset IDs for use in tests.
+
+    Uses timestamp to ensure unique asset names across test runs.
     """
+    import time
+    timestamp = int(time.time() * 1000)  # Millisecond timestamp for uniqueness
 
     async def _create_assets():
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-            # Create test assets
+            # Create test assets with unique names using timestamp
             test_assets = [
                 Asset(
-                    display_name=f"Test Asset {i}",
-                    identifier=f"TEST{i}",
-                    identifier_type="TICKER",
+                    display_name=f"Test Asset {timestamp}-{i}",
                     currency="USD",
                     asset_type=AssetType.STOCK,
-                    valuation_model=ValuationModel.MARKET_PRICE,
                     active=True,
                     )
                 for i in range(1, 4)
@@ -239,16 +240,16 @@ async def test_bulk_assign_providers():
     """Test bulk_assign_providers() method."""
     print_section("Test 5: Bulk Assign Providers")
 
+    import time
+    timestamp = int(time.time() * 1000)
+
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        # Create test assets
+        # Create test assets with unique names using timestamp
         test_assets = [
             Asset(
-                display_name=f"Test Asset {i}",
-                identifier=f"TEST{i}",
-                identifier_type="TICKER",
+                display_name=f"Test Asset Assign {timestamp}-{i}",
                 currency="USD",
                 asset_type=AssetType.STOCK,
-                valuation_model=ValuationModel.MARKET_PRICE,
                 active=True,
                 ) for i in range(1, 4)]
 
@@ -260,10 +261,29 @@ async def test_bulk_assign_providers():
             await session.refresh(asset)
 
         # Bulk assign providers
+        from backend.app.db.models import IdentifierType
         assignments = [
-            FAProviderAssignmentItem(asset_id=test_assets[0].id, provider_code="yfinance", provider_params={"ticker": "TEST1"}),
-            FAProviderAssignmentItem(asset_id=test_assets[1].id, provider_code="yfinance", provider_params={"ticker": "TEST2"}),
-            FAProviderAssignmentItem(asset_id=test_assets[2].id, provider_code="mockprov", provider_params=None),
+            FAProviderAssignmentItem(
+                asset_id=test_assets[0].id,
+                provider_code="yfinance",
+                identifier="TEST1",
+                identifier_type=IdentifierType.TICKER,
+                provider_params={"ticker": "TEST1"}
+            ),
+            FAProviderAssignmentItem(
+                asset_id=test_assets[1].id,
+                provider_code="yfinance",
+                identifier="TEST2",
+                identifier_type=IdentifierType.TICKER,
+                provider_params={"ticker": "TEST2"}
+            ),
+            FAProviderAssignmentItem(
+                asset_id=test_assets[2].id,
+                provider_code="mockprov",
+                identifier="MOCK1",
+                identifier_type=IdentifierType.UUID,
+                provider_params=None
+            ),
             ]
 
         results = await AssetSourceManager.bulk_assign_providers(assignments, session)
@@ -290,15 +310,15 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
     """Test metadata auto-populate on provider assignment."""
     print_section("Test 6a: Metadata Auto-Populate")
 
+    import time
+    timestamp = int(time.time() * 1000)
+
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         # Create new test asset for metadata test
         test_asset = Asset(
-            display_name="MockProvider Test Asset",
-            identifier="MOCK_METADATA_TEST",
-            identifier_type="TICKER",
+            display_name=f"MockProvider Test Asset {timestamp}",
             currency="USD",
             asset_type=AssetType.STOCK,
-            valuation_model=ValuationModel.MARKET_PRICE,
             active=True,
             classification_params=None  # Start with no metadata
             )
@@ -311,7 +331,10 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
         item = FAProviderAssignmentItem(
             asset_id=test_asset.id,
             provider_code="mockprov",
-            provider_params={"mock_param": "test"})
+            identifier="MOCK_META_TEST",
+            identifier_type=IdentifierType.UUID,
+            provider_params={"mock_param": "test"}
+        )
 
         results = await AssetSourceManager.bulk_assign_providers([item], session)
         # Assuming single result, extract it
@@ -332,11 +355,9 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
         assert metadata["sector"] == "Technology", "sector incorrect"
         print_success("✓ Metadata content verified (sector=Technology)")
 
-        # Check for metadata_updated flag in result
-        if result.metadata_updated:
-            print_success("✓ Result includes metadata_updated flag")
-            if result.metadata_changes:
-                print_info(f"  Changes: {len(result.metadata_changes)} fields updated")
+        # Metadata auto-populate during assignment is successful (verified by log and DB content above)
+        # Note: fields_detail is None during assignment (it's used in refresh endpoint)
+        print_success("✓ Metadata auto-populate on assignment completed successfully")
 
 
 @pytest.mark.asyncio
@@ -378,14 +399,14 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
             FAUpsert(
                 asset_id=asset_ids[0],
                 prices=[
-                    FAUpsertItem(date=date(2025, 1, 1), close=Decimal("100.50"), volume=Decimal("1000"), currency="USD"),
-                    FAUpsertItem(date=date(2025, 1, 2), close=Decimal("101.25"), volume=Decimal("1500"), currency="USD"),
+                    FAPricePoint(date=date(2025, 1, 1), close=Decimal("100.50"), volume=Decimal("1000"), currency="USD"),
+                    FAPricePoint(date=date(2025, 1, 2), close=Decimal("101.25"), volume=Decimal("1500"), currency="USD"),
                     ]
                 ),
             FAUpsert(
                 asset_id=asset_ids[1],
                 prices=[
-                    FAUpsertItem(date=date(2025, 1, 1), close=Decimal("200.00"), volume=Decimal("500"), currency="USD"),
+                    FAPricePoint(date=date(2025, 1, 1), close=Decimal("200.00"), volume=Decimal("500"), currency="USD"),
                     ]
                 ),
             ]
@@ -619,6 +640,8 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
         invalid_assignment = AssetProviderAssignment(
             asset_id=test_asset_id,
             provider_code=invalid_provider,
+            identifier="INVALID_TEST",
+            identifier_type=IdentifierType.UUID,
             provider_params=None,
             fetch_interval=1440
             )

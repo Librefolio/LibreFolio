@@ -47,7 +47,6 @@ from backend.app.db import (
     TransactionType,
     CashMovementType,
     AssetType,
-    IdentifierType,
     )
 from backend.app.db.session import get_sync_engine
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
@@ -104,8 +103,6 @@ def clean_test_asset():
     with Session(get_sync_engine()) as session:
         asset = Asset(
             display_name="Test Asset for Deletion",
-            identifier="TEST-DELETE-001",
-            identifier_type=IdentifierType.TICKER,
             currency="EUR",
             asset_type=AssetType.STOCK
             )
@@ -258,10 +255,15 @@ def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
     """Verify AssetProviderAssignment is CASCADE deleted when Asset is deleted."""
     with Session(get_sync_engine()) as session:
         # Add provider assignment to asset
+        from backend.app.db.models import IdentifierType
+
         assignment = AssetProviderAssignment(
             asset_id=clean_test_asset,
             provider_code="yfinance",
-            provider_params='{"identifier": "TEST"}'
+            identifier="TEST",
+            identifier_type=IdentifierType.TICKER,
+            provider_params='{"symbol": "TEST"}',
+            fetch_interval=1440
             )
         session.add(assignment)
         session.commit()
@@ -584,6 +586,8 @@ def test_transaction_deletion_does_not_cascade_to_cashmovement(test_data):
 
 def test_asset_provider_unique_per_asset(test_data):
     """Verify only one provider can be assigned per asset (UNIQUE constraint)."""
+    from backend.app.db.models import IdentifierType
+
     with Session(get_sync_engine()) as session:
         asset_id = test_data['asset_id']
 
@@ -599,7 +603,10 @@ def test_asset_provider_unique_per_asset(test_data):
             duplicate = AssetProviderAssignment(
                 asset_id=asset_id,
                 provider_code="different_provider",
-                provider_params='{"test": "duplicate"}'
+                identifier="DIFFERENT",
+                identifier_type=IdentifierType.TICKER,
+                provider_params='{"test": "duplicate"}',
+                fetch_interval=1440
                 )
             session.add(duplicate)
 
@@ -612,7 +619,10 @@ def test_asset_provider_unique_per_asset(test_data):
             assignment1 = AssetProviderAssignment(
                 asset_id=asset_id,
                 provider_code="yfinance",
-                provider_params='{"identifier": "AAPL"}'
+                identifier="AAPL",
+                identifier_type=IdentifierType.TICKER,
+                provider_params='{"symbol": "AAPL"}',
+                fetch_interval=1440
                 )
             session.add(assignment1)
             session.commit()
@@ -621,7 +631,10 @@ def test_asset_provider_unique_per_asset(test_data):
             assignment2 = AssetProviderAssignment(
                 asset_id=asset_id,
                 provider_code="different_provider",
-                provider_params='{"identifier": "AAPL2"}'
+                identifier="AAPL2",
+                identifier_type=IdentifierType.TICKER,
+                provider_params='{"symbol": "AAPL2"}',
+                fetch_interval=1440
                 )
             session.add(assignment2)
 

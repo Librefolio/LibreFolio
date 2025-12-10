@@ -121,17 +121,24 @@ async def test_current_value(provider_code: str):
         for test_case in provider.test_cases:
             identifier = test_case['identifier']
             expected_symbol = test_case.get('expected_symbol', identifier)
-            # Get provider_params if specified in test_case (for cssscraper, scheduled_investment, etc.)
+            # Get provider_params and identifier_type if specified in test_case
             provider_params = test_case.get('provider_params')
+            identifier_type = test_case.get('identifier_type', 'TICKER')  # Default to TICKER
 
             print_info(f"  Testing: {identifier} (expects: {expected_symbol})")
 
-            # Call with provider_params if available, otherwise without
+            # Import IdentifierType if not already imported
+            from backend.app.db.models import IdentifierType
+            # Convert string to enum if needed
+            if isinstance(identifier_type, str):
+                identifier_type = IdentifierType[identifier_type]
+
+            # Call with all required parameters
             try:
                 if provider_params:
-                    result = await provider.get_current_value(identifier, provider_params)
+                    result = await provider.get_current_value(identifier, identifier_type, provider_params)
                 else:
-                    result = await provider.get_current_value(identifier)
+                    result = await provider.get_current_value(identifier, identifier_type)
             except TypeError as e:
                 # Provider requires provider_params but test_case doesn't have it
                 if "provider_params" in str(e):
@@ -381,9 +388,11 @@ async def test_error_handling(provider_code: str):
         invalid_identifier = "INVALID_NONEXISTENT_SYMBOL_12345"
         print_info(f"Testing with invalid identifier: {invalid_identifier}")
 
+        from backend.app.db.models import IdentifierType
+
         error_raised = False
         try:
-            result = await provider.get_current_value(invalid_identifier)
+            result = await provider.get_current_value(invalid_identifier, IdentifierType.TICKER)
 
             # If we got a result, check what it is
             if result is None:

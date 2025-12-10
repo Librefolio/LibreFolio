@@ -5,7 +5,7 @@
 **Execution Order**:
 1. Complete Steps 1-11 of Plan 05 ✅ (DONE)
 2. Complete Steps 1-11 of Plan 05b ⏳ (IN PROGRESS)
-3. **Execute this plan (12)** - Update all tests for both changes
+3. **Execute this plan (5c)** - Update all tests for both changes
 4. Complete Step 12 of Plan 05 (final integration tests)
 
 ---

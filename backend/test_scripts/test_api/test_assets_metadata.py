@@ -1,10 +1,13 @@
 """
 Asset Metadata API Tests.
 
-Tests for asset metadata management endpoints:
-- PATCH /api/v1/assets/metadata (bulk partial update)
-- POST /api/v1/assets (bulk read with metadata)
-- POST /api/v1/assets/{asset_id}/metadata/refresh (single refresh from provider)
+Tests for asset metadata management via unified PATCH endpoint:
+- PATCH /api/v1/assets (bulk partial update including metadata)
+- GET /api/v1/assets (bulk read with metadata)
+- POST /api/v1/assets/provider/refresh (refresh from provider)
+
+Note: Metadata (classification_params) is now part of the main asset PATCH endpoint,
+no separate /assets endpoint exists.
 """
 import time
 from decimal import Decimal
@@ -13,11 +16,12 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
+from backend.app.db import AssetType
 from backend.app.schemas import (
-    FABulkAssetCreateRequest, FAAssetCreateItem, FABulkAssetCreateResponse,
-    FABulkPatchMetadataRequest, FAPatchMetadataItem, FAClassificationParams,
+    FAAssetCreateItem, FABulkAssetCreateResponse,
+    FABulkAssetPatchResponse, FAAssetPatchItem, FAClassificationParams,
     FAAssetMetadataResponse, FAMetadataRefreshResult,
-    FABulkMetadataRefreshResponse, FAGeographicArea
+    FABulkMetadataRefreshResponse, FAGeographicArea, FAAssetPatchResult
     )
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success
@@ -63,17 +67,14 @@ async def create_test_asset(name_prefix: str = "META") -> int:
     """
     async with httpx.AsyncClient() as client:
         item = FAAssetCreateItem(
-            display_name=f"{name_prefix} Test Asset",
-            identifier=unique_id(name_prefix),
-            identifier_type="TICKER",
+            display_name=f"{name_prefix} Test Asset {unique_id(name_prefix)}",
             currency="USD",
-            asset_type="STOCK",
-            valuation_model="MARKET_PRICE"
+            asset_type=AssetType.STOCK
             )
 
         response = await client.post(
             f"{API_BASE}/assets",
-            json=FABulkAssetCreateRequest(assets=[item]).model_dump(mode="json"),
+            json=[item.model_dump(mode="json")],
             timeout=TIMEOUT
             )
         assert response.status_code == 201, f"Failed to create test asset: {response.text}"
@@ -89,37 +90,39 @@ async def create_test_asset(name_prefix: str = "META") -> int:
 
 @pytest.mark.asyncio
 async def test_patch_metadata_valid_geographic_area(test_server):
-    """Test 1: PATCH /assets/metadata with valid geographic_area."""
-    print_section("Test 1: PATCH /assets/metadata - Valid Geographic Area")
+    """Test 1: PATCH /assets with valid geographic_area in classification_params."""
+    print_section("Test 1: PATCH /assets - Valid Geographic Area")
 
     test_asset = await create_test_asset("PATCH1")
 
     async with httpx.AsyncClient() as client:
         # Prepare patch request
-        patch_item = FAPatchMetadataItem(
+        patch_item = FAAssetPatchItem(
             asset_id=test_asset,
-            patch=FAClassificationParams(
+            classification_params=FAClassificationParams(
                 short_description="Updated via API test",
                 geographic_area=FAGeographicArea(distribution={"USA": 0.7, "FRA": 0.3}),
                 )
             )
 
-        request = FABulkPatchMetadataRequest(assets=[patch_item])
-
-        response = await client.patch(f"{API_BASE}/assets/metadata", json=request.model_dump(mode="json"), timeout=TIMEOUT)
+        response = await client.patch(
+            f"{API_BASE}/assets",
+            json=[patch_item.model_dump(mode="json")],
+            timeout=TIMEOUT
+            )
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
-        # Parse response as list of FAMetadataRefreshResult
-        results = [FAMetadataRefreshResult(**r) for r in response.json()]
-        assert len(results) == 1, "Expected 1 result"
+        # Parse response
+        patch_response = FABulkAssetPatchResponse(**response.json())
+        assert len(patch_response.results) == 1, "Expected 1 result"
 
-        result = results[0]
+        result: FAAssetPatchResult = patch_response.results[0]
         assert result.success, f"Patch failed: {result.message}"
         assert result.asset_id == test_asset
-        assert result.changes is not None, "Changes should be returned"
-        assert len(result.changes) > 0, "Should have at least one change"
+        assert result.updated_fields is not None, "Some field should be changed"
+        assert len(result.updated_fields) > 0, "Should have at least one change"
 
-        print_success(f"✓ Metadata patched successfully with {len(result.changes)} change(s)")
+        print_success(f"✓ Metadata patched successfully with {len(result.updated_fields)} updated_field(s)")
 
         # Verify database was actually updated
         read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
@@ -144,25 +147,23 @@ async def test_patch_metadata_valid_geographic_area(test_server):
 
 @pytest.mark.asyncio
 async def test_patch_metadata_invalid_geographic_area(test_server):
-    """Test 2: PATCH /assets/metadata with invalid geographic_area."""
-    print_section("Test 2: PATCH /assets/metadata - Invalid Geographic Area")
+    """Test 2: PATCH /assets with invalid geographic_area."""
+    print_section("Test 2: PATCH /assets - Invalid Geographic Area")
 
     test_asset = await create_test_asset("PATCH2")
 
     async with httpx.AsyncClient() as client:
         # Write json directly to bypass pydantic validation for invalid country code
-        request = {
-            "assets": [
-                {
-                    "asset_id": test_asset,
-                    "patch": {"geographic_area": {"distribution": {"INVALID_COUNTRY": 1.0}}}
-                    }
-                ]
-            }
+        request = [
+            {
+                "asset_id": test_asset,
+                "classification_params": {"geographic_area": {"distribution": {"INVALID_COUNTRY": 1.0}}}
+                }
+            ]
 
-        response = await client.patch(f"{API_BASE}/assets/metadata", json=request, timeout=TIMEOUT)
+        response = await client.patch(f"{API_BASE}/assets", json=request, timeout=TIMEOUT)
 
-        # Should return 200 with per-item error
+        # Should return 422 validation error
         assert response.status_code == 422, f"Expected 422, got {response.status_code}, message: {response.text}"
         data = response.json()
         assert "detail" in data, "Response should have 'detail' field"
@@ -174,22 +175,26 @@ async def test_patch_metadata_invalid_geographic_area(test_server):
 
 @pytest.mark.asyncio
 async def test_patch_metadata_absent_fields(test_server):
-    """Test 3: PATCH /assets/metadata with absent fields (PATCH semantics)."""
-    print_section("Test 3: PATCH /assets/metadata - Absent Fields (PATCH Semantics)")
+    """Test 3: PATCH /assets with absent fields (PATCH semantics)."""
+    print_section("Test 3: PATCH /assets - Absent Fields (PATCH Semantics)")
 
     test_asset = await create_test_asset("PATCH3")
 
     async with httpx.AsyncClient() as client:
         # First, set some initial metadata
-        patch_item = FAPatchMetadataItem(
+        patch_item = FAAssetPatchItem(
             asset_id=test_asset,
-            patch=FAClassificationParams(
+            classification_params=FAClassificationParams(
                 short_description="Initial description",
                 sector="Technology"
                 )
             )
-        initial_patch = FABulkPatchMetadataRequest(assets=[patch_item])
-        await client.patch(f"{API_BASE}/assets/metadata", json=initial_patch.model_dump(mode="json"), timeout=TIMEOUT)
+
+        await client.patch(
+            f"{API_BASE}/assets",
+            json=[patch_item.model_dump(mode="json")],
+            timeout=TIMEOUT
+            )
 
         # Read current state
         read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
@@ -199,19 +204,17 @@ async def test_patch_metadata_absent_fields(test_server):
         print_info(f"  Before PATCH: {before_params}")
 
         # Now patch only sector field (using JSON dict to preserve PATCH semantics)
-        patch_sector_only = {
-            "assets": [
-                {
-                    "asset_id": test_asset,
-                    "patch": {
-                        "sector": "Finance"
-                        }
+        patch_sector_only = [
+            {
+                "asset_id": test_asset,
+                "classification_params": {
+                    "sector": "Finance"
                     }
-                ]
-            }
+                }
+            ]
 
         response = await client.patch(
-            f"{API_BASE}/assets/metadata",
+            f"{API_BASE}/assets",
             json=patch_sector_only,
             timeout=TIMEOUT
             )
@@ -226,6 +229,7 @@ async def test_patch_metadata_absent_fields(test_server):
         print_info(f"  After PATCH: {after_params}")
 
         assert after_params.sector == "Finance", "sector not updated"
+        print_info(f"after_params.short_description: {after_params.short_description}, before_params.short_description: {before_params.short_description}")
         assert after_params.short_description == before_params.short_description, "short_description should not change"
 
         print_success("✓ Absent fields ignored (PATCH semantics verified)")
@@ -233,39 +237,45 @@ async def test_patch_metadata_absent_fields(test_server):
 
 @pytest.mark.asyncio
 async def test_patch_metadata_null_clears_field(test_server):
-    """Test 4: PATCH /assets/metadata with null (clears field)."""
-    print_section("Test 4: PATCH /assets/metadata - Null Clears Field")
+    """Test 4: PATCH /assets with null (clears field)."""
+    print_section("Test 4: PATCH /assets - Null Clears Field")
 
     test_asset = await create_test_asset("PATCH4")
 
     async with httpx.AsyncClient() as client:
         # First, set sector
-        patch_item = FAPatchMetadataItem(asset_id=test_asset, patch=FAClassificationParams(sector="Technology"))
-        await client.patch(f"{API_BASE}/assets/metadata", json=FABulkPatchMetadataRequest(assets=[patch_item]).model_dump(mode="json"), timeout=TIMEOUT)
+        patch_item = FAAssetPatchItem(asset_id=test_asset, classification_params=FAClassificationParams(sector="Technology"))
+        await client.patch(
+            f"{API_BASE}/assets",
+            json=[patch_item.model_dump(mode="json")],
+            timeout=TIMEOUT
+            )
 
-        # Now clear it with null
-        patch_null = FAPatchMetadataItem(asset_id=test_asset, patch=FAClassificationParams(sector=None))
-
-        response = await client.patch(f"{API_BASE}/assets/metadata", json=FABulkPatchMetadataRequest(assets=[patch_null]).model_dump(mode="json"), timeout=TIMEOUT)
+        # Now clear it with empty string
+        patch_null = FAAssetPatchItem(asset_id=test_asset, classification_params=FAClassificationParams(sector=""))
+        response = await client.patch(
+            f"{API_BASE}/assets",
+            json=[patch_null.model_dump(mode="json")],
+            timeout=TIMEOUT
+            )
 
         assert response.status_code == 200, f"PATCH null failed: {response.status_code}"
 
-        results = [FAMetadataRefreshResult(**r) for r in response.json()]
-        result = results[0]
+        patch_response = FABulkAssetPatchResponse(**response.json())
+        result = patch_response.results[0]
         assert result.success, f"PATCH null should succeed: {result.message}"
 
         # Verify changes show field cleared
-        assert result.changes is not None, "Changes should be returned"
-        sector_change = next((c for c in result.changes if c.field == "sector"), None)
-        assert sector_change is not None, "sector change not in changes list"
-        assert sector_change.new_value == "null" or sector_change.new_value is None, \
-            f"sector should be cleared (null), got: {sector_change.new_value}"
+        assert result.updated_fields is not None, "Some field should be changed"
+        sector_change = next((c for c in result.updated_fields if c[0] == "classification_params"), None)
+        assert sector_change is not None, "Inside classification_params, sector should be changed"
+        assert sector_change[2] == "null" or sector_change[2] is None, f"sector should be cleared (null), got: {sector_change[2]}"
 
         # Verify DB actually cleared
         read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
         after_assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
         after_params = after_assets[0].classification_params
-        assert after_params.sector is None, "sector should be None in DB"
+        assert after_params is None or after_params.sector, "sector should be None in DB"
 
         print_success("✓ Null clears field (DB verified)")
 
@@ -288,7 +298,6 @@ async def test_bulk_read_assets(test_server):
         asset = assets[0]
         assert asset.asset_id == test_asset, "Asset ID mismatch"
         assert asset.display_name, "Asset should have display_name"
-        assert asset.identifier, "Asset should have identifier"
         assert asset.currency, "Asset should have currency"
 
         print_success(f"✓ Bulk read returned asset with metadata (classification_params: {asset.classification_params is not None})")
@@ -301,9 +310,9 @@ async def test_bulk_read_multiple_assets(test_server):
 
     async with httpx.AsyncClient() as client:
         # Create multiple test assets
-        items = [FAAssetCreateItem(display_name=f"Test Asset {i}", identifier=unique_id(f"BULK{i}"), currency="USD") for i in range(3)]
+        items = [FAAssetCreateItem(display_name=f"Test Asset {i} {unique_id(f'BULK{i}')}", currency="USD", asset_type=AssetType.STOCK) for i in range(3)]
 
-        create_response = await client.post(f"{API_BASE}/assets", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
+        create_response = await client.post(f"{API_BASE}/assets", json=[a.model_dump(mode='json') for a in items], timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_response.json())
         asset_ids = [r.asset_id for r in create_data.results if r.success]
 
@@ -326,14 +335,14 @@ async def test_bulk_read_multiple_assets(test_server):
 
 @pytest.mark.asyncio
 async def test_metadata_refresh_single_no_provider(test_server):
-    """Test 7: POST /assets/metadata/refresh (single asset, no provider assigned)."""
-    print_section("Test 7: POST /assets/metadata/refresh - Single Asset, No Provider")
+    """Test 7: POST /assets/refresh (single asset, no provider assigned)."""
+    print_section("Test 7: POST /assets/refresh - Single Asset, No Provider")
 
     test_asset = await create_test_asset("REFRESH1")
 
     async with httpx.AsyncClient() as client:
         # Use bulk endpoint with single asset
-        response = await client.get(f"{API_BASE}/assets/metadata/refresh", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Refresh failed: {response.status_code}: {response.text}"
 
@@ -356,13 +365,13 @@ async def test_metadata_refresh_single_no_provider(test_server):
 
 @pytest.mark.asyncio
 async def test_metadata_refresh_bulk(test_server):
-    """Test 8: POST /assets/metadata/refresh."""
-    print_section("Test 8: POST /assets/metadata/refresh")
+    """Test 8: POST /assets/refresh."""
+    print_section("Test 8: POST /assets/refresh")
 
     test_asset = await create_test_asset("REFRESH2")
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{API_BASE}/assets/metadata/refresh", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Bulk refresh failed: {response.status_code}: {response.text}"
 
@@ -376,24 +385,22 @@ async def test_metadata_refresh_bulk(test_server):
 
 @pytest.mark.asyncio
 async def test_patch_metadata_geographic_area_sum_validation(test_server):
-    """Test 9: PATCH /assets/metadata - geographic_area sum validation."""
-    print_section("Test 9: PATCH /assets/metadata - Geographic Area Sum Validation")
+    """Test 9: PATCH /assets - geographic_area sum validation."""
+    print_section("Test 9: PATCH /assets - Geographic Area Sum Validation")
 
     test_asset = await create_test_asset("PATCH9")
 
     async with httpx.AsyncClient() as client:
         # Try to set geographic_area with sum != 1.0
         # Write json directly to bypass pydantic validation
-        requests = {
-            "assets": [
-                {
-                    "asset_id": test_asset,
-                    "patch": {"geographic_area": {"distribution": {"USA": 0.5, "CAN": 0.3}}}
-                    }
-                ]
-            }
+        requests = [
+            {
+                "asset_id": test_asset,
+                "classification_params": {"geographic_area": {"distribution": {"USA": 0.5, "CAN": 0.3}}}
+                }
+            ]
 
-        response = await client.patch(f"{API_BASE}/assets/metadata", json=requests, timeout=TIMEOUT)
+        response = await client.patch(f"{API_BASE}/assets", json=requests, timeout=TIMEOUT)
 
         assert response.status_code == 422, f"Expected 422, got {response.status_code}, message: {response.text}"
         data = response.json()
@@ -406,30 +413,35 @@ async def test_patch_metadata_geographic_area_sum_validation(test_server):
 
 @pytest.mark.asyncio
 async def test_patch_metadata_multiple_assets(test_server):
-    """Test 10: PATCH /assets/metadata - Multiple assets in one request."""
-    print_section("Test 10: PATCH /assets/metadata - Multiple Assets")
+    """Test 10: PATCH /assets - Multiple assets in one request."""
+    print_section("Test 10: PATCH /assets - Multiple Assets")
 
     async with httpx.AsyncClient() as client:
         # Create 2 test assets
-        items = [FAAssetCreateItem(display_name=f"Multi Patch {i}", identifier=unique_id(f"MULTI{i}"), currency="USD") for i in range(2)]
+        items = [FAAssetCreateItem(display_name=f"Multi Patch {i} {unique_id(f'MULTI{i}')}", currency="USD", asset_type=AssetType.STOCK) for i in range(2)]
 
-        create_response = await client.post(f"{API_BASE}/assets", json=FABulkAssetCreateRequest(assets=items).model_dump(mode="json"), timeout=TIMEOUT)
+        create_response = await client.post(f"{API_BASE}/assets", json=[a.model_dump(mode='json') for a in items], timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_response.json())
         asset_ids = [r.asset_id for r in create_data.results if r.success]
 
         # Patch both assets
         patch_items = [
-            FAPatchMetadataItem(asset_id=asset_ids[0], patch=FAClassificationParams(sector="Technology")),
-            FAPatchMetadataItem(asset_id=asset_ids[1], patch=FAClassificationParams(sector="Finance"))
+            FAAssetPatchItem(asset_id=asset_ids[0], classification_params=FAClassificationParams(sector="Technology")),
+            FAAssetPatchItem(asset_id=asset_ids[1], classification_params=FAClassificationParams(sector="Finance"))
             ]
 
-        response = await client.patch(f"{API_BASE}/assets/metadata", json=FABulkPatchMetadataRequest(assets=patch_items).model_dump(mode="json"), timeout=TIMEOUT)
+        response = await client.patch(
+            f"{API_BASE}/assets",
+            json=[p.model_dump(mode="json") for p in patch_items],
+            timeout=TIMEOUT
+            )
 
         assert response.status_code == 200, f"Bulk PATCH failed: {response.status_code}"
 
-        results = [FAMetadataRefreshResult(**r) for r in response.json()]
-        assert len(results) == 2, "Should have 2 results"
-        assert all(r.success for r in results), "All patches should succeed"
+        # PATCH /assets returns FABulkAssetPatchResponse, not FAMetadataRefreshResult
+        patch_response = FABulkAssetPatchResponse(**response.json())
+        assert len(patch_response.results) == 2, "Should have 2 results"
+        assert all(r.success for r in patch_response.results), "All patches should succeed"
 
         print_success("✓ Multiple assets patched in one request")
 

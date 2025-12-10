@@ -5,6 +5,7 @@ Handles currency conversion and FX rate synchronization.
 from datetime import date
 from datetime import timedelta
 from decimal import Decimal
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,33 +14,30 @@ from sqlmodel import select, delete as sql_delete, and_, or_
 from backend.app.db.models import FxCurrencyPairSource
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import BackwardFillInfo
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
 from backend.app.schemas.fx import (
     # Provider models
     FXProviderInfo,
-    FXProvidersResponse,
     # Conversion models
-    FXConvertRequest,
+    FXConversionRequest,
     FXConversionResult,
     FXConvertResponse,
     # Rate upsert models
-    FXBulkUpsertRequest,
+    FXUpsertItem,
     FXUpsertResult,
     FXBulkUpsertResponse,
     # Rate delete models
-    FXBulkDeleteRequest,
+    FXDeleteItem,
     FXDeleteResult,
     FXBulkDeleteResponse,
     # Pair source models
     FXPairSourceItem,
     FXPairSourcesResponse,
-    FXCreatePairSourcesRequest,
     FXPairSourceResult,
     FXCreatePairSourcesResponse,
-    FXDeletePairSourcesRequest,
+    FXDeletePairSourceItem,
     FXDeletePairSourceResult,
     FXDeletePairSourcesResponse,
-    # Currency list models
     FXCurrenciesResponse,
     )
 from backend.app.schemas.refresh import FXSyncResponse
@@ -61,7 +59,7 @@ router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 # ENDPOINTS
 # ============================================================================
 
-@router_providers.get("", response_model=FXProvidersResponse)
+@router_providers.get("", response_model=List[FXProviderInfo])
 async def list_providers():
     """
     Get the list of all available FX rate providers.
@@ -71,6 +69,7 @@ async def list_providers():
     - Default base currency
     - All supported base currencies (for multi-base providers)
     - Description
+    - Icon URL
 
     Returns:
         List of provider information
@@ -100,7 +99,7 @@ async def list_providers():
                 icon_url=instance.get_icon()
                 ))
 
-        return FXProvidersResponse(providers=providers, count=len(providers))
+        return providers  # Return list directly, no wrapper
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}")
 
@@ -195,7 +194,7 @@ async def sync_rates(
                 )
             return FXSyncResponse(
                 synced=result['total_changed'],
-                date_range=(start, end),
+                date_range=DateRangeModel(start=start, end=end),
                 currencies=result['currencies_synced']
                 )
 
@@ -334,7 +333,7 @@ async def sync_rates(
 
             return FXSyncResponse(
                 synced=total_changed,
-                date_range=(start, end),
+                date_range=DateRangeModel(start=start, end=end),
                 currencies=sorted(list(all_currencies_synced))
                 )
 
@@ -346,20 +345,19 @@ async def sync_rates(
 
 @router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)
 async def upsert_rates_endpoint(
-    request: FXBulkUpsertRequest,
+    rates: List[FXUpsertItem],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
     Manually insert or update one or more FX rates (bulk operation).
 
-    This endpoint accepts a list of rates to insert/update. Even single rate
-    should be sent as a list with one element.
+    This endpoint accepts a list of rates to insert/update.
 
     Uses UPSERT logic: if a rate for the same date/base/quote exists, it will be updated.
     Automatic alphabetical ordering and rate inversion is applied.
 
     Args:
-        request: List of rates to insert/update
+        rates: List of rates to insert/update
         session: Database session
 
     Returns:
@@ -368,7 +366,7 @@ async def upsert_rates_endpoint(
     results = []
     errors = []
 
-    for idx, rate_item in enumerate(request.rates):
+    for idx, rate_item in enumerate(rates):
         base = rate_item.base.upper()
         quote = rate_item.quote.upper()
 
@@ -427,21 +425,20 @@ async def upsert_rates_endpoint(
 
 @router_currencies.delete("/rate", response_model=FXBulkDeleteResponse)
 async def delete_rates_endpoint(
-    request: FXBulkDeleteRequest,
+    deletions: List[FXDeleteItem],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
     Delete one or more FX rates (bulk operation).
 
-    This endpoint accepts a list of deletion requests. Each request can specify:
-    - A single date (start_date only) to delete one specific day
-    - A date range (start_date + end_date) to delete all rates in that range
+    This endpoint accepts a list of deletion requests. Each request can specify a date range
+    to delete rates (using DateRangeModel).
 
     Currency pairs are automatically normalized to alphabetical order in the backend,
     so deleting USD/EUR will delete the stored EUR/USD rate.
 
     Args:
-        request: List of deletion requests
+        deletions: List of deletion requests with date ranges
         session: Database session
 
     Returns:
@@ -473,7 +470,7 @@ async def delete_rates_endpoint(
     bulk_deletions = []
     deletion_metadata = []  # Track original request info for response
 
-    for idx, delete_req in enumerate(request.deletions):
+    for idx, delete_req in enumerate(deletions):
         from_cur = delete_req.from_currency.upper()
         to_cur = delete_req.to_currency.upper()
 
@@ -483,26 +480,24 @@ async def delete_rates_endpoint(
             errors.append(error_msg)
             continue
 
-        # Validate date range
-        if delete_req.end_date and delete_req.start_date > delete_req.end_date:
-            error_msg = f"Deletion {idx}: start_date must be before or equal to end_date"
-            errors.append(error_msg)
-            continue
+        # Extract dates from DateRangeModel
+        start_date = delete_req.date_range.start
+        end_date = delete_req.date_range.end
 
         # Add to bulk deletions (backend will normalize)
         bulk_deletions.append((
             from_cur,
             to_cur,
-            delete_req.start_date,
-            delete_req.end_date
+            start_date,
+            end_date
             ))
 
         deletion_metadata.append({
             'original_idx': idx,
             'from_currency': from_cur,
             'to_currency': to_cur,
-            'start_date': delete_req.start_date,
-            'end_date': delete_req.end_date
+            'start_date': start_date,
+            'end_date': end_date
             })
 
     # Execute bulk deletions if any valid
@@ -528,8 +523,10 @@ async def delete_rates_endpoint(
                     success=success,
                     base=base,
                     quote=quote,
-                    start_date=metadata['start_date'],
-                    end_date=metadata['end_date'] if metadata['end_date'] else None,
+                    date_range=DateRangeModel(
+                        start=metadata['start_date'],
+                        end=metadata['end_date'] if metadata['end_date'] else None
+                        ),
                     existing_count=existing_count,
                     deleted_count=deleted_count,
                     message=message
@@ -552,6 +549,7 @@ async def delete_rates_endpoint(
 
     return FXBulkDeleteResponse(
         results=results,
+        success_count=len([r for r in results if r.success]),
         total_deleted=total_deleted,
         errors=errors
         )
@@ -559,7 +557,7 @@ async def delete_rates_endpoint(
 
 @router_currencies.post("/convert", response_model=FXConvertResponse)
 async def convert_currency_bulk(
-    request: FXConvertRequest,
+    request: List[FXConversionRequest],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -587,22 +585,22 @@ async def convert_currency_bulk(
     bulk_conversions = []
     conversion_metadata = []  # Track which original conversion each bulk conversion belongs to
 
-    for conv_idx, conversion in enumerate(request.conversions):
+    for conv_idx, conversion in enumerate(request):
         from_cur = conversion.from_currency.upper()
         to_cur = conversion.to_currency.upper()
 
         # Validate date range
-        if conversion.end_date and conversion.start_date > conversion.end_date:
+        if conversion.date_range.end and conversion.date_range.start > conversion.date_range.end:
             raise HTTPException(
                 status_code=400,
-                detail=f"Conversion {conv_idx}: start_date must be before or equal to end_date"
+                detail=f"Conversion {conv_idx}: start date must be before or equal to end date"
                 )
 
         # Expand date range into individual days
-        if conversion.end_date:
+        if conversion.date_range.end:
             # Multi-day conversion: process each day in range
-            current_date = conversion.start_date
-            while current_date <= conversion.end_date:
+            current_date = conversion.date_range.start
+            while current_date <= conversion.date_range.end:
                 bulk_conversions.append((conversion.amount, from_cur, to_cur, current_date))
                 conversion_metadata.append({
                     'original_idx': conv_idx,
@@ -612,12 +610,13 @@ async def convert_currency_bulk(
                 current_date += timedelta(days=1)
         else:
             # Single-day conversion
-            bulk_conversions.append((conversion.amount, from_cur, to_cur, conversion.start_date))
+            bulk_conversions.append((conversion.amount, from_cur, to_cur, conversion.date_range.start))
             conversion_metadata.append({
                 'original_idx': conv_idx,
                 'conversion': conversion,
-                'date': conversion.start_date
+                'date': conversion.date_range.start
                 })
+
 
     # Call convert_bulk with raise_on_error=False to get partial results
     bulk_results, bulk_errors = await convert_bulk(session, bulk_conversions, raise_on_error=False)
@@ -646,7 +645,7 @@ async def convert_currency_bulk(
         backward_fill_info = None
         if backward_fill_applied:
             days_back = (on_date - actual_rate_date).days
-            backward_fill_info = BackwardFillInfo(actual_rate_date=actual_rate_date.isoformat(), days_back=days_back)
+            backward_fill_info = BackwardFillInfo(actual_rate_date=actual_rate_date, days_back=days_back)
 
         results.append(FXConversionResult(
             amount=conversion.amount,
@@ -667,6 +666,7 @@ async def convert_currency_bulk(
 
     return FXConvertResponse(
         results=results,
+        success_count=len([r for r in results if r.converted_amount is not None]),
         errors=bulk_errors
         )
 
@@ -712,14 +712,11 @@ async def list_pair_sources(session: AsyncSession = Depends(get_session_generato
 
 @router_providers.post("/pair-sources", response_model=FXCreatePairSourcesResponse, status_code=201)
 async def create_pair_sources_bulk(
-    request: FXCreatePairSourcesRequest,
+    sources: List[FXPairSourceItem],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
     Create or update multiple currency pair sources in a single atomic transaction.
-        # Validate all provider codes exist
-        available_providers = {p['code'] for p in FXProviderRegistry.list_providers()}
-    the entire transaction is rolled back.
 
     Validations:
     - base < quote (alphabetical ordering)
@@ -727,7 +724,7 @@ async def create_pair_sources_bulk(
     - Priority must be >= 1
 
     Args:
-        request: List of pair sources to create/update
+        sources: List of pair sources to create/update
         session: Database session
 
     Returns:
@@ -744,7 +741,7 @@ async def create_pair_sources_bulk(
         # OPTIMIZATION: Batch query for inverse pairs conflict detection
         # Build list of all inverse pairs to check in ONE query
         inverse_checks = []
-        for source in request.sources:
+        for source in sources:
             # Inverse pair: swap base/quote
             inverse_checks.append((source.quote.upper(), source.base.upper(), source.priority))
 
@@ -775,7 +772,7 @@ async def create_pair_sources_bulk(
             existing_inverses = set()
 
         # Validate each source
-        for source in request.sources:
+        for source in sources:
             # Validate provider exists
             if source.provider_code.upper() not in available_providers:
                 results.append(FXPairSourceResult(
@@ -869,7 +866,7 @@ async def create_pair_sources_bulk(
 
 @router_providers.delete("/pair-sources", response_model=FXDeletePairSourcesResponse)
 async def delete_pair_sources_bulk(
-    request: FXDeletePairSourcesRequest,
+    sources: List[FXDeletePairSourceItem],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -882,7 +879,7 @@ async def delete_pair_sources_bulk(
     - If a pair doesn't exist, logs a warning but continues
 
     Args:
-        request: FXDeletePairSourcesRequest with list of FXDeletePairSourceItem
+        sources: List of FXDeletePairSourceItem to delete
         session: Database session
 
     Returns:
@@ -892,7 +889,7 @@ async def delete_pair_sources_bulk(
     total_deleted = 0
 
     try:
-        for source_item in request.sources:
+        for source_item in sources:
             # Now we have a proper Pydantic model with validation
             base = source_item.base  # Already uppercase from validator
             quote = source_item.quote  # Already uppercase from validator
@@ -942,6 +939,7 @@ async def delete_pair_sources_bulk(
 
         return FXDeletePairSourcesResponse(
             results=results,
+            success_count=len([r for r in results if r.success]),
             total_deleted=total_deleted
             )
 

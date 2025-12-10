@@ -35,7 +35,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -446,12 +446,6 @@ class FAClassificationParams(BaseModel):
     geographic_area: Optional[FAGeographicArea] = None
     sector: Optional[str] = None
 
-class FAPatchMetadataItem(BaseModel):
-    """Single asset metadata patch item for bulk requests."""
-    model_config = ConfigDict(extra="forbid")
-
-    asset_id: int = Field(..., description="Asset ID")
-    patch: FAClassificationParams
 
 class FAAssetMetadataResponse(BaseModel):
     """
@@ -579,7 +573,7 @@ class FAinfoResponse(BaseModel):
     has_provider: bool = Field(..., description="Whether asset has a provider assigned")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
 
-
+# TODO: eliminare e passare direttamente lista List[int] con post?
 class FABulkAssetDeleteRequest(BaseModel):
     """Bulk asset deletion request."""
     model_config = ConfigDict(extra="forbid")
@@ -644,7 +638,7 @@ class FAAssetPatchResult(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     success: bool = Field(..., description="Whether patch succeeded")
     message: str = Field(..., description="Success message or error description")
-    updated_fields: Optional[List[str]] = Field(None, description="List of fields updated")
+    updated_fields: Optional[List[tuple[str,Any,Any]]] = Field(None, description="List of fields updated (field, old_value, new_value)")
 
 class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
     """Bulk asset patch response (partial success allowed)."""
@@ -676,7 +670,6 @@ __all__ = [
     "FAMetadataChangeDetail",
     "FAMetadataRefreshResult",
     "FABulkMetadataRefreshResponse",
-    "FAPatchMetadataItem",
     # Asset CRUD schemas
     "FAAssetCreateItem",
     "FAAssetCreateResult",

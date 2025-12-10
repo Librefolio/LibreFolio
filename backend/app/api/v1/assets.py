@@ -15,9 +15,7 @@ from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
     FAPricePoint,
-    FAMetadataRefreshResult,
     FAClassificationParams,
-    FAPatchMetadataItem,
     FAAssetMetadataResponse,
     FABulkMetadataRefreshResponse,
     # Asset CRUD schemas
@@ -32,9 +30,10 @@ from backend.app.schemas.assets import (
     FABulkAssetPatchResponse,
     )
 from backend.app.schemas.prices import (
+    FAAssetDelete,
+    FAUpsert,
     FAUpsertResult,
     FABulkUpsertResponse,
-    FAPriceBulkDeleteRequest,
     FABulkDeleteResponse,
     )
 from backend.app.schemas.provider import (
@@ -44,19 +43,16 @@ from backend.app.schemas.provider import (
     FABulkRemoveResponse,
     FAProviderAssignmentReadItem,
     )
-from backend.app.schemas.refresh import FABulkRefreshResponse
+from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem
 from backend.app.services.asset_crud import AssetCRUDService
-from backend.app.services.asset_metadata import AssetMetadataService
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.provider_registry import AssetProviderRegistry
 
 logger = get_logger(__name__)
 
 asset_router = APIRouter(prefix="/assets", tags=["Assets"])
-metadata_router = APIRouter(prefix="/metadata", tags=["FA Metadata"])
 price_router = APIRouter(prefix="/prices", tags=["FA Prices"])
 provider_router = APIRouter(prefix="/provider", tags=["FA Provider"])
-# Include metadata_router in main router at the end because include_router do a run-time copy, not dynamic reference
 
 # ============================================================================
 # ASSET CRUD ENDPOINTS
@@ -301,7 +297,7 @@ async def assign_providers_bulk(
 
 @provider_router.delete("", response_model=FABulkRemoveResponse)
 async def remove_providers_bulk(
-    asset_ids: List[int],
+    asset_ids: List[int] = Query(..., description="List of asset IDs to remove providers from"),
     session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk remove provider assignments (PRIMARY bulk endpoint)."""
@@ -374,13 +370,13 @@ async def get_provider_assignments(
 
 @price_router.post("", response_model=FABulkUpsertResponse)
 async def upsert_prices_bulk(
-    request: FABulkUpsertRequest,
+    assets: List[FAUpsert],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk upsert prices manually (PRIMARY bulk endpoint)."""
     try:
         # Pass FAUpsert objects directly to service
-        result = await AssetSourceManager.bulk_upsert_prices(request.assets, session)
+        result = await AssetSourceManager.bulk_upsert_prices(assets, session)
 
         return FABulkUpsertResponse(
             inserted_count=result["inserted_count"],
@@ -394,12 +390,12 @@ async def upsert_prices_bulk(
 
 @price_router.delete("", response_model=FABulkDeleteResponse)
 async def delete_prices_bulk(
-    request: FAPriceBulkDeleteRequest,
+    assets: List[FAAssetDelete],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk delete price ranges (PRIMARY bulk endpoint)."""
     try:
-        return await AssetSourceManager.bulk_delete_prices(request.assets, session)
+        return await AssetSourceManager.bulk_delete_prices(assets, session)
     except Exception as e:
         logger.error(f"Error in bulk delete prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -558,96 +554,14 @@ async def read_assets_bulk(
 
 @price_router.post("/refresh", response_model=FABulkRefreshResponse)
 async def refresh_prices_bulk(
-    request: FABulkRefreshRequest,
+    requests: List[FARefreshItem],
     session: AsyncSession = Depends(get_session_generator)
     ):
     """Bulk refresh prices via providers (PRIMARY bulk endpoint)."""
     try:
-        return await AssetSourceManager.bulk_refresh_prices(request.requests, session)
+        return await AssetSourceManager.bulk_refresh_prices(requests, session)
     except Exception as e:
         logger.error(f"Error in bulk refresh prices: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@metadata_router.patch("", response_model=list[FAMetadataRefreshResult])
-async def update_assets_metadata_bulk(
-    patches: List[FAPatchMetadataItem],
-    session: AsyncSession = Depends(get_session_generator)
-    ):
-    """
-    Bulk partial update (PATCH) of asset classification metadata.
-
-    Follows RFC 7386 JSON Merge Patch semantics:
-    - Absent fields in patch: ignored (no change)
-    - Field = null: clears the field
-    - Field = value: updates the field
-
-    **Geographic Area Handling**:
-    - Full replacement (not merge) of geographic_area dict
-    - Countries normalized to ISO-3166-A3 codes
-    - Weights must sum to 1.0 (±0.0001 tolerance)
-    - Weights quantized to 4 decimal places
-
-    **Request Body**:
-    ```json
-    [
-      {
-        "asset_id": 1,
-        "patch": {
-          "sector": "Technology",
-          "geographic_area": {
-            "USA": "0.6",
-            "GBR": "0.4"
-          }
-        }
-      }
-    ]
-    ```
-
-    **Response** (per-item results):
-    ```json
-    [
-      {
-        "asset_id": 1,
-        "success": true,
-        "message": "updated",
-        "changes": [
-          {"field": "geographic_area", "old": {...}, "new": {...}}
-        ]
-      }
-    ]
-    ```
-
-    **Validation Errors** (per-item):
-    - Invalid country code → success=false, message with details
-    - Geographic area sum != 1.0 → success=false
-    - Negative weights → success=false
-
-    Args:
-        patches: List of metadata patches
-        session: Database session
-
-    Returns:
-        List of FAMetadataRefreshResult (per-item success/failure)
-
-    Raises:
-        HTTPException: 500 if unexpected error occurs
-    """
-    try:
-        results = []
-        for item in patches:
-            try:
-                result = await AssetMetadataService.update_asset_metadata(item.asset_id, item.patch, session)
-                # Result is now FAMetadataRefreshResult with changes included
-                results.append(result)
-            except ValueError as e:
-                results.append(FAMetadataRefreshResult(asset_id=item.asset_id, success=False, message=str(e), changes=None))
-            except Exception as e:
-                logger.error(f"Error updating metadata for asset {item.asset_id}: {e}")
-                results.append(FAMetadataRefreshResult(asset_id=item.asset_id, success=False, message="internal error", changes=None))
-        return results
-    except Exception as e:
-        logger.error(f"Error in bulk metadata update: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -718,8 +632,7 @@ async def refresh_assets_from_provider(
 
 
 # ============================================================================
-# Include sub-route in main router
+# Include sub-routes in main router
 # ============================================================================
-asset_router.include_router(metadata_router)
 asset_router.include_router(price_router)
 asset_router.include_router(provider_router)
