@@ -737,15 +737,70 @@ def services_all(verbose: bool = False) -> bool:
 
 def api_fx(verbose: bool = False) -> bool:
     """
-    Run FX API endpoint tests.
+    Run FX API endpoint tests (conversion, providers, pair sources).
     """
     print_section("FX API Endpoint Tests")
     print_info("Testing REST API endpoints for FX functionality")
+    print_info("Tests: Currency conversion, providers, pair sources CRUD")
     print_info("Note: Server will be automatically started and stopped by test")
 
     return run_command(
         ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_fx_api.py", "-v"],
         "FX API tests",
+        verbose=verbose
+        )
+
+
+def api_fx_sync(verbose: bool = False) -> bool:
+    """
+    Run FX Sync API endpoint tests.
+    """
+    print_section("FX Sync API Endpoint Tests")
+    print_info("Testing FX rate synchronization endpoints")
+    print_info("Tests: GET /fx/currencies/sync with all scenarios")
+    print_info("Tests: Error handling (FXServiceError), auto-config mode, provider validation")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_fx_sync.py", "-v"],
+        "FX Sync API tests",
+        verbose=verbose
+        )
+
+
+def api_assets_price(verbose: bool = False) -> bool:
+    """
+    Run Assets Price API endpoint tests.
+    """
+    print_section("Assets Price API Endpoint Tests")
+    print_info("Testing asset price management endpoints")
+    print_info("Tests: POST /assets/prices (bulk upsert)")
+    print_info("Tests: DELETE /assets/prices (bulk delete)")
+    print_info("Tests: GET /assets/prices/{asset_id}")
+    print_info("Tests: POST /assets/prices/refresh (from providers)")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_price.py", "-v"],
+        "Assets Price API tests",
+        verbose=verbose
+        )
+
+
+def api_assets_provider(verbose: bool = False) -> bool:
+    """
+    Run Assets Provider API endpoint tests.
+    """
+    print_section("Assets Provider API Endpoint Tests")
+    print_info("Testing provider assignment endpoints")
+    print_info("Tests: GET /assets/provider/assignments")
+    print_info("Tests: POST /assets/provider (edge cases)")
+    print_info("Tests: DELETE /assets/provider (edge cases)")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_provider.py", "-v"],
+        "Assets Provider API tests",
         verbose=verbose
         )
 
@@ -792,8 +847,11 @@ def api_test(verbose: bool = False) -> bool:
 
     tests = [
         ("FX API", lambda: api_fx(verbose)),
+        ("FX Sync API", lambda: api_fx_sync(verbose)),
         ("Assets Metadata API", lambda: api_assets_metadata(verbose)),
         ("Assets CRUD API", lambda: api_assets_crud(verbose)),
+        ("Assets Price API", lambda: api_assets_price(verbose)),
+        ("Assets Provider API", lambda: api_assets_provider(verbose)),
         ]
 
     results = []
@@ -1224,6 +1282,10 @@ Test commands:
   fx              - Test FX endpoints (GET /currencies, POST /sync, GET /convert)
                     📋 Prerequisites: Services FX conversion subsystem (run: db fx-rates)
                     Note: Server will be automatically started and stopped by test
+
+  fx-sync         - Test FX sync endpoints (GET /currencies/sync)
+                    📋 Prerequisite: External FX API working (run: external all)
+                    Note: Server will be automatically started and stopped by test
   
   assets-metadata - Test Assets Metadata endpoints (PATCH, bulk read, refresh)
                     📋 Prerequisites: Database created (run: db create)
@@ -1234,7 +1296,13 @@ Test commands:
                     📋 Prerequisites: Database created (run: db create)
                     💡 Tests: POST /bulk (create), GET /list (filter), DELETE /bulk
                     Note: Server will be automatically started and stopped by test
-         
+
+  assets-provider - Test Asset provider assignment enpoint
+                    Note: Server will be automatically started and stopped by test
+                    
+  assets-price    - Test Asset price data endpoint
+                    Note: Server will be automatically started and stopped by test
+                    
   all             - Run all API tests (FX + Assets Metadata + Assets CRUD)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
@@ -1242,7 +1310,7 @@ Test commands:
 
     api_parser.add_argument(
         "action",
-        choices=["fx", "assets-metadata", "assets-crud", "all"],
+        choices=["fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "all"],
         help="API test to run"
         )
 
@@ -1404,10 +1472,16 @@ def main():
         # API tests
         if args.action == "fx":
             success = api_fx(verbose=verbose)
+        elif args.action == "fx-sync":
+            success = api_fx_sync(verbose=verbose)
         elif args.action == "assets-metadata":
             success = api_assets_metadata(verbose=verbose)
         elif args.action == "assets-crud":
             success = api_assets_crud(verbose=verbose)
+        elif args.action == "assets-price":
+            success = api_assets_price(verbose=verbose)
+        elif args.action == "assets-provider":
+            success = api_assets_provider(verbose=verbose)
         elif args.action == "all":
             success = api_test(verbose=verbose)
 

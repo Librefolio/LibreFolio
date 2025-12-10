@@ -13,7 +13,10 @@ Per soddisfare i requisiti di **responsività**, gestione semplice di **tab/moda
 ## 2. Architettura Integrata (Soluzione B)
 
 *   **Unico Container**: Frontend statico e backend (ASGI) serviti dallo stesso processo Uvicorn.
-*   **Unica Porta HTTPS**: Tutto su porta HTTPS (es. 8443), zero CORS issues.
+*   **Unica Porta HTTPS (Produzione)**: Il server principale deve essere esposto in modo sicuro tramite HTTPS (es. porta 8443), eliminando problemi CORS.
+*   **Server di Test**:
+    *   Deve essere sempre creato con un utente e password standard predefiniti.
+    *   I test automatizzati dovranno effettuare il login utilizzando queste credenziali base.
 *   **Backend FastAPI**: Serve static files su `/`, API su `/api/*` e Auth su `/auth/*`.
 
 ## 3. Sviluppo del Frontend (SvelteKit)
@@ -28,7 +31,11 @@ Per soddisfare i requisiti di **responsività**, gestione semplice di **tab/moda
     *   Supporto per **SVG animati**: implementati come componenti Svelte inline o tramite CSS animations per garantire leggerezza e scalabilità senza pesare sul bundle.
 
 ### 3.2. Login e Dashboard
-*   **Login Page**: Form minimalista centrato, con supporto visivo per lo sfondo animato. Chiamata POST a `/auth/login`.
+*   **Login Page**: Form minimalista centrato.
+    *   **UI Reference**: Vedere `@mkdocs_src/docs/POC_UX/login/login_screen_1.jpg`.
+    *   **Logo**: Punta ad un file (attualmente placeholder).
+    *   **Background**: Dinamico con rette che salgono e scendono ("chart-like" animations), esteticamente curato.
+    *   **Action**: Chiamata POST a `/auth/login`.
 *   **Dashboard**:
     *   Layout responsivo.
     *   Navigazione tramite Tabs (es. "Portafoglio", "Transazioni", "Analisi").
@@ -44,8 +51,8 @@ Per soddisfare i requisiti di **responsività**, gestione semplice di **tab/moda
 ### 4.2. Recupero Account (Terminale Only)
 Per proteggere da attacchi remoti ma permettere il recupero con accesso fisico:
 *   **Nessun Endpoint di Reset**: Non esisteranno API pubbliche (`/api/reset-password`) per il reset.
-*   **CLI Script**: Sviluppo di uno script Python (es. `manage.py` o integrato in `dev.sh`) eseguibile solo da terminale server.
-    *   Comando: `python manage.py user reset-password <username>`
+*   **CLI Script & dev.sh**: Il reset deve essere accessibile tramite `dev.sh`.
+    *   Comando: `./dev.sh reset-password <username>` (che invocherà internamente uno script Python dedicato).
     *   Funzione: Genera un nuovo hash per una password fornita o generata casualmente e aggiorna direttamente il DB.
     *   Sicurezza: Richiede accesso alla shell del server/container, garantendo che solo l'amministratore fisico possa effettuare il reset.
 

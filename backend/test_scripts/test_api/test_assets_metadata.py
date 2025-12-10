@@ -446,5 +446,158 @@ async def test_patch_metadata_multiple_assets(test_server):
         print_success("✓ Multiple assets patched in one request")
 
 
+# ============================================================
+# Test 11: PATCH /assets - Geographic area invalid weights
+# ============================================================
+@pytest.mark.asyncio
+async def test_patch_with_geographic_area_invalid_weights(test_server):
+    """Test 11: PATCH /assets - Geographic area with invalid weight distribution."""
+    print_section("Test 11: PATCH /assets - Geographic Area Invalid Weights")
+
+    async with httpx.AsyncClient() as client:
+        # Create asset
+        asset_item = FAAssetCreateItem(
+            display_name=f"Geo Invalid {unique_id('GEOINV')}",
+            currency="USD",
+            asset_type=AssetType.STOCK
+        )
+        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+
+        # Try to patch with geographic_area weights sum != 1.0
+        # Send raw JSON to bypass Pydantic validation (test API validation)
+        invalid_json = [{
+            "asset_id": asset_id,
+            "classification_params": {
+                "geographic_area": {
+                    "distribution": {"USA": 0.5, "CAN": 0.3}  # sum = 0.8 != 1.0
+                }
+            }
+        }]
+
+        response = await client.patch(
+            f"{API_BASE}/assets",
+            json=invalid_json,
+            timeout=TIMEOUT
+        )
+
+        # Should reject with 422
+        assert response.status_code == 422, f"Expected 422, got {response.status_code}"
+        error_data = response.json()
+        assert "detail" in error_data
+        print_success("✓ Invalid geographic area weights correctly rejected with 422")
+
+
+# ============================================================
+# Test 12: PATCH /assets - Classification validation
+# ============================================================
+@pytest.mark.asyncio
+async def test_patch_classification_validation(test_server):
+    """Test 12: PATCH /assets - Classification params validation."""
+    print_section("Test 12: PATCH /assets - Classification Validation")
+
+    async with httpx.AsyncClient() as client:
+        # Create asset
+        asset_item = FAAssetCreateItem(
+            display_name=f"Class Valid {unique_id('CLSVAL')}",
+            currency="USD"
+        )
+        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+
+        # Try to patch with invalid classification_params structure
+        # Send raw JSON to bypass Pydantic validation
+        invalid_json = {
+            "asset_id": asset_id,
+            "classification_params": {
+                "sector": 123,  # Should be string
+                "geographic_area": "invalid"  # Should be dict
+            }
+        }
+
+        response = await client.patch(
+            f"{API_BASE}/assets",
+            json=[invalid_json],
+            timeout=TIMEOUT
+        )
+
+        # Should reject with 422
+        assert response.status_code == 422, f"Expected 422, got {response.status_code}"
+        print_success("✓ Invalid classification_params rejected with 422")
+
+
+# ============================================================
+# Test 13: PATCH /assets - Remove all classification params
+# ============================================================
+@pytest.mark.asyncio
+async def test_patch_remove_all_classification(test_server):
+    """Test 13: PATCH /assets - Remove all classification_params."""
+    print_section("Test 13: PATCH /assets - Remove All Classification")
+
+    async with httpx.AsyncClient() as client:
+        # Create asset with classification_params
+        asset_item = FAAssetCreateItem(
+            display_name=f"Remove Class {unique_id('RMCLS')}",
+            currency="USD",
+            classification_params=FAClassificationParams(
+                sector="Technology",
+                geographic_area=FAGeographicArea(distribution={"USA": 1.0})
+            )
+        )
+        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+        print_info(f"  Created asset with classification_params")
+
+        # Verify it has classification_params
+        query_resp = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+        assets_before = [FAAssetMetadataResponse(**a) for a in query_resp.json()]
+        assert assets_before[0].classification_params is not None
+        print_info("  Verified: asset has classification_params")
+
+        # Remove all classification_params by sending empty dict
+        # PATCH semantics: to clear the entire classification_params object, send empty dict
+        # Individual field nulls are merged into existing classification_params
+        patch_json = [{
+            "asset_id": asset_id,
+            "classification_params": {}  # Empty dict = remove all classification fields
+        }]
+
+        response = await client.patch(
+            f"{API_BASE}/assets",
+            json=patch_json,
+            timeout=TIMEOUT
+        )
+
+        assert response.status_code == 200, f"PATCH failed: {response.status_code}"
+        patch_response = FABulkAssetPatchResponse(**response.json())
+        assert patch_response.results[0].success
+        print_info("  PATCH successful")
+
+        # Verify classification_params is now None/empty
+        query_resp2 = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+        assets_after = [FAAssetMetadataResponse(**a) for a in query_resp2.json()]
+
+        # Classification params should be None or all fields empty
+        print_info(f"  After PATCH classification_params: {assets_after[0].classification_params}")
+
+        # Accept both None and empty string for cleared fields
+        if assets_after[0].classification_params is None:
+            print_success("✓ All classification_params removed (None)")
+        else:
+            # Check all fields are empty/None
+            cp = assets_after[0].classification_params
+            # sector should be None or empty string
+            sector_cleared = not cp.sector or cp.sector == ""
+            # geographic_area should be None or have empty distribution
+            geo_cleared = cp.geographic_area is None or not cp.geographic_area.distribution
+
+            assert sector_cleared, f"Expected sector to be cleared, got: {cp.sector}"
+            assert geo_cleared, f"Expected geographic_area to be cleared, got: {cp.geographic_area}"
+            print_success("✓ All classification_params fields cleared")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
