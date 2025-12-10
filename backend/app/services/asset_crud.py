@@ -16,9 +16,11 @@ TODO (Plan 05b - Step 12): Schema changes to implement
 3. Update FABulkAssetDeleteResponse:
    - Now inherits from BaseBulkDeleteResponse (no changes needed if using base correctly)
 """
-from typing import List
+import json
+from typing import List, Any
 
-from sqlalchemy import select, and_, or_
+import mergedeep
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment, AssetType
@@ -33,9 +35,8 @@ from backend.app.schemas.assets import (
     FAAssetDeleteResult,
     FAAssetPatchItem,
     FABulkAssetPatchResponse,
-    FAAssetPatchResult,
+    FAAssetPatchResult, FAClassificationParams,
     )
-from backend.app.utils.validation_utils import normalize_currency_code
 
 logger = get_logger(__name__)
 
@@ -126,7 +127,7 @@ class AssetCRUDService:
         return FABulkAssetCreateResponse(
             results=results,
             success_count=success_count,
-            failed_count=len(results) - success_count
+            errors=[]
             )
 
     @staticmethod
@@ -236,6 +237,7 @@ class AssetCRUDService:
                 results.append(FAAssetDeleteResult(
                     asset_id=asset_id,
                     success=True,
+                    deleted_count=1,
                     message="Asset deleted successfully"
                     ))
 
@@ -254,6 +256,7 @@ class AssetCRUDService:
                 results.append(FAAssetDeleteResult(
                     asset_id=asset_id,
                     success=False,
+                    deleted_count=0,
                     message=message
                     ))
                 logger.error(f"Error deleting asset {asset_id}: {e}")
@@ -269,7 +272,7 @@ class AssetCRUDService:
         return FABulkAssetDeleteResponse(
             results=results,
             success_count=success_count,
-            failed_count=len(results) - success_count
+            errors=[]  # Operation-level errors (none for now)
             )
 
     @staticmethod
@@ -281,8 +284,8 @@ class AssetCRUDService:
         Patch multiple assets in bulk (partial success allowed).
 
         Merge logic:
-        - Field present in patch (even if None): UPDATE or BLANK
-        - Field absent in patch: IGNORE (keep existing value)
+        - Field absent in patch or None: IGNORE (keep existing value)
+        - Field present in patch: UPDATE or BLANK (to delete a string set to empty)
 
         For classification_params:
         - If None: Set DB column to NULL
@@ -296,7 +299,6 @@ class AssetCRUDService:
             FABulkAssetPatchResponse with per-item results
         """
 
-
         results: list[FAAssetPatchResult] = []
 
         for patch in patches:
@@ -304,50 +306,38 @@ class AssetCRUDService:
                 # Fetch asset
                 stmt = select(Asset).where(Asset.id == patch.asset_id)
                 result = await session.execute(stmt)
-                asset = result.scalar_one_or_none()
+                asset: Asset = result.scalar_one_or_none()
 
                 if not asset:
-                    results.append(FAAssetPatchResult(
-                        asset_id=patch.asset_id,
-                        success=False,
-                        message=f"Asset {patch.asset_id} not found",
-                        updated_fields=None
-                    ))
+                    results.append(FAAssetPatchResult(asset_id=patch.asset_id, success=False, message=f"Asset {patch.asset_id} not found", updated_fields=None))
                     continue
+                asset_classification_params_before = json.loads(asset.classification_params) if asset.classification_params else {}
+                # TODO: trasforma il log in debug una volta testato
+                logger.info(f"Asset found for patching: id={patch.asset_id}: {asset.model_dump_json()}")
 
                 # Track updated fields
-                updated_fields = []
+                updated_fields:List[tuple[str, Any,Any]] = []
 
                 # Update fields if present in patch (use model_dump to detect presence)
-                patch_dict = patch.model_dump(exclude={'asset_id'}, exclude_unset=True)
-
+                patch_dict = patch.model_dump(mode='json', exclude={'asset_id'}, exclude_unset=True, exclude_none=True)
                 for field, value in patch_dict.items():
-                    if field == 'classification_params':
-                        if value is None:
-                            asset.classification_params = None
-                        else:
-                            # value is FAClassificationParams instance
-                            asset.classification_params = value.model_dump_json(exclude_none=True)
-                        updated_fields.append('classification_params')
-                    elif field == 'currency':
-                        # Validate currency
-                        if value:
-                            asset.currency = normalize_currency_code(value)
-                        else:
-                            asset.currency = value
-                        updated_fields.append('currency')
-                    elif field == 'asset_type':
-                        # Validate enum
-                        if value:
-                            try:
-                                AssetType(value)
-                                asset.asset_type = value
-                                updated_fields.append('asset_type')
-                            except ValueError:
-                                raise ValueError(f"Invalid asset_type: {value}")
-                    else:
-                        setattr(asset, field, value)
-                        updated_fields.append(field)
+                    # TODO: trasforma il log in debug una volta testato
+                    logger.info(f"Patching field '{field}': '{value}'")
+                    if field == "classification_params": # merge new sub-field with old ones
+                        value = mergedeep.merge({}, asset_classification_params_before, value)
+                        # Set empty strings to None to allow exclusion
+                        value = {k: v if v != "" else None for k, v in value.items()}
+                        # Store only setted params, delete
+                        value = FAClassificationParams(**value).model_dump(mode='json', exclude_none=True)
+                    if not value:
+                        value = None  # Explicitly set to None if falsey value (e.g., empty string)
+                    if isinstance(value, dict):
+                        value = json.dumps(value)  # Transform dict as serialized JSON
+                    oldVal=getattr(asset, field)
+                    setattr(asset, field, value)
+                    updated_fields.append((field, oldVal, value))
+                    # TODO: trasforma il log in debug una volta testato
+                    logger.info(f"updated field '{field}': '{oldVal}' -> '{value}'")
 
                 await session.flush()
 
@@ -356,7 +346,7 @@ class AssetCRUDService:
                     success=True,
                     message=f"Asset patched successfully ({len(updated_fields)} fields)",
                     updated_fields=updated_fields
-                ))
+                    ))
 
                 logger.info(f"Asset patched: id={patch.asset_id}, fields={updated_fields}")
 
@@ -367,17 +357,15 @@ class AssetCRUDService:
                     success=False,
                     message=f"Error: {str(e)}",
                     updated_fields=None
-                ))
+                    ))
 
         # Commit all successful patches
         await session.commit()
 
         success_count = sum(1 for r in results if r.success)
-        failed_count = len(results) - success_count
 
         return FABulkAssetPatchResponse(
             results=results,
             success_count=success_count,
-            failed_count=failed_count
-        )
-
+            errors=[]
+            )

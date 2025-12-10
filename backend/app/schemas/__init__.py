@@ -5,7 +5,7 @@ Used across multiple subsystems (DB, API, Services) to validate data structures
 and standardize data exchange between components.
 
 **Organization by Domain**:
-- common.py: Shared schemas (BackwardFillInfo, DateRangeModel)
+- common.py: Shared schemas (BackwardFillInfo, DateRangeModel, BaseBulkResponse, BaseDeleteResult)
 - assets.py: Asset-related schemas (FAPricePoint, ScheduledInvestment*, etc.)
 - provider.py: Provider assignment schemas (FA + FX)
 - prices.py: FA price operation schemas (upsert, delete, query)
@@ -20,143 +20,152 @@ and standardize data exchange between components.
 - No backward compatibility maintained during v2.1 refactoring
 - All models use Pydantic v2 with strict validation
 - Schemas separated from API layer (no inline definitions)
+- Plan 05b: Removed 16 wrapper classes (now use List[ItemType] directly)
 """
 from backend.app.schemas.assets import (
     FACurrentValue,
     FAPricePoint,
     FAHistoricalData,
     FAAssetProviderAssignment,
+    FAAssetPatchItem,
     # Metadata & classification
     FAGeographicArea,
-    FAClassificationParams,
     FAClassificationParams,
     FAAssetMetadataResponse,
     FAMetadataChangeDetail,
     FAMetadataRefreshResult,
     FABulkMetadataRefreshResponse,
-    FAPatchMetadataItem,
-    FABulkPatchMetadataRequest,
-    # Asset CRUD (NEW)
+    FABulkAssetPatchResponse,
+    FAAssetPatchResult,
+    # Asset CRUD
     FAAssetCreateItem,
-    FABulkAssetCreateRequest,
     FAAssetCreateResult,
     FABulkAssetCreateResponse,
     FAAinfoFiltersRequest,
     FAinfoResponse,
-    FABulkAssetDeleteRequest,
     FAAssetDeleteResult,
     FABulkAssetDeleteResponse,
     )
 from backend.app.schemas.common import (
     BackwardFillInfo,
     DateRangeModel,
+    BaseBulkResponse,
+    BaseDeleteResult,
+    BaseBulkDeleteResponse,
     )
 from backend.app.schemas.fx import (
     FXProviderInfo,
-    FXConvertRequest,
+    FXConversionRequest,
+    FXConversionResult,
     FXConvertResponse,
-    FXBulkUpsertRequest,
+    FXUpsertItem,
     FXBulkUpsertResponse,
-    FXBulkDeleteRequest,
+    FXDeleteItem,
+    FXDeleteResult,
     FXBulkDeleteResponse,
+    FXPairSourceItem,
     FXPairSourcesResponse,
-    FXCreatePairSourcesRequest,
+    FXPairSourceResult,
+    FXCreatePairSourcesResponse,
     FXDeletePairSourceItem,
-    FXDeletePairSourcesRequest,
+    FXDeletePairSourceResult,
     FXDeletePairSourcesResponse,
+    FXCurrenciesResponse,
     )
 from backend.app.schemas.prices import (
     FAUpsert,
-    FAUpsertItem,
+    FAPricePoint,
     FAAssetDelete,
-    FABulkUpsertRequest,
     FABulkUpsertResponse,
-    FAPriceBulkDeleteRequest,
     FABulkDeleteResponse,
     FAPriceDeleteResult,
+    FAUpsertResult,
     )
 from backend.app.schemas.provider import (
     FAProviderInfo,
-    FABulkAssignRequest,
     FABulkAssignResponse,
-    FABulkRemoveRequest,
     FABulkRemoveResponse,
     FAProviderAssignmentItem,
+    FAProviderAssignmentReadItem,
     FAProviderAssignmentResult,
     FAProviderRemovalResult,
+    FAProviderRefreshFieldsDetail,
     )
 from backend.app.schemas.refresh import (
     FARefreshItem,
-    FABulkRefreshRequest,
     FABulkRefreshResponse,
     FARefreshResult,
     FXSyncResponse,
     )
 
 __all__ = [
-    # Common
+    # Common (base classes)
     "BackwardFillInfo",
     "DateRangeModel",
+    "BaseBulkResponse",
+    "BaseDeleteResult",
+    "BaseBulkDeleteResponse",
     # Assets
     "FACurrentValue",
     "FAPricePoint",
     "FAHistoricalData",
     "FAAssetProviderAssignment",
+    "FAAssetPatchItem",
     # Assets: Metadata & classification
     "FAGeographicArea",
-    "FAClassificationParams",
     "FAClassificationParams",
     "FAAssetMetadataResponse",
     "FAMetadataChangeDetail",
     "FAMetadataRefreshResult",
     "FABulkMetadataRefreshResponse",
-    "FAPatchMetadataItem",
-    "FABulkPatchMetadataRequest",
+    "FABulkAssetPatchResponse",
+    "FAAssetPatchResult",
     # Assets: CRUD
     "FAAssetCreateItem",
-    "FABulkAssetCreateRequest",
     "FAAssetCreateResult",
     "FABulkAssetCreateResponse",
     "FAAinfoFiltersRequest",
     "FAinfoResponse",
-    "FABulkAssetDeleteRequest",
-    "FAAssetDelete",
     "FAAssetDeleteResult",
     "FABulkAssetDeleteResponse",
     # Provider
     "FAProviderInfo",
-    "FABulkAssignRequest",
     "FABulkAssignResponse",
-    "FABulkRemoveRequest",
     "FABulkRemoveResponse",
     "FAProviderAssignmentItem",
+    "FAProviderAssignmentReadItem",
     "FAProviderAssignmentResult",
     "FAProviderRemovalResult",
+    "FAProviderRefreshFieldsDetail",
     # Prices
     "FAUpsert",
-    "FAUpsertItem",
-    "FABulkUpsertRequest",
+    "FAPricePoint",  # Note: FAUpsertItem merged into FAPricePoint
+    "FAAssetDelete",
     "FABulkUpsertResponse",
-    "FAPriceBulkDeleteRequest",
     "FABulkDeleteResponse",
     "FAPriceDeleteResult",
+    "FAUpsertResult",
     # Refresh
     "FARefreshItem",
-    "FABulkRefreshRequest",
     "FABulkRefreshResponse",
     "FARefreshResult",
     "FXSyncResponse",
     # FX
     "FXProviderInfo",
-    "FXConvertRequest",
+    "FXConversionRequest",
+    "FXConversionResult",
     "FXConvertResponse",
-    "FXBulkUpsertRequest",
+    "FXUpsertItem",
     "FXBulkUpsertResponse",
-    "FXBulkDeleteRequest",
+    "FXDeleteItem",
+    "FXDeleteResult",
     "FXBulkDeleteResponse",
+    "FXPairSourceItem",
     "FXPairSourcesResponse",
-    "FXCreatePairSourcesRequest",
+    "FXPairSourceResult",
+    "FXCreatePairSourcesResponse",
     "FXDeletePairSourceItem",
-    "FXDeletePairSourcesRequest",
+    "FXDeletePairSourceResult",
     "FXDeletePairSourcesResponse",
+    "FXCurrenciesResponse",
     ]

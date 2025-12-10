@@ -9,7 +9,7 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.session import get_async_engine
 from backend.app.services.asset_source import AssetSourceManager
-from backend.app.db.models import Asset, AssetType, ValuationModel
+from backend.app.db.models import Asset, AssetType
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.refresh import FARefreshItem
@@ -24,15 +24,15 @@ async def test_bulk_refresh_prices_orchestration():
     # Ensure providers discovered (in case modules were created after import)
     AssetProviderRegistry.auto_discover()
 
+    import time
+    timestamp = int(time.time() * 1000)
+
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         # Create an asset and assign a fake provider code (we expect provider registry to have a stub or error)
         asset = Asset(
-            display_name="Refresh Test Asset",
-            identifier="REFTEST",
-            identifier_type="TICKER",
+            display_name=f"Refresh Test Asset {timestamp}",
             currency="USD",
             asset_type=AssetType.STOCK,
-            valuation_model=ValuationModel.MARKET_PRICE,
             active=True,
             )
         session.add(asset)
@@ -40,12 +40,22 @@ async def test_bulk_refresh_prices_orchestration():
         await session.refresh(asset)
 
         # Assign a mock provider that returns deterministic prices
+        from backend.app.db.models import IdentifierType
         await AssetSourceManager.bulk_assign_providers([
-            FAProviderAssignmentItem(asset_id=asset.id, provider_code="mockprov", provider_params={})
+            FAProviderAssignmentItem(
+                asset_id=asset.id,
+                provider_code="mockprov",
+                identifier="REFRESH_TEST",
+                identifier_type=IdentifierType.UUID,
+                provider_params={},
+                fetch_interval=1440  # Optional but added for completeness
+            )
             ], session)
 
         # Execute refresh - expect prices to be inserted
-        payload = [FARefreshItem(asset_id=asset.id, start_date=date(2025, 1, 1), end_date=date(2025, 1, 3))]
+        # TODO (Plan 05b Step 12): Update to use DateRangeModel
+        from backend.app.schemas.common import DateRangeModel
+        payload = [FARefreshItem(asset_id=asset.id, date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)))]
         results = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         # Verify results

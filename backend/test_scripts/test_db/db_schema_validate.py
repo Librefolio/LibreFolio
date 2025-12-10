@@ -37,7 +37,6 @@ from backend.app.db.base import SQLModel
 from backend.app.db.models import (
     IdentifierType,
     AssetType,
-    ValuationModel,
     TransactionType,
     CashMovementType,
     )
@@ -190,8 +189,6 @@ def test_enum_values():
     assert IdentifierType.ISIN == "ISIN"
     assert AssetType.STOCK == "STOCK"
     assert AssetType.HOLD == "HOLD"
-    assert ValuationModel.MARKET_PRICE == "MARKET_PRICE"
-    assert ValuationModel.MANUAL == "MANUAL"
     assert TransactionType.BUY == "BUY"
     assert CashMovementType.DEPOSIT == "DEPOSIT"
 

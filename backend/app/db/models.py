@@ -12,6 +12,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Optional
 
+from pydantic import field_validator
 from sqlalchemy import (
     Column,
     UniqueConstraint,
@@ -356,6 +357,17 @@ class Asset(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+    @field_validator('classification_params')
+    def validate_classification_params(cls, v):
+        from backend.app.schemas.assets import FAClassificationParams
+        if v is None:
+            return v
+        if isinstance(v, FAClassificationParams):
+            return v.model_dump_json(exclude_none=True)
+        return FAClassificationParams(**v).model_dump_json(exclude_none=True)
+
+
 
 
 class Transaction(SQLModel, table=True):

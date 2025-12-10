@@ -57,7 +57,7 @@ from backend.app.db.models import (
 from backend.app.schemas import (
     FACurrentValue, FAHistoricalData,
     FAMetadataRefreshResult, FAPricePoint, BackwardFillInfo,
-    FAUpsert, FAUpsertItem, FAAssetDelete, FAProviderAssignmentItem,
+    FAUpsert, FAPricePoint, FAAssetDelete, FAProviderAssignmentItem,
     FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse,
     FABulkDeleteResponse, FAPriceDeleteResult, FABulkRemoveResponse,
     FAProviderRemovalResult, FABulkRefreshResponse, FARefreshResult)
@@ -330,6 +330,8 @@ class AssetSourceManager:
                 AssetProviderAssignment(
                     asset_id=a.asset_id,
                     provider_code=a.provider_code,
+                    identifier=a.identifier,
+                    identifier_type=a.identifier_type,
                     provider_params=params_to_store,
                     fetch_interval=a.fetch_interval,  # Already has default from Pydantic
                     last_fetch_at=None,  # Never fetched yet
@@ -372,30 +374,43 @@ class AssetSourceManager:
                                 # Set correct asset_id
                                 patch_item.asset_id = assignment.asset_id
 
-                                # NOTE: Auto-refresh during provider assignment has been REMOVED
-                                #
-                                # Design decision: Provider assignment and metadata refresh are now separate operations.
-                                #
-                                # Rationale:
-                                # - Cleaner separation of concerns (assign vs refresh)
-                                # - Faster assignment (no external API calls)
-                                # - User controls when to refresh
-                                # - Explicit refresh allows field selection (see refresh_assets_from_provider)
-                                #
-                                # To refresh metadata after assignment, call:
-                                #   POST /assets/provider/refresh
-                                #
-                                # The refresh endpoint allows specifying which fields to update:
-                                # - If fields not specified: update all fields the provider can fetch
-                                # - If fields specified: update only those fields (keys from FAAssetPatchItem)
-                                #
-                                # See: refresh_assets_from_provider() method below
-                                pass
+                                # Apply metadata to asset
+                                from backend.app.services.asset_metadata import AssetMetadataService
+                                import json
+
+                                changes_count = 0
+
+                                # Update asset_type if provided
+                                if patch_item.asset_type and patch_item.asset_type != asset.asset_type:
+                                    asset.asset_type = patch_item.asset_type
+                                    changes_count += 1
+
+                                # Update classification_params if provided
+                                if patch_item.classification_params:
+                                    # Parse current classification_params (JSON string -> object)
+                                    current_params = None
+                                    if asset.classification_params:
+                                        try:
+                                            current_dict = json.loads(asset.classification_params)
+                                            current_params = FAClassificationParams(**current_dict)
+                                        except Exception:
+                                            pass  # Invalid JSON, start fresh
+
+                                    # Apply partial update
+                                    updated_params = AssetMetadataService.apply_partial_update(current_params, patch_item.classification_params)
+
+                                    # Serialize back to JSON
+                                    asset.classification_params = json.dumps(updated_params.model_dump(mode="json", exclude_none=True))
+                                    changes_count += 1
+
+                                if changes_count > 0:
+                                    await session.commit()
+
                                 logger.info(
                                     "Metadata auto-populated from provider",
                                     asset_id=assignment.asset_id,
                                     provider=assignment.provider_code,
-                                    changes_count=0  # placeholder in attesa di implementazione
+                                    changes_count=changes_count
                                     )
                             else:
                                 result.metadata_updated = False
@@ -437,8 +452,19 @@ class AssetSourceManager:
             return FABulkRemoveResponse(results=[], success_count=0)
         await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids)))
         await session.commit()
-        results = [FAProviderRemovalResult(asset_id=aid, success=True, message="Provider removed") for aid in asset_ids]
-        return FABulkRemoveResponse(results=results, success_count=len(results))
+        results = [
+            FAProviderRemovalResult(
+                asset_id=aid,
+                success=True,
+                deleted_count=1,  # Always 1 for successful provider removal
+                message="Provider removed"
+            ) for aid in asset_ids
+        ]
+        return FABulkRemoveResponse(
+            results=results,
+            success_count=len(results),
+            errors=[]
+        )
 
     @staticmethod
     async def refresh_assets_from_provider(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:
@@ -602,12 +628,11 @@ class AssetSourceManager:
                     ))
 
         success_count = sum(1 for r in results if r.success)
-        failed_count = len(results) - success_count
 
         return FABulkMetadataRefreshResponse(
             results=results,
             success_count=success_count,
-            failed_count=failed_count
+            errors=[]
             )
 
     @staticmethod
@@ -766,13 +791,19 @@ class AssetSourceManager:
         results = [
             FAPriceDeleteResult(
                 asset_id=item.asset_id,
-                deleted=asset_delete_counts.get(item.asset_id, 0),
+                success=True,
+                deleted_count=asset_delete_counts.get(item.asset_id, 0),
                 message=f"Deleted prices in {len(item.date_ranges)} range(s)"
                 )
             for item in data
             ]
 
-        return FABulkDeleteResponse(deleted_count=deleted_count, results=results)
+        return FABulkDeleteResponse(
+            results=results,
+            success_count=len(results),
+            total_deleted=deleted_count,
+            errors=[]
+        )
 
     # ========================================================================
     # PRICE QUERY WITH BACKWARD-FILL + Special logic for PROVIDER DELEGATION
@@ -958,8 +989,8 @@ class AssetSourceManager:
 
         async def _process_single(item: FARefreshItem) -> FARefreshResult:
             asset_id = item.asset_id
-            start = item.start_date
-            end = item.end_date
+            start = item.date_range.start
+            end = item.date_range.end
 
             fetched_count = 0
             inserted_count = 0
@@ -1096,10 +1127,10 @@ class AssetSourceManager:
                     errors=errors
                     )
 
-            # Convert prices to FAUpsertItem objects
+            # Convert prices to FAPricePoint objects
             price_items = []
             for p in prices:
-                price_items.append(FAUpsertItem(
+                price_items.append(FAPricePoint(
                     date=p["date"],
                     open=p.get("open"),
                     high=p.get("high"),
@@ -1142,4 +1173,9 @@ class AssetSourceManager:
         # Wait for all to complete
         completed = await asyncio.gather(*tasks)
 
-        return FABulkRefreshResponse(results=list(completed))
+        results = list(completed)
+        return FABulkRefreshResponse(
+            results=results,
+            success_count=sum(1 for r in results if not r.errors),  # Success = no errors
+            errors=[]
+        )

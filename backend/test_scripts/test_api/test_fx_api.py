@@ -18,15 +18,18 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.schemas import (
-    FXConvertRequest, FXConvertResponse,
-    FXBulkUpsertRequest, FXBulkUpsertResponse,
-    FXBulkDeleteRequest, FXBulkDeleteResponse,
-    )
+from backend.app.schemas import FXConvertResponse, FXBulkUpsertResponse, FXBulkDeleteResponse
+from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.fx import (
-    FXProvidersResponse, FXConversionRequest, FXUpsertItem, FXDeleteItem, FXPairSourceItem, FXPairSourcesResponse,
-    FXCreatePairSourcesRequest, FXCreatePairSourcesResponse,
-    FXDeletePairSourceItem, FXDeletePairSourcesRequest,
+    FXConversionRequest,
+    FXUpsertItem,
+    FXDeleteItem,
+    FXPairSourceItem,
+    FXPairSourcesResponse,
+    FXCreatePairSourcesResponse,
+    FXDeletePairSourceItem,
+    FXProviderInfo,
+    FXDeletePairSourcesResponse,
     )
 from backend.app.schemas.refresh import FXSyncResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -105,22 +108,20 @@ async def test_get_providers(test_server):
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
-        # Parse response using Pydantic
-        providers_response = FXProvidersResponse(**response.json())
+        # Parse response as List[FXProviderInfo]
+        providers = [FXProviderInfo(**p) for p in response.json()]
 
-        assert providers_response.count > 0, "Should have at least one provider"
-        assert len(providers_response.providers) == providers_response.count, "Count mismatch"
+        assert len(providers) > 0, "Should have at least one provider"
 
         # Validate each provider
-        for provider in providers_response.providers:
+        for provider in providers:
             assert provider.code, "Provider should have code"
             assert provider.name, "Provider should have name"
             assert provider.base_currency, "Provider should have base_currency"
-            assert len(provider.base_currencies) > 0, "Provider should have at least one base currency"
-            assert provider.description, "Provider should have description"
+            assert hasattr(provider, 'icon_url'), "Provider should have icon_url field"
 
-        print_success(f"✓ Found {providers_response.count} providers")
-        print_info(f"  Providers: {', '.join([p.code for p in providers_response.providers])}")
+        print_success(f"✓ Found {len(providers)} providers")
+        print_info(f"  Providers: {', '.join([p.code for p in providers])}")
 
 
 @pytest.mark.asyncio
@@ -138,19 +139,17 @@ async def test_pair_sources_crud(test_server):
 
         # 3b. Create a new pair source
         print_info("3b. Create pair source (USD/EUR)")
-        create_request = FXCreatePairSourcesRequest(
-            sources=[
-                FXPairSourceItem(
-                    base="USD",
-                    quote="EUR",
-                    provider_code="ECB",
-                    priority=1
-                    )
-                ]
-            )
+        create_request_sources = [
+            FXPairSourceItem(
+                base="USD",
+                quote="EUR",
+                provider_code="ECB",
+                priority=2  # Use priority 2 to avoid conflict with existing EUR/USD priority 1
+                )
+            ]
         response = await client.post(
             f"{API_BASE}/fx/providers/pair-sources",
-            json=create_request.model_dump(mode="json"),
+            json=[s.model_dump(mode="json") for s in create_request_sources],
             timeout=TIMEOUT
             )
         assert response.status_code == 201, f"POST failed: {response.status_code}: {response.text}"
@@ -172,19 +171,17 @@ async def test_pair_sources_crud(test_server):
 
         # 3d. Update priority
         print_info("3d. Update priority")
-        update_request = FXCreatePairSourcesRequest(
-            sources=[
-                FXPairSourceItem(
-                    base="USD",
-                    quote="EUR",
-                    provider_code="ECB",
-                    priority=2
-                    )
-                ]
-            )
+        update_request_sources = [
+            FXPairSourceItem(
+                base="USD",
+                quote="EUR",
+                provider_code="ECB",
+                priority=3  # Update to priority 3
+                )
+            ]
         response = await client.post(
             f"{API_BASE}/fx/providers/pair-sources",
-            json=update_request.model_dump(mode="json"),
+            json=[s.model_dump(mode="json") for s in update_request_sources],
             timeout=TIMEOUT
             )
         assert response.status_code == 201, f"POST failed: {response.status_code}"
@@ -195,15 +192,13 @@ async def test_pair_sources_crud(test_server):
         # 3e. Delete pair source
         print_info("3e. Delete pair source")
 
-        delete_request = FXDeletePairSourcesRequest(
-            sources=[
-                FXDeletePairSourceItem(base="USD", quote="EUR")
-                ]
-            )
+        delete_request_sources = [
+            FXDeletePairSourceItem(base="USD", quote="EUR")
+            ]
         response = await client.request(
             method="DELETE",
             url=f"{API_BASE}/fx/providers/pair-sources",
-            content=delete_request.model_dump_json(),
+            json=[s.model_dump(mode="json") for s in delete_request_sources],
             headers={"Content-Type": "application/json"},
             timeout=TIMEOUT
             )
@@ -239,8 +234,8 @@ async def test_sync_rates(test_server):
         sync_response = FXSyncResponse(**response.json())
 
         assert sync_response.synced >= 0, "Synced count should be non-negative"
-        assert sync_response.date_range[0] == yesterday, "Start date should match"
-        assert sync_response.date_range[1] == yesterday, "End date should match"
+        assert sync_response.date_range.start == yesterday, "Start date should match"
+        assert sync_response.date_range.end == yesterday, "End date should match"
 
         print_success(f"✓ Sync completed: {sync_response.synced} rates synced")
         print_info(f"  Currencies: {', '.join(sync_response.currencies)}")
@@ -258,24 +253,26 @@ async def test_sync_rates_auto_config(test_server):
         # Step 1: Create pair source configuration in DB
         print_info("Step 1: Configure pair sources in DB")
 
-        pair_sources_request = FXCreatePairSourcesRequest(
-            sources=[
-                FXPairSourceItem(
-                    base="EUR",
-                    quote="USD",
-                    provider_code="ECB",
-                    priority=1
-                    ),
-                FXPairSourceItem(
-                    base="GBP",
-                    quote="USD",
-                    provider_code="ECB",  # ECB also provides GBP rates
-                    priority=1
-                    ),
-                ]
-            )
+        pair_sources = [
+            FXPairSourceItem(
+                base="EUR",
+                quote="USD",
+                provider_code="ECB",
+                priority=1
+                ),
+            FXPairSourceItem(
+                base="GBP",
+                quote="USD",
+                provider_code="ECB",  # ECB also provides GBP rates
+                priority=1
+                ),
+            ]
 
-        create_response = await client.post(f"{API_BASE}/fx/providers/pair-sources",json=pair_sources_request.model_dump(mode="json"),timeout=TIMEOUT)
+        create_response = await client.post(
+            f"{API_BASE}/fx/providers/pair-sources",
+            json=[s.model_dump(mode="json") for s in pair_sources],
+            timeout=TIMEOUT
+            )
         assert create_response.status_code == 201, f"Expected 201, got {create_response.status_code}: {create_response.text}"
 
         create_data = FXCreatePairSourcesResponse(**create_response.json())
@@ -299,12 +296,14 @@ async def test_sync_rates_auto_config(test_server):
         sync_data = FXSyncResponse(**sync_response.json())
 
         assert sync_data.synced >= 0, "Synced count should be non-negative"
-        assert sync_data.date_range[0] == yesterday, "Start date should match"
-        assert sync_data.date_range[1] == yesterday, "End date should match"
-        assert len(sync_data.currencies) > 0, "Should have synced at least one currency"
-
+        assert sync_data.date_range.start == yesterday, "Start date should match"
+        assert sync_data.date_range.end == yesterday, "End date should match"
+        # Note: currencies list may be empty on weekends/holidays when providers don't publish rates
         print_success(f"✓ Auto-config sync completed: {sync_data.synced} rates synced")
-        print_info(f"  Currencies: {', '.join(sync_data.currencies)}")
+        if len(sync_data.currencies) > 0:
+            print_info(f"  Currencies: {', '.join(sync_data.currencies)}")
+        else:
+            print_info("  ℹ️  No currencies synced (normal for weekends/holidays)")
 
         # Step 3: Test error case - currency not configured
         print_info("Step 3: Test missing currency configuration")
@@ -325,16 +324,14 @@ async def test_sync_rates_auto_config(test_server):
         # Step 4: Cleanup - delete pair sources
         print_info("Step 4: Cleanup pair sources")
 
-        delete_request = FXDeletePairSourcesRequest(
-            sources=[
-                FXDeletePairSourceItem(base="EUR", quote="USD"),
-                FXDeletePairSourceItem(base="GBP", quote="USD"),
-                ]
-            )
+        delete_sources = [
+            FXDeletePairSourceItem(base="EUR", quote="USD"),
+            FXDeletePairSourceItem(base="GBP", quote="USD"),
+            ]
         delete_response = await client.request(
             method="DELETE",
             url=f"{API_BASE}/fx/providers/pair-sources",
-            json=delete_request.model_dump(mode="json"),
+            json=[s.model_dump(mode="json") for s in delete_sources],
             timeout=TIMEOUT
             )
 
@@ -358,24 +355,26 @@ async def test_convert_currency(test_server):
             "currencies": "EUR,GBP",
             "provider": "ECB"
             }
-        await client.post(
+        await client.get(  # Sync is GET not POST
             f"{API_BASE}/fx/currencies/sync",
             params=sync_params,
             timeout=TIMEOUT
             )
 
-        # Now convert (use Pydantic models)
-        request = FXConvertRequest(
-            conversions=[
-                FXConversionRequest(
-                    amount=Decimal("100"),
-                    **{"from": "USD", "to": "EUR"},  # Use dict unpacking for aliased fields test
-                    start_date=today - timedelta(days=1)
-                    )
-                ]
-            )
+        # Now convert (use List directly)
+        conversions = [
+            FXConversionRequest(
+                amount=Decimal("100"),
+                **{"from": "USD", "to": "EUR"},  # Use dict unpacking for aliased fields test
+                date_range=DateRangeModel(start=today - timedelta(days=1))
+                )
+            ]
 
-        response = await client.post(f"{API_BASE}/fx/currencies/convert",json=request.model_dump(mode="json"),timeout=TIMEOUT)
+        response = await client.post(
+            f"{API_BASE}/fx/currencies/convert",
+            json=[c.model_dump(mode="json") for c in conversions],
+            timeout=TIMEOUT
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -399,19 +398,17 @@ async def test_convert_missing_rate(test_server):
 
     async with httpx.AsyncClient() as client:
         # Use a fake currency pair that definitely doesn't exist
-        request = FXConvertRequest(
-            conversions=[
-                FXConversionRequest(
-                    amount=Decimal("100"),
-                    **{"from": "XXX", "to": "YYY"},  # Invalid currencies
-                    start_date=date.today()
-                    )
-                ]
-            )
+        conversions = [
+            FXConversionRequest(
+                amount=Decimal("100"),
+                **{"from": "XXX", "to": "YYY"},  # Invalid currencies
+                date_range=DateRangeModel(start=date.today())
+                )
+            ]
 
         response = await client.post(
             f"{API_BASE}/fx/currencies/convert",
-            json=request.model_dump(mode="json"),
+            json=[c.model_dump(mode="json") for c in conversions],
             timeout=TIMEOUT
             )
 
@@ -435,22 +432,20 @@ async def test_manual_rate_upsert(test_server):
     async with httpx.AsyncClient() as client:
         today = date.today()
 
-        # Upsert a test rate (use Pydantic model)
-        request = FXBulkUpsertRequest(
-            rates=[
-                FXUpsertItem(
-                    **{"date": today},  # Use dict unpacking for aliased field
-                    base="GBP",
-                    quote="USD",
-                    rate=Decimal("1.25"),
-                    source="MANUAL"
-                    )
-                ]
-            )
+        # Upsert a test rate (use List directly)
+        rates = [
+            FXUpsertItem(
+                **{"date": today},  # Use dict unpacking for aliased field
+                base="GBP",
+                quote="USD",
+                rate=Decimal("1.25"),
+                source="MANUAL"
+                )
+            ]
 
         response = await client.post(
             f"{API_BASE}/fx/currencies/rate",
-            json=request.model_dump(mode="json"),
+            json=[r.model_dump(mode="json") for r in rates],
             timeout=TIMEOUT
             )
 
@@ -480,27 +475,27 @@ async def test_bulk_conversions(test_server):
         today = date.today()
 
         # Setup: Ensure we have some rates
-        upsert_request = FXBulkUpsertRequest(
-            rates=[
-                FXUpsertItem(**{"date": today}, base="USD", quote="EUR", rate=Decimal("0.85"), source="MANUAL"),
-                FXUpsertItem(**{"date": today}, base="GBP", quote="USD", rate=Decimal("1.25"), source="MANUAL"),
-                ]
-            )
+        upsert_rates = [
+            FXUpsertItem(**{"date": today}, base="USD", quote="EUR", rate=Decimal("0.85"), source="MANUAL"),
+            FXUpsertItem(**{"date": today}, base="GBP", quote="USD", rate=Decimal("1.25"), source="MANUAL"),
+            ]
         await client.post(
             f"{API_BASE}/fx/currencies/rate",
-            json=upsert_request.model_dump(mode="json"),
+            json=[r.model_dump(mode="json") for r in upsert_rates],
             timeout=TIMEOUT
             )
 
         # Bulk convert
-        request = FXConvertRequest(
-            conversions=[
-                FXConversionRequest(amount=Decimal("100"), **{"from": "USD", "to": "EUR"}, start_date=today),
-                FXConversionRequest(amount=Decimal("200"), **{"from": "GBP", "to": "USD"}, start_date=today),
-                ]
-            )
+        conversions = [
+            FXConversionRequest(amount=Decimal("100"), **{"from": "USD", "to": "EUR"}, date_range=DateRangeModel(start=today)),
+            FXConversionRequest(amount=Decimal("200"), **{"from": "GBP", "to": "USD"}, date_range=DateRangeModel(start=today)),
+            ]
 
-        response = await client.post(f"{API_BASE}/fx/currencies/convert",json=request.model_dump(mode="json"),timeout=TIMEOUT)
+        response = await client.post(
+            f"{API_BASE}/fx/currencies/convert",
+            json=[c.model_dump(mode="json") for c in conversions],
+            timeout=TIMEOUT
+            )
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
         convert_response = FXConvertResponse(**response.json())
@@ -518,15 +513,17 @@ async def test_bulk_rate_upserts(test_server):
         today = date.today()
 
         # Bulk upsert
-        request = FXBulkUpsertRequest(
-            rates=[
-                FXUpsertItem(**{"date": today}, base="EUR", quote="USD", rate=Decimal("1.10"), source="MANUAL"),
-                FXUpsertItem(**{"date": today}, base="JPY", quote="USD", rate=Decimal("0.0067"), source="MANUAL"),
-                FXUpsertItem(**{"date": today}, base="CHF", quote="USD", rate=Decimal("1.12"), source="MANUAL"),
-                ]
-            )
+        rates = [
+            FXUpsertItem(**{"date": today}, base="EUR", quote="USD", rate=Decimal("1.10"), source="MANUAL"),
+            FXUpsertItem(**{"date": today}, base="JPY", quote="USD", rate=Decimal("0.0067"), source="MANUAL"),
+            FXUpsertItem(**{"date": today}, base="CHF", quote="USD", rate=Decimal("1.12"), source="MANUAL"),
+            ]
 
-        response = await client.post(f"{API_BASE}/fx/currencies/rate",json=request.model_dump(mode="json"),timeout=TIMEOUT)
+        response = await client.post(
+            f"{API_BASE}/fx/currencies/rate",
+            json=[r.model_dump(mode="json") for r in rates],
+            timeout=TIMEOUT
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
@@ -547,33 +544,28 @@ async def test_delete_rates(test_server):
         yesterday = today - timedelta(days=1)
 
         # Setup: Insert some test rates
-        upsert_request = FXBulkUpsertRequest(
-            rates=[
-                FXUpsertItem(**{"date": yesterday}, base="AUD", quote="USD", rate=Decimal("0.65"), source="MANUAL"),
-                FXUpsertItem(**{"date": today}, base="AUD", quote="USD", rate=Decimal("0.66"), source="MANUAL"),
-                ]
-            )
+        upsert_rates = [
+            FXUpsertItem(**{"date": yesterday}, base="AUD", quote="USD", rate=Decimal("0.65"), source="MANUAL"),
+            FXUpsertItem(**{"date": today}, base="AUD", quote="USD", rate=Decimal("0.66"), source="MANUAL"),
+            ]
         await client.post(
             f"{API_BASE}/fx/currencies/rate",
-            json=upsert_request.model_dump(mode="json"),
+            json=[r.model_dump(mode="json") for r in upsert_rates],
             timeout=TIMEOUT
             )
 
         # Delete rate range
-        request = FXBulkDeleteRequest(
-            deletions=[
-                FXDeleteItem(
-                    **{"from": "AUD", "to": "USD"},  # Use dict unpacking for aliased fields
-                    start_date=yesterday,
-                    end_date=today
-                    )
-                ]
-            )
+        deletions = [
+            FXDeleteItem(
+                **{"from": "AUD", "to": "USD"},  # Use dict unpacking for aliased fields
+                date_range=DateRangeModel(start=yesterday, end=today)
+                )
+            ]
 
         response = await client.request(
             method="DELETE",
             url=f"{API_BASE}/fx/currencies/rate",
-            content=request.model_dump_json(),
+            json=[d.model_dump(mode="json") for d in deletions],
             headers={"Content-Type": "application/json"},
             timeout=TIMEOUT
             )
