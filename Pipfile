@@ -29,6 +29,7 @@ mkdocs = "*"
 mkdocs-material = "*"
 websockets = "*"
 uvicorn = "*"
+mergedeep = "*"
 
 [dev-packages]
 pytest = "*"

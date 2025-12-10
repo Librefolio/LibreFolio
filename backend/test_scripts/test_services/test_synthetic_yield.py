@@ -14,6 +14,8 @@ from decimal import Decimal
 
 import pytest
 
+from backend.app.db import TransactionType
+
 # Force test mode BEFORE any other imports
 os.environ["LIBREFOLIO_TEST_MODE"] = "1"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///backend/data/sqlite/test_app.db"
@@ -63,8 +65,10 @@ async def test_provider_validate_params():
 @pytest.mark.asyncio
 async def test_provider_get_current_value():
     """Test provider get_current_value method."""
-    provider = ScheduledInvestmentProvider()
+    from backend.app.db.models import IdentifierType
 
+    provider = ScheduledInvestmentProvider()
+    # TODO: trasformare in classe pydantic, converire in dizionario e aggiungere _transaction_override
     params = {
         "schedule": [
             {
@@ -82,12 +86,12 @@ async def test_provider_get_current_value():
             "day_count": "ACT/365"
             },
         "_transaction_override": [
-            {"type": "BUY", "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
+            {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
             ]
         }
 
     # Use identifier "1" for test mode with _transaction_override
-    result = await provider.get_current_value("1", params)
+    result = await provider.get_current_value("1", IdentifierType.OTHER, params)
 
     # Value should be > face_value (interest accrued since 2025-01-01)
     assert result.value > Decimal("10000"), f"Expected value > 10000, got {result.value}"
@@ -98,8 +102,11 @@ async def test_provider_get_current_value():
 @pytest.mark.asyncio
 async def test_provider_get_history_value():
     """Test provider get_history_value method."""
+    from backend.app.db.models import IdentifierType
+
     provider = ScheduledInvestmentProvider()
 
+    # TODO: trasformare in classe pydantic, converire in dizionario e aggiungere _transaction_override
     params = {
         "schedule": [
             {
@@ -117,14 +124,14 @@ async def test_provider_get_history_value():
             "day_count": "ACT/365"
             },
         "_transaction_override": [
-            {"type": "BUY", "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
+            {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
             ]
         }
 
     start = date(2025, 1, 1)
     end = date(2025, 1, 7)
 
-    result = await provider.get_history_value("1", params, start, end)
+    result = await provider.get_history_value("1", IdentifierType.OTHER, params, start, end)
 
     # Should have 7 prices
     assert len(result.prices) == 7, f"Expected 7 prices, got {len(result.prices)}"

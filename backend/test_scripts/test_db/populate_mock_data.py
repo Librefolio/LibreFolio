@@ -55,7 +55,6 @@ from backend.app.db import (
     CashMovement,
     IdentifierType,
     AssetType,
-    ValuationModel,
     TransactionType,
     CashMovementType,
     )
@@ -151,110 +150,58 @@ def populate_assets(session: Session):
         # Stocks
         {
             "display_name": "Apple Inc.",
-            "identifier": "AAPL",
-            "identifier_type": IdentifierType.TICKER,
             "currency": "USD",
             "asset_type": AssetType.STOCK,
-            "valuation_model": ValuationModel.MARKET_PRICE,
             },
         {
             "display_name": "Microsoft Corporation",
-            "identifier": "MSFT",
-            "identifier_type": IdentifierType.TICKER,
             "currency": "USD",
             "asset_type": AssetType.STOCK,
-            "valuation_model": ValuationModel.MARKET_PRICE,
             },
         {
             "display_name": "Tesla, Inc.",
-            "identifier": "TSLA",
-            "identifier_type": IdentifierType.TICKER,
             "currency": "USD",
             "asset_type": AssetType.STOCK,
-            "valuation_model": ValuationModel.MARKET_PRICE,
             },
         # ETFs
         {
             "display_name": "Vanguard FTSE All-World UCITS ETF",
-            "identifier": "VWCE",
-            "identifier_type": IdentifierType.TICKER,
             "currency": "EUR",
             "asset_type": AssetType.ETF,
-            "valuation_model": ValuationModel.MARKET_PRICE,
             },
         {
             "display_name": "iShares Core S&P 500 UCITS ETF",
-            "identifier": "CSPX",
-            "identifier_type": IdentifierType.TICKER,
             "currency": "EUR",
             "asset_type": AssetType.ETF,
-            "valuation_model": ValuationModel.MARKET_PRICE,
             },
         # HOLD assets (manual valuation)
         {
             "display_name": "Apartment - Milano Navigli",
-            "identifier": "REALESTATE-001",
-            "identifier_type": IdentifierType.OTHER,
             "currency": "EUR",
             "asset_type": AssetType.HOLD,
-            "valuation_model": ValuationModel.MANUAL,
             # No plugins - manual valuation only
             },
-        # P2P Loans
+        # P2P Loans (note: interest_schedule moved to AssetProviderAssignment.provider_params)
         {
             "display_name": "Real Estate Loan - Milano Centro",
-            "identifier": "RECROWD-12345",
-            "identifier_type": IdentifierType.OTHER,
             "currency": "EUR",
             "asset_type": AssetType.CROWDFUND_LOAN,
-            "valuation_model": ValuationModel.SCHEDULED_YIELD,
             "face_value": Decimal("10000.00"),
             "maturity_date": date.today() + timedelta(days=365),
-            "interest_schedule": json.dumps([
-                {
-                    "start_date": str(date.today()),
-                    "end_date": str(date.today() + timedelta(days=365)),
-                    "annual_rate": 0.085,
-                    "compounding": "SIMPLE",
-                    "compound_frequency": "MONTHLY",
-                    "day_count": "ACT/365",
-                    }
-                ]),
-            "late_interest": json.dumps({
-                "annual_rate": 0.12,
-                "grace_days": 0,
-                }),
             },
         {
             "display_name": "Real Estate Loan - Roma Parioli",
-            "identifier": "RECROWD-12346",
-            "identifier_type": IdentifierType.OTHER,
             "currency": "EUR",
             "asset_type": AssetType.CROWDFUND_LOAN,
-            "valuation_model": ValuationModel.SCHEDULED_YIELD,
             "face_value": Decimal("5000.00"),
             "maturity_date": date.today() + timedelta(days=540),
-            "interest_schedule": json.dumps([
-                {
-                    "start_date": str(date.today()),
-                    "end_date": str(date.today() + timedelta(days=540)),
-                    "annual_rate": 0.095,
-                    "compounding": "SIMPLE",
-                    "compound_frequency": "MONTHLY",
-                    "day_count": "ACT/365",
-                    }
-                ]),
-            "late_interest": json.dumps({
-                "annual_rate": 0.12,
-                "grace_days": 0,
-                }),
             },
         ]
 
     for data in assets_data:
         asset = Asset(**data)
         session.add(asset)
-        asset_desc = f"{data['display_name']} ({data['identifier']})"
+        asset_desc = f"{data['display_name']}"
         if data.get('face_value'):
             asset_desc += f" - €{data['face_value']}"
         print(f"  ✅ {asset_desc}")
@@ -272,31 +219,69 @@ def populate_asset_provider_assignments(session: Session):
     print("\n🔧 Creating Asset Provider Assignments...")
     print("-" * 60)
 
-    # Map: identifier → (provider_code, provider_params)
+    # Map: (display_name, identifier, identifier_type, provider_code, provider_params)
     # provider_params is JSON configuration for the provider
+    from backend.app.db.models import IdentifierType
+
     assignments = [
-        ("AAPL", "yfinance", json.dumps({"symbol": "AAPL"})),
-        ("MSFT", "yfinance", json.dumps({"symbol": "MSFT"})),
-        ("TSLA", "yfinance", json.dumps({"symbol": "TSLA"})),
-        ("VWCE", "yfinance", json.dumps({"symbol": "VWCE.MI"})),
-        ("CSPX", "yfinance", json.dumps({"symbol": "CSPX.L"})),
-        # Note: HOLD assets and SCHEDULED_YIELD loans don't need providers
+        ("Apple Inc.", "AAPL", IdentifierType.TICKER, "yfinance", json.dumps({"symbol": "AAPL"})),
+        ("Microsoft Corporation", "MSFT", IdentifierType.TICKER, "yfinance", json.dumps({"symbol": "MSFT"})),
+        ("Tesla, Inc.", "TSLA", IdentifierType.TICKER, "yfinance", json.dumps({"symbol": "TSLA"})),
+        ("Vanguard FTSE All-World UCITS ETF", "VWCE", IdentifierType.TICKER, "yfinance", json.dumps({"symbol": "VWCE.MI"})),
+        ("iShares Core S&P 500 UCITS ETF", "CSPX", IdentifierType.TICKER, "yfinance", json.dumps({"symbol": "CSPX.L"})),
+        # Scheduled investment loans with interest schedules
+        ("Real Estate Loan - Milano Centro", "RECROWD-12345", IdentifierType.OTHER, "scheduled_investment", json.dumps({
+            "schedule": [
+                {
+                    "start_date": str(date.today()),
+                    "end_date": str(date.today() + timedelta(days=365)),
+                    "annual_rate": 0.085,
+                    "compounding": "SIMPLE",
+                    "compound_frequency": "MONTHLY",
+                    "day_count": "ACT/365",
+                    }
+                ],
+            "late_interest": {
+                "annual_rate": 0.12,
+                "grace_days": 0,
+                }
+            })),
+        ("Real Estate Loan - Roma Parioli", "RECROWD-12346", IdentifierType.OTHER, "scheduled_investment", json.dumps({
+            "schedule": [
+                {
+                    "start_date": str(date.today()),
+                    "end_date": str(date.today() + timedelta(days=540)),
+                    "annual_rate": 0.095,
+                    "compounding": "SIMPLE",
+                    "compound_frequency": "MONTHLY",
+                    "day_count": "ACT/365",
+                    }
+                ],
+            "late_interest": {
+                "annual_rate": 0.12,
+                "grace_days": 0,
+                }
+            })),
+        # Note: HOLD assets don't need providers
         ]
 
-    for identifier, provider_code, provider_params in assignments:
-        asset = session.exec(select(Asset).where(Asset.identifier == identifier)).first()
+    for display_name, identifier, identifier_type, provider_code, provider_params in assignments:
+        asset = session.exec(select(Asset).where(Asset.display_name == display_name)).first()
         if not asset:
-            print(f"  ⚠️  Asset {identifier} not found, skipping assignment")
+            print(f"  ⚠️  Asset '{display_name}' not found, skipping assignment")
             continue
 
         assignment = AssetProviderAssignment(
             asset_id=asset.id,
             provider_code=provider_code,
+            identifier=identifier,
+            identifier_type=identifier_type,
             provider_params=provider_params,
+            fetch_interval=1440,  # Default 24 hours
             last_fetch_at=None,  # Never fetched yet
             )
         session.add(assignment)
-        print(f"  ✅ {identifier} → {provider_code}")
+        print(f"  ✅ {display_name} ({identifier}) → {provider_code}")
 
     session.commit()
     print(f"\n  📊 Assigned providers to {len(assignments)} assets")
@@ -392,13 +377,13 @@ def populate_transactions_and_cash(session: Session):
     degiro = session.exec(select(Broker).where(Broker.name == "Degiro")).first()
     recrowd = session.exec(select(Broker).where(Broker.name == "Recrowd")).first()
 
-    apple = session.exec(select(Asset).where(Asset.identifier == "AAPL")).first()
-    msft = session.exec(select(Asset).where(Asset.identifier == "MSFT")).first()
-    tsla = session.exec(select(Asset).where(Asset.identifier == "TSLA")).first()
-    vwce = session.exec(select(Asset).where(Asset.identifier == "VWCE")).first()
-    cspx = session.exec(select(Asset).where(Asset.identifier == "CSPX")).first()
-    loan1 = session.exec(select(Asset).where(Asset.identifier == "RECROWD-12345")).first()
-    loan2 = session.exec(select(Asset).where(Asset.identifier == "RECROWD-12346")).first()
+    apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
+    msft = session.exec(select(Asset).where(Asset.display_name == "Microsoft Corporation")).first()
+    tsla = session.exec(select(Asset).where(Asset.display_name == "Tesla, Inc.")).first()
+    vwce = session.exec(select(Asset).where(Asset.display_name == "Vanguard FTSE All-World UCITS ETF")).first()
+    cspx = session.exec(select(Asset).where(Asset.display_name == "iShares Core S&P 500 UCITS ETF")).first()
+    loan1 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Milano Centro")).first()
+    loan2 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Roma Parioli")).first()
 
     # Transaction history (most recent first)
     transactions = [
@@ -603,7 +588,7 @@ def populate_transactions_and_cash(session: Session):
             TransactionType.INTEREST: "📈",
             }.get(tx_data["type"], "📊")
 
-        print(f"  {tx_type_emoji} {tx_data['type'].value}: {tx_data['asset'].identifier} "
+        print(f"  {tx_type_emoji} {tx_data['type'].value}: {tx_data['asset'].display_name} "
               f"(qty: {tx_data['quantity']}, price: {tx_data['price']} {tx_data['currency']})")
 
     session.commit()
@@ -614,16 +599,17 @@ def populate_price_history(session: Session):
     print("\n📈 Creating Price History...")
     print("-" * 60)
 
+    # (display_name, base_price, daily_change)
     assets_with_prices = [
-        ("AAPL", Decimal("175.00"), Decimal("0.50")),  # base price, daily change
-        ("MSFT", Decimal("380.00"), Decimal("1.20")),
-        ("TSLA", Decimal("242.00"), Decimal("2.50")),
-        ("VWCE", Decimal("95.00"), Decimal("0.30")),
-        ("CSPX", Decimal("485.00"), Decimal("0.80")),
+        ("Apple Inc.", Decimal("175.00"), Decimal("0.50")),  # base price, daily change
+        ("Microsoft Corporation", Decimal("380.00"), Decimal("1.20")),
+        ("Tesla, Inc.", Decimal("242.00"), Decimal("2.50")),
+        ("Vanguard FTSE All-World UCITS ETF", Decimal("95.00"), Decimal("0.30")),
+        ("iShares Core S&P 500 UCITS ETF", Decimal("485.00"), Decimal("0.80")),
         ]
 
-    for identifier, base_price, daily_change in assets_with_prices:
-        asset = session.exec(select(Asset).where(Asset.identifier == identifier)).first()
+    for display_name, base_price, daily_change in assets_with_prices:
+        asset = session.exec(select(Asset).where(Asset.display_name == display_name)).first()
         if not asset:
             continue
 
@@ -645,7 +631,7 @@ def populate_price_history(session: Session):
                 )
             session.add(price)
 
-        print(f"  ✅ {identifier}: 7 days of prices")
+        print(f"  ✅ {display_name}: 7 days of prices")
 
     session.commit()
 
@@ -887,23 +873,23 @@ def main():
             print("\n# View brokers")
             print("SELECT * FROM brokers LIMIT 5;")
             print("\n# View assets")
-            print("SELECT id, display_name, identifier, currency, asset_type, valuation_model FROM assets LIMIT 5;")
+            print("SELECT id, display_name, currency, asset_type, icon_url FROM assets LIMIT 5;")
             print("\n# View asset provider assignments")
-            print("SELECT a.identifier, apa.provider_code, apa.provider_params")
+            print("SELECT a.display_name, apa.identifier, apa.provider_code, apa.provider_params")
             print("FROM asset_provider_assignments apa")
             print("JOIN assets a ON apa.asset_id = a.id;")
             print("\n# View cash accounts")
             print("SELECT ca.id, b.name as broker, ca.currency, ca.display_name")
             print("FROM cash_accounts ca JOIN brokers b ON ca.broker_id = b.id;")
             print("\n# View transactions")
-            print("SELECT t.id, t.transaction_type, a.identifier, t.quantity, t.price, t.transaction_date")
+            print("SELECT t.id, t.transaction_type, a.display_name, t.quantity, t.price, t.transaction_date")
             print("FROM transactions t JOIN assets a ON t.asset_id = a.id")
             print("LIMIT 5;")
             print("\n# View cash movements")
             print("SELECT cm.id, cm.movement_type, cm.amount, cm.currency, cm.movement_date")
             print("FROM cash_movements cm LIMIT 5;")
             print("\n# View price history")
-            print("SELECT ph.date, a.identifier, ph.close, ph.currency")
+            print("SELECT ph.date, a.display_name, ph.close, ph.currency")
             print("FROM price_history ph JOIN assets a ON ph.asset_id = a.id")
             print("LIMIT 5;")
             print("\n# View FX rates")
@@ -958,7 +944,7 @@ def main():
         # Verify each table has data
         tables_to_check = [
             ('brokers', 'name'),
-            ('assets', 'identifier'),
+            ('assets', 'display_name'),
             ('asset_provider_assignments', 'provider_code'),
             ('cash_accounts', 'display_name'),
             ('transactions', 'type'),

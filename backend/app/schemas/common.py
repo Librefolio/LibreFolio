@@ -209,40 +209,40 @@ class BaseDeleteResult(BaseModel):
 class BaseBulkDeleteResponse(BaseBulkResponse[TResult]):
     """
     Specialized base class for bulk delete/removal operations.
-
+    
     Combines BaseBulkResponse structure with delete-specific aggregate field.
     Inherits list of results and success tracking from BaseBulkResponse,
     adds total deletion count across all items.
-
+    
     Standard fields (from BaseBulkResponse):
     - results: List[TResult] - Per-item deletion results
     - success_count: int - Number of successful deletions
     - errors: List[str] - Operation-level errors
-
+    
     Delete-specific field:
     - total_deleted: int - Total number of records deleted across all items
-
+    
     Computed properties (from BaseBulkResponse):
     - failed_count: int - Number of failed deletions
     - total_count: int - Total number of items processed
-
+    
     Design Notes:
     - Extends BaseBulkResponse with delete-specific aggregate
     - total_deleted is the sum of all deleted_count from individual results
     - Generic class parameterized by TResult (the result item type)
     - Use when bulk operation deletes multiple records per item
-
+    
     Examples:
         ```python
         # For price deletion (deletes multiple price records per asset)
         class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
             pass
-
+        
         # For FX rate deletion (deletes multiple rates per pair)
         class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
             pass
         ```
-
+    
     Benefits:
     - Consistent pattern for bulk deletion operations
     - Clear separation: success_count (items) vs total_deleted (records)
@@ -251,4 +251,3 @@ class BaseBulkDeleteResponse(BaseBulkResponse[TResult]):
     """
     # Delete-specific aggregate field
     total_deleted: int = Field(..., ge=0, description="Total number of records deleted across all items")
-

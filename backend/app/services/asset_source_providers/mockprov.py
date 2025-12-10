@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Dict
 
 from backend.app.db import IdentifierType
-from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint, FAClassificationParams, FAGeographicArea
+from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint, FAClassificationParams, FAGeographicArea, FAAssetPatchItem
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 
@@ -134,7 +134,7 @@ class MockProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-        ) -> FAClassificationParams | None:
+        ) -> FAAssetPatchItem | None:
         """
         Fetch mock asset metadata for testing.
 
@@ -147,11 +147,17 @@ class MockProvider(AssetSourceProvider):
             provider_params: Optional parameters (unused)
 
         Returns:
-            Mock metadata dict with all fields populated
+            FAAssetPatchItem object with classification_params populated
         """
-        # Return mock data for testing
-        return FAClassificationParams(
+        # Return mock data for testing as FAAssetPatchItem
+        classification_params = FAClassificationParams(
             sector="Technology",
             short_description=f"Mock test asset {identifier} - type: {identifier_type} - used for testing metadata features",
             geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")})
-            ).model_dump(mode="json")
+            )
+
+        return FAAssetPatchItem(
+            asset_id=0,  # Will be set by caller
+            classification_params=classification_params
+        )
+
