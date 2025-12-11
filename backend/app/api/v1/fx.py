@@ -290,6 +290,7 @@ async def sync_rates(
 
                 except FXServiceError as e:
                     # Provider failed - try fallback providers if configured
+                    # hard to test in coverage because need fail of provider and fallback
                     logger.warning(f"Provider {provider_code} (priority=1) failed: {str(e)}")
 
                     # Find fallback providers for any pair in this currency set
