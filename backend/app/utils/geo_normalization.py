@@ -1,43 +1,30 @@
 """
 Geographic area normalization utilities for LibreFolio.
 
-Provides functions to normalize country codes to ISO-3166-A3 format and
-validate geographic area weight distributions for asset classification.
+Provides functions to normalize country codes to ISO-3166-A3 format.
+Weight validation and quantization is handled by BaseDistribution in schemas/assets.py.
 
 Usage:
-    from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
+    from backend.app.utils.geo_normalization import normalize_country_keys
 
-    # Normalize and validate geographic area
+    # Normalize country codes in distribution
     data = {"USA": "0.6", "Italy": 0.3, "GB": 0.1}
-    normalized = validate_and_normalize_geographic_area(data)
-    # Returns: {"USA": Decimal("0.6000"), "ITA": Decimal("0.3000"), "GBR": Decimal("0.1000")}
+    normalized = normalize_country_keys(data)
+    # Returns: {"USA": Decimal("0.6"), "ITA": Decimal("0.3"), "GBR": Decimal("0.1")}
 
 Key Features:
 - Country code normalization (name/ISO-2/ISO-3 → ISO-3166-A3)
 - Weight parsing (int/float/str → Decimal)
-- Sum validation (must equal 1.0 within tolerance)
-- Automatic renormalization (adjusts smallest weight if sum != 1.0)
-- Quantization to 4 decimals (ROUND_HALF_EVEN)
+- Duplicate detection after normalization
 """
-from decimal import Decimal, ROUND_HALF_EVEN
+from decimal import Decimal
 from typing import Any
 
 import pycountry
 
 from backend.app.utils.decimal_utils import parse_decimal_value
 
-# Tolerance for sum validation (1e-6 = 0.000001)
-SUM_TOLERANCE = Decimal("0.000001")
 
-# Target sum for geographic area weights
-TARGET_SUM = Decimal("1.0")
-
-# Quantization template for 4 decimals
-WEIGHT_QUANTIZER = Decimal("0.0001")
-
-
-# TODO: aggiungere un endpoint API per passare country name e restituire una lista di ISO3,
-#  dico lista perchè nel caso di eur mi aspetto che restituisca DEU, FRA, ITA, ESP, etc. o per ASIA restituire CHN, JPN, IND, KOR, etc.
 def normalize_country_to_iso3(country_input: str) -> str:
     """
     Normalize country code/name to ISO-3166-A3 format.
@@ -106,35 +93,12 @@ def normalize_country_to_iso3(country_input: str) -> str:
     raise ValueError(f"Country '{country_input}' not found. Please use ISO-3166-A2 (e.g., US), ISO-3166-A3 (e.g., USA), or full country name.")
 
 
-def quantize_weight(value: Decimal) -> Decimal:
+def normalize_country_keys(data: dict[str, Any]) -> dict[str, Decimal]:
     """
-    Quantize weight to 4 decimals using ROUND_HALF_EVEN.
+    Normalize country codes in distribution dictionary to ISO-3166-A3.
 
-    Args:
-        value: Decimal weight value
-
-    Returns:
-        Quantized Decimal (4 decimal places)
-
-    Examples:
-        >>> quantize_weight(Decimal("0.60375"))
-        Decimal("0.6038")
-        >>> quantize_weight(Decimal("0.333333"))
-        Decimal("0.3333")
-    """
-    return value.quantize(WEIGHT_QUANTIZER, rounding=ROUND_HALF_EVEN)
-
-
-def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, Decimal]:
-    """
-    Validate and normalize geographic area weight distribution.
-
-    This is the main validation function that:
-    1. Normalizes all country codes to ISO-3166-A3
-    2. Parses all weights to Decimal
-    3. Validates sum is within tolerance of 1.0
-    4. Quantizes weights to 4 decimals
-    5. Renormalizes if sum != 1.0 (adjusts smallest weight)
+    This function only handles country code normalization and weight parsing.
+    Weight validation and quantization is done by BaseDistribution.
 
     Args:
         data: Dict of country codes/names to weights
@@ -142,29 +106,18 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
               Values: Numeric (int, float, str, Decimal)
 
     Returns:
-        Dict of ISO-3166-A3 codes to quantized Decimal weights
-        Guaranteed to sum to exactly 1.0
+        Dict with normalized ISO-3166-A3 keys and parsed Decimal values
 
     Raises:
-        ValueError: If validation fails (empty, invalid codes, sum out of tolerance, negative weights)
+        ValueError: If country code invalid or duplicates after normalization
 
     Examples:
-        >>> validate_and_normalize_geographic_area({"USA": 0.6, "ITA": 0.3, "GBR": 0.1})
-        {"USA": Decimal("0.6000"), "ITA": Decimal("0.3000"), "GBR": Decimal("0.1000")}
-
-        >>> validate_and_normalize_geographic_area({"US": "0.5", "Italy": "0.5"})
-        {"USA": Decimal("0.5000"), "ITA": Decimal("0.5000")}
-
-        >>> validate_and_normalize_geographic_area({"USA": 0.333, "ITA": 0.333, "GBR": 0.334})
-        {"USA": Decimal("0.3330"), "ITA": Decimal("0.3330"), "GBR": Decimal("0.3340")}
+        >>> normalize_country_keys({"USA": 0.6, "Italy": 0.3, "GB": 0.1})
+        {"USA": Decimal("0.6"), "ITA": Decimal("0.3"), "GBR": Decimal("0.1")}
     """
     if not data or not isinstance(data, dict):
         raise ValueError("Geographic area must be a non-empty dictionary")
 
-    if len(data) == 0:
-        raise ValueError("Geographic area must contain at least one country")
-
-    # Step 1: Normalize country codes and parse weights
     normalized: dict[str, Decimal] = {}
 
     for country_input, weight_value in data.items():
@@ -176,7 +129,10 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
 
         # Check for duplicates (after normalization)
         if iso3_code in normalized:
-            raise ValueError(f"Duplicate country after normalization: '{country_input}' → {iso3_code} (already present in geographic area)")
+            raise ValueError(
+                f"Duplicate country after normalization: '{country_input}' → {iso3_code} "
+                f"(already present in geographic area)"
+            )
 
         # Parse weight
         weight = parse_decimal_value(weight_value)
@@ -189,43 +145,28 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
 
         normalized[iso3_code] = weight
 
-    # Step 2: Calculate sum
-    total_sum = sum(normalized.values())
+    return normalized
 
-    # Step 3: Check sum is within tolerance
-    sum_diff = abs(total_sum - TARGET_SUM)
 
-    if sum_diff > SUM_TOLERANCE:
-        raise ValueError(f"Geographic area weights must sum to 1.0 (±{SUM_TOLERANCE}). Current sum: {total_sum} (difference: {sum_diff})")
+# Backward compatibility - delegate to FAGeographicArea
+def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, Decimal]:
+    """
+    Validate and normalize geographic area weight distribution.
 
-    # Step 4: Quantize all weights to 4 decimals
-    quantized: dict[str, Decimal] = {country: quantize_weight(weight) for country, weight in normalized.items()}
+    DEPRECATED: This function is kept for backward compatibility.
+    New code should use FAGeographicArea(distribution=data).distribution
 
-    # Step 5: Renormalize if sum != 1.0 after quantization
-    quantized_sum = sum(quantized.values())
+    Args:
+        data: Dict of country codes/names to weights
 
-    if quantized_sum != TARGET_SUM:
-        # Find the smallest weight (will be adjusted)
-        min_country = min(quantized, key=quantized.get)
-        min_weight = quantized[min_country]
+    Returns:
+        Dict of ISO-3166-A3 codes to quantized Decimal weights
 
-        # Calculate adjustment needed
-        adjustment = TARGET_SUM - quantized_sum
+    Raises:
+        ValueError: If validation fails
+    """
+    # Import here to avoid circular dependency
+    from backend.app.schemas.assets import FAGeographicArea
 
-        # Apply adjustment to the smallest weight
-        adjusted_weight = min_weight + adjustment
-
-        # Validate adjustment doesn't make weight negative
-        if adjusted_weight < 0:
-            raise ValueError(f"Cannot renormalize: adjustment would make weight negative. Country: {min_country}, Original: {min_weight}, Adjustment: {adjustment}")
-
-        # Apply adjustment
-        quantized[min_country] = adjusted_weight
-
-    # Final validation: sum must be exactly 1.0
-    final_sum = sum(quantized.values())
-    if final_sum != TARGET_SUM:
-        # This should never happen, but be defensive
-        raise ValueError(f"Internal error: final sum is {final_sum} after renormalization (expected {TARGET_SUM})")
-
-    return quantized
+    geo_area = FAGeographicArea(distribution=data)
+    return geo_area.distribution

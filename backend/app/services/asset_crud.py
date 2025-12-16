@@ -306,19 +306,47 @@ class AssetCRUDService:
                 updated_fields:List[tuple[str, Any,Any]] = []
 
                 # Update fields if present in patch (use model_dump to detect presence)
+                # Use exclude_unset=True to only include fields that were explicitly set
+                # Use exclude_none=True to exclude None values (except classification_params which we handle specially)
                 patch_dict = patch.model_dump(mode='json', exclude={'asset_id'}, exclude_unset=True, exclude_none=True)
+
+                # Special handling for classification_params=None (clearing the field)
+                # Check if it was explicitly set to None in the original patch object
+                if 'classification_params' not in patch_dict and patch.classification_params is None:
+                    # Check if the field was explicitly set (not just default None)
+                    # We can use __pydantic_fields_set__ to check
+                    if 'classification_params' in patch.model_fields_set:
+                        patch_dict['classification_params'] = None
+
                 for field, value in patch_dict.items():
                     logger.debug(f"Patching field '{field}': '{value}'")
-                    if field == "classification_params": # merge new sub-field with old ones
-                        # Empty dict = clear all classification_params
-                        if not value:  # Empty dict or None
-                            value = {}
+                    if field == "classification_params":
+                        # None = clear all classification_params
+                        if value is None:
+                            value = None  # Will set classification_params to NULL in DB
+                        elif not value:  # Empty dict = also clear
+                            value = None
                         else:
-                            value = mergedeep.merge({}, asset_classification_params_before, value)
-                        # Set empty strings to None to allow exclusion
-                        value = {k: v if v != "" else None for k, v in value.items()}
-                        # Store only setted params, delete
-                        value = FAClassificationParams(**value).model_dump(mode='json', exclude_none=True)
+                            # PATCH semantics for classification_params:
+                            # - If a field (e.g., sector_area, geographic_area) is present in patch, replace it completely
+                            # - If a field is absent from patch, keep the existing value
+                            # NO deep merge: each field is atomic (sector_area.distribution is replaced as a whole)
+
+                            # Start with existing values
+                            merged = dict(asset_classification_params_before)
+
+                            # Replace only the fields present in the patch (shallow merge, not deep)
+                            for key, val in value.items():
+                                if val is not None and val != "":
+                                    merged[key] = val
+                                else:
+                                    # Explicit null/empty = remove field
+                                    merged.pop(key, None)
+
+                            # Validate and serialize
+                            value = FAClassificationParams(**merged).model_dump(mode='json', exclude_none=True)
+                            if not value:  # If result is empty dict, set to None
+                                value = None
                     if not value:
                         value = None  # Explicitly set to None if falsey value (e.g., empty string)
                     if isinstance(value, dict):

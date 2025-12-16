@@ -142,7 +142,7 @@ class AssetMetadataService:
         current_dict = current.model_dump(exclude_none=False) if current else {
             'short_description': None,
             'geographic_area': None,
-            'sector': None,
+            'sector_area': None,
             }
 
         # Get patch fields that were explicitly set (exclude unset fields)
@@ -187,11 +187,11 @@ class AssetMetadataService:
         current_dict = current.model_dump(exclude_none=False) if current else {
             'short_description': None,
             'geographic_area': None,
-            'sector': None,
+            'sector_area': None,
             }
 
         # Update with provider data (only non-None values)
-        for field in ['short_description', 'geographic_area', 'sector']:
+        for field in ['short_description', 'geographic_area', 'sector_area']:
             if field in provider_data and provider_data[field] is not None:
                 current_dict[field] = provider_data[field]
 

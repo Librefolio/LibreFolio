@@ -42,7 +42,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # Import from common and prices modules
 from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
-from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
+from backend.app.utils.geo_normalization import normalize_country_keys
+from backend.app.utils.sector_normalization import normalize_sector
 from backend.app.utils.validation_utils import validate_compound_frequency, normalize_currency_code
 from backend.app.db.models import AssetType
 
@@ -393,32 +394,221 @@ class FAScheduledInvestmentParams(BaseModel):
 # ASSET METADATA & CLASSIFICATION
 # ============================================================================
 
-class FAGeographicArea(BaseModel):
+# ============================================================================
+# DISTRIBUTION BASE MODELS
+# ============================================================================
+
+class BaseDistribution(BaseModel):
     """
-    Geographic area distribution model.
+    Base class for distribution models (geographic, sector, etc.).
 
-    Validates and normalizes geographic distribution weights:
-    - ISO-3166-A3 country codes as keys
-    - Decimal weights that must sum to 1.0 (±1e-6 tolerance)
-    - Weights quantized to 4 decimals (ROUND_HALF_EVEN)
-    - Automatic renormalization if sum != 1.0
+    Handles common validation:
+    - Weights must be Decimal with 4 decimal places
+    - Weights must sum to 1.0 (±1e-6 tolerance)
+    - Auto-renormalization if sum != 1.0
+    - Quantization with ROUND_HALF_EVEN
 
-    Examples:
-        >>> geo = FAGeographicArea(distribution={"USA": Decimal("0.6"), "EUR": Decimal("0.4")})
-        >>> geo.distribution
-        {'USA': Decimal('0.6000'), 'EUR': Decimal('0.4000')}
+    Child classes must override validate_distribution() to normalize keys
+    before calling parent validation via _validate_and_normalize_weights().
     """
     model_config = ConfigDict(extra="forbid")
 
-    distribution: dict[str, Decimal] = Field(..., description="Geographic distribution weights (ISO-3166-A3 codes)")
+    distribution: dict[str, Decimal] = Field(..., description="Distribution weights (must sum to 1.0)")
+
+    @classmethod
+    def _validate_and_normalize_weights(
+        cls,
+        weights: dict[str, Decimal],
+        allow_empty: bool = False
+    ) -> dict[str, Decimal]:
+        """
+        Common validation logic for distribution weights.
+
+        This method:
+        1. Validates weights are non-negative
+        2. Quantizes to 4 decimals (ROUND_HALF_EVEN)
+        3. Validates sum is ~1.0 (tolerance: 1e-6)
+        4. Renormalizes if needed (adjusts smallest weight)
+
+        Args:
+            weights: Dictionary of weights (keys must already be normalized)
+            allow_empty: Whether to allow empty distributions
+
+        Returns:
+            Normalized and quantized weights summing to exactly 1.0
+
+        Raises:
+            ValueError: If validation fails
+        """
+        from decimal import ROUND_HALF_EVEN
+
+        if not weights and not allow_empty:
+            raise ValueError("Distribution cannot be empty")
+
+        if not weights:
+            return {}
+
+        # First pass: convert to Decimal and validate non-negative
+        quantizer = Decimal('0.0001')
+        parsed_weights = {}
+
+        for key, weight in weights.items():
+            # Ensure it's a Decimal
+            if not isinstance(weight, Decimal):
+                weight = Decimal(str(weight))
+
+            # Check non-negative
+            if weight < 0:
+                raise ValueError(f"Weight for '{key}' cannot be negative: {weight}")
+
+            parsed_weights[key] = weight
+
+        # Check if sum is zero (can't normalize)
+        raw_total = sum(parsed_weights.values())
+        if raw_total == Decimal('0'):
+            raise ValueError("Distribution weights sum to zero")
+
+        target = Decimal('1.0')
+        tolerance = Decimal('0.01')  # Allow up to 1% deviation before rejecting
+
+        # Check if raw sum is too far from 1.0 to be a rounding issue
+        if abs(raw_total - target) > tolerance:
+            raise ValueError(
+                f"Distribution weights must sum to approximately 1.0 (±{tolerance}). "
+                f"Current sum: {raw_total} (difference: {abs(raw_total - target)})"
+            )
+
+        # Normalize weights to sum to exactly 1.0, then quantize
+        quantized = {}
+        for key, weight in parsed_weights.items():
+            normalized = (weight / raw_total).quantize(quantizer, rounding=ROUND_HALF_EVEN)
+            quantized[key] = normalized
+
+        # Calculate sum after quantization
+        total = sum(quantized.values())
+
+        # Fine-tune to ensure exactly 1.0
+        if total != target:
+            # Adjust the smallest weight
+            min_key = min(quantized, key=quantized.get)
+            adjustment = target - total
+            adjusted_weight = quantized[min_key] + adjustment
+
+            if adjusted_weight < 0:
+                raise ValueError(
+                    f"Cannot renormalize: adjustment would make weight negative. "
+                    f"Key: {min_key}, Original: {quantized[min_key]}, Adjustment: {adjustment}"
+                )
+
+            quantized[min_key] = adjusted_weight
+
+        # Final validation
+        final_sum = sum(quantized.values())
+        if final_sum != target:
+            raise ValueError(
+                f"Internal error: final sum is {final_sum} after renormalization (expected {target})"
+            )
+
+        return quantized
+
+
+class FAGeographicArea(BaseDistribution):
+    """
+    Geographic area distribution with ISO-3166-A3 validation.
+
+    Extends BaseDistribution with country code normalization.
+    Keys must be ISO-3166-A3 country codes (or names/ISO-2 that will be normalized).
+
+    Examples:
+        >>> geo = FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")})
+        >>> geo.distribution
+        {'USA': Decimal('0.6000'), 'ITA': Decimal('0.4000')}
+
+        >>> geo = FAGeographicArea(distribution={"US": 0.5, "Italy": 0.5})
+        >>> geo.distribution
+        {'USA': Decimal('0.5000'), 'ITA': Decimal('0.5000')}
+    """
 
     @field_validator("distribution")
     @classmethod
     def validate_distribution(cls, v):
-        """Validate and normalize geographic area distribution."""
+        """
+        Validate and normalize geographic area distribution.
+
+        Process:
+        1. Normalize country keys to ISO-3166-A3 (geo_normalization)
+        2. Validate and normalize weights (BaseDistribution)
+        """
         if not v:
             raise ValueError("Geographic distribution cannot be empty")
-        return validate_and_normalize_geographic_area(v)
+
+        # Step 1: Normalize country codes
+        normalized_countries = normalize_country_keys(v)
+
+        # Step 2: Validate and normalize weights
+        return cls._validate_and_normalize_weights(normalized_countries)
+
+
+class FASectorArea(BaseDistribution):
+    """
+    Sector allocation distribution with standard classification.
+
+    Validates sector names against FinancialSector enum:
+    - Industrials, Technology, Financials, Consumer Discretionary,
+      Health Care, Real Estate, Basic Materials, Energy, Consumer Staples,
+      Telecommunication, Utilities, Other
+
+    Unknown sectors are mapped to "Other" with warning log.
+    Weights are automatically merged if multiple input keys map to same sector.
+
+    Examples:
+        >>> sector_dist = FASectorArea(distribution={
+        ...     "Technology": Decimal("0.35"),
+        ...     "Financials": Decimal("0.25"),
+        ...     "Health Care": Decimal("0.40")
+        ... })
+
+        >>> # Aliases and case-insensitive
+        >>> sector_dist = FASectorArea(distribution={
+        ...     "technology": 0.3,
+        ...     "healthcare": 0.3,  # Will be normalized to "Health Care"
+        ...     "FINANCIALS": 0.4
+        ... })
+    """
+
+    @field_validator("distribution")
+    @classmethod
+    def validate_distribution(cls, v):
+        """
+        Validate and normalize sector distribution.
+
+        Process:
+        1. Normalize sector names using FinancialSector enum
+        2. Merge weights for sectors that map to same standard name
+        3. Validate and normalize weights (BaseDistribution)
+        """
+        if not v:
+            raise ValueError("Sector distribution cannot be empty")
+
+        # Step 1: Normalize sector names and merge weights
+        normalized_sectors: dict[str, Decimal] = {}
+
+        for sector_name, weight in v.items():
+            # Normalize sector name using enum
+            normalized_name = normalize_sector(sector_name)
+
+            # Parse to Decimal if needed
+            if not isinstance(weight, Decimal):
+                weight = Decimal(str(weight))
+
+            # Merge weights if multiple keys map to same sector
+            if normalized_name in normalized_sectors:
+                normalized_sectors[normalized_name] += weight
+            else:
+                normalized_sectors[normalized_name] = weight
+
+        # Step 2: Validate and normalize weights
+        return cls._validate_and_normalize_weights(normalized_sectors)
 
 
 class FAClassificationParams(BaseModel):
@@ -426,26 +616,26 @@ class FAClassificationParams(BaseModel):
     Asset classification metadata.
 
     All fields optional (partial updates supported via PATCH).
-    geographic_area is indivisible block (full replace on update, no merge).
+    geographic_area and sector_area are indivisible blocks (full replace on update, no merge).
 
     Validation:
     - geographic_area: ISO-3166-A3 codes, weights must sum to 1.0 (±1e-6)
+    - sector_area: Standard FinancialSector enum values, weights must sum to 1.0 (±1e-6)
     - Weights quantized to 4 decimals (ROUND_HALF_EVEN)
-    - Automatic renormalization if sum != 1.0 (handled by FAGeographicArea)
+    - Automatic renormalization if sum != 1.0
 
     Examples:
         >>> params = FAClassificationParams(
         ...     short_description="Apple Inc. - Technology company",
         ...     geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "EUR": Decimal("0.4")}),
-        ...     sector="Technology"
+        ...     sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
         ... )
     """
     model_config = ConfigDict(extra="forbid")
 
     short_description: Optional[str] = None
     geographic_area: Optional[FAGeographicArea] = None
-    # TODO: Create FASectorArea similar to FAGeographicArea for sector distribution
-    sector: Optional[str] = None
+    sector_area: Optional[FASectorArea] = None
 
 
 class FAAssetMetadataResponse(BaseModel):
@@ -494,7 +684,6 @@ class FAMetadataRefreshResult(BaseModel):
     asset_id: int
     success: bool
     message: str
-    changes: Optional[List[FAMetadataChangeDetail]] = None
     warnings: Optional[List[str]] = None
 
 class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
@@ -574,12 +763,6 @@ class FAinfoResponse(BaseModel):
     has_provider: bool = Field(..., description="Whether asset has a provider assigned")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
 
-# TODO: eliminare e passare direttamente lista List[int] con post?
-class FABulkAssetDeleteRequest(BaseModel):
-    """Bulk asset deletion request."""
-    model_config = ConfigDict(extra="forbid")
-
-    asset_ids: List[int] = Field(..., min_length=1, description="List of asset IDs to delete")
 
 
 class FAAssetDeleteResult(BaseDeleteResult):
@@ -663,9 +846,11 @@ __all__ = [
     "FALateInterestConfig",
     "FAScheduledInvestmentSchedule",
     "FAScheduledInvestmentParams",
-    # Metadata & classification (NEW)
+    # Distribution base models
+    "BaseDistribution",
+    # Metadata & classification
     "FAGeographicArea",
-    "FAClassificationParams",
+    "FASectorArea",
     "FAClassificationParams",
     "FAAssetMetadataResponse",
     "FAMetadataChangeDetail",
@@ -683,8 +868,4 @@ __all__ = [
     "FAAssetPatchItem",
     "FABulkAssetPatchResponse",
     "FAAssetPatchResult",
-    "FAinfoResponse",
-    "FABulkAssetDeleteRequest",
-    "FAAssetDeleteResult",
-    "FABulkAssetDeleteResponse",
     ]

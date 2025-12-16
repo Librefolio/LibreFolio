@@ -23,7 +23,6 @@ from backend.app.schemas.assets import (
     FABulkAssetCreateResponse,
     FAAinfoFiltersRequest,
     FAinfoResponse,
-    FABulkAssetDeleteRequest,
     FABulkAssetDeleteResponse,
     # Asset PATCH schemas
     FAAssetPatchItem,
@@ -199,7 +198,7 @@ async def list_assets(
 
 @asset_router.delete("", response_model=FABulkAssetDeleteResponse, tags=["FA CRUD"])
 async def delete_assets_bulk(
-    request: FABulkAssetDeleteRequest,
+    asset_ids: List[int] = Query(..., min_length=1, description="List of asset IDs to delete"),
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -212,10 +211,8 @@ async def delete_assets_bulk(
     **Blocks deletion** if asset has transactions (foreign key constraint).
 
     **Request Example**:
-    ```json
-    {
-      "asset_ids": [1, 2, 3]
-    }
+    ```
+    DELETE /api/v1/assets?asset_ids=1&asset_ids=2&asset_ids=3
     ```
 
     **Response Example**:
@@ -239,7 +236,7 @@ async def delete_assets_bulk(
     ```
     """
     try:
-        return await AssetCRUDService.delete_assets_bulk(request.asset_ids, session)
+        return await AssetCRUDService.delete_assets_bulk(asset_ids, session)
     except Exception as e:
         logger.error(f"Error in bulk asset deletion: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -439,10 +436,14 @@ async def upsert_prices_bulk(
         # Pass FAUpsert objects directly to service
         result = await AssetSourceManager.bulk_upsert_prices(assets, session)
 
+        results_list = [FAUpsertResult(**r) for r in result["results"]]
+        success_count = sum(1 for r in results_list if r.count > 0)
+
         return FABulkUpsertResponse(
             inserted_count=result["inserted_count"],
             updated_count=result["updated_count"],
-            results=[FAUpsertResult(**r) for r in result["results"]]
+            results=results_list,
+            success_count=success_count
             )
     except Exception as e:
         logger.error(f"Error in bulk upsert prices: {e}")

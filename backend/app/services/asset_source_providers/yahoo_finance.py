@@ -27,7 +27,7 @@ except ImportError:
 
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
-from backend.app.schemas.assets import FACurrentValue, FAPricePoint, FAHistoricalData, FAAssetPatchItem, FAClassificationParams
+from backend.app.schemas.assets import FACurrentValue, FAPricePoint, FAHistoricalData, FAAssetPatchItem, FAClassificationParams, FASectorArea
 
 logger = get_logger(__name__)
 
@@ -412,10 +412,10 @@ class YahooFinanceProvider(AssetSourceProvider):
             sector = info.get('sector')
 
             # Build FAClassificationParams
-
             classification_data = {'short_description': short_description}
             if sector:
-                classification_data['sector'] = sector
+                # Convert single sector string to FASectorArea distribution
+                classification_data['sector_area'] = FASectorArea(distribution={sector: Decimal("1.0")})
 
             classification = FAClassificationParams(**classification_data)
 

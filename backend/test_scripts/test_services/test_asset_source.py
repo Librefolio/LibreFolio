@@ -352,7 +352,7 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
 
         # Parse and verify content
         metadata = json.loads(test_asset.classification_params)
-        assert metadata["sector"] == "Technology", "sector incorrect"
+        assert 'Technology' in metadata['sector_area']['distribution'], "sector incorrect"
         print_success("✓ Metadata content verified (sector=Technology)")
 
         # Metadata auto-populate during assignment is successful (verified by log and DB content above)

@@ -15,7 +15,6 @@ from backend.app.schemas.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
     FAAssetMetadataResponse,
-    FABulkAssetDeleteRequest,
     AssetType
 )
 from backend.app.schemas.provider import (
@@ -32,6 +31,7 @@ from backend.test_scripts.test_server_helper import _TestingServerManager
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
+SEARCH_TIMEOUT = 90.0  # Search can be slow due to external API calls (yfinance, justetf)
 
 def print_section(title: str):
     print(f"\n{'=' * 60}\n  {title}\n{'=' * 60}")
@@ -291,10 +291,11 @@ async def test_search_assets_basic(test_server):
 
     async with httpx.AsyncClient() as client:
         # Search using default (all providers)
+        # Note: Uses longer timeout as external APIs (yfinance) can be slow
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search",
             params={"q": "Apple"},
-            timeout=TIMEOUT
+            timeout=SEARCH_TIMEOUT
         )
 
         assert search_resp.status_code == 200, f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
@@ -339,10 +340,11 @@ async def test_search_assets_semiconductor(test_server):
 
     async with httpx.AsyncClient() as client:
         # Search for "Semiconductor" - sector-specific
+        # Note: Uses longer timeout as external APIs (yfinance) can be slow
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search",
             params={"q": "Semiconductor"},
-            timeout=TIMEOUT
+            timeout=SEARCH_TIMEOUT
         )
 
         assert search_resp.status_code == 200, f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
@@ -385,7 +387,7 @@ async def test_search_assets_provider_filter(test_server):
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search",
             params={"q": "MSCI", "providers": "justetf"},
-            timeout=TIMEOUT
+            timeout=SEARCH_TIMEOUT
         )
 
         assert search_resp.status_code == 200, f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
@@ -425,7 +427,7 @@ async def test_search_assets_ibm(test_server):
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search",
             params={"q": "IBM"},
-            timeout=TIMEOUT
+            timeout=SEARCH_TIMEOUT
         )
 
         assert search_resp.status_code == 200, f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
@@ -757,10 +759,9 @@ async def test_search_to_asset_e2e(test_server):
 
         # Step 8: Cleanup - delete created assets
         print_info("\nStep 8: Cleanup...")
-        delete_resp = await client.request(
-            "DELETE",
+        delete_resp = await client.delete(
             f"{API_BASE}/assets",
-            json=FABulkAssetDeleteRequest(asset_ids=asset_ids).model_dump(mode="json"),
+            params={"asset_ids": asset_ids},
             timeout=TIMEOUT
         )
 
@@ -876,10 +877,9 @@ async def test_price_refresh_uses_current_value(test_server):
             print_success("✓ get_current_value was called (no errors)")
 
         # Cleanup
-        await client.request(
-            "DELETE",
+        await client.delete(
             f"{API_BASE}/assets",
-            json=FABulkAssetDeleteRequest(asset_ids=[asset_id]).model_dump(mode="json"),
+            params={"asset_ids": [asset_id]},
             timeout=TIMEOUT
         )
         print_info("  Cleanup completed")
@@ -997,10 +997,9 @@ async def test_css_scraper_current_price(test_server):
                 print_info("  No prices stored (may be network/site issue)")
 
         # Cleanup
-        await client.request(
-            "DELETE",
+        await client.delete(
             f"{API_BASE}/assets",
-            json=FABulkAssetDeleteRequest(asset_ids=[asset_id]).model_dump(mode="json"),
+            params={"asset_ids": [asset_id]},
             timeout=TIMEOUT
         )
         print_info("  Cleanup completed")

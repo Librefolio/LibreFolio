@@ -680,8 +680,7 @@ class AssetSourceManager:
                     results.append(FAMetadataRefreshResult(
                         asset_id=asset_id,
                         success=False,
-                        message=f"Asset {asset_id} not found",
-                        changes=None
+                        message=f"Asset {asset_id} not found"
                         ))
                     continue
 
@@ -695,8 +694,7 @@ class AssetSourceManager:
                     results.append(FAMetadataRefreshResult(
                         asset_id=asset_id,
                         success=False,
-                        message=f"No provider assigned to asset {asset_id}",
-                        changes=None
+                        message=f"No provider assigned to asset {asset_id}"
                         ))
                     continue
 
@@ -706,8 +704,7 @@ class AssetSourceManager:
                     results.append(FAMetadataRefreshResult(
                         asset_id=asset_id,
                         success=False,
-                        message=f"Provider {assignment.provider_code} not found",
-                        changes=None
+                        message=f"Provider {assignment.provider_code} not found"
                         ))
                     continue
 
@@ -716,9 +713,9 @@ class AssetSourceManager:
                     results.append(FAMetadataRefreshResult(
                         asset_id=asset_id,
                         success=False,
-                        message=f"Provider {assignment.provider_code} doesn't support metadata fetch",
-                        changes=None
+                        message=f"Provider {assignment.provider_code} doesn't support metadata fetch"
                         ))
+                    continue
                     continue
 
                 # Fetch metadata from provider
@@ -734,8 +731,7 @@ class AssetSourceManager:
                     results.append(FAMetadataRefreshResult(
                         asset_id=asset_id,
                         success=False,
-                        message=f"Failed to fetch metadata: {str(e)}",
-                        changes=None
+                        message=f"Failed to fetch metadata: {str(e)}"
                         ))
                     continue
 
@@ -743,8 +739,7 @@ class AssetSourceManager:
                     results.append(FAMetadataRefreshResult(
                         asset_id=asset_id,
                         success=False,
-                        message="Provider returned no metadata",
-                        changes=None
+                        message="Provider returned no metadata"
                         ))
                     continue
 
@@ -775,8 +770,7 @@ class AssetSourceManager:
                 results.append(FAMetadataRefreshResult(
                     asset_id=asset_id,
                     success=False,
-                    message=f"Error: {str(e)}",
-                    changes=None
+                    message=f"Error: {str(e)}"
                     ))
 
         # Apply all patches in bulk using AssetCRUDService
@@ -788,13 +782,10 @@ class AssetSourceManager:
                 fields_detail = asset_fields_map.get(patch_result.asset_id)
 
                 # Convert to FAMetadataRefreshResult
-                # Note: fields_detail should be embedded in changes or as separate field
-                # For now, keep backward compatibility with changes=None and log fields_detail
                 results.append(FAMetadataRefreshResult(
                     asset_id=patch_result.asset_id,
                     success=patch_result.success,
-                    message=patch_result.message,
-                    changes=None  # TODO: Use fields_detail instead of changes
+                    message=patch_result.message
                     ))
 
         success_count = sum(1 for r in results if r.success)
