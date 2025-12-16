@@ -183,3 +183,37 @@ class FAProviderRemovalResult(BaseDeleteResult):
 class FABulkRemoveResponse(BaseBulkResponse[FAProviderRemovalResult]):
     """Response for bulk FA provider removal."""
     pass
+
+
+# ============================================================================
+# FA PROVIDER SEARCH
+# ============================================================================
+
+
+class FAProviderSearchResultItem(BaseModel):
+    """Single search result from a provider.
+
+    Contains the asset identifier and metadata from the provider's search.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    identifier: str = Field(..., description="Asset identifier (ISIN, ticker, URL, etc.)")
+    display_name: str = Field(..., description="Human-readable asset name")
+    provider_code: str = Field(..., description="Provider that returned this result")
+    currency: Optional[str] = Field(None, description="Asset currency if known")
+    asset_type: Optional[str] = Field(None, description="Asset type (ETF, stock, bond, etc.)")
+
+
+class FAProviderSearchResponse(BaseModel):
+    """Response for provider search endpoint.
+
+    Returns aggregated search results from one or more providers.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(..., description="Original search query")
+    total_results: int = Field(..., description="Total number of results across all providers")
+    results: List[FAProviderSearchResultItem] = Field(..., description="Search results")
+    providers_queried: List[str] = Field(..., description="Provider codes that were queried")
+    providers_with_errors: List[str] = Field(default_factory=list, description="Providers that returned errors")
+

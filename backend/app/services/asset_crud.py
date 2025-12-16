@@ -3,18 +3,6 @@ Asset CRUD Service.
 
 Handles Create, Read (List), Update, and Delete operations for assets.
 Supports bulk operations with partial success.
-
-TODO (Plan 05b - Step 12): Schema changes to implement
-1. Update FAAssetDeleteResult construction:
-   - Ensure deleted_count is 0 (failure) or 1 (success) for single asset
-   - Populate success field based on deletion outcome
-   - Provide meaningful message field
-2. Update all bulk response construction:
-   - Populate success_count (required by BaseBulkResponse)
-   - Count successful operations in results list
-   - Ensure errors list is populated for operation-level errors
-3. Update FABulkAssetDeleteResponse:
-   - Now inherits from BaseBulkDeleteResponse (no changes needed if using base correctly)
 """
 import json
 from typing import List, Any
@@ -312,8 +300,7 @@ class AssetCRUDService:
                     results.append(FAAssetPatchResult(asset_id=patch.asset_id, success=False, message=f"Asset {patch.asset_id} not found", updated_fields=None))
                     continue
                 asset_classification_params_before = json.loads(asset.classification_params) if asset.classification_params else {}
-                # TODO: trasforma il log in debug una volta testato
-                logger.info(f"Asset found for patching: id={patch.asset_id}: {asset.model_dump_json()}")
+                logger.debug(f"Asset found for patching: id={patch.asset_id}: {asset.model_dump_json()}")
 
                 # Track updated fields
                 updated_fields:List[tuple[str, Any,Any]] = []
@@ -321,8 +308,7 @@ class AssetCRUDService:
                 # Update fields if present in patch (use model_dump to detect presence)
                 patch_dict = patch.model_dump(mode='json', exclude={'asset_id'}, exclude_unset=True, exclude_none=True)
                 for field, value in patch_dict.items():
-                    # TODO: trasforma il log in debug una volta testato
-                    logger.info(f"Patching field '{field}': '{value}'")
+                    logger.debug(f"Patching field '{field}': '{value}'")
                     if field == "classification_params": # merge new sub-field with old ones
                         # Empty dict = clear all classification_params
                         if not value:  # Empty dict or None
@@ -340,8 +326,7 @@ class AssetCRUDService:
                     oldVal=getattr(asset, field)
                     setattr(asset, field, value)
                     updated_fields.append((field, oldVal, value))
-                    # TODO: trasforma il log in debug una volta testato
-                    logger.info(f"updated field '{field}': '{oldVal}' -> '{value}'")
+                    logger.debug(f"updated field '{field}': '{oldVal}' -> '{value}'")
 
                 await session.flush()
 

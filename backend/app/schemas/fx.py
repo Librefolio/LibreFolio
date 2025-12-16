@@ -285,8 +285,6 @@ class FXDeletePairSourceItem(BaseModel):
     def uppercase_currency(cls, v):
         return normalize_currency_code(v)
 
-
-# TODO: approfondire se questo tipo di dettagli serve nel risultato di delete
 class FXDeletePairSourceResult(BaseDeleteResult):
     """Result of a single pair source deletion."""
 

@@ -21,24 +21,6 @@ Design principles:
 - Singles call bulk with 1 element
 - DB optimization: Minimize queries (typically 1-3 max)
 - Parallel provider calls where possible
-
-TODO (Plan 05b - Step 12): Schema changes to implement
-1. Update FAPriceDeleteResult construction:
-   - CRITICAL: Rename field 'deleted' to 'deleted_count'
-   - Ensure success field is always populated
-   - Handle optional message field
-2. Update FABulkDeleteResponse construction:
-   - Now inherits from BaseBulkDeleteResponse
-   - Use 'total_deleted' instead of 'deleted_count' for aggregate
-3. Update FARefreshItem usage:
-   - Handle date_range: DateRangeModel instead of start_date/end_date
-   - Extract date_range.start and date_range.end for internal logic
-4. Update FABulkRefreshResponse construction:
-   - Populate success_count (required by BaseBulkResponse)
-5. Update FAProviderRemovalResult construction:
-   - Ensure deleted_count is 0 or 1 for single provider removal
-6. Update FABulkAssignResponse and FABulkRemoveResponse:
-   - Populate success_count (required by BaseBulkResponse)
 """
 import asyncio
 import json
@@ -98,13 +80,45 @@ class AssetSourceError(Exception):
 
 class AssetSourceProvider(ABC):
     """
-    Abstract base class for asset pricing providers.
+    Abstract base class for asset pricing providers (plugins).
 
-    All providers must implement:
-    - get_current_value(): Fetch current price
-    - get_history_value(): Fetch historical prices
-    - search(): Search for assets (if supported)
-    - validate_params(): Validate provider_params
+    ARCHITECTURE: Plugin vs Core Responsibilities
+    =============================================
+
+    PLUGIN (this class implementations) is responsible for:
+    - Fetching RAW data from external sources (APIs, web scraping, etc.)
+    - Returning data in the expected schema format (FACurrentValue, FAHistoricalData)
+    - Handling provider-specific errors and converting them to AssetSourceError
+    - Validating provider_params specific to each provider
+
+    CORE (AssetSourceService) is responsible for:
+    - Database storage and caching of fetched data
+    - Backward-filling historical prices (filling gaps with last known value)
+    - Currency conversion if needed
+    - Merging data from multiple sources
+    - Transaction management and error recovery
+
+    Example flow for get_history_value:
+    1. Core calls plugin.get_history_value(start, end)
+    2. Plugin fetches RAW prices from external API (only trading days)
+    3. Plugin returns FAHistoricalData with prices list (may have gaps)
+    4. Core applies _backward_fill_prices() to fill weekends/holidays
+    5. Core stores filled data in database
+
+    Required implementations:
+    - provider_code: Unique identifier for this provider
+    - provider_name: Human-readable name
+    - test_cases: Test data for automated testing
+    - get_current_value(): Fetch latest price
+    - get_history_value(): Fetch historical prices (raw, no filling)
+    - test_search_query: Search query for tests (None if search unsupported)
+
+    Optional overrides:
+    - get_icon(): Provider icon URL
+    - supports_history: False if provider cannot fetch historical data
+    - search(): Search for assets by query
+    - validate_params(): Validate provider-specific parameters
+    - fetch_asset_metadata(): Fetch asset metadata (type, sector, etc.)
 
     Providers auto-register via @register_provider(AssetProviderRegistry) decorator.
     """
@@ -112,30 +126,61 @@ class AssetSourceProvider(ABC):
     @property
     @abstractmethod
     def provider_code(self) -> str:
-        """Unique provider code (e.g., 'yfinance', 'cssscraper')."""
+        """
+        Unique provider identifier used in database and API.
+
+        Examples: 'yfinance', 'justetf', 'cssscraper'
+
+        Must be:
+        - Lowercase alphanumeric with underscores
+        - Unique across all registered providers
+        - Stable (changing breaks existing assets)
+        """
         pass
 
     @property
     @abstractmethod
     def provider_name(self) -> str:
-        """Human-readable provider name."""
+        """
+        Human-readable provider name for UI display.
+
+        Examples: 'Yahoo Finance', 'JustETF', 'CSS Web Scraper'
+        """
         pass
 
     def get_icon(self) -> str | None:
         """
-        Return provider icon URL (hardcoded).
+        Provider icon URL for UI display.
 
         Returns:
-            Optional icon URL string (can be remote or local path)
+            URL string (remote or local path), or None for default icon
         """
-        return None  # Default: no icon
+        return None
 
     @property
     @abstractmethod
     def test_cases(self) -> list[dict]:
         """
-        List of test cases with 'identifier' and 'provider_params' for testing.
-        :return: [{"identifier": str, "provider_params": dict | None}, ...]
+        Test cases for automated provider testing.
+
+        Each test case must include:
+        - identifier: str - Asset identifier to test
+        - identifier_type: IdentifierType - Type of identifier
+        - provider_params: dict | None - Provider-specific params (if needed)
+
+        Example:
+            [
+                {
+                    'identifier': 'AAPL',
+                    'identifier_type': IdentifierType.TICKER,
+                    'provider_params': None
+                },
+                {
+                    'identifier': 'https://example.com/price',
+                    'identifier_type': IdentifierType.URL,
+                    'provider_params': {'css_selector': '.price', 'currency': 'EUR'}
+                }
+            ]
         """
         pass
 
@@ -147,25 +192,50 @@ class AssetSourceProvider(ABC):
         provider_params: dict,
         ) -> FACurrentValue:
         """
-        Fetch current price for asset.
+        Fetch current/latest price for an asset.
+
+        PLUGIN RESPONSIBILITY:
+        - Fetch the latest available price from external source
+        - Return price with currency and timestamp
+        - Handle provider-specific authentication/rate limiting
+
+        CORE WILL:
+        - Cache the result if needed
+        - Store in database
+        - Handle currency conversion if requested
 
         Args:
-            identifier: Asset identifier for provider (e.g., ticker, ISIN, UUID)
-            identifier_type: Type of identifier (TICKER, ISIN, UUID, etc.)
-            provider_params: Provider-specific configuration (JSON)
+            identifier: Asset identifier (ticker, ISIN, URL, etc.)
+            identifier_type: Type of identifier (helps provider parse it)
+            provider_params: Provider-specific config (e.g., CSS selectors, API keys)
 
         Returns:
-            CurrentValue with latest price
+            FACurrentValue with:
+            - value: Decimal price
+            - currency: ISO currency code (e.g., 'USD', 'EUR')
+            - as_of_date: Date of the price
+            - source: Provider name for attribution
 
         Raises:
-            AssetSourceError: On fetch failure
+            AssetSourceError: With appropriate error_code:
+            - INVALID_IDENTIFIER_TYPE: Wrong identifier type for this provider
+            - NO_DATA: Asset not found or no price available
+            - FETCH_ERROR: Network/API error
+            - MISSING_PARAMS: Required provider_params missing
         """
         pass
 
     @property
     def supports_history(self) -> bool:
-        """Whether this provider supports historical data."""
-        return True  # In theory except special case, all plugin should support this feature
+        """
+        Whether this provider can fetch historical price data.
+
+        Override to return False for providers that only support current prices
+        (e.g., simple web scrapers without historical data access).
+
+        Default: True (most providers support history)
+        """
+        return True
 
     @abstractmethod
     async def get_history_value(
@@ -177,41 +247,93 @@ class AssetSourceProvider(ABC):
         end_date: date_type,
         ) -> FAHistoricalData:
         """
-        Fetch historical prices for date range.
+        Fetch historical prices for a date range.
+
+        PLUGIN RESPONSIBILITY:
+        - Fetch RAW historical prices from external source
+        - Return only actual data points (trading days with prices)
+        - DO NOT fill gaps (weekends, holidays) - core handles this
+        - DO NOT set backward_filled flag - core handles this
+
+        CORE WILL:
+        - Apply backward_fill_prices() to fill gaps with last known value
+        - Set backward_filled=True on filled records
+        - Store all records (real + filled) in database
+        - Handle date range chunking for large requests
+
+        Example:
+            Plugin returns: [Mon: 100, Tue: 101, Wed: 102, Fri: 104]
+            Core fills to:  [Mon: 100, Tue: 101, Wed: 102, Thu: 102*, Fri: 104]
+                            (* = backward_filled=True)
 
         Args:
-            identifier: Asset identifier for provider (e.g., ticker, ISIN, UUID)
-            identifier_type: Type of identifier (TICKER, ISIN, UUID, etc.)
-            provider_params: Provider-specific configuration (JSON)
+            identifier: Asset identifier
+            identifier_type: Type of identifier
+            provider_params: Provider-specific config
             start_date: Start date (inclusive)
             end_date: End date (inclusive)
 
         Returns:
-            HistoricalData with price series
+            FAHistoricalData with:
+            - prices: List[FAPricePoint] - Raw prices from source
+              Each FAPricePoint has: date, open, high, low, close, volume
+              (open/high/low/volume can be None if not available)
+            - currency: ISO currency code
+            - source: Provider name
 
         Raises:
-            AssetSourceError: On fetch failure
+            AssetSourceError: With appropriate error_code:
+            - NOT_SUPPORTED: If supports_history is False
+            - NO_DATA: No data available for date range
+            - FETCH_ERROR: Network/API error
         """
         pass
 
     @property
     @abstractmethod
     def test_search_query(self) -> str | None:
-        """Search query to use in tests, return None if query feature is not supported"""
+        """
+        Search query string for automated testing.
+
+        Return None if this provider does not support search functionality.
+        Otherwise return a query that should return at least one result.
+
+        Examples:
+            'Apple' - for stock providers
+            'MSCI World' - for ETF providers
+            None - for CSS scrapers (no search)
+        """
         pass
 
     async def search(self, query: str) -> list[dict]:
         """
-        Search for assets via provider (if supported).
+        Search for assets matching a query string.
+
+        PLUGIN RESPONSIBILITY:
+        - Query external source for matching assets
+        - Return standardized result format
+        - Handle empty results gracefully (return [])
+
+        CORE WILL:
+        - Present results to user for selection
+        - Use selected result to create/link asset
 
         Args:
-            query: Search query string
+            query: User search string (e.g., 'Apple', 'MSCI World ETF')
 
         Returns:
-            List of {identifier, display_name, currency, type}
+            List of dicts, each containing:
+            - identifier: str - Provider-specific identifier
+            - display_name: str - Human-readable name
+            - currency: str | None - Trading currency if known
+            - type: str | None - Asset type if known (e.g., 'stock', 'etf')
+
+            Empty list if no matches found.
 
         Raises:
-            AssetSourceError: If search not supported or fails
+            AssetSourceError:
+            - NOT_SUPPORTED: If search not implemented (default behavior)
+            - FETCH_ERROR: If search fails due to network/API error
         """
         raise AssetSourceError(
             f"Search not supported by {self.provider_name}",
@@ -222,16 +344,41 @@ class AssetSourceProvider(ABC):
     @abstractmethod
     def validate_params(self, params: dict | None) -> None:
         """
-        Validate provider_params structure.
+        Validate provider_params structure before use.
 
-        Base implementation accepts None or empty dict (no params required).
-        Override this method if your provider requires specific parameters.
+        PLUGIN RESPONSIBILITY:
+        - Check that all required parameters are present
+        - Validate parameter types and formats
+        - Raise AssetSourceError if validation fails
+
+        CORE WILL:
+        - Call this before get_current_value/get_history_value
+        - Store validated params in database
+
+        Implementation patterns:
+
+        1. No params required (most providers):
+            def validate_params(self, params: dict | None) -> None:
+                pass  # Accept anything
+
+        2. Optional params with defaults:
+            def validate_params(self, params: dict | None) -> None:
+                if params is None:
+                    return  # Use defaults
+                # Validate specific keys if present
+
+        3. Required params (e.g., CSS scraper):
+            def validate_params(self, params: dict | None) -> None:
+                if not params:
+                    raise AssetSourceError("Params required", "MISSING_PARAMS")
+                if 'css_selector' not in params:
+                    raise AssetSourceError("css_selector required", "MISSING_PARAMS")
 
         Args:
             params: Provider parameters to validate (can be None)
 
         Raises:
-            AssetSourceError: If params invalid
+            AssetSourceError: With error_code 'MISSING_PARAMS' or 'INVALID_PARAMS'
         """
         pass  # Default: no validation, accepts any params including None
 
@@ -244,20 +391,43 @@ class AssetSourceProvider(ABC):
         """
         Fetch asset metadata from provider (optional feature).
 
-        Override this method if your provider can fetch metadata
-        (asset_type, sector, geographic_area, short_description).
+        PLUGIN RESPONSIBILITY:
+        - Fetch metadata from external source if available
+        - Return FAAssetPatchItem with available fields
+        - Return None if metadata not supported or unavailable
+        - DO NOT store in database - core handles this
+
+        CORE WILL:
+        - Call this when user requests metadata refresh
+        - Merge returned metadata with existing asset data
+        - Store updated metadata in database
+
+        Override this method if your provider can fetch:
+        - asset_type: Stock, ETF, Bond, etc.
+        - short_description: Brief description of the asset
+        - classification_params: Sector, geographic distribution, etc.
 
         Args:
             identifier: Asset identifier for provider
             identifier_type: Type of identifier (TICKER, ISIN, UUID, etc.)
-            provider_params: Provider-specific configuration (JSON)
+            provider_params: Provider-specific configuration
 
         Returns:
-            FAAssetPatchItem with metadata fields (asset_id placeholder=0, caller sets real ID)
-            or None if not supported/fetch fails
+            FAAssetPatchItem with metadata fields populated:
+            - asset_id: Set to 0 (placeholder, core will set real ID)
+            - asset_type: AssetType enum if known
+            - classification_params: FAClassificationParams with:
+              - sector: Primary sector (e.g., 'Technology')
+              - geographic_area: FAGeographicArea with distribution dict
+              - short_description: Brief description
+
+            Return None if:
+            - Metadata fetching not supported by this provider
+            - Asset not found
+            - Metadata unavailable for this asset
 
         Raises:
-            AssetSourceError: On fetch failure
+            AssetSourceError: On fetch failure (network error, etc.)
         """
         return None  # Default: metadata not supported
 
@@ -1012,8 +1182,9 @@ class AssetSourceManager:
 
                 provider_code = assignment.provider_code
                 provider_params = assignment.provider_params or {}
+                identifier = assignment.identifier  # Identifier is in assignment, not asset
 
-                # Fetch asset to get identifier
+                # Verify asset exists
                 asset_stmt = select(Asset).where(Asset.id == asset_id)
                 asset_res = await session.execute(asset_stmt)
                 asset = asset_res.scalar_one_or_none()
@@ -1026,8 +1197,6 @@ class AssetSourceManager:
                         updated_count=updated_count,
                         errors=errors
                         )
-
-                identifier = asset.identifier
             except Exception as e:
                 errors.append(f"Failed to resolve provider or asset: {str(e)}")
                 return FARefreshResult(
@@ -1088,12 +1257,61 @@ class AssetSourceManager:
             # Provider fetch coroutine
             async def _fetch_remote():
                 try:
-                    hist_data = await prov.get_history_value(identifier, provider_params, start, end)
-                    # Convert FAHistoricalData to dict for compatibility
+                    prices_data = []
+                    today = date_type.today()
+                    identifier_type = assignment.identifier_type
+
+                    # 1. Try to fetch historical data if provider supports it AND date range includes past dates
+                    if prov.supports_history and start < today:
+                        try:
+                            # Fetch history up to yesterday (or end if end < today)
+                            history_end = min(end, today - timedelta(days=1)) if end >= today else end
+                            if start <= history_end:
+                                hist_data = await prov.get_history_value(
+                                    identifier, identifier_type, provider_params, start, history_end
+                                )
+                                if hist_data and hist_data.prices:
+                                    prices_data = [p.model_dump() for p in hist_data.prices]
+                                    logger.debug(f"Fetched {len(prices_data)} historical prices for asset {asset_id}")
+                        except Exception as hist_e:
+                            logger.warning(f"History fetch failed for asset {asset_id}: {hist_e}")
+                            # Continue - we'll try current value
+
+                    # 2. Always try to get current value if end date includes today
+                    if end >= today:
+                        try:
+                            current_data = await prov.get_current_value(
+                                identifier, identifier_type, provider_params
+                            )
+                            if current_data and current_data.value:
+                                # Create a price point for today
+                                current_price = {
+                                    "date": current_data.as_of_date or today,
+                                    "close": current_data.value,
+                                    "currency": current_data.currency or "USD"
+                                }
+
+                                # Remove any existing entry for today from history (current value takes precedence)
+                                prices_data = [p for p in prices_data if p.get("date") != current_price["date"]]
+                                prices_data.append(current_price)
+                                logger.debug(f"Added current price for asset {asset_id}: {current_data.value}")
+                        except Exception as curr_e:
+                            logger.warning(f"Current value fetch failed for asset {asset_id}: {curr_e}")
+                            # Continue - we may still have history data
+
+                    if not prices_data:
+                        raise AssetSourceError(
+                            "No price data available from provider",
+                            "NO_DATA",
+                            {"asset_id": asset_id, "provider": provider_code}
+                        )
+
                     return {
-                        "prices": [p.model_dump() for p in hist_data.prices],
-                        "source": hist_data.source
-                        }
+                        "prices": prices_data,
+                        "source": provider_code
+                    }
+                except AssetSourceError:
+                    raise
                 except Exception as e:
                     raise AssetSourceError(f"Provider fetch failed: {str(e)}", "PROVIDER_FETCH_ERROR", {})
 

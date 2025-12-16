@@ -53,7 +53,6 @@ async def test_bulk_refresh_prices_orchestration():
             ], session)
 
         # Execute refresh - expect prices to be inserted
-        # TODO (Plan 05b Step 12): Update to use DateRangeModel
         from backend.app.schemas.common import DateRangeModel
         payload = [FARefreshItem(asset_id=asset.id, date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)))]
         results = await AssetSourceManager.bulk_refresh_prices(payload, session)

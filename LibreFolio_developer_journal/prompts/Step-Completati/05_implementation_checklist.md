@@ -5,9 +5,9 @@
 **Project**: LibreFolio - Asset Pricing Provider System  
 **Start Date**: 6 November 2025  
 **Estimated Duration**: 6-8 days  
-**Status**: ✅ **Phase 0-5 COMPLETED** — Plugin Architecture + Schema Consolidation Complete
+**Status**: ✅ **Phase 0-7 MOSTLY COMPLETED** — Plugin Architecture + Search Endpoint Complete
 
-**Last Updated**: 2025-11-18
+**Last Updated**: 2025-12-16
 
 ---
 
@@ -25,21 +25,28 @@ Completed (verified):
 - ✅ Phase 3: CSS Scraper Provider — full implementation with US/EU format support, tests passing
 - ✅ Phase 4: Synthetic Yield Plugin Refactor — scheduled_investment provider, financial_math utilities, 100% tests passing (103/103 total)
 - ✅ **Phase 5: Schema Consolidation & Code Quality** — Database corrections, Scheduled Investment refactoring, Schema organization (6 modules, FA/FX naming, 0 inline Pydantic)
+- ✅ **Phase 6.1: JustETF Provider** — Full implementation with search, metadata, gettex quotes
+- ✅ **Phase 7.4-7.5: Search Endpoint & Tests** — `GET /api/v1/assets/provider/search` implemented with 5 tests
 - ✅ Generic Test Suite: Uniform tests for all asset providers (test_external/test_asset_providers.py)
 
-**🎉 Major Milestone: Plugin Architecture + Code Quality Complete!**
-- 4 asset providers registered: cssscraper, mockprov, scheduled_investment, yfinance
+**Ignored (not needed for MVP)**:
+- ⏭️ Phase 6.2: Borsa Italiana Provider — CSS Scraper can handle this use case
+- ⏭️ Phase 6.3: Dividend dates in history — Secondary feature
+- ⏭️ Phase 7.1-7.3: Cache Infrastructure — Providers have internal caching
+
+**🎉 Major Milestone: Plugin Architecture + Search Complete!**
+- 5 asset providers registered: cssscraper, mockprov, scheduled_investment, yfinance, **justetf**
 - Schema consolidation: 6 modules (common, assets, provider, prices, refresh, fx)
 - Naming conventions: 100% FA/FX systematic
+- Search endpoint: `GET /api/v1/assets/provider/search` with provider filtering
 - Financial calculation utilities extracted and documented (4 guides)
 - Testing documentation complete (5 guides)
 - All tests passing: 15/15 asset_source, 103/103 financial_math, 0 regressions
 - Quality gates: 8/8 passed
 
 Current focus / next steps:
-- 🎯 **Next**: Phase 6 - Advanced Provider Implementations (JustETF, etc.) — **READY TO START**
-- 🎯 Phase 7: Search & Cache System
-- 🎯 Phase 8: Documentation & Developer Guides (final polish)
+- 🎯 **Next**: Phase 8 - Documentation & Developer Guides (final polish)
+- 🎯 Frontend integration using search endpoint
 
 **Phase 5 Code Quality Summary** (Nov 13-18, 2025):
 - Database: Transaction → CashMovement corrected (unidirectional, CASCADE, CHECK constraints)
@@ -1359,47 +1366,52 @@ Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-
 
 ### 6.1 JustETF Provider
 
-- [ ] **Create justEtf.py**
+- [x] **Create justEtf.py**
   - File: `backend/app/services/asset_source_providers/just_etf.py`
   - Base URL: `https://www.justetf.com/en/etf-profile.html?isin=<ISIN>`
   - Use `@register_provider(AssetProviderRegistry)` decorator
 
-- [ ] **Implement provider_code and metadata**
+- [x] **Implement provider_code and metadata**
   - Code: `justetf`
   - Name: "JustETF"
   - Description: "European ETF data from JustETF"
   - Supports search: `True`
   - Test identifier: Valid ISIN (e.g., `IE00B4L5Y983` - iShares Core MSCI World)
 
-- [ ] **Implement get_current_value()**
+- [x] **Implement get_current_value()**
   - Scrape current NAV (Net Asset Value) from ETF page
   - CSS selector: Research and document
   - Parse currency (usually EUR)
   - Return `CurrentValueModel`
 
-- [ ] **Implement get_history_value()**
+- [x] **Implement get_history_value()**
   - Check if historical data available via API/scraping
   - If not available: Return empty `HistoricalDataModel` with message
   - Document limitations in provider docstring
 
-- [ ] **Implement search()**
+- [x] **Implement search()**
   - Query: Search ETFs by name or ISIN
   - Base URL: `https://www.justetf.com/en/find-etf.html?query=<query>`
   - Parse results and return list of ISINs with metadata
   - Cache results for 10 minutes
 
-- [ ] **Implement get_asset_metadata()**
+- [x] **Implement get_asset_metadata()**
   - Extract: ETF name, region, sector, TER (Total Expense Ratio)
   - Map to `classification_params`: geographic area, sector
   - Set `investment_type = "etf"`
   - Set `base_currency` from NAV currency
 
-- [ ] **Add test configuration**
+- [x] **Add test configuration**
   - Property: `test_config` returns list of test cases
   - Include: Valid ISIN, provider_params, expected results
   - Example: Borsa Italiana BTP (see below)
 
 ### 6.2 Borsa Italiana Provider
+
+**Status**: ⏭️ **IGNORED** - Non prioritario, il CSS Scraper esistente può già gestire questo caso d'uso.
+
+<details>
+<summary>Dettagli originali (click per espandere)</summary>
 
 - [ ] **Create borsa_italiana.py**
   - File: `backend/app/services/asset_source_providers/borsa_italiana.py`
@@ -1469,7 +1481,14 @@ Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-
     }
     ```
 
+</details>
+
 ### 6.3 Enhanced get_history() with Dividend Dates
+
+**Status**: ⏭️ **IGNORED** - Feature secondaria, può essere aggiunta in futuro se necessario.
+
+<details>
+<summary>Dettagli originali (click per espandere)</summary>
 
 - [ ] **Update AssetSourceProvider interface**
   - Method: `get_history_value()` returns `HistoricalDataModel`
@@ -1520,13 +1539,24 @@ Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-
 - Future use: Calculate dividend yield, forecast future payments
 ```
 
+</details>
+
 ---
 
 ## Phase 7: Search & Cache System (3-4 days)
 
-**Status**: 🟡 **READY TO START** - Provider infrastructure in place
+**Status**: ✅ **PARTIALLY COMPLETED** (2025-12-16) - Endpoint search implementato, cache avanzata ignorata per MVP
 
 **Goal**: Implement unified search and caching system for asset provider queries with fuzzy matching and automatic cache management.
+
+**Completed**:
+- ✅ 7.4 API Endpoint: `GET /api/v1/assets/provider/search` implementato
+- ✅ 7.5 Tests: 5 test aggiunti per l'endpoint search
+
+**Ignored (not needed for MVP)**:
+- ⏭️ 7.1 Cache Infrastructure: Provider già gestiscono cache interne
+- ⏭️ 7.2 Search Service Layer: Endpoint chiama direttamente i provider
+- ⏭️ 7.3 Provider Search Interface: Interfaccia `search()` già esiste nei provider
 
 **Schema Organization Note**: 
 - Search results will use `PricePointModel` from `schemas/assets.py` for price data
@@ -1534,6 +1564,11 @@ Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-
 - No inline Pydantic models - all schemas imported from dedicated modules
 
 ### 7.1 Cache Infrastructure
+
+**Status**: ⏭️ **IGNORED** - Cache avanzata non necessaria per MVP, i provider gestiscono già cache interne semplici (es. yfinance 10min TTL).
+
+<details>
+<summary>Dettagli originali (click per espandere)</summary>
 
 - [ ] **Create cache utility module**
   - File: `backend/app/utils/search_cache.py`
@@ -1556,7 +1591,14 @@ Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-
   - Check: Compare current time with expiry on retrieval
   - Cleanup: Scheduled task removes expired entries
 
+</details>
+
 ### 7.2 Search Service Layer
+
+**Status**: ⏭️ **IGNORED** - Service layer separato non necessario, l'endpoint chiama direttamente i provider.
+
+<details>
+<summary>Dettagli originali (click per espandere)</summary>
 
 - [ ] **Create search service**
   - File: `backend/app/services/asset_search.py`
@@ -1583,7 +1625,14 @@ Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-
   - Fields: `identifier`, `name`, `provider_code`, `provider_params`, `metadata`, `source` (cached/remote)
   - Response: List of `AssetSearchResult` objects
 
+</details>
+
 ### 7.3 Provider Search Interface
+
+**Status**: ⏭️ **IGNORED** - L'interfaccia `search()` esiste già nei provider, formalizzazione non necessaria per MVP.
+
+<details>
+<summary>Dettagli originali (click per espandere)</summary>
 
 - [ ] **Update AssetSourceProvider interface**
   - Method: `search(query: str) -> List[dict]` (already exists, formalize contract)
@@ -1610,10 +1659,48 @@ Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-
   - BorsaItalianaProvider: Search by ISIN/name
   - ScheduledInvestmentProvider: Not supported
 
+</details>
+
 ### 7.4 API Endpoint
 
-- [ ] **Create unified search endpoint**
-  - Endpoint: `GET /api/v1/assets/search?q=<query>&providers=<csv>`
+**Status**: ✅ **COMPLETED** (2025-12-16)
+
+- [x] **Create unified search endpoint**
+  - Endpoint: `GET /api/v1/assets/provider/search?q=<query>&providers=<csv>`
+  - Aggiunto all'endpoint al tag 'FA Provider'
+  - Query params:
+    - `q`: Search query (required, min 1 character)
+    - `providers`: Comma-separated provider codes (optional, default: all)
+  - Response schema: `FAProviderSearchResponse` with:
+    - `query`: Original search query
+    - `total_results`: Total count
+    - `results`: List of `FAProviderSearchResultItem` (identifier, display_name, provider_code, currency, asset_type)
+    - `providers_queried`: List of providers that were queried
+    - `providers_with_errors`: List of providers that had errors
+
+- [x] **Service Layer Implementation**
+  - File: `backend/app/services/asset_search.py`
+  - Class: `AssetSearchService`
+  - Method: `search(query, provider_codes)` - Parallel search using `asyncio.gather`
+  - Features:
+    - Parallel execution across all providers
+    - Graceful error handling per provider
+    - "Not supported" detection (not counted as error)
+    - Results aggregation without deduplication
+
+- [x] **Yahoo Finance Search Improvement**
+  - Updated `yahoo_finance.py` to use `yfinance.Search` instead of exact ticker match
+  - Now returns real search results (top 20) for queries like "Apple", "Semiconductor"
+  - Cache with 10 minute TTL
+
+**Implementation Notes**:
+```python
+# Parallel search using asyncio.gather
+tasks = [search_single_provider(code, provider) for code, provider in valid_providers]
+search_results_raw = await asyncio.gather(*tasks, return_exceptions=True)
+```
+  - Endpoint: `GET /api/v1/assets/provider/search?q=<query>&providers=<csv>`
+  - Aggiungere l'endpoint al tag 'FA FA Provider'
   - Query params:
     - `q`: Search query (required)
     - `providers`: Comma-separated provider codes (optional, default: all)
@@ -1635,16 +1722,31 @@ Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-
     }
     ```
 
-- [ ] **Add cache status endpoint**
-  - Endpoint: `GET /api/v1/assets/search/cache/status`
-  - Response: `{"entries": 123, "expired": 5, "total_size_kb": 456}`
-
-- [ ] **Add cache cleanup endpoint**
-  - Endpoint: `POST /api/v1/assets/search/cache/cleanup`
-  - Action: Trigger `cleanup_expired_entries()`
-  - Response: `{"deleted": 5}`
 
 ### 7.5 Tests
+
+**Status**: ✅ **COMPLETED** (2025-12-16)
+
+- [x] **Test API endpoint search**
+  - File: `backend/test_scripts/test_api/test_assets_provider.py`
+  - Test 6: Basic search 'Apple' - verifies yfinance + justetf results
+  - Test 7: Search 'Semiconductor' - verifies ETFs (justetf) + stocks (yfinance)
+  - Test 8: Provider filter (justetf only) - verifies filtering works
+  - Test 9: Search 'IBM' - verifies yfinance finds well-known stocks
+  - Test 10: Invalid provider handling - graceful skip
+  - Test 11: Empty query validation (422 error)
+  - Test 12: Parallel execution timing verification
+  - Test 13: **E2E test** - Search → Create Asset → Assign Provider → Refresh Metadata → Price Refresh → Verify Prices
+  - Test 14: **get_current_value for today** - verifies price refresh uses current value for today's date
+  - Test 15: **CSS Scraper current price** - verifies providers without history support can still get current price
+
+- [x] **Service layer improvements**
+  - `bulk_refresh_prices()` now uses `get_current_value()` for today's date
+  - History is fetched for past dates, current value for today
+  - Providers without history support (like CSS Scraper) can still provide current prices
+
+<details>
+<summary>Test cache e search service (IGNORED)</summary>
 
 - [ ] **Test cache functionality**
   - Test: Store and retrieve with TTL
@@ -1658,11 +1760,7 @@ Step contenuti nella checklist `LibreFolio_developer_journal/prompts/05_phase_5-
   - Test: Parallel provider calls work correctly
   - Test: Cache updated with new results
 
-- [ ] **Test API endpoints**
-  - Test: Search endpoint returns results
-  - Test: Provider filtering works
-  - Test: Cache status accurate
-  - Test: Cleanup endpoint works
+</details>
 
 **Notes**:
 ```
