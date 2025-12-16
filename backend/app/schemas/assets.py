@@ -444,6 +444,7 @@ class FAClassificationParams(BaseModel):
 
     short_description: Optional[str] = None
     geographic_area: Optional[FAGeographicArea] = None
+    # TODO: Create FASectorArea similar to FAGeographicArea for sector distribution
     sector: Optional[str] = None
 
 

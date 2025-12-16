@@ -60,6 +60,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         return [
             {
                 'identifier': 'AAPL',
+                'identifier_type': IdentifierType.TICKER,
                 'provider_params': None
                 }
             ]
@@ -252,20 +253,20 @@ class YahooFinanceProvider(AssetSourceProvider):
     @property
     def test_search_query(self) -> str | None:
         """Search query to use in tests."""
-        return 'AAPL'
+        return 'Apple'
 
     async def search(self, query: str) -> list[dict]:
         """
         Search Yahoo Finance for matching tickers.
 
-        Note: yfinance doesn't have native search API, so we try exact match.
+        Uses yfinance.Search for real search functionality.
         Results are cached for 10 minutes.
 
         Args:
-            query: Ticker symbol to search (e.g., "AAPL")
+            query: Search query (e.g., "Apple", "Microsoft", "AAPL")
 
         Returns:
-            List of matching tickers (0 or 1 result)
+            List of matching tickers with metadata.
             Each result: {identifier, display_name, currency, type}
 
         Raises:
@@ -278,9 +279,12 @@ class YahooFinanceProvider(AssetSourceProvider):
                 {"query": query}
                 )
 
+        # Minimum search length
+        if len(query) < self._MIN_SEARCH_CHARS:
+            return []
+
         # Check cache
-        cache_key = query.upper()
-        # TODO: implementare ricerca fuzzy
+        cache_key = query.lower()
         if cache_key in self._search_cache:
             results, timestamp = self._search_cache[cache_key]
             age = (utcnow() - timestamp).total_seconds()
@@ -289,42 +293,36 @@ class YahooFinanceProvider(AssetSourceProvider):
                 return results
 
         try:
-            # yfinance doesn't have native search, try exact match
-            ticker = yf.Ticker(query.upper())
+            # Use yfinance Search for real search functionality
+            from yfinance import Search
+            search_result = Search(query)
 
-            try:
-                info = ticker.info
-                if not info or 'symbol' not in info:
-                    # Not found
-                    self._search_cache[cache_key] = ([], utcnow())
-                    return []
+            results = []
+            quotes = getattr(search_result, 'quotes', []) or []
 
-                result = [
-                    {
-                        "identifier": info.get('symbol', query.upper()),
-                        "display_name": info.get('longName', info.get('shortName', query.upper())),
-                        "currency": info.get('currency', 'USD'),
-                        "type": info.get('quoteType', 'Unknown')  # EQUITY, ETF, CRYPTOCURRENCY, etc.
-                        }
-                    ]
+            for quote in quotes[:20]:  # Limit to top 20 results
+                # Skip non-Yahoo Finance results
+                if not quote.get('isYahooFinance', True):
+                    continue
 
-                # Cache result
-                self._search_cache[cache_key] = (result, utcnow())
-                logger.info(f"Search for '{query}': found {info.get('symbol')}")
-                return result
+                results.append({
+                    "identifier": quote.get('symbol', ''),
+                    "display_name": quote.get('longname', quote.get('shortname', quote.get('symbol', ''))),
+                    "currency": None,  # Not provided in search results
+                    "type": quote.get('quoteType', 'Unknown')  # EQUITY, ETF, CRYPTOCURRENCY, etc.
+                })
 
-            except Exception as e:
-                logger.debug(f"Ticker '{query}' not found: {e}")
-                # Cache empty result
-                self._search_cache[cache_key] = ([], datetime.utcnow())
-                return []
+            # Cache result
+            self._search_cache[cache_key] = (results, utcnow())
+            logger.info(f"Search for '{query}': found {len(results)} results")
+            return results
 
         except Exception as e:
-            raise AssetSourceError(
-                f"Search failed for '{query}': {e}",
-                "SEARCH_ERROR",
-                {"query": query, "error": str(e)}
-                )
+            logger.warning(f"Search failed for '{query}': {e}")
+            # Cache empty result to avoid repeated failures
+            self._search_cache[cache_key] = ([], utcnow())
+            return []
+
 
     def validate_params(self, params: Dict | None) -> None:
         """

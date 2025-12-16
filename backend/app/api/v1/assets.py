@@ -42,6 +42,7 @@ from backend.app.schemas.provider import (
     FABulkAssignResponse,
     FABulkRemoveResponse,
     FAProviderAssignmentReadItem,
+    FAProviderSearchResponse,
     )
 from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem
 from backend.app.services.asset_crud import AssetCRUDService
@@ -278,6 +279,66 @@ async def list_providers():
                     ))
 
     return providers
+
+
+@provider_router.get("/search", response_model=FAProviderSearchResponse)
+async def search_assets_via_providers(
+    q: str = Query(..., min_length=1, description="Search query"),
+    providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)")
+    ):
+    """
+    Search for assets across one or more providers in parallel.
+
+    Queries the specified providers (or all providers that support search) and
+    returns aggregated results. Searches are executed in parallel using asyncio.gather
+    for optimal performance.
+
+    **Query Parameters**:
+    - `q`: Search query (required, min 1 character)
+    - `providers`: Comma-separated provider codes to query (optional, default: all with search support)
+
+    **Example Requests**:
+    ```
+    GET /api/v1/assets/provider/search?q=Apple
+    GET /api/v1/assets/provider/search?q=MSCI+World&providers=justetf
+    GET /api/v1/assets/provider/search?q=AAPL&providers=yfinance,justetf
+    ```
+
+    **Response**:
+    ```json
+    {
+      "query": "Apple",
+      "total_results": 5,
+      "results": [
+        {
+          "identifier": "AAPL",
+          "display_name": "Apple Inc.",
+          "provider_code": "yfinance",
+          "currency": "USD",
+          "asset_type": "stock"
+        }
+      ],
+      "providers_queried": ["yfinance", "justetf"],
+      "providers_with_errors": []
+    }
+    ```
+
+    **Notes**:
+    - Searches are executed in parallel across all providers
+    - Providers that don't support search are skipped (no error)
+    - Provider-specific errors are logged but don't fail the entire request
+    - Results are not deduplicated (same asset may appear from multiple providers)
+    """
+    from backend.app.services.asset_search import AssetSearchService
+
+    # Parse provider list
+    provider_codes: list[str] | None = None
+    if providers:
+        provider_codes = [p.strip() for p in providers.split(",") if p.strip()]
+
+    # Delegate to service layer (parallel execution via asyncio.gather)
+    return await AssetSearchService.search(q, provider_codes)
+
 
 
 @provider_router.post("", response_model=FABulkAssignResponse)

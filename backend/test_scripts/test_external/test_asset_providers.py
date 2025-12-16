@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from backend.app.db import IdentifierType
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -120,15 +122,15 @@ async def test_current_value(provider_code: str):
 
         for test_case in provider.test_cases:
             identifier = test_case['identifier']
+            # TODO: modificare i test per fornire expected_symbol o rimuovere
             expected_symbol = test_case.get('expected_symbol', identifier)
             # Get provider_params and identifier_type if specified in test_case
             provider_params = test_case.get('provider_params')
-            identifier_type = test_case.get('identifier_type', 'TICKER')  # Default to TICKER
+            identifier_type = test_case.get('identifier_type', IdentifierType.TICKER)  # Default to TICKER
 
             print_info(f"  Testing: {identifier} (expects: {expected_symbol})")
 
             # Import IdentifierType if not already imported
-            from backend.app.db.models import IdentifierType
             # Convert string to enum if needed
             if isinstance(identifier_type, str):
                 identifier_type = IdentifierType[identifier_type]
@@ -181,14 +183,14 @@ async def test_current_value(provider_code: str):
 
 @pytest.mark.asyncio
 async def test_historical_data(provider_code: str):
-    """Test get_historical_data method (if supported)."""
+    """Test get_history_value method (if supported)."""
     print_section(f"Test 3: {provider_code} - Historical Data Fetching")
 
     try:
         provider = AssetProviderRegistry.get_provider_instance(provider_code)
 
-        # Check if historical data is supported
-        supports_history = hasattr(provider, 'get_historical_data') and callable(provider.get_historical_data)
+        # Check if historical data is supported via supports_history property
+        supports_history = provider.supports_history
 
         if not supports_history:
             print_info(f"{provider_code} does not support historical data - SKIPPING")
@@ -200,6 +202,8 @@ async def test_historical_data(provider_code: str):
 
         test_case = provider.test_cases[0]
         identifier = test_case['identifier']
+        identifier_type = test_case.get('identifier_type', IdentifierType.ISIN)
+        provider_params = test_case.get('provider_params')
 
         print_info(f"Testing historical data for: {identifier}")
 
@@ -209,13 +213,14 @@ async def test_historical_data(provider_code: str):
 
         print_info(f"  Date range: {start_date} to {end_date}")
 
-        result = await provider.get_historical_data(identifier, start_date, end_date)
+        result = await provider.get_history_value(
+            identifier, identifier_type, provider_params, start_date, end_date
+        )
 
-        # Validate result structure
-        assert isinstance(result, dict), f"Result is not a dict: {type(result)}"
-        assert 'prices' in result, "Result missing 'prices' list"
+        # Validate result structure - FAHistoricalData has .prices attribute
+        assert hasattr(result, 'prices'), f"Result missing 'prices' attribute: {type(result)}"
 
-        prices = result['prices']
+        prices = result.prices
         assert isinstance(prices, list), f"prices is not a list: {type(prices)}"
 
         if not prices:
@@ -223,13 +228,12 @@ async def test_historical_data(provider_code: str):
         else:
             print_info(f"  Received {len(prices)} price points")
 
-            # Check first price structure
+            # Check first price structure - FAPricePoint object
             first_price = prices[0]
-            assert isinstance(first_price, dict), "Price point is not a dict"
-            assert 'date' in first_price, "Price point missing 'date'"
-            assert 'close' in first_price, "Price point missing 'close'"
+            assert hasattr(first_price, 'date'), "Price point missing 'date'"
+            assert hasattr(first_price, 'close'), "Price point missing 'close'"
 
-            print_success(f"  ✓ First price: {first_price['date']} close={first_price['close']}")
+            print_success(f"  ✓ First price: {first_price.date} close={first_price.close}")
 
         print_success("Historical data fetch successful")
 
