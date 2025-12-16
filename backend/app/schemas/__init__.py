@@ -28,8 +28,11 @@ from backend.app.schemas.assets import (
     FAHistoricalData,
     FAAssetProviderAssignment,
     FAAssetPatchItem,
+    # Distribution models
+    BaseDistribution,
     # Metadata & classification
     FAGeographicArea,
+    FASectorArea,
     FAClassificationParams,
     FAAssetMetadataResponse,
     FAMetadataChangeDetail,
@@ -111,8 +114,11 @@ __all__ = [
     "FAHistoricalData",
     "FAAssetProviderAssignment",
     "FAAssetPatchItem",
+    # Assets: Distribution models
+    "BaseDistribution",
     # Assets: Metadata & classification
     "FAGeographicArea",
+    "FASectorArea",
     "FAClassificationParams",
     "FAAssetMetadataResponse",
     "FAMetadataChangeDetail",

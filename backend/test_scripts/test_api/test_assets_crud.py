@@ -13,7 +13,7 @@ from backend.app.db import AssetType
 from backend.app.schemas import (
     FAAssetCreateItem, FABulkAssetCreateResponse,
     FAClassificationParams, FAinfoResponse, FABulkAssignResponse,
-    FABulkAssetDeleteResponse, FAGeographicArea
+    FABulkAssetDeleteResponse, FAGeographicArea, FASectorArea
     )
 from backend.app.db.models import IdentifierType
 from backend.app.schemas.common import DateRangeModel
@@ -203,7 +203,7 @@ async def test_create_with_classification_params(test_server):
             currency="USD",
             asset_type=AssetType.STOCK,
             classification_params=FAClassificationParams(
-                sector="Technology",
+                sector_area=FASectorArea(distribution={"Technology": 1.0}),
                 geographic_area=FAGeographicArea(distribution={"USA": 0.8, "CHN": 0.2})
                 )
             )
@@ -378,10 +378,8 @@ async def test_delete_success(test_server):
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_ids = [r.asset_id for r in create_data.results]
 
-        # Delete them
-        from backend.app.schemas.assets import FABulkAssetDeleteRequest
-        delete_req = FABulkAssetDeleteRequest(asset_ids=asset_ids)
-        response = await client.request("DELETE", f"{API_BASE}/assets", json=delete_req.model_dump(mode="json"), timeout=TIMEOUT)
+        # Delete them using query params
+        response = await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = FABulkAssetDeleteResponse(**response.json())
         assert data.success_count == 2, f"Expected success_count=2, got {data.success_count}"
@@ -418,14 +416,11 @@ async def test_delete_cascade(test_server):
         assert provider_data.results[0].success, f"Provider assignment failed"
         print_info(f"  Provider assigned: {item_fa_provider.provider_code}")
 
-        # Step 3: Add price
-        # TODO: Price upsert endpoint not yet implemented - skip this step
-        print_info("  Skipping price upsert - endpoint not implemented yet")
+        # Step 3: Add price (skipped - tested in test_assets_prices.py)
+        print_info("  Skipping price upsert - tested separately in test_assets_prices.py")
 
         # Step 4: Delete asset (cascade test without prices for now)
-        from backend.app.schemas.assets import FABulkAssetDeleteRequest
-        delete_req = FABulkAssetDeleteRequest(asset_ids=[asset_id])
-        delete_resp = await client.request("DELETE", f"{API_BASE}/assets", json=delete_req.model_dump(mode="json"), timeout=TIMEOUT)
+        delete_resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
         assert delete_resp.status_code == 200, f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
 
         delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
@@ -457,9 +452,7 @@ async def test_delete_partial_success(test_server):
         print_info(f"  Invalid asset ID: {invalid_id}")
 
         # Step 2: Try to delete both (one valid, one invalid)
-        from backend.app.schemas.assets import FABulkAssetDeleteRequest
-        delete_req = FABulkAssetDeleteRequest(asset_ids=[valid_id, invalid_id])
-        delete_resp = await client.request("DELETE", f"{API_BASE}/assets", json=delete_req.model_dump(mode="json"),
+        delete_resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [valid_id, invalid_id]},
                                            timeout=TIMEOUT)
         assert delete_resp.status_code == 200, f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
 
@@ -590,11 +583,10 @@ async def test_bulk_delete_prices(test_server):
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id}")
 
-        # Step 2: Insert prices
-        # TODO: Price upsert endpoint not yet implemented - skip for now
-        print_info("  Skipping price upsert - endpoint not implemented yet")
-        print_success("✓ Asset created, price operations skipped")
-        return  # Skip rest of test for now
+        # Step 2: Insert prices (skipped - tested in test_assets_prices.py)
+        print_info("  Skipping price upsert - tested separately in test_assets_prices.py")
+        print_success("✓ Asset created, price operations tested separately")
+        return  # Skip rest of test - price operations have dedicated test file
 
         # from backend.app.schemas.prices import FAAssetUpsert, FAPricePoint
         prices = [
@@ -695,11 +687,10 @@ async def test_bulk_refresh_prices(test_server):
         assert assign_resp.status_code == 200, f"Provider assignment failed: {assign_resp.status_code}"
         print_info(f"  Assigned provider: mockprov")
 
-        # Step 3: Refresh prices
-        # TODO: Verify refresh endpoint signature and schemas
-        print_info("  Skipping price refresh - endpoint may not be ready")
-        print_success("✓ Asset created and provider assigned, price refresh skipped")
-        return  # Skip rest of test for now
+        # Step 3: Refresh prices (skipped - tested in test_assets_provider.py)
+        print_info("  Skipping price refresh - tested separately in test_assets_provider.py")
+        print_success("✓ Asset created and provider assigned, refresh tested separately")
+        return  # Skip rest of test - refresh operations have dedicated test file
 
         # from backend.app.schemas.refresh import FABulkRefreshRequest, FARefreshItem
         from datetime import date

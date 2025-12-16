@@ -20,6 +20,7 @@ from backend.app.schemas.assets import (
     FAPricePoint,
     FAClassificationParams,
     FAGeographicArea,
+    FASectorArea,
 )
 from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
@@ -380,18 +381,37 @@ class JustETFProvider(AssetSourceProvider):
                     except Exception as e:
                         logger.warning(f"Could not create FAGeographicArea for {identifier}: {e}")
 
-            # TODO: Create FASectorArea similar to FAGeographicArea for sector distribution
-            # For now, use the first sector as the main sector string
-            sector = None
+            # Build sector distribution using FASectorArea
+            sector_area = None
             sectors = overview.get('sectors', [])
             if sectors:
-                # Use the first (largest) sector as the primary sector
-                sector = sectors[0].get('name')
+                sector_distribution = {}
+                sector_total = Decimal('0')
+                for sector_item in sectors:
+                    sector_name = sector_item.get('name')
+                    percentage = sector_item.get('percentage')
+                    if sector_name and percentage is not None:
+                        weight = Decimal(str(percentage)) / Decimal('100')
+                        # Accumulate if sector appears multiple times
+                        if sector_name in sector_distribution:
+                            sector_distribution[sector_name] += weight
+                        else:
+                            sector_distribution[sector_name] = weight
+                        sector_total += weight
+
+                if sector_distribution and sector_total > Decimal('0'):
+                    # Renormalize to sum to 1.0
+                    sector_distribution = {k: v / sector_total for k, v in sector_distribution.items()}
+                    try:
+                        # FASectorArea will normalize sector names using FinancialSector enum
+                        sector_area = FASectorArea(distribution=sector_distribution)
+                    except Exception as e:
+                        logger.warning(f"Could not create FASectorArea for {identifier}: {e}")
 
             classification = FAClassificationParams(
                 short_description=short_description,
                 geographic_area=geographic_area,
-                sector=sector,
+                sector_area=sector_area,
             )
 
             return FAAssetPatchItem(
