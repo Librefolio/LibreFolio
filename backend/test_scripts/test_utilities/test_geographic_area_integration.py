@@ -8,22 +8,21 @@ import json
 from decimal import Decimal
 
 from backend.app.db import AssetType
-from backend.app.schemas.assets import FAClassificationParams, FAGeographicArea
+from backend.app.schemas.assets import FAClassificationParams, FAGeographicArea, FASectorArea
 
 
 def test_classification_params_with_geographic_area():
     """Test FAClassificationParams creation with FAGeographicArea."""
-    geo = FAGeographicArea(distribution={"USA": Decimal("0.6"), "EUR": Decimal("0.4")})
+    geo = FAGeographicArea(distribution={"USA": Decimal("0.6"), "DEU": Decimal("0.4")})
     params = FAClassificationParams(
         short_description="Test Company",
         geographic_area=geo,
-        sector="Technology"
+        sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
         )
 
     assert params.geographic_area is not None
-    assert params.geographic_area.distribution["USA"] == Decimal("0.6")
-    # EUR might be normalized to FRA
-    assert "EUR" in params.geographic_area.distribution or "FRA" in params.geographic_area.distribution
+    assert params.geographic_area.distribution["USA"] == Decimal("0.6000")
+    assert params.geographic_area.distribution["DEU"] == Decimal("0.4000")
 
 
 def test_serialize_classification_params():
@@ -31,7 +30,7 @@ def test_serialize_classification_params():
     geo = FAGeographicArea(distribution={"USA": Decimal("0.7"), "GBR": Decimal("0.3")})
     params = FAClassificationParams(
         geographic_area=geo,
-        sector="Technology"
+        sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
         )
 
     json_str = params.model_dump_json(exclude_none=True)
@@ -47,7 +46,7 @@ def test_serialize_classification_params():
 def test_deserialize_classification_params():
     """Test deserialization from JSON with nested FAGeographicArea."""
     # New format: nested with "distribution" key
-    json_str = '{"geographic_area":{"distribution":{"USA":"0.6000","ITA":"0.4000"}},"sector":"Technology"}'
+    json_str = '{"geographic_area":{"distribution":{"USA":"0.6000","ITA":"0.4000"}},"sector_area":{"distribution":{"Technology":"1.0000"}}}'
 
     params = FAClassificationParams.model_validate_json(json_str)
 
@@ -61,10 +60,10 @@ def test_deserialize_classification_params():
 def test_round_trip_serialization():
     """Test round-trip: serialize → deserialize → serialize."""
     # Create original
-    geo = FAGeographicArea(distribution={"USA": Decimal("0.5"), "EUR": Decimal("0.5")})
+    geo = FAGeographicArea(distribution={"USA": Decimal("0.5"), "FRA": Decimal("0.5")})
     original = FAClassificationParams(
         geographic_area=geo,
-        sector="Finance"
+        sector_area=FASectorArea(distribution={"Financials": Decimal("1.0")})
         )
 
     # Serialize
@@ -86,7 +85,7 @@ def test_round_trip_serialization():
 def test_none_geographic_area():
     """Test that None geographic_area works correctly."""
     params = FAClassificationParams(
-        sector="Technology"
+        sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
         )
 
     json_str = params.model_dump_json(exclude_none=True)

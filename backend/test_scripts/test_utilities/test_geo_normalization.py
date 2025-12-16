@@ -10,7 +10,6 @@ import pytest
 
 from backend.app.utils.geo_normalization import (
     normalize_country_to_iso3,
-    quantize_weight,
     validate_and_normalize_geographic_area,
     )
 
@@ -44,21 +43,6 @@ def test_normalize_country_to_iso3():
     with pytest.raises(ValueError):
         normalize_country_to_iso3("")
 
-
-def test_quantize_weight():
-    """Test weight quantization to 4 decimals."""
-    # Quantize to 4 decimals
-    assert quantize_weight(Decimal("0.123456789")) == Decimal("0.1235")
-    assert quantize_weight(Decimal("0.60375")) == Decimal("0.6038")
-
-    # ROUND_HALF_EVEN
-    assert quantize_weight(Decimal("0.12345")) == Decimal("0.1234")
-    assert quantize_weight(Decimal("0.12355")) == Decimal("0.1236")
-
-    # Fewer decimals padded
-    assert quantize_weight(Decimal("0.6")) == Decimal("0.6000")
-
-
 def test_validate_and_normalize_geographic_area():
     """Test complete geographic area validation pipeline."""
     # Valid ISO-3 codes
@@ -84,13 +68,18 @@ def test_validate_and_normalize_geographic_area():
     assert "USA" in result
     assert "ITA" in result
 
-    # Sum within tolerance
+    # Sum within tolerance (1% tolerance)
     data = {"USA": Decimal("0.5"), "ITA": Decimal("0.499999")}
     result = validate_and_normalize_geographic_area(data)
     assert sum(result.values()) == Decimal("1.0")
 
-    # Sum out of tolerance
-    data = {"USA": 0.5, "ITA": 0.4}  # Sum = 0.9
+    # Sum within tolerance - will be renormalized to 1.0
+    data = {"USA": 0.5, "ITA": 0.495}  # Sum = 0.995, within 1% of 1.0
+    result = validate_and_normalize_geographic_area(data)
+    assert sum(result.values()) == Decimal("1.0")
+
+    # Sum out of tolerance (> 1% deviation)
+    data = {"USA": 0.5, "ITA": 0.4}  # Sum = 0.9, 10% deviation
     with pytest.raises(ValueError):
         validate_and_normalize_geographic_area(data)
 

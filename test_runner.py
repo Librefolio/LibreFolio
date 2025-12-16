@@ -630,6 +630,30 @@ def utils_geographic_area_integration(verbose: bool = False) -> bool:
         )
 
 
+def utils_sector_normalization(verbose: bool = False) -> bool:
+    """Test FinancialSector enum and sector normalization."""
+    print_section("Utils: Sector Normalization")
+    print_info("Testing: backend/app/utils/sector_normalization.py")
+    print_info("Tests: FinancialSector enum, aliases, normalization, validation")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_sector_normalization.py", "-v"],
+        "Sector normalization tests",
+        verbose=verbose,
+        )
+
+
+def utils_distribution_models(verbose: bool = False) -> bool:
+    """Test BaseDistribution, FAGeographicArea, FASectorArea models."""
+    print_section("Utils: Distribution Models")
+    print_info("Testing: BaseDistribution, FAGeographicArea, FASectorArea")
+    print_info("Tests: Weight validation, normalization, quantization, sector merging")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_distribution_models.py", "-v"],
+        "Distribution models tests",
+        verbose=verbose,
+        )
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     print_header("LibreFolio Utility Tests")
@@ -644,6 +668,8 @@ def utils_all(verbose: bool = False) -> bool:
         ("Scheduled Investment Schemas", lambda: utils_scheduled_investment_schemas(verbose)),
         ("Geographic Area Normalization", lambda: utils_geo_normalization(verbose)),
         ("FAGeographicArea Integration", lambda: utils_geographic_area_integration(verbose)),
+        ("Sector Normalization", lambda: utils_sector_normalization(verbose)),
+        ("Distribution Models", lambda: utils_distribution_models(verbose)),
         ]
 
     results = []
@@ -781,7 +807,7 @@ def api_assets_price(verbose: bool = False) -> bool:
     print_info("Note: Server will be automatically started and stopped by test")
 
     return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_price.py", "-v"],
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_prices.py", "-v"],
         "Assets Price API tests",
         verbose=verbose
         )
@@ -837,6 +863,22 @@ def api_assets_crud(verbose: bool = False) -> bool:
         )
 
 
+def api_utilities(verbose: bool = False) -> bool:
+    """
+    Run Utilities API endpoint tests.
+    """
+    print_section("Utilities API Endpoint Tests")
+    print_info("Testing REST API endpoints for frontend utilities")
+    print_info("Tests: GET /utilities/sectors, GET /utilities/countries/normalize")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_utilities.py", "-v"],
+        "Utilities API tests",
+        verbose=verbose
+        )
+
+
 def api_test(verbose: bool = False) -> bool:
     """
     Run all API tests.
@@ -852,6 +894,7 @@ def api_test(verbose: bool = False) -> bool:
         ("Assets CRUD API", lambda: api_assets_crud(verbose)),
         ("Assets Price API", lambda: api_assets_price(verbose)),
         ("Assets Provider API", lambda: api_assets_provider(verbose)),
+        ("Utilities API", lambda: api_utilities(verbose)),
         ]
 
     results = []
@@ -1241,6 +1284,14 @@ Test commands:
                                 📋 Prerequisites: None
                                 💡 Tests: Pydantic JSON serialization/deserialization, round-trip, nested structure
   
+  sector-normalization - Test FinancialSector enum and sector normalization
+                         📋 Prerequisites: None
+                         💡 Tests: Sector enum values, aliases, normalization to standard names
+  
+  distribution-models - Test BaseDistribution, FAGeographicArea, FASectorArea models
+                        📋 Prerequisites: None
+                        💡 Tests: Weight validation, quantization, country/sector normalization
+  
   all              - Run all utility tests
   
 These are foundational tests for remediation phases 1 & 2.
@@ -1259,6 +1310,8 @@ These are foundational tests for remediation phases 1 & 2.
             "scheduled-investment-schemas",
             "geo-normalization",
             "geographic-area-integration",
+            "sector-normalization",
+            "distribution-models",
             "all",
             ],
         help="Utility test to run",
@@ -1302,15 +1355,20 @@ Test commands:
                     
   assets-price    - Test Asset price data endpoint
                     Note: Server will be automatically started and stopped by test
+  
+  utilities       - Test Utilities endpoints (sectors list, country normalization)
+                    📋 Prerequisites: None
+                    💡 Tests: GET /utilities/sectors, GET /utilities/countries/normalize
+                    Note: Server will be automatically started and stopped by test
                     
-  all             - Run all API tests (FX + Assets Metadata + Assets CRUD)
+  all             - Run all API tests (FX + Assets Metadata + Assets CRUD + Utilities)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
     api_parser.add_argument(
         "action",
-        choices=["fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "all"],
+        choices=["fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "all"],
         help="API test to run"
         )
 
@@ -1465,6 +1523,10 @@ def main():
             success = utils_geo_normalization(verbose=verbose)
         elif args.action == "geographic-area-integration":
             success = utils_geographic_area_integration(verbose=verbose)
+        elif args.action == "sector-normalization":
+            success = utils_sector_normalization(verbose=verbose)
+        elif args.action == "distribution-models":
+            success = utils_distribution_models(verbose=verbose)
         elif args.action == "all":
             success = utils_all(verbose=verbose)
 
@@ -1482,6 +1544,8 @@ def main():
             success = api_assets_price(verbose=verbose)
         elif args.action == "assets-provider":
             success = api_assets_provider(verbose=verbose)
+        elif args.action == "utilities":
+            success = api_utilities(verbose=verbose)
         elif args.action == "all":
             success = api_test(verbose=verbose)
 

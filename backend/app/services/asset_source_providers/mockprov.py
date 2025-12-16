@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Dict
 
 from backend.app.db import IdentifierType
-from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint, FAClassificationParams, FAGeographicArea, FAAssetPatchItem
+from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint, FAClassificationParams, FAGeographicArea, FAAssetPatchItem, FASectorArea
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 
@@ -151,7 +151,7 @@ class MockProvider(AssetSourceProvider):
         """
         # Return mock data for testing as FAAssetPatchItem
         classification_params = FAClassificationParams(
-            sector="Technology",
+            sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
             short_description=f"Mock test asset {identifier} - type: {identifier_type} - used for testing metadata features",
             geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")})
             )
