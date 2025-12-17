@@ -5,7 +5,7 @@ Used across multiple subsystems (DB, API, Services) to validate data structures
 and standardize data exchange between components.
 
 **Organization by Domain**:
-- common.py: Shared schemas (BackwardFillInfo, DateRangeModel, BaseBulkResponse, BaseDeleteResult)
+- common.py: Shared schemas (BackwardFillInfo, DateRangeModel, OldNew, BaseBulkResponse, BaseDeleteResult)
 - assets.py: Asset-related schemas (FAPricePoint, ScheduledInvestment*, etc.)
 - provider.py: Provider assignment schemas (FA + FX)
 - prices.py: FA price operation schemas (upsert, delete, query)
@@ -52,6 +52,7 @@ from backend.app.schemas.assets import (
 from backend.app.schemas.common import (
     BackwardFillInfo,
     DateRangeModel,
+    OldNew,
     BaseBulkResponse,
     BaseDeleteResult,
     BaseBulkDeleteResponse,
@@ -105,6 +106,7 @@ __all__ = [
     # Common (base classes)
     "BackwardFillInfo",
     "DateRangeModel",
+    "OldNew",
     "BaseBulkResponse",
     "BaseDeleteResult",
     "BaseBulkDeleteResponse",

@@ -52,6 +52,8 @@ def normalize_country_to_iso3(country_input: str) -> str:
         "USA"
         >>> normalize_country_to_iso3("Italy")
         "ITA"
+    # TODO: capire come rendere la ricerca multi lingua
+    # TODO: se la ricerca risontra più elementi, ritornare una lista e far scegliere all'utente
     """
     if not country_input or not isinstance(country_input, str):
         raise ValueError(f"Invalid country input: {country_input} (must be non-empty string)")

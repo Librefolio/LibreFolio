@@ -102,7 +102,7 @@ async def test_patch_display_name(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert "display_name" in patch_data.results[0].updated_fields
+        assert any(item.field == "display_name" for item in patch_data.results[0].updated_fields)
         print_success("✓ display_name patched successfully")
 
         # Step 3: Verify in DB
@@ -150,7 +150,7 @@ async def test_patch_currency(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert "currency" in patch_data.results[0].updated_fields
+        assert any(item.field == "currency" for item in patch_data.results[0].updated_fields)
         print_success("✓ currency patched successfully")
 
         # Step 3: Verify in DB
@@ -198,7 +198,7 @@ async def test_patch_asset_type(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert "asset_type" in patch_data.results[0].updated_fields
+        assert any(item.field == "asset_type" for item in patch_data.results[0].updated_fields)
         print_success("✓ asset_type patched successfully")
 
         # Step 3: Verify in DB
@@ -246,7 +246,7 @@ async def test_patch_icon_url(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert "icon_url" in patch_data.results[0].updated_fields
+        assert any(item.field == "icon_url" for item in patch_data.results[0].updated_fields)
         print_success("✓ icon_url patched successfully")
 
         # Step 3: Verify in DB
@@ -323,7 +323,7 @@ async def test_patch_active(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert "active" in patch_data.results[0].updated_fields
+        assert any(item.field == "active" for item in patch_data.results[0].updated_fields)
         print_success("✓ active patched to False")
 
         # Step 3: Verify: asset NOT in active=true filter
@@ -378,12 +378,11 @@ async def test_patch_multiple_base_fields(test_server):
 
         # Verify all fields in updated_fields
         updated = patch_data.results[0].updated_fields
-        assert "display_name" in updated
-        assert "currency" in updated
-        assert "asset_type" in updated
-        assert "icon_url" in updated
+        assert any(item.field == "display_name" for item in updated)
+        assert any(item.field == "currency" for item in updated)
+        assert any(item.field == "asset_type" for item in updated)
+        assert any(item.field == "icon_url" for item in updated)
         print_success(f"✓ All fields patched: {updated}")
-
         # Step 3: Verify in DB
         read_resp = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
         assets = [FAAssetMetadataResponse(**a) for a in read_resp.json()]

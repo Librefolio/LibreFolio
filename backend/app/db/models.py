@@ -33,7 +33,6 @@ from backend.app.utils.datetime_utils import utcnow
 # ENUMS
 # ============================================================================
 
-# TODO: capire se c'è un modo standard per convertire qualsiasi asset in un ID univoco, indipendente dal tipo (es. hash di qualcosa o db mondiale)
 class IdentifierType(str, Enum):
     """
     Asset identifier type.
