@@ -642,6 +642,18 @@ def utils_sector_normalization(verbose: bool = False) -> bool:
         )
 
 
+def utils_currency(verbose: bool = False) -> bool:
+    """Test Currency class and OldNew generic."""
+    print_section("Utils: Currency and OldNew")
+    print_info("Testing: Currency arithmetic, validation, OldNew generic")
+    print_info("Tests: Creation, arithmetic ops, comparison, serialization")
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_currency.py", "-v"],
+        "Currency tests",
+        verbose=verbose,
+        )
+
+
 def utils_distribution_models(verbose: bool = False) -> bool:
     """Test BaseDistribution, FAGeographicArea, FASectorArea models."""
     print_section("Utils: Distribution Models")
@@ -669,6 +681,7 @@ def utils_all(verbose: bool = False) -> bool:
         ("Geographic Area Normalization", lambda: utils_geo_normalization(verbose)),
         ("FAGeographicArea Integration", lambda: utils_geographic_area_integration(verbose)),
         ("Sector Normalization", lambda: utils_sector_normalization(verbose)),
+        ("Currency and OldNew", lambda: utils_currency(verbose)),
         ("Distribution Models", lambda: utils_distribution_models(verbose)),
         ]
 
@@ -1288,6 +1301,10 @@ Test commands:
                          📋 Prerequisites: None
                          💡 Tests: Sector enum values, aliases, normalization to standard names
   
+  currency         - Test Currency class and OldNew generic
+                     📋 Prerequisites: pycountry installed
+                     💡 Tests: Currency arithmetic, validation, comparison, serialization
+  
   distribution-models - Test BaseDistribution, FAGeographicArea, FASectorArea models
                         📋 Prerequisites: None
                         💡 Tests: Weight validation, quantization, country/sector normalization
@@ -1311,6 +1328,7 @@ These are foundational tests for remediation phases 1 & 2.
             "geo-normalization",
             "geographic-area-integration",
             "sector-normalization",
+            "currency",
             "distribution-models",
             "all",
             ],
@@ -1525,6 +1543,8 @@ def main():
             success = utils_geographic_area_integration(verbose=verbose)
         elif args.action == "sector-normalization":
             success = utils_sector_normalization(verbose=verbose)
+        elif args.action == "currency":
+            success = utils_currency(verbose=verbose)
         elif args.action == "distribution-models":
             success = utils_distribution_models(verbose=verbose)
         elif args.action == "all":

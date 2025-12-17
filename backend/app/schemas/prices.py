@@ -31,8 +31,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, BaseDeleteResult, BaseBulkResponse, BaseBulkDeleteResponse
-from backend.app.utils.validation_utils import normalize_currency_code
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, BaseDeleteResult, BaseBulkResponse, BaseBulkDeleteResponse, Currency
 
 
 # ============================================================================
@@ -59,8 +58,8 @@ class FAPricePoint(BaseModel):
 
     @field_validator("currency")
     @classmethod
-    def currency_uppercase(cls, v: str) -> str:
-        return normalize_currency_code(v)
+    def currency_validate(cls, v: str) -> str:
+        return Currency.validate_code(v)
 
     @field_validator("open", "high", "low", "close", "volume", mode="before")
     @classmethod

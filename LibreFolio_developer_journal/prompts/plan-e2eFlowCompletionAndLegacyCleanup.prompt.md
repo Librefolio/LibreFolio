@@ -4,7 +4,7 @@
 **Complessità**: ⚡ ALTA (Currency class è breaking change significativo)  
 **Tempo stimato**: 8-10 ore  
 **Data creazione**: 2025-12-17  
-**Stato**: 📝 READY TO IMPLEMENT
+**Stato**: 🚧 IN PROGRESS
 
 ---
 
@@ -26,21 +26,21 @@ Search → Create Asset → Assign Provider → Refresh Metadata → Refresh Pri
 
 | # | File | Line | TODO | Stato |
 |---|------|------|------|-------|
-| 1 | `asset_source.py` | 330 | identifier_type in search | ✅ FASE 2.1 |
-| 2 | `assets.py` | 691 | refreshed_fields con OldNew | ✅ FASE 2.2 |
-| 3 | `fx.py` | 637 | Currency class | ✅ FASE 1.1 |
-| 4 | `asset_source.py` | 530, 712 | hasattr checks | ✅ FASE 3.1 |
-| 5 | `fx.py` | 88 | hasattr check | ✅ FASE 3.2 |
-| 6 | `geo_normalization.py` | 55 | multi-language + lista multipla | ✅ FASE 4.1 |
-| 7 | `utilities.py` | 62 | region mapping | ✅ FASE 4.3 |
+| 1 | `asset_source.py` | 330 | identifier_type in search | ✅ DONE |
+| 2 | `provider.py` | FAProviderRefreshFieldsDetail | refreshed_fields con OldNew | ✅ DONE |
+| 3 | `common.py` | Currency class | Currency class | ✅ DONE |
+| 4 | `asset_source.py` | 530, 712 | hasattr checks | ✅ DONE |
+| 5 | `fx.py` | 88 | hasattr check | ⏳ TODO |
+| 6 | `geo_normalization.py` | 55 | multi-language + lista multipla | ✅ DONE (endpoint added) |
+| 7 | `utilities.py` | 62 | region mapping | ⏳ TODO (advanced feature) |
 
 ### 🟡 MEDI - Migliorano UX
 
 | # | File | Line | TODO | Stato |
 |---|------|------|------|-------|
-| 8 | `justetf.py` | 260 | hasattr check | ✅ FASE 3.1 |
-| 9 | `justetf.py` | 304, 417 | currency in search/metadata | ✅ FASE 2.3 |
-| 10 | `yahoo_finance.py` | 311 | currency in search | ✅ FASE 2.3 |
+| 8 | `justetf.py` | search | identifier_type in search | ✅ DONE |
+| 9 | `yahoo_finance.py` | search | identifier_type in search | ✅ DONE |
+| 10 | `mockprov.py` | search | identifier_type in search | ✅ DONE |
 | 11 | `css_scraper.py` | 110 | headers customization | ⏭️ SKIP (FUTURE) |
 
 ### 🟢 MINORI - Future Work
@@ -299,17 +299,19 @@ async def list_countries(lang: str = Query("en", description="Language code (onl
 ### Step 1.1: Creare `Currency` class ⚡ BREAKING
 
 **Files da creare/modificare**:
-1. ✏️ `backend/app/schemas/common.py` - Aggiungere classe Currency
-2. ✏️ `backend/app/utils/validation_utils.py` - Aggiornare normalize_currency_code()
+1. ✅ `backend/app/schemas/common.py` - Aggiungere classe Currency
+2. ✅ `backend/app/utils/validation_utils.py` - RIMOSSO normalize_currency_code()
 
 **Tasks**:
-- [ ] Definire classe `Currency(BaseModel)` con `code` e `amount`
-- [ ] Implementare validator con `pycountry.currencies` + `CRYPTO_CURRENCIES`
-- [ ] Implementare operazioni: `__add__`, `__sub__`, `__neg__`, `__abs__`, `__eq__`, `__ne__`
-- [ ] Implementare `to_dict()` per serializzazione API
-- [ ] Implementare `__str__()` e `__repr__()`
-- [ ] Aggiornare `normalize_currency_code()` per includere cripto
-- [ ] Unit tests completi: `test_currency.py`
+- [x] Definire classe `Currency(BaseModel)` con `code` e `amount`
+- [x] Implementare validator con `pycountry.currencies` + `CRYPTO_CURRENCIES`
+- [x] Implementare operazioni: `__add__`, `__sub__`, `__neg__`, `__abs__`, `__eq__`, `__ne__`
+- [x] Implementare `to_dict()` per serializzazione API
+- [x] Implementare `__str__()` e `__repr__()`
+- [x] Aggiungere `Currency.validate_code()` metodo statico per validare solo codici
+- [x] RIMOSSO `normalize_currency_code()` da validation_utils.py
+- [x] Usare `Currency.validate_code()` in fx.py, prices.py
+- [x] Unit tests completi: `test_currency.py`
 
 **Breaking Change**: ⚠️ SÌ - Nuovo tipo, vecchi `Decimal` non compatibili perchè insufficienti
 
@@ -339,37 +341,6 @@ def test_invalid_currency():
 def test_crypto_currency():
     btc = Currency(code="BTC", amount=Decimal("0.5"))
     assert btc.code == "BTC"
-```
-
----
-
-### Step 1.2: Creare `OldNew[T]` generic
-
-**Files**:
-1. ✏️ `backend/app/schemas/common.py` - Classe OldNew
-
-**Tasks**:
-- [ ] Definire `OldNew(BaseModel, Generic[T])`
-- [ ] Campo `old: Optional[T] = None`
-- [ ] Campo `new: T`
-- [ ] Unit tests: `test_common_schemas.py`
-
-**Test cases**:
-```python
-def test_oldnew_basic():
-    change = OldNew(old="Tech", new="Finance")
-    assert change.old == "Tech"
-    assert change.new == "Finance"
-
-def test_oldnew_none_old():
-    change = OldNew[str](old=None, new="New Value")
-    assert change.old is None
-    assert change.new == "New Value"
-
-def test_oldnew_optional_type():
-    change: OldNew[str | None] = OldNew(old="Old", new=None)
-    assert change.old == "Old"
-    assert change.new is None
 ```
 
 ---
@@ -778,13 +749,21 @@ Utente: confermo breaking subito
 ### Step 5.4: Aggiornare API endpoints per Currency
 
 **Files**:
-1. ✏️ `backend/app/api/v1/fx.py` - Conversion endpoints
+1. ✅ `backend/app/api/v1/fx.py` - Conversion endpoints
 2. ✏️ `backend/app/api/v1/assets.py` - Price endpoints
-3. ✏️ `backend/app/schemas/*.py` - Request/Response models
+3. ✅ `backend/app/schemas/fx.py` - FXConversionRequest/Result updated
 
 **Strategy**:
 Dove prendo già solo valuta e quantità, uso direttamente currency.
 Dove ho più valute (ad esempio forex), per quella di partenza uso currecy, per quella di arrivo, metto una stringa con il codice valuta, e la classe pydantic valida che sia una valuta valida con le funzioni di currency.
+
+**COMPLETATO**:
+- [x] `FXConversionRequest`: `amount+from_currency` → `from_amount: Currency`
+- [x] `FXConversionResult`: `amount+from_currency` → `from_amount: Currency`, `converted_amount+to_currency` → `to_amount: Currency`
+- [x] `convert_currency_bulk()` in `fx.py` API aggiornato
+- [x] Test files aggiornati: `test_fx_sync.py`, `test_fx_api.py`
+- [x] RIMOSSO `normalize_currency_code` da validation_utils.py
+- [x] Tutti i validator in `fx.py` usano ora `Currency.validate_code()`
 
 ---
 
@@ -797,17 +776,6 @@ Dove ho più valute (ad esempio forex), per quella di partenza uso currecy, per 
 
 **Decision needed**:
 
-**Option A - Full Breaking** (Recommended):
-```python
-class FAPricePoint(BaseModel):
-    date: date
-    close: Currency  # ⚡ Era Decimal + separato currency
-    open: Optional[Currency] = None
-    high: Optional[Currency] = None
-    low: Optional[Currency] = None
-    volume: Optional[Decimal] = None  # Volume senza currency
-```
-
 **Option B - Backward Compat** (Not recommended):
 ```python
 class FAPricePoint(BaseModel):
@@ -816,12 +784,12 @@ class FAPricePoint(BaseModel):
     currency: str   # Keep API contract
     
     @property
-    def close_currency(self) -> Currency:
+    def close_cur(self) -> Currency:
         """Internal use: Currency object."""
         return Currency(code=self.currency, amount=self.close)
 ```
 
-**User choice**: Option A (Full Breaking)
+**User choice**: Option B con validazione della currecy e un metodo property per ogni campo valore che fa questa conversione just in time
 
 **Tasks**:
 - [ ] Update ALL schemas che hanno currency/amount pairs

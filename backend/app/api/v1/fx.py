@@ -14,7 +14,7 @@ from sqlmodel import select, delete as sql_delete, and_, or_
 from backend.app.db.models import FxCurrencyPairSource
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, Currency
 from backend.app.schemas.fx import (
     # Provider models
     FXProviderInfo,
@@ -588,8 +588,8 @@ async def convert_currency_bulk(
     conversion_metadata = []  # Track which original conversion each bulk conversion belongs to
 
     for conv_idx, conversion in enumerate(request):
-        from_cur = conversion.from_currency.upper()
-        to_cur = conversion.to_currency.upper()
+        from_cur = conversion.from_amount.code
+        to_cur = conversion.to_currency
 
         # Validate date range
         if conversion.date_range.end and conversion.date_range.start > conversion.date_range.end:
@@ -603,7 +603,7 @@ async def convert_currency_bulk(
             # Multi-day conversion: process each day in range
             current_date = conversion.date_range.start
             while current_date <= conversion.date_range.end:
-                bulk_conversions.append((conversion.amount, from_cur, to_cur, current_date))
+                bulk_conversions.append((conversion.from_amount.amount, from_cur, to_cur, current_date))
                 conversion_metadata.append({
                     'original_idx': conv_idx,
                     'conversion': conversion,
@@ -612,7 +612,7 @@ async def convert_currency_bulk(
                 current_date += timedelta(days=1)
         else:
             # Single-day conversion
-            bulk_conversions.append((conversion.amount, from_cur, to_cur, conversion.date_range.start))
+            bulk_conversions.append((conversion.from_amount.amount, from_cur, to_cur, conversion.date_range.start))
             conversion_metadata.append({
                 'original_idx': conv_idx,
                 'conversion': conversion,
@@ -634,14 +634,13 @@ async def convert_currency_bulk(
         converted_amount, actual_rate_date, backward_fill_applied = bulk_result
         conversion = metadata['conversion']
         on_date = metadata['date']
-        # TODO: portare questi upper dentro la classe che astrae la valuta, ancora da fare
-        from_cur = conversion.from_currency.upper()
-        to_cur = conversion.to_currency.upper()
+        from_cur = conversion.from_amount.code
+        to_cur = conversion.to_currency
 
         # Calculate effective rate (for display purposes)
         rate = None
         if from_cur != to_cur:
-            rate = converted_amount / conversion.amount
+            rate = converted_amount / conversion.from_amount.amount
 
         # Build backward-fill info if applicable
         backward_fill_info = None
@@ -650,11 +649,9 @@ async def convert_currency_bulk(
             backward_fill_info = BackwardFillInfo(actual_rate_date=actual_rate_date, days_back=days_back)
 
         results.append(FXConversionResult(
-            amount=conversion.amount,
-            from_currency=from_cur,
-            to_currency=to_cur,
+            from_amount=conversion.from_amount,
+            to_amount=Currency(code=to_cur, amount=converted_amount),
             conversion_date=on_date.isoformat(),
-            converted_amount=converted_amount,
             rate=rate,
             backward_fill_info=backward_fill_info
             ))
@@ -668,7 +665,7 @@ async def convert_currency_bulk(
 
     return FXConvertResponse(
         results=results,
-        success_count=len([r for r in results if r.converted_amount is not None]),
+        success_count=len([r for r in results if r.to_amount is not None]),
         errors=bulk_errors
         )
 

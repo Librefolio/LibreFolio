@@ -307,8 +307,9 @@ class YahooFinanceProvider(AssetSourceProvider):
 
                 results.append({
                     "identifier": quote.get('symbol', ''),
+                    "identifier_type": IdentifierType.TICKER,  # YFinance uses ticker symbols
                     "display_name": quote.get('longname', quote.get('shortname', quote.get('symbol', ''))),
-                    "currency": None,  # Not provided in search results #TODO: capire se un modo per avere la valuta ci può essere
+                    "currency": None,  # TODO: capire se un modo per avere la valuta ci può essere
                     "type": quote.get('quoteType', 'Unknown')  # EQUITY, ETF, CRYPTOCURRENCY, etc.
                 })
 

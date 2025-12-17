@@ -35,9 +35,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, BaseDeleteResult, BaseBulkResponse, BaseBulkDeleteResponse
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, BaseDeleteResult, BaseBulkResponse, BaseBulkDeleteResponse, Currency
 from backend.app.utils.datetime_utils import parse_ISO_date
-from backend.app.utils.validation_utils import normalize_currency_code
 
 
 # ============================================================================
@@ -67,42 +66,37 @@ class FXProviderInfo(BaseModel):
 # ============================================================================
 
 class FXConversionRequest(BaseModel):
-    """Single conversion request with date range."""
+    """Single conversion request with date range.
+
+    Breaking change: Now uses Currency object for from_amount instead of
+    separate amount + from_currency fields.
+    """
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
         )
 
-    amount: Decimal = Field(..., gt=0, description="Amount to convert (must be positive)")
-    from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
+    from_amount: Currency = Field(..., description="Amount to convert with source currency")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
     date_range: DateRangeModel = Field(..., description="Date range for conversion (start required, end optional for single day)")
 
-    @field_validator('amount', mode='before')
+    @field_validator('to_currency', mode='before')
     @classmethod
-    def coerce_amount(cls, v):
-        """Coerce amount to Decimal."""
-        if isinstance(v, str):
-            return Decimal(v)
-        if isinstance(v, (int, float)):
-            return Decimal(str(v))
-        return v
-
-    @field_validator('from_currency', 'to_currency', mode='before')
-    @classmethod
-    def uppercase_currency(cls, v):
-        return normalize_currency_code(v)
+    def validate_to_currency(cls, v):
+        return Currency.validate_code(v)
 
 
 class FXConversionResult(BaseModel):
-    """Single conversion result."""
+    """Single conversion result.
+
+    Breaking change: Now uses Currency objects for from_amount and to_amount
+    instead of separate amount/currency fields.
+    """
     model_config = ConfigDict()
 
-    amount: Decimal = Field(..., description="Original amount")
-    from_currency: str = Field(..., description="Source currency code")
-    to_currency: str = Field(..., description="Target currency code")
+    from_amount: Currency = Field(..., description="Original amount with source currency")
+    to_amount: Currency = Field(..., description="Converted amount with target currency")
     conversion_date: date_type = Field(..., description="Date requested for conversion (ISO format)")
-    converted_amount: Decimal = Field(..., description="Converted amount")
     rate: Optional[Decimal] = Field(None, description="Exchange rate used (if not identity)")
     backward_fill_info: Optional[BackwardFillInfo] = Field(
         None,
@@ -158,7 +152,7 @@ class FXUpsertItem(BaseModel):
     @field_validator('base', 'quote', mode='before')
     @classmethod
     def uppercase_currency(cls, v):
-        return normalize_currency_code(v)
+        return Currency.validate_code(v)
 
 
 
@@ -204,7 +198,7 @@ class FXDeleteItem(BaseModel):
     @field_validator('from_currency', 'to_currency', mode='before')
     @classmethod
     def uppercase_currency(cls, v):
-        return normalize_currency_code(v)
+        return Currency.validate_code(v)
 
 
 class FXDeleteResult(BaseDeleteResult):
@@ -244,7 +238,7 @@ class FXPairSourceItem(BaseModel):
     @field_validator('base', 'quote', mode='before')
     @classmethod
     def uppercase_currency(cls, v):
-        return normalize_currency_code(v)
+        return Currency.validate_code(v)
 
 
 class FXPairSourcesResponse(BaseModel):
@@ -283,7 +277,7 @@ class FXDeletePairSourceItem(BaseModel):
     @field_validator('base', 'quote', mode='before')
     @classmethod
     def uppercase_currency(cls, v):
-        return normalize_currency_code(v)
+        return Currency.validate_code(v)
 
 class FXDeletePairSourceResult(BaseDeleteResult):
     """Result of a single pair source deletion."""

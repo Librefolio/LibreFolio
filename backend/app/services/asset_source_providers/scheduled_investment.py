@@ -654,6 +654,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             provider_params = {k: v for k, v in provider_params.items() if k != "_transaction_override"}
         try:
             # Convert dict to Pydantic model (automatic validation)
+            # TODO: capire a cosa serviva FAScheduledInvestmentParams e perchè non è usato qui
             return FAScheduledInvestmentSchedule(**provider_params)
         except ValueError as e:
             raise AssetSourceError(

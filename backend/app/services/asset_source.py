@@ -44,6 +44,7 @@ from backend.app.schemas import (
     FABulkDeleteResponse, FAPriceDeleteResult, FABulkRemoveResponse,
     FAProviderRemovalResult, FABulkRefreshResponse, FARefreshResult)
 from backend.app.schemas.assets import FAAssetPatchItem
+from backend.app.schemas.common import OldNew
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.services.asset_crud import AssetCRUDService
 from backend.app.services.provider_registry import AssetProviderRegistry
@@ -324,10 +325,10 @@ class AssetSourceProvider(ABC):
         Returns:
             List of dicts, each containing:
             - identifier: str - Provider-specific identifier
+            - identifier_type: IdentifierType - Type of identifier (ISIN, TICKER, etc.)
             - display_name: str - Human-readable name
             - currency: str | None - Trading currency if known
             - type: str | None - Asset type if known (e.g., 'stock', 'etf')
-            # TODO: aggiungere anche l'identifier_type al return, e più in generare renere il ritorno una classe pydantic, cercare prima tra quelle già create
 
             Empty list if no matches found.
 
@@ -526,15 +527,13 @@ class AssetSourceManager:
                 # Get provider instance
                 provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
 
-                # Check if provider supports metadata fetch
-                # TODO: non deve testare hasattr, deve usarlo! è compito del plugin fornirlo
-                if provider and hasattr(provider, 'fetch_asset_metadata'):
+                if provider:
                     # Get asset to fetch currency and current metadata
                     asset_result = await session.execute(select(Asset).where(Asset.id == assignment.asset_id))
                     asset = asset_result.scalar_one_or_none()
 
                     if asset:
-                        # Try to fetch metadata
+                        # Try to fetch metadata (returns None if not supported)
                         try:
                             patch_item = await provider.fetch_asset_metadata(
                                 assignment.identifier,
@@ -708,17 +707,7 @@ class AssetSourceManager:
                         ))
                     continue
 
-                # Check if provider supports metadata fetch
-                # TODO: non deve testare hasattr, deve usarlo! è compito del plugin fornirlo
-                if not hasattr(provider, 'fetch_asset_metadata'):
-                    results.append(FAMetadataRefreshResult(
-                        asset_id=asset_id,
-                        success=False,
-                        message=f"Provider {assignment.provider_code} doesn't support metadata fetch"
-                        ))
-                    continue
-
-                # Fetch metadata from provider
+                # Fetch metadata from provider (returns None if not supported)
                 provider_params = json.loads(assignment.provider_params) if assignment.provider_params else None
 
                 try:
@@ -739,16 +728,30 @@ class AssetSourceManager:
                     results.append(FAMetadataRefreshResult(
                         asset_id=asset_id,
                         success=False,
-                        message="Provider returned no metadata"
+                        message=f"Provider {assignment.provider_code} returned no metadata (may not support metadata fetch)"
                         ))
                     continue
 
                 # Set correct asset_id
                 patch_item.asset_id = asset_id
 
-                # Calculate refreshed_fields from patch_item
+                # Calculate refreshed_fields with old/new values from patch_item
                 patch_dict = patch_item.model_dump(exclude={'asset_id'}, exclude_unset=True)
-                refreshed_fields = list(patch_dict.keys())
+
+                # Build OldNew list by comparing asset's current values with patch values
+                refreshed_fields_with_changes: list[OldNew[str | None]] = []
+                for field_name, new_value in patch_dict.items():
+                    # Get old value from asset
+                    old_value = getattr(asset, field_name, None)
+                    # Convert to string representation for comparison
+                    old_str = str(old_value) if old_value is not None else None
+                    new_str = str(new_value) if new_value is not None else None
+
+                    refreshed_fields_with_changes.append(OldNew(
+                        info=field_name,
+                        old=old_str,
+                        new=new_str
+                    ))
 
                 # Calculate missing_data_fields
                 # Fields that are patchable but not returned by provider
@@ -760,7 +763,7 @@ class AssetSourceManager:
                 # Store patch and fields detail
                 patches_to_apply.append(patch_item)
                 asset_fields_map[asset_id] = FAProviderRefreshFieldsDetail(
-                    refreshed_fields=refreshed_fields,
+                    refreshed_fields=refreshed_fields_with_changes,
                     missing_data_fields=missing_data_fields,
                     ignored_fields=[]  # Future use
                     )
