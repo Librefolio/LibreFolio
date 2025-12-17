@@ -158,7 +158,6 @@ async def patch_assets_bulk(
 async def list_assets(
     currency: Optional[str] = Query(None, description="Filter by currency (e.g., USD)"),
     asset_type: Optional[str] = Query(None, description="Filter by asset type (e.g., STOCK)"),
-    valuation_model: Optional[str] = Query(None, description="Filter by valuation model (e.g., MARKET_PRICE)"),
     active: bool = Query(True, description="Include only active assets (default: true)"),
     search: Optional[str] = Query(None, description="Search in display_name or identifier"),
     session: AsyncSession = Depends(get_session_generator)
@@ -169,7 +168,6 @@ async def list_assets(
     **Query Parameters**:
     - `currency`: Filter by currency code (e.g., "USD", "EUR")
     - `asset_type`: Filter by type (e.g., "STOCK", "ETF", "BOND")
-    - `valuation_model`: Filter by valuation model (e.g., "MARKET_PRICE", "SCHEDULED_YIELD")
     - `active`: Include only active assets (default: true, set to false for inactive)
     - `search`: Search text in asset name or identifier (case-insensitive)
 
@@ -186,7 +184,6 @@ async def list_assets(
         filters = FAAinfoFiltersRequest(
             currency=currency,
             asset_type=asset_type,
-            valuation_model=valuation_model,
             active=active,
             search=search
             )
@@ -648,7 +645,10 @@ async def refresh_assets_from_provider(
 
     **Example Request**:
     ```
-    POST /api/v1/assets/provider/refresh?asset_ids=1&asset_ids=2
+    POST /api/v1/assets/provider/refresh
+    {
+      "asset_ids": [1, 2, 3]
+    }
     ```
 
     **Example Response**:

@@ -4,7 +4,6 @@ Validation utilities for Pydantic models.
 Provides reusable validator functions for common field types like currencies,
 date ranges, and compound frequency configurations.
 """
-from datetime import date as date_type
 from typing import Optional, Any
 
 
@@ -36,36 +35,6 @@ def normalize_currency_code(v: Any) -> str:
     if isinstance(v, str):
         return v.upper().strip()
     return v
-
-
-def validate_date_range_order(start: date_type, end: Optional[date_type]) -> None:
-    """
-    Validate that end date is not before start date.
-
-    Ensures logical date range integrity by checking that end >= start when
-    end is provided. Single-day ranges (end=None) are always valid.
-
-    Args:
-        start: Start date (required, inclusive)
-        end: End date (optional, inclusive). None means single day.
-
-    Raises:
-        ValueError: If end < start
-
-    Examples:
-        >>> from datetime import date
-        >>> validate_date_range_order(date(2025, 1, 1), date(2025, 1, 31))  # OK
-        >>> validate_date_range_order(date(2025, 1, 1), None)  # OK (single day)
-        >>> validate_date_range_order(date(2025, 1, 31), date(2025, 1, 1))  # ValueError
-
-    Note:
-        Use this in DateRangeModel @model_validator to ensure valid ranges
-        before processing queries or deletions.
-    """
-    if end is not None and end < start:
-        raise ValueError(
-            f"end date ({end}) must be >= start date ({start})"
-            )
 
 
 def validate_compound_frequency(

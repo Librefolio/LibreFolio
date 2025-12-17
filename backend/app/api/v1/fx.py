@@ -85,6 +85,7 @@ async def list_providers():
             instance = FXProviderRegistry.get_provider_instance(code)
 
             # Get base currencies (all supported or just default)
+            # TODO: non deve testare hasattr, deve usarlo! è compito del plugin fornirlo
             if hasattr(instance, 'base_currencies') and instance.base_currencies:
                 base_currencies = instance.base_currencies
             else:
