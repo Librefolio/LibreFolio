@@ -35,12 +35,12 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Import from common and prices modules
-from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse
+from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse, OldNew
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
 from backend.app.utils.geo_normalization import normalize_country_keys
 from backend.app.utils.sector_normalization import normalize_sector
@@ -688,6 +688,10 @@ class FAMetadataRefreshResult(BaseModel):
 
 class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
     """Bulk metadata refresh response (partial success)."""
+    # TODO: mancano i campi di dettaglio come:
+    #  - refreshed_fields=List[OldNew[str]]
+    #  - missing_data_fields=List[str con le key dell'ASSET]
+    #  - ignored_fields=List[str con le key dell'ASSET]
     pass
 
 # ============================================================================
@@ -745,7 +749,6 @@ class FAAinfoFiltersRequest(BaseModel):
 
     currency: Optional[str] = Field(None, description="Filter by currency (e.g., USD)")
     asset_type: Optional[str] = Field(None, description="Filter by asset type (e.g., STOCK)")
-    valuation_model: Optional[str] = Field(None, description="Filter by valuation model (e.g., MARKET_PRICE)")
     active: bool = Field(True, description="Include only active assets (default: true)")
     search: Optional[str] = Field(None, description="Search in display_name or identifier")
 
@@ -822,7 +825,8 @@ class FAAssetPatchResult(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     success: bool = Field(..., description="Whether patch succeeded")
     message: str = Field(..., description="Success message or error description")
-    updated_fields: Optional[List[tuple[str,Any,Any]]] = Field(None, description="List of fields updated (field, old_value, new_value)")
+    updated_fields: Optional[List[OldNew[str|None]]] = Field(None, description="List of fields updated: [{info: field, old: old_value, new: new_value}]")
+
 
 class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
     """Bulk asset patch response (partial success allowed)."""

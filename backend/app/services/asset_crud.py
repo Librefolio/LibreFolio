@@ -25,6 +25,7 @@ from backend.app.schemas.assets import (
     FABulkAssetPatchResponse,
     FAAssetPatchResult, FAClassificationParams,
     )
+from backend.app.schemas.common import OldNew
 
 logger = get_logger(__name__)
 
@@ -303,7 +304,7 @@ class AssetCRUDService:
                 logger.debug(f"Asset found for patching: id={patch.asset_id}: {asset.model_dump_json()}")
 
                 # Track updated fields
-                updated_fields:List[tuple[str, Any,Any]] = []
+                updated_fields:List[OldNew[str]] = []
 
                 # Update fields if present in patch (use model_dump to detect presence)
                 # Use exclude_unset=True to only include fields that were explicitly set
@@ -353,7 +354,7 @@ class AssetCRUDService:
                         value = json.dumps(value)  # Transform dict as serialized JSON
                     oldVal=getattr(asset, field)
                     setattr(asset, field, value)
-                    updated_fields.append((field, oldVal, value))
+                    updated_fields.append(OldNew(info=field, old=oldVal, new=value))
                     logger.debug(f"updated field '{field}': '{oldVal}' -> '{value}'")
 
                 await session.flush()

@@ -327,6 +327,7 @@ class AssetSourceProvider(ABC):
             - display_name: str - Human-readable name
             - currency: str | None - Trading currency if known
             - type: str | None - Asset type if known (e.g., 'stock', 'etf')
+            # TODO: aggiungere anche l'identifier_type al return, e più in generare renere il ritorno una classe pydantic, cercare prima tra quelle già create
 
             Empty list if no matches found.
 
@@ -526,6 +527,7 @@ class AssetSourceManager:
                 provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
 
                 # Check if provider supports metadata fetch
+                # TODO: non deve testare hasattr, deve usarlo! è compito del plugin fornirlo
                 if provider and hasattr(provider, 'fetch_asset_metadata'):
                     # Get asset to fetch currency and current metadata
                     asset_result = await session.execute(select(Asset).where(Asset.id == assignment.asset_id))
@@ -684,9 +686,7 @@ class AssetSourceManager:
                         ))
                     continue
 
-                assignment_stmt = select(AssetProviderAssignment).where(
-                    AssetProviderAssignment.asset_id == asset_id
-                    )
+                assignment_stmt = select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id)
                 assignment_result = await session.execute(assignment_stmt)
                 assignment = assignment_result.scalar_one_or_none()
 
@@ -709,13 +709,13 @@ class AssetSourceManager:
                     continue
 
                 # Check if provider supports metadata fetch
+                # TODO: non deve testare hasattr, deve usarlo! è compito del plugin fornirlo
                 if not hasattr(provider, 'fetch_asset_metadata'):
                     results.append(FAMetadataRefreshResult(
                         asset_id=asset_id,
                         success=False,
                         message=f"Provider {assignment.provider_code} doesn't support metadata fetch"
                         ))
-                    continue
                     continue
 
                 # Fetch metadata from provider

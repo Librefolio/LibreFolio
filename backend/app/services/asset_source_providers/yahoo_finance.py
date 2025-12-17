@@ -308,7 +308,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 results.append({
                     "identifier": quote.get('symbol', ''),
                     "display_name": quote.get('longname', quote.get('shortname', quote.get('symbol', ''))),
-                    "currency": None,  # Not provided in search results
+                    "currency": None,  # Not provided in search results #TODO: capire se un modo per avere la valuta ci può essere
                     "type": quote.get('quoteType', 'Unknown')  # EQUITY, ETF, CRYPTOCURRENCY, etc.
                 })
 

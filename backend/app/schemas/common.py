@@ -23,10 +23,6 @@ from typing import Optional, List, TypeVar, Generic
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from backend.app.utils.datetime_utils import parse_ISO_date
-from backend.app.utils.validation_utils import validate_date_range_order
-
-# Generic type for result items in bulk responses
-TResult = TypeVar('TResult', bound=BaseModel)
 
 
 class BackwardFillInfo(BaseModel):
@@ -104,8 +100,72 @@ class DateRangeModel(BaseModel):
     @model_validator(mode='after')
     def validate_end_after_start(self) -> 'DateRangeModel':
         """Ensure end >= start when end is provided."""
-        validate_date_range_order(self.start, self.end)
+        if self.end is not None and self.end < self.start:
+            raise ValueError(f"end date ({self.end}) must be >= start date ({self.end})")
         return self
+
+class BaseDeleteResult(BaseModel):
+    """
+    Standardized base class for all delete/removal operation results.
+
+    Provides consistent structure across FA and FX systems for deletion operations.
+    All delete/removal result classes should inherit from this base.
+
+    Standard fields:
+    - success: bool - Whether the deletion operation succeeded
+    - deleted_count: int - Number of items actually deleted (always >= 0)
+    - message: Optional[str] - Info/warning/error message
+
+    Identifier fields:
+    - Subclasses add their own identifier fields (asset_id, base/quote, etc.)
+
+    Design Notes:
+    - Simple inheritance model (no Generic complexity)
+    - Consistent naming: always use 'deleted_count' (not 'deleted')
+    - message is optional (None if operation successful with no warnings)
+    - Subclasses can add operation-specific fields (existing_count, etc.)
+
+    Examples:
+        ```python
+        class FAAssetDeleteResult(BaseDeleteResult):
+            asset_id: int
+            # Inherits: success, deleted_count, message
+
+        class FXDeleteResult(BaseDeleteResult):
+            base: str
+            quote: str
+            date_range: DateRangeModel
+            existing_count: int  # Operation-specific field
+            # Inherits: success, deleted_count, message
+        ```
+
+    Benefits:
+    - Consistent API across all deletion operations
+    - Guaranteed validation (deleted_count >= 0)
+    - Single source of truth for deletion result structure
+    - Easy to extend with operation-specific fields
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool = Field(..., description="Whether the deletion succeeded")
+    deleted_count: int = Field(..., ge=0, description="Number of items deleted")
+    message: Optional[str] = Field(None, description="Info/warning/error message")
+
+# CustomType specified by subclass
+CType = TypeVar('CType')
+
+class OldNew(BaseModel, Generic[CType]):
+    """
+    Standardized base class for all change communications
+    """
+    model_config = ConfigDict(extra="forbid")
+    info: str = Field(..., description="Info message/Field name")
+    old: CType = Field(..., description="Old value")
+    new: CType = Field(..., description="New value")
+
+
+# Generic type for result items in bulk responses, must be child of BaseModel
+TResult = TypeVar('TResult', bound=BaseModel)
 
 
 class BaseBulkResponse(BaseModel, Generic[TResult]):
@@ -156,54 +216,6 @@ class BaseBulkResponse(BaseModel, Generic[TResult]):
     def total_count(self) -> int:
         """Computed property: total number of items processed."""
         return len(self.results)
-
-
-class BaseDeleteResult(BaseModel):
-    """
-    Standardized base class for all delete/removal operation results.
-
-    Provides consistent structure across FA and FX systems for deletion operations.
-    All delete/removal result classes should inherit from this base.
-
-    Standard fields:
-    - success: bool - Whether the deletion operation succeeded
-    - deleted_count: int - Number of items actually deleted (always >= 0)
-    - message: Optional[str] - Info/warning/error message
-
-    Identifier fields:
-    - Subclasses add their own identifier fields (asset_id, base/quote, etc.)
-
-    Design Notes:
-    - Simple inheritance model (no Generic complexity)
-    - Consistent naming: always use 'deleted_count' (not 'deleted')
-    - message is optional (None if operation successful with no warnings)
-    - Subclasses can add operation-specific fields (existing_count, etc.)
-
-    Examples:
-        ```python
-        class FAAssetDeleteResult(BaseDeleteResult):
-            asset_id: int
-            # Inherits: success, deleted_count, message
-
-        class FXDeleteResult(BaseDeleteResult):
-            base: str
-            quote: str
-            date_range: DateRangeModel
-            existing_count: int  # Operation-specific field
-            # Inherits: success, deleted_count, message
-        ```
-
-    Benefits:
-    - Consistent API across all deletion operations
-    - Guaranteed validation (deleted_count >= 0)
-    - Single source of truth for deletion result structure
-    - Easy to extend with operation-specific fields
-    """
-    model_config = ConfigDict(extra="forbid")
-
-    success: bool = Field(..., description="Whether the deletion succeeded")
-    deleted_count: int = Field(..., ge=0, description="Number of items deleted")
-    message: Optional[str] = Field(None, description="Info/warning/error message")
 
 
 class BaseBulkDeleteResponse(BaseBulkResponse[TResult]):
