@@ -19,7 +19,7 @@ import pytest
 
 from backend.app.config import get_settings
 from backend.app.schemas import FXConvertResponse, FXBulkUpsertResponse, FXBulkDeleteResponse
-from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.common import DateRangeModel, Currency
 from backend.app.schemas.fx import (
     FXConversionRequest,
     FXUpsertItem,
@@ -364,8 +364,8 @@ async def test_convert_currency(test_server):
         # Now convert (use List directly)
         conversions = [
             FXConversionRequest(
-                amount=Decimal("100"),
-                **{"from": "USD", "to": "EUR"},  # Use dict unpacking for aliased fields test
+                from_amount=Currency(code="USD", amount=Decimal("100")),
+                **{"to": "EUR"},  # Use dict unpacking for aliased fields test
                 date_range=DateRangeModel(start=today - timedelta(days=1))
                 )
             ]
@@ -382,11 +382,11 @@ async def test_convert_currency(test_server):
 
         if len(convert_response.results) > 0:
             result = convert_response.results[0]
-            assert result.amount == Decimal("100"), "Original amount should be 100"
-            assert result.from_currency == "USD", "From currency should be USD"
-            assert result.to_currency == "EUR", "To currency should be EUR"
-            assert result.converted_amount > 0, "Converted amount should be positive"
-            print_success(f"✓ Converted 100 USD to {result.converted_amount} EUR")
+            assert result.from_amount.amount == Decimal("100"), "Original amount should be 100"
+            assert result.from_amount.code == "USD", "From currency should be USD"
+            assert result.to_amount.code == "EUR", "To currency should be EUR"
+            assert result.to_amount.amount > 0, "Converted amount should be positive"
+            print_success(f"✓ Converted 100 USD to {result.to_amount.amount} EUR")
         else:
             print_info("ℹ️  No conversion result (rate may not be available)")
 
@@ -399,18 +399,14 @@ async def test_convert_missing_rate(test_server):
     async with httpx.AsyncClient() as client:
         # Use a fake currency pair that definitely doesn't exist
         conversions = [
-            FXConversionRequest(
-                amount=Decimal("100"),
-                **{"from": "XXX", "to": "YYY"},  # Invalid currencies
-                date_range=DateRangeModel(start=date.today())
-                )
+            {
+                "from_amount": {"code": "xxx", "amount": "100"},
+                "to": "yyy",
+                "date_range": {"start": date.today().isoformat()}
+                }
             ]
 
-        response = await client.post(
-            f"{API_BASE}/fx/currencies/convert",
-            json=[c.model_dump(mode="json") for c in conversions],
-            timeout=TIMEOUT
-            )
+        response = await client.post(f"{API_BASE}/fx/currencies/convert",json=conversions,timeout=TIMEOUT)
 
         # Should either return 200 with errors or 4xx
         if response.status_code == 200:
@@ -487,8 +483,8 @@ async def test_bulk_conversions(test_server):
 
         # Bulk convert
         conversions = [
-            FXConversionRequest(amount=Decimal("100"), **{"from": "USD", "to": "EUR"}, date_range=DateRangeModel(start=today)),
-            FXConversionRequest(amount=Decimal("200"), **{"from": "GBP", "to": "USD"}, date_range=DateRangeModel(start=today)),
+            FXConversionRequest(from_amount=Currency(code="USD", amount=Decimal("100")), to="EUR", date_range=DateRangeModel(start=today)),
+            FXConversionRequest(from_amount=Currency(code="GBP", amount=Decimal("200")), to="USD", date_range=DateRangeModel(start=today))
             ]
 
         response = await client.post(

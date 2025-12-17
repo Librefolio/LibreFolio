@@ -114,6 +114,7 @@ class MockProvider(AssetSourceProvider):
         return [
             {
                 "identifier": f"MOCK_{query.upper()}",
+                "identifier_type": IdentifierType.TICKER,  # Mock uses TICKER
                 "display_name": f"Mock Asset: {query}",
                 "currency": "USD",
                 "type": "MOCK"

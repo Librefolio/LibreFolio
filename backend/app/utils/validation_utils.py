@@ -1,40 +1,13 @@
 """
 Validation utilities for Pydantic models.
 
-Provides reusable validator functions for common field types like currencies,
-date ranges, and compound frequency configurations.
+Provides reusable validator functions for common field types like
+date ranges and compound frequency configurations.
+
+Note: Currency validation is now handled by Currency.validate_code()
+in backend.app.schemas.common
 """
-from typing import Optional, Any
-
-
-def normalize_currency_code(v: Any) -> str:
-    """
-    Normalize currency code to uppercase ISO 4217 format.
-
-    Converts lowercase/mixed case currency codes to uppercase and strips whitespace.
-    This ensures consistent currency representation in the database and API responses.
-
-    Args:
-        v: Currency code string (or any type, returns as-is if not string)
-
-    Returns:
-        str: Uppercase, stripped currency code (e.g., "USD", "EUR", "GBP")
-
-    Examples:
-        >>> normalize_currency_code("usd")
-        'USD'
-        >>> normalize_currency_code("  eur  ")
-        'EUR'
-        >>> normalize_currency_code("GBP")
-        'GBP'
-
-    Note:
-        Use this function in Pydantic @field_validator for all currency fields
-        to ensure consistency across FA (Financial Asset) and FX schemas.
-    """
-    if isinstance(v, str):
-        return v.upper().strip()
-    return v
+from typing import Optional
 
 
 def validate_compound_frequency(

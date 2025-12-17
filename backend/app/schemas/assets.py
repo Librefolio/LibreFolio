@@ -40,11 +40,11 @@ from typing import Optional, List, Any, Dict
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Import from common and prices modules
-from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse, OldNew
+from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse, OldNew, Currency
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
 from backend.app.utils.geo_normalization import normalize_country_keys
 from backend.app.utils.sector_normalization import normalize_sector
-from backend.app.utils.validation_utils import validate_compound_frequency, normalize_currency_code
+from backend.app.utils.validation_utils import validate_compound_frequency
 from backend.app.db.models import AssetType
 
 # ============================================================================
@@ -359,20 +359,18 @@ class FAScheduledInvestmentParams(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
 
-    face_value: Decimal
-    currency: str
+    face_value: Currency
     interest_schedule: List[FAInterestRatePeriod]
     maturity_date: date
     late_interest: Optional[FALateInterestConfig] = None
 
     @field_validator("face_value", mode="before")
     @classmethod
-    def parse_face_value(cls, v):
+    def parse_face_value(cls, v:Currency):
         """Convert face_value to Decimal and validate it's positive."""
-        value = Decimal(str(v))
-        if value <= 0:
+        if v.amount <= 0:
             raise ValueError("face_value must be positive")
-        return value
+        return v
 
     @field_validator("interest_schedule")
     @classmethod
@@ -381,13 +379,6 @@ class FAScheduledInvestmentParams(BaseModel):
         if not v:
             raise ValueError("interest_schedule must contain at least one period")
         return v
-
-    @field_validator("currency")
-    @classmethod
-    def currency_uppercase(cls, v):
-        if not v:
-            raise ValueError("currency is required")
-        return normalize_currency_code(v)
 
 
 # ============================================================================
@@ -717,7 +708,7 @@ class FAAssetCreateItem(BaseModel):
     @field_validator('currency')
     @classmethod
     def currency_uppercase(cls, v: str) -> str:
-        return normalize_currency_code(v)
+        return Currency.validate_code(v)
 
 
 
@@ -814,7 +805,7 @@ class FAAssetPatchItem(BaseModel):
     @classmethod
     def currency_uppercase(cls, v: Optional[str]) -> Optional[str]:
         """Normalize currency to uppercase."""
-        return normalize_currency_code(v) if v else None
+        return Currency.validate_code(v) if v else None
 
 
 

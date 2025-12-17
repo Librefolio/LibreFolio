@@ -300,8 +300,9 @@ class JustETFProvider(AssetSourceProvider):
             return [
                 {
                     "identifier": idx,
+                    "identifier_type": IdentifierType.ISIN,  # JustETF always uses ISIN
                     "display_name": row['name'],
-                    "currency": None,  # Not provided by search # TODO: capire se si riesce a ritornare la valuta
+                    "currency": None,  # TODO: capire se si riesce a ritornare la valuta
                     "type": "ETF",
                 }
                 for idx, row in result.iterrows()

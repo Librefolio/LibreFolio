@@ -18,11 +18,241 @@ This module contains Pydantic models used by multiple services
 from __future__ import annotations
 
 from datetime import date as date_type
-from typing import Optional, List, TypeVar, Generic
+from decimal import Decimal
+from typing import Optional, List, TypeVar, Generic, Any
 
+import pycountry
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from backend.app.utils.datetime_utils import parse_ISO_date
+
+
+# =============================================================================
+# CRYPTOCURRENCY SUPPORT
+# =============================================================================
+
+# Cryptocurrencies not in pycountry ISO 4217 database
+CRYPTO_CURRENCIES = {
+    "BTC": "Bitcoin",
+    "ETH": "Ethereum",
+    "USDT": "Tether",
+    "USDC": "USD Coin",
+    "BNB": "Binance Coin",
+    "XRP": "Ripple",
+    "ADA": "Cardano",
+    "SOL": "Solana",
+    "DOT": "Polkadot",
+    "DOGE": "Dogecoin",
+    "MATIC": "Polygon",
+    "AVAX": "Avalanche",
+    "LINK": "Chainlink",
+    "UNI": "Uniswap",
+    "ATOM": "Cosmos",
+    "LTC": "Litecoin",
+    "XLM": "Stellar",
+    "ALGO": "Algorand",
+    "VET": "VeChain",
+    "FIL": "Filecoin",
+}
+
+
+# =============================================================================
+# CURRENCY CLASS
+# =============================================================================
+
+class Currency(BaseModel):
+    """
+    Currency amount with validation and arithmetic operations.
+
+    Validates currency codes against ISO 4217 (via pycountry) + crypto dict.
+    Supports addition/subtraction only between same currencies.
+    Amount can be negative.
+
+    Attributes:
+        code: ISO 4217 currency code (USD, EUR) or crypto symbol (BTC, ETH)
+        amount: Decimal amount (can be negative)
+
+    Examples:
+        >>> usd = Currency(code="USD", amount=Decimal("100.50"))
+        >>> fee = Currency(code="USD", amount=Decimal("2.50"))
+        >>> total = usd + fee  # Currency(code="USD", amount=Decimal("103.00"))
+
+        >>> eur = Currency(code="EUR", amount=Decimal("50"))
+        >>> usd + eur  # ValueError: Cannot add USD and EUR
+
+        >>> btc = Currency(code="BTC", amount=Decimal("0.5"))  # Valid crypto
+
+        >>> negative = -usd  # Currency(code="USD", amount=Decimal("-100.50"))
+
+    Raises:
+        ValueError: If currency code is not valid ISO 4217 or supported crypto
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(..., description="ISO 4217 currency code or crypto symbol")
+    amount: Decimal = Field(..., description="Amount (can be negative)")
+
+    @staticmethod
+    def validate_code(v: Any) -> str:
+        """
+        Validate and normalize a currency code (static method).
+
+        Use this method in Pydantic @field_validator for currency code fields
+        that don't need a full Currency object.
+
+        Args:
+            v: Currency code to validate
+
+        Returns:
+            Uppercase validated currency code
+
+        Raises:
+            ValueError: If currency code is invalid
+
+        Example:
+            @field_validator('currency')
+            @classmethod
+            def validate_currency(cls, v):
+                return Currency.validate_code(v)
+        """
+        if not isinstance(v, str):
+            raise ValueError(f"Currency code must be a string, got {type(v)}")
+
+        # Normalize: uppercase and strip whitespace
+        code = v.upper().strip()
+
+        if not code:
+            raise ValueError("Currency code cannot be empty")
+
+        # Check ISO 4217 via pycountry
+        try:
+            pycountry.currencies.lookup(code)
+            return code
+        except LookupError:
+            pass
+
+        # Check crypto currencies
+        if code in CRYPTO_CURRENCIES:
+            return code
+
+        # Invalid currency
+        raise ValueError(
+            f"Invalid currency code: '{code}'. "
+            f"Must be ISO 4217 currency or supported crypto."
+        )
+
+    @field_validator('code', mode='before')
+    @classmethod
+    def validate_currency_code(cls, v: Any) -> str:
+        """Validate and normalize currency code."""
+        return cls.validate_code(v)
+
+    @field_validator('amount', mode='before')
+    @classmethod
+    def validate_amount(cls, v: Any) -> Decimal:
+        """Convert amount to Decimal if needed."""
+        if isinstance(v, Decimal):
+            return v
+        if isinstance(v, (int, float, str)):
+            try:
+                return Decimal(str(v))
+            except Exception:
+                raise ValueError(f"Cannot convert '{v}' to Decimal")
+        raise ValueError(f"Amount must be numeric, got {type(v)}")
+
+    def __add__(self, other: 'Currency') -> 'Currency':
+        """Add two Currency objects (same currency only)."""
+        if not isinstance(other, Currency):
+            raise TypeError(f"Cannot add Currency and {type(other).__name__}")
+        if self.code != other.code:
+            raise ValueError(f"Cannot add {self.code} and {other.code}")
+        return Currency(code=self.code, amount=self.amount + other.amount)
+
+    def __sub__(self, other: 'Currency') -> 'Currency':
+        """Subtract two Currency objects (same currency only)."""
+        if not isinstance(other, Currency):
+            raise TypeError(f"Cannot subtract {type(other).__name__} from Currency")
+        if self.code != other.code:
+            raise ValueError(f"Cannot subtract {other.code} from {self.code}")
+        return Currency(code=self.code, amount=self.amount - other.amount)
+
+    def __neg__(self) -> 'Currency':
+        """Negate currency amount."""
+        return Currency(code=self.code, amount=-self.amount)
+
+    def __abs__(self) -> 'Currency':
+        """Absolute value of currency amount."""
+        return Currency(code=self.code, amount=abs(self.amount))
+
+    def __eq__(self, other: object) -> bool:
+        """Check equality (same code and amount)."""
+        if not isinstance(other, Currency):
+            return False
+        return self.code == other.code and self.amount == other.amount
+
+    def __ne__(self, other: object) -> bool:
+        """Check inequality."""
+        return not self.__eq__(other)
+
+    def __lt__(self, other: 'Currency') -> bool:
+        """Less than comparison (same currency only)."""
+        if not isinstance(other, Currency):
+            raise TypeError(f"Cannot compare Currency and {type(other).__name__}")
+        if self.code != other.code:
+            raise ValueError(f"Cannot compare {self.code} and {other.code}")
+        return self.amount < other.amount
+
+    def __le__(self, other: 'Currency') -> bool:
+        """Less than or equal comparison (same currency only)."""
+        return self == other or self < other
+
+    def __gt__(self, other: 'Currency') -> bool:
+        """Greater than comparison (same currency only)."""
+        if not isinstance(other, Currency):
+            raise TypeError(f"Cannot compare Currency and {type(other).__name__}")
+        if self.code != other.code:
+            raise ValueError(f"Cannot compare {self.code} and {other.code}")
+        return self.amount > other.amount
+
+    def __ge__(self, other: 'Currency') -> bool:
+        """Greater than or equal comparison (same currency only)."""
+        return self == other or self > other
+
+    def __str__(self) -> str:
+        """String representation: '100.50 USD'."""
+        return f"{self.amount} {self.code}"
+
+    def __repr__(self) -> str:
+        """Developer representation."""
+        return f"Currency(code='{self.code}', amount=Decimal('{self.amount}'))"
+
+    def __hash__(self) -> int:
+        """Hash for use in sets/dicts."""
+        return hash((self.code, self.amount))
+
+    def to_dict(self) -> dict:
+        """Serialize to dict for JSON responses."""
+        return {
+            "currency": self.code,
+            "amount": str(self.amount)  # Decimal → string for JSON
+        }
+
+    @classmethod
+    def zero(cls, code: str) -> 'Currency':
+        """Create a zero-valued Currency."""
+        return cls(code=code, amount=Decimal("0"))
+
+    def is_zero(self) -> bool:
+        """Check if amount is zero."""
+        return self.amount == Decimal("0")
+
+    def is_positive(self) -> bool:
+        """Check if amount is positive."""
+        return self.amount > Decimal("0")
+
+    def is_negative(self) -> bool:
+        """Check if amount is negative."""
+        return self.amount < Decimal("0")
 
 
 class BackwardFillInfo(BaseModel):
@@ -156,10 +386,20 @@ CType = TypeVar('CType')
 
 class OldNew(BaseModel, Generic[CType]):
     """
-    Standardized base class for all change communications
+    Represents a field change with old and new values.
+
+    Used to communicate changes in metadata refresh operations.
+    Generic type CType allows flexible typing (str, str|None, etc.)
+
+    Examples:
+        >>> change = OldNew(info="sector", old="Technology", new="Industrials")
+        >>> change = OldNew(info="sector", old=None, new="Technology")  # First time set
+        >>>
+        >>> # With optional types
+        >>> change: OldNew[str | None] = OldNew(info="sector", old="Tech", new=None)  # Cleared
     """
     model_config = ConfigDict(extra="forbid")
-    info: str = Field(..., description="Info message/Field name")
+    info: Optional[str] = Field(None, description="Info message/Field name")
     old: CType = Field(..., description="Old value")
     new: CType = Field(..., description="New value")
 

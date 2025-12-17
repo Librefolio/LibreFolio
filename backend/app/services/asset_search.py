@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 from typing import Optional
 
+from backend.app.db.models import IdentifierType
 from backend.app.logging_config import get_logger
 from backend.app.schemas.provider import FAProviderSearchResponse, FAProviderSearchResultItem
 from backend.app.services.provider_registry import AssetProviderRegistry
@@ -119,6 +120,7 @@ class AssetSearchService:
             for item in items:
                 results.append(FAProviderSearchResultItem(
                     identifier=item.get("identifier", ""),
+                    identifier_type=item.get("identifier_type"),
                     display_name=item.get("display_name", item.get("name", "")),
                     provider_code=code,
                     currency=item.get("currency"),

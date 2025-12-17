@@ -11,6 +11,8 @@ from fastapi import APIRouter, Query
 
 from backend.app.schemas.utilities import (
     CountryNormalizationResponse,
+    CountryListResponse,
+    CountryListItem,
     SectorListResponse
 )
 from backend.app.utils.sector_normalization import FinancialSector
@@ -114,4 +116,60 @@ async def list_sectors(
         sectors=sectors,
         count=len(sectors)
     )
+
+
+@router.get("/countries", response_model=CountryListResponse)
+async def list_countries(
+    language: str = Query("en", description="Language for country names (default: en)")
+):
+    """
+    Get list of all countries with ISO codes.
+
+    Returns all ISO-3166 countries with:
+    - ISO-3166-A3 code (e.g., USA)
+    - ISO-3166-A2 code (e.g., US)
+    - Country name in requested language
+
+    **Supported Languages**:
+    - en (English) - default
+    - Other languages depend on pycountry translations
+
+    **Example Request**:
+    ```
+    GET /api/v1/utilities/countries
+    GET /api/v1/utilities/countries?language=en
+    ```
+
+    **Response**:
+    ```json
+    {
+      "countries": [
+        {"iso3": "AFG", "iso2": "AF", "name": "Afghanistan"},
+        {"iso3": "ALB", "iso2": "AL", "name": "Albania"},
+        ...
+      ],
+      "count": 249,
+      "language": "en"
+    }
+    ```
+    """
+    import pycountry
+
+    countries = []
+    for country in pycountry.countries:
+        countries.append(CountryListItem(
+            iso3=country.alpha_3,
+            iso2=country.alpha_2,
+            name=country.name
+        ))
+
+    # Sort by name
+    countries.sort(key=lambda c: c.name)
+
+    return CountryListResponse(
+        countries=countries,
+        count=len(countries),
+        language=language
+    )
+
 

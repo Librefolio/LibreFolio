@@ -27,6 +27,7 @@ from backend.app.schemas.fx import (
     FXPairSourcesResponse,
     DateRangeModel
 )
+from backend.app.schemas.common import Currency
 
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -270,8 +271,8 @@ async def test_convert_multi_day_process(test_server):
         # Step 2: Request conversion with date range (multi-day)
         conversions = [
             FXConversionRequest(
-                amount=Decimal("100"),
-                **{"from": "USD", "to": "EUR"},
+                from_amount=Currency(code="USD", amount=Decimal("100")),
+                **{"to": "EUR"},
                 date_range=DateRangeModel(start=start_date, end=end_date)
             )
         ]
@@ -290,8 +291,8 @@ async def test_convert_multi_day_process(test_server):
 
         # Verify result has multi-day data (multi-day conversions return one result per day)
         result = convert_data.results[0]
-        assert result.converted_amount is not None
-        print_success(f"✓ Multi-day conversion successful: {result.converted_amount} {result.to_currency}")
+        assert result.to_amount is not None
+        print_success(f"✓ Multi-day conversion successful: {result.to_amount}")
 
         # In multi-day conversion, we get one result per day in the range
         # So check that we have multiple results
@@ -328,13 +329,13 @@ async def test_convert_bulk_multi_day(test_server):
         # Step 2: Request BULK conversions, each with multi-day range
         conversions = [
             FXConversionRequest(
-                amount=Decimal("100"),
-                **{"from": "USD", "to": "EUR"},
+                from_amount=Currency(code="USD", amount=Decimal("100")),
+                **{"to": "EUR"},
                 date_range=DateRangeModel(start=start_date, end=start_date + timedelta(days=2))
             ),
             FXConversionRequest(
-                amount=Decimal("200"),
-                **{"from": "USD", "to": "GBP"},
+                from_amount=Currency(code="USD", amount=Decimal("200")),
+                **{"to": "GBP"},
                 date_range=DateRangeModel(start=start_date, end=start_date + timedelta(days=2))
             )
         ]

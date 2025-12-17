@@ -27,7 +27,7 @@ from __future__ import annotations
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from backend.app.db.models import IdentifierType
-from backend.app.schemas.common import BaseDeleteResult, BaseBulkResponse
+from backend.app.schemas.common import BaseDeleteResult, BaseBulkResponse, OldNew
 
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
@@ -141,11 +141,22 @@ class FAProviderAssignmentReadItem(BaseModel):
 class FAProviderRefreshFieldsDetail(BaseModel):
     """Field-level details for provider refresh operation.
 
-    Provides granular information about which fields were updated during refresh.
+    Provides granular information about which fields were updated during refresh,
+    including old and new values for each changed field.
+
+    Examples:
+        >>> detail = FAProviderRefreshFieldsDetail(
+        ...     refreshed_fields=[
+        ...         OldNew(info="sector", old="Technology", new="Industrials"),
+        ...         OldNew(old=None, new="Test Corp")  # First time set
+        ...     ],
+        ...     missing_data_fields=["currency"],
+        ...     ignored_fields=[]
+        ... )
     """
     model_config = ConfigDict(extra="forbid")
 
-    refreshed_fields: List[str] = Field(..., description="Fields successfully refreshed from provider")
+    refreshed_fields: List[OldNew[str | None]] = Field(...,description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.")
     missing_data_fields: List[str] = Field(..., description="Fields provider couldn't fetch (no data available)")
     ignored_fields: List[str] = Field(..., description="Fields ignored (not requested when using field selection)")
 
@@ -194,10 +205,13 @@ class FAProviderSearchResultItem(BaseModel):
     """Single search result from a provider.
 
     Contains the asset identifier and metadata from the provider's search.
+    The identifier_type field is required so the result can be used directly
+    for asset creation without needing to look up the identifier type.
     """
     model_config = ConfigDict(extra="forbid")
 
     identifier: str = Field(..., description="Asset identifier (ISIN, ticker, URL, etc.)")
+    identifier_type: IdentifierType = Field(..., description="Type of identifier (ISIN, TICKER, URL, etc.)")
     display_name: str = Field(..., description="Human-readable asset name")
     provider_code: str = Field(..., description="Provider that returned this result")
     currency: Optional[str] = Field(None, description="Asset currency if known")
