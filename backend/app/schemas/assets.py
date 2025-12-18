@@ -42,6 +42,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # Import from common and prices modules
 from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse, OldNew, Currency
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
+from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.geo_normalization import normalize_country_keys
 from backend.app.utils.sector_normalization import normalize_sector
 from backend.app.utils.validation_utils import validate_compound_frequency
@@ -669,20 +670,24 @@ class FAMetadataRefreshResult(BaseModel):
     Result of metadata refresh for single asset.
 
     Follows FA pattern: { asset_id, success, message, ... }
+    Includes fields_detail with old/new values for each refreshed field.
     """
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     success: bool
     message: str
+    fields_detail: Optional["FAProviderRefreshFieldsDetail"] = Field(None,description="Details of refreshed fields with old/new values")
     warnings: Optional[List[str]] = None
 
 class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
-    """Bulk metadata refresh response (partial success)."""
-    # TODO: mancano i campi di dettaglio come:
-    #  - refreshed_fields=List[OldNew[str]]
-    #  - missing_data_fields=List[str con le key dell'ASSET]
-    #  - ignored_fields=List[str con le key dell'ASSET]
+    """Bulk metadata refresh response (partial success).
+
+    Each result includes fields_detail with:
+    - refreshed_fields: List[OldNew[str]] with old/new values
+    - missing_data_fields: Fields provider didn't return
+    - ignored_fields: Fields skipped (future use)
+    """
     pass
 
 # ============================================================================

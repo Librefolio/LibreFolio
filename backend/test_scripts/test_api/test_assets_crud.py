@@ -21,21 +21,11 @@ from backend.app.schemas.prices import FAPricePoint, FABulkUpsertResponse
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.refresh import FABulkRefreshResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info, print_success
+from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
-
-# Helper to generate unique identifiers
-_counter = 0
-
-
-def unique_id(prefix: str = "TEST") -> str:
-    """Generate unique identifier for test assets."""
-    global _counter
-    _counter += 1
-    return f"{prefix}_{int(time.time() * 1000)}_{_counter}"
 
 
 # ============================================================================

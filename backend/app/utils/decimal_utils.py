@@ -52,10 +52,11 @@ def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple
         (24, 10)
     """
     # Get the table columns from SQLModel
-    if not hasattr(model, '__table__'):
-        raise ValueError(f"Model {model.__name__} has no __table__ attribute")
-
-    table = model.__table__
+    # Valid SQLModel/SQLAlchemy models always have __table__ after definition
+    try:
+        table = model.__table__
+    except AttributeError:
+        raise ValueError(f"Model {model.__name__} is not a valid SQLModel/SQLAlchemy model (no __table__)")
 
     if column_name not in table.columns:
         raise ValueError(f"Column '{column_name}' not found in {model.__name__}")

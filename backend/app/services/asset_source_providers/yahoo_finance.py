@@ -420,10 +420,14 @@ class YahooFinanceProvider(AssetSourceProvider):
 
             classification = FAClassificationParams(**classification_data)
 
+            # Extract currency from info
+            currency = info.get('currency') or info.get('financialCurrency')
+
             # Build FAAssetPatchItem (asset_id will be filled by caller)
             patch_item = FAAssetPatchItem(
                 asset_id=0,  # Placeholder, will be set by caller
                 asset_type=asset_type,
+                currency=currency,
                 classification_params=classification
             )
 

@@ -30,18 +30,11 @@ from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.common import DateRangeModel
 
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info, print_success
+from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
-
-
-def unique_id(prefix: str = "TEST") -> str:
-    """Generate unique ID for test data."""
-    import time
-    return f"{prefix}_{int(time.time() * 1000)}_{id(prefix) % 100}"
-
 
 @pytest.fixture(scope="module")
 def test_server():

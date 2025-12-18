@@ -892,6 +892,24 @@ def api_utilities(verbose: bool = False) -> bool:
         )
 
 
+def search2prices_test(verbose: bool = False) -> bool:
+    """
+    Run E2E (End-to-End) API tests.
+
+    Tests complete flow: Search → Create → Assign → Metadata → Prices
+    """
+    print_section("E2E API Test search-to-prices")
+    print_info("Testing complete end-to-end flow via API")
+    print_info("Tests: Search → Create Asset → Assign Provider → Refresh Metadata → Refresh Prices")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    return run_command(
+        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_e2e/test_search_to_prices.py", "-v"],
+        "E2E API tests",
+        verbose=verbose
+        )
+
+
 def api_test(verbose: bool = False) -> bool:
     """
     Run all API tests.
@@ -907,7 +925,65 @@ def api_test(verbose: bool = False) -> bool:
         ("Assets CRUD API", lambda: api_assets_crud(verbose)),
         ("Assets Price API", lambda: api_assets_price(verbose)),
         ("Assets Provider API", lambda: api_assets_provider(verbose)),
-        ("Utilities API", lambda: api_utilities(verbose)),
+        ("Utilities API", lambda: api_utilities(verbose))
+        ]
+
+    results = []
+    for test_name, test_func in tests:
+        success = test_func()
+        results.append((test_name, success))
+
+        if not success:
+            print_error(f"Test failed: {test_name}")
+            print_warning("Stopping API tests execution")
+            break
+
+    # Summary
+    print_section("API Tests Summary")
+    passed = sum(1 for _, success in results if success)
+    total = len(results)
+
+    for test_name, success in results:
+        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
+        print(f"{status} - {test_name}")
+
+    print(f"\nResults: {passed}/{total} tests passed")
+
+    # If coverage mode, combine coverage from all processes
+    if _COVERAGE_MODE:
+        print_section("Combining Coverage Data")
+        print_info("Merging coverage from test server subprocess...")
+        try:
+            result = subprocess.run(
+                ["coverage", "combine"],
+                capture_output=True,
+                text=True,
+                cwd=Path(__file__).parent
+            )
+            if result.returncode == 0:
+                print_success("Coverage data combined successfully")
+            else:
+                print_warning(f"Coverage combine had warnings: {result.stderr}")
+        except Exception as e:
+            print_warning(f"Could not combine coverage: {e}")
+
+    if passed == total:
+        print_success("All API tests passed! 🎉")
+        return True
+    else:
+        print_error(f"{total - passed} test(s) failed")
+        return False
+
+def e2e_test(verbose: bool = False) -> bool:
+    """
+    Run all API tests.
+    """
+    print_header("LibreFolio E2E Tests with API interaction")
+    print_info("Testing E2E workflow using REST API endpoints")
+    print_info("Note: Server will be automatically started/stopped by tests")
+
+    tests = [
+        ("E2E search-to-prices Flow", lambda: search2prices_test(verbose)),
         ]
 
     results = []
@@ -957,6 +1033,7 @@ def api_test(verbose: bool = False) -> bool:
         return False
 
 
+
 # ============================================================================
 # GLOBAL ALL TESTS
 # ============================================================================
@@ -985,6 +1062,7 @@ def run_all_tests(verbose: bool = False) -> bool:
         ("Utility Modules", lambda: utils_all(verbose)),
         ("Services layers", lambda: services_all(verbose)),
         ("API Endpoints", lambda: api_test(verbose)),  # Auto-starts server via TestServerManager
+        ("E2E Tests", lambda: e2e_test(verbose)), # Auto-starts server via TestServerManager
         ]
 
     results = []
@@ -1378,8 +1456,13 @@ Test commands:
                     📋 Prerequisites: None
                     💡 Tests: GET /utilities/sectors, GET /utilities/countries/normalize
                     Note: Server will be automatically started and stopped by test
+  
+  e2e             - Test complete End-to-End flow
+                    📋 Prerequisites: Database created, providers configured
+                    💡 Tests: Search → Create → Assign Provider → Metadata → Prices
+                    Note: Server will be automatically started and stopped by test
                     
-  all             - Run all API tests (FX + Assets Metadata + Assets CRUD + Utilities)
+  all             - Run all API tests (FX + Assets Metadata + Assets CRUD + ...)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
@@ -1388,6 +1471,35 @@ Test commands:
         "action",
         choices=["fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "all"],
         help="API test to run"
+        )
+
+    # ========================================================================
+    # E2E TESTS SUBPARSER
+    # ========================================================================
+    e2e_parser = subparsers.add_parser(
+        "e2e",
+        help="E2E Tests with API Interaction",
+        description="""
+E2E Tests with API Interaction
+These tests verify complete end-to-end workflows via REST API:
+  • Target: http://localhost:8001 (test server)
+  • Backend server auto-started if not running
+
+  search-to-prices  - Test complete flow: Search → Create → Assign → Metadata → Prices
+                      📋 Prerequisites: Database created, providers configured
+                      💡 Tests: Search asset, create asset, assign provider, refresh metadata, refresh prices
+                      Note: Server will be automatically started and stopped by test
+                      
+  all               - Run all E2E tests with API interaction
+
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+
+    e2e_parser.add_argument(
+        "action",
+        choices=["search-to-prices", "all"],
+        help="End-to-End tests with API interaction (auto-starts server if needed)"
         )
 
     # ========================================================================
@@ -1568,6 +1680,13 @@ def main():
             success = api_utilities(verbose=verbose)
         elif args.action == "all":
             success = api_test(verbose=verbose)
+    
+    elif args.category == "e2e":
+        # E2E tests
+        if args.action == "search-to-prices":
+            success = search2prices_test(verbose=verbose)
+        elif args.action == "all":
+            success = e2e_test(verbose=verbose)
 
     # If coverage mode, show final summary
     if _COVERAGE_MODE:
