@@ -16,7 +16,7 @@ from backend.app.schemas.utilities import (
     SectorListResponse
 )
 from backend.app.utils.sector_normalization import FinancialSector
-from backend.app.utils.geo_normalization import normalize_country_to_iso3
+from backend.app.utils.geo_normalization import normalize_country_to_iso3, is_region, expand_region
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
 
@@ -50,8 +50,27 @@ async def normalize_country(
     }
     ```
 
-    TODO: Implement region expansion (EUR → [DEU, FRA, ITA, ESP, ...])
+    For regions like EUR, ASIA, G7, returns multiple countries:
+    ```json
+    {
+      "query": "G7",
+      "iso3_codes": ["USA", "CAN", "GBR", "DEU", "FRA", "ITA", "JPN"],
+      "match_type": "region"
+    }
+    ```
     """
+    name_upper = name.strip().upper()
+
+    # Check if it's a region first
+    if is_region(name_upper):
+        countries = expand_region(name_upper)
+        return CountryNormalizationResponse(
+            query=name,
+            iso3_codes=countries,
+            match_type="region"
+        )
+
+    # Try to normalize as single country
     try:
         iso3_code = normalize_country_to_iso3(name)
         return CountryNormalizationResponse(
@@ -60,8 +79,6 @@ async def normalize_country(
             match_type="exact"
         )
     except ValueError as e:
-        # Could be a region - for now return error
-        # TODO: Implement region mapping
         return CountryNormalizationResponse(
             query=name,
             iso3_codes=[],

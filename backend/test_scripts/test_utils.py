@@ -5,6 +5,7 @@ Common utilities for all test scripts to avoid code duplication.
 Provides standardized output formatting, test helpers, and common functions.
 """
 import sys
+import time
 
 
 # ============================================================================
@@ -160,3 +161,16 @@ def exit_failure():
 def exit_with_result(success: bool):
     """Exit with appropriate code based on result."""
     sys.exit(0 if success else 1)
+
+# ============================================================================
+# RECORDS HELPER
+# ============================================================================
+
+# Helper to generate unique identifiers
+_counter = 0
+
+def unique_id(prefix: str = "TEST") -> str:
+    """Generate unique identifier for test data."""
+    global _counter
+    _counter += 1
+    return f"{prefix}_{int(time.time() * 1000)}_{_counter}"

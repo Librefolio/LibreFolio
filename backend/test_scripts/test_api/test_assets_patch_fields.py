@@ -27,29 +27,12 @@ from backend.app.schemas.assets import (
 
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 
 # Constants
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
-
-def unique_id(prefix: str = "TEST") -> str:
-    """Generate unique ID for test data."""
-    import time
-    return f"{prefix}_{int(time.time() * 1000)}_{id(prefix) % 100}"
-
-def print_section(title: str):
-    """Print test section header."""
-    print(f"\n{'=' * 60}\n  {title}\n{'=' * 60}")
-
-def print_info(msg: str):
-    """Print info message."""
-    print(f"ℹ️  {msg}")
-
-def print_success(msg: str):
-    """Print success message."""
-    print(f"✅ ✓ {msg}")
-
 
 # Fixture: test server
 @pytest.fixture(scope="module")

@@ -43,7 +43,7 @@ from backend.app.schemas import (
     FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse,
     FABulkDeleteResponse, FAPriceDeleteResult, FABulkRemoveResponse,
     FAProviderRemovalResult, FABulkRefreshResponse, FARefreshResult)
-from backend.app.schemas.assets import FAAssetPatchItem
+from backend.app.schemas.assets import FAAssetPatchItem, FAClassificationParams
 from backend.app.schemas.common import OldNew
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.services.asset_crud import AssetCRUDService
@@ -784,11 +784,12 @@ class AssetSourceManager:
             for patch_result in patch_response.results:
                 fields_detail = asset_fields_map.get(patch_result.asset_id)
 
-                # Convert to FAMetadataRefreshResult
+                # Convert to FAMetadataRefreshResult with fields_detail
                 results.append(FAMetadataRefreshResult(
                     asset_id=patch_result.asset_id,
                     success=patch_result.success,
-                    message=patch_result.message
+                    message=patch_result.message,
+                    fields_detail=fields_detail
                     ))
 
         success_count = sum(1 for r in results if r.success)
