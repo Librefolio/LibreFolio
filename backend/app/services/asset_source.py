@@ -38,7 +38,7 @@ from backend.app.db.models import (
     )
 from backend.app.schemas import (
     FACurrentValue, FAHistoricalData,
-    FAMetadataRefreshResult, FAPricePoint, BackwardFillInfo,
+    FAMetadataRefreshResult, BackwardFillInfo,
     FAUpsert, FAPricePoint, FAAssetDelete, FAProviderAssignmentItem,
     FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse,
     FABulkDeleteResponse, FAPriceDeleteResult, FABulkRemoveResponse,
@@ -629,13 +629,13 @@ class AssetSourceManager:
                 success=True,
                 deleted_count=1,  # Always 1 for successful provider removal
                 message="Provider removed"
-            ) for aid in asset_ids
-        ]
+                ) for aid in asset_ids
+            ]
         return FABulkRemoveResponse(
             results=results,
             success_count=len(results),
             errors=[]
-        )
+            )
 
     @staticmethod
     async def refresh_assets_from_provider(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:
@@ -751,7 +751,7 @@ class AssetSourceManager:
                         info=field_name,
                         old=old_str,
                         new=new_str
-                    ))
+                        ))
 
                 # Calculate missing_data_fields
                 # Fields that are patchable but not returned by provider
@@ -968,7 +968,7 @@ class AssetSourceManager:
             success_count=len(results),
             total_deleted=deleted_count,
             errors=[]
-        )
+            )
 
     # ========================================================================
     # PRICE QUERY WITH BACKWARD-FILL + Special logic for PROVIDER DELEGATION
@@ -1264,7 +1264,7 @@ class AssetSourceManager:
                             if start <= history_end:
                                 hist_data = await prov.get_history_value(
                                     identifier, identifier_type, provider_params, start, history_end
-                                )
+                                    )
                                 if hist_data and hist_data.prices:
                                     prices_data = [p.model_dump() for p in hist_data.prices]
                                     logger.debug(f"Fetched {len(prices_data)} historical prices for asset {asset_id}")
@@ -1277,14 +1277,14 @@ class AssetSourceManager:
                         try:
                             current_data = await prov.get_current_value(
                                 identifier, identifier_type, provider_params
-                            )
+                                )
                             if current_data and current_data.value:
                                 # Create a price point for today
                                 current_price = {
                                     "date": current_data.as_of_date or today,
                                     "close": current_data.value,
                                     "currency": current_data.currency or "USD"
-                                }
+                                    }
 
                                 # Remove any existing entry for today from history (current value takes precedence)
                                 prices_data = [p for p in prices_data if p.get("date") != current_price["date"]]
@@ -1299,12 +1299,12 @@ class AssetSourceManager:
                             "No price data available from provider",
                             "NO_DATA",
                             {"asset_id": asset_id, "provider": provider_code}
-                        )
+                            )
 
                     return {
                         "prices": prices_data,
                         "source": provider_code
-                    }
+                        }
                 except AssetSourceError:
                     raise
                 except Exception as e:
@@ -1391,4 +1391,4 @@ class AssetSourceManager:
             results=results,
             success_count=sum(1 for r in results if not r.errors),  # Success = no errors
             errors=[]
-        )
+            )

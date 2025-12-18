@@ -5,8 +5,8 @@ Tests the /api/v1/utilities endpoints:
 - GET /utilities/sectors - List standard financial sectors
 - GET /utilities/countries/normalize - Normalize country codes
 """
-import pytest
 import httpx
+import pytest
 
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -56,7 +56,7 @@ async def test_list_sectors_with_other(test_server):
             "Industrials", "Technology", "Financials", "Consumer Discretionary",
             "Health Care", "Real Estate", "Basic Materials", "Energy",
             "Consumer Staples", "Telecommunication", "Utilities", "Other"
-        ]
+            ]
         for sector in expected:
             assert sector in data["sectors"], f"Missing sector: {sector}"
 
@@ -74,7 +74,7 @@ async def test_list_sectors_without_other(test_server):
             f"{API_BASE}/utilities/sectors",
             params={"include_other": "false"},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -100,7 +100,7 @@ async def test_normalize_country_iso3(test_server):
             f"{API_BASE}/utilities/countries/normalize",
             params={"name": "USA"},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -124,7 +124,7 @@ async def test_normalize_country_iso2(test_server):
             f"{API_BASE}/utilities/countries/normalize",
             params={"name": "IT"},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -147,7 +147,7 @@ async def test_normalize_country_name(test_server):
             f"{API_BASE}/utilities/countries/normalize",
             params={"name": "Germany"},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -170,7 +170,7 @@ async def test_normalize_country_invalid(test_server):
             f"{API_BASE}/utilities/countries/normalize",
             params={"name": "InvalidCountryXYZ"},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -196,14 +196,14 @@ async def test_normalize_country_case_insensitive(test_server):
             ("italy", "ITA"),
             ("FRANCE", "FRA"),
             ("jApAn", "JPN"),
-        ]
+            ]
 
         for name, expected_iso3 in test_cases:
             response = await client.get(
                 f"{API_BASE}/utilities/countries/normalize",
                 params={"name": name},
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -215,4 +215,3 @@ async def test_normalize_country_case_insensitive(test_server):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

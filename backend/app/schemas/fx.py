@@ -57,7 +57,6 @@ class FXProviderInfo(BaseModel):
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
 
 
-
 # ============================================================================
 # RATE SYNC MODELS
 
@@ -155,7 +154,6 @@ class FXUpsertItem(BaseModel):
         return Currency.validate_code(v)
 
 
-
 class FXUpsertResult(BaseModel):
     """Single rate upsert result."""
     model_config = ConfigDict()
@@ -174,6 +172,7 @@ class FXUpsertResult(BaseModel):
 
     def date_str(self) -> str:
         return self.date.isoformat()
+
 
 class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
     """Response model for bulk rate upsert."""
@@ -213,6 +212,7 @@ class FXDeleteResult(BaseDeleteResult):
     # - deleted_count: int (number of FX rates actually deleted)
     # - message: Optional[str] (e.g., 'no rates found')
 
+
 class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
     """Response model for bulk FX rate deletion."""
     # Inherits from BaseBulkDeleteResponse:
@@ -222,13 +222,14 @@ class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
     # - total_deleted: int (total FX rates deleted)
     pass
 
+
 # ============================================================================
 # PAIR SOURCE CONFIGURATION MODELS
 # ============================================================================
 
 class FXPairSourceItem(BaseModel):
     """Configuration for a currency pair source."""
-    model_config = ConfigDict(str_strip_whitespace=True,)
+    model_config = ConfigDict(str_strip_whitespace=True, )
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
@@ -245,8 +246,6 @@ class FXPairSourcesResponse(BaseModel):
     """Response model for listing pair sources."""
     sources: list[FXPairSourceItem] = Field(..., description="Configured pair sources")
     count: int = Field(..., description="Number of configured sources")
-
-
 
 
 class FXPairSourceResult(BaseModel):
@@ -268,7 +267,7 @@ class FXCreatePairSourcesResponse(BaseBulkResponse[FXPairSourceResult]):
 
 class FXDeletePairSourceItem(BaseModel):
     """Single pair source to delete."""
-    model_config = ConfigDict(str_strip_whitespace=True,)
+    model_config = ConfigDict(str_strip_whitespace=True, )
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
@@ -278,6 +277,7 @@ class FXDeletePairSourceItem(BaseModel):
     @classmethod
     def uppercase_currency(cls, v):
         return Currency.validate_code(v)
+
 
 class FXDeletePairSourceResult(BaseDeleteResult):
     """Result of a single pair source deletion."""
@@ -289,6 +289,7 @@ class FXDeletePairSourceResult(BaseDeleteResult):
     # - success: bool
     # - deleted_count: int (number of pair source records deleted)
     # - message: Optional[str]
+
 
 class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResult]):
     """Response model for DELETE /pair-sources/bulk."""

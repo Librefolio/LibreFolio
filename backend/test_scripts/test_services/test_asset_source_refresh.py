@@ -49,7 +49,7 @@ async def test_bulk_refresh_prices_orchestration():
                 identifier_type=IdentifierType.UUID,
                 provider_params={},
                 fetch_interval=1440  # Optional but added for completeness
-            )
+                )
             ], session)
 
         # Execute refresh - expect prices to be inserted

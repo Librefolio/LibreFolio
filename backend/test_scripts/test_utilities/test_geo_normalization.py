@@ -43,6 +43,7 @@ def test_normalize_country_to_iso3():
     with pytest.raises(ValueError):
         normalize_country_to_iso3("")
 
+
 def test_validate_and_normalize_geographic_area():
     """Test complete geographic area validation pipeline."""
     # Valid ISO-3 codes

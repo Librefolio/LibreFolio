@@ -52,7 +52,7 @@ class YahooFinanceProvider(AssetSourceProvider):
 
     def get_icon(self) -> str:
         """ Return provider icon URL (hardcoded) """
-        return "https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" # Yahoo Finance logo
+        return "https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png"  # Yahoo Finance logo
 
     @property
     def test_cases(self) -> list[dict]:
@@ -311,7 +311,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                     "display_name": quote.get('longname', quote.get('shortname', quote.get('symbol', ''))),
                     "currency": None,  # TODO: capire se un modo per avere la valuta ci può essere
                     "type": quote.get('quoteType', 'Unknown')  # EQUITY, ETF, CRYPTOCURRENCY, etc.
-                })
+                    })
 
             # Cache result
             self._search_cache[cache_key] = (results, utcnow())
@@ -323,7 +323,6 @@ class YahooFinanceProvider(AssetSourceProvider):
             # Cache empty result to avoid repeated failures
             self._search_cache[cache_key] = ([], utcnow())
             return []
-
 
     def validate_params(self, params: Dict | None) -> None:
         """
@@ -429,7 +428,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 asset_type=asset_type,
                 currency=currency,
                 classification_params=classification
-            )
+                )
 
             logger.info(f"Fetched metadata from yfinance for {identifier}: asset_type={asset_type}, sector={sector}")
             return patch_item

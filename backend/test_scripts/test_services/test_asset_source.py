@@ -269,21 +269,21 @@ async def test_bulk_assign_providers():
                 identifier="TEST1",
                 identifier_type=IdentifierType.TICKER,
                 provider_params={"ticker": "TEST1"}
-            ),
+                ),
             FAProviderAssignmentItem(
                 asset_id=test_assets[1].id,
                 provider_code="yfinance",
                 identifier="TEST2",
                 identifier_type=IdentifierType.TICKER,
                 provider_params={"ticker": "TEST2"}
-            ),
+                ),
             FAProviderAssignmentItem(
                 asset_id=test_assets[2].id,
                 provider_code="mockprov",
                 identifier="MOCK1",
                 identifier_type=IdentifierType.UUID,
                 provider_params=None
-            ),
+                ),
             ]
 
         results = await AssetSourceManager.bulk_assign_providers(assignments, session)
@@ -334,7 +334,7 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
             identifier="MOCK_META_TEST",
             identifier_type=IdentifierType.UUID,
             provider_params={"mock_param": "test"}
-        )
+            )
 
         results = await AssetSourceManager.bulk_assign_providers([item], session)
         # Assuming single result, extract it

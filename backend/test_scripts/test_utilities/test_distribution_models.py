@@ -4,14 +4,14 @@ Tests for Distribution models (BaseDistribution, FAGeographicArea, FASectorArea)
 Tests the validation logic, normalization, and weight quantization.
 """
 from decimal import Decimal
+
 import pytest
 
 from backend.app.schemas.assets import (
-    BaseDistribution,
     FAGeographicArea,
     FASectorArea,
     FAClassificationParams
-)
+    )
 
 
 # ============================================================
@@ -95,7 +95,7 @@ class TestFASectorArea:
             "Technology": Decimal("0.4"),
             "Financials": Decimal("0.3"),
             "Health Care": Decimal("0.3")
-        })
+            })
         assert sector.distribution["Technology"] == Decimal("0.4000")
         assert sector.distribution["Financials"] == Decimal("0.3000")
 
@@ -110,7 +110,7 @@ class TestFASectorArea:
         sector = FASectorArea(distribution={
             "technology": Decimal("0.5"),
             "FINANCIALS": Decimal("0.5")
-        })
+            })
         assert "Technology" in sector.distribution
         assert "Financials" in sector.distribution
 
@@ -118,8 +118,8 @@ class TestFASectorArea:
         """Sector aliases should be normalized."""
         sector = FASectorArea(distribution={
             "healthcare": Decimal("0.5"),  # Should become "Health Care"
-            "telecom": Decimal("0.5")      # Should become "Telecommunication"
-        })
+            "telecom": Decimal("0.5")  # Should become "Telecommunication"
+            })
         assert "Health Care" in sector.distribution
         assert "Telecommunication" in sector.distribution
         assert "healthcare" not in sector.distribution
@@ -129,17 +129,17 @@ class TestFASectorArea:
         sector = FASectorArea(distribution={
             "UnknownSector": Decimal("0.5"),
             "Technology": Decimal("0.5")
-        })
+            })
         assert "Other" in sector.distribution
         assert "UnknownSector" not in sector.distribution
 
     def test_multiple_unknown_merged_into_other(self):
         """Multiple unknown sectors should be merged into 'Other'."""
         sector = FASectorArea(distribution={
-            "Banking": Decimal("0.2"),      # Unknown -> Other
-            "Insurance": Decimal("0.2"),    # Unknown -> Other
+            "Banking": Decimal("0.2"),  # Unknown -> Other
+            "Insurance": Decimal("0.2"),  # Unknown -> Other
             "Technology": Decimal("0.6")
-        })
+            })
         assert "Other" in sector.distribution
         # 0.2 + 0.2 = 0.4 -> should be in Other
         assert sector.distribution["Other"] == Decimal("0.4000")
@@ -174,7 +174,7 @@ class TestFAClassificationParams:
         params = FAClassificationParams(
             short_description="Test asset",
             sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
-        )
+            )
         assert params.sector_area is not None
         assert params.sector_area.distribution["Technology"] == Decimal("1.0")
 
@@ -182,7 +182,7 @@ class TestFAClassificationParams:
         """Should accept geographic_area field."""
         params = FAClassificationParams(
             geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")})
-        )
+            )
         assert params.geographic_area is not None
         assert params.geographic_area.distribution["USA"] == Decimal("1.0")
 
@@ -192,7 +192,7 @@ class TestFAClassificationParams:
             short_description="Multi-region tech fund",
             geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "DEU": Decimal("0.4")}),
             sector_area=FASectorArea(distribution={"Technology": Decimal("0.7"), "Financials": Decimal("0.3")})
-        )
+            )
         assert params.geographic_area is not None
         assert params.sector_area is not None
 
@@ -234,4 +234,3 @@ class TestWeightQuantization:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

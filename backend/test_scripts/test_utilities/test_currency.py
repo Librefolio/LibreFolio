@@ -12,8 +12,9 @@ Tests cover:
 - Utility methods (zero, is_zero, is_positive, is_negative)
 """
 
-import pytest
 from decimal import Decimal
+
+import pytest
 
 from backend.app.schemas.common import Currency, CRYPTO_CURRENCIES
 
@@ -352,4 +353,3 @@ class TestOldNew:
         change = OldNew(old=None, new="Technology")
         assert change.old is None
         assert change.new == "Technology"
-

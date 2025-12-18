@@ -112,6 +112,7 @@ class FAUpsertResult(BaseModel):
     count: int
     message: str
 
+
 class FABulkUpsertResponse(BaseBulkResponse[FAUpsertResult]):
     """Response for bulk price upsert."""
     # Operation-specific fields
@@ -133,8 +134,6 @@ class FAAssetDelete(BaseModel):
 
     asset_id: int = Field(..., description="Asset ID")
     date_ranges: List[DateRangeModel] = Field(..., min_length=1, description="List of date ranges to delete")
-
-
 
 
 class FAPriceDeleteResult(BaseDeleteResult):

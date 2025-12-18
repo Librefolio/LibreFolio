@@ -14,6 +14,7 @@ from sqlmodel import select
 
 from backend.app.db.models import FxRate
 from backend.app.logging_config import get_logger
+from backend.app.schemas.common import Currency
 from backend.app.services.provider_registry import FXProviderRegistry
 from backend.app.utils.decimal_utils import truncate_fx_rate
 
@@ -589,61 +590,64 @@ async def ensure_rates_multi_source(
 
 async def convert(
     session,  # AsyncSession
-    amount: Decimal,
-    from_currency: str,
+    amount: Currency,
     to_currency: str,
     as_of_date: date,
     return_rate_info: bool = False
-    ) -> Decimal | tuple[Decimal, date, bool]:
+    ) -> Currency | tuple[Currency, date, bool]:
     """
-    Convert a single amount from one currency to another.
+    Convert a Currency object to another currency.
     This is a convenience wrapper around convert_bulk() for single conversions.
+
+    ⚡ BREAKING CHANGE: Now accepts/returns Currency objects instead of Decimal.
 
     Args:
         session: Database session
-        amount: Amount to convert
-        from_currency: Source currency code (ISO 4217)
+        amount: Currency object containing amount and source currency code
         to_currency: Target currency code (ISO 4217)
         as_of_date: Date for which to use the FX rate
-        return_rate_info: If True, return (amount, rate_date, backward_fill_applied)
+        return_rate_info: If True, return (Currency, rate_date, backward_fill_applied)
 
     Returns:
-        If return_rate_info=False: Converted amount
-        If return_rate_info=True: Tuple of (converted_amount, rate_date, backward_fill_applied)
+        If return_rate_info=False: Currency object with converted amount
+        If return_rate_info=True: Tuple of (Currency, rate_date, backward_fill_applied)
 
     Raises:
         RateNotFoundError: If no rate is found at all for this currency pair
     """
     # Call bulk version with single item (raise_on_error=True for backward compatibility)
-    results, errors = await convert_bulk(session, [(amount, from_currency, to_currency, as_of_date)], raise_on_error=True)
+    results, errors = await convert_bulk(session, [(amount, to_currency, as_of_date)], raise_on_error=True)
 
-    converted_amount, rate_date, backward_fill_applied = results[0]
+    converted_currency, rate_date, backward_fill_applied = results[0]
 
     if return_rate_info:
-        return converted_amount, rate_date, backward_fill_applied
-    return converted_amount
+        return converted_currency, rate_date, backward_fill_applied
+    return converted_currency
 
 
 async def convert_bulk(
     session,  # AsyncSession
-    conversions: list[tuple[Decimal, str, str, date]],  # [(amount, from, to, date), ...]
+    conversions: list[tuple[Currency, str, date]],  # [(amount_currency, to_currency, date), ...]
     raise_on_error: bool = True
-    ) -> tuple[list[tuple[Decimal, date, bool] | None], list[str]]:
+    ) -> tuple[list[tuple[Currency, date, bool] | None], list[str]]:
     """
-    Convert multiple amounts in a single batch operation. Use date in fx_rates table already cached.
+    Convert multiple Currency amounts in a single batch operation.
     Uses unlimited backward-fill: if rate for exact date is not found,
     uses the most recent rate available (no time limit).
+
+    ⚡ BREAKING CHANGE: Now accepts/returns Currency objects instead of Decimal.
 
     Rates are stored alphabetically (base < quote): 1 base = rate * quote
 
     Args:
         session: Database session
-        conversions: List of (amount, from_currency, to_currency, as_of_date) tuples
+        conversions: List of (Currency, to_currency, as_of_date) tuples
+                     where Currency contains amount + from_currency
         raise_on_error: If True, raise on first error. If False, collect errors and continue
 
     Returns:
         Tuple of (results, errors) where:
-        - results: List of (converted_amount, rate_date, backward_fill_applied) or None for failed conversions
+        - results: List of (Currency, rate_date, backward_fill_applied) or None for failed conversions
         - errors: List of error messages for failed conversions
 
         If raise_on_error=True, raises on first error (legacy behavior)
@@ -658,7 +662,11 @@ async def convert_bulk(
     pairs_needed = {}  # {(base, quote, max_date): [indices_needing_this_pair]}
     conversion_metadata = []  # Store metadata for each conversion
 
-    for idx, (amount, from_currency, to_currency, as_of_date) in enumerate(conversions):
+    for idx, (amount_currency, to_currency, as_of_date) in enumerate(conversions):
+        # Extract from Currency object
+        amount = amount_currency.amount
+        from_currency = amount_currency.code
+
         # Identity conversions don't need DB lookup
         if from_currency == to_currency:
             conversion_metadata.append({
@@ -744,9 +752,10 @@ async def convert_bulk(
         idx = meta['idx']
 
         try:
-            # Identity conversion
+            # Identity conversion - same currency, return as Currency object
             if meta['identity']:
-                results.append((meta['amount'], meta['date'], False))
+                result_currency = Currency(code=meta['to'], amount=meta['amount'])
+                results.append((result_currency, meta['date'], False))
                 continue
 
             # Find appropriate rate for this conversion
@@ -786,11 +795,13 @@ async def convert_bulk(
 
             # Apply conversion
             if meta['direct']:
-                converted = meta['amount'] * rate_record.rate
+                converted_amount = meta['amount'] * rate_record.rate
             else:
-                converted = meta['amount'] / rate_record.rate
+                converted_amount = meta['amount'] / rate_record.rate
 
-            results.append((converted, rate_record.date, backward_fill_applied))
+            # Return Currency object with target currency
+            result_currency = Currency(code=meta['to'], amount=converted_amount)
+            results.append((result_currency, rate_record.date, backward_fill_applied))
 
         except RateNotFoundError:
             if raise_on_error:
@@ -804,7 +815,7 @@ async def convert_bulk(
                 errors.append(error_msg)
                 results.append(None)
 
-    return (results, errors)
+    return results, errors
 
 
 async def upsert_rates_bulk(

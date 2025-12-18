@@ -4,11 +4,12 @@ Tests for sector normalization utilities.
 Tests the FinancialSector enum and normalization functions.
 """
 import pytest
+
 from backend.app.utils.sector_normalization import (
     FinancialSector,
     normalize_sector,
     validate_sector
-)
+    )
 
 
 # ============================================================
@@ -30,7 +31,7 @@ class TestFinancialSectorEnum:
             "Industrials", "Technology", "Financials", "Consumer Discretionary",
             "Health Care", "Real Estate", "Basic Materials", "Energy",
             "Consumer Staples", "Telecommunication", "Utilities", "Other"
-        ]
+            ]
         actual = [s.value for s in FinancialSector]
         for sector in expected:
             assert sector in actual, f"Missing sector: {sector}"
@@ -73,7 +74,7 @@ class TestFinancialSectorFromString:
         ("Telecommunication", FinancialSector.TELECOMMUNICATION),
         ("Utilities", FinancialSector.UTILITIES),
         ("Other", FinancialSector.OTHER),
-    ])
+        ])
     def test_exact_matches(self, input_val, expected):
         """Exact sector names should be recognized."""
         assert FinancialSector.from_string(input_val) == expected
@@ -83,7 +84,7 @@ class TestFinancialSectorFromString:
         ("healthcare", FinancialSector.HEALTH_CARE),  # No space
         ("materials", FinancialSector.BASIC_MATERIALS),  # Short form
         ("telecom", FinancialSector.TELECOMMUNICATION),  # Short form
-    ])
+        ])
     def test_aliases(self, input_val, expected):
         """Aliases should be recognized."""
         assert FinancialSector.from_string(input_val) == expected
@@ -99,7 +100,7 @@ class TestFinancialSectorFromString:
         "Gaming",
         "Automotive",
         "SomeRandomSector",
-    ])
+        ])
     def test_unknown_sectors_map_to_other(self, input_val):
         """Unknown sector names should map to OTHER."""
         result = FinancialSector.from_string(input_val)
@@ -194,7 +195,7 @@ class TestEdgeCases:
         data = {
             FinancialSector.TECHNOLOGY: 0.5,
             FinancialSector.FINANCIALS: 0.5
-        }
+            }
         assert data[FinancialSector.TECHNOLOGY] == 0.5
         # Also works with string lookup since it's a str enum
         assert data["Technology"] == 0.5
@@ -202,4 +203,3 @@ class TestEdgeCases:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

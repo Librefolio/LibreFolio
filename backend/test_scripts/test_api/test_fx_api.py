@@ -10,7 +10,6 @@ Tests for Foreign Exchange (FX) endpoints:
 - POST /fx/rates (manual rate upsert)
 - DELETE /fx/rates (rate deletion)
 """
-import time
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -29,15 +28,15 @@ from backend.app.schemas.fx import (
     FXCreatePairSourcesResponse,
     FXDeletePairSourceItem,
     FXProviderInfo,
-    FXDeletePairSourcesResponse,
     )
 from backend.app.schemas.refresh import FXSyncResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
+from backend.test_scripts.test_utils import print_section, print_info, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+
 
 # ============================================================================
 # PYTEST FIXTURES
@@ -67,7 +66,7 @@ async def test_get_currencies(test_server):
     print_section("Test 1: GET /fx/currencies")
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{API_BASE}/fx/currencies",timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/fx/currencies", timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -93,7 +92,7 @@ async def test_get_providers(test_server):
     print_section("Test 2: GET /fx/providers")
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{API_BASE}/fx/providers",timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -121,7 +120,7 @@ async def test_pair_sources_crud(test_server):
     async with httpx.AsyncClient() as client:
         # 3a. List all pair sources (empty or existing)
         print_info("3a. List pair sources")
-        response = await client.get(f"{API_BASE}/fx/providers/pair-sources",timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
         assert response.status_code == 200, f"GET failed: {response.status_code}"
         sources_response = FXPairSourcesResponse(**response.json())
         print_success(f"✓ Listed {sources_response.count} initial sources")
@@ -278,7 +277,7 @@ async def test_sync_rates_auto_config(test_server):
             "currencies": "EUR,GBP"  # These currencies are configured in DB
             }
 
-        sync_response = await client.get(f"{API_BASE}/fx/currencies/sync",params=params,timeout=TIMEOUT)
+        sync_response = await client.get(f"{API_BASE}/fx/currencies/sync", params=params, timeout=TIMEOUT)
 
         assert sync_response.status_code == 200, f"Expected 200, got {sync_response.status_code}: {sync_response.text}"
 
@@ -303,7 +302,7 @@ async def test_sync_rates_auto_config(test_server):
             "currencies": "FALSE_CURRENCY"  # NOT configured in DB
             }
 
-        error_response = await client.get(f"{API_BASE}/fx/currencies/sync",params=params_missing,timeout=TIMEOUT)
+        error_response = await client.get(f"{API_BASE}/fx/currencies/sync", params=params_missing, timeout=TIMEOUT)
 
         assert error_response.status_code == 400, f"Expected 400 for missing config, got {error_response.status_code}"
         error_data = error_response.json()
@@ -395,7 +394,7 @@ async def test_convert_missing_rate(test_server):
                 }
             ]
 
-        response = await client.post(f"{API_BASE}/fx/currencies/convert",json=conversions,timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/fx/currencies/convert", json=conversions, timeout=TIMEOUT)
 
         # Should either return 200 with errors or 4xx
         if response.status_code == 200:
@@ -605,7 +604,7 @@ async def test_invalid_requests(test_server):
                     }
                 ]
             }
-        response = await client.post(f"{API_BASE}/fx/currencies/convert",json=request,timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/fx/currencies/convert", json=request, timeout=TIMEOUT)
         assert response.status_code == 422, f"Expected 422 for negative amount, got {response.status_code}"
         print_success("✓ Negative amount rejected with 422")
 

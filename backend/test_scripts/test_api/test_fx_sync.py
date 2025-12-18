@@ -9,16 +9,14 @@ Tests for FX sync endpoints:
   - Multi-provider scenarios
 """
 
-import pytest
-import httpx
 from datetime import date, timedelta
 from decimal import Decimal
 
+import httpx
+import pytest
+
 from backend.app.config import get_settings
-# Import Pydantic schemas
-from backend.app.schemas.refresh import (
-    FXSyncResponse
-)
+from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import (
     FXConversionRequest,
     FXConvertResponse,
@@ -26,9 +24,11 @@ from backend.app.schemas.fx import (
     FXCreatePairSourcesResponse,
     FXPairSourcesResponse,
     DateRangeModel
-)
-from backend.app.schemas.common import Currency
-
+    )
+# Import Pydantic schemas
+from backend.app.schemas.refresh import (
+    FXSyncResponse
+    )
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
@@ -37,13 +37,16 @@ settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
 
+
 def print_section(title: str):
     """Print test section header."""
     print(f"\n{'=' * 60}\n  {title}\n{'=' * 60}")
 
+
 def print_info(msg: str):
     """Print info message."""
     print(f"ℹ️  {msg}")
+
 
 def print_success(msg: str):
     """Print success message."""
@@ -78,9 +81,9 @@ async def test_sync_service_error_handling(test_server):
                 "end": "2025-01-01",
                 "currencies": "EUR,INVALID_CURRENCY",
                 "provider": "ECB"
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         # Should handle error gracefully
         # Could be 400 (validation), 502 (upstream error), or 200 with error in response
@@ -115,20 +118,20 @@ async def test_sync_auto_config(test_server):
                 quote="USD",
                 provider_code="ECB",
                 priority=1
-            ),
+                ),
             FXPairSourceItem(
                 base="GBP",
                 quote="USD",
                 provider_code="ECB",
                 priority=1
-            )
-        ]
+                )
+            ]
 
         create_resp = await client.post(
             f"{API_BASE}/fx/providers/pair-sources",
             json=[s.model_dump(mode="json") for s in pair_sources],
             timeout=TIMEOUT
-        )
+            )
 
         # Might already exist, so accept both 201 and 400
         if create_resp.status_code == 201:
@@ -148,9 +151,9 @@ async def test_sync_auto_config(test_server):
                 "end": yesterday.isoformat(),
                 "currencies": "EUR,GBP"
                 # NO provider param - should use pair sources
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         # Should succeed using auto-config
         assert sync_resp.status_code == 200, f"Auto-config sync failed: {sync_resp.status_code}"
@@ -165,7 +168,7 @@ async def test_sync_auto_config(test_server):
                 f"{API_BASE}/fx/providers/pair-sources",
                 json=[source.model_dump(mode="json")],
                 timeout=TIMEOUT
-            )
+                )
         print_info("  Cleanup: Pair sources deleted")
 
 
@@ -185,18 +188,20 @@ async def test_sync_auto_config_no_pairs(test_server):
         if existing_sources.count > 0:
             # Delete all existing pair sources
             for source in existing_sources.sources:
-                delete_items = [FXPairSourceItem(
-                    base=source.base,
-                    quote=source.quote,
-                    provider_code=source.provider_code,
-                    priority=source.priority
-                )]
+                delete_items = [
+                    FXPairSourceItem(
+                        base=source.base,
+                        quote=source.quote,
+                        provider_code=source.provider_code,
+                        priority=source.priority
+                        )
+                    ]
                 await client.request(
                     "DELETE",
                     f"{API_BASE}/fx/providers/pair-sources",
                     json=[s.model_dump(mode="json") for s in delete_items],
                     timeout=TIMEOUT
-                )
+                    )
             print_info("  Deleted all existing pair sources")
 
         # Step 2: Try sync without provider param (auto-config mode)
@@ -205,7 +210,7 @@ async def test_sync_auto_config_no_pairs(test_server):
             f"{API_BASE}/fx/currencies/sync",
             params={"start": "2025-01-01", "end": "2025-01-01", "currencies": "EUR,GBP"},
             timeout=TIMEOUT
-        )
+            )
 
         # Should return 400 error about missing configuration
         assert sync_resp.status_code == 400, f"Expected 400, got {sync_resp.status_code}"
@@ -234,9 +239,9 @@ async def test_sync_weekend_no_rates(test_server):
                 "end": weekend_date,
                 "currencies": "EUR,GBP",
                 "provider": "ECB"
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         # Should succeed but with 0 rates synced (ECB doesn't publish on weekends)
         assert sync_resp.status_code == 200, f"Sync failed: {sync_resp.status_code}"
@@ -264,7 +269,7 @@ async def test_convert_multi_day_process(test_server):
             "end": end_date.isoformat(),
             "currencies": "EUR,GBP",
             "provider": "ECB"
-        }
+            }
         await client.get(f"{API_BASE}/fx/currencies/sync", params=sync_params, timeout=TIMEOUT)
         print_info("  FX rates synced for date range")
 
@@ -274,14 +279,14 @@ async def test_convert_multi_day_process(test_server):
                 from_amount=Currency(code="USD", amount=Decimal("100")),
                 **{"to": "EUR"},
                 date_range=DateRangeModel(start=start_date, end=end_date)
-            )
-        ]
+                )
+            ]
 
         convert_resp = await client.post(
             f"{API_BASE}/fx/currencies/convert",
             json=[c.model_dump(mode="json") for c in conversions],
             timeout=TIMEOUT
-        )
+            )
 
         # Should handle multi-day conversion
         assert convert_resp.status_code == 200, f"Convert failed: {convert_resp.status_code}: {convert_resp.text}"
@@ -321,9 +326,9 @@ async def test_convert_bulk_multi_day(test_server):
                 "end": end_date.isoformat(),
                 "currencies": "EUR,GBP",
                 "provider": "ECB"
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
         print_info("  FX rates synced for bulk test")
 
         # Step 2: Request BULK conversions, each with multi-day range
@@ -332,19 +337,19 @@ async def test_convert_bulk_multi_day(test_server):
                 from_amount=Currency(code="USD", amount=Decimal("100")),
                 **{"to": "EUR"},
                 date_range=DateRangeModel(start=start_date, end=start_date + timedelta(days=2))
-            ),
+                ),
             FXConversionRequest(
                 from_amount=Currency(code="USD", amount=Decimal("200")),
                 **{"to": "GBP"},
                 date_range=DateRangeModel(start=start_date, end=start_date + timedelta(days=2))
-            )
-        ]
+                )
+            ]
 
         convert_resp = await client.post(
             f"{API_BASE}/fx/currencies/convert",
             json=[c.model_dump(mode="json") for c in conversions],
             timeout=TIMEOUT
-        )
+            )
 
         assert convert_resp.status_code == 200, f"Bulk convert failed: {convert_resp.status_code}"
 

@@ -53,7 +53,6 @@ from backend.app.db import (
     FxCurrencyPairSource,
     CashAccount,
     CashMovement,
-    IdentifierType,
     AssetType,
     TransactionType,
     CashMovementType,
@@ -230,7 +229,8 @@ def populate_asset_provider_assignments(session: Session):
         ("Vanguard FTSE All-World UCITS ETF", "VWCE", IdentifierType.TICKER, "yfinance", json.dumps({"symbol": "VWCE.MI"})),
         ("iShares Core S&P 500 UCITS ETF", "CSPX", IdentifierType.TICKER, "yfinance", json.dumps({"symbol": "CSPX.L"})),
         # Scheduled investment loans with interest schedules
-        ("Real Estate Loan - Milano Centro", "RECROWD-12345", IdentifierType.OTHER, "scheduled_investment", json.dumps({
+        (
+            "Real Estate Loan - Milano Centro", "RECROWD-12345", IdentifierType.OTHER, "scheduled_investment", json.dumps({
             "schedule": [
                 {
                     "start_date": str(date.today()),
@@ -245,8 +245,10 @@ def populate_asset_provider_assignments(session: Session):
                 "annual_rate": 0.12,
                 "grace_days": 0,
                 }
-            })),
-        ("Real Estate Loan - Roma Parioli", "RECROWD-12346", IdentifierType.OTHER, "scheduled_investment", json.dumps({
+            })
+            ),
+        (
+            "Real Estate Loan - Roma Parioli", "RECROWD-12346", IdentifierType.OTHER, "scheduled_investment", json.dumps({
             "schedule": [
                 {
                     "start_date": str(date.today()),
@@ -261,7 +263,8 @@ def populate_asset_provider_assignments(session: Session):
                 "annual_rate": 0.12,
                 "grace_days": 0,
                 }
-            })),
+            })
+            ),
         # Note: HOLD assets don't need providers
         ]
 

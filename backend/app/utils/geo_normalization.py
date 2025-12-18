@@ -24,43 +24,56 @@ import pycountry
 
 from backend.app.utils.decimal_utils import parse_decimal_value
 
-
 # Region to country mapping for expansion
 # When a region code is detected, it can be expanded to multiple country ISO-3 codes
 REGION_MAPPING: dict[str, list[str]] = {
     # Europe
-    "EUR": ["DEU", "FRA", "ITA", "ESP", "NLD", "AUT", "BEL", "FIN", "GRC", "IRL",
-            "LVA", "LTU", "LUX", "MLT", "PRT", "SVK", "SVN", "CYP", "EST"],  # Eurozone 20
-    "EU": ["DEU", "FRA", "ITA", "ESP", "NLD", "AUT", "BEL", "FIN", "GRC", "IRL",
-           "LVA", "LTU", "LUX", "MLT", "PRT", "SVK", "SVN", "CYP", "EST", "POL",
-           "CZE", "HUN", "SWE", "DNK", "BGR", "HRV", "ROU"],  # EU27
+    "EUR": [
+        "DEU", "FRA", "ITA", "ESP", "NLD", "AUT", "BEL", "FIN", "GRC", "IRL",
+        "LVA", "LTU", "LUX", "MLT", "PRT", "SVK", "SVN", "CYP", "EST"
+        ],  # Eurozone 20
+    "EU": [
+        "DEU", "FRA", "ITA", "ESP", "NLD", "AUT", "BEL", "FIN", "GRC", "IRL",
+        "LVA", "LTU", "LUX", "MLT", "PRT", "SVK", "SVN", "CYP", "EST", "POL",
+        "CZE", "HUN", "SWE", "DNK", "BGR", "HRV", "ROU"
+        ],  # EU27
     "NORDIC": ["SWE", "DNK", "NOR", "FIN", "ISL"],
 
     # Americas
-    "LATAM": ["BRA", "MEX", "ARG", "CHL", "COL", "PER", "VEN", "ECU", "BOL",
-              "PRY", "URY", "CRI", "PAN", "GTM", "HND", "SLV", "NIC", "DOM", "CUB"],
+    "LATAM": [
+        "BRA", "MEX", "ARG", "CHL", "COL", "PER", "VEN", "ECU", "BOL",
+        "PRY", "URY", "CRI", "PAN", "GTM", "HND", "SLV", "NIC", "DOM", "CUB"
+        ],
     "NAFTA": ["USA", "CAN", "MEX"],
 
     # Asia
-    "ASIA": ["CHN", "JPN", "IND", "KOR", "SGP", "THA", "VNM", "IDN", "MYS",
-             "PHL", "TWN", "HKG", "PAK", "BGD", "LKA", "MMR", "KHM", "LAO", "MNG", "NPL"],
+    "ASIA": [
+        "CHN", "JPN", "IND", "KOR", "SGP", "THA", "VNM", "IDN", "MYS",
+        "PHL", "TWN", "HKG", "PAK", "BGD", "LKA", "MMR", "KHM", "LAO", "MNG", "NPL"
+        ],
     "ASEAN": ["SGP", "THA", "VNM", "IDN", "MYS", "PHL", "KHM", "LAO", "MMR", "BRN"],
 
     # Middle East & Africa
-    "MENA": ["ARE", "SAU", "QAT", "KWT", "OMN", "BHR", "JOR", "LBN", "EGY",
-             "MAR", "TUN", "DZA", "IRQ", "YEM"],
-    "AFRICA": ["ZAF", "EGY", "NGA", "KEN", "ETH", "GHA", "TZA", "UGA", "DZA",
-               "MAR", "TUN", "MOZ", "AGO", "SEN", "CIV", "CMR", "ZWE", "RWA", "BEN"],
+    "MENA": [
+        "ARE", "SAU", "QAT", "KWT", "OMN", "BHR", "JOR", "LBN", "EGY",
+        "MAR", "TUN", "DZA", "IRQ", "YEM"
+        ],
+    "AFRICA": [
+        "ZAF", "EGY", "NGA", "KEN", "ETH", "GHA", "TZA", "UGA", "DZA",
+        "MAR", "TUN", "MOZ", "AGO", "SEN", "CIV", "CMR", "ZWE", "RWA", "BEN"
+        ],
 
     # Oceania
     "OCEANIA": ["AUS", "NZL", "FJI", "PNG", "NCL", "PYF", "GUM", "SLB", "VUT"],
 
     # Economic groups
     "G7": ["USA", "CAN", "GBR", "DEU", "FRA", "ITA", "JPN"],
-    "G20": ["USA", "CAN", "GBR", "DEU", "FRA", "ITA", "JPN", "CHN", "IND",
-            "BRA", "MEX", "RUS", "ZAF", "SAU", "TUR", "KOR", "IDN", "AUS", "ARG"],
+    "G20": [
+        "USA", "CAN", "GBR", "DEU", "FRA", "ITA", "JPN", "CHN", "IND",
+        "BRA", "MEX", "RUS", "ZAF", "SAU", "TUR", "KOR", "IDN", "AUS", "ARG"
+        ],
     "BRICS": ["BRA", "RUS", "IND", "CHN", "ZAF"],
-}
+    }
 
 
 def is_region(code: str) -> bool:
@@ -196,7 +209,7 @@ def normalize_country_keys(data: dict[str, Any]) -> dict[str, Decimal]:
             raise ValueError(
                 f"Duplicate country after normalization: '{country_input}' → {iso3_code} "
                 f"(already present in geographic area)"
-            )
+                )
 
         # Parse weight
         weight = parse_decimal_value(weight_value)

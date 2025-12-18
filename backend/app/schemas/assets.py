@@ -27,7 +27,7 @@ price points, asset metadata, and scheduled investment calculations.
 - Enums: Financial calculation types (compounding, frequencies, day counts)
 - Base models: FAPricePoint, FACurrentValue, FAHistoricalData
 - Provider: FAAssetProviderAssignment
-- Scheduled Investment: FAInterestRatePeriod, FALateInterestConfig, FAScheduledInvestmentSchedule, FAScheduledInvestmentParams
+- Scheduled Investment: FAInterestRatePeriod, FALateInterestConfig, FAScheduledInvestmentSchedule
 """
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
@@ -35,10 +35,11 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Optional, List, Any, Dict
+from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from backend.app.db.models import AssetType
 # Import from common and prices modules
 from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse, OldNew, Currency
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
@@ -46,7 +47,7 @@ from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.geo_normalization import normalize_country_keys
 from backend.app.utils.sector_normalization import normalize_sector
 from backend.app.utils.validation_utils import validate_compound_frequency
-from backend.app.db.models import AssetType
+
 
 # ============================================================================
 # ENUMS FOR FINANCIAL CALCULATIONS
@@ -326,62 +327,6 @@ class FAScheduledInvestmentSchedule(BaseModel):
         return sorted_schedule
 
 
-class FAScheduledInvestmentParams(BaseModel):
-    """
-    Provider parameters for scheduled investment assets.
-
-    Contains all configuration needed to calculate synthetic values
-    for scheduled-yield assets like loans and bonds.
-
-    Attributes:
-        face_value: Principal amount (starting value)
-        currency: ISO 4217 currency code (e.g., "EUR", "USD")
-        interest_schedule: List of interest rate periods
-        maturity_date: Asset maturity date
-        late_interest: Optional late interest configuration
-
-    Example:
-        {
-            "face_value": "10000",
-            "currency": "EUR",
-            "interest_schedule": [
-                {
-                    "start_date": "2025-01-01",
-                    "end_date": "2025-12-31",
-                    "rate": "0.05"
-                }
-            ],
-            "maturity_date": "2025-12-31",
-            "late_interest": {
-                "rate": "0.12",
-                "grace_period_days": 30
-            }
-        }
-    """
-    model_config = ConfigDict(extra="forbid")
-
-    face_value: Currency
-    interest_schedule: List[FAInterestRatePeriod]
-    maturity_date: date
-    late_interest: Optional[FALateInterestConfig] = None
-
-    @field_validator("face_value", mode="before")
-    @classmethod
-    def parse_face_value(cls, v:Currency):
-        """Convert face_value to Decimal and validate it's positive."""
-        if v.amount <= 0:
-            raise ValueError("face_value must be positive")
-        return v
-
-    @field_validator("interest_schedule")
-    @classmethod
-    def validate_schedule(cls, v):
-        """Ensure schedule is not empty."""
-        if not v:
-            raise ValueError("interest_schedule must contain at least one period")
-        return v
-
-
 # ============================================================================
 # ASSET METADATA & CLASSIFICATION
 # ============================================================================
@@ -412,7 +357,7 @@ class BaseDistribution(BaseModel):
         cls,
         weights: dict[str, Decimal],
         allow_empty: bool = False
-    ) -> dict[str, Decimal]:
+        ) -> dict[str, Decimal]:
         """
         Common validation logic for distribution weights.
 
@@ -468,7 +413,7 @@ class BaseDistribution(BaseModel):
             raise ValueError(
                 f"Distribution weights must sum to approximately 1.0 (±{tolerance}). "
                 f"Current sum: {raw_total} (difference: {abs(raw_total - target)})"
-            )
+                )
 
         # Normalize weights to sum to exactly 1.0, then quantize
         quantized = {}
@@ -490,7 +435,7 @@ class BaseDistribution(BaseModel):
                 raise ValueError(
                     f"Cannot renormalize: adjustment would make weight negative. "
                     f"Key: {min_key}, Original: {quantized[min_key]}, Adjustment: {adjustment}"
-                )
+                    )
 
             quantized[min_key] = adjusted_weight
 
@@ -499,7 +444,7 @@ class BaseDistribution(BaseModel):
         if final_sum != target:
             raise ValueError(
                 f"Internal error: final sum is {final_sum} after renormalization (expected {target})"
-            )
+                )
 
         return quantized
 
@@ -677,8 +622,9 @@ class FAMetadataRefreshResult(BaseModel):
     asset_id: int
     success: bool
     message: str
-    fields_detail: Optional["FAProviderRefreshFieldsDetail"] = Field(None,description="Details of refreshed fields with old/new values")
+    fields_detail: Optional["FAProviderRefreshFieldsDetail"] = Field(None, description="Details of refreshed fields with old/new values")
     warnings: Optional[List[str]] = None
+
 
 class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
     """Bulk metadata refresh response (partial success).
@@ -689,6 +635,7 @@ class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
     - ignored_fields: Fields skipped (future use)
     """
     pass
+
 
 # ============================================================================
 # ASSET CRUD SCHEMAS
@@ -714,7 +661,6 @@ class FAAssetCreateItem(BaseModel):
     @classmethod
     def currency_uppercase(cls, v: str) -> str:
         return Currency.validate_code(v)
-
 
 
 class FAAssetCreateResult(BaseModel):
@@ -763,7 +709,6 @@ class FAinfoResponse(BaseModel):
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
 
 
-
 class FAAssetDeleteResult(BaseDeleteResult):
     """Result of single asset deletion in bulk operation."""
     model_config = ConfigDict(extra="forbid")
@@ -773,6 +718,7 @@ class FAAssetDeleteResult(BaseDeleteResult):
     # - success: bool
     # - deleted_count: int (always 0 or 1 for single asset)
     # - message: Optional[str]
+
 
 class FABulkAssetDeleteResponse(BaseBulkResponse[FAAssetDeleteResult]):
     """Bulk asset deletion response (partial success allowed)."""
@@ -813,7 +759,6 @@ class FAAssetPatchItem(BaseModel):
         return Currency.validate_code(v) if v else None
 
 
-
 class FAAssetPatchResult(BaseModel):
     """Result of single asset patch in bulk operation."""
     model_config = ConfigDict(extra="forbid")
@@ -821,7 +766,7 @@ class FAAssetPatchResult(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     success: bool = Field(..., description="Whether patch succeeded")
     message: str = Field(..., description="Success message or error description")
-    updated_fields: Optional[List[OldNew[str|None]]] = Field(None, description="List of fields updated: [{info: field, old: old_value, new: new_value}]")
+    updated_fields: Optional[List[OldNew[str | None]]] = Field(None, description="List of fields updated: [{info: field, old: old_value, new: new_value}]")
 
 
 class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
@@ -845,7 +790,6 @@ __all__ = [
     "FAInterestRatePeriod",
     "FALateInterestConfig",
     "FAScheduledInvestmentSchedule",
-    "FAScheduledInvestmentParams",
     # Distribution base models
     "BaseDistribution",
     # Metadata & classification

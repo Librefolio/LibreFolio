@@ -54,6 +54,7 @@ asset_router = APIRouter(prefix="/assets", tags=["Assets"])
 price_router = APIRouter(prefix="/prices", tags=["FA Prices"])
 provider_router = APIRouter(prefix="/provider", tags=["FA Provider"])
 
+
 # ============================================================================
 # ASSET CRUD ENDPOINTS
 # ============================================================================
@@ -334,7 +335,6 @@ async def search_assets_via_providers(
     return await AssetSearchService.search(q, provider_codes)
 
 
-
 @provider_router.post("", response_model=FABulkAssignResponse)
 async def assign_providers_bulk(
     assignments: List[FAProviderAssignmentItem],
@@ -411,7 +411,7 @@ async def get_provider_assignments(
                 provider_params=params,
                 fetch_interval=a.fetch_interval,
                 last_fetch_at=a.last_fetch_at.isoformat() if a.last_fetch_at else None
-            ))
+                ))
 
         return items
     except Exception as e:

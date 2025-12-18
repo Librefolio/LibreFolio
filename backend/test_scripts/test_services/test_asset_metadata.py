@@ -10,27 +10,26 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.db import AssetType
 from backend.app.schemas import FAGeographicArea, FASectorArea
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.schemas.assets import FAClassificationParams, FAClassificationParams
+from backend.app.schemas.assets import FAClassificationParams
 from backend.app.services.asset_metadata import AssetMetadataService
 
 
 def test_compute_metadata_diff():
     """Test computing differences between two FAClassificationParams instances."""
-    old = FAClassificationParams(sector_area=FASectorArea(distribution={"Energy":1}))
+    old = FAClassificationParams(sector_area=FASectorArea(distribution={"Energy": 1}))
     new = FAClassificationParams(sector_area=FASectorArea(distribution={"Technology": 1}))
 
     changes = AssetMetadataService.compute_metadata_diff(old, new)
     fields = {c.field for c in changes}
 
     assert "sector_area" in fields
-    assert len(changes) == 1 , f"Expected 1 change, got {len(changes)}: {changes}"
+    assert len(changes) == 1, f"Expected 1 change, got {len(changes)}: {changes}"
 
 
 def test_apply_partial_update_absent_fields_ignored():
@@ -50,7 +49,7 @@ def test_apply_partial_update_null_clears_field():
     current = FAClassificationParams(
         short_description="Original",
         sector_area=FASectorArea(distribution={"Technology": 1})
-    )
+        )
 
     # Explicitly set sector_area to None to clear it
     patch = FAClassificationParams(sector_area=None)
@@ -99,7 +98,7 @@ def test_patch_semantic_edge_cases():
     # Case 1: PATCH with only geographic_area → other fields unchanged
     print("\nCase 1: PATCH only geographic_area, other fields unchanged")
     current = FAClassificationParams(
-        sector_area=FASectorArea(distribution={"Technology":1}),
+        sector_area=FASectorArea(distribution={"Technology": 1}),
         short_description="Tech stock",
         geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")})
         )
@@ -124,16 +123,16 @@ def test_patch_semantic_edge_cases():
 
     # Case 3: Multiple PATCHes in sequence → final state correct
     print("\nCase 3: Multiple PATCHes in sequence")
-    current = FAClassificationParams(sector_area=FASectorArea(distribution={"Financials":1}))
+    current = FAClassificationParams(sector_area=FASectorArea(distribution={"Financials": 1}))
 
     # First PATCH: Update sector and add geo area
-    patch1 = FAClassificationParams(sector_area=FASectorArea(distribution={"Technology":1}), geographic_area=FAGeographicArea(distribution={"USA": "1.0"}))
+    patch1 = FAClassificationParams(sector_area=FASectorArea(distribution={"Technology": 1}), geographic_area=FAGeographicArea(distribution={"USA": "1.0"}))
     current = AssetMetadataService.apply_partial_update(current, patch1)
     assert "Technology" in current.sector_area.distribution, "sector should be changed"
     assert current.geographic_area.distribution == {"USA": Decimal("1.0000")}
 
     # Second PATCH: Update sector, keep others
-    patch2 = FAClassificationParams(sector_area=FASectorArea(distribution={"Energy":1}))
+    patch2 = FAClassificationParams(sector_area=FASectorArea(distribution={"Energy": 1}))
     current = AssetMetadataService.apply_partial_update(current, patch2)
     assert "Energy" in current.sector_area.distribution  # Check change
     assert current.geographic_area.distribution == {"USA": Decimal("1.0000")}  # Still there
@@ -152,14 +151,14 @@ def test_patch_semantic_edge_cases():
     # In a real scenario, this would be handled by optimistic locking
     # For testing, we just verify that the last PATCH wins
 
-    current = FAClassificationParams(sector_area=FASectorArea(distribution={"Technology":1}))
+    current = FAClassificationParams(sector_area=FASectorArea(distribution={"Technology": 1}))
 
     # User A PATCHes sector
-    patch_a = FAClassificationParams(sector_area=FASectorArea(distribution={"Financials":1}))
+    patch_a = FAClassificationParams(sector_area=FASectorArea(distribution={"Financials": 1}))
     result_a = AssetMetadataService.apply_partial_update(current, patch_a)
 
     # User B PATCHes sector (simulates concurrent write)
-    patch_b = FAClassificationParams(sector_area=FASectorArea(distribution={"Health Care":1}))
+    patch_b = FAClassificationParams(sector_area=FASectorArea(distribution={"Health Care": 1}))
     result_b = AssetMetadataService.apply_partial_update(current, patch_b)
 
     # Both are valid transformations from the same base state

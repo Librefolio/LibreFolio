@@ -55,7 +55,7 @@ from backend.app.schemas.assets import (
     FAPricePoint,
     FAScheduledInvestmentSchedule,
     CompoundingType,
-    FAInterestRatePeriod,  # added for synthetic periods
+    FAInterestRatePeriod, DayCountConvention,  # added for synthetic periods
     )
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
@@ -91,26 +91,26 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         return [
             {
                 "identifier": "1",  # asset_id
-                "provider_params": {
-                    "schedule": [
-                        {
-                            "start_date": "2025-01-01",
-                            "end_date": "2025-12-31",
-                            "annual_rate": "0.05",
-                            "compounding": "SIMPLE",
-                            "day_count": "ACT/365"
-                            }
+                "provider_params": FAScheduledInvestmentSchedule(
+                    schedule=[
+                        FAInterestRatePeriod(
+                            start_date=date_type(2025, 1, 1),
+                            end_date=date_type(2025, 12, 31),
+                            annual_rate=Decimal("0.05"),
+                            compounding=CompoundingType.SIMPLE,
+                            day_count=DayCountConvention.ACT_365
+                            )
                         ],
-                    "late_interest": None,
-                    "_transaction_override": [
-                        {
-                            "type": "BUY",
-                            "quantity": 1,
-                            "price": "10000",
-                            "trade_date": "2025-01-01"
-                            }
-                        ]
-                    }
+                    late_interest=None
+                    ).model_dump(mode="json"),
+                "_transaction_override": [
+                    {
+                        "type": "BUY",
+                        "quantity": 1,
+                        "price": "10000",
+                        "trade_date": "2025-01-01"
+                        }
+                    ]
                 }
             ]
 
@@ -236,8 +236,8 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         Args:
             identifier: Asset ID (as string)
             identifier_type: Type of identifier (typically UUID for scheduled investments)
-            provider_params: Must include schedule (FAScheduledInvestmentSchedule JSON).
-                           Can include "_transaction_override" for testing.
+            provider_params: Is a dictionary like FAScheduledInvestmentSchedule.
+                           Can include "_transaction_override" extra key for testing.
 
         Returns:
             FACurrentValue with calculated value
@@ -376,7 +376,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             # Initialize variables
             all_transactions = []
             schedule = None
-            currency = "EUR"
+            currency = "EUR" # Default value, fetch from asset later if needed
 
             # Check for transaction override (for testing)
             transaction_override = provider_params.get("_transaction_override")
@@ -394,9 +394,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 # Production mode: fetch from DB
                 async for session in get_session_generator():
                     asset = await self._get_asset_from_db(asset_id, session)
-                    all_transactions = await self._get_transactions_from_db(
-                        asset_id, session, up_to_date=end_date
-                        )
+                    all_transactions = await self._get_transactions_from_db(asset_id, session, up_to_date=end_date)
 
                     # Get provider assignment to read schedule from provider_params
                     assignment_result = await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))
@@ -654,7 +652,6 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             provider_params = {k: v for k, v in provider_params.items() if k != "_transaction_override"}
         try:
             # Convert dict to Pydantic model (automatic validation)
-            # TODO: capire a cosa serviva FAScheduledInvestmentParams e perchè non è usato qui
             return FAScheduledInvestmentSchedule(**provider_params)
         except ValueError as e:
             raise AssetSourceError(

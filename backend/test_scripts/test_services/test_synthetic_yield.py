@@ -22,7 +22,7 @@ os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///backend/data/sqlite/test_app.d
 
 from backend.app.services.asset_source_providers.scheduled_investment import ScheduledInvestmentProvider
 
-from backend.app.schemas.assets import FAScheduledInvestmentSchedule
+from backend.app.schemas.assets import FAScheduledInvestmentSchedule, FAInterestRatePeriod, CompoundingType, DayCountConvention, FALateInterestConfig
 
 
 # ============================================================================
@@ -68,27 +68,24 @@ async def test_provider_get_current_value():
     from backend.app.db.models import IdentifierType
 
     provider = ScheduledInvestmentProvider()
-    # TODO: trasformare in classe pydantic, converire in dizionario e aggiungere _transaction_override
-    params = {
-        "schedule": [
-            {
-                "start_date": "2025-01-01",
-                "end_date": "2025-12-31",
-                "annual_rate": "0.05",
-                "compounding": "SIMPLE",
-                "day_count": "ACT/365"
-                }
-            ],
-        "late_interest": {
-            "annual_rate": "0.12",
-            "grace_period_days": 30,
-            "compounding": "SIMPLE",
-            "day_count": "ACT/365"
-            },
-        "_transaction_override": [
-            {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
-            ]
-        }
+    params = FAScheduledInvestmentSchedule(schedule=[
+        FAInterestRatePeriod(
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+            annual_rate=Decimal("0.05"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+            )
+        ],
+        late_interest=FALateInterestConfig(
+            annual_rate=Decimal("0.12"),
+            grace_period_days=30,
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365)
+        ).model_dump(mode="json")
+    params["_transaction_override"] = [
+        {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
+        ]
 
     # Use identifier "1" for test mode with _transaction_override
     result = await provider.get_current_value("1", IdentifierType.OTHER, params)
@@ -105,28 +102,24 @@ async def test_provider_get_history_value():
     from backend.app.db.models import IdentifierType
 
     provider = ScheduledInvestmentProvider()
-
-    # TODO: trasformare in classe pydantic, converire in dizionario e aggiungere _transaction_override
-    params = {
-        "schedule": [
-            {
-                "start_date": "2025-01-01",
-                "end_date": "2025-12-31",
-                "annual_rate": "0.05",
-                "compounding": "SIMPLE",
-                "day_count": "ACT/365"
-                }
-            ],
-        "late_interest": {
-            "annual_rate": "0.12",
-            "grace_period_days": 30,
-            "compounding": "SIMPLE",
-            "day_count": "ACT/365"
-            },
-        "_transaction_override": [
-            {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
-            ]
-        }
+    params = FAScheduledInvestmentSchedule(schedule=[
+        FAInterestRatePeriod(
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+            annual_rate=Decimal("0.05"),
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365
+            )
+        ],
+        late_interest=FALateInterestConfig(
+            annual_rate=Decimal("0.12"),
+            grace_period_days=30,
+            compounding=CompoundingType.SIMPLE,
+            day_count=DayCountConvention.ACT_365)
+        ).model_dump(mode="json")
+    params["_transaction_override"] = [
+        {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
+        ]
 
     start = date(2025, 1, 1)
     end = date(2025, 1, 7)

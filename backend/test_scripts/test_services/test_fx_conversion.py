@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
+from backend.app.schemas.common import Currency
 from backend.app.services.fx import RateNotFoundError, convert, convert_bulk
 from backend.test_scripts.test_utils import (
     print_error,
@@ -131,14 +132,18 @@ async def test_identity_conversion():
         test_amount = Decimal("100.00")
         test_date = date.today()
 
-        # Test EUR → EUR
-        result_eur = await convert(session, test_amount, "EUR", "EUR", test_date)
-        assert result_eur == test_amount, f"EUR → EUR: expected {test_amount}, got {result_eur}"
+        # Test EUR → EUR (using Currency objects)
+        amount_eur = Currency(code="EUR", amount=test_amount)
+        result_eur = await convert(session, amount_eur, "EUR", test_date)
+        assert result_eur.amount == test_amount, f"EUR → EUR: expected {test_amount}, got {result_eur.amount}"
+        assert result_eur.code == "EUR", f"EUR → EUR: expected code EUR, got {result_eur.code}"
         print_success(f"EUR → EUR: {test_amount} = {result_eur} ✓")
 
         # Test USD → USD
-        result_usd = await convert(session, test_amount, "USD", "USD", test_date)
-        assert result_usd == test_amount, f"USD → USD: expected {test_amount}, got {result_usd}"
+        amount_usd = Currency(code="USD", amount=test_amount)
+        result_usd = await convert(session, amount_usd, "USD", test_date)
+        assert result_usd.amount == test_amount, f"USD → USD: expected {test_amount}, got {result_usd.amount}"
+        assert result_usd.code == "USD", f"USD → USD: expected code USD, got {result_usd.code}"
         print_success(f"USD → USD: {test_amount} = {result_usd} ✓")
 
 
@@ -164,15 +169,16 @@ async def test_direct_conversion():
         print_info(f"Using rate from {rate_record.date}")
         print_info(f"EUR/USD = {rate_record.rate} (1 EUR = {rate_record.rate} USD)")
 
-        # Convert 100 EUR to USD
-        amount_eur = Decimal("100.00")
-        result_usd = await convert(session, amount_eur, "EUR", "USD", rate_record.date)
-        expected_usd = amount_eur * rate_record.rate
+        # Convert 100 EUR to USD (using Currency)
+        amount_eur = Currency(code="EUR", amount=Decimal("100.00"))
+        result_usd = await convert(session, amount_eur, "USD", rate_record.date)
+        expected_usd = amount_eur.amount * rate_record.rate
 
-        print_info(f"Conversion: {amount_eur} EUR → {result_usd} USD")
+        print_info(f"Conversion: {amount_eur} → {result_usd}")
         print_info(f"Expected: {expected_usd} USD")
 
-        assert not (abs(result_usd - expected_usd) > Decimal("0.01")), f"Conversion result doesn't match expected value"
+        assert result_usd.code == "USD", f"Expected currency USD, got {result_usd.code}"
+        assert not (abs(result_usd.amount - expected_usd) > Decimal("0.01")), f"Conversion result doesn't match expected value"
 
         print_success("Direct conversion (EUR → USD) correct")
 
@@ -200,15 +206,16 @@ async def test_inverse_conversion():
         print_info(f"EUR/USD = {rate_record.rate} (1 EUR = {rate_record.rate} USD)")
         print_info(f"Therefore: 1 USD = {Decimal('1') / rate_record.rate} EUR")
 
-        # Convert 100 USD to EUR (inverse operation)
-        amount_usd = Decimal("100.00")
-        result_eur = await convert(session, amount_usd, "USD", "EUR", rate_record.date)
-        expected_eur = amount_usd / rate_record.rate
+        # Convert 100 USD to EUR (inverse operation, using Currency)
+        amount_usd = Currency(code="USD", amount=Decimal("100.00"))
+        result_eur = await convert(session, amount_usd, "EUR", rate_record.date)
+        expected_eur = amount_usd.amount / rate_record.rate
 
-        print_info(f"Conversion: {amount_usd} USD → {result_eur} EUR")
+        print_info(f"Conversion: {amount_usd} → {result_eur}")
         print_info(f"Expected: {expected_eur} EUR")
 
-        assert not (abs(result_eur - expected_eur) > Decimal("0.01")), f"Inverse conversion result doesn't match expected value"
+        assert result_eur.code == "EUR", f"Expected currency EUR, got {result_eur.code}"
+        assert not (abs(result_eur.amount - expected_eur) > Decimal("0.01")), f"Inverse conversion result doesn't match expected value"
 
         print_success("Inverse conversion (USD → EUR) correct")
 
@@ -234,22 +241,24 @@ async def test_roundtrip_conversion():
 
         print_info(f"Using rate from {rate_record.date}: EUR/USD = {rate_record.rate}")
 
-        # Roundtrip: EUR → USD → EUR
+        # Roundtrip: EUR → USD → EUR (using Currency)
         original_amount = Decimal("100.00")
 
         # Step 1: EUR → USD
-        usd_amount = await convert(session, original_amount, "EUR", "USD", rate_record.date)
-        print_info(f"Step 1: {original_amount} EUR → {usd_amount} USD")
+        eur_currency = Currency(code="EUR", amount=original_amount)
+        usd_result = await convert(session, eur_currency, "USD", rate_record.date)
+        print_info(f"Step 1: {eur_currency} → {usd_result}")
 
         # Step 2: USD → EUR
-        final_amount = await convert(session, usd_amount, "USD", "EUR", rate_record.date)
-        print_info(f"Step 2: {usd_amount} USD → {final_amount} EUR")
+        final_result = await convert(session, usd_result, "EUR", rate_record.date)
+        print_info(f"Step 2: {usd_result} → {final_result}")
 
         # Should get back original amount (within rounding error)
-        difference = abs(final_amount - original_amount)
+        difference = abs(final_result.amount - original_amount)
         print_info(f"Difference: {difference} EUR")
 
-        assert not (difference > Decimal("0.01")), f"Roundtrip failed: started with {original_amount}, ended with {final_amount}"
+        assert final_result.code == "EUR", f"Expected EUR, got {final_result.code}"
+        assert not (difference > Decimal("0.01")), f"Roundtrip failed: started with {original_amount}, ended with {final_result.amount}"
 
         print_success("Roundtrip conversion successful (rate inversion works correctly)")
 
@@ -262,25 +271,25 @@ async def test_different_dates():
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
-        test_amount = Decimal("100.00")
+        test_amount = Currency(code="EUR", amount=Decimal("100.00"))
 
         # Test with today's date
         today = date.today()
-        result_today = await convert(session, test_amount, "EUR", "USD", today)
-        print_success(f"Today ({today}): 100 EUR → {result_today} USD")
+        result_today = await convert(session, test_amount, "USD", today)
+        print_success(f"Today ({today}): {test_amount} → {result_today}")
 
         # Test with yesterday's date
         yesterday = today - timedelta(days=1)
-        result_yesterday = await convert(session, test_amount, "EUR", "USD", yesterday)
-        print_success(f"Yesterday ({yesterday}): 100 EUR → {result_yesterday} USD")
+        result_yesterday = await convert(session, test_amount, "USD", yesterday)
+        print_success(f"Yesterday ({yesterday}): {test_amount} → {result_yesterday}")
 
         # Test with 7 days ago
         week_ago = today - timedelta(days=7)
-        result_week_ago = await convert(session, test_amount, "EUR", "USD", week_ago)
-        print_success(f"7 days ago ({week_ago}): 100 EUR → {result_week_ago} USD")
+        result_week_ago = await convert(session, test_amount, "USD", week_ago)
+        print_success(f"7 days ago ({week_ago}): {test_amount} → {result_week_ago}")
 
         # Verify rates are different (due to daily variation in mock data)
-        assert not (result_today == result_yesterday == result_week_ago), f"All dates returned same rate - variation not working"
+        assert not (result_today.amount == result_yesterday.amount == result_week_ago.amount), f"All dates returned same rate - variation not working"
 
         print_info(f"Rate variation detected (rates differ across dates) ✓")
 
@@ -309,10 +318,10 @@ async def test_backward_fill():
 
         # Test 1: Exact date match (no backward-fill)
         print_info(f"\nTest 6.1: Exact date match ({rate_record.date})")
-        amount = Decimal("100.00")
+        amount = Currency(code="EUR", amount=Decimal("100.00"))
 
         converted, actual_date, backward_filled = await convert(
-            session, amount, "EUR", "USD", rate_record.date, return_rate_info=True
+            session, amount, "USD", rate_record.date, return_rate_info=True
             )
 
         assert not (backward_filled), f"Backward-fill should not be applied for exact date match"
@@ -325,7 +334,7 @@ async def test_backward_fill():
         print_info("Expected: Use unlimited backward-fill")
 
         converted, actual_date, backward_filled = await convert(
-            session, amount, "EUR", "USD", future_date, return_rate_info=True
+            session, amount, "USD", future_date, return_rate_info=True
             )
 
         assert backward_filled, f"Backward-fill should be applied for future date"
@@ -333,8 +342,8 @@ async def test_backward_fill():
         days_back = (future_date - actual_date).days
         print_success(f"✓ Backward-fill applied: used rate from {actual_date} ({days_back} days back)")
 
-        expected = amount * rate_record.rate
-        assert not (abs(converted - expected) > Decimal("0.01")), f"Conversion value incorrect"
+        expected = amount.amount * rate_record.rate
+        assert not (abs(converted.amount - expected) > Decimal("0.01")), f"Conversion value incorrect"
 
         # Test 3: Very old date (before any rate exists - should fail)
         very_old_date = rate_record.date - timedelta(days=3650)  # 10 years before
@@ -343,7 +352,7 @@ async def test_backward_fill():
 
         # Test should raise RateNotFoundError
         with pytest.raises(RateNotFoundError):
-            await convert(session, amount, "EUR", "USD", very_old_date)
+            await convert(session, amount, "USD", very_old_date)
         print_success("✓ Correctly raised RateNotFoundError for date before any data")
 
         print_success("Backward-fill logic works correctly (unlimited with tracking)")
@@ -372,13 +381,13 @@ async def test_missing_rate_error():
 
         # Test 1: Date before oldest rate (should fail)
         date_before = oldest_rate.date - timedelta(days=1)
-        amount = Decimal("100.00")
+        amount = Currency(code="EUR", amount=Decimal("100.00"))
 
         print_info(f"\nTest 7.1: Date before any data ({date_before})")
         print_info("Expected: RateNotFoundError")
 
         with pytest.raises(RateNotFoundError) as exc_info:
-            await convert(session, amount, "EUR", "USD", date_before)
+            await convert(session, amount, "USD", date_before)
 
         error_msg = str(exc_info.value)
         print_success("✓ Correctly raised RateNotFoundError")
@@ -391,7 +400,7 @@ async def test_missing_rate_error():
 
         try:
             converted, actual_date, backward_filled = await convert(
-                session, amount, "EUR", "USD", old_but_valid_date, return_rate_info=True
+                session, amount, "USD", old_but_valid_date, return_rate_info=True
                 )
 
             assert backward_filled, f"Should use backward-fill for old date"
@@ -427,10 +436,11 @@ async def test_bulk_conversions_single():
         print_info(f"Using rate from {rate_record.date}: EUR/USD = {rate_record.rate}")
 
         # Convert using bulk with single item (raise_on_error=True)
-        amount = Decimal("100.00")
+        # New signature: (Currency, to_currency, date)
+        amount = Currency(code="EUR", amount=Decimal("100.00"))
         results, errors = await convert_bulk(
             session,
-            [(amount, "EUR", "USD", rate_record.date)],
+            [(amount, "USD", rate_record.date)],
             raise_on_error=True
             )
 
@@ -439,11 +449,12 @@ async def test_bulk_conversions_single():
         assert len(errors) == 0, f"Expected 0 errors, got {len(errors)}"
 
         converted, actual_date, backward_filled = results[0]
-        expected = amount * rate_record.rate
+        expected = amount.amount * rate_record.rate
 
-        assert not (abs(converted - expected) > Decimal("0.01")), f"Expected {expected}, got {converted}"
+        assert converted.code == "USD", f"Expected USD, got {converted.code}"
+        assert not (abs(converted.amount - expected) > Decimal("0.01")), f"Expected {expected}, got {converted.amount}"
 
-        print_success(f"✓ Single item bulk: 100 EUR → {converted} USD")
+        print_success(f"✓ Single item bulk: {amount} → {converted}")
 
 
 @pytest.mark.asyncio
@@ -455,13 +466,13 @@ async def test_bulk_conversions_multiple():
 
     async with AsyncSession(engine) as session:
         test_date = date.today()
-        amount = Decimal("100.00")
 
-        # Prepare 3 conversions
+        # Prepare 3 conversions using Currency objects
+        # New signature: (Currency, to_currency, date)
         conversions = [
-            (amount, "EUR", "USD", test_date),
-            (amount, "EUR", "GBP", test_date),
-            (amount, "CHF", "EUR", test_date),
+            (Currency(code="EUR", amount=Decimal("100.00")), "USD", test_date),
+            (Currency(code="EUR", amount=Decimal("100.00")), "GBP", test_date),
+            (Currency(code="CHF", amount=Decimal("100.00")), "EUR", test_date),
             ]
 
         print_info("Testing 3 conversions in single bulk call")
@@ -474,30 +485,35 @@ async def test_bulk_conversions_multiple():
         assert len(errors) == 0, f"Expected 0 errors, got {len(errors)}"
 
         # Verify all results
-        print_success(f"✓ 100 EUR → {results[0][0]} USD")
-        print_success(f"✓ 100 EUR → {results[1][0]} GBP")
-        print_success(f"✓ 100 CHF → {results[2][0]} EUR")
+        print_success(f"✓ 100 EUR → {results[0][0]}")
+        print_success(f"✓ 100 EUR → {results[1][0]}")
+        print_success(f"✓ 100 CHF → {results[2][0]}")
 
 
 @pytest.mark.asyncio
 async def test_bulk_partial_failure():
-    """Test convert_bulk with partial failures (some invalid conversions)."""
+    """Test convert_bulk with partial failures (some invalid conversions).
+
+    Note: Currency validates codes at creation, so we test failure by using
+    a date where no rates exist for some pairs.
+    """
     print_section("Test 10: Bulk Conversion - Partial Failure")
 
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
         test_date = date.today()
-        amount = Decimal("100.00")
+        very_old_date = date(1900, 1, 1)  # No rates exist for this date
 
-        # Mix valid and invalid conversions
+        # Mix valid and failing conversions using Currency objects
+        # New signature: (Currency, to_currency, date)
         conversions = [
-            (amount, "EUR", "USD", test_date),  # Valid
-            (amount, "XXX", "EUR", test_date),  # Invalid currency
-            (amount, "EUR", "GBP", test_date),  # Valid
+            (Currency(code="EUR", amount=Decimal("100.00")), "USD", test_date),  # Valid
+            (Currency(code="EUR", amount=Decimal("100.00")), "USD", very_old_date),  # Fails - no rate for date
+            (Currency(code="EUR", amount=Decimal("100.00")), "GBP", test_date),  # Valid
             ]
 
-        print_info("Testing 3 conversions: 2 valid, 1 invalid")
+        print_info("Testing 3 conversions: 2 valid, 1 failing (no rate for 1900)")
 
         # Call bulk with raise_on_error=False
         results, errors = await convert_bulk(session, conversions, raise_on_error=False)
@@ -520,23 +536,28 @@ async def test_bulk_partial_failure():
 
 @pytest.mark.asyncio
 async def test_bulk_all_failures():
-    """Test convert_bulk when all conversions fail."""
+    """Test convert_bulk when all conversions fail.
+
+    Note: Currency validates codes at creation, so we use valid but unusual
+    currency codes that won't have rates in our test DB.
+    """
     print_section("Test 11: Bulk Conversion - All Failures")
 
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
-        test_date = date.today()
-        amount = Decimal("100.00")
+        # Use a very old date where no rates exist
+        very_old_date = date(1900, 1, 1)
 
-        # All invalid conversions
+        # All conversions will fail because no rates exist for this date
+        # New signature: (Currency, to_currency, date)
         conversions = [
-            (amount, "XXX", "EUR", test_date),
-            (amount, "YYY", "USD", test_date),
-            (amount, "ZZZ", "GBP", test_date),
+            (Currency(code="EUR", amount=Decimal("100.00")), "USD", very_old_date),
+            (Currency(code="USD", amount=Decimal("100.00")), "GBP", very_old_date),
+            (Currency(code="GBP", amount=Decimal("100.00")), "CHF", very_old_date),
             ]
 
-        print_info("Testing 3 conversions: all invalid")
+        print_info("Testing 3 conversions: all will fail (no rates for date 1900-01-01)")
 
         # Call bulk with raise_on_error=False
         results, errors = await convert_bulk(session, conversions, raise_on_error=False)
@@ -555,23 +576,28 @@ async def test_bulk_all_failures():
 
 @pytest.mark.asyncio
 async def test_bulk_raise_on_error():
-    """Test convert_bulk with raise_on_error=True (should stop on first error)."""
+    """Test convert_bulk with raise_on_error=True (should stop on first error).
+
+    Note: Currency validates codes at creation, so we test failure by using
+    a date where no rates exist.
+    """
     print_section("Test 12: Bulk Conversion - Raise on Error")
 
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
         test_date = date.today()
-        amount = Decimal("100.00")
+        very_old_date = date(1900, 1, 1)  # No rates exist for this date
 
-        # First valid, second invalid
+        # First valid, second fails due to missing rate
+        # New signature: (Currency, to_currency, date)
         conversions = [
-            (amount, "EUR", "USD", test_date),  # Valid
-            (amount, "XXX", "EUR", test_date),  # Invalid - should raise here
-            (amount, "EUR", "GBP", test_date),  # Valid but should not be reached
+            (Currency(code="EUR", amount=Decimal("100.00")), "USD", test_date),  # Valid
+            (Currency(code="EUR", amount=Decimal("100.00")), "USD", very_old_date),  # Fails - no rate
+            (Currency(code="EUR", amount=Decimal("100.00")), "GBP", test_date),  # Valid but should not be reached
             ]
 
-        print_info("Testing raise_on_error=True with invalid second item")
+        print_info("Testing raise_on_error=True with failing second item (no rate for 1900)")
 
         with pytest.raises(RateNotFoundError) as exc_info:
             await convert_bulk(session, conversions, raise_on_error=True)

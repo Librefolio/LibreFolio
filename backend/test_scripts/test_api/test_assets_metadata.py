@@ -9,7 +9,6 @@ Tests for asset metadata management via unified PATCH endpoint:
 Note: Metadata (classification_params) is now part of the main asset PATCH endpoint,
 no separate /assets endpoint exists.
 """
-import time
 from decimal import Decimal
 
 import httpx
@@ -20,8 +19,7 @@ from backend.app.db import AssetType
 from backend.app.schemas import (
     FAAssetCreateItem, FABulkAssetCreateResponse,
     FABulkAssetPatchResponse, FAAssetPatchItem, FAClassificationParams,
-    FAAssetMetadataResponse, FAMetadataRefreshResult,
-    FABulkMetadataRefreshResponse, FAGeographicArea, FASectorArea, FAAssetPatchResult
+    FAAssetMetadataResponse, FABulkMetadataRefreshResponse, FAGeographicArea, FASectorArea, FAAssetPatchResult
     )
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
@@ -29,6 +27,7 @@ from backend.test_scripts.test_utils import print_section, print_info, print_suc
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+
 
 # ============================================================================
 # PYTEST FIXTURES
@@ -114,7 +113,7 @@ async def test_patch_metadata_valid_geographic_area(test_server):
         print_success(f"✓ Metadata patched successfully with {len(result.updated_fields)} updated_field(s)")
 
         # Verify database was actually updated
-        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids": [test_asset]}, timeout=TIMEOUT)
 
         assert read_response.status_code == 200, "Failed to read back asset"
         assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
@@ -186,7 +185,7 @@ async def test_patch_metadata_absent_fields(test_server):
             )
 
         # Read current state
-        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids": [test_asset]}, timeout=TIMEOUT)
         before_assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
         before_params = before_assets[0].classification_params
 
@@ -212,7 +211,7 @@ async def test_patch_metadata_absent_fields(test_server):
         assert response.status_code == 200, f"PATCH failed: {response.status_code}"
 
         # Verify only sector_area changed, other fields intact
-        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids": [test_asset]}, timeout=TIMEOUT)
         after_assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
         after_params = after_assets[0].classification_params
 
@@ -239,8 +238,8 @@ async def test_patch_metadata_null_clears_field(test_server):
             asset_id=test_asset,
             classification_params=FAClassificationParams(
                 sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
+                )
             )
-        )
         await client.patch(
             f"{API_BASE}/assets",
             json=[patch_item.model_dump(mode="json")],
@@ -248,7 +247,7 @@ async def test_patch_metadata_null_clears_field(test_server):
             )
 
         # Verify classification_params was set
-        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids": [test_asset]}, timeout=TIMEOUT)
         before_assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
         before_params = before_assets[0].classification_params
         assert before_params is not None, "classification_params should be set before clearing"
@@ -271,7 +270,7 @@ async def test_patch_metadata_null_clears_field(test_server):
         assert result.success, f"PATCH null should succeed: {result.message}"
 
         # Verify DB actually cleared
-        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        read_response = await client.get(f"{API_BASE}/assets", params={"asset_ids": [test_asset]}, timeout=TIMEOUT)
         after_assets = [FAAssetMetadataResponse(**a) for a in read_response.json()]
         after_params = after_assets[0].classification_params
 
@@ -289,7 +288,7 @@ async def test_bulk_read_assets(test_server):
     test_asset = await create_test_asset("READ1")
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{API_BASE}/assets", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/assets", params={"asset_ids": [test_asset]}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Bulk read failed: {response.status_code}: {response.text}"
 
@@ -320,7 +319,7 @@ async def test_bulk_read_multiple_assets(test_server):
         assert len(asset_ids) == 3, "Should have created 3 assets"
 
         # Bulk read
-        response = await client.get(f"{API_BASE}/assets", params={"asset_ids":asset_ids}, timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Bulk read failed: {response.status_code}"
 
@@ -343,7 +342,7 @@ async def test_metadata_refresh_single_no_provider(test_server):
 
     async with httpx.AsyncClient() as client:
         # Use bulk endpoint with single asset
-        response = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids": [test_asset]}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Refresh failed: {response.status_code}: {response.text}"
 
@@ -372,7 +371,7 @@ async def test_metadata_refresh_bulk(test_server):
     test_asset = await create_test_asset("REFRESH2")
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids":[test_asset]}, timeout=TIMEOUT)
+        response = await client.post(f"{API_BASE}/assets/provider/refresh", params={"asset_ids": [test_asset]}, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"Bulk refresh failed: {response.status_code}: {response.text}"
 
@@ -455,10 +454,10 @@ async def test_patch_metadata_multiple_assets(test_server):
         patch_items = [
             FAAssetPatchItem(asset_id=asset_ids[0], classification_params=FAClassificationParams(
                 sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
-            )),
+                )),
             FAAssetPatchItem(asset_id=asset_ids[1], classification_params=FAClassificationParams(
                 sector_area=FASectorArea(distribution={"Financials": Decimal("1.0")})
-            ))
+                ))
             ]
 
         response = await client.patch(
@@ -498,45 +497,49 @@ async def test_patch_with_geographic_area_invalid_weights(test_server):
             display_name=f"Geo Invalid {unique_id('GEOINV')}",
             currency="USD",
             asset_type=AssetType.STOCK
-        )
+            )
         create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
 
         # Test 1: Negative weights should be rejected
-        invalid_json = [{
-            "asset_id": asset_id,
-            "classification_params": {
-                "geographic_area": {
-                    "distribution": {"USA": -0.5, "CAN": 1.5}  # Negative weight
+        invalid_json = [
+            {
+                "asset_id": asset_id,
+                "classification_params": {
+                    "geographic_area": {
+                        "distribution": {"USA": -0.5, "CAN": 1.5}  # Negative weight
+                        }
+                    }
                 }
-            }
-        }]
+            ]
 
         response = await client.patch(
             f"{API_BASE}/assets",
             json=invalid_json,
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 422, f"Expected 422 for negative weights, got {response.status_code}"
         print_info("  Negative weights correctly rejected with 422")
 
         # Test 2: Invalid country code should be rejected
-        invalid_country_json = [{
-            "asset_id": asset_id,
-            "classification_params": {
-                "geographic_area": {
-                    "distribution": {"INVALID_COUNTRY": 1.0}
+        invalid_country_json = [
+            {
+                "asset_id": asset_id,
+                "classification_params": {
+                    "geographic_area": {
+                        "distribution": {"INVALID_COUNTRY": 1.0}
+                        }
+                    }
                 }
-            }
-        }]
+            ]
 
         response = await client.patch(
             f"{API_BASE}/assets",
             json=invalid_country_json,
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 422, f"Expected 422 for invalid country, got {response.status_code}"
         print_info("  Invalid country code correctly rejected with 422")
@@ -557,7 +560,7 @@ async def test_patch_classification_validation(test_server):
         asset_item = FAAssetCreateItem(
             display_name=f"Class Valid {unique_id('CLSVAL')}",
             currency="USD"
-        )
+            )
         create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -569,14 +572,14 @@ async def test_patch_classification_validation(test_server):
             "classification_params": {
                 "sector": 123,  # Should be string
                 "geographic_area": "invalid"  # Should be dict
+                }
             }
-        }
 
         response = await client.patch(
             f"{API_BASE}/assets",
             json=[invalid_json],
             timeout=TIMEOUT
-        )
+            )
 
         # Should reject with 422
         assert response.status_code == 422, f"Expected 422, got {response.status_code}"
@@ -599,8 +602,8 @@ async def test_patch_remove_all_classification(test_server):
             classification_params=FAClassificationParams(
                 sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
                 geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")})
+                )
             )
-        )
         create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -615,16 +618,18 @@ async def test_patch_remove_all_classification(test_server):
         # Remove all classification_params by sending empty dict
         # PATCH semantics: to clear the entire classification_params object, send empty dict
         # Individual field nulls are merged into existing classification_params
-        patch_json = [{
-            "asset_id": asset_id,
-            "classification_params": {}  # Empty dict = remove all classification fields
-        }]
+        patch_json = [
+            {
+                "asset_id": asset_id,
+                "classification_params": {}  # Empty dict = remove all classification fields
+                }
+            ]
 
         response = await client.patch(
             f"{API_BASE}/assets",
             json=patch_json,
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"PATCH failed: {response.status_code}"
         patch_response = FABulkAssetPatchResponse(**response.json())

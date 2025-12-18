@@ -6,7 +6,6 @@ Provides helper endpoints for:
 - Sector classification listing
 - Other frontend utilities
 """
-from typing import List
 from fastapi import APIRouter, Query
 
 from backend.app.schemas.utilities import (
@@ -14,9 +13,9 @@ from backend.app.schemas.utilities import (
     CountryListResponse,
     CountryListItem,
     SectorListResponse
-)
-from backend.app.utils.sector_normalization import FinancialSector
+    )
 from backend.app.utils.geo_normalization import normalize_country_to_iso3, is_region, expand_region
+from backend.app.utils.sector_normalization import FinancialSector
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
 
@@ -24,7 +23,7 @@ router = APIRouter(prefix="/utilities", tags=["Utilities"])
 @router.get("/countries/normalize", response_model=CountryNormalizationResponse)
 async def normalize_country(
     name: str = Query(..., min_length=1, description="Country name or code to normalize")
-):
+    ):
     """
     Normalize country name/code to ISO-3166-A3 format.
 
@@ -68,7 +67,7 @@ async def normalize_country(
             query=name,
             iso3_codes=countries,
             match_type="region"
-        )
+            )
 
     # Try to normalize as single country
     try:
@@ -77,20 +76,20 @@ async def normalize_country(
             query=name,
             iso3_codes=[iso3_code],
             match_type="exact"
-        )
+            )
     except ValueError as e:
         return CountryNormalizationResponse(
             query=name,
             iso3_codes=[],
             match_type="not_found",
             error=str(e)
-        )
+            )
 
 
 @router.get("/sectors", response_model=SectorListResponse)
 async def list_sectors(
     include_other: bool = Query(True, description="Include 'Other' in the list")
-):
+    ):
     """
     Get list of all standard financial sectors.
 
@@ -132,13 +131,13 @@ async def list_sectors(
     return SectorListResponse(
         sectors=sectors,
         count=len(sectors)
-    )
+        )
 
 
 @router.get("/countries", response_model=CountryListResponse)
 async def list_countries(
     language: str = Query("en", description="Language for country names (default: en)")
-):
+    ):
     """
     Get list of all countries with ISO codes.
 
@@ -178,7 +177,7 @@ async def list_countries(
             iso3=country.alpha_3,
             iso2=country.alpha_2,
             name=country.name
-        ))
+            ))
 
     # Sort by name
     countries.sort(key=lambda c: c.name)
@@ -187,6 +186,4 @@ async def list_countries(
         countries=countries,
         count=len(countries),
         language=language
-    )
-
-
+        )

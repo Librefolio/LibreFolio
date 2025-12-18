@@ -1,0 +1,2 @@
+# Extract TODO comments from Python files in the backend directory
+# └─▶ $ find ./backend -name "*.py" -type f -exec awk '/^.*#.*TODO/{if(!flag){start=NR; print FILENAME ":" start} flag=1; print; next} flag && /^.*#/{print; next} {if(flag){print ""; print ""} flag=0}' {} \; > grep-todo_.txt
