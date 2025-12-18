@@ -11,13 +11,14 @@ This test verifies the complete end-to-end flow works correctly:
 
 All operations are done via API endpoints, simulating frontend behavior.
 """
-import pytest
-import httpx
 from datetime import date, timedelta
 
+import httpx
+import pytest
+
 from backend.app.config import get_settings
-from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -70,7 +71,7 @@ async def test_complete_e2e_flow_justetf(test_server):
             f"{API_BASE}/assets/provider/search",
             params={"q": "iShares Core MSCI World"},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Search failed: {response.status_code}"
         search_data = response.json()
@@ -114,13 +115,13 @@ async def test_complete_e2e_flow_justetf(test_server):
             "display_name": unique_name,
             "currency": "EUR",  # ETF currency
             "asset_type": "ETF"
-        }
+            }
 
         response = await client.post(
             f"{API_BASE}/assets",
             json=[asset_data],
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 201, f"Create failed: {response.status_code} - {response.text}"
         create_data = response.json()
@@ -141,13 +142,13 @@ async def test_complete_e2e_flow_justetf(test_server):
             "identifier": identifier,
             "identifier_type": identifier_type,  # ✅ No guessing, from search!
             "provider_params": None
-        }
+            }
 
         response = await client.post(
             f"{API_BASE}/assets/provider",
             json=[assignment],
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Assign failed: {response.status_code} - {response.text}"
         assign_data = response.json()
@@ -164,7 +165,7 @@ async def test_complete_e2e_flow_justetf(test_server):
             f"{API_BASE}/assets/provider/refresh",
             params={"asset_ids": asset_id},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Metadata refresh failed: {response.status_code}"
         refresh_data = response.json()
@@ -193,7 +194,7 @@ async def test_complete_e2e_flow_justetf(test_server):
             f"{API_BASE}/assets",
             params={"asset_ids": asset_id},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200
         assets = response.json()
@@ -220,15 +221,17 @@ async def test_complete_e2e_flow_justetf(test_server):
 
         response = await client.post(
             f"{API_BASE}/assets/prices/refresh",
-            json=[{
-                "asset_id": asset_id,
-                "date_range": {
-                    "start": start_date.isoformat(),
-                    "end": today.isoformat()
-                }
-            }],
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {
+                        "start": start_date.isoformat(),
+                        "end": today.isoformat()
+                        }
+                    }
+                ],
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Price refresh failed: {response.status_code}"
         price_refresh_data = response.json()
@@ -249,9 +252,9 @@ async def test_complete_e2e_flow_justetf(test_server):
             params={
                 "start_date": start_date.isoformat(),
                 "end_date": today.isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Get prices failed: {response.status_code}"
         prices = response.json()  # Direct list response
@@ -293,7 +296,7 @@ async def test_complete_e2e_flow_yfinance(test_server):
             f"{API_BASE}/assets/provider/search",
             params={"q": "Apple"},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Search failed: {response.status_code}"
         search_data = response.json()
@@ -320,13 +323,15 @@ async def test_complete_e2e_flow_yfinance(test_server):
         unique_name = f"E2E YFinance Test {unique_id('YF')}"
         response = await client.post(
             f"{API_BASE}/assets",
-            json=[{
-                "display_name": unique_name,
-                "currency": "USD",
-                "asset_type": "STOCK"
-            }],
+            json=[
+                {
+                    "display_name": unique_name,
+                    "currency": "USD",
+                    "asset_type": "STOCK"
+                    }
+                ],
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 201
         asset_id = response.json()["results"][0]["asset_id"]
@@ -337,14 +342,16 @@ async def test_complete_e2e_flow_yfinance(test_server):
 
         response = await client.post(
             f"{API_BASE}/assets/provider",
-            json=[{
-                "asset_id": asset_id,
-                "provider_code": provider_code,
-                "identifier": identifier,
-                "identifier_type": identifier_type
-            }],
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "provider_code": provider_code,
+                    "identifier": identifier,
+                    "identifier_type": identifier_type
+                    }
+                ],
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200
         print_success(f"  Provider {provider_code} assigned")
@@ -356,7 +363,7 @@ async def test_complete_e2e_flow_yfinance(test_server):
             f"{API_BASE}/assets/provider/refresh",
             params={"asset_ids": asset_id},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200
         print_success("  Metadata refreshed")
@@ -367,15 +374,17 @@ async def test_complete_e2e_flow_yfinance(test_server):
         today = date.today()
         response = await client.post(
             f"{API_BASE}/assets/prices/refresh",
-            json=[{
-                "asset_id": asset_id,
-                "date_range": {
-                    "start": today.isoformat(),
-                    "end": today.isoformat()
-                }
-            }],
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {
+                        "start": today.isoformat(),
+                        "end": today.isoformat()
+                        }
+                    }
+                ],
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200
         print_success("  Price refreshed")
@@ -387,7 +396,7 @@ async def test_complete_e2e_flow_yfinance(test_server):
             f"{API_BASE}/assets",
             params={"asset_ids": asset_id},
             timeout=TIMEOUT
-        )
+            )
 
         asset = response.json()[0]
         print_success(f"  Asset: {asset.get('display_name')}")
@@ -422,7 +431,7 @@ async def test_search_provides_all_required_fields(test_server):
             f"{API_BASE}/assets/provider/search",
             params={"q": "World"},
             timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -444,4 +453,3 @@ async def test_search_provides_all_required_fields(test_server):
             print_info(f"  ✓ {result['identifier']} ({result['identifier_type']}) - {result['provider_code']}")
 
         print_success(f"All {min(5, data['total_results'])} checked results have required fields")
-

@@ -160,5 +160,4 @@ class MockProvider(AssetSourceProvider):
         return FAAssetPatchItem(
             asset_id=0,  # Will be set by caller
             classification_params=classification_params
-        )
-
+            )

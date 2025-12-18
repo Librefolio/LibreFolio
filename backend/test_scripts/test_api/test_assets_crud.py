@@ -3,23 +3,19 @@ Asset CRUD API Tests.
 
 Tests for asset creation, listing, and deletion endpoints.
 """
-import time
 
 import httpx
 import pytest
 
 from backend.app.config import get_settings
 from backend.app.db import AssetType
+from backend.app.db.models import IdentifierType
 from backend.app.schemas import (
     FAAssetCreateItem, FABulkAssetCreateResponse,
     FAClassificationParams, FAinfoResponse, FABulkAssignResponse,
     FABulkAssetDeleteResponse, FAGeographicArea, FASectorArea
     )
-from backend.app.db.models import IdentifierType
-from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.prices import FAPricePoint, FABulkUpsertResponse
 from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.schemas.refresh import FABulkRefreshResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 
@@ -222,7 +218,6 @@ async def test_list_no_filters(test_server):
         response = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = [FAinfoResponse(**item) for item in response.json()]
-        # TODO: per ora >=3 perchè non c'è ancora il vincolo nel db che impedisce duplicati
         assert len(data) >= 3, f"Expected 3 assets, got {len(data)}"
         print_success(f"✓ Listed {len(data)} assets")
 
@@ -287,7 +282,6 @@ async def test_list_search(test_server):
 
         # Should find Apple
         apple = [a for a in data if "Apple" in a.display_name]
-        # TODO: per ora >=1 perchè non c'è ancora il vincolo nel db che impedisce duplicati
         assert len(apple) >= 1, "Apple not found in search results"
 
         print_success("✓ Search filter works")
@@ -335,7 +329,7 @@ async def test_list_has_provider(test_server):
             identifier="TEST",
             identifier_type=IdentifierType.TICKER,
             provider_params=None
-        )
+            )
         assign_resp = await client.post(f"{API_BASE}/assets/provider", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
         assert assign_resp.status_code == 200, f"Expected 200, got {assign_resp.status_code}, error message: {assign_resp.text}"
         resp_data = FABulkAssignResponse(**assign_resp.json())
@@ -358,7 +352,7 @@ async def test_delete_success(test_server):
 
     async with httpx.AsyncClient() as client:
         # Create assets to delete
-        items : list[FAAssetCreateItem] = [
+        items: list[FAAssetCreateItem] = [
             FAAssetCreateItem(display_name=f"Delete 1 {unique_id('DEL1')}", currency="USD"),
             FAAssetCreateItem(display_name=f"Delete 2 {unique_id('DEL2')}", currency="USD")
             ]
@@ -443,7 +437,7 @@ async def test_delete_partial_success(test_server):
 
         # Step 2: Try to delete both (one valid, one invalid)
         delete_resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [valid_id, invalid_id]},
-                                           timeout=TIMEOUT)
+                                          timeout=TIMEOUT)
         assert delete_resp.status_code == 200, f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
 
         delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
@@ -617,6 +611,7 @@ async def test_bulk_refresh_prices(test_server):
         # Step 3: Refresh prices (skipped - tested in test_assets_provider.py)
         print_info("  Skipping price refresh - tested separately in test_assets_provider.py")
         print_success("✓ Asset created and provider assigned, refresh tested separately")
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

@@ -11,8 +11,8 @@ Tests for PATCH /api/v1/assets endpoint covering base fields:
 Metadata fields (classification_params) are tested in test_assets_metadata.py
 """
 
-import pytest
 import httpx
+import pytest
 
 from backend.app.config import get_settings
 # Import Pydantic schemas
@@ -24,7 +24,6 @@ from backend.app.schemas.assets import (
     FAAssetMetadataResponse,
     AssetType, FAinfoResponse
     )
-
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
@@ -33,6 +32,7 @@ from backend.test_scripts.test_utils import print_section, print_info, print_suc
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
+
 
 # Fixture: test server
 @pytest.fixture(scope="module")
@@ -59,12 +59,12 @@ async def test_patch_display_name(test_server):
             display_name=f"Original Name {unique_id('PATCH1')}",
             currency="USD",
             asset_type=AssetType.STOCK
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -75,12 +75,12 @@ async def test_patch_display_name(test_server):
         patch_item = FAAssetPatchItem(
             asset_id=asset_id,
             display_name=new_name
-        )
+            )
         patch_resp = await client.patch(
             f"{API_BASE}/assets",
             json=[patch_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert patch_resp.status_code == 200, f"PATCH failed: {patch_resp.status_code}: {patch_resp.text}"
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
@@ -109,12 +109,12 @@ async def test_patch_currency(test_server):
             display_name=f"Currency Test {unique_id('PATCH2')}",
             currency="USD",
             asset_type=AssetType.STOCK
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id} with currency=USD")
@@ -123,12 +123,12 @@ async def test_patch_currency(test_server):
         patch_item = FAAssetPatchItem(
             asset_id=asset_id,
             currency="EUR"
-        )
+            )
         patch_resp = await client.patch(
             f"{API_BASE}/assets",
             json=[patch_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert patch_resp.status_code == 200
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
@@ -157,12 +157,12 @@ async def test_patch_asset_type(test_server):
             display_name=f"Type Test {unique_id('PATCH3')}",
             currency="USD",
             asset_type=AssetType.STOCK
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id} with asset_type=STOCK")
@@ -171,12 +171,12 @@ async def test_patch_asset_type(test_server):
         patch_item = FAAssetPatchItem(
             asset_id=asset_id,
             asset_type=AssetType.ETF
-        )
+            )
         patch_resp = await client.patch(
             f"{API_BASE}/assets",
             json=[patch_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert patch_resp.status_code == 200
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
@@ -204,12 +204,12 @@ async def test_patch_icon_url(test_server):
         create_item = FAAssetCreateItem(
             display_name=f"Icon Test {unique_id('PATCH4')}",
             currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id} without icon_url")
@@ -219,12 +219,12 @@ async def test_patch_icon_url(test_server):
         patch_item = FAAssetPatchItem(
             asset_id=asset_id,
             icon_url=new_icon_url
-        )
+            )
         patch_resp = await client.patch(
             f"{API_BASE}/assets",
             json=[patch_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert patch_resp.status_code == 200
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
@@ -242,12 +242,12 @@ async def test_patch_icon_url(test_server):
         patch_clear = FAAssetPatchItem(
             asset_id=asset_id,
             icon_url=""
-        )
+            )
         patch_clear_resp = await client.patch(
             f"{API_BASE}/assets",
             json=[patch_clear.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert patch_clear_resp.status_code == 200
         print_success("✓ icon_url cleared successfully")
 
@@ -282,12 +282,12 @@ async def test_patch_active(test_server):
             display_name=f"Active Test {unique_id('PATCH6')}",
             currency="USD",
             asset_type=AssetType.STOCK
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id} (active=True)")
@@ -296,12 +296,12 @@ async def test_patch_active(test_server):
         patch_item = FAAssetPatchItem(
             asset_id=asset_id,
             active=False
-        )
+            )
         patch_resp = await client.patch(
             f"{API_BASE}/assets",
             json=[patch_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert patch_resp.status_code == 200
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
@@ -331,12 +331,12 @@ async def test_patch_multiple_base_fields(test_server):
             display_name=f"Multi Patch {unique_id('PATCH7')}",
             currency="USD",
             asset_type=AssetType.STOCK
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id}")
@@ -348,12 +348,12 @@ async def test_patch_multiple_base_fields(test_server):
             currency="EUR",
             asset_type=AssetType.ETF,
             icon_url="https://multi.test/icon.png"
-        )
+            )
         patch_resp = await client.patch(
             f"{API_BASE}/assets",
             json=[patch_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert patch_resp.status_code == 200
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
@@ -375,4 +375,3 @@ async def test_patch_multiple_base_fields(test_server):
         assert asset.asset_type == AssetType.ETF
         assert asset.icon_url == "https://multi.test/icon.png"
         print_success("✓ DB verification passed (all fields updated)")
-

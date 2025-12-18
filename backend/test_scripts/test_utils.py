@@ -162,12 +162,14 @@ def exit_with_result(success: bool):
     """Exit with appropriate code based on result."""
     sys.exit(0 if success else 1)
 
+
 # ============================================================================
 # RECORDS HELPER
 # ============================================================================
 
 # Helper to generate unique identifiers
 _counter = 0
+
 
 def unique_id(prefix: str = "TEST") -> str:
     """Generate unique identifier for test data."""

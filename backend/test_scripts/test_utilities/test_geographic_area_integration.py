@@ -7,7 +7,6 @@ using Pydantic's native JSON methods.
 import json
 from decimal import Decimal
 
-from backend.app.db import AssetType
 from backend.app.schemas.assets import FAClassificationParams, FAGeographicArea, FASectorArea
 
 

@@ -24,10 +24,14 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 - Bulk Operations: Batch processing for efficiency
 """
 from __future__ import annotations
+
 from typing import List, Optional, Any
+
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+
 from backend.app.db.models import IdentifierType
 from backend.app.schemas.common import BaseDeleteResult, BaseBulkResponse, OldNew
+
 
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
@@ -64,7 +68,6 @@ class FXProviderInfo(BaseModel):
     name: str = Field(..., description="Provider full name")
     base_currencies: List[str] = Field(..., description="Supported base currencies")
     description: Optional[str] = Field(None, description="Provider description")
-
 
 
 # ============================================================================
@@ -104,7 +107,7 @@ class FAProviderAssignmentItem(BaseModel):
         # Lazy import to avoid circular dependency
         from backend.app.services.provider_registry import AssetProviderRegistry
         from backend.app.services.asset_source import AssetSourceError
-        
+
         # Get provider instance
         provider = AssetProviderRegistry.get_provider_instance(self.provider_code)
         if not provider:
@@ -137,7 +140,6 @@ class FAProviderAssignmentReadItem(BaseModel):
     last_fetch_at: Optional[str] = Field(None, description="Last fetch timestamp (ISO format)")
 
 
-
 class FAProviderRefreshFieldsDetail(BaseModel):
     """Field-level details for provider refresh operation.
 
@@ -156,7 +158,7 @@ class FAProviderRefreshFieldsDetail(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
 
-    refreshed_fields: List[OldNew[str | None]] = Field(...,description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.")
+    refreshed_fields: List[OldNew[str | None]] = Field(..., description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.")
     missing_data_fields: List[str] = Field(..., description="Fields provider couldn't fetch (no data available)")
     ignored_fields: List[str] = Field(..., description="Fields ignored (not requested when using field selection)")
 
@@ -169,6 +171,7 @@ class FAProviderAssignmentResult(BaseModel):
     success: bool
     message: str
     fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(None, description="Field-level refresh details (for refresh operations)")
+
 
 class FABulkAssignResponse(BaseBulkResponse[FAProviderAssignmentResult]):
     """Response for bulk FA provider assignment."""
@@ -230,4 +233,3 @@ class FAProviderSearchResponse(BaseModel):
     results: List[FAProviderSearchResultItem] = Field(..., description="Search results")
     providers_queried: List[str] = Field(..., description="Provider codes that were queried")
     providers_with_errors: List[str] = Field(default_factory=list, description="Providers that returned errors")
-

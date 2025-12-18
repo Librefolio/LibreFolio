@@ -21,7 +21,7 @@ from backend.app.schemas.assets import (
     FAClassificationParams,
     FAGeographicArea,
     FASectorArea,
-)
+    )
 from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 
@@ -120,7 +120,7 @@ class JustETFProvider(AssetSourceProvider):
             raise AssetSourceError(
                 "justetf-scraping library not available - install with: pipenv install justetf-scraping",
                 "NOT_AVAILABLE",
-            )
+                )
 
     @property
     def provider_code(self) -> str:
@@ -142,15 +142,15 @@ class JustETFProvider(AssetSourceProvider):
                 'identifier': 'IE00B4L5Y983',  # iShares Core MSCI World UCITS ETF USD (Acc)
                 'identifier_type': IdentifierType.ISIN,
                 'provider_params': None,
-            }
-        ]
+                }
+            ]
 
     async def get_current_value(
         self,
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-    ) -> FACurrentValue:
+        ) -> FACurrentValue:
         """
         Fetch current price from JustETF using gettex real-time WebSocket data.
         """
@@ -159,7 +159,7 @@ class JustETFProvider(AssetSourceProvider):
             raise AssetSourceError(
                 f"JustETF provider only supports ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
-            )
+                )
 
         try:
             # Check cache first
@@ -173,7 +173,7 @@ class JustETFProvider(AssetSourceProvider):
                     raise AssetSourceError(
                         f"No gettex quote available for {identifier}",
                         "NOT_FOUND",
-                    )
+                        )
                 _gettex_cache.set(cache_key, quote)
             else:
                 quote = cached
@@ -184,7 +184,7 @@ class JustETFProvider(AssetSourceProvider):
                 raise AssetSourceError(
                     f"No price data in gettex quote for {identifier}",
                     "NOT_FOUND",
-                )
+                    )
 
             currency = quote.get('currency', 'EUR')
             timestamp = quote.get('timestamp')
@@ -202,7 +202,7 @@ class JustETFProvider(AssetSourceProvider):
                 currency=currency,
                 as_of_date=as_of_date,
                 source=self.provider_name,
-            )
+                )
         except AssetSourceError:
             raise
         except Exception as e:
@@ -210,7 +210,7 @@ class JustETFProvider(AssetSourceProvider):
                 f"Failed to fetch current value for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
                 {"identifier": identifier, "error": str(e)},
-            ) from e
+                ) from e
 
     @property
     def supports_history(self) -> bool:
@@ -223,7 +223,7 @@ class JustETFProvider(AssetSourceProvider):
         provider_params: Dict | None,
         start_date: date,
         end_date: date,
-    ) -> FAHistoricalData:
+        ) -> FAHistoricalData:
         """
         Fetch historical data from JustETF using load_chart.
         Adds current value only if end_date is today.
@@ -233,7 +233,7 @@ class JustETFProvider(AssetSourceProvider):
             raise AssetSourceError(
                 f"JustETF provider only supports ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
-            )
+                )
 
         try:
             currency: str = "EUR"
@@ -268,7 +268,7 @@ class JustETFProvider(AssetSourceProvider):
                     volume=None,
                     currency=currency,
                     backward_fill_info=None,
-                ))
+                    ))
 
             return FAHistoricalData(prices=prices, currency=currency, source=self.provider_name)
         except Exception as e:
@@ -276,7 +276,7 @@ class JustETFProvider(AssetSourceProvider):
                 f"Failed to fetch history for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
                 {"identifier": identifier, "error": str(e)},
-            ) from e
+                ) from e
 
     @property
     def test_search_query(self) -> str | None:
@@ -304,15 +304,15 @@ class JustETFProvider(AssetSourceProvider):
                     "display_name": row['name'],
                     "currency": row['currency'],  # Currency from DataFrame
                     "type": "ETF",
-                }
+                    }
                 for idx, row in result.iterrows()
-            ]
+                ]
         except Exception as e:
             raise AssetSourceError(
                 f"Search failed for '{query}' on JustETF: {e}",
                 "SEARCH_ERROR",
                 {"query": query, "error": str(e)},
-            ) from e
+                ) from e
 
     def validate_params(self, params: Dict | None) -> None:
         """JustETF provider does not require any params."""
@@ -323,7 +323,7 @@ class JustETFProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-    ) -> FAAssetPatchItem | None:
+        ) -> FAAssetPatchItem | None:
         """Fetch asset metadata from JustETF using get_etf_overview."""
         self._check_availability()
         if identifier_type != IdentifierType.ISIN:
@@ -414,7 +414,7 @@ class JustETFProvider(AssetSourceProvider):
                 short_description=short_description,
                 geographic_area=geographic_area,
                 sector_area=sector_area,
-            )
+                )
 
             # Extract currency from overview
             fund_currency = overview.get('fund_currency')
@@ -427,7 +427,7 @@ class JustETFProvider(AssetSourceProvider):
                 icon_url=None,
                 classification_params=classification,
                 active=None,
-            )
+                )
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {identifier} from JustETF: {e}")
             return None

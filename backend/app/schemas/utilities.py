@@ -2,6 +2,7 @@
 Pydantic schemas for utility endpoints.
 """
 from typing import List, Optional
+
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -39,4 +40,3 @@ class SectorListResponse(BaseModel):
 
     sectors: List[str] = Field(..., description="List of standard financial sector names")
     count: int = Field(..., description="Number of sectors in the list")
-

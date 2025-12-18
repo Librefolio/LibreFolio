@@ -122,10 +122,12 @@ async def test_current_value(provider_code: str):
 
         for test_case in provider.test_cases:
             identifier = test_case['identifier']
-            # TODO: modificare i test per fornire expected_symbol o rimuovere
+            # TODO: modificare i provider affichè forniscano nella test list anche l'expected_symbol
             expected_symbol = test_case.get('expected_symbol', identifier)
             # Get provider_params and identifier_type if specified in test_case
             provider_params = test_case.get('provider_params')
+            if isinstance(provider_params, dict) and '_transaction_override' in test_case:
+                provider_params['_transaction_override'] = test_case.get('_transaction_override')
             identifier_type = test_case.get('identifier_type', IdentifierType.TICKER)  # Default to TICKER
 
             print_info(f"  Testing: {identifier} (expects: {expected_symbol})")
@@ -204,6 +206,8 @@ async def test_historical_data(provider_code: str):
         identifier = test_case['identifier']
         identifier_type = test_case.get('identifier_type', IdentifierType.ISIN)
         provider_params = test_case.get('provider_params')
+        if isinstance(provider_params, dict) and '_transaction_override' in test_case:
+            provider_params['_transaction_override'] = test_case.get('_transaction_override')
 
         print_info(f"Testing historical data for: {identifier}")
 
@@ -213,9 +217,7 @@ async def test_historical_data(provider_code: str):
 
         print_info(f"  Date range: {start_date} to {end_date}")
 
-        result = await provider.get_history_value(
-            identifier, identifier_type, provider_params, start_date, end_date
-        )
+        result = await provider.get_history_value(identifier, identifier_type, provider_params, start_date, end_date)
 
         # Validate result structure - FAHistoricalData has .prices attribute
         assert hasattr(result, 'prices'), f"Result missing 'prices' attribute: {type(result)}"

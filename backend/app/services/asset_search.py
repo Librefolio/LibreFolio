@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 from typing import Optional
 
-from backend.app.db.models import IdentifierType
 from backend.app.logging_config import get_logger
 from backend.app.schemas.provider import FAProviderSearchResponse, FAProviderSearchResultItem
 from backend.app.services.provider_registry import AssetProviderRegistry
@@ -31,7 +30,7 @@ class AssetSearchService:
     async def search(
         query: str,
         provider_codes: Optional[list[str]] = None
-    ) -> FAProviderSearchResponse:
+        ) -> FAProviderSearchResponse:
         """
         Search for assets across one or more providers in parallel.
 
@@ -69,7 +68,7 @@ class AssetSearchService:
                 results=[],
                 providers_queried=[],
                 providers_with_errors=[]
-            )
+                )
 
         # Create search tasks for parallel execution
         async def search_single_provider(code: str, provider) -> tuple[str, list[dict], str | None]:
@@ -94,7 +93,7 @@ class AssetSearchService:
         tasks = [
             search_single_provider(code, provider)
             for code, provider in valid_providers
-        ]
+            ]
 
         search_results_raw = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -125,7 +124,7 @@ class AssetSearchService:
                     provider_code=code,
                     currency=item.get("currency"),
                     asset_type=item.get("type")
-                ))
+                    ))
 
         return FAProviderSearchResponse(
             query=query,
@@ -133,5 +132,4 @@ class AssetSearchService:
             results=results,
             providers_queried=providers_queried,
             providers_with_errors=providers_with_errors
-        )
-
+            )

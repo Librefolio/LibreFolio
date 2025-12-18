@@ -14,7 +14,7 @@ from sqlmodel import select, delete as sql_delete, and_, or_
 from backend.app.db.models import FxCurrencyPairSource
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, Currency
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
 from backend.app.schemas.fx import (
     # Provider models
     FXProviderInfo,
@@ -54,6 +54,7 @@ logger = get_logger(__name__)
 fx_router = APIRouter(prefix="/fx", tags=["FX"])
 router_providers = APIRouter(prefix="/providers", tags=["FX Providers"])
 router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
+
 
 # ============================================================================
 # ENDPOINTS
@@ -584,7 +585,6 @@ async def convert_currency_bulk(
     conversion_metadata = []  # Track which original conversion each bulk conversion belongs to
 
     for conv_idx, conversion in enumerate(request):
-        from_cur = conversion.from_amount.code
         to_cur = conversion.to_currency
 
         # Validate date range
@@ -595,11 +595,12 @@ async def convert_currency_bulk(
                 )
 
         # Expand date range into individual days
+        # Now using new signature: (Currency, to_currency, date)
         if conversion.date_range.end:
             # Multi-day conversion: process each day in range
             current_date = conversion.date_range.start
             while current_date <= conversion.date_range.end:
-                bulk_conversions.append((conversion.from_amount.amount, from_cur, to_cur, current_date))
+                bulk_conversions.append((conversion.from_amount, to_cur, current_date))
                 conversion_metadata.append({
                     'original_idx': conv_idx,
                     'conversion': conversion,
@@ -608,13 +609,12 @@ async def convert_currency_bulk(
                 current_date += timedelta(days=1)
         else:
             # Single-day conversion
-            bulk_conversions.append((conversion.from_amount.amount, from_cur, to_cur, conversion.date_range.start))
+            bulk_conversions.append((conversion.from_amount, to_cur, conversion.date_range.start))
             conversion_metadata.append({
                 'original_idx': conv_idx,
                 'conversion': conversion,
                 'date': conversion.date_range.start
                 })
-
 
     # Call convert_bulk with raise_on_error=False to get partial results
     bulk_results, bulk_errors = await convert_bulk(session, bulk_conversions, raise_on_error=False)
@@ -627,7 +627,8 @@ async def convert_currency_bulk(
             # This conversion failed (error already in bulk_errors)
             continue
 
-        converted_amount, actual_rate_date, backward_fill_applied = bulk_result
+        # bulk_result is now (Currency, rate_date, backward_fill_applied)
+        converted_currency, actual_rate_date, backward_fill_applied = bulk_result
         conversion = metadata['conversion']
         on_date = metadata['date']
         from_cur = conversion.from_amount.code
@@ -636,7 +637,7 @@ async def convert_currency_bulk(
         # Calculate effective rate (for display purposes)
         rate = None
         if from_cur != to_cur:
-            rate = converted_amount / conversion.from_amount.amount
+            rate = converted_currency.amount / conversion.from_amount.amount
 
         # Build backward-fill info if applicable
         backward_fill_info = None
@@ -646,7 +647,7 @@ async def convert_currency_bulk(
 
         results.append(FXConversionResult(
             from_amount=conversion.from_amount,
-            to_amount=Currency(code=to_cur, amount=converted_amount),
+            to_amount=converted_currency,  # Already a Currency object
             conversion_date=on_date.isoformat(),
             rate=rate,
             backward_fill_info=backward_fill_info
@@ -941,6 +942,7 @@ async def delete_pair_sources_bulk(
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete pair sources: {str(e)}")
+
 
 # ============================================================================
 # Include sub-route in main router
