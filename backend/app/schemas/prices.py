@@ -44,6 +44,10 @@ class FAPricePoint(BaseModel):
     Used for both:
     - Upsert operations (backward_fill_info is None)
     - Query results (backward_fill_info may be present)
+
+    The API contract uses separate `close: Decimal` and `currency: str` fields
+    for JSON compatibility. Use `close_cur` property for internal operations
+    that need a Currency object.
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -67,6 +71,26 @@ class FAPricePoint(BaseModel):
         if v is None:
             return None
         return Decimal(str(v))
+
+    @property
+    def close_cur(self) -> Currency:
+        """Get close price as Currency object for internal calculations."""
+        return Currency(code=self.currency, amount=self.close)
+
+    @property
+    def open_cur(self) -> Optional[Currency]:
+        """Get open price as Currency object for internal calculations."""
+        return Currency(code=self.currency, amount=self.open) if self.open is not None else None
+
+    @property
+    def high_cur(self) -> Optional[Currency]:
+        """Get high price as Currency object for internal calculations."""
+        return Currency(code=self.currency, amount=self.high) if self.high is not None else None
+
+    @property
+    def low_cur(self) -> Optional[Currency]:
+        """Get low price as Currency object for internal calculations."""
+        return Currency(code=self.currency, amount=self.low) if self.low is not None else None
 
 
 class FAUpsert(BaseModel):
@@ -139,7 +163,11 @@ class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
 # ============================================================================
 
 class FACurrentValue(BaseModel):
-    """Current value of an asset."""
+    """Current value of an asset.
+
+    The API contract uses separate `value: Decimal` and `currency: str` fields
+    for JSON compatibility. Use `value_cur` property for internal operations.
+    """
     model_config = ConfigDict(extra="forbid")
 
     value: Decimal
@@ -151,6 +179,16 @@ class FACurrentValue(BaseModel):
     @classmethod
     def parse_decimal(cls, v):
         return Decimal(str(v))
+
+    @field_validator("currency")
+    @classmethod
+    def currency_validate(cls, v: str) -> str:
+        return Currency.validate_code(v)
+
+    @property
+    def value_cur(self) -> Currency:
+        """Get value as Currency object for internal calculations."""
+        return Currency(code=self.currency, amount=self.value)
 
 
 class FAHistoricalData(BaseModel):

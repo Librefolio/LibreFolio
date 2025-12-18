@@ -25,6 +25,68 @@ import pycountry
 from backend.app.utils.decimal_utils import parse_decimal_value
 
 
+# Region to country mapping for expansion
+# When a region code is detected, it can be expanded to multiple country ISO-3 codes
+REGION_MAPPING: dict[str, list[str]] = {
+    # Europe
+    "EUR": ["DEU", "FRA", "ITA", "ESP", "NLD", "AUT", "BEL", "FIN", "GRC", "IRL",
+            "LVA", "LTU", "LUX", "MLT", "PRT", "SVK", "SVN", "CYP", "EST"],  # Eurozone 20
+    "EU": ["DEU", "FRA", "ITA", "ESP", "NLD", "AUT", "BEL", "FIN", "GRC", "IRL",
+           "LVA", "LTU", "LUX", "MLT", "PRT", "SVK", "SVN", "CYP", "EST", "POL",
+           "CZE", "HUN", "SWE", "DNK", "BGR", "HRV", "ROU"],  # EU27
+    "NORDIC": ["SWE", "DNK", "NOR", "FIN", "ISL"],
+
+    # Americas
+    "LATAM": ["BRA", "MEX", "ARG", "CHL", "COL", "PER", "VEN", "ECU", "BOL",
+              "PRY", "URY", "CRI", "PAN", "GTM", "HND", "SLV", "NIC", "DOM", "CUB"],
+    "NAFTA": ["USA", "CAN", "MEX"],
+
+    # Asia
+    "ASIA": ["CHN", "JPN", "IND", "KOR", "SGP", "THA", "VNM", "IDN", "MYS",
+             "PHL", "TWN", "HKG", "PAK", "BGD", "LKA", "MMR", "KHM", "LAO", "MNG", "NPL"],
+    "ASEAN": ["SGP", "THA", "VNM", "IDN", "MYS", "PHL", "KHM", "LAO", "MMR", "BRN"],
+
+    # Middle East & Africa
+    "MENA": ["ARE", "SAU", "QAT", "KWT", "OMN", "BHR", "JOR", "LBN", "EGY",
+             "MAR", "TUN", "DZA", "IRQ", "YEM"],
+    "AFRICA": ["ZAF", "EGY", "NGA", "KEN", "ETH", "GHA", "TZA", "UGA", "DZA",
+               "MAR", "TUN", "MOZ", "AGO", "SEN", "CIV", "CMR", "ZWE", "RWA", "BEN"],
+
+    # Oceania
+    "OCEANIA": ["AUS", "NZL", "FJI", "PNG", "NCL", "PYF", "GUM", "SLB", "VUT"],
+
+    # Economic groups
+    "G7": ["USA", "CAN", "GBR", "DEU", "FRA", "ITA", "JPN"],
+    "G20": ["USA", "CAN", "GBR", "DEU", "FRA", "ITA", "JPN", "CHN", "IND",
+            "BRA", "MEX", "RUS", "ZAF", "SAU", "TUR", "KOR", "IDN", "AUS", "ARG"],
+    "BRICS": ["BRA", "RUS", "IND", "CHN", "ZAF"],
+}
+
+
+def is_region(code: str) -> bool:
+    """Check if a code is a region rather than a country."""
+    return code.upper() in REGION_MAPPING
+
+
+def expand_region(region_code: str) -> list[str]:
+    """
+    Expand a region code to its constituent country ISO-3 codes.
+
+    Args:
+        region_code: Region code (e.g., "EUR", "ASIA", "G7")
+
+    Returns:
+        List of ISO-3166-A3 country codes, or empty list if not a region
+
+    Examples:
+        >>> expand_region("G7")
+        ["USA", "CAN", "GBR", "DEU", "FRA", "ITA", "JPN"]
+        >>> expand_region("USA")  # Not a region
+        []
+    """
+    return REGION_MAPPING.get(region_code.upper(), [])
+
+
 def normalize_country_to_iso3(country_input: str) -> str:
     """
     Normalize country code/name to ISO-3166-A3 format.

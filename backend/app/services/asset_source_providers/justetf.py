@@ -257,8 +257,8 @@ class JustETFProvider(AssetSourceProvider):
 
             prices: List[FAPricePoint] = []
             for row in df.itertuples():
-                # TODO: capire se serve davvero questo hasattr
-                row_date = row.date_only if hasattr(row, 'date_only') else row.date.date()
+                # date_only is added above, always available
+                row_date = row.date_only
                 prices.append(FAPricePoint(
                     date=row_date,
                     open=None,
@@ -302,7 +302,7 @@ class JustETFProvider(AssetSourceProvider):
                     "identifier": idx,
                     "identifier_type": IdentifierType.ISIN,  # JustETF always uses ISIN
                     "display_name": row['name'],
-                    "currency": None,  # TODO: capire se si riesce a ritornare la valuta
+                    "currency": row['currency'],  # Currency from DataFrame
                     "type": "ETF",
                 }
                 for idx, row in result.iterrows()
@@ -333,7 +333,7 @@ class JustETFProvider(AssetSourceProvider):
             # Check cache
             cache_key = f"overview_{identifier}"
             cached = _overview_cache.get(cache_key, CACHE_TTL_OVERVIEW)
-            cached = None
+
             if cached is None:
                 overview = await asyncio.to_thread(get_etf_overview, identifier, include_gettex=False)
                 _overview_cache.set(cache_key, overview)
@@ -415,11 +415,14 @@ class JustETFProvider(AssetSourceProvider):
                 geographic_area=geographic_area,
                 sector_area=sector_area,
             )
-            # TODO: far comunicare anche currency
+
+            # Extract currency from overview
+            fund_currency = overview.get('fund_currency')
+
             return FAAssetPatchItem(
                 asset_id=0,  # Placeholder, will be set by caller
                 display_name=None,
-                currency=None,
+                currency=fund_currency,
                 asset_type=AssetType.ETF,
                 icon_url=None,
                 classification_params=classification,
