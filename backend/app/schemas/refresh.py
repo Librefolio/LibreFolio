@@ -27,13 +27,11 @@ and update price/rate data from external providers.
 """
 from __future__ import annotations
 
-from datetime import date as date_type
-from typing import List, Optional
+from typing import List
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict
 
 from backend.app.schemas.common import DateRangeModel, BaseBulkResponse
-from backend.app.utils.datetime_utils import parse_ISO_date
 
 
 # ============================================================================
@@ -50,6 +48,7 @@ class FARefreshItem(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     date_range: DateRangeModel = Field(..., description="Date range for refresh")
 
+
 class FARefreshResult(BaseModel):
     """Result of refresh for single asset."""
     model_config = ConfigDict(extra="forbid")
@@ -59,6 +58,7 @@ class FARefreshResult(BaseModel):
     inserted_count: int = Field(..., description="Number of prices inserted into DB")
     updated_count: int = Field(..., description="Number of prices updated in DB")
     errors: List[str] = Field(default_factory=list)
+
 
 class FABulkRefreshResponse(BaseBulkResponse[FARefreshResult]):
     """Response for bulk asset price refresh."""
@@ -84,4 +84,3 @@ class FXSyncResponse(BaseModel):
     synced: int = Field(..., description="Number of new rates inserted/updated")
     date_range: DateRangeModel = Field(..., description="Date range synced")
     currencies: List[str] = Field(..., description="Currencies synced")
-

@@ -8,33 +8,34 @@ Tests for price-related endpoints:
 - POST /api/v1/assets/prices/refresh - Refresh prices from providers
 """
 
-import pytest
-import httpx
 from datetime import date, timedelta
 from decimal import Decimal
 
+import httpx
+import pytest
+
 from backend.app.config import get_settings
+from backend.app.db.models import IdentifierType
 from backend.app.schemas.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
-)
-from backend.app.db.models import AssetType, IdentifierType
+    )
+from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import (
     FAPricePoint,
     FAUpsert,
     FABulkUpsertResponse,
     FAAssetDelete,
     FABulkDeleteResponse
-)
+    )
 from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.schemas.common import DateRangeModel
-
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
+
 
 @pytest.fixture(scope="module")
 def test_server():
@@ -58,12 +59,12 @@ async def test_bulk_upsert_prices(test_server):
         create_item = FAAssetCreateItem(
             display_name=f"Price Upsert Test {unique_id('PRICE1')}",
             currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"Created asset ID: {asset_id}")
@@ -76,20 +77,20 @@ async def test_bulk_upsert_prices(test_server):
                 close=Decimal("100.50"),
                 volume=Decimal("1000"),
                 currency="USD"
-            ),
+                ),
             FAPricePoint(
                 date=today - timedelta(days=1),
                 close=Decimal("101.25"),
                 volume=Decimal("1500"),
                 currency="USD"
-            ),
+                ),
             FAPricePoint(
                 date=today,
                 close=Decimal("102.00"),
                 volume=Decimal("2000"),
                 currency="USD"
-            )
-        ]
+                )
+            ]
 
         upsert_data = FAUpsert(asset_id=asset_id, prices=prices)
 
@@ -97,7 +98,7 @@ async def test_bulk_upsert_prices(test_server):
             f"{API_BASE}/assets/prices",
             json=[upsert_data.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert upsert_resp.status_code == 200, f"Upsert failed: {upsert_resp.status_code}: {upsert_resp.text}"
 
         upsert_result = FABulkUpsertResponse(**upsert_resp.json())
@@ -110,9 +111,9 @@ async def test_bulk_upsert_prices(test_server):
             params={
                 "start_date": (today - timedelta(days=2)).isoformat(),
                 "end_date": today.isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
         assert get_resp.status_code == 200
 
         price_history = get_resp.json()
@@ -133,12 +134,12 @@ async def test_get_price_history(test_server):
         create_item = FAAssetCreateItem(
             display_name=f"Price Get Test {unique_id('PRICEGET')}",
             currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"Created asset ID: {asset_id}")
@@ -148,13 +149,13 @@ async def test_get_price_history(test_server):
             FAPricePoint(date=date(2025, 1, 1), close=Decimal("100.00"), currency="USD"),
             FAPricePoint(date=date(2025, 1, 3), close=Decimal("103.00"), currency="USD"),
             FAPricePoint(date=date(2025, 1, 5), close=Decimal("105.00"), currency="USD"),
-        ]
+            ]
         upsert_data = FAUpsert(asset_id=asset_id, prices=prices)
         await client.post(
             f"{API_BASE}/assets/prices",
             json=[upsert_data.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         print_info("Prices inserted")
 
         # Step 3: GET prices with date range
@@ -162,7 +163,7 @@ async def test_get_price_history(test_server):
             f"{API_BASE}/assets/prices/{asset_id}",
             params={"start_date": "2025-01-01", "end_date": "2025-01-05"},
             timeout=TIMEOUT
-        )
+            )
         assert get_resp.status_code == 200
 
         price_history = get_resp.json()
@@ -183,12 +184,12 @@ async def test_bulk_delete_prices(test_server):
         create_item = FAAssetCreateItem(
             display_name=f"Price Delete Test {unique_id('PRICEDEL')}",
             currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"Created asset ID: {asset_id}")
@@ -197,26 +198,26 @@ async def test_bulk_delete_prices(test_server):
         prices = [
             FAPricePoint(date=date(2025, 1, d), close=Decimal(f"100.{d:02d}"), currency="USD")
             for d in range(1, 11)
-        ]
+            ]
         upsert_data = FAUpsert(asset_id=asset_id, prices=prices)
         await client.post(
             f"{API_BASE}/assets/prices",
             json=[upsert_data.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         print_info("Inserted 10 prices (Jan 1-10)")
 
         # Step 2: DELETE range Jan 3-7 (5 days) using FAAssetDelete
         delete_request = FAAssetDelete(
             asset_id=asset_id,
             date_ranges=[DateRangeModel(start=date(2025, 1, 3), end=date(2025, 1, 7))]
-        )
+            )
         delete_resp = await client.request(
             "DELETE",
             f"{API_BASE}/assets/prices",
             json=[delete_request.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         assert delete_resp.status_code == 200, f"Delete failed: {delete_resp.status_code}: {delete_resp.text}"
 
         delete_data = FABulkDeleteResponse(**delete_resp.json())
@@ -228,7 +229,7 @@ async def test_bulk_delete_prices(test_server):
             f"{API_BASE}/assets/prices/{asset_id}",
             params={"start_date": "2025-01-01", "end_date": "2025-01-10"},
             timeout=TIMEOUT
-        )
+            )
         remaining_prices = get_resp.json()
         print_success(f"Remaining prices: {len(remaining_prices)}")
 
@@ -246,12 +247,12 @@ async def test_refresh_prices_from_provider(test_server):
         create_item = FAAssetCreateItem(
             display_name=f"Price Refresh Test {unique_id('PRICEREF')}",
             currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[create_item.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"Created asset ID: {asset_id}")
@@ -263,28 +264,30 @@ async def test_refresh_prices_from_provider(test_server):
             identifier="MOCK_REFRESH",
             identifier_type=IdentifierType.UUID,
             provider_params={"symbol": "MOCKREFRESH"}
-        )
+            )
         await client.post(
             f"{API_BASE}/assets/provider",
             json=[assignment.model_dump(mode="json")],
             timeout=TIMEOUT
-        )
+            )
         print_info("Provider mockprov assigned")
 
         # Step 2: Refresh prices from provider
         today = date.today()
-        refresh_request = [{
-            "asset_id": asset_id,
-            "date_range": {
-                "start": (today - timedelta(days=5)).isoformat(),
-                "end": today.isoformat()
-            }
-        }]
+        refresh_request = [
+            {
+                "asset_id": asset_id,
+                "date_range": {
+                    "start": (today - timedelta(days=5)).isoformat(),
+                    "end": today.isoformat()
+                    }
+                }
+            ]
         refresh_resp = await client.post(
             f"{API_BASE}/assets/prices/refresh",
             json=refresh_request,
             timeout=TIMEOUT
-        )
+            )
         assert refresh_resp.status_code == 200, f"Refresh failed: {refresh_resp.status_code}: {refresh_resp.text}"
         print_success("Prices refresh requested")
 
@@ -294,8 +297,8 @@ async def test_refresh_prices_from_provider(test_server):
             params={
                 "start_date": (today - timedelta(days=5)).isoformat(),
                 "end_date": today.isoformat()
-            },
+                },
             timeout=TIMEOUT
-        )
+            )
         price_history = get_resp.json()
         print_success(f"Prices after refresh: {len(price_history)}")

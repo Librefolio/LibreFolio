@@ -96,7 +96,6 @@ class AssetType(str, Enum):
     OTHER = "OTHER"
 
 
-
 class TransactionType(str, Enum):
     """
     Asset transaction types.
@@ -334,7 +333,7 @@ class Asset(SQLModel, table=True):
     __tablename__ = "assets"
     __table_args__ = (
         UniqueConstraint("display_name", name="uq_assets_display_name"),
-    )
+        )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     display_name: str = Field(nullable=False)
@@ -365,8 +364,6 @@ class Asset(SQLModel, table=True):
         if isinstance(v, FAClassificationParams):
             return v.model_dump_json(exclude_none=True)
         return FAClassificationParams(**v).model_dump_json(exclude_none=True)
-
-
 
 
 class Transaction(SQLModel, table=True):

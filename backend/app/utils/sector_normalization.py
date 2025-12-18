@@ -4,7 +4,7 @@ Sector normalization utilities.
 Provides ENUM-based sector classification and validation for financial assets.
 """
 from enum import Enum
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -69,7 +69,7 @@ class FinancialSector(str, Enum):
             "telecom": cls.TELECOMMUNICATION,  # Alias
             "utilities": cls.UTILITIES,
             "other": cls.OTHER
-        }
+            }
 
         if normalized_key in mapping:
             return mapping[normalized_key]
@@ -79,7 +79,7 @@ class FinancialSector(str, Enum):
             "Sector not in standard classification",
             original_sector=sector_name,
             normalized_to="Other"
-        )
+            )
         return cls.OTHER
 
     @classmethod
@@ -128,4 +128,3 @@ def validate_sector(sector_name: str) -> bool:
         True if sector is recognized (not "Other")
     """
     return FinancialSector.from_string(sector_name) != FinancialSector.OTHER
-

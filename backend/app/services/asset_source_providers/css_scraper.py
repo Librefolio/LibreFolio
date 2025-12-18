@@ -258,7 +258,6 @@ class CSSScraperProvider(AssetSourceProvider):
                     {"decimal_format": params['decimal_format']}
                     )
 
-
     # ============================================================================
     # HELPER FUNCTIONS
     # ============================================================================

@@ -26,7 +26,6 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator, model_valida
 
 from backend.app.utils.datetime_utils import parse_ISO_date
 
-
 # =============================================================================
 # CRYPTOCURRENCY SUPPORT
 # =============================================================================
@@ -53,7 +52,7 @@ CRYPTO_CURRENCIES = {
     "ALGO": "Algorand",
     "VET": "VeChain",
     "FIL": "Filecoin",
-}
+    }
 
 
 # =============================================================================
@@ -139,7 +138,7 @@ class Currency(BaseModel):
         raise ValueError(
             f"Invalid currency code: '{code}'. "
             f"Must be ISO 4217 currency or supported crypto."
-        )
+            )
 
     @field_validator('code', mode='before')
     @classmethod
@@ -235,7 +234,7 @@ class Currency(BaseModel):
         return {
             "currency": self.code,
             "amount": str(self.amount)  # Decimal → string for JSON
-        }
+            }
 
     @classmethod
     def zero(cls, code: str) -> 'Currency':
@@ -334,6 +333,7 @@ class DateRangeModel(BaseModel):
             raise ValueError(f"end date ({self.end}) must be >= start date ({self.end})")
         return self
 
+
 class BaseDeleteResult(BaseModel):
     """
     Standardized base class for all delete/removal operation results.
@@ -381,8 +381,10 @@ class BaseDeleteResult(BaseModel):
     deleted_count: int = Field(..., ge=0, description="Number of items deleted")
     message: Optional[str] = Field(None, description="Info/warning/error message")
 
+
 # CustomType specified by subclass
 CType = TypeVar('CType')
+
 
 class OldNew(BaseModel, Generic[CType]):
     """
