@@ -114,12 +114,12 @@ class TransactionType(str, Enum):
       Effect: ↓ quantity, ↑ cash (auto-generates SALE_PROCEEDS movement)
       Example: Sell 5 shares of MSFT at €300 each
 
-    - TRANSFER_IN: Receive asset from another broker
+    - ASSET_IN: Receive asset from another broker
       When: Transfer stocks from Broker A to Broker B (receiving side)
       Effect: ↑ quantity, no cash impact
       Example: Transfer 100 shares of VWCE from Degiro to Interactive Brokers
 
-    - TRANSFER_OUT: Send asset to another broker
+    - ASSET_OUT: Send asset to another broker
       When: Transfer stocks from Broker A to Broker B (sending side)
       Effect: ↓ quantity, no cash impact
       Example: Transfer 50 shares of BTC from Coinbase to hardware wallet
@@ -166,8 +166,8 @@ class TransactionType(str, Enum):
     SELL = "SELL"
     DIVIDEND = "DIVIDEND"
     INTEREST = "INTEREST"
-    TRANSFER_IN = "TRANSFER_IN"
-    TRANSFER_OUT = "TRANSFER_OUT"
+    ASSET_IN = "ASSET_IN"
+    ASSET_OUT = "ASSET_OUT"
     ADD_HOLDING = "ADD_HOLDING"
     REMOVE_HOLDING = "REMOVE_HOLDING"
     FEE = "FEE"
@@ -230,12 +230,12 @@ class CashMovementType(str, Enum):
 
     == Transfer movements (between brokers) ==
 
-    - TRANSFER_IN: Receive cash from another broker
+    - CASH_IN: Receive cash from another broker
       When: Transfer money between broker accounts
       Effect: ↑ cash balance
       Example: Transfer €1000 from Degiro to Interactive Brokers
 
-    - TRANSFER_OUT: Send cash to another broker
+    - CASH_OUT: Send cash to another broker
       When: Transfer money between broker accounts
       Effect: ↓ cash balance
       Example: Transfer €1000 from Interactive Brokers to Degiro
@@ -253,8 +253,8 @@ class CashMovementType(str, Enum):
     INTEREST_INCOME = "INTEREST_INCOME"
     FEE = "FEE"
     TAX = "TAX"
-    TRANSFER_IN = "TRANSFER_IN"
-    TRANSFER_OUT = "TRANSFER_OUT"
+    CASH_IN = "CASH_IN"
+    CASH_OUT = "CASH_OUT"
 
 
 TRANSACTION_TYPES_REQUIRING_CASH_MOVEMENT = {

@@ -232,8 +232,8 @@
 ✅ Step 4: FX Rates (COMPLETATO - 5 Nov 2025)
 
 → Step 5: Plugins                     [PROSSIMO - yfinance, CSS scraper, synthetic_yield]
+→ Step 3: Transactions & Cash         
 → Step 6: Runtime Analysis            [FIFO completo + scheduled-yield support]
-→ Step 3: Transactions & Cash         [Riusa logica Step 6]
 → Step 7: Portfolio Aggregations      [Usa tutto: FX, Plugins, Analysis]
 → Step 8+: Scheduler, Settings, Frontend, etc.
 ```
