@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
+from functools import lru_cache
 from typing import Optional, List, TypeVar, Generic, Any
 
 import pycountry
@@ -53,6 +54,45 @@ CRYPTO_CURRENCIES = {
     "VET": "VeChain",
     "FIL": "Filecoin",
     }
+
+
+# =============================================================================
+# CACHED CURRENCY VALIDATION
+# =============================================================================
+
+@lru_cache(maxsize=256)
+def _validate_currency_code_cached(code: str) -> str:
+    """
+    Cached currency code validation.
+
+    This function is cached to avoid repeated pycountry lookups.
+    The cache stores up to 256 validated currency codes.
+
+    Args:
+        code: Normalized (uppercase, stripped) currency code
+
+    Returns:
+        The validated currency code
+
+    Raises:
+        ValueError: If currency code is invalid
+    """
+    # Check ISO 4217 via pycountry
+    try:
+        pycountry.currencies.lookup(code)
+        return code
+    except LookupError:
+        pass
+
+    # Check crypto currencies
+    if code in CRYPTO_CURRENCIES:
+        return code
+
+    # Invalid currency
+    raise ValueError(
+        f"Invalid currency code: '{code}'. "
+        f"Must be ISO 4217 currency or supported crypto."
+        )
 
 
 # =============================================================================
@@ -99,6 +139,8 @@ class Currency(BaseModel):
         Use this method in Pydantic @field_validator for currency code fields
         that don't need a full Currency object.
 
+        This method uses an LRU cache internally to avoid repeated pycountry lookups.
+
         Args:
             v: Currency code to validate
 
@@ -123,22 +165,8 @@ class Currency(BaseModel):
         if not code:
             raise ValueError("Currency code cannot be empty")
 
-        # Check ISO 4217 via pycountry
-        try:
-            pycountry.currencies.lookup(code)
-            return code
-        except LookupError:
-            pass
-
-        # Check crypto currencies
-        if code in CRYPTO_CURRENCIES:
-            return code
-
-        # Invalid currency
-        raise ValueError(
-            f"Invalid currency code: '{code}'. "
-            f"Must be ISO 4217 currency or supported crypto."
-            )
+        # Use cached validation
+        return _validate_currency_code_cached(code)
 
     @field_validator('code', mode='before')
     @classmethod
