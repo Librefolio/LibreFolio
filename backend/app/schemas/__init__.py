@@ -11,10 +11,13 @@ and standardize data exchange between components.
 - prices.py: FA price operation schemas (upsert, delete, query)
 - refresh.py: FA refresh + FX sync operational schemas
 - fx.py: FX-specific schemas (conversion, upsert, delete, pair sources)
+- transactions.py: Transaction CRUD schemas (TX prefix)
+- brokers.py: Broker CRUD schemas
 
 **Naming Conventions**:
 - FA prefix: Financial Assets (stocks, ETFs, bonds, loans)
 - FX prefix: Foreign Exchange (currency rates)
+- TX prefix: Transactions
 
 **Design Notes**:
 - No backward compatibility maintained during v2.1 refactoring
@@ -49,7 +52,25 @@ from backend.app.schemas.assets import (
     FAAssetDeleteResult,
     FABulkAssetDeleteResponse,
     )
+from backend.app.schemas.brokers import (
+    BRCreateItem,
+    BRReadItem,
+    BRSummary,
+    BRAssetHolding,
+    BRUpdateItem,
+    BRDeleteItem,
+    BRDeleteResult,
+    BRBulkDeleteResponse,
+    BRCreateResult,
+    BRBulkCreateResponse,
+    BRUpdateResult,
+    BRBulkUpdateResponse,
+    BRUserAccessCreateItem,
+    BRUserAccessReadItem,
+    BRUserAccessUpdateItem,
+    )
 from backend.app.schemas.common import (
+    Currency,
     BackwardFillInfo,
     DateRangeModel,
     OldNew,
@@ -101,16 +122,74 @@ from backend.app.schemas.refresh import (
     FARefreshResult,
     FXSyncResponse,
     )
+from backend.app.schemas.transactions import (
+    TXCreateItem,
+    TXReadItem,
+    TXUpdateItem,
+    TXDeleteItem,
+    TXQueryParams,
+    TXCreateResultItem,
+    TXBulkCreateResponse,
+    TXUpdateResultItem,
+    TXBulkUpdateResponse,
+    TXDeleteResult,
+    TXBulkDeleteResponse,
+    TXTypeMetadata,
+    TX_TYPE_METADATA,
+    # Type aliases
+    SignType,
+    AssetMode,
+    # Shared utilities
+    validate_tags_list,
+    tags_to_csv,
+    )
 
 __all__ = [
     # Common (base classes)
+    "Currency",
     "BackwardFillInfo",
     "DateRangeModel",
     "OldNew",
     "BaseBulkResponse",
     "BaseDeleteResult",
     "BaseBulkDeleteResponse",
-    # Assets
+    # Brokers (BR prefix)
+    "BRCreateItem",
+    "BRReadItem",
+    "BRSummary",
+    "BRAssetHolding",
+    "BRUpdateItem",
+    "BRDeleteItem",
+    "BRDeleteResult",
+    "BRBulkDeleteResponse",
+    "BRCreateResult",
+    "BRBulkCreateResponse",
+    "BRUpdateResult",
+    "BRBulkUpdateResponse",
+    "BRUserAccessCreateItem",
+    "BRUserAccessReadItem",
+    "BRUserAccessUpdateItem",
+    # Transactions (TX prefix)
+    "TXCreateItem",
+    "TXReadItem",
+    "TXUpdateItem",
+    "TXDeleteItem",
+    "TXQueryParams",
+    "TXCreateResultItem",
+    "TXBulkCreateResponse",
+    "TXUpdateResultItem",
+    "TXBulkUpdateResponse",
+    "TXDeleteResult",
+    "TXBulkDeleteResponse",
+    "TXTypeMetadata",
+    "TX_TYPE_METADATA",
+    # Transaction type aliases
+    "SignType",
+    "AssetMode",
+    # Transaction utilities
+    "validate_tags_list",
+    "tags_to_csv",
+    # Assets (FA prefix)
     "FACurrentValue",
     "FAPricePoint",
     "FAHistoricalData",

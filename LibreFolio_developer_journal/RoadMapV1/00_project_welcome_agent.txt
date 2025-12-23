@@ -28,6 +28,6 @@ There are 2 scripts to help you set up the development environment:
 - `test_runner.sh`: a script to centralize tests running and coverage reporting
 
 Before use custom commands, please try to use these scripts to keep consistency.
-You can runn --help on both scripts to see available commands.
+You can run --help on both scripts to see available commands.
 
 Thanks!

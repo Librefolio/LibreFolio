@@ -11,17 +11,18 @@ from backend.app.db.models import (
     IdentifierType,
     AssetType,
     TransactionType,
-    CashMovementType,
+    UserRole,
     # Models
+    User,
+    UserSettings,
     Broker,
+    BrokerUserAccess,
     Asset,
     Transaction,
     PriceHistory,
     FxRate,
     FxCurrencyPairSource,
     AssetProviderAssignment,
-    CashAccount,
-    CashMovement,
     )
 
 __all__ = [
@@ -30,15 +31,16 @@ __all__ = [
     "IdentifierType",
     "AssetType",
     "TransactionType",
-    "CashMovementType",
+    "UserRole",
     # Models
+    "User",
+    "UserSettings",
     "Broker",
+    "BrokerUserAccess",
     "Asset",
     "Transaction",
     "PriceHistory",
     "FxRate",
     "FxCurrencyPairSource",
     "AssetProviderAssignment",
-    "CashAccount",
-    "CashMovement",
     ]

@@ -7,17 +7,18 @@ from backend.app.db.base import (
     IdentifierType,
     AssetType,
     TransactionType,
-    CashMovementType,
+    UserRole,
     # Models
+    User,
+    UserSettings,
     Broker,
+    BrokerUserAccess,
     Asset,
     Transaction,
     PriceHistory,
     FxRate,
     FxCurrencyPairSource,
     AssetProviderAssignment,
-    CashAccount,
-    CashMovement,
     )
 from backend.app.db.session import get_sync_engine, get_async_engine, get_session_generator
 
@@ -30,15 +31,16 @@ __all__ = [
     "IdentifierType",
     "AssetType",
     "TransactionType",
-    "CashMovementType",
+    "UserRole",
     # Models
+    "User",
+    "UserSettings",
     "Broker",
+    "BrokerUserAccess",
     "Asset",
     "Transaction",
     "PriceHistory",
     "FxRate",
     "FxCurrencyPairSource",
     "AssetProviderAssignment",
-    "CashAccount",
-    "CashMovement",
     ]

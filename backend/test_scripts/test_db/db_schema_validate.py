@@ -38,7 +38,7 @@ from backend.app.db.models import (
     IdentifierType,
     AssetType,
     TransactionType,
-    CashMovementType,
+    UserRole,
     )
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
 
@@ -190,7 +190,9 @@ def test_enum_values():
     assert AssetType.STOCK == "STOCK"
     assert AssetType.HOLD == "HOLD"
     assert TransactionType.BUY == "BUY"
-    assert CashMovementType.DEPOSIT == "DEPOSIT"
+    assert TransactionType.DEPOSIT == "DEPOSIT"
+    assert TransactionType.FX_CONVERSION == "FX_CONVERSION"
+    assert UserRole.OWNER == "OWNER"
 
     print("✅ All enum types accessible")
 

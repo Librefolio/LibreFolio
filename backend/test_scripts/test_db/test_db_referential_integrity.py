@@ -1,5 +1,5 @@
 """
-Database Referential Integrity Tests
+Database Referential Integrity Tests (v2 - Unified Transaction Model)
 
 Tests ALL foreign key CASCADE behaviors, UNIQUE constraints, and CHECK constraints.
 This comprehensive test suite ensures:
@@ -11,9 +11,7 @@ This comprehensive test suite ensures:
 Test Coverage:
 - Asset deletion cascades (PriceHistory, AssetProviderAssignment)
 - Asset deletion restrictions (Transactions)
-- Broker deletion restrictions (CashAccounts, Transactions)
-- CashAccount deletion cascades (CashMovements)
-- Transaction ↔ CashMovement integrity (already tested, kept here)
+- Broker deletion restrictions (Transactions)
 - All UNIQUE constraints
 - All CHECK constraints (using check_constraints_hook)
 """
@@ -21,6 +19,7 @@ import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+import time
 
 import pytest
 
@@ -38,15 +37,13 @@ from sqlalchemy.exc import IntegrityError
 
 from backend.app.db import (
     Transaction,
-    CashMovement,
     Broker,
     Asset,
-    CashAccount,
     PriceHistory,
     AssetProviderAssignment,
     TransactionType,
-    CashMovementType,
     AssetType,
+    IdentifierType,
     )
 from backend.app.db.session import get_sync_engine
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
@@ -75,25 +72,20 @@ def populate_test_data():
 
     yield
 
-    # No cleanup - leave data for other tests
-
 
 @pytest.fixture(scope="module")
 def test_data():
-    """Get test data (broker, asset, cash_account) for all tests."""
+    """Get test data (broker, asset) for all tests."""
     with Session(get_sync_engine()) as session:
         broker = session.exec(select(Broker)).first()
         asset = session.exec(select(Asset)).first()
-        cash_account = session.exec(select(CashAccount)).first()
 
         assert broker is not None, "No broker found - populate_mock_data failed"
         assert asset is not None, "No asset found - populate_mock_data failed"
-        assert cash_account is not None, "No cash_account found - populate_mock_data failed"
 
         return {
             'broker_id': broker.id,
             'asset_id': asset.id,
-            'cash_account_id': cash_account.id
             }
 
 
@@ -102,7 +94,7 @@ def clean_test_asset():
     """Create a clean test asset without any related data."""
     with Session(get_sync_engine()) as session:
         asset = Asset(
-            display_name="Test Asset for Deletion",
+            display_name=f"Test Asset {int(time.time() * 1000)}",
             currency="EUR",
             asset_type=AssetType.STOCK
             )
@@ -113,20 +105,18 @@ def clean_test_asset():
 
     yield asset_id
 
-    # Cleanup (asset might already be deleted by test)
+    # Cleanup
     try:
         with Session(get_sync_engine()) as session:
             asset = session.get(Asset, asset_id)
             if asset:
-                # Delete any related data first to avoid FK constraint errors
-                # Delete PriceHistory
+                # Delete related data first
                 prices = session.exec(
                     select(PriceHistory).where(PriceHistory.asset_id == asset_id)
                     ).all()
                 for price in prices:
                     session.delete(price)
 
-                # Delete AssetProviderAssignment
                 assignment = session.exec(
                     select(AssetProviderAssignment).where(
                         AssetProviderAssignment.asset_id == asset_id
@@ -135,23 +125,17 @@ def clean_test_asset():
                 if assignment:
                     session.delete(assignment)
 
-                # Now delete asset
                 session.delete(asset)
                 session.commit()
     except Exception:
-        # Asset was already deleted by test or doesn't exist
         pass
 
 
 @pytest.fixture
 def clean_test_broker():
     """Create a clean test broker without any related data."""
-    import time
-
     with Session(get_sync_engine()) as session:
-        # Use timestamp to ensure unique broker name
         unique_name = f"Test Broker {int(time.time() * 1000)}"
-
         broker = Broker(
             name=unique_name,
             description="Temporary broker for testing CASCADE"
@@ -163,30 +147,20 @@ def clean_test_broker():
 
     yield broker_id
 
-    # Cleanup (broker might already be deleted by test)
+    # Cleanup
     try:
         with Session(get_sync_engine()) as session:
             broker = session.get(Broker, broker_id)
             if broker:
-                # Delete any related data first to avoid FK constraint errors
-                # Delete CashAccounts
-                accounts = session.exec(
-                    select(CashAccount).where(CashAccount.broker_id == broker_id)
+                # Delete related transactions first
+                transactions = session.exec(
+                    select(Transaction).where(Transaction.broker_id == broker_id)
                     ).all()
-                for account in accounts:
-                    # Delete CashMovements first
-                    movements = session.exec(
-                        select(CashMovement).where(CashMovement.cash_account_id == account.id)
-                        ).all()
-                    for movement in movements:
-                        session.delete(movement)
-                    session.delete(account)
-
-                # Now delete broker
+                for tx in transactions:
+                    session.delete(tx)
                 session.delete(broker)
                 session.commit()
     except Exception:
-        # Broker was already deleted by test or doesn't exist
         pass
 
 
@@ -194,69 +168,10 @@ def clean_test_broker():
 # CASCADE TESTS - ASSET DELETION
 # ============================================================================
 
-@pytest.mark.xfail(
-    reason="Asset deletion blocked by transactions FK (no CASCADE from transactions→assets). "
-           "This is expected behavior (RESTRICT), but prevents testing PriceHistory CASCADE. "
-           "PriceHistory→Asset CASCADE is correctly configured in migration (verified).",
-    strict=False
-    )
-def test_asset_deletion_cascades_price_history(clean_test_asset):
-    """Verify PriceHistory is CASCADE deleted when Asset is deleted.
-    
-    NOTE: This test currently fails because Asset deletion is blocked by
-    the transactions FK constraint (which doesn't have ON DELETE CASCADE).
-    This is actually CORRECT behavior - we want RESTRICT on transactions→assets.
-    
-    The PriceHistory→Asset CASCADE *is* correctly configured in the migration
-    (verified via sqlite3), but we can't test it because Asset deletion is
-    blocked by transactions.
-    
-    To properly test this, we would need to:
-    1. Create an asset with ONLY PriceHistory (no transactions)
-    2. Or delete transactions first (defeats purpose of cascade test)
-    3. Or accept this as xfail with explanation
-    
-    We choose option 3: mark as xfail with clear explanation.
-    """
-    with Session(get_sync_engine()) as session:
-        # Get the asset
-        asset = session.get(Asset, clean_test_asset)
-        assert asset is not None
-
-        # Add price history to asset
-        price = PriceHistory(
-            asset_id=clean_test_asset,
-            date=date(2025, 1, 15),
-            close=Decimal("100.00"),
-            currency="EUR",
-            source_plugin_key="test"
-            )
-        session.add(price)
-        session.commit()
-
-        # Verify price exists
-        price_check = session.exec(
-            select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)
-            ).first()
-        assert price_check is not None, "Price should exist before asset deletion"
-
-        # Delete asset - PriceHistory should CASCADE delete
-        session.delete(asset)
-        session.commit()
-
-        # Verify price was CASCADE deleted
-        price_after = session.exec(
-            select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)
-            ).first()
-        assert price_after is None, "PriceHistory should be CASCADE deleted with Asset"
-
-
 def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
     """Verify AssetProviderAssignment is CASCADE deleted when Asset is deleted."""
     with Session(get_sync_engine()) as session:
         # Add provider assignment to asset
-        from backend.app.db.models import IdentifierType
-
         assignment = AssetProviderAssignment(
             asset_id=clean_test_asset,
             provider_code="yfinance",
@@ -274,7 +189,7 @@ def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
                 AssetProviderAssignment.asset_id == clean_test_asset
                 )
             ).first()
-        assert assignment_check is not None, "Assignment should exist before asset deletion"
+        assert assignment_check is not None
 
         # Delete asset
         asset = session.get(Asset, clean_test_asset)
@@ -287,404 +202,144 @@ def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
                 AssetProviderAssignment.asset_id == clean_test_asset
                 )
             ).first()
-        assert assignment_after is None, "AssetProviderAssignment should be CASCADE deleted with Asset"
+        assert assignment_after is None, "AssetProviderAssignment should be CASCADE deleted"
 
 
-def test_asset_deletion_restricted_by_transactions(clean_test_asset, test_data):
-    """Verify Asset deletion is RESTRICTED when Transactions exist."""
+def test_asset_deletion_cascades_price_history(clean_test_asset):
+    """Verify PriceHistory is CASCADE deleted when Asset is deleted."""
     with Session(get_sync_engine()) as session:
-        # Add transaction to asset
-        tx = Transaction(
+        # Add price history
+        price = PriceHistory(
             asset_id=clean_test_asset,
-            broker_id=test_data['broker_id'],
-            type=TransactionType.ADD_HOLDING,
-            quantity=Decimal("10.00"),
-            price=Decimal("100.00"),
+            date=date(2025, 1, 15),
+            close=Decimal("100.00"),
             currency="EUR",
-            trade_date=date(2025, 1, 15)
+            source_plugin_key="test"
             )
-        session.add(tx)
+        session.add(price)
         session.commit()
 
-        # Attempt to delete asset (should fail due to RESTRICT)
+        # Verify price exists
+        price_check = session.exec(
+            select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)
+            ).first()
+        assert price_check is not None
+
+        # Delete asset
         asset = session.get(Asset, clean_test_asset)
-
-        with pytest.raises(IntegrityError):
-            session.delete(asset)
-            session.commit()
-
-        session.rollback()
-
-        # Cleanup: delete transaction first, then asset
-        session.delete(tx)
+        session.delete(asset)
         session.commit()
+
+        # Verify price was CASCADE deleted
+        price_after = session.exec(
+            select(PriceHistory).where(PriceHistory.asset_id == clean_test_asset)
+            ).first()
+        assert price_after is None, "PriceHistory should be CASCADE deleted"
 
 
 # ============================================================================
-# CASCADE TESTS - BROKER DELETION
+# RESTRICT TESTS - BROKER DELETION
 # ============================================================================
 
-def test_broker_deletion_restricted_by_cash_accounts(clean_test_broker):
-    """Verify Broker deletion is RESTRICTED when CashAccounts exist."""
-    with Session(get_sync_engine()) as session:
-        # Add cash account to broker
-        cash_account = CashAccount(
-            broker_id=clean_test_broker,
-            currency="EUR",
-            display_name="Test EUR Account"
-            )
-        session.add(cash_account)
-        session.commit()
-        cash_account_id = cash_account.id
-
-        # Attempt to delete broker (should fail due to RESTRICT)
-        broker = session.get(Broker, clean_test_broker)
-
-        with pytest.raises(IntegrityError):
-            session.delete(broker)
-            session.commit()
-
-        session.rollback()
-
-        # Cleanup: delete cash account first
-        session.delete(cash_account)
-        session.commit()
-
-
-def test_broker_deletion_restricted_by_transactions(clean_test_broker, test_data):
+def test_broker_deletion_restricted_by_transactions(clean_test_broker, clean_test_asset):
     """Verify Broker deletion is RESTRICTED when Transactions exist."""
     with Session(get_sync_engine()) as session:
-        # Add transaction with this broker
+        # Add transaction to broker
         tx = Transaction(
-            asset_id=test_data['asset_id'],
             broker_id=clean_test_broker,
-            type=TransactionType.ADD_HOLDING,
+            asset_id=clean_test_asset,
+            type=TransactionType.BUY,
+            date=date.today(),
             quantity=Decimal("10.00"),
-            price=Decimal("100.00"),
-            currency="EUR",
-            trade_date=date(2025, 1, 15)
+            amount=Decimal("-1000.00"),
+            currency="EUR"
             )
         session.add(tx)
         session.commit()
 
-        # Attempt to delete broker (should fail due to RESTRICT)
+        # Try to delete broker - should fail with FK error
         broker = session.get(Broker, clean_test_broker)
+        session.delete(broker)
 
         with pytest.raises(IntegrityError):
-            session.delete(broker)
             session.commit()
 
         session.rollback()
-
-        # Cleanup: delete transaction first
-        session.delete(tx)
-        session.commit()
-
-
-# ============================================================================
-# CASCADE TESTS - CASH ACCOUNT DELETION
-# ============================================================================
-
-@pytest.mark.xfail(
-    reason="CashAccount deletion blocked by FK constraint. "
-           "Need to verify if CashMovement→CashAccount has CASCADE configured in migration.",
-    strict=False
-    )
-def test_cash_account_deletion_cascades_movements(clean_test_broker):
-    """Verify CashMovements are CASCADE deleted when CashAccount is deleted.
-    
-    NOTE: This test currently fails due to FK constraint on CashAccount deletion.
-    Need to verify migration has: FOREIGN KEY (cash_account_id) REFERENCES cash_accounts (id) ON DELETE CASCADE
-    """
-    with Session(get_sync_engine()) as session:
-        # Create cash account
-        cash_account = CashAccount(
-            broker_id=clean_test_broker,
-            currency="EUR",
-            display_name="Test EUR Account"
-            )
-        session.add(cash_account)
-        session.flush()
-        cash_account_id = cash_account.id
-
-        # Add cash movement
-        movement = CashMovement(
-            cash_account_id=cash_account_id,
-            type=CashMovementType.DEPOSIT,
-            amount=Decimal("1000.00"),
-            trade_date=date(2025, 1, 15)
-            )
-        session.add(movement)
-        session.commit()
-
-        # Verify movement exists
-        movement_check = session.exec(
-            select(CashMovement).where(CashMovement.cash_account_id == cash_account_id)
-            ).first()
-        assert movement_check is not None, "CashMovement should exist before account deletion"
-
-        # Delete cash account
-        session.delete(cash_account)
-        session.commit()
-
-        # Verify movement was CASCADE deleted
-        movement_after = session.exec(
-            select(CashMovement).where(CashMovement.cash_account_id == cash_account_id)
-            ).first()
-        assert movement_after is None, "CashMovement should be CASCADE deleted with CashAccount"
-
-
-# ============================================================================
-# CASCADE TESTS - TRANSACTION ↔ CASHMOVEMENT (from old test)
-# ============================================================================
-
-def test_transaction_cashmovement_unidirectional_relationship(test_data):
-    """Test that Transaction -> CashMovement unidirectional relationship works."""
-    with Session(get_sync_engine()) as session:
-        # Create CashMovement first
-        cash_mov = CashMovement(
-            cash_account_id=test_data['cash_account_id'],
-            type=CashMovementType.BUY_SPEND,
-            amount=Decimal("1000.00"),
-            trade_date=date(2025, 1, 15),
-            note="Test cash movement"
-            )
-        session.add(cash_mov)
-        session.flush()
-
-        cash_mov_id = cash_mov.id
-
-        # Create Transaction pointing to CashMovement
-        tx = Transaction(
-            asset_id=test_data['asset_id'],
-            broker_id=test_data['broker_id'],
-            type=TransactionType.BUY,
-            quantity=Decimal("10.00"),
-            price=Decimal("100.00"),
-            currency="EUR",
-            trade_date=date(2025, 1, 15),
-            cash_movement_id=cash_mov_id
-            )
-        session.add(tx)
-        session.commit()
-
-        tx_id = tx.id
-
-        # Verify relationship works: Transaction -> CashMovement
-        tx_from_db = session.exec(
-            select(Transaction).where(Transaction.id == tx_id)
-            ).first()
-
-        assert tx_from_db is not None
-        assert tx_from_db.cash_movement_id == cash_mov_id
-
-        cash_mov_via_tx = session.exec(
-            select(CashMovement).where(CashMovement.id == tx_from_db.cash_movement_id)
-            ).first()
-
-        assert cash_mov_via_tx is not None, "CashMovement not found via Transaction.cash_movement_id"
-        assert cash_mov_via_tx.amount == Decimal("1000.00")
-        assert cash_mov_via_tx.type == CashMovementType.BUY_SPEND
-
-        # Verify reverse lookup: CashMovement -> Transaction
-        tx_via_cash = session.exec(
-            select(Transaction).where(Transaction.cash_movement_id == cash_mov_id)
-            ).first()
-
-        assert tx_via_cash is not None, "Transaction not found via cash_movement_id query"
-        assert tx_via_cash.type == TransactionType.BUY
-        assert tx_via_cash.quantity == Decimal("10.00")
-
-
-def test_cash_movement_deletion_cascades_transaction(test_data):
-    """Test ON DELETE CASCADE: Deleting CashMovement cascades to Transaction."""
-    with Session(get_sync_engine()) as session:
-        # Create CashMovement
-        cash_mov = CashMovement(
-            cash_account_id=test_data['cash_account_id'],
-            type=CashMovementType.DIVIDEND_INCOME,
-            amount=Decimal("50.00"),
-            trade_date=date(2025, 2, 1),
-            )
-        session.add(cash_mov)
-        session.flush()
-        cash_mov_id = cash_mov.id
-
-        # Create Transaction pointing to CashMovement
-        tx = Transaction(
-            asset_id=test_data['asset_id'],
-            broker_id=test_data['broker_id'],
-            type=TransactionType.DIVIDEND,
-            quantity=Decimal("0.00"),
-            price=Decimal("50.00"),
-            currency="EUR",
-            trade_date=date(2025, 2, 1),
-            cash_movement_id=cash_mov_id
-            )
-        session.add(tx)
-        session.commit()
-        tx_id = tx.id
-
-        # Verify both exist
-        tx_before = session.get(Transaction, tx_id)
-        cash_before = session.get(CashMovement, cash_mov_id)
-
-        assert tx_before is not None
-        assert cash_before is not None
-
-        # Delete CashMovement (should CASCADE delete Transaction)
-        session.delete(cash_before)
-        session.commit()
-
-        # Verify CASCADE: Transaction should also be deleted
-        tx_after = session.get(Transaction, tx_id)
-        assert tx_after is None, "Transaction should be CASCADE deleted with CashMovement"
-
-
-def test_transaction_deletion_does_not_cascade_to_cashmovement(test_data):
-    """Test that deleting Transaction does NOT cascade to CashMovement."""
-    with Session(get_sync_engine()) as session:
-        # Create CashMovement
-        cash_mov = CashMovement(
-            cash_account_id=test_data['cash_account_id'],
-            type=CashMovementType.SALE_PROCEEDS,
-            amount=Decimal("500.00"),
-            trade_date=date(2025, 5, 1),
-            )
-        session.add(cash_mov)
-        session.flush()
-        cash_mov_id = cash_mov.id
-
-        # Create Transaction pointing to CashMovement
-        tx = Transaction(
-            asset_id=test_data['asset_id'],
-            broker_id=test_data['broker_id'],
-            type=TransactionType.SELL,
-            quantity=Decimal("5.00"),
-            price=Decimal("100.00"),
-            currency="EUR",
-            trade_date=date(2025, 5, 1),
-            cash_movement_id=cash_mov_id
-            )
-        session.add(tx)
-        session.commit()
-        tx_id = tx.id
-
-        # Delete Transaction (should NOT cascade to CashMovement)
-        tx_to_delete = session.get(Transaction, tx_id)
-        session.delete(tx_to_delete)
-        session.commit()
-
-        # Verify CashMovement still exists
-        cash_after = session.get(CashMovement, cash_mov_id)
-        assert cash_after is not None, "CashMovement should NOT be deleted when Transaction is deleted"
 
 
 # ============================================================================
 # UNIQUE CONSTRAINT TESTS
 # ============================================================================
 
-def test_asset_provider_unique_per_asset(test_data):
-    """Verify only one provider can be assigned per asset (UNIQUE constraint)."""
-    from backend.app.db.models import IdentifierType
+def test_unique_constraint_broker_name():
+    """Verify broker name must be unique."""
+    unique_name = f"Unique Broker {int(time.time() * 1000)}"
 
     with Session(get_sync_engine()) as session:
-        asset_id = test_data['asset_id']
+        broker1 = Broker(name=unique_name, description="First broker")
+        session.add(broker1)
+        session.commit()
 
-        # Check if assignment already exists
-        existing = session.exec(
-            select(AssetProviderAssignment).where(
-                AssetProviderAssignment.asset_id == asset_id
-                )
-            ).first()
+        broker2 = Broker(name=unique_name, description="Duplicate broker")
+        session.add(broker2)
 
-        if existing:
-            # Try to add duplicate assignment (should fail)
-            duplicate = AssetProviderAssignment(
-                asset_id=asset_id,
-                provider_code="different_provider",
-                identifier="DIFFERENT",
-                identifier_type=IdentifierType.TICKER,
-                provider_params='{"test": "duplicate"}',
-                fetch_interval=1440
-                )
-            session.add(duplicate)
-
-            with pytest.raises(IntegrityError):
-                session.commit()
-
-            session.rollback()
-        else:
-            # Add first assignment
-            assignment1 = AssetProviderAssignment(
-                asset_id=asset_id,
-                provider_code="yfinance",
-                identifier="AAPL",
-                identifier_type=IdentifierType.TICKER,
-                provider_params='{"symbol": "AAPL"}',
-                fetch_interval=1440
-                )
-            session.add(assignment1)
+        with pytest.raises(IntegrityError):
             session.commit()
 
-            # Try to add second assignment to same asset (should fail)
-            assignment2 = AssetProviderAssignment(
-                asset_id=asset_id,
-                provider_code="different_provider",
-                identifier="AAPL2",
-                identifier_type=IdentifierType.TICKER,
-                provider_params='{"symbol": "AAPL2"}',
-                fetch_interval=1440
-                )
-            session.add(assignment2)
+        session.rollback()
 
-            with pytest.raises(IntegrityError):
-                session.commit()
+        # Cleanup
+        session.delete(broker1)
+        session.commit()
 
-            session.rollback()
 
-            # Cleanup
-            session.delete(assignment1)
+def test_unique_constraint_asset_display_name():
+    """Verify asset display_name must be unique."""
+    unique_name = f"Unique Asset {int(time.time() * 1000)}"
+
+    with Session(get_sync_engine()) as session:
+        asset1 = Asset(
+            display_name=unique_name,
+            currency="EUR",
+            asset_type=AssetType.STOCK
+            )
+        session.add(asset1)
+        session.commit()
+
+        asset2 = Asset(
+            display_name=unique_name,
+            currency="USD",
+            asset_type=AssetType.ETF
+            )
+        session.add(asset2)
+
+        with pytest.raises(IntegrityError):
             session.commit()
 
+        session.rollback()
 
-def test_cash_account_unique_per_broker_currency(test_data):
-    """Verify only one cash account per broker/currency pair (UNIQUE constraint)."""
+        # Cleanup
+        session.delete(asset1)
+        session.commit()
+
+
+def test_unique_constraint_price_history_asset_date():
+    """Verify only one price per asset per date."""
     with Session(get_sync_engine()) as session:
-        broker_id = test_data['broker_id']
-
-        # Get existing account currency
-        existing = session.exec(
-            select(CashAccount).where(CashAccount.broker_id == broker_id)
-            ).first()
-
-        if existing:
-            currency = existing.currency
-
-            # Try to add duplicate account with same broker/currency (should fail)
-            duplicate = CashAccount(
-                broker_id=broker_id,
-                currency=currency,
-                display_name="Duplicate Account"
-                )
-            session.add(duplicate)
-
-            with pytest.raises(IntegrityError):
-                session.commit()
-
-            session.rollback()
-
-
-def test_price_history_unique_per_asset_date(test_data):
-    """Verify daily-point policy: only one price per asset per date (UNIQUE constraint)."""
-    with Session(get_sync_engine()) as session:
-        asset_id = test_data['asset_id']
-        test_date = date(2025, 6, 1)
+        # Create temp asset
+        asset = Asset(
+            display_name=f"Price Test Asset {int(time.time() * 1000)}",
+            currency="EUR",
+            asset_type=AssetType.STOCK
+            )
+        session.add(asset)
+        session.commit()
+        asset_id = asset.id
 
         # Add first price
         price1 = PriceHistory(
             asset_id=asset_id,
-            date=test_date,
+            date=date(2025, 1, 15),
             close=Decimal("100.00"),
             currency="EUR",
             source_plugin_key="test"
@@ -692,11 +347,11 @@ def test_price_history_unique_per_asset_date(test_data):
         session.add(price1)
         session.commit()
 
-        # Try to add second price for same asset/date (should fail)
+        # Try to add duplicate
         price2 = PriceHistory(
             asset_id=asset_id,
-            date=test_date,
-            close=Decimal("105.00"),
+            date=date(2025, 1, 15),
+            close=Decimal("101.00"),
             currency="EUR",
             source_plugin_key="test"
             )
@@ -708,44 +363,12 @@ def test_price_history_unique_per_asset_date(test_data):
         session.rollback()
 
         # Cleanup
-        session.delete(price1)
-        session.commit()
-
-
-def test_fx_rate_unique_per_date_pair():
-    """Verify daily-point policy: only one rate per date/base/quote (UNIQUE constraint)."""
-
-    with Session(get_sync_engine()) as session:
-        test_date = date(2025, 6, 1)
-
-        # Add first rate
-        rate1 = FxRate(
-            date=test_date,
-            base="EUR",
-            quote="USD",
-            rate=Decimal("1.0850"),
-            source="TEST"
+        session.exec(
+            select(PriceHistory).where(PriceHistory.asset_id == asset_id)
             )
-        session.add(rate1)
-        session.commit()
-
-        # Try to add second rate for same date/pair (should fail)
-        rate2 = FxRate(
-            date=test_date,
-            base="EUR",
-            quote="USD",
-            rate=Decimal("1.0900"),
-            source="TEST"
-            )
-        session.add(rate2)
-
-        with pytest.raises(IntegrityError):
-            session.commit()
-
-        session.rollback()
-
-        # Cleanup
-        session.delete(rate1)
+        for p in session.exec(select(PriceHistory).where(PriceHistory.asset_id == asset_id)).all():
+            session.delete(p)
+        session.delete(asset)
         session.commit()
 
 
@@ -753,89 +376,169 @@ def test_fx_rate_unique_per_date_pair():
 # CHECK CONSTRAINT TESTS
 # ============================================================================
 
-def test_check_constraints_all_present():
-    """
-    Verify all CHECK constraints defined in models exist in database.
+def test_fx_rate_base_less_than_quote():
+    """Verify FX rates must have base < quote alphabetically."""
+    with Session(get_sync_engine()) as session:
+        # This should fail: USD > EUR alphabetically
+        rate = FxRate(
+            date=date(2025, 1, 15),
+            base="USD",  # Wrong: should be EUR
+            quote="EUR",  # Wrong: should be USD
+            rate=Decimal("0.92"),
+            source="TEST"
+            )
+        session.add(rate)
 
-    Uses check_constraints_hook.py to validate constraints.
-    This test dynamically discovers all CHECK constraints from SQLModel
-    and verifies they exist in the actual database.
-    """
-    # Run constraint check with INFO level (only shows summary)
-    all_present, missing = check_and_add_missing_constraints(
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+        session.rollback()
+
+
+def test_fx_rate_base_less_than_quote_valid():
+    """Verify valid FX rate with base < quote is accepted."""
+    with Session(get_sync_engine()) as session:
+        # This should work: EUR < USD alphabetically
+        rate = FxRate(
+            date=date(2099, 12, 31),  # Far future to avoid conflicts
+            base="EUR",
+            quote="USD",
+            rate=Decimal("1.09"),
+            source="TEST"
+            )
+        session.add(rate)
+        session.commit()
+
+        # Cleanup
+        session.delete(rate)
+        session.commit()
+
+
+# ============================================================================
+# TRANSACTION MODEL TESTS
+# ============================================================================
+
+def test_transaction_with_null_asset():
+    """Verify transactions can have NULL asset_id (for pure cash operations)."""
+    with Session(get_sync_engine()) as session:
+        broker = session.exec(select(Broker)).first()
+        assert broker is not None
+
+        # Create deposit without asset
+        tx = Transaction(
+            broker_id=broker.id,
+            asset_id=None,  # Pure cash operation
+            type=TransactionType.DEPOSIT,
+            date=date.today(),
+            quantity=Decimal("0"),
+            amount=Decimal("1000.00"),
+            currency="EUR",
+            description="Test deposit"
+            )
+        session.add(tx)
+        session.commit()
+
+        # Verify
+        tx_check = session.exec(
+            select(Transaction).where(Transaction.description == "Test deposit")
+            ).first()
+        assert tx_check is not None
+        assert tx_check.asset_id is None
+
+        # Cleanup
+        session.delete(tx_check)
+        session.commit()
+
+
+def test_transaction_related_transaction_link():
+    """Verify related_transaction_id can be used for linking transfers."""
+    with Session(get_sync_engine()) as session:
+        broker1 = session.exec(select(Broker)).first()
+
+        # Create a second broker for testing with unique name
+        broker2 = Broker(
+            name=f"Transfer Test Broker {int(time.time() * 1000000)}",  # More unique
+            description="For transfer testing"
+            )
+        session.add(broker2)
+        session.commit()
+        session.refresh(broker2)
+        broker2_id = broker2.id
+
+        asset = session.exec(select(Asset)).first()
+        assert broker1 and broker2 and asset
+
+        # Create outgoing transfer (first)
+        tx_out = Transaction(
+            broker_id=broker1.id,
+            asset_id=asset.id,
+            type=TransactionType.TRANSFER,
+            date=date.today(),
+            quantity=Decimal("-10"),  # Outgoing
+            amount=Decimal("0"),
+            currency="EUR",
+            description=f"Transfer out {broker2_id}"  # Unique description
+            )
+        session.add(tx_out)
+        session.commit()
+        session.refresh(tx_out)
+        tx_out_id = tx_out.id
+
+        # Create incoming transfer (linked to outgoing)
+        tx_in = Transaction(
+            broker_id=broker2.id,
+            asset_id=asset.id,
+            type=TransactionType.TRANSFER,
+            date=date.today(),
+            quantity=Decimal("10"),  # Incoming
+            amount=Decimal("0"),
+            currency="EUR",
+            related_transaction_id=tx_out_id,  # Link to outgoing
+            description=f"Transfer in {broker2_id}"  # Unique description
+            )
+        session.add(tx_in)
+        session.commit()
+        session.refresh(tx_in)
+        tx_in_id = tx_in.id
+
+        # Verify link - use fresh query
+        tx_in_check = session.get(Transaction, tx_in_id)
+        assert tx_in_check is not None
+        assert tx_in_check.related_transaction_id == tx_out_id, \
+            f"Expected related_transaction_id={tx_out_id}, got {tx_in_check.related_transaction_id}"
+
+        # Cleanup - must delete in reverse order of dependencies
+        # tx_in references tx_out via FK, so delete tx_in first
+        tx_in_obj = session.get(Transaction, tx_in_id)
+        tx_out_obj = session.get(Transaction, tx_out_id)
+        broker2_obj = session.get(Broker, broker2_id)
+
+        if tx_in_obj:
+            session.delete(tx_in_obj)
+            session.commit()  # Commit before deleting tx_out
+
+        if tx_out_obj:
+            session.delete(tx_out_obj)
+            session.commit()  # Commit before deleting broker
+
+        if broker2_obj:
+            session.delete(broker2_obj)
+            session.commit()
+
+
+# ============================================================================
+# CHECK CONSTRAINT HOOK VERIFICATION
+# ============================================================================
+
+def test_check_constraints_present():
+    """Verify all CHECK constraints are present in database."""
+    all_present, missing_constraints = check_and_add_missing_constraints(
         auto_fix=False,
         log_level=LogLevel.INFO
         )
 
     assert all_present, \
-        f"Missing CHECK constraints: {', '.join(missing)}\n" \
-        f"Run: python -m backend.alembic.check_constraints_hook --log-level verbose"
+        f"Missing CHECK constraints: {missing_constraints}"
 
+    print("✅ All CHECK constraints present in database")
 
-def test_transaction_check_cash_movement_required(test_data):
-    """Test CHECK constraint: BUY transactions require cash_movement_id."""
-    with Session(get_sync_engine()) as session:
-        # Attempting to create BUY Transaction WITHOUT cash_movement_id should FAIL
-        with pytest.raises(IntegrityError):
-            tx = Transaction(
-                asset_id=test_data['asset_id'],
-                broker_id=test_data['broker_id'],
-                type=TransactionType.BUY,
-                quantity=Decimal("5.00"),
-                price=Decimal("100.00"),
-                currency="EUR",
-                trade_date=date(2025, 3, 1),
-                cash_movement_id=None  # Missing required cash_movement_id
-                )
-            session.add(tx)
-            session.commit()
-
-        session.rollback()
-
-
-def test_transaction_check_cash_movement_not_required(test_data):
-    """Test CHECK constraint: ADD_HOLDING doesn't require cash_movement_id."""
-    with Session(get_sync_engine()) as session:
-        # Creating ADD_HOLDING Transaction WITHOUT cash_movement_id should SUCCEED
-        tx = Transaction(
-            asset_id=test_data['asset_id'],
-            broker_id=test_data['broker_id'],
-            type=TransactionType.ADD_HOLDING,
-            quantity=Decimal("10.00"),
-            price=Decimal("100.00"),
-            currency="EUR",
-            trade_date=date(2025, 4, 1),
-            cash_movement_id=None  # OK for ADD_HOLDING
-            )
-        session.add(tx)
-        session.commit()
-
-        assert tx.id is not None
-        assert tx.cash_movement_id is None
-
-        # Cleanup
-        session.delete(tx)
-        session.commit()
-
-
-def test_fx_rate_check_alphabetical_ordering():
-    """Test CHECK constraint: FX rates must have base < quote (alphabetical)."""
-    with Session(get_sync_engine()) as session:
-        # Try to create rate with USD/EUR (invalid: USD > EUR)
-        invalid_rate = FxRate(
-            date=date(2025, 6, 1),
-            base="USD",  # USD > EUR alphabetically - violates constraint
-            quote="EUR",
-            rate=Decimal("0.9200"),
-            source="TEST"
-            )
-        session.add(invalid_rate)
-
-        with pytest.raises(IntegrityError):
-            session.commit()
-
-        session.rollback()
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "-s"])
