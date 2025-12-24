@@ -25,6 +25,21 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def today_date() -> date:
+    """
+    Get current date (UTC).
+
+    Returns:
+        date: Current date in UTC
+
+    Example:
+        >>> today = today_date()
+        >>> isinstance(today, date)
+        True
+    """
+    return datetime.now(timezone.utc).date()
+
+
 def parse_ISO_date(v) -> date:
     if isinstance(v, date):
         return v
