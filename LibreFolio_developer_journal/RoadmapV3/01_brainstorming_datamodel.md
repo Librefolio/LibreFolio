@@ -294,52 +294,58 @@ Da implementare nella Phase 5 (Plugin Infrastructure).
 
 ## Phase 3: Service Layer (Business Logic)
 
+**Status:** ✅ **COMPLETATA** (2025-12-23)
+
 **Razionale:** Centralizzare la logica complessa (validazione saldi, linking transazioni) per renderla riutilizzabile da API, Import e CLI.
 
-### 3.1 `BrokerService`
+### 3.1 `TransactionService` ✅
 
-- **Create:**
-    - Crea record `Broker`.
-    - Gestisce `initial_balances`: per ogni valuta > 0, chiama `TransactionService.create_transaction_bulk` con una transazione `DEPOSIT`.
-- **Update (`update_broker`):**
-    - Aggiorna campi semplici (nome, descrizione).
-    - Se vengono modificati i flag `allow_cash_overdraft` o `allow_asset_shorting` da `True` a `False`:
-        - Chiama `TransactionService.validate_balances` per assicurarsi che lo stato attuale non violi i nuovi vincoli.
-        - Se violazione, rollback e errore.
-- **Delete (`delete_broker`):**
-    - Verifica se ci sono transazioni associate al broker.
-    - Se ci sono transazioni (anche solo depositi iniziali), blocca l'eliminazione (o richiede force delete che svuota tutto).
-    - Elimina il broker.
-- **Logic:** Non gestisce più liste di valute supportate. Le valute sono implicite nelle transazioni.
+Implementato in `backend/app/services/transaction_service.py`:
 
-### 3.2 `TransactionService`
+**Metodi CRUD:**
+- `create_bulk(items: List[TXCreateItem]) -> TXBulkCreateResponse`
+- `query(params: TXQueryParams) -> List[TXReadItem]`
+- `get_by_id(tx_id: int) -> Optional[TXReadItem]`
+- `update_bulk(items: List[TXUpdateItem]) -> TXBulkUpdateResponse`
+- `delete_bulk(items: List[TXDeleteItem]) -> TXBulkDeleteResponse`
+- `delete_by_broker(broker_id: int) -> int` (per cascade delete)
 
-- **`create_transaction_bulk(transactions: List[TransactionCreate])`:**
-    1. **DB Transaction Start.**
-    2. **Insert:** Inserisce le righe. Converte `tags: List[str]` in stringa CSV.
-    3. **Link Resolution:** Raggruppa per `link_uuid`.
-        - Se trova coppia (A, B), aggiorna B.related_transaction_id = A.id.
-    4. **Validation:** Chiama `validate_balances` per i broker coinvolti.
-    5. **Commit.**
-- **`update_transaction_bulk(updates: List[TransactionUpdate])`:**
-    1. **DB Transaction Start.**
-    2. **Update:** Applica le modifiche.
-        - Nota: Non aggiorna automaticamente le transazioni collegate (related). Il frontend deve inviare update per entrambe.
-    3. **Validation:** Se cambiano `amount`, `quantity` o `date`, chiama `validate_balances`.
-    4. **Commit.**
-- **`delete_transaction_bulk(ids: List[int])`:**
-    - Verifica integrità coppie (se cancello A, devo cancellare B).
-    - Esegue delete.
-    - Valida saldi post-cancellazione.
-- **`validate_balances(broker_id, from_date)`:**
-    - **Algoritmo:**
-        1. Recupera il saldo iniziale al giorno `from_date - 1` (somma di tutte le transazioni precedenti).
-        2. Recupera tutte le transazioni dal giorno `from_date` in poi, ordinate per data.
-        3. Itera giorno per giorno:
-            - Somma tutte le transazioni del giorno `T` al saldo corrente.
-            - Verifica: `Saldo_T >= 0` (se flag overdraft/shorting sono False).
-            - Se negativo in qualsiasi giorno, solleva eccezione e rollback.
-    - Questo garantisce che non si vada mai in rosso a fine giornata, indipendentemente dall'ordine intra-day.
+**Metodi Balance:**
+- `get_cash_balances(broker_id: int) -> Dict[str, Decimal]`
+- `get_asset_holdings(broker_id: int) -> Dict[int, Decimal]`
+- `get_cost_basis(broker_id: int, asset_id: int) -> Decimal`
+
+**Logica interna:**
+- `_validate_broker_balances(broker_id, from_date)`: Algoritmo giorno-per-giorno
+- `_get_balances_before_date(broker_id, before_date)`: Starting point per validazione
+
+**Eccezioni:**
+- `BalanceValidationError`: Saldo negativo non permesso
+- `LinkedTransactionError`: Errore su transazioni collegate
+
+**Note implementative:**
+- ✅ Link resolution automatico via `link_uuid` in create_bulk
+- ✅ Delete automatico di transazioni collegate
+- ✅ Validazione saldi giorno-per-giorno (non intra-day)
+- ✅ Skip validation se `allow_cash_overdraft` AND `allow_asset_shorting` sono True
+
+### 3.2 `BrokerService` ✅
+
+Implementato in `backend/app/services/broker_service.py`:
+
+**Metodi CRUD:**
+- `create_bulk(items: List[BRCreateItem]) -> BRBulkCreateResponse`
+- `get_all() -> List[BRReadItem]`
+- `get_by_id(broker_id: int) -> Optional[BRReadItem]`
+- `get_summary(broker_id: int) -> Optional[BRSummary]`
+- `update_bulk(items, broker_ids) -> BRBulkUpdateResponse`
+- `delete_bulk(items: List[BRDeleteItem]) -> BRBulkDeleteResponse`
+
+**Note implementative:**
+- ✅ Auto-crea DEPOSIT transactions per `initial_balances`
+- ✅ `get_summary()` include cash_balances + holdings con cost basis e market value
+- ✅ Valida saldi quando si disabilita overdraft/shorting
+- ✅ `delete_bulk` con `force=True` cascade-delete tutte le transazioni
 
 ### 3.3 `PluginSystem` (Abstract & Registry)
 
@@ -361,55 +367,225 @@ Da implementare nella Phase 5 (Plugin Infrastructure).
 
 ## Phase 4: API Layer
 
+**Status:** ✅ **COMPLETATA** (2025-12-23)
+
 **Razionale:** Esporre endpoint RESTful coerenti. Separare nettamente la gestione file (upload/delete) dal processing (import effettivo).
 
-### 4.1 Broker Endpoints (`/api/v1/brokers`)
+### 4.1 Broker Endpoints (`/api/v1/brokers`) ✅
 
-- `POST /`: Crea broker + depositi iniziali.
-- `GET /`: Lista broker.
-- `PATCH /{id}`: Chiama `BrokerService.update_broker`.
-- `DELETE /{id}`: Chiama `BrokerService.delete_broker`.
+Implementato in `backend/app/api/v1/brokers.py`:
 
-### 4.2 Transaction Endpoints (`/api/v1/transactions`)
+- `POST /brokers`: Crea broker + depositi iniziali
+- `GET /brokers`: Lista broker
+- `GET /brokers/{id}`: Dettagli broker
+- `GET /brokers/{id}/summary`: Broker con cash_balances e holdings
+- `PATCH /brokers/{id}`: Aggiorna broker (valida se disabilita flags)
+- `DELETE /brokers?ids=[]&force=`: Bulk delete con cascade opzionale
 
-- `POST /`: Chiama `create_transaction_bulk`.
-- `GET /`: Filtri (`broker_id`, `asset_id`, `date_range`, `tags`).
-- `DELETE /`: Chiama `delete_transaction_bulk`.
-- `PATCH /`: Chiama `update_transaction_bulk`.
-- `GET /types`: Ritorna metadata enum (icone, descrizioni).
+### 4.2 Transaction Endpoints (`/api/v1/transactions`) ✅
 
-### 4.3 Import Endpoints (`/api/v1/import`)
+Implementato in `backend/app/api/v1/transactions.py`:
 
-- `POST /upload`: Upload file in `backend/data/brokerReports/uploaded/`.
-    - **Response:** `{ "file_id": "...", "supported_plugins": ["directa_csv", "generic_csv"] }`
-    - Il backend itera sui plugin registrati chiamando `is_supported(path)` per popolare la lista.
-- `GET /files`: Lista file.
-    - Query param: `status` (`uploaded` | `imported` | `all` | `failed`).
-    - Ritorna lista con metadata e lista di `supported_plugins`.
-- `DELETE /files/{file_id}`: Elimina fisicamente il file (se non processato o per pulizia), inserire una data clean rigida, essendo un operazione potenzialmente hackerabbile, l'id
-  deve essere un numero e la richeista deve essere una lista di numeri int.
-- `POST /process/{file_id}`:
-    - Params: `plugin_code`, `tags`, ....
-    - Esegue parsing e inserimento tramite `PluginSystem.process_file`.
-    - Sposta file in `imported/` se un successo, in `failed/` se errore.
+- `POST /transactions`: Bulk create con link_uuid resolution
+- `GET /transactions`: Query con filtri (broker, asset, types, date_range, tags, currency)
+- `GET /transactions/{id}`: Singola transazione
+- `GET /transactions/types`: Metadata per tutti i tipi (validazione frontend)
+- `PATCH /transactions`: Bulk update
+- `DELETE /transactions?ids=[]`: Bulk delete con cascade linked
 
-### 4.4 Export/Backup Endpoints (`/api/v1/export`)
-
-**Razionale:** Placeholder per funzionalità future. Attualmente ritornano 501 Not Implemented o un messaggio JSON fisso.
-
-- `GET /transactions`: "To Be Developed".
-- `POST /restore`: "To Be Developed".
+**Note implementative:**
+- ✅ Tutti i services e endpoint convertiti ad async (AsyncSession, await)
+- ✅ Commit/rollback gestito nell'endpoint dopo verifica errors
+- ✅ Query params per date_range costruiti da `date_start` + `date_end`
+- ✅ Delete di linked transaction fallisce se non si eliminano entrambe
+- ✅ `TXReadItem.linked_transaction_id`: popolato bidirezionalmente dal service
+  - `related_transaction_id`: campo DB (unidirezionale, B → A)
+  - `linked_transaction_id`: campo DTO popolato in entrambi i versi per il frontend
 
 ---
 
-## Phase 5: Implementation Steps (Execution Order)
+## Phase 5: Plugin Infrastructure & Import API
+
+**Status:** 🔲 **DA IMPLEMENTARE**
+
+**Razionale:** Disaccoppiare il core dai formati specifici dei file. Il core non deve sapere cos'è un CSV Directa.
+
+### 5.1 Service Layer: PluginSystem
+
+#### Base Class `TransactionImportPlugin`
+```python
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import List
+
+class TransactionImportPlugin(ABC):
+    """Base class for transaction import plugins."""
+    
+    @property
+    @abstractmethod
+    def code(self) -> str:
+        """Unique plugin identifier (e.g., 'directa_csv', 'generic_csv')."""
+        pass
+    
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Human-readable plugin name."""
+        pass
+    
+    @property
+    @abstractmethod
+    def description(self) -> str:
+        """Plugin description."""
+        pass
+    
+    @abstractmethod
+    def is_supported(self, file_path: Path) -> bool:
+        """
+        Check if this plugin can parse the given file.
+        
+        Args:
+            file_path: Path to the file to check
+            
+        Returns:
+            True if plugin supports this file format
+        """
+        pass
+    
+    @abstractmethod
+    def parse(self, file_path: Path, broker_id: int) -> List[TXCreateItem]:
+        """
+        Parse file and return list of transaction DTOs.
+        
+        Args:
+            file_path: Path to the file to parse
+            broker_id: Target broker for the transactions
+            
+        Returns:
+            List of TXCreateItem DTOs ready for TransactionService.create_bulk()
+        """
+        pass
+```
+
+#### Plugin Registry
+- `register_plugin(plugin: TransactionImportPlugin)`: Registra un plugin
+- `get_plugin(code: str) -> TransactionImportPlugin`: Ottiene plugin per codice
+- `get_supported_plugins(file_path: Path) -> List[str]`: Lista codici plugin che supportano il file
+- `list_plugins() -> List[PluginInfo]`: Lista tutti i plugin registrati
+
+#### Import Service
+- `upload_file(file: UploadFile) -> ImportFileInfo`: Upload file, ritorna ID e plugin supportati
+- `list_files(status: str) -> List[ImportFileInfo]`: Lista file per status
+- `delete_file(file_id: int) -> bool`: Elimina file
+- `process_file(file_id: int, plugin_code: str, broker_id: int, tags: List[str]) -> TXBulkCreateResponse`:
+  1. Recupera file path
+  2. Istanzia plugin
+  3. `dtos = plugin.parse(path, broker_id)`
+  4. Aggiunge tags a ogni DTO
+  5. Chiama `TransactionService.create_bulk(dtos)`
+  6. Sposta file in `imported/` o `failed/`
+
+### 5.2 API Layer: Import Endpoints
+
+#### `POST /api/v1/import/upload`
+Upload file in `backend/data/brokerReports/uploaded/`
+
+**Request:** `multipart/form-data` con file
+**Response:**
+```json
+{
+  "file_id": 123,
+  "filename": "report_2025.csv",
+  "size_bytes": 45678,
+  "uploaded_at": "2025-12-23T10:00:00Z",
+  "supported_plugins": ["directa_csv", "generic_csv"]
+}
+```
+
+#### `GET /api/v1/import/files`
+Lista file uploadati
+
+**Query params:** `status` (`uploaded` | `imported` | `failed` | `all`)
+**Response:** Lista di `ImportFileInfo`
+
+#### `DELETE /api/v1/import/files`
+Elimina file (bulk)
+
+**Request:** `ids: List[int]` (query param o body)
+**Response:** `BulkDeleteResponse`
+
+**Nota sicurezza:** ID deve essere int, non path. Validazione rigorosa.
+
+#### `POST /api/v1/import/process/{file_id}`
+Processa file con plugin specifico
+
+**Request body:**
+```json
+{
+  "plugin_code": "directa_csv",
+  "broker_id": 1,
+  "tags": ["import-2025", "directa"]
+}
+```
+
+**Response:** `TXBulkCreateResponse` (stesso formato di POST /transactions)
+
+**Side effects:**
+- Successo: file spostato in `imported/`
+- Errore: file spostato in `failed/`
+
+#### `GET /api/v1/import/plugins`
+Lista plugin disponibili
+
+**Response:**
+```json
+[
+  {
+    "code": "directa_csv",
+    "name": "Directa CSV",
+    "description": "Import transactions from Directa broker CSV export"
+  },
+  {
+    "code": "generic_csv",
+    "name": "Generic CSV",
+    "description": "Import from generic CSV with column mapping"
+  }
+]
+```
+
+### 5.3 File Storage Structure
+
+```
+backend/data/brokerReports/
+├── uploaded/      # File appena caricati, in attesa di processing
+├── imported/      # File processati con successo
+└── failed/        # File che hanno fallito il processing
+```
+
+### 5.4 First Plugin: Generic CSV
+
+Plugin base che permette mapping manuale delle colonne:
+- Configurazione colonne via JSON
+- Supporto per formati data comuni
+- Mapping tipi transazione
+
+---
+
+### Phase 6: Export/Backup Endpoints (`/api/v1/backup`)
+**Razionale:** Placeholder per funzionalità future. Attualmente ritornano 501 Not Implemented o un messaggio JSON fisso.
+
+- `GET /export`: "To Be Developed".
+- `POST /restore`: "To Be Developed".
+---
+
+## Notes: Implementation Order
 
 **Razionale:** Ordine logico per minimizzare i blocchi. Prima il DB, poi la logica core, infine le API e i plugin.
 
-1. **DB Migration:** Eliminare vecchie tabelle, creare `Transaction`, aggiornare `Broker`.
-2. **Broker Logic:** Implementare Service e API per Broker (inclusa logica initial deposit).
-3. **Transaction Core:** Implementare `TransactionService` (CRUD, Validation, Linking).
-4. **Transaction API:** Implementare Endpoints.
-5. **Plugin Infrastructure:** Creare classe base, registry e file management.
-6. **Generic CSV Plugin:** Implementare il primo plugin "Generic CSV".
-7. **Import API:** Collegare il tutto.
+1. ✅ **DB Migration:** Eliminare vecchie tabelle, creare `Transaction`, aggiornare `Broker`.
+2. ✅ **Broker Logic:** Implementare Service e API per Broker (inclusa logica initial deposit).
+3. ✅ **Transaction Core:** Implementare `TransactionService` (CRUD, Validation, Linking).
+4. ✅ **Transaction API:** Implementare Endpoints.
+5. 🔲 **Plugin Infrastructure:** Creare classe base, registry e file management.
+6. 🔲 **Generic CSV Plugin:** Implementare il primo plugin "Generic CSV".
+7. 🔲 **Import API:** Collegare il tutto.
