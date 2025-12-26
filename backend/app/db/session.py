@@ -12,7 +12,9 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.config import get_settings
 
-settings = get_settings()
+# NOTE: settings is loaded lazily in get_sync_engine() and get_async_engine()
+# to allow test setup to configure LIBREFOLIO_TEST_MODE before first use.
+# Do NOT load settings at module level!
 
 
 @event.listens_for(Engine, "connect")
@@ -31,7 +33,7 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
 # ============================================================================
 # ENGINE SINGLETON INSTANCES
 # ============================================================================
-# These are created ONCE at the first call of db, and reused throughout the app.
+# These are created ONCE at the first call, and reused throughout the app.
 # The singleton pattern ensures a single connection pool per engine.
 
 sync_engine: Engine | None = None  # For migrations, scripts populate, checks, populated in get_sync_engine()
@@ -56,6 +58,10 @@ def get_sync_engine() -> Engine:
     global sync_engine
     if sync_engine is not None:
         return sync_engine
+
+    # Lazy load settings to allow test setup to configure environment first
+    settings = get_settings()
+
     # Ensure database directory exists
     db_url = settings.DATABASE_URL
     if db_url.startswith("sqlite:///"):
@@ -88,6 +94,10 @@ def get_async_engine() -> AsyncEngine:
     global async_engine
     if async_engine is not None:
         return async_engine
+
+    # Lazy load settings to allow test setup to configure environment first
+    settings = get_settings()
+
     # Ensure database directory exists
     db_url = settings.DATABASE_URL
     if db_url.startswith("sqlite:///"):

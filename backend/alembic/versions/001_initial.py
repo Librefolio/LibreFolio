@@ -196,6 +196,9 @@ def upgrade() -> None:
     print("  ✓ Index created")
 
     # Unified Transactions table (REFACTORED)
+    # NOTE: related_transaction_id uses DEFERRABLE INITIALLY DEFERRED FK
+    # This allows bidirectional linking (A->B and B->A) within the same transaction.
+    # The FK constraint is only checked at COMMIT, not at INSERT/UPDATE time.
     print("📦 Creating table: transactions (UNIFIED)...")
     conn.execute(sa.text("""CREATE TABLE transactions
                             (
@@ -214,7 +217,8 @@ def upgrade() -> None:
                                 updated_at             DATETIME       NOT NULL,
                                 FOREIGN KEY (broker_id) REFERENCES brokers (id),
                                 FOREIGN KEY (asset_id) REFERENCES assets (id),
-                                FOREIGN KEY (related_transaction_id) REFERENCES transactions (id)
+                                FOREIGN KEY (related_transaction_id) REFERENCES transactions (id) 
+                                    DEFERRABLE INITIALLY DEFERRED
                             )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE INDEX idx_transactions_broker_date ON transactions (broker_id, date, id)"))

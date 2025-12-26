@@ -25,7 +25,7 @@ from sqlalchemy import (
     Integer,
     ForeignKey,
     )
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Relationship
 
 from backend.app.utils.datetime_utils import utcnow
 
@@ -427,11 +427,27 @@ class Transaction(SQLModel, table=True):
     )
 
     # Link for paired transactions (TRANSFER, FX_CONVERSION)
-    # Unidirectional: second transaction points to first
+    # BIDIRECTIONAL: Both transactions point to each other (A->B and B->A)
+    # Uses DEFERRABLE INITIALLY DEFERRED FK - constraint checked only at COMMIT
+    # This allows creating both records in the same transaction without FK violations
     related_transaction_id: Optional[int] = Field(
         default=None,
-        sa_column=Column(Integer, ForeignKey("transactions.id"), nullable=True),
-        description="Links to paired transaction (for TRANSFER, FX_CONVERSION)"
+        sa_column=Column(
+            Integer,
+            ForeignKey("transactions.id", deferrable=True, initially="DEFERRED"),
+            nullable=True
+        ),
+        description="Links to paired transaction (for TRANSFER, FX_CONVERSION). Bidirectional."
+    )
+
+    # Relationship for ORM access (post_update=True for bidirectional self-reference)
+    # This tells SQLAlchemy to INSERT first with NULL, then UPDATE to set the link
+    related_transaction: Optional["Transaction"] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[Transaction.related_transaction_id]",
+            "remote_side": "[Transaction.id]",
+            "post_update": True,
+        }
     )
 
     # User-defined tags for filtering and grouping

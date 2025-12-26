@@ -34,7 +34,7 @@ def test_get_model_column_precision_fx_rate():
 
 def test_get_model_column_precision_transaction():
     """Test getting precision from Transaction numeric columns."""
-    for column in ["quantity", "price"]:
+    for column in ["quantity", "amount"]:
         precision, scale = get_model_column_precision(Transaction, column)
         assert precision == 18, f"{column}: expected precision 18, got {precision}"
         assert scale == 6, f"{column}: expected scale 6, got {scale}"

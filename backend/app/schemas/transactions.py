@@ -232,8 +232,9 @@ class TXReadItem(BaseModel):
     Uses Currency for cash representation.
 
     Note on linked transactions:
-    - related_transaction_id: The ID stored in DB (unidirectional, only B -> A)
-    - linked_transaction_id: Populated by service to show the pair in BOTH directions
+    With bidirectional DEFERRABLE FK, related_transaction_id is populated
+    on BOTH transactions in a pair (A->B and B->A), so no separate
+    linked_transaction_id field is needed.
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -249,12 +250,10 @@ class TXReadItem(BaseModel):
     # Cash as Currency object (None if amount is 0)
     cash: Optional[Currency] = None
 
-    # DB field: only populated on the "second" transaction (B -> A)
+    # DB field: bidirectional link to paired transaction (TRANSFER, FX_CONVERSION)
+    # Both transactions in a pair point to each other
     related_transaction_id: Optional[int] = None
 
-    # Computed field: populated on BOTH transactions to show the pair
-    # Service fills this by looking up both directions
-    linked_transaction_id: Optional[int] = None
 
     tags: Optional[List[str]] = None
     description: Optional[str] = None
@@ -263,13 +262,15 @@ class TXReadItem(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_db_model(cls, tx: Transaction, linked_id: Optional[int] = None) -> 'TXReadItem':
+    def from_db_model(cls, tx: Transaction) -> 'TXReadItem':
         """
         Create TXReadItem from database Transaction model.
 
+        With bidirectional FK (DEFERRABLE), related_transaction_id is always
+        populated correctly in both directions. No need for external lookup.
+
         Args:
             tx: Transaction SQLModel instance from database
-            linked_id: Optional linked transaction ID (for bidirectional display)
 
         Returns:
             TXReadItem DTO ready for API response
@@ -284,10 +285,6 @@ class TXReadItem(BaseModel):
         if tx.tags:
             tags = [t.strip() for t in tx.tags.split(',') if t.strip()]
 
-        # Determine linked_transaction_id (bidirectional)
-        # If linked_id is provided, use it. Otherwise fall back to related_transaction_id.
-        linked_tx_id = linked_id if linked_id is not None else tx.related_transaction_id
-
         return cls(
             id=tx.id,
             broker_id=tx.broker_id,
@@ -297,7 +294,6 @@ class TXReadItem(BaseModel):
             quantity=tx.quantity,
             cash=cash,
             related_transaction_id=tx.related_transaction_id,
-            linked_transaction_id=linked_tx_id,
             tags=tags,
             description=tx.description,
             created_at=tx.created_at,
