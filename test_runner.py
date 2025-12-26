@@ -38,6 +38,23 @@ from backend.test_scripts.test_utils import (Colors, print_header, print_section
 _COVERAGE_MODE = False
 
 
+def _build_pytest_cmd(test_path: str, test_names: list = None) -> list:
+    """
+    Build pytest command with optional test name filter.
+
+    Args:
+        test_path: Path to test file or directory
+        test_names: Optional list of test names to filter (uses -k flag)
+
+    Returns:
+        List of command parts for run_command
+    """
+    cmd = ["pipenv", "run", "python", "-m", "pytest", test_path, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return cmd
+
+
 # TODO: riscrivere in maniera sensata questa funzione affinchè per i test si prenda solo il path e aggiunga tutto lei
 def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool:
     """
@@ -121,7 +138,7 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
 # EXTERNAL SERVICES TESTS
 # ============================================================================
 
-def external_fx_providers(verbose: bool = False) -> bool:
+def external_fx_providers(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run FX providers external tests (network-dependent).
 
@@ -137,14 +154,11 @@ def external_fx_providers(verbose: bool = False) -> bool:
     print_info("⚠️  WARNING: Requires internet connection")
     print_info("⚠️  WARNING: May be slow due to API rate limiting")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_external/test_fx_providers.py", "-v"],
-        "FX providers external tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_fx_providers.py", test_names)
+    return run_command(cmd, "FX providers external tests", verbose=verbose)
 
 
-def external_asset_providers(verbose: bool = False) -> bool:
+def external_asset_providers(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test all registered asset pricing providers (yfinance, cssscraper, etc.).
 
@@ -157,11 +171,8 @@ def external_asset_providers(verbose: bool = False) -> bool:
     print_info("⚠️  WARNING: Requires internet connection")
     print_info("⚠️  WARNING: May be slow due to API rate limiting")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_external/test_asset_providers.py", "-v"],
-        "Asset providers tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_asset_providers.py", test_names)
+    return run_command(cmd, "Asset providers tests", verbose=verbose)
 
 
 def external_all(verbose: bool = False) -> bool:
@@ -256,7 +267,7 @@ def db_create(verbose: bool = False) -> bool:
     return success
 
 
-def db_validate(verbose: bool = False) -> bool:
+def db_validate(verbose: bool = False, test_names: list = None) -> bool:
     """
     Validate database schema.
     Checks that all expected tables, constraints, indexes exist.
@@ -267,11 +278,10 @@ def db_validate(verbose: bool = False) -> bool:
     print_info("The backend server is NOT used in this test")
     print_info("Testing: Tables, Foreign Keys, Constraints, Indexes, Enums")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "-s", "backend/test_scripts/test_db/db_schema_validate.py", "-v"],
-        "Schema validation",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/db_schema_validate.py", test_names)
+    # Add -s flag for this specific test
+    cmd.insert(cmd.index("-v"), "-s")
+    return run_command(cmd, "Schema validation", verbose=verbose)
 
 
 def db_populate(verbose: bool = False, force: bool = False) -> bool:
@@ -312,7 +322,7 @@ def db_populate(verbose: bool = False, force: bool = False) -> bool:
     return success
 
 
-def db_fx_rates(verbose: bool = False) -> bool:
+def db_fx_rates(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test FX rates persistence in database.
     Tests fetching rates from ECB and persisting to database.
@@ -322,14 +332,11 @@ def db_fx_rates(verbose: bool = False) -> bool:
     print_info(f"This test operates on: {TEST_DB_PATH} (test database)")
     print_info("Testing: Fetch rates, Persist to DB, Overwrite, Idempotency, Constraints")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_db/test_fx_rates_persistence.py", "-v"],
-        "FX rates persistence tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_fx_rates_persistence.py", test_names)
+    return run_command(cmd, "FX rates persistence tests", verbose=verbose)
 
 
-def db_numeric_truncation(verbose: bool = False) -> bool:
+def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test Numeric column truncation behavior across all tables.
     Validates helper functions and database precision handling.
@@ -338,14 +345,11 @@ def db_numeric_truncation(verbose: bool = False) -> bool:
     print_info("Testing all Numeric columns in database")
     print_info("Tests: Helper functions, DB truncation, No false updates")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_db/test_numeric_truncation.py", "-v"],
-        "Numeric truncation tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_numeric_truncation.py", test_names)
+    return run_command(cmd, "Numeric truncation tests", verbose=verbose)
 
 
-def db_test_referential_integrity(verbose: bool = False) -> bool:
+def db_test_referential_integrity(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test ALL database referential integrity constraints.
 
@@ -365,11 +369,9 @@ def db_test_referential_integrity(verbose: bool = False) -> bool:
     print_info("Comprehensive test suite for ALL foreign key behaviors and constraints")
     print_info("Tests: CASCADE (7), Transaction↔CashMovement (3), UNIQUE (4), CHECK (4)")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "-s", "backend/test_scripts/test_db/test_db_referential_integrity.py", "-v"],
-        "Database referential integrity tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_db_referential_integrity.py", test_names)
+    cmd.insert(cmd.index("-v"), "-s")
+    return run_command(cmd, "Database referential integrity tests", verbose=verbose)
 
 
 def db_all(verbose: bool = False) -> bool:
@@ -427,7 +429,7 @@ def db_all(verbose: bool = False) -> bool:
 # SERVICES TESTS
 # ============================================================================
 
-def services_fx_conversion(verbose: bool = False) -> bool:
+def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test FX conversion service logic.
     Tests currency conversion algorithms (direct, inverse, roundtrip, different dates, forward-fill).
@@ -439,26 +441,20 @@ def services_fx_conversion(verbose: bool = False) -> bool:
     print_info("Safety: Verifies test database usage before modifying data")
     print_info("Note: Mock FX rates automatically inserted for 3 dates")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_fx_conversion.py", "-v"],
-        "FX conversion service tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_conversion.py", test_names)
+    return run_command(cmd, "FX conversion service tests", verbose=verbose)
 
 
-def services_asset_metadata(verbose: bool = False) -> bool:
+def services_asset_metadata(verbose: bool = False, test_names: list = None) -> bool:
     """Test AssetMetadataService static utility behavior."""
     print_section("Services: Asset Metadata Service")
     print_info("Testing: backend/app/services/asset_metadata.py")
     print_info("Tests: parse/serialize, diff, patch semantics")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_asset_metadata.py", "-v"],
-        "Asset metadata service tests",
-        verbose=verbose,
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_metadata.py", test_names)
+    return run_command(cmd, "Asset metadata service tests", verbose=verbose)
 
 
-def services_asset_source(verbose: bool = False) -> bool:
+def services_asset_source(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test Asset Source service logic.
     Tests provider assignment (bulk/single), helper functions, and synthetic yield calculation.
@@ -468,42 +464,33 @@ def services_asset_source(verbose: bool = False) -> bool:
     print_info("Tests: Helper functions, Provider assignment, Synthetic yield")
     print_info("Note: Test assets automatically created and cleaned up")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_asset_source.py", "-v"],
-        "Asset source service tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source.py", test_names)
+    return run_command(cmd, "Asset source service tests", verbose=verbose)
 
 
-def services_asset_source_refresh(verbose: bool = False) -> bool:
+def services_asset_source_refresh(verbose: bool = False, test_names: list = None) -> bool:
     """
     Smoke test: Asset Source refresh orchestration.
     Runs the lightweight refresh orchestration smoke test which uses a mock provider.
     """
     print_section("Services: Asset Source Refresh (smoke)")
     print_info("Testing: backend/app/services/asset_source bulk refresh orchestration (smoke)")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_asset_source_refresh.py", "-v"],
-        "Asset source refresh smoke test",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_refresh.py", test_names)
+    return run_command(cmd, "Asset source refresh smoke test", verbose=verbose)
 
 
-def services_provider_registry(verbose: bool = False) -> bool:
+def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test registry dei provider (asset & fx).
     Verifica registrazione, lookup, priorità e fallback.
     """
     print_section("Services: Provider Registry")
     print_info("Testing: backend/app/services/provider_registry.py")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_provider_registry.py", "-v"],
-        "Provider registry tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry.py", test_names)
+    return run_command(cmd, "Provider registry tests", verbose=verbose)
 
 
-def services_synthetic_yield(verbose: bool = False) -> bool:
+def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test synthetic yield calculation for SCHEDULED_YIELD assets.
     Tests runtime valuation for crowdfunding loans, bonds, etc.
@@ -511,159 +498,151 @@ def services_synthetic_yield(verbose: bool = False) -> bool:
     print_section("Services: Synthetic Yield Calculation")
     print_info("Testing: SCHEDULED_YIELD asset valuation (ACT/365 SIMPLE interest)")
     print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_synthetic_yield.py", "-v"],
-        "Synthetic yield tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_synthetic_yield.py", test_names)
+    return run_command(cmd, "Synthetic yield tests", verbose=verbose)
 
 
-def services_synthetic_yield_integration(verbose: bool = False) -> bool:
+def services_synthetic_yield_integration(verbose: bool = False, test_names: list = None) -> bool:
     """Test E2E synthetic yield integration scenarios (P2P loan, bond, mixed schedule)."""
     print_section("Services: Synthetic Yield Integration E2E")
     print_info("Testing: ScheduledInvestmentProvider end-to-end scenarios")
     print_info("Scenarios: P2P loan (grace + late), bond compound quarterly, mixed SIMPLE/COMPOUND")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_synthetic_yield_integration.py", "-v"],
-        "Synthetic yield integration E2E tests",
-        verbose=verbose,
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_synthetic_yield_integration.py", test_names)
+    return run_command(cmd, "Synthetic yield integration E2E tests", verbose=verbose)
+
+
+
+def services_transaction(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test TransactionService CRUD operations, balance validation, and link resolution.
+    """
+    print_section("Services: Transaction Service")
+    print_info("Testing: backend/app/services/transaction_service.py")
+    print_info("Tests: CRUD, balance validation, link resolution, balance queries")
+
+    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_transaction_service.py", "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+
+    return run_command(cmd, "Transaction service tests", verbose=verbose)
+
+
+def services_broker(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test BrokerService CRUD operations, initial balances, and flag validation.
+    """
+    print_section("Services: Broker Service")
+    print_info("Testing: backend/app/services/broker_service.py")
+    print_info("Tests: CRUD, initial deposits, get_summary, flag validation")
+
+    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_services/test_broker_service.py", "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+
+    return run_command(cmd, "Broker service tests", verbose=verbose)
 
 
 # ============================================================================
 # UTILS TESTS
 # ============================================================================
 
-def utils_decimal_precision(verbose: bool = False) -> bool:
+def utils_decimal_precision(verbose: bool = False, test_names: list = None) -> bool:
     """Test decimal precision utilities (Phase 2 task 3.2)."""
     print_section("Utils: Decimal Precision")
     print_info("Testing: backend/app/utils/decimal_utils.py")
     print_info("Tests: Model precision extraction, Truncation, Edge cases")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_decimal_utils.py", "-v"],
-        "Decimal precision tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_decimal_utils.py", test_names)
+    return run_command(cmd, "Decimal precision tests", verbose=verbose)
 
 
-def utils_datetime(verbose: bool = False) -> bool:
+def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
     """Test datetime utilities (Phase 1 task 3.1)."""
     print_section("Utils: Datetime")
     print_info("Testing: backend/app/utils/datetime_utils.py")
     print_info("Tests: Timezone-aware datetime helpers")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_datetime_utils.py", "-v"],
-        "Datetime utils tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_datetime_utils.py", test_names)
+    return run_command(cmd, "Datetime utils tests", verbose=verbose)
 
 
-def utils_financial_math(verbose: bool = False) -> bool:
+def utils_financial_math(verbose: bool = False, test_names: list = None) -> bool:
     """Test financial math utilities."""
     print_section("Utils: Financial Math")
     print_info("Testing: backend/app/utils/financial_math.py")
     print_info("Tests: Day count conventions, Interest calculations, Rate finding")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_financial_math.py", "-v"],
-        "Financial math tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_financial_math.py", test_names)
+    return run_command(cmd, "Financial math tests", verbose=verbose)
 
 
-def utils_day_count(verbose: bool = False) -> bool:
+def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
     """Test day count conventions."""
     print_section("Utils: Day Count Conventions")
     print_info("Testing: backend/app/utils/financial_math.py (day count functions)")
     print_info("Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_day_count_conventions.py", "-v"],
-        "Day count convention tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_day_count_conventions.py", test_names)
+    return run_command(cmd, "Day count convention tests", verbose=verbose)
 
 
-def utils_compound_interest(verbose: bool = False) -> bool:
+def utils_compound_interest(verbose: bool = False, test_names: list = None) -> bool:
     """Test compound interest calculations."""
     print_section("Utils: Compound Interest")
     print_info("Testing: backend/app/utils/financial_math.py (interest calculations)")
     print_info("Tests: Simple, Compound (annual, semiannual, quarterly, monthly, daily, continuous)")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_compound_interest.py", "-v"],
-        "Compound interest tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_compound_interest.py", test_names)
+    return run_command(cmd, "Compound interest tests", verbose=verbose)
 
 
-def utils_scheduled_investment_schemas(verbose: bool = False) -> bool:
+def utils_scheduled_investment_schemas(verbose: bool = False, test_names: list = None) -> bool:
     """Test Pydantic schemas for scheduled investment (InterestRatePeriod, LateInterestConfig, ScheduledInvestmentSchedule)."""
     print_section("Utils: Scheduled Investment Schemas")
     print_info("Testing: backend/app/schemas/assets.py (scheduled investment related models)")
     print_info("Tests: Period validation, late interest, schedule continuity")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_scheduled_investment_schemas.py", "-v"],
-        "Scheduled investment schema tests",
-        verbose=verbose,
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_scheduled_investment_schemas.py", test_names)
+    return run_command(cmd, "Scheduled investment schema tests", verbose=verbose)
 
 
-def utils_geo_normalization(verbose: bool = False) -> bool:
+def utils_geo_normalization(verbose: bool = False, test_names: list = None) -> bool:
     """Test geographic area normalization utilities (country codes, weight validation)."""
     print_section("Utils: Geographic Area Normalization")
     print_info("Testing: backend/app/utils/geo_normalization.py")
     print_info("Tests: ISO-3166-A3 normalization, weight parsing, validation pipeline")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_geo_normalization.py", "-v"],
-        "Geographic area normalization tests",
-        verbose=verbose,
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_geo_normalization.py", test_names)
+    return run_command(cmd, "Geographic area normalization tests", verbose=verbose)
 
 
-def utils_geographic_area_integration(verbose: bool = False) -> bool:
+def utils_geographic_area_integration(verbose: bool = False, test_names: list = None) -> bool:
     """Test FAGeographicArea integration with FAClassificationParams."""
     print_section("Utils: FAGeographicArea Integration")
     print_info("Testing: FAGeographicArea serialization/deserialization")
     print_info("Tests: Pydantic JSON methods, round-trip, nested structure")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_geographic_area_integration.py", "-v"],
-        "FAGeographicArea integration tests",
-        verbose=verbose,
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_geographic_area_integration.py", test_names)
+    return run_command(cmd, "FAGeographicArea integration tests", verbose=verbose)
 
 
-def utils_sector_normalization(verbose: bool = False) -> bool:
+def utils_sector_normalization(verbose: bool = False, test_names: list = None) -> bool:
     """Test FinancialSector enum and sector normalization."""
     print_section("Utils: Sector Normalization")
     print_info("Testing: backend/app/utils/sector_normalization.py")
     print_info("Tests: FinancialSector enum, aliases, normalization, validation")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_sector_normalization.py", "-v"],
-        "Sector normalization tests",
-        verbose=verbose,
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_sector_normalization.py", test_names)
+    return run_command(cmd, "Sector normalization tests", verbose=verbose)
 
 
-def utils_currency(verbose: bool = False) -> bool:
+def utils_currency(verbose: bool = False, test_names: list = None) -> bool:
     """Test Currency class and OldNew generic."""
     print_section("Utils: Currency and OldNew")
     print_info("Testing: Currency arithmetic, validation, OldNew generic")
     print_info("Tests: Creation, arithmetic ops, comparison, serialization")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_currency.py", "-v"],
-        "Currency tests",
-        verbose=verbose,
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_currency.py", test_names)
+    return run_command(cmd, "Currency tests", verbose=verbose)
 
 
-def utils_distribution_models(verbose: bool = False) -> bool:
+def utils_distribution_models(verbose: bool = False, test_names: list = None) -> bool:
     """Test BaseDistribution, FAGeographicArea, FASectorArea models."""
     print_section("Utils: Distribution Models")
     print_info("Testing: BaseDistribution, FAGeographicArea, FASectorArea")
     print_info("Tests: Weight validation, normalization, quantization, sector merging")
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_distribution_models.py", "-v"],
-        "Distribution models tests",
-        verbose=verbose,
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_distribution_models.py", test_names)
+    return run_command(cmd, "Distribution models tests", verbose=verbose)
 
 
 def utils_all(verbose: bool = False) -> bool:
@@ -708,6 +687,111 @@ def utils_all(verbose: bool = False) -> bool:
 
     if passed == total:
         print_success("All utility tests passed! 🎉")
+        return True
+    else:
+        print_error(f"{total - passed} test(s) failed")
+        return False
+
+
+# ============================================================================
+# SCHEMAS TESTS
+# ============================================================================
+
+def schemas_common(verbose: bool = False, test_names: list = None) -> bool:
+    """Test common Pydantic schemas (Currency, DateRangeModel, OldNew)."""
+    print_section("Schemas: Common (Currency, DateRangeModel, OldNew)")
+    print_info("Testing: backend/app/schemas/common.py")
+
+    # For now, run existing test_currency.py until migration is complete
+    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_currency.py", "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+
+    return run_command(cmd, "Common schemas tests", verbose=verbose)
+
+
+def schemas_assets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test asset-related Pydantic schemas (FAGeographicArea, FAInterestRatePeriod, etc.)."""
+    print_section("Schemas: Assets (FAGeographicArea, FAInterestRatePeriod, etc.)")
+    print_info("Testing: backend/app/schemas/assets.py")
+
+    # TODO: Migrate these 3 test files into a single test_schemas/test_asset_schemas.py
+    # Files to merge:
+    #   - test_utilities/test_scheduled_investment_schemas.py
+    #   - test_utilities/test_distribution_models.py
+    #   - test_utilities/test_geographic_area_integration.py
+    # After migration, update this function to point to the new file and remove
+    # the corresponding entries from utils_all() and utils_* functions.
+
+    cmd = ["pipenv", "run", "python", "-m", "pytest",
+           "backend/test_scripts/test_utilities/test_scheduled_investment_schemas.py",
+           "backend/test_scripts/test_utilities/test_distribution_models.py",
+           "backend/test_scripts/test_utilities/test_geographic_area_integration.py",
+           "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+
+    return run_command(cmd, "Asset schemas tests", verbose=verbose)
+
+
+def schemas_transactions(verbose: bool = False, test_names: list = None) -> bool:
+    """Test transaction Pydantic schemas (TXCreateItem, TXReadItem, etc.)."""
+    print_section("Schemas: Transactions (TXCreateItem, TXReadItem, etc.)")
+    print_info("Testing: backend/app/schemas/transactions.py")
+
+    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_schemas/test_transaction_schemas.py", "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+
+    return run_command(cmd, "Transaction schemas tests", verbose=verbose)
+
+
+def schemas_brokers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test broker Pydantic schemas (BRCreateItem, BRReadItem, etc.)."""
+    print_section("Schemas: Brokers (BRCreateItem, BRReadItem, etc.)")
+    print_info("Testing: backend/app/schemas/brokers.py")
+
+    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_schemas/test_broker_schemas.py", "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+
+    return run_command(cmd, "Broker schemas tests", verbose=verbose)
+
+
+def schemas_all(verbose: bool = False) -> bool:
+    """Run all schema validation tests."""
+    print_header("LibreFolio Schema Validation Tests")
+    print_info("Testing Pydantic schema validation rules")
+
+    tests = [
+        ("Common Schemas", lambda: schemas_common(verbose)),
+        ("Asset Schemas", lambda: schemas_assets(verbose)),
+        ("Transaction Schemas", lambda: schemas_transactions(verbose)),
+        ("Broker Schemas", lambda: schemas_brokers(verbose)),
+    ]
+
+    results = []
+    for test_name, test_func in tests:
+        success = test_func()
+        results.append((test_name, success))
+        if not success:
+            print_error(f"Test failed: {test_name}")
+            print_warning("Stopping schema tests execution")
+            break
+
+    # Summary
+    print_section("Schema Tests Summary")
+    passed = sum(1 for _, success in results if success)
+    total = len(results)
+
+    for test_name, success in results:
+        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
+        print(f"{status} - {test_name}")
+
+    print(f"\nResults: {passed}/{total} tests passed")
+
+    if passed == total:
+        print_success("All schema tests passed! 🎉")
         return True
     else:
         print_error(f"{total - passed} test(s) failed")
@@ -774,7 +858,7 @@ def services_all(verbose: bool = False) -> bool:
 # API TESTS
 # ============================================================================
 
-def api_fx(verbose: bool = False) -> bool:
+def api_fx(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run FX API endpoint tests (conversion, providers, pair sources).
     """
@@ -783,14 +867,11 @@ def api_fx(verbose: bool = False) -> bool:
     print_info("Tests: Currency conversion, providers, pair sources CRUD")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_fx_api.py", "-v"],
-        "FX API tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_api.py", test_names)
+    return run_command(cmd, "FX API tests", verbose=verbose)
 
 
-def api_fx_sync(verbose: bool = False) -> bool:
+def api_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run FX Sync API endpoint tests.
     """
@@ -800,14 +881,11 @@ def api_fx_sync(verbose: bool = False) -> bool:
     print_info("Tests: Error handling (FXServiceError), auto-config mode, provider validation")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_fx_sync.py", "-v"],
-        "FX Sync API tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_sync.py", test_names)
+    return run_command(cmd, "FX Sync API tests", verbose=verbose)
 
 
-def api_assets_price(verbose: bool = False) -> bool:
+def api_assets_price(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run Assets Price API endpoint tests.
     """
@@ -819,14 +897,11 @@ def api_assets_price(verbose: bool = False) -> bool:
     print_info("Tests: POST /assets/prices/refresh (from providers)")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_prices.py", "-v"],
-        "Assets Price API tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_prices.py", test_names)
+    return run_command(cmd, "Assets Price API tests", verbose=verbose)
 
 
-def api_assets_provider(verbose: bool = False) -> bool:
+def api_assets_provider(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run Assets Provider API endpoint tests.
     """
@@ -837,14 +912,11 @@ def api_assets_provider(verbose: bool = False) -> bool:
     print_info("Tests: DELETE /assets/provider (edge cases)")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_provider.py", "-v"],
-        "Assets Provider API tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_provider.py", test_names)
+    return run_command(cmd, "Assets Provider API tests", verbose=verbose)
 
 
-def api_assets_metadata(verbose: bool = False) -> bool:
+def api_assets_metadata(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run Assets Metadata API endpoint tests.
     """
@@ -853,14 +925,11 @@ def api_assets_metadata(verbose: bool = False) -> bool:
     print_info("Tests: PATCH metadata, bulk read, refresh endpoints")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_metadata.py", "-v"],
-        "Assets Metadata API tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_metadata.py", test_names)
+    return run_command(cmd, "Assets Metadata API tests", verbose=verbose)
 
 
-def api_assets_crud(verbose: bool = False) -> bool:
+def api_assets_crud(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run Assets CRUD API endpoint tests.
     """
@@ -869,14 +938,11 @@ def api_assets_crud(verbose: bool = False) -> bool:
     print_info("Tests: Create assets, list/filter assets, delete assets")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_assets_crud.py", "-v"],
-        "Assets CRUD API tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_crud.py", test_names)
+    return run_command(cmd, "Assets CRUD API tests", verbose=verbose)
 
 
-def api_utilities(verbose: bool = False) -> bool:
+def api_utilities(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run Utilities API endpoint tests.
     """
@@ -885,14 +951,11 @@ def api_utilities(verbose: bool = False) -> bool:
     print_info("Tests: GET /utilities/sectors, GET /utilities/countries/normalize")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_api/test_utilities.py", "-v"],
-        "Utilities API tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_utilities.py", test_names)
+    return run_command(cmd, "Utilities API tests", verbose=verbose)
 
 
-def search2prices_test(verbose: bool = False) -> bool:
+def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run E2E (End-to-End) API tests.
 
@@ -903,11 +966,8 @@ def search2prices_test(verbose: bool = False) -> bool:
     print_info("Tests: Search → Create Asset → Assign Provider → Refresh Metadata → Refresh Prices")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    return run_command(
-        ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_e2e/test_search_to_prices.py", "-v"],
-        "E2E API tests",
-        verbose=verbose
-        )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_search_to_prices.py", test_names)
+    return run_command(cmd, "E2E API tests", verbose=verbose)
 
 
 def api_test(verbose: bool = False) -> bool:
@@ -1218,6 +1278,12 @@ Test commands:
         help="External service test to run"
         )
 
+    external_parser.add_argument(
+        "test_names",
+        nargs="*",
+        help="Optional: specific test names to run (e.g., test_ecb_provider)"
+        )
+
     # ========================================================================
     # DATABASE TESTS SUBPARSER
     # ========================================================================
@@ -1265,6 +1331,12 @@ Test commands:
         "action",
         choices=["create", "validate", "numeric-truncation", "fx-rates", "populate", "referential-integrity", "all"],
         help="Database test to run"
+        )
+
+    db_parser.add_argument(
+        "test_names",
+        nargs="*",
+        help="Optional: specific test names to run (e.g., test_tables_exist)"
         )
 
     db_parser.add_argument(
@@ -1324,8 +1396,14 @@ Future: FIFO calculations, portfolio aggregations, loan schedules will be added 
 
     services_parser.add_argument(
         "action",
-        choices=["fx-conversion", "asset-source", "asset-metadata", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "all"],
+        choices=["fx-conversion", "asset-source", "asset-metadata", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "transaction", "broker", "all"],
         help="Service test to run"
+        )
+
+    services_parser.add_argument(
+        "test_names",
+        nargs="*",
+        help="Optional: specific test names to run (e.g., test_direct_conversion)"
         )
 
     # ========================================================================
@@ -1413,6 +1491,60 @@ These are foundational tests for remediation phases 1 & 2.
         help="Utility test to run",
         )
 
+    utils_parser.add_argument(
+        "test_names",
+        nargs="*",
+        help="Optional: specific test names to run (e.g., test_utcnow)"
+        )
+
+    # ========================================================================
+    # SCHEMAS TESTS SUBPARSER
+    # ========================================================================
+    schemas_parser = subparsers.add_parser(
+        "schemas",
+        help="Pydantic schema validation tests",
+        description="""
+Schema Validation Tests
+
+These tests verify Pydantic schema validation rules:
+  • No backend server required
+  • Tests DTO validation, business rules, serialization
+  • Pure unit tests (no database needed)
+
+Test commands:
+  common           - Test common schemas (Currency, DateRangeModel, OldNew)
+                     📋 Prerequisites: None
+                     💡 Tests: Creation, validation, arithmetic, serialization
+  
+  assets           - Test asset-related schemas (FAGeographicArea, FAInterestRatePeriod, etc.)
+                     📋 Prerequisites: None
+                     💡 Tests: Distribution validation, interest periods, schedule continuity
+  
+  transactions     - Test transaction schemas (TXCreateItem, TXReadItem, TXUpdateItem)
+                     📋 Prerequisites: None
+                     💡 Tests: Type rules, link_uuid, cash/asset requirements, sign validation
+  
+  brokers          - Test broker schemas (BRCreateItem, BRReadItem, BRUpdateItem)
+                     📋 Prerequisites: None
+                     💡 Tests: Name validation, initial_balances, delete force flag
+  
+  all              - Run all schema tests
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+
+    schemas_parser.add_argument(
+        "action",
+        choices=["common", "assets", "transactions", "brokers", "all"],
+        help="Schema test to run"
+        )
+
+    schemas_parser.add_argument(
+        "test_names",
+        nargs="*",
+        help="Optional: specific test names to run (e.g., test_transfer_requires_link_uuid)"
+        )
+
     # ========================================================================
     # API TESTS SUBPARSER
     # ========================================================================
@@ -1473,6 +1605,12 @@ Test commands:
         help="API test to run"
         )
 
+    api_parser.add_argument(
+        "test_names",
+        nargs="*",
+        help="Optional: specific test names to run (e.g., test_get_currencies)"
+        )
+
     # ========================================================================
     # E2E TESTS SUBPARSER
     # ========================================================================
@@ -1500,6 +1638,12 @@ These tests verify complete end-to-end workflows via REST API:
         "action",
         choices=["search-to-prices", "all"],
         help="End-to-End tests with API interaction (auto-starts server if needed)"
+        )
+
+    e2e_parser.add_argument(
+        "test_names",
+        nargs="*",
+        help="Optional: specific test names to run"
         )
 
     # ========================================================================
@@ -1547,6 +1691,7 @@ def main():
 
     # Extract flags
     verbose = getattr(args, 'verbose', False)
+    test_names = getattr(args, 'test_names', None)
     coverage = getattr(args, 'coverage', False)
     cov_clean = getattr(args, 'cov_clean', False)
 
@@ -1592,9 +1737,9 @@ def main():
     elif args.category == "external":
         # External services tests
         if args.action == "fx-providers":
-            success = external_fx_providers(verbose=verbose)
+            success = external_fx_providers(verbose=verbose, test_names=test_names)
         elif args.action == "asset-providers":
-            success = external_asset_providers(verbose=verbose)
+            success = external_asset_providers(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = external_all(verbose=verbose)
 
@@ -1603,88 +1748,105 @@ def main():
         if args.action == "create":
             success = db_create(verbose=verbose)
         elif args.action == "validate":
-            success = db_validate(verbose=verbose)
+            success = db_validate(verbose=verbose, test_names=test_names)
         elif args.action == "numeric-truncation":
-            success = db_numeric_truncation(verbose=verbose)
+            success = db_numeric_truncation(verbose=verbose, test_names=test_names)
         elif args.action == "fx-rates":
-            success = db_fx_rates(verbose=verbose)
+            success = db_fx_rates(verbose=verbose, test_names=test_names)
         elif args.action == "populate":
             force = getattr(args, 'force', False)
             success = db_populate(verbose=verbose, force=force)
         elif args.action == "referential-integrity":
-            success = db_test_referential_integrity(verbose=verbose)
+            success = db_test_referential_integrity(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = db_all(verbose=verbose)
 
     elif args.category == "services":
         # Backend services tests
         if args.action == "fx-conversion":
-            success = services_fx_conversion(verbose=verbose)
+            success = services_fx_conversion(verbose=verbose, test_names=test_names)
         elif args.action == "asset-source":
-            success = services_asset_source(verbose=verbose)
+            success = services_asset_source(verbose=verbose, test_names=test_names)
         elif args.action == "asset-metadata":
-            success = services_asset_metadata(verbose=verbose)
+            success = services_asset_metadata(verbose=verbose, test_names=test_names)
         elif args.action == "asset-source-refresh":
-            success = services_asset_source_refresh(verbose=verbose)
+            success = services_asset_source_refresh(verbose=verbose, test_names=test_names)
         elif args.action == "provider-registry":
-            success = services_provider_registry(verbose=verbose)
+            success = services_provider_registry(verbose=verbose, test_names=test_names)
         elif args.action == "synthetic-yield":
-            success = services_synthetic_yield(verbose=verbose)
+            success = services_synthetic_yield(verbose=verbose, test_names=test_names)
         elif args.action == "synthetic-yield-integration":
-            success = services_synthetic_yield_integration(verbose=verbose)
+            success = services_synthetic_yield_integration(verbose=verbose, test_names=test_names)
+        elif args.action == "transaction":
+            success = services_transaction(verbose=verbose, test_names=test_names)
+        elif args.action == "broker":
+            success = services_broker(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = services_all(verbose=verbose)
 
     elif args.category == "utils":
         # Utility module tests
         if args.action == "decimal-precision":
-            success = utils_decimal_precision(verbose=verbose)
+            success = utils_decimal_precision(verbose=verbose, test_names=test_names)
         elif args.action == "datetime":
-            success = utils_datetime(verbose=verbose)
+            success = utils_datetime(verbose=verbose, test_names=test_names)
         elif args.action == "financial-math":
-            success = utils_financial_math(verbose=verbose)
+            success = utils_financial_math(verbose=verbose, test_names=test_names)
         elif args.action == "day-count":
-            success = utils_day_count(verbose=verbose)
+            success = utils_day_count(verbose=verbose, test_names=test_names)
         elif args.action == "compound-interest":
-            success = utils_compound_interest(verbose=verbose)
+            success = utils_compound_interest(verbose=verbose, test_names=test_names)
         elif args.action == "scheduled-investment-schemas":
-            success = utils_scheduled_investment_schemas(verbose=verbose)
+            success = utils_scheduled_investment_schemas(verbose=verbose, test_names=test_names)
         elif args.action == "geo-normalization":
-            success = utils_geo_normalization(verbose=verbose)
+            success = utils_geo_normalization(verbose=verbose, test_names=test_names)
         elif args.action == "geographic-area-integration":
-            success = utils_geographic_area_integration(verbose=verbose)
+            success = utils_geographic_area_integration(verbose=verbose, test_names=test_names)
         elif args.action == "sector-normalization":
-            success = utils_sector_normalization(verbose=verbose)
+            success = utils_sector_normalization(verbose=verbose, test_names=test_names)
         elif args.action == "currency":
-            success = utils_currency(verbose=verbose)
+            success = utils_currency(verbose=verbose, test_names=test_names)
         elif args.action == "distribution-models":
-            success = utils_distribution_models(verbose=verbose)
+            success = utils_distribution_models(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = utils_all(verbose=verbose)
+
+    elif args.category == "schemas":
+        # Schema validation tests
+        if args.action == "common":
+            success = schemas_common(verbose=verbose, test_names=test_names)
+        elif args.action == "assets":
+            success = schemas_assets(verbose=verbose, test_names=test_names)
+        elif args.action == "transactions":
+            success = schemas_transactions(verbose=verbose, test_names=test_names)
+        elif args.action == "brokers":
+            success = schemas_brokers(verbose=verbose, test_names=test_names)
+        elif args.action == "all":
+            success = schemas_all(verbose=verbose)
 
     elif args.category == "api":
         # API tests
         if args.action == "fx":
-            success = api_fx(verbose=verbose)
+            success = api_fx(verbose=verbose, test_names=test_names)
         elif args.action == "fx-sync":
-            success = api_fx_sync(verbose=verbose)
+            success = api_fx_sync(verbose=verbose, test_names=test_names)
         elif args.action == "assets-metadata":
-            success = api_assets_metadata(verbose=verbose)
+            success = api_assets_metadata(verbose=verbose, test_names=test_names)
         elif args.action == "assets-crud":
-            success = api_assets_crud(verbose=verbose)
+            success = api_assets_crud(verbose=verbose, test_names=test_names)
         elif args.action == "assets-price":
-            success = api_assets_price(verbose=verbose)
+            success = api_assets_price(verbose=verbose, test_names=test_names)
         elif args.action == "assets-provider":
-            success = api_assets_provider(verbose=verbose)
+            success = api_assets_provider(verbose=verbose, test_names=test_names)
         elif args.action == "utilities":
-            success = api_utilities(verbose=verbose)
+            success = api_utilities(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = api_test(verbose=verbose)
     
     elif args.category == "e2e":
         # E2E tests
         if args.action == "search-to-prices":
-            success = search2prices_test(verbose=verbose)
+            success = search2prices_test(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = e2e_test(verbose=verbose)
 

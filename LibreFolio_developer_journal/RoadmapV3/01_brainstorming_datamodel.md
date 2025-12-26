@@ -67,9 +67,16 @@ class Transaction(SQLModel, table=True):
     amount: Decimal = Field(default=0, nullable=False)
     currency: Optional[str] = Field(default=None)  # Required if amount != 0
 
-    # Unidirectional Link: The second transaction points to the first.
-    # Used for TRANSFER and FX_CONVERSION.
-    related_transaction_id: Optional[int] = Field(foreign_key="transactions.id", nullable=True)
+    # BIDIRECTIONAL Link with DEFERRABLE FK (2025-12-26)
+    # Both transactions in a pair point to each other (A->B and B->A).
+    # Uses DEFERRABLE INITIALLY DEFERRED to allow setting mutual links in same transaction.
+    # FK constraint is only checked at COMMIT, not at INSERT/UPDATE time.
+    related_transaction_id: Optional[int] = Field(
+        foreign_key="transactions.id", 
+        deferrable=True, 
+        initially="DEFERRED",
+        nullable=True
+    )
 
     tags: Optional[str] = Field(default=None)  # Comma-separated tags (es: "tag1,tag2")
     description: Optional[str] = Field(default=None)
@@ -80,21 +87,27 @@ class Transaction(SQLModel, table=True):
 
 La tabella dovrebbe essere:
 
-| Colonna                  | Tipo     | Nullable | Default | Descrizione                                                         |
-|:-------------------------|:---------|:---------|:--------|:--------------------------------------------------------------------|
-| `id`                     | PK       | No       | -       | ID Univoco.                                                         |
-| `broker_id`              | FK       | No       | -       | Broker di appartenenza.                                             |
-| `asset_id`               | FK       | Sì       | -       | Asset coinvolto. NULL per movimenti puramente cash.                 |
-| `type`                   | Enum     | No       | -       | Tipo di operazione.                                                 |
-| `date`                   | Date     | No       | -       | Data di regolamento (Settlement Date).                              |
-| `quantity`               | Decimal  | No       | `0`     | Delta Asset. Positivo = Entrata. Negativo = Uscita.                 |
-| `amount`                 | Decimal  | No       | `0`     | Delta Cash. Positivo = Incasso. Negativo = Spesa.                   |
-| `currency`               | String   | Sì       | -       | Codice valuta (ISO 4217) se `amount != 0`.                          |
-| `related_transaction_id` | FK       | Sì       | -       | Punta alla transazione "gemella". Indice DB necessario.             |
-| `tags`                   | Text     | Sì       | -       | Lista di tag separati da virgola o JSON. Per raggruppamenti utente. |
-| `description`            | Text     | Sì       | -       | Note o descrizione originale.                                       |
-| `created_at`             | DateTime | No       | Now     | Timestamp creazione.                                                |
-| `updated_at`             | DateTime | No       | Now     | Timestamp aggiornamento.                                            |
+| Colonna                  | Tipo     | Nullable | Default | Descrizione                                                                        |
+|:-------------------------|:---------|:---------|:--------|:-----------------------------------------------------------------------------------|
+| `id`                     | PK       | No       | -       | ID Univoco.                                                                        |
+| `broker_id`              | FK       | No       | -       | Broker di appartenenza.                                                            |
+| `asset_id`               | FK       | Sì       | -       | Asset coinvolto. NULL per movimenti puramente cash.                                |
+| `type`                   | Enum     | No       | -       | Tipo di operazione.                                                                |
+| `date`                   | Date     | No       | -       | Data di regolamento (Settlement Date).                                             |
+| `quantity`               | Decimal  | No       | `0`     | Delta Asset. Positivo = Entrata. Negativo = Uscita.                                |
+| `amount`                 | Decimal  | No       | `0`     | Delta Cash. Positivo = Incasso. Negativo = Spesa.                                  |
+| `currency`               | String   | Sì       | -       | Codice valuta (ISO 4217) se `amount != 0`.                                         |
+| `related_transaction_id` | FK       | Sì       | -       | **BIDIRECTIONAL**: punta alla transazione gemella. DEFERRABLE INITIALLY DEFERRED.  |
+| `tags`                   | Text     | Sì       | -       | Lista di tag separati da virgola o JSON. Per raggruppamenti utente.                |
+| `description`            | Text     | Sì       | -       | Note o descrizione originale.                                                      |
+| `created_at`             | DateTime | No       | Now     | Timestamp creazione.                                                               |
+| `updated_at`             | DateTime | No       | Now     | Timestamp aggiornamento.                                                           |
+
+**Nota sulla FK DEFERRABLE (2025-12-26):**
+- Permette di impostare A->B e B->A nella stessa transazione DB
+- Il vincolo FK viene verificato solo al COMMIT, non all'INSERT
+- Semplifica enormemente la logica di create e delete delle transazioni linkate
+- Non serve più il workaround di "nullify before delete"
 
 ### 1.3 Transaction Types Reference Table ✅
 

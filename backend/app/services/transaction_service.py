@@ -133,10 +133,12 @@ class TransactionService:
             except Exception as e:
                 results.append(TXCreateResultItem(success=False, link_uuid=item.link_uuid, error=str(e)))
 
-        # Phase 2: Resolve link_uuid pairs
+        # Phase 2: Resolve link_uuid pairs - BIDIRECTIONAL linking
+        # With DEFERRABLE FK constraint, we can set A->B and B->A in the same transaction
         for link_uuid, txs in link_uuid_map.items():
             if len(txs) == 2:
-                # Link second to first (unidirectional)
+                # Bidirectional link: A points to B, B points to A
+                txs[0].related_transaction_id = txs[1].id
                 txs[1].related_transaction_id = txs[0].id
             elif len(txs) != 2:
                 errors.append(f"link_uuid '{link_uuid}' has {len(txs)} transactions (expected 2)")
@@ -200,85 +202,17 @@ class TransactionService:
         result = await self.session.execute(stmt)
         txs = list(result.scalars().all())
 
-        # Build bidirectional link map
-        linked_map = await self._build_linked_map([tx.id for tx in txs])
-
-        return [TXReadItem.from_db_model(tx, linked_map.get(tx.id)) for tx in txs]
+        # With bidirectional FK, related_transaction_id is already correct in both directions
+        return [TXReadItem.from_db_model(tx) for tx in txs]
 
     async def get_by_id(self, tx_id: int) -> Optional[TXReadItem]:
-        """Get a single transaction by ID with bidirectional linked_transaction_id."""
+        """Get a single transaction by ID."""
         tx = await self.session.get(Transaction, tx_id)
         if not tx:
             return None
 
-        # Find the linked transaction in both directions
-        linked_id = await self._find_linked_transaction(tx_id)
-        return TXReadItem.from_db_model(tx, linked_id)
-
-    async def _find_linked_transaction(self, tx_id: int) -> Optional[int]:
-        """
-        Find the linked transaction ID for a single transaction.
-
-        This is a convenience wrapper around _build_linked_map for single lookups.
-
-        Note: This method is agnostic about which transaction types support linking.
-        Currently only TRANSFER and FX_CONVERSION use links, but this method is
-        designed to be resilient to future changes in linking rules.
-
-        Args:
-            tx_id: Transaction ID to look up
-
-        Returns:
-            The ID of the linked transaction, or None if not linked
-        """
-        linked_map = await self._build_linked_map([tx_id])
-        return linked_map.get(tx_id)
-
-    async def _build_linked_map(self, tx_ids: List[int]) -> Dict[int, Optional[int]]:
-        """
-        Build a map of tx_id -> linked_transaction_id for a batch of transactions.
-
-        Resolves links bidirectionally:
-        - If tx A points to tx B (A.related_transaction_id = B.id), then A -> B
-        - If tx B points to tx A (B.related_transaction_id = A.id), then A -> B
-
-        Note: This method is agnostic about which transaction types support linking.
-        Currently only TRANSFER and FX_CONVERSION use links, but this method is
-        designed to be resilient to future changes in linking rules. It simply
-        looks up the related_transaction_id field in both directions.
-
-        Args:
-            tx_ids: List of transaction IDs to look up
-
-        Returns:
-            Dict mapping tx_id to its linked transaction ID (or None if not linked)
-        """
-        if not tx_ids:
-            return {}
-
-        # Get all transactions to find their related_transaction_id
-        stmt = select(Transaction.id, Transaction.related_transaction_id).where(Transaction.id.in_(tx_ids))
-        result = await self.session.execute(stmt)
-        tx_to_related = {row[0]: row[1] for row in result.all()}
-
-        # Find transactions that point to any of our tx_ids
-        stmt = select(Transaction.id, Transaction.related_transaction_id).where(Transaction.related_transaction_id.in_(tx_ids))
-        result = await self.session.execute(stmt)
-        related_to_tx = {row[1]: row[0] for row in result.all()}  # related_id -> tx_id that points to it
-
-        # Build the final map
-        linked_map: Dict[int, Optional[int]] = {}
-        for tx_id in tx_ids:
-            # If this tx points to another, use that
-            if tx_to_related.get(tx_id):
-                linked_map[tx_id] = tx_to_related[tx_id]
-            # Otherwise, check if another tx points to this one
-            elif tx_id in related_to_tx:
-                linked_map[tx_id] = related_to_tx[tx_id]
-            else:
-                linked_map[tx_id] = None
-
-        return linked_map
+        # With bidirectional FK, related_transaction_id is already populated
+        return TXReadItem.from_db_model(tx)
 
     async def get_by_ids(self, tx_ids: List[int]) -> List[Transaction]:
         """Get multiple transactions by IDs (returns DB models)."""
@@ -435,7 +369,9 @@ class TransactionService:
         affected_brokers: Set[int] = set()
         earliest_date_by_broker: Dict[int, date_type] = {}
 
-        # Delete valid transactions
+        # Delete all transactions
+        # With DEFERRABLE FK, the constraint is only checked at COMMIT,
+        # so we can delete both A and B even if they point to each other
         for tx in valid_txs:
             try:
                 affected_brokers.add(tx.broker_id)
@@ -454,7 +390,7 @@ class TransactionService:
             except Exception as e:
                 results.append(TXDeleteResult(id=tx.id, success=False, deleted_count=0, message=str(e)))
 
-        # Flush to apply deletes before validation
+        # Single flush at end for performance
         await self.session.flush()
 
         # Validate balances

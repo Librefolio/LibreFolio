@@ -568,6 +568,7 @@ class FAClassificationParams(BaseModel):
         ...     sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
         ... )
     """
+    # TODO: rendere la classe non strettamente vincolata, per permettere potenziali aggiunte plugin fuori standard
     model_config = ConfigDict(extra="forbid")
 
     short_description: Optional[str] = None
