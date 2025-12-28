@@ -23,7 +23,6 @@ This is achieved by:
 2. Using gevent for asyncio event loop instrumentation
 3. No subprocess complexity or sitecustomize.py needed
 """
-import os
 import threading
 import time
 from pathlib import Path
@@ -130,8 +129,9 @@ class _TestingServerManager:
 
     def _run_server(self):
         """Run uvicorn server in background thread (called by start_server)."""
-        # Set test mode
-        os.environ["LIBREFOLIO_TEST_MODE"] = "1"
+        # Set test mode using the proper function (updates both env var and global flag)
+        from backend.app.config import set_test_mode
+        set_test_mode(True)
 
         # Import app here (inside thread) to ensure coverage tracking
         from backend.app.main import app
