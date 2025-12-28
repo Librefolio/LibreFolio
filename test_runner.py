@@ -542,6 +542,18 @@ def services_broker(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Broker service tests", verbose=verbose)
 
 
+def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test edge cases and regression scenarios for transactions.
+    """
+    print_section("Services: Transaction Edge Cases")
+    print_info("Testing: Edge cases, boundary conditions, regression scenarios")
+    print_info("Tests: Decimal precision, currency validation, date edge cases, null handling")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_edge_cases.py", test_names)
+    return run_command(cmd, "Transaction edge cases tests", verbose=verbose)
+
+
 # ============================================================================
 # UTILS TESTS
 # ============================================================================
@@ -823,6 +835,9 @@ def services_all(verbose: bool = False) -> bool:
         ("Provider Registry", lambda: services_provider_registry(verbose)),
         ("Synthetic Yield Calculation", lambda: services_synthetic_yield(verbose)),
         ("Synthetic Yield Integration E2E", lambda: services_synthetic_yield_integration(verbose)),
+        ("Transaction Service", lambda: services_transaction(verbose)),
+        ("Broker Service", lambda: services_broker(verbose)),
+        ("Transaction Edge Cases", lambda: services_edge_cases(verbose)),
         ]
 
     results = []
@@ -955,6 +970,34 @@ def api_utilities(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Utilities API tests", verbose=verbose)
 
 
+def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Run Transactions API endpoint tests.
+    """
+    print_section("Transactions API Endpoint Tests")
+    print_info("Testing REST API endpoints for transaction management")
+    print_info("Tests: POST /transactions (bulk create), GET /transactions (query)")
+    print_info("Tests: GET /transactions/{id}, PATCH /transactions, DELETE /transactions")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transactions_api.py", test_names)
+    return run_command(cmd, "Transactions API tests", verbose=verbose)
+
+
+def api_brokers(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Run Brokers API endpoint tests.
+    """
+    print_section("Brokers API Endpoint Tests")
+    print_info("Testing REST API endpoints for broker management")
+    print_info("Tests: POST /brokers (create), GET /brokers (list)")
+    print_info("Tests: GET /brokers/{id}, PATCH /brokers, DELETE /brokers")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_brokers_api.py", test_names)
+    return run_command(cmd, "Brokers API tests", verbose=verbose)
+
+
 def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run E2E (End-to-End) API tests.
@@ -985,7 +1028,9 @@ def api_test(verbose: bool = False) -> bool:
         ("Assets CRUD API", lambda: api_assets_crud(verbose)),
         ("Assets Price API", lambda: api_assets_price(verbose)),
         ("Assets Provider API", lambda: api_assets_provider(verbose)),
-        ("Utilities API", lambda: api_utilities(verbose))
+        ("Utilities API", lambda: api_utilities(verbose)),
+        ("Transactions API", lambda: api_transactions(verbose)),
+        ("Brokers API", lambda: api_brokers(verbose)),
         ]
 
     results = []
@@ -1396,7 +1441,7 @@ Future: FIFO calculations, portfolio aggregations, loan schedules will be added 
 
     services_parser.add_argument(
         "action",
-        choices=["fx-conversion", "asset-source", "asset-metadata", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "transaction", "broker", "all"],
+        choices=["fx-conversion", "asset-source", "asset-metadata", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "transaction", "broker", "edge-cases", "all"],
         help="Service test to run"
         )
 
@@ -1601,7 +1646,7 @@ Test commands:
 
     api_parser.add_argument(
         "action",
-        choices=["fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "all"],
+        choices=["fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "transactions", "brokers", "all"],
         help="API test to run"
         )
 
@@ -1781,6 +1826,8 @@ def main():
             success = services_transaction(verbose=verbose, test_names=test_names)
         elif args.action == "broker":
             success = services_broker(verbose=verbose, test_names=test_names)
+        elif args.action == "edge-cases":
+            success = services_edge_cases(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = services_all(verbose=verbose)
 
@@ -1840,6 +1887,10 @@ def main():
             success = api_assets_provider(verbose=verbose, test_names=test_names)
         elif args.action == "utilities":
             success = api_utilities(verbose=verbose, test_names=test_names)
+        elif args.action == "transactions":
+            success = api_transactions(verbose=verbose, test_names=test_names)
+        elif args.action == "brokers":
+            success = api_brokers(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = api_test(verbose=verbose)
     
