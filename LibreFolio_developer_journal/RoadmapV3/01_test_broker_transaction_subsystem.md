@@ -871,32 +871,39 @@ Modifiche necessarie:
 
 ---
 
-## Appendix B: Migration Checklist
+## Appendix B: Migration Checklist ✅ COMPLETE
 
 Passi per applicare la riorganizzazione:
 
 - [x] Creare cartella `backend/test_scripts/test_schemas/`
 - [x] Creare `backend/test_scripts/test_schemas/__init__.py`
-- [ ] Creare `backend/test_scripts/test_schemas/test_common_schemas.py` (copiare contenuto da `test_currency.py`)
-- [ ] Creare `backend/test_scripts/test_schemas/test_asset_schemas.py` (unire contenuti da 3 file)
+- [x] Creare `backend/test_scripts/test_schemas/test_common_schemas.py` (migrato da `test_currency.py`) ✅ 52 test
+- [x] Creare `backend/test_scripts/test_schemas/test_asset_schemas.py` (uniti 3 file) ✅ 54 test
 - [x] Creare `backend/test_scripts/test_schemas/test_transaction_schemas.py` (NUOVO) ✅ 52 test
 - [x] Creare `backend/test_scripts/test_schemas/test_broker_schemas.py` (NUOVO) ✅ 29 test
-- [ ] Rimuovere vecchi file da `test_utilities/`:
-    - [ ] `test_currency.py`
-    - [ ] `test_scheduled_investment_schemas.py`
-    - [ ] `test_distribution_models.py`
-    - [ ] `test_geographic_area_integration.py`
+- [x] Rimuovere vecchi file da `test_utilities/`:
+    - [x] `test_currency.py`
+    - [x] `test_scheduled_investment_schemas.py`
+    - [x] `test_distribution_models.py`
+    - [x] `test_geographic_area_integration.py`
 - [x] Aggiornare `test_runner.py`:
     - [x] Aggiungere sezione `# SCHEMAS TESTS`
     - [x] Aggiungere funzioni `schemas_*`
-    - [ ] Rimuovere funzioni `utils_*` per i file spostati
-    - [ ] Aggiornare `utils_all()` lista tests
+    - [x] Rimuovere funzioni `utils_*` per i file spostati (rimossi da utils_all)
+    - [x] Aggiornare `utils_all()` lista tests
     - [x] Aggiornare argparse con nuovo subparser
     - [x] Aggiornare handler nel `main()`
-    - [ ] Aggiornare `run_all_tests()` per includere schemas
+    - [x] Aggiornare `run_all_tests()` per includere schemas
     - [x] Implementare 3° livello (test name filter)
-- [ ] Verificare che `pytest` trovi tutti i test
+- [x] Verificare che `pytest` trovi tutti i test
 - [x] Eseguire `python test_runner.py schemas all` per validare ✅
+
+**Schema Tests Summary (2025-12-28):**
+- Common Schemas: 52 tests (Currency, DateRangeModel, OldNew)
+- Asset Schemas: 54 tests (FAInterestRatePeriod, FAGeographicArea, FASectorArea, etc.)
+- Transaction Schemas: 52 tests (TXCreateItem, validation rules)
+- Broker Schemas: 29 tests (BRCreateItem, BRSummary)
+- **Total: 187 schema tests passing**
 
 ### API Test Files (Category 5) - COMPLETE ✅
 
