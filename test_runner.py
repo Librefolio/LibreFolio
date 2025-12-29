@@ -603,15 +603,6 @@ def utils_compound_interest(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Compound interest tests", verbose=verbose)
 
 
-def utils_scheduled_investment_schemas(verbose: bool = False, test_names: list = None) -> bool:
-    """Test Pydantic schemas for scheduled investment (InterestRatePeriod, LateInterestConfig, ScheduledInvestmentSchedule)."""
-    print_section("Utils: Scheduled Investment Schemas")
-    print_info("Testing: backend/app/schemas/assets.py (scheduled investment related models)")
-    print_info("Tests: Period validation, late interest, schedule continuity")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_scheduled_investment_schemas.py", test_names)
-    return run_command(cmd, "Scheduled investment schema tests", verbose=verbose)
-
-
 def utils_geo_normalization(verbose: bool = False, test_names: list = None) -> bool:
     """Test geographic area normalization utilities (country codes, weight validation)."""
     print_section("Utils: Geographic Area Normalization")
@@ -621,15 +612,6 @@ def utils_geo_normalization(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Geographic area normalization tests", verbose=verbose)
 
 
-def utils_geographic_area_integration(verbose: bool = False, test_names: list = None) -> bool:
-    """Test FAGeographicArea integration with FAClassificationParams."""
-    print_section("Utils: FAGeographicArea Integration")
-    print_info("Testing: FAGeographicArea serialization/deserialization")
-    print_info("Tests: Pydantic JSON methods, round-trip, nested structure")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_geographic_area_integration.py", test_names)
-    return run_command(cmd, "FAGeographicArea integration tests", verbose=verbose)
-
-
 def utils_sector_normalization(verbose: bool = False, test_names: list = None) -> bool:
     """Test FinancialSector enum and sector normalization."""
     print_section("Utils: Sector Normalization")
@@ -637,24 +619,6 @@ def utils_sector_normalization(verbose: bool = False, test_names: list = None) -
     print_info("Tests: FinancialSector enum, aliases, normalization, validation")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_sector_normalization.py", test_names)
     return run_command(cmd, "Sector normalization tests", verbose=verbose)
-
-
-def utils_currency(verbose: bool = False, test_names: list = None) -> bool:
-    """Test Currency class and OldNew generic."""
-    print_section("Utils: Currency and OldNew")
-    print_info("Testing: Currency arithmetic, validation, OldNew generic")
-    print_info("Tests: Creation, arithmetic ops, comparison, serialization")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_currency.py", test_names)
-    return run_command(cmd, "Currency tests", verbose=verbose)
-
-
-def utils_distribution_models(verbose: bool = False, test_names: list = None) -> bool:
-    """Test BaseDistribution, FAGeographicArea, FASectorArea models."""
-    print_section("Utils: Distribution Models")
-    print_info("Testing: BaseDistribution, FAGeographicArea, FASectorArea")
-    print_info("Tests: Weight validation, normalization, quantization, sector merging")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_distribution_models.py", test_names)
-    return run_command(cmd, "Distribution models tests", verbose=verbose)
 
 
 def utils_all(verbose: bool = False) -> bool:
@@ -668,12 +632,10 @@ def utils_all(verbose: bool = False) -> bool:
         ("Financial Math", lambda: utils_financial_math(verbose)),
         ("Day Count Conventions", lambda: utils_day_count(verbose)),
         ("Compound Interest", lambda: utils_compound_interest(verbose)),
-        ("Scheduled Investment Schemas", lambda: utils_scheduled_investment_schemas(verbose)),
         ("Geographic Area Normalization", lambda: utils_geo_normalization(verbose)),
-        ("FAGeographicArea Integration", lambda: utils_geographic_area_integration(verbose)),
         ("Sector Normalization", lambda: utils_sector_normalization(verbose)),
-        ("Currency and OldNew", lambda: utils_currency(verbose)),
-        ("Distribution Models", lambda: utils_distribution_models(verbose)),
+        # Note: Currency, Distribution Models, Scheduled Investment Schemas, and
+        # FAGeographicArea Integration have been moved to schemas category
         ]
 
     results = []
@@ -714,11 +676,7 @@ def schemas_common(verbose: bool = False, test_names: list = None) -> bool:
     print_section("Schemas: Common (Currency, DateRangeModel, OldNew)")
     print_info("Testing: backend/app/schemas/common.py")
 
-    # For now, run existing test_currency.py until migration is complete
-    cmd = ["pipenv", "run", "python", "-m", "pytest", "backend/test_scripts/test_utilities/test_currency.py", "-v"]
-    if test_names:
-        cmd.extend(["-k", " or ".join(test_names)])
-
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_common_schemas.py", test_names)
     return run_command(cmd, "Common schemas tests", verbose=verbose)
 
 
@@ -727,22 +685,7 @@ def schemas_assets(verbose: bool = False, test_names: list = None) -> bool:
     print_section("Schemas: Assets (FAGeographicArea, FAInterestRatePeriod, etc.)")
     print_info("Testing: backend/app/schemas/assets.py")
 
-    # TODO: Migrate these 3 test files into a single test_schemas/test_asset_schemas.py
-    # Files to merge:
-    #   - test_utilities/test_scheduled_investment_schemas.py
-    #   - test_utilities/test_distribution_models.py
-    #   - test_utilities/test_geographic_area_integration.py
-    # After migration, update this function to point to the new file and remove
-    # the corresponding entries from utils_all() and utils_* functions.
-
-    cmd = ["pipenv", "run", "python", "-m", "pytest",
-           "backend/test_scripts/test_utilities/test_scheduled_investment_schemas.py",
-           "backend/test_scripts/test_utilities/test_distribution_models.py",
-           "backend/test_scripts/test_utilities/test_geographic_area_integration.py",
-           "-v"]
-    if test_names:
-        cmd.extend(["-k", " or ".join(test_names)])
-
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_asset_schemas.py", test_names)
     return run_command(cmd, "Asset schemas tests", verbose=verbose)
 
 
@@ -1164,6 +1107,7 @@ def run_all_tests(verbose: bool = False) -> bool:
     test_categories = [
         ("External Services", lambda: external_all(verbose)),
         ("Database Layer", lambda: db_all(verbose)),
+        ("Schema Validation", lambda: schemas_all(verbose)),
         ("Utility Modules", lambda: utils_all(verbose)),
         ("Services layers", lambda: services_all(verbose)),
         ("API Endpoints", lambda: api_test(verbose)),  # Auto-starts server via TestServerManager
@@ -1486,33 +1430,18 @@ Test commands:
                       📋 Prerequisites: None
                       💡 Tests: Simple, Compound (annual, semiannual, quarterly, monthly, daily, continuous)
   
-  scheduled-investment-schemas - Test Pydantic schemas for scheduled investment (InterestRatePeriod, LateInterestConfig, ScheduledInvestmentSchedule)
-                                 📋 Prerequisites: None
-                                 💡 Tests: Period validation, late interest, schedule continuity
-  
   geo-normalization - Test geographic area normalization utilities (Phase 5.1)
                       📋 Prerequisites: pycountry installed
                       💡 Tests: ISO-3166-A3 conversion, weight validation, sum normalization
-  
-  geographic-area-integration - Test FAGeographicArea integration with FAClassificationParams
-                                📋 Prerequisites: None
-                                💡 Tests: Pydantic JSON serialization/deserialization, round-trip, nested structure
   
   sector-normalization - Test FinancialSector enum and sector normalization
                          📋 Prerequisites: None
                          💡 Tests: Sector enum values, aliases, normalization to standard names
   
-  currency         - Test Currency class and OldNew generic
-                     📋 Prerequisites: pycountry installed
-                     💡 Tests: Currency arithmetic, validation, comparison, serialization
-  
-  distribution-models - Test BaseDistribution, FAGeographicArea, FASectorArea models
-                        📋 Prerequisites: None
-                        💡 Tests: Weight validation, quantization, country/sector normalization
-  
   all              - Run all utility tests
-  
-These are foundational tests for remediation phases 1 & 2.
+
+Note: Currency, Distribution Models, Scheduled Investment Schemas and Geographic Area 
+      Integration tests have been migrated to the 'schemas' category.
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
@@ -1525,12 +1454,8 @@ These are foundational tests for remediation phases 1 & 2.
             "financial-math",
             "day-count",
             "compound-interest",
-            "scheduled-investment-schemas",
             "geo-normalization",
-            "geographic-area-integration",
             "sector-normalization",
-            "currency",
-            "distribution-models",
             "all",
             ],
         help="Utility test to run",
@@ -1843,18 +1768,10 @@ def main():
             success = utils_day_count(verbose=verbose, test_names=test_names)
         elif args.action == "compound-interest":
             success = utils_compound_interest(verbose=verbose, test_names=test_names)
-        elif args.action == "scheduled-investment-schemas":
-            success = utils_scheduled_investment_schemas(verbose=verbose, test_names=test_names)
         elif args.action == "geo-normalization":
             success = utils_geo_normalization(verbose=verbose, test_names=test_names)
-        elif args.action == "geographic-area-integration":
-            success = utils_geographic_area_integration(verbose=verbose, test_names=test_names)
         elif args.action == "sector-normalization":
             success = utils_sector_normalization(verbose=verbose, test_names=test_names)
-        elif args.action == "currency":
-            success = utils_currency(verbose=verbose, test_names=test_names)
-        elif args.action == "distribution-models":
-            success = utils_distribution_models(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = utils_all(verbose=verbose)
 

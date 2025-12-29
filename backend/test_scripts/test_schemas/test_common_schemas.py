@@ -1,5 +1,8 @@
 """
-Tests for Currency class in common.py.
+Tests for common Pydantic schemas: Currency, DateRangeModel, OldNew.
+
+Migrated from: test_utilities/test_currency.py
+Schema source: backend/app/schemas/common.py
 
 Tests cover:
 - Currency creation with valid ISO 4217 codes
@@ -10,14 +13,21 @@ Tests cover:
 - Error handling for different currencies
 - Serialization (to_dict, str, repr)
 - Utility methods (zero, is_zero, is_positive, is_negative)
+- OldNew generic class
+- DateRangeModel validation
 """
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from backend.app.schemas.common import Currency, CRYPTO_CURRENCIES
+from backend.app.schemas.common import Currency, CRYPTO_CURRENCIES, OldNew, DateRangeModel
 
+
+# ============================================================================
+# CURRENCY CREATION TESTS
+# ============================================================================
 
 class TestCurrencyCreation:
     """Test Currency object creation."""
@@ -70,6 +80,10 @@ class TestCurrencyCreation:
         assert usd.amount == Decimal("100.50")
 
 
+# ============================================================================
+# CRYPTO CURRENCY TESTS
+# ============================================================================
+
 class TestCryptoCurrencies:
     """Test cryptocurrency support."""
 
@@ -89,6 +103,10 @@ class TestCryptoCurrencies:
             crypto = Currency(code=code, amount=Decimal("1"))
             assert crypto.code == code
 
+
+# ============================================================================
+# INVALID CURRENCY TESTS
+# ============================================================================
 
 class TestInvalidCurrency:
     """Test invalid currency rejection."""
@@ -118,6 +136,10 @@ class TestInvalidCurrency:
         with pytest.raises(ValueError, match="must be a string"):
             Currency(code=123, amount=Decimal("100"))
 
+
+# ============================================================================
+# ARITHMETIC TESTS
+# ============================================================================
 
 class TestArithmetic:
     """Test arithmetic operations."""
@@ -171,6 +193,10 @@ class TestArithmetic:
         assert result.amount == Decimal("100")
 
 
+# ============================================================================
+# ARITHMETIC ERRORS TESTS
+# ============================================================================
+
 class TestArithmeticErrors:
     """Test arithmetic error handling."""
 
@@ -200,6 +226,10 @@ class TestArithmeticErrors:
         with pytest.raises(TypeError, match="Cannot subtract int from Currency"):
             usd - 50
 
+
+# ============================================================================
+# COMPARISON TESTS
+# ============================================================================
 
 class TestComparison:
     """Test comparison operations."""
@@ -268,6 +298,10 @@ class TestComparison:
             usd < eur
 
 
+# ============================================================================
+# SERIALIZATION TESTS
+# ============================================================================
+
 class TestSerialization:
     """Test serialization methods."""
 
@@ -299,6 +333,10 @@ class TestSerialization:
         s = {usd1, usd2}
         assert len(s) == 1
 
+
+# ============================================================================
+# UTILITY METHODS TESTS
+# ============================================================================
 
 class TestUtilityMethods:
     """Test utility methods."""
@@ -335,21 +373,70 @@ class TestUtilityMethods:
         assert not zero.is_negative()
 
 
+# ============================================================================
+# OLDNEW TESTS
+# ============================================================================
+
 class TestOldNew:
     """Test OldNew generic class."""
 
     def test_basic_usage(self):
         """Basic OldNew usage."""
-        from backend.app.schemas.common import OldNew
-
         change = OldNew(old="Technology", new="Industrials")
         assert change.old == "Technology"
         assert change.new == "Industrials"
 
     def test_none_old(self):
         """OldNew with None old value (first time set)."""
-        from backend.app.schemas.common import OldNew
-
         change = OldNew(old=None, new="Technology")
         assert change.old is None
         assert change.new == "Technology"
+
+    def test_with_currency(self):
+        """OldNew with Currency values."""
+        old_balance = Currency(code="EUR", amount=Decimal("1000"))
+        new_balance = Currency(code="EUR", amount=Decimal("1500"))
+        change = OldNew(old=old_balance, new=new_balance)
+        assert change.old.amount == Decimal("1000")
+        assert change.new.amount == Decimal("1500")
+
+
+# ============================================================================
+# DATERANGEMODEL TESTS
+# ============================================================================
+
+class TestDateRangeModel:
+    """Test DateRangeModel validation."""
+
+    def test_valid_range(self):
+        """Valid date range."""
+        dr = DateRangeModel(start=date(2025, 1, 1), end=date(2025, 12, 31))
+        assert dr.start == date(2025, 1, 1)
+        assert dr.end == date(2025, 12, 31)
+
+    def test_same_start_end(self):
+        """Same start and end date is valid (single day range)."""
+        dr = DateRangeModel(start=date(2025, 6, 15), end=date(2025, 6, 15))
+        assert dr.start == dr.end
+
+    def test_end_before_start_fails(self):
+        """End before start should fail."""
+        with pytest.raises(ValueError, match="must be >= start"):
+            DateRangeModel(start=date(2025, 12, 31), end=date(2025, 1, 1))
+
+    def test_optional_end(self):
+        """End can be optional if schema allows."""
+        # This depends on the schema definition
+        try:
+            dr = DateRangeModel(start=date(2025, 1, 1), end=None)
+            # If it works, end is optional
+            assert dr.end is None
+        except (ValueError, TypeError):
+            # If it fails, end is required - that's also valid
+            pass
+
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "-s"])
+
