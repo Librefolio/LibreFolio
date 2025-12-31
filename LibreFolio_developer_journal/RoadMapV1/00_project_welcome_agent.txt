@@ -1,33 +1,73 @@
-Hi, I’m working on a self-hosted financial portfolio tracker called **LibreFolio**.
+Ciao! Sto lavorando su un portfolio tracker finanziario self-hosted chiamato **LibreFolio**.
 
-The project is built with:
-- **Python backend** (FastAPI + SQLModel + SQLite + Alembic + Pipenv)
-- **React frontend** (TypeScript + MUI + i18n)
-- **Single Docker image** (backend serves frontend static assets)
+## Stack Tecnologico
 
-🧠 Key rules:
-- All code, comments, docstrings, README, and documentation must be written in **English**.
-- Only the frontend UI is multilingual (English, Italian, French, Spanish).
-- All **calculations must be done in the backend** (Python); the frontend only displays results.
-- The backend uses **Alembic migrations** to manage schema evolution.
-- The database includes **cash accounts per broker**, **FX rates**, and **scheduled-yield assets** (like Recrowd loans with tiered interest schedules and late interest policies).
-- Asset transactions include types like BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, ADD_HOLDING, REMOVE_HOLDING, TRANSFER_IN/OUT, FEE, TAX.
-- FIFO matching is computed **at runtime** (no persisted splits).
-- Market value for scheduled-yield assets is computed from the interest schedule (via a synthetic plugin).
+- **Backend Python**: FastAPI + SQLModel + SQLite + Alembic + Pipenv
+- **Frontend**: SvelteKit + Tailwind + Skeleton UI (in sviluppo)
+- **Deploy**: Single Docker image (backend serve gli asset statici del frontend)
 
-Before we continue with the next step, please:
-✅ Take a moment to review the current state of the project (codebase, models, migrations, endpoints, etc.)
-✅ Let me know if anything looks inconsistent or needs cleanup
-✅ Then I’ll send you the next prompt to continue development
+## Architettura
 
-And remeber, actualy this project exist only on this machine, so is always preferable change code without keep backward compatibility or legacy code.
-Our goal is to have a clean and maintainable codebase to share with the user when the project will be finishing.
+### Database (SQLite)
+- **Users & Settings**: Multi-utenza con preferenze (valuta base, lingua, tema)
+- **Brokers**: Contenitori flessibili con flag per overdraft/shorting
+- **Assets**: Supporto per azioni, ETF, crypto, bond, prestiti P2P (scheduled-yield)
+- **Transactions**: Tabella unificata per tutti i movimenti (BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, TRANSFER, FX_CONVERSION, ADJUSTMENT)
+- **FX Rates**: Multi-provider (ECB, FED, BOE, SNB) con fallback e backward-fill
+- **Price History**: Prezzi da yfinance, JustETF, CSS scraper
 
-There are 2 scripts to help you set up the development environment:
-- `dev.sh`: wraps common commands to work with the project
-- `test_runner.sh`: a script to centralize tests running and coverage reporting
+### Servizi Implementati
+- **TransactionService**: CRUD, validazione saldi giorno-per-giorno, linking bidirezionale
+- **BrokerService**: CRUD con depositi iniziali, summary con holdings
+- **FX Service**: Sync tassi multi-provider, conversioni con forward-fill
+- **Asset Services**: Metadata, pricing, scheduled-yield valuation
+- **Provider Registry**: AbstractProviderRegistry per auto-discovery di provider (FX, Asset, BRIM)
 
-Before use custom commands, please try to use these scripts to keep consistency.
-You can run --help on both scripts to see available commands.
+### Principi Chiave
+- Tutti i **calcoli sono nel backend** (Python); il frontend solo visualizza
+- **FIFO matching calcolato a runtime** (no split persistiti)
+- **Valutazione scheduled-yield** calcolata dalla schedule interessi
+- Le migrazioni DB sono gestite con **Alembic**
+- Codice, commenti, docstrings, README e documentazione in **inglese**
+- Solo l'UI frontend è multilingue (EN, IT, FR, ES)
 
-Thanks!
+## Stato Attuale (Dicembre 2025)
+
+### ✅ Completato
+- **Phase 1-4**: Database, Schemas, Services, API per Brokers e Transactions
+- **Test Suite**: 7/7 categorie passano (External, DB, Schemas, Utils, Services, API, E2E)
+- **FX Multi-Provider**: ECB, FED, BOE, SNB con fallback automatico
+- **Asset Providers**: yfinance, JustETF, CSS Scraper, Scheduled Investment
+
+### 🔲 Da Implementare
+- **Phase 5 (BRIM)**: Broker Report Import Manager - import file broker con flusso parse→review→import (Generic CSV, Directa, Degiro, etc.)
+- **Phase 6-7**: Runtime Analysis (FIFO, KPIs), Portfolio Aggregations
+- **Phase 8**: Scheduler e Autenticazione
+- **Phase 9**: Frontend SvelteKit
+- **Phase 10**: Docker deploy
+
+## Comandi Utili
+
+```bash
+# Visualizza aiuto per i comandi disponibili
+./dev.sh --help
+./dev.sh test --help
+
+# Esegui tutti i test
+./dev.sh test all
+
+# Avvia server di sviluppo
+./dev.sh run
+```
+
+## Note per lo Sviluppo
+
+⚠️ **Progetto embrionale**: Il codice esiste solo su questa macchina. È preferibile modificare senza mantenere backward compatibility o legacy code. L'obiettivo è avere un codebase pulito e mantenibile quando il progetto sarà pronto per la condivisione.
+
+Prima di proseguire con il prossimo passo:
+1. ✅ Rivedi lo stato attuale del progetto (codebase, modelli, migrazioni, endpoints)
+2. ✅ Segnala eventuali inconsistenze o necessità di cleanup
+3. ✅ Poi ti invierò il prossimo prompt per continuare lo sviluppo
+
+Grazie!
+

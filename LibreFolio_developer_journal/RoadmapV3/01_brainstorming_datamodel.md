@@ -299,9 +299,6 @@ Implementati in `backend/app/schemas/brokers.py`:
     - `force=False` (default): delete fallisce se esistono transazioni → errore con conteggio
     - `force=True`: elimina broker E tutte le transazioni → `BRDeleteResult.transactions_deleted` mostra quante
 
-### 2.3 Plugin Schemas
-
-Da implementare nella Phase 5 (Plugin Infrastructure).
 
 ---
 
@@ -360,21 +357,6 @@ Implementato in `backend/app/services/broker_service.py`:
 - ✅ Valida saldi quando si disabilita overdraft/shorting
 - ✅ `delete_bulk` con `force=True` cascade-delete tutte le transazioni
 
-### 3.3 `PluginSystem` (Abstract & Registry)
-
-**Razionale:** Disaccoppiare il core dai formati specifici dei file. Il core non deve sapere cos'è un CSV Directa.
-
-- **Base Class `TransactionImportPlugin`:**
-    - `code`: str
-    - `is_supported(file_path) -> bool`: Ritorna True se il plugin supporta il file (check estensione/contenuto).
-    - `parse(file_path) -> List[TransactionCreate]`: Ritorna DTOs puri.
-- **Core Functions:**
-    - `process_file(file_id, plugin_code)`:
-        1. Recupera file path.
-        2. Istanzia plugin.
-        3. `dtos = plugin.parse(path)`.
-        4. Chiama `TransactionService.create_transaction_bulk(dtos)`.
-        5. Gestisce errori e sposta file.
 
 ---
 
@@ -415,190 +397,811 @@ Implementato in `backend/app/api/v1/transactions.py`:
   - `related_transaction_id`: campo DB (unidirezionale, B → A)
   - `linked_transaction_id`: campo DTO popolato in entrambi i versi per il frontend
 
+### 4.3 Write and debug test scripts
+
+✅ Piano di realizzazione dei test script: 01_test_broker_transaction_subsystem.md
+
 ---
 
-## Phase 5: Plugin Infrastructure & Import API
+## Phase 5: Broker Report Import System (BRIM)
 
 **Status:** 🔲 **DA IMPLEMENTARE**
 
-**Razionale:** Disaccoppiare il core dai formati specifici dei file. Il core non deve sapere cos'è un CSV Directa.
+**Razionale:** Disaccoppiare il core dai formati specifici dei file broker. 
+Il core applicativo non deve sapere cos'è un CSV Directa o un export Degiro.
+I plugin traducono formati esterni in DTOs standard (`TXCreateItem`).
 
-### 5.1 Service Layer: PluginSystem
+**Naming Convention:** Prefisso **BRIM** (Broker Report Import Manager) per allineamento con FX, FA, BR, TX.
 
-#### Base Class `TransactionImportPlugin`
+**Principio chiave:** L'import genera transazioni **identiche** a quelle create manualmente.
+Il flusso finale passa **sempre** da `TransactionService.create_bulk()`.
+
+---
+
+### 5.1 Pydantic Schemas (DTOs)
+
+Schemas per l'import system in `backend/app/schemas/brim.py`:
+
 ```python
+from pydantic import BaseModel
+from datetime import datetime
+from typing import List, Optional
+from enum import Enum
+
+class BRIMFileStatus(str, Enum):
+    """Status of an uploaded file."""
+    UPLOADED = "uploaded"
+    IMPORTED = "imported"
+    FAILED = "failed"
+
+class BRIMFileInfo(BaseModel):
+    """Information about an uploaded file."""
+    file_id: str  # UUID, NOT path!
+    filename: str  # Original filename
+    size_bytes: int
+    status: BRIMFileStatus
+    uploaded_at: datetime
+    processed_at: Optional[datetime] = None
+    compatible_plugins: List[str]  # Plugin codes that can parse this file
+    error_message: Optional[str] = None
+
+class BRIMPluginInfo(BaseModel):
+    """Information about an available import plugin."""
+    code: str
+    name: str
+    description: str
+    supported_extensions: List[str]
+
+class BRIMParseRequest(BaseModel):
+    """Request to parse an uploaded file (preview)."""
+    plugin_code: str
+    broker_id: int
+
+class BRIMParseResponse(BaseModel):
+    """Response from parsing a file - can be edited by user before import."""
+    file_id: str
+    plugin_code: str
+    broker_id: int
+    transactions: List[TXCreateItem]  # Standard transaction DTOs
+    warnings: List[str] = []  # Parser warnings (e.g., skipped rows)
+    
+class BRIMImportRequest(BaseModel):
+    """Request to import transactions - accepts edited TXCreateItem list."""
+    file_id: str
+    transactions: List[TXCreateItem]  # Potentially user-modified
+    tags: Optional[List[str]] = None  # Additional tags to apply to all
+```
+
+---
+
+### 5.2 Provider Base Class, Registry & Service
+
+Tutto consolidato in un unico file: `backend/app/services/brim_provider.py`
+
+Segue lo stesso pattern di `FXRateProvider` e `AssetSourceProvider`.
+
+```python
+"""
+Broker Report Import Manager (BRIM) - Provider base class, registry, and service.
+
+This module provides:
+- BRIMProvider: Abstract base class for broker report import plugins
+- BRIMProviderRegistry: Registry for auto-discovery of plugins
+- File storage functions for uploaded broker reports
+- Service functions for parsing and import coordination
+"""
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List
+from typing import List, Tuple, Optional
+from datetime import datetime
+import uuid
+import json
 
-class TransactionImportPlugin(ABC):
-    """Base class for transaction import plugins."""
+from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.brim import BRIMFileInfo, BRIMFileStatus, BRIMParseResponse
+from backend.app.services.provider_registry import AbstractProviderRegistry
+
+
+# =============================================================================
+# Abstract Base Class
+# =============================================================================
+
+class BRIMProvider(ABC):
+    """Abstract base class for broker report import plugins.
+    
+    Each plugin is responsible for parsing a specific broker's file format
+    and converting it to a list of TXCreateItem DTOs.
+    """
     
     @property
     @abstractmethod
-    def code(self) -> str:
-        """Unique plugin identifier (e.g., 'directa_csv', 'generic_csv')."""
+    def provider_code(self) -> str:
+        """Unique plugin identifier (e.g., 'directa_csv', 'broker_generic_csv')."""
         pass
     
     @property
     @abstractmethod
-    def name(self) -> str:
-        """Human-readable plugin name."""
+    def provider_name(self) -> str:
+        """Human-readable plugin name (e.g., 'Directa CSV Export')."""
         pass
     
     @property
     @abstractmethod
     def description(self) -> str:
-        """Plugin description."""
+        """Plugin description for UI display."""
+        pass
+    
+    @property
+    def supported_extensions(self) -> List[str]:
+        """List of supported file extensions (e.g., ['.csv', '.xlsx'])."""
+        return ['.csv']
+    
+    @abstractmethod
+    def can_parse(self, file_path: Path) -> bool:
+        """Check if this plugin can parse the given file."""
         pass
     
     @abstractmethod
-    def is_supported(self, file_path: Path) -> bool:
-        """
-        Check if this plugin can parse the given file.
-        
-        Args:
-            file_path: Path to the file to check
-            
-        Returns:
-            True if plugin supports this file format
-        """
+    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str]]:
+        """Parse file and return (transactions, warnings)."""
         pass
+
+
+class BRIMParseError(Exception):
+    """Raised when a file cannot be parsed by a plugin."""
+    pass
+
+
+# =============================================================================
+# Registry (extends AbstractProviderRegistry)
+# =============================================================================
+
+class BRIMProviderRegistry(AbstractProviderRegistry):
+    """Registry for broker report import plugins.
     
-    @abstractmethod
-    def parse(self, file_path: Path, broker_id: int) -> List[TXCreateItem]:
-        """
-        Parse file and return list of transaction DTOs.
-        
-        Args:
-            file_path: Path to the file to parse
-            broker_id: Target broker for the transactions
-            
-        Returns:
-            List of TXCreateItem DTOs ready for TransactionService.create_bulk()
-        """
-        pass
+    Auto-discovers plugins from `backend/app/services/brim_providers/`.
+    """
+    @classmethod
+    def _get_provider_folder(cls) -> str:
+        return "brim_providers"
+    
+    @classmethod
+    def get_compatible_plugins(cls, file_path: Path) -> List[str]:
+        """Get list of plugin codes that can parse the given file."""
+        cls.auto_discover()
+        compatible = []
+        for code, plugin_cls in cls._providers.items():
+            try:
+                instance = plugin_cls()
+                if instance.can_parse(file_path):
+                    compatible.append(code)
+            except Exception:
+                continue
+        return compatible
+
+
+# =============================================================================
+# File Storage Functions
+# =============================================================================
+
+BROKER_REPORTS_DIR = Path(__file__).parent.parent.parent / "data" / "broker_reports"
+
+def _ensure_dirs() -> None:
+    """Create storage directories if they don't exist."""
+    for subdir in ["uploaded", "imported", "failed"]:
+        (BROKER_REPORTS_DIR / subdir).mkdir(parents=True, exist_ok=True)
+
+
+def save_uploaded_file(content: bytes, original_filename: str) -> BRIMFileInfo:
+    """
+    Save an uploaded file to the 'uploaded' folder.
+    
+    Process:
+    1. Generate a UUID for the file (security: never expose original filename in path)
+    2. Determine file extension from original filename
+    3. Write file content to: uploaded/{uuid}.{ext}
+    4. Query BRIMProviderRegistry.get_compatible_plugins() to detect which plugins can parse this file
+    5. Create metadata JSON sidecar: uploaded/{uuid}.json containing:
+       - file_id, filename (original), size_bytes, status=UPLOADED
+       - uploaded_at (UTC timestamp), compatible_plugins list
+    6. Return BRIMFileInfo with all metadata
+    
+    Args:
+        content: Raw file bytes from upload
+        original_filename: Original filename (e.g., "report_2025.csv")
+    
+    Returns:
+        BRIMFileInfo with file_id, compatible plugins, etc.
+    """
+    pass
+
+
+def list_files(status: Optional[BRIMFileStatus] = None) -> List[BRIMFileInfo]:
+    """
+    List all files, optionally filtered by status.
+    
+    Process:
+    1. Determine which folders to scan (one folder per status, or all if status=None)
+    2. For each folder, glob all *.json metadata files
+    3. Parse each JSON into BRIMFileInfo
+    4. Return sorted list (most recent first by uploaded_at)
+    
+    Args:
+        status: Optional filter (UPLOADED, IMPORTED, FAILED)
+    
+    Returns:
+        List of BRIMFileInfo objects
+    """
+    pass
+
+
+def get_file_info(file_id: str) -> Optional[BRIMFileInfo]:
+    """
+    Get metadata for a specific file by its UUID.
+    
+    Process:
+    1. Search for {file_id}.json in all three folders (uploaded, imported, failed)
+    2. Return first match, or None if not found
+    
+    Args:
+        file_id: UUID of the file
+    
+    Returns:
+        BRIMFileInfo or None if not found
+    """
+    pass
+
+
+def get_file_path(file_id: str) -> Optional[Path]:
+    """
+    Get the actual filesystem path to a file for parsing.
+    
+    Process:
+    1. Call get_file_info() to find the file and its current status
+    2. Extract original extension from the stored filename
+    3. Construct path: {status_folder}/{file_id}.{ext}
+    4. Verify file exists, return Path or None
+    
+    Args:
+        file_id: UUID of the file
+    
+    Returns:
+        Path object or None if file not found
+    """
+    pass
+
+
+def delete_file(file_id: str) -> bool:
+    """
+    Delete a file and its metadata.
+    
+    Process:
+    1. Find file location via get_file_info()
+    2. Delete both the data file and .json metadata
+    3. Return True if deleted, False if not found
+    
+    Args:
+        file_id: UUID of the file
+    
+    Returns:
+        True if deleted, False if not found
+    """
+    pass
+
+
+def move_to_imported(file_id: str) -> bool:
+    """
+    Move a successfully processed file from 'uploaded' to 'imported'.
+    
+    Process:
+    1. Get current file info and verify status is UPLOADED
+    2. Move data file: uploaded/{id}.ext → imported/{id}.ext
+    3. Update metadata: status=IMPORTED, processed_at=now()
+    4. Write updated metadata to imported/{id}.json
+    5. Delete old metadata from uploaded/
+    
+    Args:
+        file_id: UUID of the file
+    
+    Returns:
+        True if moved, False if not found or wrong status
+    """
+    pass
+
+
+def move_to_failed(file_id: str, error_message: str) -> bool:
+    """
+    Move a failed file from 'uploaded' to 'failed' with error details.
+    
+    Process:
+    1. Get current file info and verify status is UPLOADED
+    2. Move data file: uploaded/{id}.ext → failed/{id}.ext
+    3. Update metadata: status=FAILED, processed_at=now(), error_message=error
+    4. Write updated metadata to failed/{id}.json
+    5. Delete old metadata from uploaded/
+    
+    Args:
+        file_id: UUID of the file
+        error_message: Error description to store
+    
+    Returns:
+        True if moved, False if not found or wrong status
+    """
+    pass
+
+
+# =============================================================================
+# Service Functions
+# =============================================================================
+
+def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseResponse:
+    """
+    Parse a file using the specified plugin (preview only, no DB persistence).
+    
+    Process:
+    1. Call get_file_path(file_id) to get actual file location
+       - Raise FileNotFoundError if file doesn't exist
+    2. Call BRIMProviderRegistry.get_provider_instance(plugin_code)
+       - Raise ValueError if plugin not found
+    3. Call plugin.can_parse(file_path)
+       - Raise ValueError if plugin cannot parse this file type
+    4. Call plugin.parse(file_path, broker_id)
+       - Returns Tuple[List[TXCreateItem], List[str]]
+       - Transactions are standard DTOs ready for TransactionService
+       - Warnings include skipped rows, ambiguous data, etc.
+    5. Build and return BRIMParseResponse with:
+       - file_id, plugin_code, broker_id
+       - transactions: List[TXCreateItem]
+       - warnings: List[str]
+    
+    IMPORTANT: This function does NOT persist anything to DB.
+    It's used for preview so user can review/edit before confirming.
+    
+    Args:
+        file_id: UUID of the uploaded file
+        plugin_code: Provider code (e.g., "broker_generic_csv")
+        broker_id: Target broker ID for the transactions
+    
+    Returns:
+        BRIMParseResponse with parsed transactions and warnings
+    
+    Raises:
+        FileNotFoundError: File not found
+        ValueError: Plugin not found or cannot parse file
+        BRIMParseError: Plugin-specific parsing error
+    """
+    pass
 ```
 
-#### Plugin Registry
-- `register_plugin(plugin: TransactionImportPlugin)`: Registra un plugin
-- `get_plugin(code: str) -> TransactionImportPlugin`: Ottiene plugin per codice
-- `get_supported_plugins(file_path: Path) -> List[str]`: Lista codici plugin che supportano il file
-- `list_plugins() -> List[PluginInfo]`: Lista tutti i plugin registrati
-
-#### Import Service
-- `upload_file(file: UploadFile) -> ImportFileInfo`: Upload file, ritorna ID e plugin supportati
-- `list_files(status: str) -> List[ImportFileInfo]`: Lista file per status
-- `delete_file(file_id: int) -> bool`: Elimina file
-- `process_file(file_id: int, plugin_code: str, broker_id: int, tags: List[str]) -> TXBulkCreateResponse`:
-  1. Recupera file path
-  2. Istanzia plugin
-  3. `dtos = plugin.parse(path, broker_id)`
-  4. Aggiunge tags a ogni DTO
-  5. Chiama `TransactionService.create_bulk(dtos)`
-  6. Sposta file in `imported/` o `failed/`
-
-### 5.2 API Layer: Import Endpoints
-
-#### `POST /api/v1/import/upload`
-Upload file in `backend/data/brokerReports/uploaded/`
-
-**Request:** `multipart/form-data` con file
-**Response:**
-```json
-{
-  "file_id": 123,
-  "filename": "report_2025.csv",
-  "size_bytes": 45678,
-  "uploaded_at": "2025-12-23T10:00:00Z",
-  "supported_plugins": ["directa_csv", "generic_csv"]
-}
+**Directory Structure:**
+```
+backend/app/services/
+├── provider_registry.py          # Existing (no changes needed, BRIMProviderRegistry in brim_provider.py)
+├── brim_provider.py              # ALL BRIM logic: base class, registry, storage, service
+├── transaction_service.py        # Used for final import (existing)
+└── brim_providers/               # Plugins folder (auto-discovered)
+    ├── __init__.py
+    ├── broker_generic_csv.py     # First plugin
+    └── sample_reports/           # Test files for all plugins
+        ├── README.md             # Description of each test file
+        ├── generic_simple.csv    # Basic CSV with all columns
+        ├── generic_dates.csv     # Various date formats
+        ├── generic_types.csv     # All transaction types
+        └── ... (more test files)
 ```
 
-#### `GET /api/v1/import/files`
-Lista file uploadati
-
-**Query params:** `status` (`uploaded` | `imported` | `failed` | `all`)
-**Response:** Lista di `ImportFileInfo`
-
-#### `DELETE /api/v1/import/files`
-Elimina file (bulk)
-
-**Request:** `ids: List[int]` (query param o body)
-**Response:** `BulkDeleteResponse`
-
-**Nota sicurezza:** ID deve essere int, non path. Validazione rigorosa.
-
-#### `POST /api/v1/import/process/{file_id}`
-Processa file con plugin specifico
-
-**Request body:**
-```json
-{
-  "plugin_code": "directa_csv",
-  "broker_id": 1,
-  "tags": ["import-2025", "directa"]
-}
-```
-
-**Response:** `TXBulkCreateResponse` (stesso formato di POST /transactions)
-
-**Side effects:**
-- Successo: file spostato in `imported/`
-- Errore: file spostato in `failed/`
-
-#### `GET /api/v1/import/plugins`
-Lista plugin disponibili
-
-**Response:**
-```json
-[
-  {
-    "code": "directa_csv",
-    "name": "Directa CSV",
-    "description": "Import transactions from Directa broker CSV export"
-  },
-  {
-    "code": "generic_csv",
-    "name": "Generic CSV",
-    "description": "Import from generic CSV with column mapping"
-  }
-]
-```
-
-### 5.3 File Storage Structure
+**File Storage Structure:**
 
 ```
-backend/data/brokerReports/
-├── uploaded/      # File appena caricati, in attesa di processing
-├── imported/      # File processati con successo
-└── failed/        # File che hanno fallito il processing
+backend/data/broker_reports/
+├── uploaded/          # File appena caricati, in attesa di processing
+│   ├── {uuid}.csv     # File con estensione originale
+│   └── {uuid}.json    # Metadata (filename originale, uploaded_at, etc.)
+├── imported/          # File processati con successo
+│   ├── {uuid}.csv
+│   └── {uuid}.json
+└── failed/            # File che hanno fallito il processing
+    ├── {uuid}.csv
+    └── {uuid}.json    # Include error_message
 ```
-
-### 5.4 First Plugin: Generic CSV
-
-Plugin base che permette mapping manuale delle colonne:
-- Configurazione colonne via JSON
-- Supporto per formati data comuni
-- Mapping tipi transazione
 
 ---
 
-### Phase 6: Export/Backup Endpoints (`/api/v1/backup`)
-**Razionale:** Placeholder per funzionalità future. Attualmente ritornano 501 Not Implemented o un messaggio JSON fisso.
+### 5.3 API Endpoints
 
-- `GET /export`: "To Be Developed".
-- `POST /restore`: "To Be Developed".
+File: `backend/app/api/v1/brim.py`
+
+Endpoints REST che chiamano le funzioni in `brim_provider.py`.
+
+#### File Management
+
+##### `POST /api/v1/brim/upload`
+
+Upload file per futuro processing.
+
+- **Request:** `multipart/form-data` con campo `file`
+- **Logic:** 
+  - Legge bytes dal file
+  - Chiama `brim_provider.save_uploaded_file(content, filename)`
+- **Response:** `BRIMFileInfo`
+- **Errors:** 400 se file vuoto, 413 se troppo grande
+
+##### `GET /api/v1/brim/files`
+
+Lista file uploadati.
+
+- **Query params:** `status` (optional): `uploaded` | `imported` | `failed`
+- **Logic:** Chiama `brim_provider.list_files(status)`
+- **Response:** `List[BRIMFileInfo]`
+
+##### `GET /api/v1/brim/files/{file_id}`
+
+Ottiene info singolo file.
+
+- **Logic:** Chiama `brim_provider.get_file_info(file_id)`
+- **Response:** `BRIMFileInfo`
+- **Errors:** 404 se file non trovato
+
+##### `DELETE /api/v1/brim/files/{file_id}`
+
+Elimina file.
+
+- **Logic:** Chiama `brim_provider.delete_file(file_id)`
+- **Response:** `{"success": true, "file_id": "..."}`
+- **Errors:** 404 se file non trovato
+
+#### Parsing & Import
+
+##### `POST /api/v1/brim/files/{file_id}/parse`
+
+Parse file e ritorna transazioni per review (preview).
+
+- **Request body:** `BRIMParseRequest`
+- **Logic:** Chiama `brim_provider.parse_file(file_id, plugin_code, broker_id)`
+- **Response:** `BRIMParseResponse` con `List[TXCreateItem]` + warnings
+- **Errors:** 404 se file non trovato, 400 se plugin non supporta il file
+
+L'utente può ora:
+1. Visualizzare le transazioni nel frontend
+2. Modificare/aggiungere/rimuovere transazioni
+3. Inviare la lista modificata a `/import`
+
+##### `POST /api/v1/brim/files/{file_id}/import`
+
+Importa transazioni (potenzialmente modificate dall'utente).
+
+- **Request body:** `BRIMImportRequest` con `List[TXCreateItem]`
+- **Logic:**
+  1. Aggiunge `tags` a ogni item se specificati nella request
+  2. **Chiama `TransactionService.create_bulk(transactions, session)`** (stesso codice dell'import manuale!)
+  3. Se successo: chiama `brim_provider.move_to_imported(file_id)`
+  4. Se errore: chiama `brim_provider.move_to_failed(file_id, error_message)`
+- **Response:** `TXBulkCreateResponse` (stesso formato di POST /transactions)
+- **Errors:** 404 se file non trovato, 400/422 per validation errors
+
+**Nota importante:** Questo endpoint usa **esattamente lo stesso** `TransactionService.create_bulk()` 
+usato da `POST /api/v1/transactions`. Le transazioni importate sono indistinguibili da quelle manuali.
+
+#### Plugin Info
+
+##### `GET /api/v1/brim/plugins`
+
+Lista plugin disponibili.
+
+- **Logic:** Chiama `brim_provider.BRIMProviderRegistry.list_providers()`
+- **Response:** `List[BRIMPluginInfo]`
+
+---
+
+### 5.4 First Plugin: Generic CSV
+
+File: `backend/app/services/brim_providers/broker_generic_csv.py`
+
+Plugin base che usa il decorator `@register_provider(BRIMProviderRegistry)`.
+
+**Features:**
+- Configurazione colonne via header mapping
+- Supporto per formati data comuni (ISO, DD/MM/YYYY, MM/DD/YYYY)
+- Mapping automatico tipi transazione
+- Skip righe vuote o commenti
+- Ritorna warnings per righe problematiche
+
+```python
+from backend.app.services.brim_provider import BRIMProvider, BRIMParseError, BRIMProviderRegistry
+from backend.app.services.provider_registry import register_provider
+
+@register_provider(BRIMProviderRegistry)
+class GenericCSVBrokerProvider(BRIMProvider):
+    """Generic CSV import plugin with auto-detection of columns."""
+    
+    @property
+    def provider_code(self) -> str:
+        return "broker_generic_csv"
+    
+    @property
+    def provider_name(self) -> str:
+        return "Generic CSV"
+    
+    @property
+    def description(self) -> str:
+        return "Import transactions from a generic CSV file with auto-detected columns"
+    
+    def can_parse(self, file_path: Path) -> bool:
+        return file_path.suffix.lower() == '.csv'
+    
+    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str]]:
+        transactions = []
+        warnings = []
+        # ... implementation
+        return transactions, warnings
+```
+
+**Header Mapping (auto-detected):**
+```python
+HEADER_MAPPINGS = {
+    "date": ["date", "data", "settlement_date", "value_date"],
+    "type": ["type", "tipo", "transaction_type", "operation"],
+    "quantity": ["quantity", "quantità", "qty", "shares"],
+    "amount": ["amount", "importo", "value", "cash"],
+    "currency": ["currency", "valuta", "ccy"],
+    "description": ["description", "descrizione", "notes", "memo"],
+    "asset": ["asset", "symbol", "ticker", "isin"],
+}
+```
+
+**Type Mapping:**
+```python
+TYPE_MAPPINGS = {
+    # BUY
+    "buy": TransactionType.BUY,
+    "acquisto": TransactionType.BUY,
+    "purchase": TransactionType.BUY,
+    # SELL
+    "sell": TransactionType.SELL,
+    "vendita": TransactionType.SELL,
+    # ... etc
+}
+```
+
+---
+
+### 5.5 Flusso Completo
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          FRONTEND                                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│  1. Upload file       ──POST /brim/upload──►  BRIMFileInfo               │
+│                                                                          │
+│  2. Select plugin     ──POST /brim/files/{id}/parse──►  BRIMParseResponse│
+│     & broker                                              │              │
+│                                                           ▼              │
+│  3. Review/Edit       ◄── List[TXCreateItem] + warnings ─┘              │
+│     transactions                                                         │
+│     (user modifies)                                                      │
+│                                                                          │
+│  4. Confirm import    ──POST /brim/files/{id}/import──►  TXBulkResponse │
+│                          (with modified List[TXCreateItem])              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          BACKEND                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│  /parse endpoint:                                                        │
+│    brim_provider.parse_file() → BRIMProvider.parse() → List[TXCreateItem]│
+│                                                                          │
+│  /import endpoint:                                                       │
+│    TransactionService.create_bulk(transactions) ← SAME AS MANUAL!       │
+│    brim_provider.move_to_imported()                                      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 5.6 Test Strategy
+
+#### Sample Reports Directory
+
+La cartella `sample_reports/` contiene file di test per tutti i plugin:
+
+```
+backend/app/services/brim_providers/sample_reports/
+├── README.md                     # Description of each test file and expected results
+├── generic_simple.csv            # Basic CSV - all columns present
+├── generic_dates.csv             # Various date formats
+├── generic_types.csv             # All transaction types
+├── generic_missing_cols.csv      # Missing optional columns
+├── generic_bad_rows.csv          # Some invalid rows (should produce warnings)
+├── generic_multilang.csv         # Mixed language headers (date, data, fecha)
+└── ... (future broker-specific files: directa_export.csv, degiro_export.csv)
+```
+
+#### Test File: `backend/test_scripts/test_services/test_brim_providers.py`
+
+**Struttura generica per tutti i plugin** (come FX e Asset providers):
+
+I test sono scritti in modo generico e vengono eseguiti per TUTTI i plugin registrati contro TUTTI i file di esempio. Ogni file deve essere processato da almeno un plugin.
+
+```python
+"""
+BRIM Provider Tests - Generic test suite for all broker report import plugins.
+
+This test module:
+1. Discovers ALL plugins via BRIMProviderRegistry
+2. Discovers ALL sample files in sample_reports/
+3. For each plugin, tests ALL files that the plugin claims to support
+4. Verifies that EVERY sample file is processed by at least one plugin
+
+Test Categories:
+- Plugin Discovery & Registration
+- File Compatibility Detection
+- Parse Functionality
+- Full Coverage Verification
+"""
+import pytest
+from pathlib import Path
+from backend.app.services.brim_provider import BRIMProviderRegistry, BRIMProvider
+
+SAMPLE_REPORTS_DIR = Path(__file__).parent.parent.parent / "app" / "services" / "brim_providers" / "sample_reports"
+
+
+class TestBRIMProviderDiscovery:
+    """Test plugin auto-discovery and registration."""
+    
+    def test_registry_discovers_plugins(self):
+        """At least one plugin should be registered."""
+        providers = BRIMProviderRegistry.list_providers()
+        assert len(providers) > 0
+    
+    def test_all_plugins_have_required_properties(self):
+        """Each plugin must have code, name, description."""
+        for info in BRIMProviderRegistry.list_providers():
+            plugin = BRIMProviderRegistry.get_provider_instance(info['code'])
+            assert plugin.provider_code
+            assert plugin.provider_name
+            assert plugin.description
+            assert isinstance(plugin.supported_extensions, list)
+
+
+class TestBRIMProviderParsing:
+    """Generic parsing tests run for ALL plugins against ALL compatible files."""
+    
+    @pytest.fixture
+    def all_sample_files(self) -> list[Path]:
+        """Get all sample report files."""
+        return [f for f in SAMPLE_REPORTS_DIR.glob("*.*") if f.suffix != '.md']
+    
+    @pytest.fixture
+    def all_plugins(self) -> list[BRIMProvider]:
+        """Get instances of all registered plugins."""
+        BRIMProviderRegistry.auto_discover()
+        return [
+            BRIMProviderRegistry.get_provider_instance(info['code'])
+            for info in BRIMProviderRegistry.list_providers()
+        ]
+    
+    def test_each_plugin_parses_compatible_files(self, all_plugins, all_sample_files):
+        """Each plugin should successfully parse files it claims to support."""
+        for plugin in all_plugins:
+            for file_path in all_sample_files:
+                if plugin.can_parse(file_path):
+                    # Plugin claims support - it MUST parse without exception
+                    transactions, warnings = plugin.parse(file_path, broker_id=1)
+                    
+                    # Basic validations
+                    assert isinstance(transactions, list)
+                    assert isinstance(warnings, list)
+                    
+                    for tx in transactions:
+                        assert tx.type is not None
+                        assert tx.date is not None
+                        assert tx.broker_id == 1
+    
+    def test_every_sample_file_is_processed(self, all_plugins, all_sample_files):
+        """Every sample file must be processable by at least one plugin."""
+        unprocessed = []
+        
+        for file_path in all_sample_files:
+            processed = False
+            for plugin in all_plugins:
+                if plugin.can_parse(file_path):
+                    try:
+                        plugin.parse(file_path, broker_id=1)
+                        processed = True
+                        break
+                    except Exception:
+                        continue
+            
+            if not processed:
+                unprocessed.append(file_path.name)
+        
+        assert not unprocessed, f"These files were not processed by any plugin: {unprocessed}"
+    
+    def test_parse_returns_valid_transactions(self, all_plugins, all_sample_files):
+        """Parsed transactions must be valid TXCreateItem objects."""
+        for plugin in all_plugins:
+            for file_path in all_sample_files:
+                if not plugin.can_parse(file_path):
+                    continue
+                
+                transactions, _ = plugin.parse(file_path, broker_id=1)
+                
+                for tx in transactions:
+                    assert hasattr(tx, 'type')
+                    assert hasattr(tx, 'date')
+                    assert hasattr(tx, 'broker_id')
+                    if tx.cash:
+                        assert tx.cash.amount is not None
+                        assert tx.cash.code is not None
+
+
+class TestBRIMFileCoverage:
+    """Verify test file coverage."""
+    
+    def test_sample_reports_directory_exists(self):
+        """Sample reports directory must exist."""
+        assert SAMPLE_REPORTS_DIR.exists()
+    
+    def test_sample_reports_not_empty(self):
+        """At least one sample file must exist."""
+        files = [f for f in SAMPLE_REPORTS_DIR.glob("*.*") if f.suffix != '.md']
+        assert len(files) > 0, "No sample report files found"
+    
+    def test_readme_documents_all_files(self):
+        """README.md should document all sample files."""
+        readme = SAMPLE_REPORTS_DIR / "README.md"
+        if readme.exists():
+            content = readme.read_text()
+            for f in SAMPLE_REPORTS_DIR.glob("*.*"):
+                if f.suffix != '.md':
+                    assert f.name in content, f"README doesn't document: {f.name}"
+```
+
+#### Additional Test Files
+
+**`test_brim_api.py`:**
+- Upload endpoint
+- List/get/delete endpoints
+- Parse endpoint (preview)
+- Import endpoint (uses TransactionService)
+- Error handling
+- Full flow: upload → parse → edit → import
+
+---
+
+## Phase 6: Export/Backup Endpoints
+
+**Status:** 🔲 **PLACEHOLDER**
+
+Placeholder per funzionalità future. Attualmente ritornano 501 Not Implemented.
+
+- `GET /api/v1/backup/export`: Esporta dati in formato JSON/CSV
+- `POST /api/v1/backup/restore`: Ripristina dati da backup
+
 ---
 
 ## Notes: Implementation Order
 
 **Razionale:** Ordine logico per minimizzare i blocchi. Prima il DB, poi la logica core, infine le API e i plugin.
 
-1. ✅ **DB Migration:** Eliminare vecchie tabelle, creare `Transaction`, aggiornare `Broker`.
-2. ✅ **Broker Logic:** Implementare Service e API per Broker (inclusa logica initial deposit).
-3. ✅ **Transaction Core:** Implementare `TransactionService` (CRUD, Validation, Linking).
-4. ✅ **Transaction API:** Implementare Endpoints.
-5. 🔲 **Plugin Infrastructure:** Creare classe base, registry e file management.
-6. 🔲 **Generic CSV Plugin:** Implementare il primo plugin "Generic CSV".
-7. 🔲 **Import API:** Collegare il tutto.
+### Fasi Completate
+
+1. ✅ **Phase 1 - DB Refactoring:** Schema unificato Transaction, update Broker, User models.
+2. ✅ **Phase 2 - Pydantic Schemas:** DTOs per TX, BR con validazione business rules.
+3. ✅ **Phase 3 - Service Layer:** TransactionService e BrokerService con balance validation.
+4. ✅ **Phase 4 - API Layer:** Endpoints REST per brokers e transactions.
+5. ✅ **Test Suite:** 190 test per schema, service, API (Categories 1-6).
+
+### Fasi Successive
+
+6. 🔲 **Phase 5 - Broker Report Import System (BRIM):**
+   - [ ] Creare `schemas/brim.py` con DTOs (BRIMFileInfo, BRIMPluginInfo, BRIMParseRequest/Response, BRIMImportRequest)
+   - [ ] Creare `services/brim_provider.py` con abstract class, registry, file storage e service functions
+   - [ ] Creare `services/brim_providers/__init__.py`
+   - [ ] Creare `services/brim_providers/sample_reports/` con file di test
+   - [ ] Creare `services/brim_providers/broker_generic_csv.py` primo plugin
+   - [ ] Creare `api/v1/brim.py` endpoints REST
+   - [ ] Test suite per BRIM system (test_brim_providers.py, test_brim_api.py)
+
+7. 🔲 **Phase 6 - Export/Backup:** Placeholder per funzionalità future.
+
