@@ -46,7 +46,7 @@ from backend.app.schemas.assets import (
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
 
-
+# TODO: spostare questa classe dentro asset_source e cancellare questo sorgente
 class AssetMetadataService:
     """
     Static service for asset metadata operations.

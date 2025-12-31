@@ -28,7 +28,7 @@ from backend.app.schemas.common import OldNew
 
 logger = get_logger(__name__)
 
-
+# TODO: spostare questa classe dentro asset_source e cancellare questo sorgente
 class AssetCRUDService:
     """Service for asset CRUD operations."""
 

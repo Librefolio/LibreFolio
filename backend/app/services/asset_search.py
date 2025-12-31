@@ -14,7 +14,7 @@ from backend.app.services.provider_registry import AssetProviderRegistry
 
 logger = get_logger(__name__)
 
-
+# TODO: spostare questa classe dentro asset_source e cancellare questo sorgente
 class AssetSearchService:
     """
     Service for searching assets across multiple providers.
