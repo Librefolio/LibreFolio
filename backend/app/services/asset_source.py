@@ -1493,20 +1493,32 @@ class AssetCRUDService:
         session: AsyncSession
         ) -> List[FAinfoResponse]:
         """
-        List assets with optional filters.
+        List assets with optional filters - enhanced for BRIM asset matching.
+
+        Supports filtering by:
+        - currency, asset_type, active (existing)
+        - search: partial match in display_name
+        - isin: exact ISIN match via AssetProviderAssignment
+        - symbol: exact ticker match via AssetProviderAssignment
+        - identifier_contains: partial match in identifier field
 
         Args:
-            filters: Query filters
+            filters: Query filters (see FAAinfoFiltersRequest)
             session: Database session
 
         Returns:
-            List of assets matching filters
+            List of assets matching filters, with identifier info
         """
-        # Build base query with LEFT JOIN to check provider assignment
-        stmt = select(Asset, AssetProviderAssignment.id.label('provider_id')).outerjoin(
+        # Build base query with LEFT JOIN to get provider assignment data
+        stmt = select(
+            Asset,
+            AssetProviderAssignment.id.label('provider_id'),
+            AssetProviderAssignment.identifier.label('identifier'),
+            AssetProviderAssignment.identifier_type.label('identifier_type')
+        ).outerjoin(
             AssetProviderAssignment,
             Asset.id == AssetProviderAssignment.asset_id
-            )
+        )
 
         # Apply filters
         conditions = []
@@ -1523,6 +1535,26 @@ class AssetCRUDService:
             search_pattern = f"%{filters.search}%"
             conditions.append(Asset.display_name.ilike(search_pattern))
 
+        # NEW: ISIN exact match (identifier_type = ISIN)
+        if filters.isin:
+            conditions.append(and_(
+                AssetProviderAssignment.identifier == filters.isin,
+                AssetProviderAssignment.identifier_type == IdentifierType.ISIN
+            ))
+
+        # NEW: Symbol/ticker exact match (identifier_type = TICKER)
+        if filters.symbol:
+            conditions.append(and_(
+                AssetProviderAssignment.identifier == filters.symbol,
+                AssetProviderAssignment.identifier_type == IdentifierType.TICKER
+            ))
+
+        # NEW: Partial identifier match (any type)
+        if filters.identifier_contains:
+            conditions.append(
+                AssetProviderAssignment.identifier.ilike(f"%{filters.identifier_contains}%")
+            )
+
         if conditions:
             stmt = stmt.where(and_(*conditions))
 
@@ -1533,11 +1565,13 @@ class AssetCRUDService:
         result = await session.execute(stmt)
         rows = result.all()
 
-        # Build response
+        # Build response with identifier info
         assets = []
         for row in rows:
             asset = row[0]  # Asset object
             provider_id = row[1]  # provider_id from join
+            identifier = row[2]  # identifier from join
+            identifier_type = row[3]  # identifier_type from join
 
             assets.append(FAinfoResponse(
                 id=asset.id,
@@ -1547,8 +1581,10 @@ class AssetCRUDService:
                 asset_type=asset.asset_type,
                 active=asset.active,
                 has_provider=provider_id is not None,
-                has_metadata=asset.classification_params is not None
-                ))
+                has_metadata=asset.classification_params is not None,
+                identifier=identifier,
+                identifier_type=identifier_type  # Pass enum directly
+            ))
 
         return assets
 

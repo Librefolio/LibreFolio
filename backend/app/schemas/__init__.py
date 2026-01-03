@@ -143,6 +143,29 @@ from backend.app.schemas.transactions import (
     validate_tags_list,
     tags_to_csv,
     )
+from backend.app.schemas.brim import (
+    # Constants and helpers
+    FAKE_ASSET_ID_BASE,
+    is_fake_asset_id,
+    # Enums
+    BRIMFileStatus,
+    BRIMMatchConfidence,
+    BRIMDuplicateLevel,
+    # File management
+    BRIMFileInfo,
+    BRIMPluginInfo,
+    # Asset mapping
+    BRIMAssetCandidate,
+    BRIMAssetMapping,
+    # Duplicate detection
+    BRIMDuplicateMatch,
+    BRIMTXDuplicateCandidate,
+    BRIMDuplicateReport,
+    # Parse/Import
+    BRIMParseRequest,
+    BRIMParseResponse,
+    BRIMImportRequest,
+    )
 
 __all__ = [
     # Common (base classes)
@@ -255,4 +278,20 @@ __all__ = [
     "FXDeletePairSourceResult",
     "FXDeletePairSourcesResponse",
     "FXCurrenciesResponse",
+    # BRIM (Broker Report Import Manager)
+    "FAKE_ASSET_ID_BASE",
+    "is_fake_asset_id",
+    "BRIMFileStatus",
+    "BRIMMatchConfidence",
+    "BRIMDuplicateLevel",
+    "BRIMFileInfo",
+    "BRIMPluginInfo",
+    "BRIMAssetCandidate",
+    "BRIMAssetMapping",
+    "BRIMDuplicateMatch",
+    "BRIMTXDuplicateCandidate",
+    "BRIMDuplicateReport",
+    "BRIMParseRequest",
+    "BRIMParseResponse",
+    "BRIMImportRequest",
     ]

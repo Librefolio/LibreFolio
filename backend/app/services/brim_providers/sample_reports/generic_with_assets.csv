@@ -1,0 +1,8 @@
+date,type,quantity,amount,currency,asset,description
+2025-01-02,BUY,10,-1000.00,EUR,AAPL,Buy Apple shares
+2025-01-03,BUY,5,-500.00,EUR,AAPL,Buy more Apple
+2025-01-04,BUY,20,-2000.00,EUR,MSFT,Buy Microsoft
+2025-01-05,SELL,-5,550.00,EUR,AAPL,Sell Apple partial
+2025-01-06,DIVIDEND,0,25.50,EUR,AAPL,Q4 dividend
+2025-01-07,DEPOSIT,0,5000.00,EUR,,Cash deposit
+2025-01-08,BUY,100,-1500.00,EUR,US0378331005,Buy via ISIN
