@@ -44,8 +44,7 @@ from backend.app.schemas.provider import (
     FAProviderSearchResponse,
     )
 from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem
-from backend.app.services.asset_crud import AssetCRUDService
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.asset_source import AssetSourceManager, AssetCRUDService
 from backend.app.services.provider_registry import AssetProviderRegistry
 
 logger = get_logger(__name__)
@@ -324,7 +323,7 @@ async def search_assets_via_providers(
     - Provider-specific errors are logged but don't fail the entire request
     - Results are not deduplicated (same asset may appear from multiple providers)
     """
-    from backend.app.services.asset_search import AssetSearchService
+    from backend.app.services.asset_source import AssetSearchService
 
     # Parse provider list
     provider_codes: list[str] | None = None
