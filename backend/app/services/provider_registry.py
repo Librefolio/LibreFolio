@@ -146,6 +146,59 @@ class AssetProviderRegistry(AbstractProviderRegistry):
         return "asset_source_providers"
 
 
+class BRIMProviderRegistry(AbstractProviderRegistry):
+    """
+    Registry for Broker Report Import Manager (BRIM) plugins.
+
+    Auto-discovers plugins from `backend/app/services/brim_providers/`.
+    """
+    @classmethod
+    def _get_provider_folder(cls) -> str:
+        return "brim_providers"
+
+    @classmethod
+    def get_compatible_plugins(cls, file_path) -> list:
+        """
+        Get list of plugin codes that can parse the given file.
+
+        Iterates through all registered plugins and calls can_parse().
+
+        Args:
+            file_path: Path to the file to check
+
+        Returns:
+            List of plugin codes that can parse this file
+        """
+        cls.auto_discover()
+        compatible = []
+        for code, plugin_cls in cls._providers.items():
+            try:
+                instance = plugin_cls()
+                if instance.can_parse(file_path):
+                    compatible.append(code)
+            except Exception:
+                continue
+        return compatible
+
+    @classmethod
+    def list_plugin_info(cls) -> list:
+        """
+        Get detailed info for all registered plugins.
+
+        Returns:
+            List of BRIMPluginInfo objects (via plugin.to_plugin_info())
+        """
+        cls.auto_discover()
+        result = []
+        for code, plugin_cls in cls._providers.items():
+            try:
+                instance = plugin_cls()
+                result.append(instance.to_plugin_info())
+            except Exception:
+                pass
+        return result
+
+
 # Decorator factory
 def register_provider(registry_class: Type[AbstractProviderRegistry]):
     """
