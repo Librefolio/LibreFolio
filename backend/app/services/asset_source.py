@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset, AssetProviderAssignment,
-    PriceHistory, IdentifierType,
+    PriceHistory, IdentifierType, AssetType,
     )
 from backend.app.schemas import (
     FACurrentValue, FAHistoricalData,
@@ -43,10 +43,10 @@ from backend.app.schemas import (
     FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse,
     FABulkDeleteResponse, FAPriceDeleteResult, FABulkRemoveResponse,
     FAProviderRemovalResult, FABulkRefreshResponse, FARefreshResult)
-from backend.app.schemas.assets import FAAssetPatchItem, FAClassificationParams
+from backend.app.schemas.assets import FAAssetPatchItem, FAClassificationParams, FAAssetCreateItem, FABulkAssetCreateResponse, FAAssetCreateResult, FAAinfoFiltersRequest, \
+    FAinfoResponse, FABulkAssetDeleteResponse, FAAssetDeleteResult, FABulkAssetPatchResponse, FAAssetPatchResult, FAMetadataChangeDetail
 from backend.app.schemas.common import OldNew
-from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
-from backend.app.services.asset_crud import AssetCRUDService
+from backend.app.schemas.provider import FAProviderRefreshFieldsDetail, FAProviderSearchResponse, FAProviderSearchResultItem
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -546,7 +546,6 @@ class AssetSourceManager:
                                 patch_item.asset_id = assignment.asset_id
 
                                 # Apply metadata to asset
-                                from backend.app.services.asset_metadata import AssetMetadataService
                                 import json
 
                                 changes_count = 0
@@ -1391,4 +1390,734 @@ class AssetSourceManager:
             results=results,
             success_count=sum(1 for r in results if not r.errors),  # Success = no errors
             errors=[]
+            )
+
+
+# ============================================================================
+# ASSET CRUD SERVICE
+# ============================================================================
+
+
+class AssetCRUDService:
+    """Service for asset CRUD operations."""
+
+    @staticmethod
+    async def create_assets_bulk(
+        assets: List[FAAssetCreateItem],
+        session: AsyncSession
+        ) -> FABulkAssetCreateResponse:
+        """
+        Create multiple assets in bulk (partial success allowed).
+
+        Args:
+            assets: List of assets to create
+            session: Database session
+
+        Returns:
+            FABulkAssetCreateResponse with per-item results
+        """
+        results: list[FAAssetCreateResult] = []
+
+        for item in assets:
+            try:
+                # Check if display_name already exists (UNIQUE constraint)
+                stmt = select(Asset).where(Asset.display_name == item.display_name)
+                existing = await session.execute(stmt)
+                if existing.scalar_one_or_none():
+                    results.append(FAAssetCreateResult(
+                        asset_id=None,
+                        success=False,
+                        message=f"Asset with display_name '{item.display_name}' already exists",
+                        display_name=item.display_name,
+                        identifier=None
+                        ))
+                    continue
+
+                # Create asset record
+                asset = Asset(
+                    display_name=item.display_name,
+                    currency=item.currency,
+                    asset_type=item.asset_type or AssetType.OTHER,
+                    icon_url=item.icon_url,
+                    active=True,
+                    )
+
+                # Handle classification_params
+                if item.classification_params:
+                    asset.classification_params = item.classification_params.model_dump_json(exclude_none=True)
+
+                session.add(asset)
+                await session.flush()  # Get ID without committing
+
+                results.append(FAAssetCreateResult(
+                    asset_id=asset.id,
+                    success=True,
+                    message="Asset created successfully",
+                    display_name=item.display_name
+                    ))
+
+                logger.info(f"Asset created: id={asset.id}, display_name={item.display_name}")
+
+            except Exception as e:
+                logger.error(f"Error creating asset {item.display_name}: {e}")
+                results.append(FAAssetCreateResult(
+                    asset_id=None,
+                    success=False,
+                    message=f"Error: {str(e)}",
+                    display_name=item.display_name
+                    ))
+
+        # Commit all successful creates
+        try:
+            await session.commit()
+        except Exception as e:
+            logger.error(f"Error committing asset creation: {e}")
+            await session.rollback()
+            # Mark all as failed
+            for result in results:
+                if result.success:
+                    result.success = False
+                    result.message = f"Transaction failed: {str(e)}"
+                    result.asset_id = None
+
+        success_count = sum(1 for r in results if r.success)
+        return FABulkAssetCreateResponse(
+            results=results,
+            success_count=success_count,
+            errors=[]
+            )
+
+    @staticmethod
+    async def list_assets(
+        filters: FAAinfoFiltersRequest,
+        session: AsyncSession
+        ) -> List[FAinfoResponse]:
+        """
+        List assets with optional filters.
+
+        Args:
+            filters: Query filters
+            session: Database session
+
+        Returns:
+            List of assets matching filters
+        """
+        # Build base query with LEFT JOIN to check provider assignment
+        stmt = select(Asset, AssetProviderAssignment.id.label('provider_id')).outerjoin(
+            AssetProviderAssignment,
+            Asset.id == AssetProviderAssignment.asset_id
+            )
+
+        # Apply filters
+        conditions = []
+
+        if filters.currency:
+            conditions.append(Asset.currency == filters.currency)
+
+        if filters.asset_type:
+            conditions.append(Asset.asset_type == filters.asset_type)
+
+        conditions.append(Asset.active == filters.active)
+
+        if filters.search:
+            search_pattern = f"%{filters.search}%"
+            conditions.append(Asset.display_name.ilike(search_pattern))
+
+        if conditions:
+            stmt = stmt.where(and_(*conditions))
+
+        # Order by display_name
+        stmt = stmt.order_by(Asset.display_name.asc())
+
+        # Execute query
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        # Build response
+        assets = []
+        for row in rows:
+            asset = row[0]  # Asset object
+            provider_id = row[1]  # provider_id from join
+
+            assets.append(FAinfoResponse(
+                id=asset.id,
+                display_name=asset.display_name,
+                currency=asset.currency,
+                icon_url=asset.icon_url,
+                asset_type=asset.asset_type,
+                active=asset.active,
+                has_provider=provider_id is not None,
+                has_metadata=asset.classification_params is not None
+                ))
+
+        return assets
+
+    @staticmethod
+    async def delete_assets_bulk(
+        asset_ids: List[int],
+        session: AsyncSession
+        ) -> FABulkAssetDeleteResponse:
+        """
+        Delete multiple assets (partial success allowed).
+
+        Blocks deletion if asset has transactions (FK constraint).
+        CASCADE deletes provider_assignments and price_history.
+
+        Args:
+            asset_ids: List of asset IDs to delete
+            session: Database session
+
+        Returns:
+            FABulkAssetDeleteResponse with per-item results
+        """
+        results = []
+
+        for asset_id in asset_ids:
+            try:
+                # Check if asset exists
+                stmt = select(Asset).where(Asset.id == asset_id)
+                result = await session.execute(stmt)
+                asset = result.scalar_one_or_none()
+
+                if not asset:
+                    results.append(FAAssetDeleteResult(
+                        asset_id=asset_id,
+                        success=False,
+                        message=f"Asset with ID {asset_id} not found"
+                        ))
+                    continue
+
+                # Try to delete (will fail if transactions exist due to FK constraint)
+                await session.delete(asset)
+                await session.flush()  # Check FK constraints before commit
+
+                results.append(FAAssetDeleteResult(
+                    asset_id=asset_id,
+                    success=True,
+                    deleted_count=1,
+                    message="Asset deleted successfully"
+                    ))
+
+                logger.info(f"Asset deleted: id={asset_id}")
+
+            except Exception as e:
+                await session.rollback()
+                error_msg = str(e)
+
+                # Check if error is due to FK constraint (transactions exist)
+                if "FOREIGN KEY constraint failed" in error_msg or "foreign key" in error_msg.lower():
+                    message = f"Cannot delete asset {asset_id}: has existing transactions"
+                else:
+                    message = f"Error deleting asset {asset_id}: {error_msg}"
+
+                results.append(FAAssetDeleteResult(
+                    asset_id=asset_id,
+                    success=False,
+                    deleted_count=0,
+                    message=message
+                    ))
+                logger.error(f"Error deleting asset {asset_id}: {e}")
+
+        # Commit successful deletions
+        try:
+            await session.commit()
+        except Exception as e:
+            logger.error(f"Error committing asset deletion: {e}")
+            await session.rollback()
+
+        success_count = sum(1 for r in results if r.success)
+        return FABulkAssetDeleteResponse(
+            results=results,
+            success_count=success_count,
+            errors=[]  # Operation-level errors (none for now)
+            )
+
+    @staticmethod
+    async def patch_assets_bulk(
+        patches: List[FAAssetPatchItem],
+        session: AsyncSession
+        ) -> FABulkAssetPatchResponse:
+        """
+        Patch multiple assets in bulk (partial success allowed).
+
+        Merge logic:
+        - Field absent in patch or None: IGNORE (keep existing value)
+        - Field present in patch: UPDATE or BLANK (to delete a string set to empty)
+
+        For classification_params:
+        - If None: Set DB column to NULL
+        - If present: model_dump_json(exclude_none=True) to omit blank subfields
+
+        Args:
+            patches: List of asset patches
+            session: Database session
+
+        Returns:
+            FABulkAssetPatchResponse with per-item results
+        """
+
+        results: list[FAAssetPatchResult] = []
+
+        for patch in patches:
+            try:
+                # Fetch asset
+                stmt = select(Asset).where(Asset.id == patch.asset_id)
+                result = await session.execute(stmt)
+                asset: Asset = result.scalar_one_or_none()
+
+                if not asset:
+                    results.append(FAAssetPatchResult(asset_id=patch.asset_id, success=False, message=f"Asset {patch.asset_id} not found", updated_fields=None))
+                    continue
+                asset_classification_params_before = json.loads(asset.classification_params) if asset.classification_params else {}
+                logger.debug(f"Asset found for patching: id={patch.asset_id}: {asset.model_dump_json()}")
+
+                # Track updated fields
+                updated_fields: List[OldNew[str]] = []
+
+                # Update fields if present in patch (use model_dump to detect presence)
+                # Use exclude_unset=True to only include fields that were explicitly set
+                # Use exclude_none=True to exclude None values (except classification_params which we handle specially)
+                patch_dict = patch.model_dump(mode='json', exclude={'asset_id'}, exclude_unset=True, exclude_none=True)
+
+                # Special handling for classification_params=None (clearing the field)
+                # Check if it was explicitly set to None in the original patch object
+                if 'classification_params' not in patch_dict and patch.classification_params is None:
+                    # Check if the field was explicitly set (not just default None)
+                    # We can use __pydantic_fields_set__ to check
+                    if 'classification_params' in patch.model_fields_set:
+                        patch_dict['classification_params'] = None
+
+                for field, value in patch_dict.items():
+                    logger.debug(f"Patching field '{field}': '{value}'")
+                    if field == "classification_params":
+                        # None = clear all classification_params
+                        if value is None:
+                            value = None  # Will set classification_params to NULL in DB
+                        elif not value:  # Empty dict = also clear
+                            value = None
+                        else:
+                            # PATCH semantics for classification_params:
+                            # - If a field (e.g., sector_area, geographic_area) is present in patch, replace it completely
+                            # - If a field is absent from patch, keep the existing value
+                            # NO deep merge: each field is atomic (sector_area.distribution is replaced as a whole)
+
+                            # Start with existing values
+                            merged = dict(asset_classification_params_before)
+
+                            # Replace only the fields present in the patch (shallow merge, not deep)
+                            for key, val in value.items():
+                                if val is not None and val != "":
+                                    merged[key] = val
+                                else:
+                                    # Explicit null/empty = remove field
+                                    merged.pop(key, None)
+
+                            # Validate and serialize
+                            value = FAClassificationParams(**merged).model_dump(mode='json', exclude_none=True)
+                            if not value:  # If result is empty dict, set to None
+                                value = None
+                    if not value:
+                        value = None  # Explicitly set to None if falsey value (e.g., empty string)
+                    if isinstance(value, dict):
+                        value = json.dumps(value)  # Transform dict as serialized JSON
+                    oldVal = getattr(asset, field)
+                    setattr(asset, field, value)
+                    updated_fields.append(OldNew(info=field, old=oldVal, new=value))
+                    logger.debug(f"updated field '{field}': '{oldVal}' -> '{value}'")
+
+                await session.flush()
+
+                results.append(FAAssetPatchResult(
+                    asset_id=patch.asset_id,
+                    success=True,
+                    message=f"Asset patched successfully ({len(updated_fields)} fields)",
+                    updated_fields=updated_fields
+                    ))
+
+                logger.info(f"Asset patched: id={patch.asset_id}, fields={updated_fields}")
+
+            except Exception as e:
+                logger.error(f"Error patching asset {patch.asset_id}: {e}")
+                results.append(FAAssetPatchResult(
+                    asset_id=patch.asset_id,
+                    success=False,
+                    message=f"Error: {str(e)}",
+                    updated_fields=None
+                    ))
+
+        # Commit all successful patches
+        await session.commit()
+
+        success_count = sum(1 for r in results if r.success)
+
+        return FABulkAssetPatchResponse(
+            results=results,
+            success_count=success_count,
+            errors=[]
+            )
+
+
+# ============================================================================
+# ASSET METADATA SERVICES MANAGER
+# ============================================================================
+
+
+class AssetMetadataService:
+    """
+    Static service for asset metadata operations.
+
+    All methods are static - no instance state required.
+    """
+
+    @staticmethod
+    def compute_metadata_diff(
+        old: Optional[FAClassificationParams],
+        new: Optional[FAClassificationParams]
+        ) -> list[FAMetadataChangeDetail]:
+        """
+        Compute diff between old and new metadata.
+
+        Tracks changes field-by-field for audit/display purposes.
+
+        Args:
+            old: Previous metadata state (or None)
+            new: New metadata state (or None)
+
+        Returns:
+            List of FAMetadataChangeDetail objects describing changes
+
+        Examples:
+            >>> old = FAClassificationParams(sector="Energy")
+            >>> new = FAClassificationParams(sector="Technology")
+            >>> changes = AssetMetadataService.compute_metadata_diff(old, new)
+            >>> len(changes)
+            2
+            >>> changes[0].field
+            'sector'
+        """
+        changes = []
+
+        # Convert to dicts for comparison
+        old_dict = old.model_dump(exclude_none=False) if old else {}
+        new_dict = new.model_dump(exclude_none=False) if new else {}
+
+        # Get all fields from both dicts
+        all_fields = set(old_dict.keys()) | set(new_dict.keys())
+
+        for field in all_fields:
+            old_value = old_dict.get(field)
+            new_value = new_dict.get(field)
+
+            # Check if changed
+            if old_value != new_value:
+                # Convert to JSON-serializable format for display
+                old_display = json.dumps(old_value, default=str) if old_value is not None else None
+                new_display = json.dumps(new_value, default=str) if new_value is not None else None
+
+                changes.append(FAMetadataChangeDetail(
+                    field=field,
+                    old_value=old_display,
+                    new_value=new_display
+                    ))
+
+        return changes
+
+    @staticmethod
+    def apply_partial_update(
+        current: Optional[FAClassificationParams],
+        patch: FAClassificationParams
+        ) -> FAClassificationParams:
+        """
+        Apply PATCH request to current metadata.
+
+        PATCH Semantics:
+        - **Absent field** (not in patch dict) → ignored, keep current value
+        - **null in JSON** (None in Python) → clear field (set to None)
+        - **Value present** → update field
+        - **geographic_area** → full block replace (no partial merge)
+
+        Args:
+            current: Current metadata state (or None for new metadata)
+            patch: PATCH request with fields to update
+
+        Returns:
+            Updated FAClassificationParams
+
+        Raises:
+            ValueError: If validation fails (e.g., invalid geographic_area)
+
+        Examples:
+            >>> current = FAClassificationParams(sector="Technology")
+            >>> patch = FAClassificationParams(sector=None)  # Clear sector
+            >>> updated = AssetMetadataService.apply_partial_update(current, patch)
+            >>> updated.sector
+            None
+        """
+        # Start with current values (or empty dict)
+        current_dict = current.model_dump(exclude_none=False) if current else {
+            'short_description': None,
+            'geographic_area': None,
+            'sector_area': None,
+            }
+
+        # Get patch fields that were explicitly set (exclude unset fields)
+        # This distinguishes between "field not in request" vs "field=null in request"
+        patch_dict = patch.model_dump(exclude_unset=True)
+
+        # Apply patch: only update fields that are present in patch_dict
+        for field, value in patch_dict.items():
+            current_dict[field] = value
+
+        # Validate and return updated model
+        try:
+            return FAClassificationParams(**current_dict)
+        except Exception as e:
+            raise ValueError(f"Validation failed after applying PATCH: {e}")
+
+    @staticmethod
+    def merge_provider_metadata(
+        current: Optional[FAClassificationParams],
+        provider_data: dict
+        ) -> FAClassificationParams:
+        """
+        Merge provider-fetched metadata with current metadata.
+
+        Strategy:
+        - Provider data takes precedence over current values
+        - Only updates fields that provider returns (non-None)
+        - Current values preserved if provider doesn't return field
+
+        Args:
+            current: Current metadata state (or None)
+            provider_data: Raw metadata dict from provider
+
+        Returns:
+            Merged FAClassificationParams
+
+        Note:
+            Provider data is already validated by FAClassificationParams
+            when this is called (geo_normalization runs in field_validator)
+        """
+        # Start with current values
+        current_dict = current.model_dump(exclude_none=False) if current else {
+            'short_description': None,
+            'geographic_area': None,
+            'sector_area': None,
+            }
+
+        # Update with provider data (only non-None values)
+        for field in ['short_description', 'geographic_area', 'sector_area']:
+            if field in provider_data and provider_data[field] is not None:
+                current_dict[field] = provider_data[field]
+
+        # Validate and return merged model
+        return FAClassificationParams(**current_dict)
+
+    @staticmethod
+    async def update_asset_metadata(
+        asset_id: int,
+        patch: FAClassificationParams,
+        session: 'AsyncSession'
+        ) -> 'FAMetadataRefreshResult':
+        """
+        Update asset metadata with PATCH semantics.
+
+        Loads asset, applies PATCH update, validates, persists to database,
+        and computes changes for tracking.
+
+        Args:
+            asset_id: Asset ID to update
+            patch: PATCH request with fields to update
+            session: Database session
+
+        Returns:
+            FAMetadataRefreshResult with success status and changes
+
+        Raises:
+            ValueError: If asset not found or validation fails
+
+        Examples:
+            >>> from backend.app.schemas.assets import FAClassificationParams
+            >>> patch = FAClassificationParams(sector="Technology")
+            >>> result = await AssetMetadataService.update_asset_metadata(1, patch, session)
+            >>> result.success
+            True
+            >>> result.changes
+            [FAMetadataChangeDetail(field='sector', old=None, new='"Technology"')]
+        """
+
+        # Load asset from DB
+        result = await session.execute(select(Asset).where(Asset.id == asset_id))
+        asset = result.scalar_one_or_none()
+
+        if not asset:
+            raise ValueError(f"Asset {asset_id} not found")
+
+        # Parse current classification_params
+        current_params = None
+        if asset.classification_params:
+            try:
+                current_params = FAClassificationParams.model_validate_json(asset.classification_params)
+            except Exception as e:
+                logger.error(
+                    "Failed to parse classification_params from database",
+                    asset_id=asset_id,
+                    error=str(e),
+                    classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
+                    )
+                pass  # Treat invalid JSON as None
+
+        # Apply PATCH update
+        try:
+            updated_params = AssetMetadataService.apply_partial_update(
+                current_params,
+                patch
+                )
+        except ValueError as e:
+            # Re-raise validation errors (will become 422 in API layer)
+            raise ValueError(f"Validation failed: {e}")
+
+        # Compute changes before persisting
+        changes = AssetMetadataService.compute_metadata_diff(current_params, updated_params)
+
+        # Serialize back to JSON
+        asset.classification_params = updated_params.model_dump_json(exclude_none=True) if updated_params else None
+
+        # Commit transaction
+        await session.commit()
+
+        # Refresh to get updated data
+        await session.refresh(asset)
+
+        # Build response with changes
+        return FAMetadataRefreshResult(
+            asset_id=asset.id,
+            success=True,
+            message="Metadata updated successfully",
+            changes=changes
+            )
+
+
+# ============================================================================
+# ASSET SEARCE SERVICES
+# ============================================================================
+
+
+class AssetSearchService:
+    """
+    Service for searching assets across multiple providers.
+
+    Features:
+    - Parallel execution using asyncio.gather for performance
+    - Graceful error handling per provider (errors don't fail entire search)
+    - Provider filtering support
+    - Aggregated results with metadata
+    """
+
+    @staticmethod
+    async def search(
+        query: str,
+        provider_codes: Optional[list[str]] = None
+        ) -> FAProviderSearchResponse:
+        """
+        Search for assets across one or more providers in parallel.
+
+        Args:
+            query: Search query string
+            provider_codes: Optional list of provider codes to query.
+                           If None, queries all providers.
+
+        Returns:
+            FAProviderSearchResponse with aggregated results from all providers.
+
+        Notes:
+            - Providers that don't support search are silently skipped
+            - Provider errors are logged but don't fail the entire search
+            - Results are not deduplicated (same asset may appear from multiple providers)
+        """
+        # Get provider codes to query
+        if not provider_codes:
+            all_providers = AssetProviderRegistry.list_providers()
+            provider_codes = [p['code'] for p in all_providers]
+
+        # Filter to valid providers only
+        valid_providers: list[tuple[str, object]] = []
+        for code in provider_codes:
+            provider_instance = AssetProviderRegistry.get_provider_instance(code)
+            if provider_instance:
+                valid_providers.append((code, provider_instance))
+            else:
+                logger.warning(f"Provider '{code}' not found, skipping")
+
+        if not valid_providers:
+            return FAProviderSearchResponse(
+                query=query,
+                total_results=0,
+                results=[],
+                providers_queried=[],
+                providers_with_errors=[]
+                )
+
+        # Create search tasks for parallel execution
+        async def search_single_provider(code: str, provider) -> tuple[str, list[dict], str | None]:
+            """
+            Search a single provider and return (code, results, error).
+            Error is None if successful, error message string if failed.
+            """
+            try:
+                search_results = await provider.search(query)
+                return (code, search_results, None)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "not_supported" in error_str or "not supported" in error_str:
+                    # Not an error, just unsupported
+                    logger.debug(f"Provider '{code}' does not support search")
+                    return (code, [], None)
+                else:
+                    logger.error(f"Search error from provider '{code}': {e}")
+                    return (code, [], str(e))
+
+        # Execute all searches in parallel
+        tasks = [
+            search_single_provider(code, provider)
+            for code, provider in valid_providers
+            ]
+
+        search_results_raw = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process results
+        results: list[FAProviderSearchResultItem] = []
+        providers_queried: list[str] = []
+        providers_with_errors: list[str] = []
+
+        for result in search_results_raw:
+            if isinstance(result, Exception):
+                # Unexpected exception from gather itself
+                logger.error(f"Unexpected error in search task: {result}")
+                continue
+
+            code, items, error = result
+            providers_queried.append(code)
+
+            if error:
+                providers_with_errors.append(code)
+                continue
+
+            # Convert provider results to response schema
+            for item in items:
+                results.append(FAProviderSearchResultItem(
+                    identifier=item.get("identifier", ""),
+                    identifier_type=item.get("identifier_type"),
+                    display_name=item.get("display_name", item.get("name", "")),
+                    provider_code=code,
+                    currency=item.get("currency"),
+                    asset_type=item.get("type")
+                    ))
+
+        return FAProviderSearchResponse(
+            query=query,
+            total_results=len(results),
+            results=results,
+            providers_queried=providers_queried,
+            providers_with_errors=providers_with_errors
             )

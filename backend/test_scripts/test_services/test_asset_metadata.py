@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.schemas.assets import FAClassificationParams
-from backend.app.services.asset_metadata import AssetMetadataService
+from backend.app.services.asset_source import AssetMetadataService
 
 
 def test_compute_metadata_diff():

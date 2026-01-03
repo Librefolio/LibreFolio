@@ -376,7 +376,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             # Initialize variables
             all_transactions = []
             schedule = None
-            currency = "EUR" # Default value, fetch from asset later if needed
+            currency = "EUR"  # Default value, fetch from asset later if needed
 
             # Check for transaction override (for testing)
             transaction_override = provider_params.get("_transaction_override")
