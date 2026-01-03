@@ -1,0 +1,5 @@
+date,type,quantity,amount,currency,description
+2025-01-02,BUY,10,-1000.00,EUR,ISO date format
+03/01/2025,BUY,5,-500.00,EUR,European DD/MM/YYYY format
+01/04/2025,BUY,5,-500.00,EUR,US MM/DD/YYYY format
+05.01.2025,BUY,3,-300.00,EUR,German DD.MM.YYYY format

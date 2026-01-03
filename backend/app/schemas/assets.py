@@ -39,7 +39,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.db.models import AssetType
+from backend.app.db.models import AssetType, IdentifierType
 # Import from common and prices modules
 from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse, OldNew, Currency
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
@@ -687,17 +687,34 @@ class FABulkAssetCreateResponse(BaseBulkResponse[FAAssetCreateResult]):
 
 
 class FAAinfoFiltersRequest(BaseModel):
-    """Filters for asset list query (used internally, not in request body)."""
+    """Filters for asset list query - enhanced for BRIM asset matching."""
     model_config = ConfigDict(extra="forbid")
 
-    currency: Optional[str] = Field(None, description="Filter by currency (e.g., USD)")
-    asset_type: Optional[str] = Field(None, description="Filter by asset type (e.g., STOCK)")
+    # Filters with proper validation
+    currency: Optional[str] = Field(None, description="Filter by currency (ISO 4217)")
+    asset_type: Optional[AssetType] = Field(None, description="Filter by asset type enum")
     active: bool = Field(True, description="Include only active assets (default: true)")
-    search: Optional[str] = Field(None, description="Search in display_name or identifier")
+
+    # Search in display_name (partial match)
+    search: Optional[str] = Field(None, description="Search in display_name (partial match)")
+
+    # NEW: Identifier-based search (for BRIM asset matching)
+    isin: Optional[str] = Field(None, description="Exact ISIN match (via AssetProviderAssignment)")
+    symbol: Optional[str] = Field(None, description="Exact symbol/ticker match (via AssetProviderAssignment)")
+    identifier_contains: Optional[str] = Field(None, description="Partial match in identifier field")
+
+    @field_validator('currency')
+    @classmethod
+    def validate_currency_code(cls, v: Optional[str]) -> Optional[str]:
+        """Validate currency using Currency.validate_code()."""
+        if v is None:
+            return None
+        from backend.app.schemas.common import Currency
+        return Currency.validate_code(v)
 
 
 class FAinfoResponse(BaseModel):
-    """Single asset info, near equivalent to Asset DB model. Create new model to decouple from ORM."""
+    """Single asset info - enhanced with identifier data for BRIM and frontend."""
     model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., description="Asset ID")
@@ -708,6 +725,9 @@ class FAinfoResponse(BaseModel):
     active: bool = Field(..., description="Whether asset is active")
     has_provider: bool = Field(..., description="Whether asset has a provider assigned")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
+    # NEW: Identifier info for BRIM matching and frontend display
+    identifier: Optional[str] = Field(None, description="Asset identifier (ticker, ISIN, etc.)")
+    identifier_type: Optional[IdentifierType] = Field(None, description="Identifier type enum")
 
 
 class FAAssetDeleteResult(BaseDeleteResult):

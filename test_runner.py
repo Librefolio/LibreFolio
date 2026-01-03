@@ -1160,10 +1160,6 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Test Categories:
-
-  utils    - Utility Module Tests
-             Tests utility modules and helper functions (no backend server needed).
-             Verifies: Decimal precision, datetime utils, financial math, ...
   
   external - External Services Tests
              Tests external API integrations (no backend server needed).
@@ -1177,11 +1173,20 @@ Test Categories:
   services - Backend Services Tests
              Tests business logic and service layer (no backend server needed).
              Verifies: conversions, calculations, algorithms.
+
+  utils    - Utility Module Tests
+             Tests utility modules and helper functions (no backend server needed).
+             Verifies: Decimal precision, datetime utils, financial math, ...
+
+  schemas  - Schema Validation Tests
+             Tests Pydantic schema validation rules (no backend server needed).
   
   api      - API Endpoint Tests  
              Tests REST API endpoints (requires running backend server).
              Verifies: HTTP endpoints, validation, error handling.
              Target: http://localhost:8000
+  
+  e2e      - E2E Tests with API interaction
   
   all      - Run ALL tests in optimal order
 

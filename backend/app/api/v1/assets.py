@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetProviderAssignment
+from backend.app.db.models import Asset, AssetProviderAssignment, AssetType
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import (
@@ -154,30 +154,62 @@ async def patch_assets_bulk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@asset_router.get("/query", response_model=List[FAinfoResponse], tags=["FA CRUD"])
-async def list_assets(
-    currency: Optional[str] = Query(None, description="Filter by currency (e.g., USD)"),
-    asset_type: Optional[str] = Query(None, description="Filter by asset type (e.g., STOCK)"),
-    active: bool = Query(True, description="Include only active assets (default: true)"),
-    search: Optional[str] = Query(None, description="Search in display_name or identifier"),
+@asset_router.get("/all", response_model=List[FAinfoResponse], tags=["FA CRUD"])
+async def get_all_assets(
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
-    List all assets with optional filters.
+    Get all active assets without filters.
+
+    Simple endpoint for frontend to load complete asset list.
+    Returns all active assets with identifier info.
+
+    **Response Fields**:
+    - `identifier`: Asset identifier (ticker, ISIN, etc.) if provider assigned
+    - `identifier_type`: Type of identifier (TICKER, ISIN, UUID, OTHER)
+    """
+    try:
+        filters = FAAinfoFiltersRequest(active=True)
+        return await AssetCRUDService.list_assets(filters, session)
+    except Exception as e:
+        logger.error(f"Error getting all assets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@asset_router.get("/query", response_model=List[FAinfoResponse], tags=["FA CRUD"])
+async def list_assets(
+    currency: Optional[str] = Query(None, description="Filter by currency (ISO 4217, e.g., USD)"),
+    asset_type: Optional[AssetType] = Query(None, description="Filter by asset type enum"),
+    active: bool = Query(True, description="Include only active assets (default: true)"),
+    search: Optional[str] = Query(None, description="Search in display_name (partial match)"),
+    isin: Optional[str] = Query(None, description="Exact ISIN match"),
+    symbol: Optional[str] = Query(None, description="Exact symbol/ticker match"),
+    identifier_contains: Optional[str] = Query(None, description="Partial match in identifier field"),
+    session: AsyncSession = Depends(get_session_generator)
+    ):
+    """
+    List all assets with optional filters - enhanced for BRIM asset matching.
 
     **Query Parameters**:
     - `currency`: Filter by currency code (e.g., "USD", "EUR")
-    - `asset_type`: Filter by type (e.g., "STOCK", "ETF", "BOND")
-    - `active`: Include only active assets (default: true, set to false for inactive)
-    - `search`: Search text in asset name or identifier (case-insensitive)
+    - `asset_type`: Filter by type enum (STOCK, ETF, BOND, etc.)
+    - `active`: Include only active assets (default: true)
+    - `search`: Search text in display_name (case-insensitive partial match)
+    - `isin`: Exact ISIN match (via provider assignment)
+    - `symbol`: Exact ticker/symbol match (via provider assignment)
+    - `identifier_contains`: Partial match in any identifier
 
     **Response Fields**:
     - `has_provider`: True if asset has a pricing provider assigned
-    - `has_metadata`: True if asset has classification metadata (sector, geographic_area, etc.)
+    - `has_metadata`: True if asset has classification metadata
+    - `identifier`: Asset identifier (ticker, ISIN, etc.) if provider assigned
+    - `identifier_type`: Type of identifier (TICKER, ISIN, UUID, OTHER)
 
     **Example**:
     ```
-    GET /api/v1/assets/list?currency=USD&asset_type=STOCK&search=Apple
+    GET /api/v1/assets/query?currency=USD&asset_type=STOCK&search=Apple
+    GET /api/v1/assets/query?isin=US0378331005
+    GET /api/v1/assets/query?symbol=AAPL
     ```
     """
     try:
@@ -185,7 +217,10 @@ async def list_assets(
             currency=currency,
             asset_type=asset_type,
             active=active,
-            search=search
+            search=search,
+            isin=isin,
+            symbol=symbol,
+            identifier_contains=identifier_contains
             )
         return await AssetCRUDService.list_assets(filters, session)
     except Exception as e:

@@ -32,6 +32,7 @@ uvicorn = "*"
 mergedeep = "*"
 websocket-client = "*"
 justetf-scraping = {git = "https://github.com/Alfystar/justetf-scraping.git", ref = "main"}
+python-multipart = "*"
 
 [dev-packages]
 pytest = "*"

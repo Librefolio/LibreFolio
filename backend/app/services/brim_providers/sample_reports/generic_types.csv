@@ -1,0 +1,9 @@
+date,type,quantity,amount,currency,description
+2025-01-01,BUY,10,-1000.00,EUR,Buy transaction
+2025-01-02,SELL,-10,1050.00,EUR,Sell transaction
+2025-01-03,DIVIDEND,0,50.00,EUR,Dividend payment
+2025-01-04,INTEREST,0,10.00,EUR,Interest income
+2025-01-05,DEPOSIT,0,5000.00,EUR,Cash deposit
+2025-01-06,WITHDRAWAL,0,-2000.00,EUR,Cash withdrawal
+2025-01-07,FEE,0,-5.00,EUR,Trading fee
+2025-01-08,TAX,0,-15.00,EUR,Withholding tax
