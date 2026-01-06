@@ -72,11 +72,11 @@ class Transaction(SQLModel, table=True):
     # Uses DEFERRABLE INITIALLY DEFERRED to allow setting mutual links in same transaction.
     # FK constraint is only checked at COMMIT, not at INSERT/UPDATE time.
     related_transaction_id: Optional[int] = Field(
-        foreign_key="transactions.id", 
-        deferrable=True, 
+        foreign_key="transactions.id",
+        deferrable=True,
         initially="DEFERRED",
         nullable=True
-    )
+        )
 
     tags: Optional[str] = Field(default=None)  # Comma-separated tags (es: "tag1,tag2")
     description: Optional[str] = Field(default=None)
@@ -87,23 +87,24 @@ class Transaction(SQLModel, table=True):
 
 La tabella dovrebbe essere:
 
-| Colonna                  | Tipo     | Nullable | Default | Descrizione                                                                        |
-|:-------------------------|:---------|:---------|:--------|:-----------------------------------------------------------------------------------|
-| `id`                     | PK       | No       | -       | ID Univoco.                                                                        |
-| `broker_id`              | FK       | No       | -       | Broker di appartenenza.                                                            |
-| `asset_id`               | FK       | Sì       | -       | Asset coinvolto. NULL per movimenti puramente cash.                                |
-| `type`                   | Enum     | No       | -       | Tipo di operazione.                                                                |
-| `date`                   | Date     | No       | -       | Data di regolamento (Settlement Date).                                             |
-| `quantity`               | Decimal  | No       | `0`     | Delta Asset. Positivo = Entrata. Negativo = Uscita.                                |
-| `amount`                 | Decimal  | No       | `0`     | Delta Cash. Positivo = Incasso. Negativo = Spesa.                                  |
-| `currency`               | String   | Sì       | -       | Codice valuta (ISO 4217) se `amount != 0`.                                         |
-| `related_transaction_id` | FK       | Sì       | -       | **BIDIRECTIONAL**: punta alla transazione gemella. DEFERRABLE INITIALLY DEFERRED.  |
-| `tags`                   | Text     | Sì       | -       | Lista di tag separati da virgola o JSON. Per raggruppamenti utente.                |
-| `description`            | Text     | Sì       | -       | Note o descrizione originale.                                                      |
-| `created_at`             | DateTime | No       | Now     | Timestamp creazione.                                                               |
-| `updated_at`             | DateTime | No       | Now     | Timestamp aggiornamento.                                                           |
+| Colonna                  | Tipo     | Nullable | Default | Descrizione                                                                       |
+|:-------------------------|:---------|:---------|:--------|:----------------------------------------------------------------------------------|
+| `id`                     | PK       | No       | -       | ID Univoco.                                                                       |
+| `broker_id`              | FK       | No       | -       | Broker di appartenenza.                                                           |
+| `asset_id`               | FK       | Sì       | -       | Asset coinvolto. NULL per movimenti puramente cash.                               |
+| `type`                   | Enum     | No       | -       | Tipo di operazione.                                                               |
+| `date`                   | Date     | No       | -       | Data di regolamento (Settlement Date).                                            |
+| `quantity`               | Decimal  | No       | `0`     | Delta Asset. Positivo = Entrata. Negativo = Uscita.                               |
+| `amount`                 | Decimal  | No       | `0`     | Delta Cash. Positivo = Incasso. Negativo = Spesa.                                 |
+| `currency`               | String   | Sì       | -       | Codice valuta (ISO 4217) se `amount != 0`.                                        |
+| `related_transaction_id` | FK       | Sì       | -       | **BIDIRECTIONAL**: punta alla transazione gemella. DEFERRABLE INITIALLY DEFERRED. |
+| `tags`                   | Text     | Sì       | -       | Lista di tag separati da virgola o JSON. Per raggruppamenti utente.               |
+| `description`            | Text     | Sì       | -       | Note o descrizione originale.                                                     |
+| `created_at`             | DateTime | No       | Now     | Timestamp creazione.                                                              |
+| `updated_at`             | DateTime | No       | Now     | Timestamp aggiornamento.                                                          |
 
 **Nota sulla FK DEFERRABLE (2025-12-26):**
+
 - Permette di impostare A->B e B->A nella stessa transazione DB
 - Il vincolo FK viene verificato solo al COMMIT, non all'INSERT
 - Semplifica enormemente la logica di create e delete delle transazioni linkate
@@ -169,8 +170,8 @@ Tabella che definisce quali campi sono obbligatori/opzionali per ogni tipo di tr
 - ✅ Modelli con validatore currency: `UserSettings`, `Asset`, `Transaction`, `PriceHistory`, `FxRate`, `FxCurrencyPairSource`
 - ✅ Test aggiornati per la nuova struttura unificata (`db_schema_validate.py`, `test_db_referential_integrity.py`)
 - ✅ Script `populate_mock_data.py` riscritto per usare il modello Transaction unificato
-- ⚠️ **Nota su validazione SQLModel**: I validatori `@field_validator` nei modelli `table=True` non vengono convertiti in vincoli SQL nella tabella. 
-     Quindi se un altra applicazione o un altro pezzo di codice facesse una INSERT nella tabella senza passare per la classe pydantic, i validator verrebbero ignorati.
+- ⚠️ **Nota su validazione SQLModel**: I validatori `@field_validator` nei modelli `table=True` non vengono convertiti in vincoli SQL nella tabella.
+  Quindi se un altra applicazione o un altro pezzo di codice facesse una INSERT nella tabella senza passare per la classe pydantic, i validator verrebbero ignorati.
 
 ---
 
@@ -299,7 +300,6 @@ Implementati in `backend/app/schemas/brokers.py`:
     - `force=False` (default): delete fallisce se esistono transazioni → errore con conteggio
     - `force=True`: elimina broker E tutte le transazioni → `BRDeleteResult.transactions_deleted` mostra quante
 
-
 ---
 
 ## Phase 3: Service Layer (Business Logic)
@@ -313,6 +313,7 @@ Implementati in `backend/app/schemas/brokers.py`:
 Implementato in `backend/app/services/transaction_service.py`:
 
 **Metodi CRUD:**
+
 - `create_bulk(items: List[TXCreateItem]) -> TXBulkCreateResponse`
 - `query(params: TXQueryParams) -> List[TXReadItem]`
 - `get_by_id(tx_id: int) -> Optional[TXReadItem]`
@@ -321,19 +322,23 @@ Implementato in `backend/app/services/transaction_service.py`:
 - `delete_by_broker(broker_id: int) -> int` (per cascade delete)
 
 **Metodi Balance:**
+
 - `get_cash_balances(broker_id: int) -> Dict[str, Decimal]`
 - `get_asset_holdings(broker_id: int) -> Dict[int, Decimal]`
 - `get_cost_basis(broker_id: int, asset_id: int) -> Decimal`
 
 **Logica interna:**
+
 - `_validate_broker_balances(broker_id, from_date)`: Algoritmo giorno-per-giorno
 - `_get_balances_before_date(broker_id, before_date)`: Starting point per validazione
 
 **Eccezioni:**
+
 - `BalanceValidationError`: Saldo negativo non permesso
 - `LinkedTransactionError`: Errore su transazioni collegate
 
 **Note implementative:**
+
 - ✅ Link resolution automatico via `link_uuid` in create_bulk
 - ✅ Delete automatico di transazioni collegate
 - ✅ Validazione saldi giorno-per-giorno (non intra-day)
@@ -344,6 +349,7 @@ Implementato in `backend/app/services/transaction_service.py`:
 Implementato in `backend/app/services/broker_service.py`:
 
 **Metodi CRUD:**
+
 - `create_bulk(items: List[BRCreateItem]) -> BRBulkCreateResponse`
 - `get_all() -> List[BRReadItem]`
 - `get_by_id(broker_id: int) -> Optional[BRReadItem]`
@@ -352,11 +358,11 @@ Implementato in `backend/app/services/broker_service.py`:
 - `delete_bulk(items: List[BRDeleteItem]) -> BRBulkDeleteResponse`
 
 **Note implementative:**
+
 - ✅ Auto-crea DEPOSIT transactions per `initial_balances`
 - ✅ `get_summary()` include cash_balances + holdings con cost basis e market value
 - ✅ Valida saldi quando si disabilita overdraft/shorting
 - ✅ `delete_bulk` con `force=True` cascade-delete tutte le transazioni
-
 
 ---
 
@@ -389,13 +395,14 @@ Implementato in `backend/app/api/v1/transactions.py`:
 - `DELETE /transactions?ids=[]`: Bulk delete con cascade linked
 
 **Note implementative:**
+
 - ✅ Tutti i services e endpoint convertiti ad async (AsyncSession, await)
 - ✅ Commit/rollback gestito nell'endpoint dopo verifica errors
 - ✅ Query params per date_range costruiti da `date_start` + `date_end`
 - ✅ Delete di linked transaction fallisce se non si eliminano entrambe
 - ✅ `TXReadItem.linked_transaction_id`: popolato bidirezionalmente dal service
-  - `related_transaction_id`: campo DB (unidirezionale, B → A)
-  - `linked_transaction_id`: campo DTO popolato in entrambi i versi per il frontend
+    - `related_transaction_id`: campo DB (unidirezionale, B → A)
+    - `linked_transaction_id`: campo DTO popolato in entrambi i versi per il frontend
 
 ### 4.3 Write and debug test scripts
 
@@ -407,7 +414,7 @@ Implementato in `backend/app/api/v1/transactions.py`:
 
 **Status:** 🔲 **DA IMPLEMENTARE**
 
-**Razionale:** Disaccoppiare il core dai formati specifici dei file broker. 
+**Razionale:** Disaccoppiare il core dai formati specifici dei file broker.
 Il core applicativo non deve sapere cos'è un CSV Directa o un export Degiro.
 I plugin traducono formati esterni in DTOs standard (`TXCreateItem`).
 
@@ -432,6 +439,7 @@ from enum import Enum
 from backend.app.db.models import TransactionType
 from backend.app.schemas.transactions import TXCreateItem
 
+
 # =============================================================================
 # FILE MANAGEMENT
 # =============================================================================
@@ -442,8 +450,9 @@ class BRIMFileStatus(str, Enum):
     Flow: UPLOADED → PARSED (success) or FAILED (error)
     """
     UPLOADED = "uploaded"
-    PARSED = "parsed"      # Successfully parsed, ready for import
+    PARSED = "parsed"  # Successfully parsed, ready for import
     FAILED = "failed"
+
 
 class BRIMFileInfo(BaseModel):
     """Information about an uploaded file."""
@@ -456,6 +465,7 @@ class BRIMFileInfo(BaseModel):
     compatible_plugins: List[str]  # Plugin codes that can parse this file
     error_message: Optional[str] = None
 
+
 class BRIMPluginInfo(BaseModel):
     """Information about an available import plugin."""
     code: str
@@ -463,12 +473,14 @@ class BRIMPluginInfo(BaseModel):
     description: str
     supported_extensions: List[str]
 
+
 # =============================================================================
 # ASSET MAPPING (Fake ID → Real Asset)
 # =============================================================================
 
 # Fake IDs start from MAX_INT and decrement to avoid collision with real IDs
-FAKE_ASSET_ID_BASE = 2**31 - 1  # 2147483647
+FAKE_ASSET_ID_BASE = 2 ** 31 - 1  # 2147483647
+
 
 class BRIMMatchConfidence(str, Enum):
     """Confidence level for asset candidate matching.
@@ -484,13 +496,15 @@ class BRIMMatchConfidence(str, Enum):
     MEDIUM = "medium"
     LOW = "low"
 
+
 class BRIMAssetCandidate(BaseModel):
     """A potential real asset match for a fake asset ID."""
-    asset_id: int                       # Real asset ID from DB
+    asset_id: int  # Real asset ID from DB
     symbol: Optional[str]
     isin: Optional[str]
     name: str
     match_confidence: BRIMMatchConfidence
+
 
 class BRIMAssetMapping(BaseModel):
     """Mapping from fake asset ID to extracted info and candidates.
@@ -498,12 +512,13 @@ class BRIMAssetMapping(BaseModel):
     Note: selected_asset_id is auto-populated if exactly 1 candidate found.
     Frontend can override or set if candidates is empty or multiple.
     """
-    fake_asset_id: int                      # The fake ID used in transactions
-    extracted_symbol: Optional[str]         # What was extracted from CSV
-    extracted_isin: Optional[str]           # What was extracted from CSV  
-    extracted_name: Optional[str]           # What was extracted from CSV
-    candidates: List[BRIMAssetCandidate]    # Possible matches (empty = not found)
-    selected_asset_id: Optional[int] = None # Auto-set if len(candidates)==1, else None
+    fake_asset_id: int  # The fake ID used in transactions
+    extracted_symbol: Optional[str]  # What was extracted from CSV
+    extracted_isin: Optional[str]  # What was extracted from CSV  
+    extracted_name: Optional[str]  # What was extracted from CSV
+    candidates: List[BRIMAssetCandidate]  # Possible matches (empty = not found)
+    selected_asset_id: Optional[int] = None  # Auto-set if len(candidates)==1, else None
+
 
 # =============================================================================
 # DUPLICATE DETECTION
@@ -523,28 +538,32 @@ class BRIMDuplicateLevel(str, Enum):
     LIKELY = "likely"
     LIKELY_WITH_ASSET = "likely_with_asset"
 
+
 class BRIMDuplicateMatch(BaseModel):
     """A potential duplicate transaction found in DB."""
     existing_tx_id: int
-    tx_date: date            # Prefixed to avoid clash with 'date' type
-    tx_type: TransactionType # Prefixed to avoid clash with 'type' builtin
+    tx_date: date  # Prefixed to avoid clash with 'date' type
+    tx_type: TransactionType  # Prefixed to avoid clash with 'type' builtin
     tx_quantity: Decimal
     tx_cash_amount: Optional[Decimal]
     tx_cash_currency: Optional[str]
     tx_description: Optional[str]
     match_level: BRIMDuplicateLevel
 
+
 class BRIMTXDuplicateCandidate(BaseModel):
     """A parsed transaction that may be a duplicate."""
-    tx_row_index: int                       # Row number in parsed transaction list
-    tx_parsed: TXCreateItem                 # The parsed transaction
+    tx_row_index: int  # Row number in parsed transaction list
+    tx_parsed: TXCreateItem  # The parsed transaction
     tx_existing_matches: List[BRIMDuplicateMatch]  # Existing DB transactions that match
+
 
 class BRIMDuplicateReport(BaseModel):
     """Report of duplicate detection results for parsed transactions."""
-    tx_unique_indices: List[int]                        # Row indices of unique transactions
+    tx_unique_indices: List[int]  # Row indices of unique transactions
     tx_possible_duplicates: List[BRIMTXDuplicateCandidate]  # Possible duplicates
-    tx_certain_duplicates: List[BRIMTXDuplicateCandidate]   # Practically certain duplicates
+    tx_certain_duplicates: List[BRIMTXDuplicateCandidate]  # Practically certain duplicates
+
 
 # =============================================================================
 # PARSE & IMPORT
@@ -555,16 +574,18 @@ class BRIMParseRequest(BaseModel):
     plugin_code: str
     broker_id: int
 
+
 class BRIMParseResponse(BaseModel):
     """Response from parsing a file - includes asset mapping and duplicates."""
     file_id: str
     plugin_code: str
     broker_id: int
-    transactions: List[TXCreateItem]              # With fake asset IDs where needed
-    asset_mappings: List[BRIMAssetMapping]        # Fake ID → candidates
-    duplicates: BRIMDuplicateReport               # Duplicate detection results
-    warnings: List[str] = []                      # Parser warnings
-    
+    transactions: List[TXCreateItem]  # With fake asset IDs where needed
+    asset_mappings: List[BRIMAssetMapping]  # Fake ID → candidates
+    duplicates: BRIMDuplicateReport  # Duplicate detection results
+    warnings: List[str] = []  # Parser warnings
+
+
 class BRIMImportRequest(BaseModel):
     """Request to import transactions - accepts edited TXCreateItem list."""
     file_id: str
@@ -614,35 +635,35 @@ class BRIMProvider(ABC):
     Each plugin is responsible for parsing a specific broker's file format
     and converting it to a list of TXCreateItem DTOs.
     """
-    
+
     @property
     @abstractmethod
     def provider_code(self) -> str:
         """Unique plugin identifier (e.g., 'directa_csv', 'broker_generic_csv')."""
         pass
-    
+
     @property
     @abstractmethod
     def provider_name(self) -> str:
         """Human-readable plugin name (e.g., 'Directa CSV Export')."""
         pass
-    
+
     @property
     @abstractmethod
     def description(self) -> str:
         """Plugin description for UI display."""
         pass
-    
+
     @property
     def supported_extensions(self) -> List[str]:
         """List of supported file extensions (e.g., ['.csv', '.xlsx'])."""
         return ['.csv']
-    
+
     @abstractmethod
     def can_parse(self, file_path: Path) -> bool:
         """Check if this plugin can parse the given file."""
         pass
-    
+
     @abstractmethod
     def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str]]:
         """Parse file and return (transactions, warnings)."""
@@ -663,10 +684,11 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
     
     Auto-discovers plugins from `backend/app/services/brim_providers/`.
     """
+
     @classmethod
     def _get_provider_folder(cls) -> str:
         return "brim_providers"
-    
+
     @classmethod
     def get_compatible_plugins(cls, file_path: Path) -> List[str]:
         """Get list of plugin codes that can parse the given file."""
@@ -687,6 +709,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
 # =============================================================================
 
 BROKER_REPORTS_DIR = Path(__file__).parent.parent.parent / "data" / "broker_reports"
+
 
 def _ensure_dirs() -> None:
     """Create storage directories if they don't exist."""
@@ -876,6 +899,7 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseRespo
 ```
 
 **Directory Structure:**
+
 ```
 backend/app/services/
 ├── provider_registry.py          # Existing (no changes needed, BRIMProviderRegistry in brim_provider.py)
@@ -922,9 +946,9 @@ Endpoints REST che chiamano le funzioni in `brim_provider.py`.
 Upload file per futuro processing.
 
 - **Request:** `multipart/form-data` con campo `file`
-- **Logic:** 
-  - Legge bytes dal file
-  - Chiama `brim_provider.save_uploaded_file(content, filename)`
+- **Logic:**
+    - Legge bytes dal file
+    - Chiama `brim_provider.save_uploaded_file(content, filename)`
 - **Response:** `BRIMFileInfo`
 - **Errors:** 400 se file vuoto, 413 se troppo grande
 
@@ -964,6 +988,7 @@ Parse file e ritorna transazioni per review (preview).
 - **Errors:** 404 se file non trovato, 400 se plugin non supporta il file
 
 L'utente può ora:
+
 1. Visualizzare le transazioni nel frontend
 2. Modificare/aggiungere/rimuovere transazioni
 3. Inviare la lista modificata a `/import`
@@ -974,14 +999,14 @@ Importa transazioni (potenzialmente modificate dall'utente).
 
 - **Request body:** `BRIMImportRequest` con `List[TXCreateItem]`
 - **Logic:**
-  1. Aggiunge `tags` a ogni item se specificati nella request
-  2. **Chiama `TransactionService.create_bulk(transactions, session)`** (stesso codice dell'import manuale!)
-  3. Se successo: chiama `brim_provider.move_to_imported(file_id)`
-  4. Se errore: chiama `brim_provider.move_to_failed(file_id, error_message)`
+    1. Aggiunge `tags` a ogni item se specificati nella request
+    2. **Chiama `TransactionService.create_bulk(transactions, session)`** (stesso codice dell'import manuale!)
+    3. Se successo: chiama `brim_provider.move_to_imported(file_id)`
+    4. Se errore: chiama `brim_provider.move_to_failed(file_id, error_message)`
 - **Response:** `TXBulkCreateResponse` (stesso formato di POST /transactions)
 - **Errors:** 404 se file non trovato, 400/422 per validation errors
 
-**Nota importante:** Questo endpoint usa **esattamente lo stesso** `TransactionService.create_bulk()` 
+**Nota importante:** Questo endpoint usa **esattamente lo stesso** `TransactionService.create_bulk()`
 usato da `POST /api/v1/transactions`. Le transazioni importate sono indistinguibili da quelle manuali.
 
 #### Plugin Info
@@ -1002,6 +1027,7 @@ File: `backend/app/services/brim_providers/broker_generic_csv.py`
 Plugin base che usa il decorator `@register_provider(BRIMProviderRegistry)`.
 
 **Features:**
+
 - Configurazione colonne via header mapping
 - Supporto per formati data comuni (ISO, DD/MM/YYYY, MM/DD/YYYY)
 - Mapping automatico tipi transazione
@@ -1012,25 +1038,26 @@ Plugin base che usa il decorator `@register_provider(BRIMProviderRegistry)`.
 from backend.app.services.brim_provider import BRIMProvider, BRIMParseError, BRIMProviderRegistry
 from backend.app.services.provider_registry import register_provider
 
+
 @register_provider(BRIMProviderRegistry)
 class GenericCSVBrokerProvider(BRIMProvider):
     """Generic CSV import plugin with auto-detection of columns."""
-    
+
     @property
     def provider_code(self) -> str:
         return "broker_generic_csv"
-    
+
     @property
     def provider_name(self) -> str:
         return "Generic CSV"
-    
+
     @property
     def description(self) -> str:
         return "Import transactions from a generic CSV file with auto-detected columns"
-    
+
     def can_parse(self, file_path: Path) -> bool:
         return file_path.suffix.lower() == '.csv'
-    
+
     def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str]]:
         transactions = []
         warnings = []
@@ -1039,6 +1066,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 ```
 
 **Header Mapping (auto-detected):**
+
 ```python
 HEADER_MAPPINGS = {
     "date": ["date", "data", "settlement_date", "value_date"],
@@ -1048,10 +1076,11 @@ HEADER_MAPPINGS = {
     "currency": ["currency", "valuta", "ccy"],
     "description": ["description", "descrizione", "notes", "memo"],
     "asset": ["asset", "symbol", "ticker", "isin"],
-}
+    }
 ```
 
 **Type Mapping:**
+
 ```python
 TYPE_MAPPINGS = {
     # BUY
@@ -1062,7 +1091,7 @@ TYPE_MAPPINGS = {
     "sell": TransactionType.SELL,
     "vendita": TransactionType.SELL,
     # ... etc
-}
+    }
 ```
 
 ---
@@ -1070,6 +1099,7 @@ TYPE_MAPPINGS = {
 ### 5.5 Flusso Completo (Updated)
 
 **IMPORTANTE - Separazione Responsabilità:**
+
 - **PLUGIN:** Solo parsing del formato file → ritorna transactions + extracted_assets
 - **CORE (API /parse):** Asset candidate search + Duplicate detection → ritorna full BRIMParseResponse
 - **CORE (API /import):** Validazione fake IDs + import via TransactionService
@@ -1178,12 +1208,12 @@ SAMPLE_REPORTS_DIR = Path(__file__).parent.parent.parent / "app" / "services" / 
 
 class TestBRIMProviderDiscovery:
     """Test plugin auto-discovery and registration."""
-    
+
     def test_registry_discovers_plugins(self):
         """At least one plugin should be registered."""
         providers = BRIMProviderRegistry.list_providers()
         assert len(providers) > 0
-    
+
     def test_all_plugins_have_required_properties(self):
         """Each plugin must have code, name, description."""
         for info in BRIMProviderRegistry.list_providers():
@@ -1196,12 +1226,12 @@ class TestBRIMProviderDiscovery:
 
 class TestBRIMProviderParsing:
     """Generic parsing tests run for ALL plugins against ALL compatible files."""
-    
+
     @pytest.fixture
     def all_sample_files(self) -> list[Path]:
         """Get all sample report files."""
         return [f for f in SAMPLE_REPORTS_DIR.glob("*.*") if f.suffix != '.md']
-    
+
     @pytest.fixture
     def all_plugins(self) -> list[BRIMProvider]:
         """Get instances of all registered plugins."""
@@ -1209,8 +1239,8 @@ class TestBRIMProviderParsing:
         return [
             BRIMProviderRegistry.get_provider_instance(info['code'])
             for info in BRIMProviderRegistry.list_providers()
-        ]
-    
+            ]
+
     def test_each_plugin_parses_compatible_files(self, all_plugins, all_sample_files):
         """Each plugin should successfully parse files it claims to support."""
         for plugin in all_plugins:
@@ -1218,20 +1248,20 @@ class TestBRIMProviderParsing:
                 if plugin.can_parse(file_path):
                     # Plugin claims support - it MUST parse without exception
                     transactions, warnings = plugin.parse(file_path, broker_id=1)
-                    
+
                     # Basic validations
                     assert isinstance(transactions, list)
                     assert isinstance(warnings, list)
-                    
+
                     for tx in transactions:
                         assert tx.type is not None
                         assert tx.date is not None
                         assert tx.broker_id == 1
-    
+
     def test_every_sample_file_is_processed(self, all_plugins, all_sample_files):
         """Every sample file must be processable by at least one plugin."""
         unprocessed = []
-        
+
         for file_path in all_sample_files:
             processed = False
             for plugin in all_plugins:
@@ -1242,21 +1272,21 @@ class TestBRIMProviderParsing:
                         break
                     except Exception:
                         continue
-            
+
             if not processed:
                 unprocessed.append(file_path.name)
-        
+
         assert not unprocessed, f"These files were not processed by any plugin: {unprocessed}"
-    
+
     def test_parse_returns_valid_transactions(self, all_plugins, all_sample_files):
         """Parsed transactions must be valid TXCreateItem objects."""
         for plugin in all_plugins:
             for file_path in all_sample_files:
                 if not plugin.can_parse(file_path):
                     continue
-                
+
                 transactions, _ = plugin.parse(file_path, broker_id=1)
-                
+
                 for tx in transactions:
                     assert hasattr(tx, 'type')
                     assert hasattr(tx, 'date')
@@ -1268,16 +1298,16 @@ class TestBRIMProviderParsing:
 
 class TestBRIMFileCoverage:
     """Verify test file coverage."""
-    
+
     def test_sample_reports_directory_exists(self):
         """Sample reports directory must exist."""
         assert SAMPLE_REPORTS_DIR.exists()
-    
+
     def test_sample_reports_not_empty(self):
         """At least one sample file must exist."""
         files = [f for f in SAMPLE_REPORTS_DIR.glob("*.*") if f.suffix != '.md']
         assert len(files) > 0, "No sample report files found"
-    
+
     def test_readme_documents_all_files(self):
         """README.md should document all sample files."""
         readme = SAMPLE_REPORTS_DIR / "README.md"
@@ -1291,6 +1321,7 @@ class TestBRIMFileCoverage:
 #### Additional Test Files
 
 **`test_brim_api.py`:**
+
 - Upload endpoint
 - List/get/delete endpoints
 - Parse endpoint (preview)
@@ -1316,7 +1347,8 @@ quale `asset_id` corrisponde nel DB. L'utente deve poter scegliere.
 
 ```python
 # Costante per Fake ID base
-FAKE_ASSET_ID_BASE = 2**31 - 1  # 2147483647 (max 32-bit signed int)
+FAKE_ASSET_ID_BASE = 2 ** 31 - 1  # 2147483647 (max 32-bit signed int)
+
 
 def is_fake_asset_id(asset_id: int) -> bool:
     """Check if an asset_id is a fake ID (used during import preview)."""
@@ -1332,12 +1364,13 @@ lo stesso usato dall'endpoint `GET /api/v1/assets/query`.
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.schemas.assets import FAAinfoFiltersRequest
 
+
 async def search_asset_candidates(
-    session: AsyncSession,
-    extracted_symbol: Optional[str],
-    extracted_isin: Optional[str],
-    extracted_name: Optional[str]
-) -> Tuple[List[BRIMAssetCandidate], Optional[int]]:
+        session: AsyncSession,
+        extracted_symbol: Optional[str],
+        extracted_isin: Optional[str],
+        extracted_name: Optional[str]
+        ) -> Tuple[List[BRIMAssetCandidate], Optional[int]]:
     """
     Search for asset candidates using the enhanced asset query service.
     
@@ -1349,14 +1382,14 @@ async def search_asset_candidates(
         - Otherwise: auto_selected_id = None
     """
     candidates = []
-    
+
     # Priority 1: ISIN exact match (EXACT confidence)
     # ISIN is globally unique - if it matches, we're certain
     if extracted_isin:
         results = await AssetSourceManager.list_assets(
-            session=session, 
+            session=session,
             filters=FAAinfoFiltersRequest(isin=extracted_isin)
-        )
+            )
         for asset in results:
             candidates.append(BRIMAssetCandidate(
                 asset_id=asset.id,
@@ -1364,14 +1397,14 @@ async def search_asset_candidates(
                 isin=asset.identifier if asset.identifier_type == IdentifierType.ISIN else None,
                 name=asset.display_name,
                 match_confidence=BRIMMatchConfidence.EXACT
-            ))
-    
+                ))
+
     # Priority 2: Symbol/Ticker exact match (HIGH or MEDIUM confidence)
     if extracted_symbol and not candidates:
         results = await AssetSourceManager.list_assets(
             session=session,
             filters=FAAinfoFiltersRequest(symbol=extracted_symbol)
-        )
+            )
         for asset in results:
             # HIGH if we could verify asset_type matches, MEDIUM otherwise
             # For now, use MEDIUM (type verification requires parsed type info)
@@ -1381,21 +1414,21 @@ async def search_asset_candidates(
                 isin=None,
                 name=asset.display_name,
                 match_confidence=BRIMMatchConfidence.MEDIUM
-            ))
-    
+                ))
+
     # Priority 3: Name/identifier partial match (LOW confidence)
     if extracted_name and not candidates:
         # Try identifier partial match first
         results = await AssetSourceManager.list_assets(
             session=session,
             filters=FAAinfoFiltersRequest(identifier_contains=extracted_name)
-        )
+            )
         if not results:
             # Fall back to display_name search
             results = await AssetSourceManager.list_assets(
                 session=session,
                 filters=FAAinfoFiltersRequest(search=extracted_name)
-            )
+                )
         for asset in results:
             candidates.append(BRIMAssetCandidate(
                 asset_id=asset.id,
@@ -1403,22 +1436,22 @@ async def search_asset_candidates(
                 isin=asset.identifier if asset.identifier_type == IdentifierType.ISIN else None,
                 name=asset.display_name,
                 match_confidence=BRIMMatchConfidence.LOW
-            ))
-    
+                ))
+
     # Auto-select if exactly 1 candidate found
     auto_selected = candidates[0].asset_id if len(candidates) == 1 else None
-    
+
     return candidates, auto_selected
 ```
 
 #### Match Confidence Criteria
 
-| Confidence | Criteria | Rationale |
-|------------|----------|-----------|
-| **EXACT** | ISIN match | ISIN is globally unique identifier |
-| **HIGH** | Symbol exact match + same asset type | Symbol + type = very likely same asset |
-| **MEDIUM** | Symbol exact match only | Same symbol, but type not verified |
-| **LOW** | Partial name/identifier match | Weak correlation, needs user verification |
+| Confidence | Criteria                             | Rationale                                 |
+|------------|--------------------------------------|-------------------------------------------|
+| **EXACT**  | ISIN match                           | ISIN is globally unique identifier        |
+| **HIGH**   | Symbol exact match + same asset type | Symbol + type = very likely same asset    |
+| **MEDIUM** | Symbol exact match only              | Same symbol, but type not verified        |
+| **LOW**    | Partial name/identifier match        | Weak correlation, needs user verification |
 
 #### Auto-Selection Logic
 
@@ -1434,9 +1467,9 @@ else:
 
 1. Frontend riceve `BRIMParseResponse` con `asset_mappings`
 2. Per ogni `BRIMAssetMapping`:
-   - Se `selected_asset_id` è già popolato (1 candidato): mostra come pre-selezionato
-   - Se `candidates` vuoto: mostra "Nessun asset trovato" - utente deve cercare/creare
-   - Se `candidates` multipli: mostra lista, utente deve scegliere
+    - Se `selected_asset_id` è già popolato (1 candidato): mostra come pre-selezionato
+    - Se `candidates` vuoto: mostra "Nessun asset trovato" - utente deve cercare/creare
+    - Se `candidates` multipli: mostra lista, utente deve scegliere
 3. Prima dell'import, frontend sostituisce i `fake_asset_id` nelle transactions con i `selected_asset_id`
 4. Se un asset non esiste nel DB, la transazione fallirà (gestito da TransactionService)
 
@@ -1450,11 +1483,11 @@ else:
 
 #### Criteri di Matching
 
-| Livello | Criteri | Descrizione |
-|---------|---------|-------------|
-| **UNIQUE** | Nessun match | Transazione nuova, nessun duplicato trovato |
-| **POSSIBLE** | type + date + quantity + cash | Stessi valori chiave, potrebbe essere duplicato |
-| **CERTAIN** | POSSIBLE + description identica (non vuota) | Tutti i campi identici, praticamente certo sia duplicato |
+| Livello      | Criteri                                     | Descrizione                                              |
+|--------------|---------------------------------------------|----------------------------------------------------------|
+| **UNIQUE**   | Nessun match                                | Transazione nuova, nessun duplicato trovato              |
+| **POSSIBLE** | type + date + quantity + cash               | Stessi valori chiave, potrebbe essere duplicato          |
+| **CERTAIN**  | POSSIBLE + description identica (non vuota) | Tutti i campi identici, praticamente certo sia duplicato |
 
 #### Schema (già definiti in 5.1)
 
@@ -1464,10 +1497,11 @@ class BRIMDuplicateLevel(str, Enum):
     POSSIBLE = "possible"
     CERTAIN = "certain"  # All fields match including description
 
+
 class BRIMDuplicateMatch(BaseModel):
     """A potential duplicate transaction found in DB."""
     existing_tx_id: int
-    tx_date: date            # Prefixed to avoid Pydantic type clash
+    tx_date: date  # Prefixed to avoid Pydantic type clash
     tx_type: TransactionType
     tx_quantity: Decimal
     tx_cash_amount: Optional[Decimal]
@@ -1475,15 +1509,17 @@ class BRIMDuplicateMatch(BaseModel):
     tx_description: Optional[str]
     match_level: BRIMDuplicateLevel  # Enum
 
+
 class BRIMTXDuplicateCandidate(BaseModel):
     """A parsed transaction that may be a duplicate."""
-    tx_row_index: int                           # Row number in parsed list
-    tx_parsed: TXCreateItem                     # The parsed transaction
+    tx_row_index: int  # Row number in parsed list
+    tx_parsed: TXCreateItem  # The parsed transaction
     tx_existing_matches: List[BRIMDuplicateMatch]  # Existing DB transactions
+
 
 class BRIMDuplicateReport(BaseModel):
     """Report of duplicate detection for parsed transactions."""
-    tx_unique_indices: List[int]                        # Rows without matches
+    tx_unique_indices: List[int]  # Rows without matches
     tx_possible_duplicates: List[BRIMTXDuplicateCandidate]
     tx_certain_duplicates: List[BRIMTXDuplicateCandidate]  # Practically sure duplicates
 ```
@@ -1492,10 +1528,10 @@ class BRIMDuplicateReport(BaseModel):
 
 ```python
 async def detect_tx_duplicates(
-    transactions: List[TXCreateItem],
-    broker_id: int,
-    session: AsyncSession
-) -> BRIMDuplicateReport:
+        transactions: List[TXCreateItem],
+        broker_id: int,
+        session: AsyncSession
+        ) -> BRIMDuplicateReport:
     """
     Detect potential duplicate transactions in the database.
     
@@ -1516,44 +1552,44 @@ async def detect_tx_duplicates(
     tx_unique_indices = []
     tx_possible_duplicates = []
     tx_certain_duplicates = []
-    
+
     for idx, tx in enumerate(transactions):
         matches = await _find_matching_transactions(tx, broker_id, session)
-        
+
         if not matches:
             tx_unique_indices.append(idx)
         else:
             # Separate by match level
             certain_matches = [m for m in matches if m.match_level == BRIMDuplicateLevel.CERTAIN]
-            
+
             candidate = BRIMTXDuplicateCandidate(
                 tx_row_index=idx,
                 tx_parsed=tx,
                 tx_existing_matches=matches
-            )
-            
+                )
+
             if certain_matches:
                 tx_certain_duplicates.append(candidate)
             else:
                 tx_possible_duplicates.append(candidate)
-    
+
     return BRIMDuplicateReport(
         tx_unique_indices=tx_unique_indices,
         tx_possible_duplicates=tx_possible_duplicates,
         tx_certain_duplicates=tx_certain_duplicates
-    )
+        )
 ```
 
 #### Frontend Flow
 
 1. Frontend riceve `BRIMDuplicateReport` in `BRIMParseResponse.duplicates`
 2. Mostra transazioni in 3 gruppi:
-   - ✅ **tx_unique_indices**: Pronti per import (checkbox selezionata di default)
-   - ⚠️ **tx_possible_duplicates**: Mostra matches, utente decide (checkbox non selezionata)
-   - ❌ **tx_certain_duplicates**: Duplicati certi, utente decide (checkbox non selezionata, warning rosso)
+    - ✅ **tx_unique_indices**: Pronti per import (checkbox selezionata di default)
+    - ⚠️ **tx_possible_duplicates**: Mostra matches, utente decide (checkbox non selezionata)
+    - ❌ **tx_certain_duplicates**: Duplicati certi, utente decide (checkbox non selezionata, warning rosso)
 3. L'utente può:
-   - Deselezionare transazioni da non importare
-   - Visualizzare i dettagli delle transazioni esistenti in conflitto
+    - Deselezionare transazioni da non importare
+    - Visualizzare i dettagli delle transazioni esistenti in conflitto
 4. Solo le transazioni selezionate vengono inviate a `/import`
 
 ---
@@ -1571,23 +1607,24 @@ BRIM ha bisogno di cercare anche per ISIN e symbol (ticker), che sono in `AssetP
 from backend.app.db.models import AssetType
 from backend.app.schemas.common import Currency
 
+
 class FAAinfoFiltersRequest(BaseModel):
     """Filters for asset list query - enhanced for BRIM."""
     model_config = ConfigDict(extra="forbid")
-    
+
     # Use proper types with validation
     currency: Optional[str] = Field(None, description="Filter by currency (ISO 4217)")
     asset_type: Optional[AssetType] = Field(None, description="Filter by asset type enum")
     active: bool = Field(True, description="Include only active assets (default: true)")
-    
+
     # EXISTING: search in display_name only
     search: Optional[str] = Field(None, description="Search in display_name (partial match)")
-    
+
     # NEW: specific identifier searches (for BRIM asset matching)
     isin: Optional[str] = Field(None, description="Exact ISIN match (via AssetProviderAssignment)")
     symbol: Optional[str] = Field(None, description="Exact symbol/ticker match (via AssetProviderAssignment)")
     identifier_contains: Optional[str] = Field(None, description="Partial match in identifier field")
-    
+
     @field_validator('currency')
     @classmethod
     def validate_currency_code(cls, v: Optional[str]) -> Optional[str]:
@@ -1602,23 +1639,23 @@ class FAAinfoFiltersRequest(BaseModel):
 ```python
 @staticmethod
 async def list_assets(
-    filters: FAAinfoFiltersRequest,
-    session: AsyncSession
-) -> List[FAinfoResponse]:
+        filters: FAAinfoFiltersRequest,
+        session: AsyncSession
+        ) -> List[FAinfoResponse]:
     """List assets with optional filters - now includes identifier search."""
-    
+
     # Build base query with LEFT JOIN to AssetProviderAssignment
-    stmt = select( 
+    stmt = select(
         AssetProviderAssignment.id.label('provider_id'),
         AssetProviderAssignment.identifier.label('identifier'),
         AssetProviderAssignment.identifier_type.label('identifier_type')
-    ).outerjoin(
+        ).outerjoin(
         AssetProviderAssignment,
         Asset.id == AssetProviderAssignment.asset_id
-    )
-    
+        )
+
     conditions = []
-    
+
     # Existing filters...
     if filters.currency:
         conditions.append(Asset.currency == filters.currency)
@@ -1627,27 +1664,27 @@ async def list_assets(
     conditions.append(Asset.active == filters.active)
     if filters.search:
         conditions.append(Asset.display_name.ilike(f"%{filters.search}%"))
-    
+
     # NEW: ISIN exact match (identifier_type = ISIN)
     if filters.isin:
         conditions.append(and_(
             AssetProviderAssignment.identifier == filters.isin,
             AssetProviderAssignment.identifier_type == IdentifierType.ISIN
-        ))
-    
+            ))
+
     # NEW: Symbol exact match (identifier_type = TICKER)
     if filters.symbol:
         conditions.append(and_(
             AssetProviderAssignment.identifier == filters.symbol,
             AssetProviderAssignment.identifier_type == IdentifierType.TICKER
-        ))
-    
+            ))
+
     # NEW: Partial identifier match (any type)
     if filters.identifier_contains:
         conditions.append(
             AssetProviderAssignment.identifier.ilike(f"%{filters.identifier_contains}%")
-        )
-    
+            )
+
     # ... rest of method
 ```
 
@@ -1667,8 +1704,8 @@ class FAinfoResponse(BaseModel):
     has_provider: bool
     has_metadata: bool
     # NEW: Identifier info for BRIM matching and frontend display
-    identifier: Optional[str] = None                    # Ticker, ISIN, etc.
-    identifier_type: Optional[IdentifierType] = None    # Use IdentifierType enum
+    identifier: Optional[str] = None  # Ticker, ISIN, etc.
+    identifier_type: Optional[IdentifierType] = None  # Use IdentifierType enum
 ```
 
 #### Nuovo Endpoint API: GET /assets/all
@@ -1680,8 +1717,8 @@ Endpoint semplice per ottenere tutti gli asset attivi senza filtri.
 ```python
 @asset_router.get("/all", response_model=List[FAinfoResponse], tags=["FA CRUD"])
 async def get_all_assets(
-    session: AsyncSession = Depends(get_session_generator)
-    ):
+        session: AsyncSession = Depends(get_session_generator)
+        ):
     """Get all active assets without filters."""
     filters = FAAinfoFiltersRequest(active=True)
     return await AssetCRUDService.list_assets(filters, session)
@@ -1690,6 +1727,7 @@ async def get_all_assets(
 **Uso:** Frontend per caricare lista completa asset, dropdown, autocomplete.
 
 **Nota:** Per ricerche con filtri, usare `GET /assets/query` con i parametri:
+
 - `currency`, `asset_type`, `active`, `search`
 - `isin`, `symbol`, `identifier_contains` (nuovi per BRIM)
 
@@ -1706,18 +1744,19 @@ CSV può essere usato da broker diversi.
 
 1. **Upload file** (`POST /brim/upload`): Non richiede broker_id
 2. **Parse file** (`POST /brim/files/{id}/parse`): Richiede broker_id in `BRIMParseRequest`
-   - Frontend mostra dropdown con lista broker disponibili
-   - Utente seleziona il broker target
+    - Frontend mostra dropdown con lista broker disponibili
+    - Utente seleziona il broker target
 3. **Import** (`POST /brim/files/{id}/import`): Transazioni già hanno broker_id
 
 ```python
 class BRIMParseRequest(BaseModel):
     """Request to parse an uploaded file (preview)."""
-    plugin_code: str            # Plugin to use
-    broker_id: int              # Target broker - SELECTED BY USER in frontend
+    plugin_code: str  # Plugin to use
+    broker_id: int  # Target broker - SELECTED BY USER in frontend
 ```
 
 **Nota futura:** In futuro si potrebbe implementare auto-detection basata su:
+
 - Pattern nel filename (es. "Directa_export.csv")
 - Header specifici del broker
 - Struttura colonne riconoscibile
@@ -1752,44 +1791,44 @@ Placeholder per funzionalità future. Attualmente ritornano 501 Not Implemented.
 ### Fasi Successive
 
 6. 🔄 **Phase 5 - Broker Report Import System (BRIM):**
-   
+
    **Completati:**
-   - [x] Creare `schemas/brim.py` con DTOs base (BRIMFileInfo, BRIMPluginInfo, BRIMParseRequest/Response, BRIMImportRequest)
-   - [x] Creare `services/brim_provider.py` con abstract class, file storage e service functions
-   - [x] Aggiungere `BRIMProviderRegistry` in `provider_registry.py` (coerenza con FX/Asset)
-   - [x] Creare `services/brim_providers/__init__.py`
-   - [x] Creare `services/brim_providers/sample_reports/` con file di test CSV
-   - [x] Creare `services/brim_providers/broker_generic_csv.py` primo plugin
-   - [x] Creare `api/v1/brim.py` endpoints REST
-   - [x] Installare `python-multipart` per file upload
-   
+    - [x] Creare `schemas/brim.py` con DTOs base (BRIMFileInfo, BRIMPluginInfo, BRIMParseRequest/Response, BRIMImportRequest)
+    - [x] Creare `services/brim_provider.py` con abstract class, file storage e service functions
+    - [x] Aggiungere `BRIMProviderRegistry` in `provider_registry.py` (coerenza con FX/Asset)
+    - [x] Creare `services/brim_providers/__init__.py`
+    - [x] Creare `services/brim_providers/sample_reports/` con file di test CSV
+    - [x] Creare `services/brim_providers/broker_generic_csv.py` primo plugin
+    - [x] Creare `api/v1/brim.py` endpoints REST
+    - [x] Installare `python-multipart` per file upload
+
    **Step 1 - Asset Search Enhancement (5.9) - ✅ COMPLETATO:**
-   - [x] Aggiungere isin/symbol/identifier_contains a FAAinfoFiltersRequest
-   - [x] Usare AssetType enum per asset_type filter
-   - [x] Usare Currency.validate_code() per currency filter
-   - [x] Aggiornare AssetCRUDService.list_assets() per JOIN con AssetProviderAssignment
-   - [x] Aggiornare FAinfoResponse con identifier e identifier_type (IdentifierType enum)
-   - [x] Creare endpoint `GET /assets/all` per frontend (senza filtri)
-   - [x] Aggiornare endpoint `GET /assets/query` con nuovi parametri di ricerca
-   
+    - [x] Aggiungere isin/symbol/identifier_contains a FAAinfoFiltersRequest
+    - [x] Usare AssetType enum per asset_type filter
+    - [x] Usare Currency.validate_code() per currency filter
+    - [x] Aggiornare AssetCRUDService.list_assets() per JOIN con AssetProviderAssignment
+    - [x] Aggiornare FAinfoResponse con identifier e identifier_type (IdentifierType enum)
+    - [x] Creare endpoint `GET /assets/all` per frontend (senza filtri)
+    - [x] Aggiornare endpoint `GET /assets/query` con nuovi parametri di ricerca
+
    **Step 2 - Fake Asset ID & Duplicate Detection - ✅ COMPLETATO:**
-   - [x] Aggiornare `schemas/brim.py` con nuovi DTOs (BRIMMatchConfidence, BRIMDuplicateLevel, etc.)
-   - [x] Implementare Fake Asset ID system con search_asset_candidates() (5.7)
-   - [x] Implementare Duplicate Detection con detect_tx_duplicates() (5.8)
-   - [x] Aggiornare `BRIMParseResponse` con asset_mappings e duplicates
-   - [x] Aggiornare plugin per estrarre info asset e assegnare Fake IDs
-   - [x] Integrare asset mapping e duplicate detection in API `/parse` (CORE, non plugin)
-   - [x] Aggiungere validazione fake asset IDs in API `/import`
-   - [x] Aggiornare `parse_file()` per ritornare extracted_assets
-   - [x] Popolare README.md in sample_reports/
-   
+    - [x] Aggiornare `schemas/brim.py` con nuovi DTOs (BRIMMatchConfidence, BRIMDuplicateLevel, etc.)
+    - [x] Implementare Fake Asset ID system con search_asset_candidates() (5.7)
+    - [x] Implementare Duplicate Detection con detect_tx_duplicates() (5.8)
+    - [x] Aggiornare `BRIMParseResponse` con asset_mappings e duplicates
+    - [x] Aggiornare plugin per estrarre info asset e assegnare Fake IDs
+    - [x] Integrare asset mapping e duplicate detection in API `/parse` (CORE, non plugin)
+    - [x] Aggiungere validazione fake asset IDs in API `/import`
+    - [x] Aggiornare `parse_file()` per ritornare extracted_assets
+    - [x] Popolare README.md in sample_reports/
+
    **Step 3 - Test Suite:**
-   - [ ] Test suite per BRIM system (vedi `01_test_brim_plan.md` per dettagli)
-   - [ ] Fixtures per cleanup DB e file
-   - [ ] Category 1-2: Plugin discovery e parsing (no DB)
-   - [ ] Category 3-4: Asset search e duplicate detection (con fixtures)
-   - [ ] Category 5-6: File storage e API endpoints
-   - [ ] Category 7: E2E tests (incluso E2E-005 full flow con asset creation)
+    - [ ] Test suite per BRIM system (vedi `01_test_brim_plan.md` per dettagli)
+    - [ ] Fixtures per cleanup DB e file
+    - [ ] Category 1-2: Plugin discovery e parsing (no DB)
+    - [ ] Category 3-4: Asset search e duplicate detection (con fixtures)
+    - [ ] Category 5-6: File storage e API endpoints
+    - [ ] Category 7: E2E tests (incluso E2E-005 full flow con asset creation)
 
 7. 🔲 **Phase 6 - Export/Backup:** Placeholder per funzionalità future.
 

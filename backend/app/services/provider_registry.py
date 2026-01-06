@@ -158,6 +158,56 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         return "brim_providers"
 
     @classmethod
+    def auto_detect_plugin(cls, file_path) -> str | None:
+        """
+        Auto-detect the best plugin for a file based on content analysis.
+
+        Iterates through all registered plugins sorted by detection_priority
+        (highest first) and returns the first plugin that can parse the file.
+
+        Args:
+            file_path: Path to the file to analyze
+
+        Returns:
+            Plugin code of the best matching plugin, or None if no match
+        """
+        cls.auto_discover()
+
+        # Get all plugins with their instances and priorities
+        plugins_with_priority = []
+        for code, plugin_cls in cls._providers.items():
+            try:
+                instance = plugin_cls()
+                priority = getattr(instance, 'detection_priority', 100)
+                plugins_with_priority.append((code, instance, priority))
+            except Exception:
+                continue
+
+        # Sort by priority descending (highest first)
+        plugins_with_priority.sort(key=lambda x: x[2], reverse=True)
+
+        # Try each plugin in order
+        for code, instance, priority in plugins_with_priority:
+            try:
+                if instance.can_parse(file_path):
+                    logger.info(
+                        "Auto-detected plugin for file",
+                        plugin_code=code,
+                        priority=priority,
+                        file_path=str(file_path)
+                        )
+                    return code
+            except Exception as e:
+                logger.warning(
+                    "Error checking plugin can_parse",
+                    plugin_code=code,
+                    error=str(e)
+                    )
+                continue
+
+        return None
+
+    @classmethod
     def get_compatible_plugins(cls, file_path) -> list:
         """
         Get list of plugin codes that can parse the given file.

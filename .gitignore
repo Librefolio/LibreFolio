@@ -18,7 +18,7 @@ backend/data/sqlite/*.db
 backend/data/sqlite/*.db-shm
 backend/data/sqlite/*.db-wal
 backend/data/broker_reports/failed/*
-backend/data/broker_reports/imports/*
+backend/data/broker_reports/parsed/*
 backend/data/broker_reports/uploaded/*
 
 

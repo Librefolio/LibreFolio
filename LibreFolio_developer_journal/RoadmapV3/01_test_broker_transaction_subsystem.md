@@ -467,11 +467,11 @@ These tests verify the full HTTP request/response cycle.
 
 ### 6.1 Decimal Precision ✅
 
-| Test ID  | Test Name                         | Description                               | Expected Result                | Status |
-|----------|-----------------------------------|-------------------------------------------|--------------------------------|--------|
-| EDGE-001 | `test_decimal_precision_amount`   | Create tx with amount=0.000001            | Stored and retrieved correctly | ✅      |
-| EDGE-002 | `test_decimal_precision_quantity` | Create tx with quantity=0.000001          | Stored and retrieved correctly | ✅      |
-| EDGE-003 | `test_large_amounts`              | Create tx with amount=999999999.999999    | No overflow                    | ✅      |
+| Test ID  | Test Name                         | Description                            | Expected Result                | Status |
+|----------|-----------------------------------|----------------------------------------|--------------------------------|--------|
+| EDGE-001 | `test_decimal_precision_amount`   | Create tx with amount=0.000001         | Stored and retrieved correctly | ✅      |
+| EDGE-002 | `test_decimal_precision_quantity` | Create tx with quantity=0.000001       | Stored and retrieved correctly | ✅      |
+| EDGE-003 | `test_large_amounts`              | Create tx with amount=999999999.999999 | No overflow                    | ✅      |
 
 **Note:** SQLite has precision limits for very large decimals (>12 digits). Test uses ~1 billion for reliable precision.
 
@@ -504,12 +504,12 @@ These tests verify the full HTTP request/response cycle.
 
 ### 6.5 Additional Edge Cases ✅
 
-| Test ID  | Test Name                          | Description                      | Expected Result           | Status |
-|----------|------------------------------------|----------------------------------|---------------------------|--------|
-| EDGE-050 | `test_zero_quantity_adjustment`    | ADJUSTMENT with quantity=0       | Currently allowed (doc)   | ✅      |
-| EDGE-051 | `test_negative_deposit`            | DEPOSIT with negative amount     | Documents actual behavior | ✅      |
-| EDGE-052 | `test_future_date_transaction`     | Transaction with future date     | Allowed                   | ✅      |
-| EDGE-053 | `test_very_old_date_transaction`   | Transaction with date year 2000  | Allowed                   | ✅      |
+| Test ID  | Test Name                        | Description                     | Expected Result           | Status |
+|----------|----------------------------------|---------------------------------|---------------------------|--------|
+| EDGE-050 | `test_zero_quantity_adjustment`  | ADJUSTMENT with quantity=0      | Currently allowed (doc)   | ✅      |
+| EDGE-051 | `test_negative_deposit`          | DEPOSIT with negative amount    | Documents actual behavior | ✅      |
+| EDGE-052 | `test_future_date_transaction`   | Transaction with future date    | Allowed                   | ✅      |
+| EDGE-053 | `test_very_old_date_transaction` | Transaction with date year 2000 | Allowed                   | ✅      |
 
 ### 6.6 Concurrent Operations (Future)
 
@@ -600,16 +600,17 @@ transfer_pair_fixture = [
 | 6. Edge Cases      | 13          | 17      | 17 ✅    |
 | **TOTAL**          | **151**     | **190** | **190** |
 
-**Note (2025-12-28):** 
+**Note (2025-12-28):**
+
 - Transaction and Broker API tests are now passing.
 - Fixed test_server_helper.py to properly set test mode using set_test_mode() function.
 - Fixed test fixtures to use UUID for unique broker names.
 - Edge Cases tests implemented in `test_transaction_edge_cases.py`:
-  - Decimal precision (amount, quantity, large values)
-  - Currency validation (ISO, crypto, invalid codes)
-  - Date edge cases (same start/end, single day, gaps)
-  - Empty/null handling (tags, description, empty query)
-  - Additional cases (future dates, old dates, negative deposits)
+    - Decimal precision (amount, quantity, large values)
+    - Currency validation (ISO, crypto, invalid codes)
+    - Date edge cases (same start/end, single day, gaps)
+    - Empty/null handling (tags, description, empty query)
+    - Additional cases (future dates, old dates, negative deposits)
 - All Categories 1-6 complete and passing.
 
 ---
@@ -899,6 +900,7 @@ Passi per applicare la riorganizzazione:
 - [x] Eseguire `python test_runner.py schemas all` per validare ✅
 
 **Schema Tests Summary (2025-12-28):**
+
 - Common Schemas: 52 tests (Currency, DateRangeModel, OldNew)
 - Asset Schemas: 54 tests (FAInterestRatePeriod, FAGeographicArea, FASectorArea, etc.)
 - Transaction Schemas: 52 tests (TXCreateItem, validation rules)

@@ -138,6 +138,105 @@ class BRIMProvider(ABC):
         """
         return ['.csv']
 
+    @property
+    def detection_priority(self) -> int:
+        """
+        Priority for auto-detection (higher = checked first).
+
+        Used when iterating plugins to find one that can parse a file.
+        Higher priority plugins are checked before lower priority ones.
+
+        Suggested ranges:
+        - 100+: Broker-specific plugins with unique headers
+        - 50-99: Semi-generic plugins
+        - 0-49: Generic fallback plugins (e.g., broker_generic_csv)
+
+        Default: 100 (broker-specific plugins)
+        """
+        return 100
+
+    @staticmethod
+    def _read_file_head(file_path: Path, num_lines: int = 15) -> str:
+        """
+        Read the first N lines of a file with encoding fallback.
+
+        Tries multiple encodings to handle different file formats:
+        - utf-8-sig (UTF-8 with BOM, common in Windows exports)
+        - utf-8
+        - latin-1 (ISO-8859-1)
+        - cp1252 (Windows Western European)
+
+        Args:
+            file_path: Path to the file
+            num_lines: Number of lines to read (default 15)
+
+        Returns:
+            String containing the first N lines, empty string on error
+        """
+        encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
+
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    lines = []
+                    for _ in range(num_lines):
+                        line = f.readline()
+                        if not line:
+                            break
+                        lines.append(line)
+                    return ''.join(lines)
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+            except Exception:
+                return ''
+
+        return ''
+
+    @staticmethod
+    def _detect_separator(content: str) -> str:
+        """
+        Auto-detect CSV separator from file content.
+
+        Checks for common separators: semicolon, comma, tab.
+        Returns the most likely separator based on frequency in first line.
+
+        Args:
+            content: File content (first few lines)
+
+        Returns:
+            Detected separator character (default: ',')
+        """
+        if not content:
+            return ','
+
+        first_line = content.split('\n')[0] if '\n' in content else content
+
+        # Count occurrences of each separator
+        separators = {
+            ';': first_line.count(';'),
+            ',': first_line.count(','),
+            '\t': first_line.count('\t'),
+            }
+
+        # Return the one with most occurrences (minimum 1)
+        best = max(separators, key=separators.get)
+        return best if separators[best] > 0 else ','
+
+    @property
+    def icon_url(self) -> Optional[str]:
+        """
+        URL to the broker's icon/logo.
+
+        Override in subclass to provide broker-specific icon.
+        Can be:
+        - Absolute URL (https://...)
+        - Relative path served by backend (e.g., /static/icons/broker_xxx.png)
+        - None if no icon available
+
+        Default: None
+        """
+        return None
+
     @abstractmethod
     def can_parse(self, file_path: Path) -> bool:
         """
@@ -183,7 +282,8 @@ class BRIMProvider(ABC):
             code=self.provider_code,
             name=self.provider_name,
             description=self.description,
-            supported_extensions=self.supported_extensions
+            supported_extensions=self.supported_extensions,
+            icon_url=self.icon_url
             )
 
 
