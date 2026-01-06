@@ -68,6 +68,37 @@ class IdentifierType(str, Enum):
 
     Impact: Used for data validation and plugin selection. Some plugins may only
     work with specific identifier types (e.g., Yahoo Finance prefers TICKER).
+
+    ⚠️  DEPENDENT SCHEMAS - If you add/remove values, update these files:
+
+    1. DATABASE SCHEMA:
+       - backend/alembic/versions/001_initial.py
+         → Add column: identifier_{value.lower()} in assets table
+         → Add index if frequently searched (ISIN, TICKER have indexes)
+
+    2. SQLMODEL (this file):
+       - Asset class below
+         → Add field: identifier_{value.lower()}: Optional[str]
+         → Add validator if needed (e.g., ISIN requires 12 chars)
+
+    3. PYDANTIC SCHEMAS (backend/app/schemas/assets.py):
+       - FAAssetCreateItem: Add identifier_{value.lower()} field
+       - FAAssetPatchItem: Add identifier_{value.lower()} field
+       - FAinfoResponse: Add identifier_{value.lower()} field
+       - FAAinfoFiltersRequest: Add filter field (exact or partial match)
+
+    4. SERVICE LAYER (backend/app/services/asset_source.py):
+       - list_assets(): Add condition for new filter
+       - create_assets_bulk(): Pass new field to Asset()
+
+    5. BRIM PROVIDER (backend/app/services/brim_provider.py):
+       - search_asset_candidates(): Add search priority if relevant
+
+    6. TESTS:
+       - test_identifier_columns_match_enum() will FAIL automatically
+         if Asset.identifier_{value.lower()} is missing
+
+    Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_columns_match_enum -v
     """
     ISIN = "ISIN"
     TICKER = "TICKER"
@@ -310,6 +341,11 @@ class Asset(SQLModel, table=True):
     This model stores fundamental asset information independent of pricing logic.
     Provider-specific identification and valuation is handled via asset_provider_assignments table.
 
+    Identifier columns:
+    - One column per IdentifierType enum value (identifier_isin, identifier_ticker, etc.)
+    - Allows direct search without JOIN to asset_provider_assignments
+    - An asset can have multiple identifiers (e.g., both ISIN and TICKER)
+
     Provider assignments:
     - Use asset_provider_assignments table (1-to-1 relationship)
     - Each asset can have at most one provider for pricing data
@@ -319,8 +355,6 @@ class Asset(SQLModel, table=True):
     Classification and metadata fields:
     - classification_params: JSON containing ClassificationParamsModel structure
 
-    The classification_params JSON should conform to ClassificationParamsModel schema:
-
     Notes:
     - display_name must be unique to avoid user confusion
     - Validation is done via ClassificationParamsModel Pydantic model when loaded
@@ -328,6 +362,8 @@ class Asset(SQLModel, table=True):
     __tablename__ = "assets"
     __table_args__ = (
         UniqueConstraint("display_name", name="uq_assets_display_name"),
+        Index("ix_assets_identifier_isin", "identifier_isin"),
+        Index("ix_assets_identifier_ticker", "identifier_ticker"),
         )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -342,6 +378,16 @@ class Asset(SQLModel, table=True):
 
     active: bool = Field(default=True)
 
+    # Identifier columns - one per IdentifierType enum value
+    # Allows direct search without JOIN to asset_provider_assignments
+    identifier_isin: Optional[str] = Field(default=None, max_length=12, description="ISIN code (12 chars)")
+    identifier_ticker: Optional[str] = Field(default=None, max_length=20, description="Ticker symbol")
+    identifier_cusip: Optional[str] = Field(default=None, max_length=9, description="CUSIP code (9 chars)")
+    identifier_sedol: Optional[str] = Field(default=None, max_length=7, description="SEDOL code (7 chars)")
+    identifier_figi: Optional[str] = Field(default=None, max_length=12, description="FIGI code (12 chars)")
+    identifier_uuid: Optional[str] = Field(default=None, max_length=36, description="UUID for custom assets")
+    identifier_other: Optional[str] = Field(default=None, max_length=100, description="Other identifier")
+
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -350,6 +396,25 @@ class Asset(SQLModel, table=True):
     def validate_currency(cls, v: Any) -> str:
         """Validate currency against ISO 4217 + crypto."""
         return _validate_currency_field(v)
+
+    @field_validator('identifier_isin', mode='before')
+    @classmethod
+    def validate_identifier_isin(cls, v: Any) -> Optional[str]:
+        """Validate and normalize ISIN."""
+        if v is None or v == '':
+            return None
+        v = str(v).strip().upper()
+        if len(v) != 12:
+            raise ValueError("ISIN must be 12 characters")
+        return v
+
+    @field_validator('identifier_ticker', mode='before')
+    @classmethod
+    def validate_identifier_ticker(cls, v: Any) -> Optional[str]:
+        """Normalize ticker to uppercase."""
+        if v is None or v == '':
+            return None
+        return str(v).strip().upper()
 
     @field_validator('classification_params')
     def validate_classification_params(cls, v):

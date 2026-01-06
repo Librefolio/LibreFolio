@@ -1440,6 +1440,14 @@ class AssetCRUDService:
                     asset_type=item.asset_type or AssetType.OTHER,
                     icon_url=item.icon_url,
                     active=True,
+                    # Identifier fields
+                    identifier_isin=item.identifier_isin,
+                    identifier_ticker=item.identifier_ticker,
+                    identifier_cusip=item.identifier_cusip,
+                    identifier_sedol=item.identifier_sedol,
+                    identifier_figi=item.identifier_figi,
+                    identifier_uuid=item.identifier_uuid,
+                    identifier_other=item.identifier_other,
                     )
 
                 # Handle classification_params
@@ -1498,9 +1506,9 @@ class AssetCRUDService:
         Supports filtering by:
         - currency, asset_type, active (existing)
         - search: partial match in display_name
-        - isin: exact ISIN match via AssetProviderAssignment
-        - symbol: exact ticker match via AssetProviderAssignment
-        - identifier_contains: partial match in identifier field
+        - Exact match on identifier columns: isin, ticker, cusip, sedol, figi, uuid
+        - identifier_other: partial match (LIKE)
+        - identifier_contains: partial match across ALL identifier columns
 
         Args:
             filters: Query filters (see FAAinfoFiltersRequest)
@@ -1513,8 +1521,8 @@ class AssetCRUDService:
         stmt = select(
             Asset,
             AssetProviderAssignment.id.label('provider_id'),
-            AssetProviderAssignment.identifier.label('identifier'),
-            AssetProviderAssignment.identifier_type.label('identifier_type')
+            AssetProviderAssignment.identifier.label('provider_identifier'),
+            AssetProviderAssignment.identifier_type.label('provider_identifier_type')
             ).outerjoin(
             AssetProviderAssignment,
             Asset.id == AssetProviderAssignment.asset_id
@@ -1535,25 +1543,41 @@ class AssetCRUDService:
             search_pattern = f"%{filters.search}%"
             conditions.append(Asset.display_name.ilike(search_pattern))
 
-        # NEW: ISIN exact match (identifier_type = ISIN)
+        # Exact match on identifier columns (one per IdentifierType)
         if filters.isin:
-            conditions.append(and_(
-                AssetProviderAssignment.identifier == filters.isin,
-                AssetProviderAssignment.identifier_type == IdentifierType.ISIN
-                ))
+            conditions.append(Asset.identifier_isin == filters.isin.upper())
 
-        # NEW: Symbol/ticker exact match (identifier_type = TICKER)
-        if filters.symbol:
-            conditions.append(and_(
-                AssetProviderAssignment.identifier == filters.symbol,
-                AssetProviderAssignment.identifier_type == IdentifierType.TICKER
-                ))
+        if filters.ticker:
+            conditions.append(Asset.identifier_ticker == filters.ticker.upper())
 
-        # NEW: Partial identifier match (any type)
+        if filters.cusip:
+            conditions.append(Asset.identifier_cusip == filters.cusip.upper())
+
+        if filters.sedol:
+            conditions.append(Asset.identifier_sedol == filters.sedol.upper())
+
+        if filters.figi:
+            conditions.append(Asset.identifier_figi == filters.figi.upper())
+
+        if filters.uuid:
+            conditions.append(Asset.identifier_uuid == filters.uuid)
+
+        # identifier_other uses partial match (LIKE) since it can contain anything
+        if filters.identifier_other:
+            conditions.append(Asset.identifier_other.ilike(f"%{filters.identifier_other}%"))
+
+        # Partial identifier match (across all identifier columns)
         if filters.identifier_contains:
-            conditions.append(
-                AssetProviderAssignment.identifier.ilike(f"%{filters.identifier_contains}%")
-                )
+            pattern = f"%{filters.identifier_contains}%"
+            conditions.append(or_(
+                Asset.identifier_isin.ilike(pattern),
+                Asset.identifier_ticker.ilike(pattern),
+                Asset.identifier_cusip.ilike(pattern),
+                Asset.identifier_sedol.ilike(pattern),
+                Asset.identifier_figi.ilike(pattern),
+                Asset.identifier_uuid.ilike(pattern),
+                Asset.identifier_other.ilike(pattern)
+                ))
 
         if conditions:
             stmt = stmt.where(and_(*conditions))
@@ -1570,8 +1594,8 @@ class AssetCRUDService:
         for row in rows:
             asset = row[0]  # Asset object
             provider_id = row[1]  # provider_id from join
-            identifier = row[2]  # identifier from join
-            identifier_type = row[3]  # identifier_type from join
+            provider_identifier = row[2]  # identifier from provider assignment
+            provider_identifier_type = row[3]  # identifier_type from provider assignment
 
             assets.append(FAinfoResponse(
                 id=asset.id,
@@ -1582,8 +1606,17 @@ class AssetCRUDService:
                 active=asset.active,
                 has_provider=provider_id is not None,
                 has_metadata=asset.classification_params is not None,
-                identifier=identifier,
-                identifier_type=identifier_type  # Pass enum directly
+                # Identifier columns from Asset
+                identifier_isin=asset.identifier_isin,
+                identifier_ticker=asset.identifier_ticker,
+                identifier_cusip=asset.identifier_cusip,
+                identifier_sedol=asset.identifier_sedol,
+                identifier_figi=asset.identifier_figi,
+                identifier_uuid=asset.identifier_uuid,
+                identifier_other=asset.identifier_other,
+                # Legacy fields from provider assignment
+                identifier=provider_identifier,
+                identifier_type=provider_identifier_type
                 ))
 
         return assets
