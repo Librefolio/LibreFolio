@@ -274,5 +274,96 @@ def test_check_constraints():
     print(f"✅ All CHECK constraints present in database")
 
 
+def test_identifier_columns_match_enum():
+    """
+    Verify every IdentifierType enum has corresponding fields in ALL dependent schemas.
+
+    This ensures the data model stays in sync with the enum definition.
+    Each IdentifierType value X should have:
+    - Asset.identifier_{x.lower()} column
+    - FAAssetCreateItem.identifier_{x.lower()} field
+    - FAAssetPatchItem.identifier_{x.lower()} field
+    - FAinfoResponse.identifier_{x.lower()} field
+
+    FAAinfoFiltersRequest uses different naming (isin, ticker, etc.) so checked separately.
+
+    If this test fails, see IdentifierType docstring for full update checklist.
+    """
+    from backend.app.db.models import Asset, IdentifierType
+    from backend.app.schemas.assets import (
+        FAAssetCreateItem,
+        FAAssetPatchItem,
+        FAinfoResponse,
+        FAAinfoFiltersRequest
+    )
+
+    print("\n  Checking IdentifierType → Schema field mappings:")
+
+    # Define what to check for each IdentifierType
+    # Format: (schema_class, field_name_pattern, description)
+    checks = [
+        (Asset, "identifier_{}", "Asset model column"),
+        (FAAssetCreateItem, "identifier_{}", "Create schema field"),
+        (FAAssetPatchItem, "identifier_{}", "Patch schema field"),
+        (FAinfoResponse, "identifier_{}", "Response schema field"),
+    ]
+
+    # FAAinfoFiltersRequest uses short names (isin, ticker, etc.)
+    # We check that separately with a mapping
+    filter_field_mapping = {
+        "ISIN": "isin",
+        "TICKER": "ticker",
+        "CUSIP": "cusip",
+        "SEDOL": "sedol",
+        "FIGI": "figi",
+        "UUID": "uuid",
+        "OTHER": "identifier_other",  # OTHER uses identifier_other (partial match)
+    }
+
+    all_missing = []
+
+    # Check standard identifier_xxx fields
+    for id_type in IdentifierType:
+        field_suffix = id_type.value.lower()
+        print(f"\n  IdentifierType.{id_type.value}:")
+
+        for schema_class, pattern, description in checks:
+            field_name = pattern.format(field_suffix)
+            # For Pydantic models, check model_fields; for SQLModel, use hasattr
+            if hasattr(schema_class, 'model_fields'):
+                has_field = field_name in schema_class.model_fields
+            else:
+                has_field = hasattr(schema_class, field_name)
+
+            status = "✓" if has_field else "✗"
+            print(f"    {status} {schema_class.__name__}.{field_name} ({description})")
+
+            if not has_field:
+                all_missing.append(f"{schema_class.__name__}.{field_name}")
+
+    # Check FAAinfoFiltersRequest separately
+    print(f"\n  FAAinfoFiltersRequest filter fields:")
+    for id_type in IdentifierType:
+        expected_field = filter_field_mapping.get(id_type.value)
+        if expected_field:
+            has_field = expected_field in FAAinfoFiltersRequest.model_fields
+            status = "✓" if has_field else "✗"
+            print(f"    {status} FAAinfoFiltersRequest.{expected_field} (for {id_type.value})")
+
+            if not has_field:
+                all_missing.append(f"FAAinfoFiltersRequest.{expected_field}")
+
+    if all_missing:
+        print(f"\n❌ Missing fields: {all_missing}")
+        print("   See IdentifierType docstring in models.py for update checklist")
+
+    assert not all_missing, \
+        f"Missing fields for IdentifierType sync: {all_missing}\n" \
+        f"See IdentifierType docstring in models.py for full update checklist"
+
+    total_checks = len(list(IdentifierType)) * len(checks) + len(filter_field_mapping)
+    print(f"\n✅ All {total_checks} IdentifierType field mappings verified")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
