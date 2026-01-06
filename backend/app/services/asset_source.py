@@ -1515,10 +1515,10 @@ class AssetCRUDService:
             AssetProviderAssignment.id.label('provider_id'),
             AssetProviderAssignment.identifier.label('identifier'),
             AssetProviderAssignment.identifier_type.label('identifier_type')
-        ).outerjoin(
+            ).outerjoin(
             AssetProviderAssignment,
             Asset.id == AssetProviderAssignment.asset_id
-        )
+            )
 
         # Apply filters
         conditions = []
@@ -1540,20 +1540,20 @@ class AssetCRUDService:
             conditions.append(and_(
                 AssetProviderAssignment.identifier == filters.isin,
                 AssetProviderAssignment.identifier_type == IdentifierType.ISIN
-            ))
+                ))
 
         # NEW: Symbol/ticker exact match (identifier_type = TICKER)
         if filters.symbol:
             conditions.append(and_(
                 AssetProviderAssignment.identifier == filters.symbol,
                 AssetProviderAssignment.identifier_type == IdentifierType.TICKER
-            ))
+                ))
 
         # NEW: Partial identifier match (any type)
         if filters.identifier_contains:
             conditions.append(
                 AssetProviderAssignment.identifier.ilike(f"%{filters.identifier_contains}%")
-            )
+                )
 
         if conditions:
             stmt = stmt.where(and_(*conditions))
@@ -1584,7 +1584,7 @@ class AssetCRUDService:
                 has_metadata=asset.classification_params is not None,
                 identifier=identifier,
                 identifier_type=identifier_type  # Pass enum directly
-            ))
+                ))
 
         return assets
 

@@ -1,0 +1,9 @@
+date,type,quantity,amount,currency,description
+2025-01-01,DEPOSIT,0,5000.00,EUR,Initial funding
+2025-01-02,BUY,10,-1000.00,EUR,Buy without asset info - requires manual mapping
+2025-01-03,BUY,5,-500.00,EUR,Another buy without asset
+2025-01-04,DEPOSIT,0,5000.00,EUR,Deposit - no asset needed
+2025-01-05,SELL,-3,350.00,EUR,Sell without asset info
+2025-01-06,DIVIDEND,0,25.00,EUR,Dividend without asset info
+2025-01-07,INTEREST,0,10.00,EUR,Interest - asset optional
+2025-01-08,FEE,0,-5.00,EUR,Fee - asset optional

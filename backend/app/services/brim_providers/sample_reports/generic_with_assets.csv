@@ -1,4 +1,5 @@
 date,type,quantity,amount,currency,asset,description
+2025-01-01,DEPOSIT,0,10000.00,EUR,,Initial funding
 2025-01-02,BUY,10,-1000.00,EUR,AAPL,Buy Apple shares
 2025-01-03,BUY,5,-500.00,EUR,AAPL,Buy more Apple
 2025-01-04,BUY,20,-2000.00,EUR,MSFT,Buy Microsoft

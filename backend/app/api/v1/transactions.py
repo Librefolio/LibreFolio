@@ -34,7 +34,7 @@ from backend.app.services.transaction_service import TransactionService
 
 logger = get_logger(__name__)
 
-tx_router = APIRouter(prefix="/transactions", tags=["transactions"])
+tx_router = APIRouter(prefix="/transactions", tags=["TX (Transactions)"])
 
 
 # =============================================================================

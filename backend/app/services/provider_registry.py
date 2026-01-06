@@ -152,6 +152,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
 
     Auto-discovers plugins from `backend/app/services/brim_providers/`.
     """
+
     @classmethod
     def _get_provider_folder(cls) -> str:
         return "brim_providers"

@@ -32,13 +32,12 @@ from pydantic import BaseModel, Field
 from backend.app.db.models import TransactionType
 from backend.app.schemas.transactions import TXCreateItem
 
-
 # =============================================================================
 # CONSTANTS
 # =============================================================================
 
 # Fake IDs start from MAX_INT and decrement to avoid collision with real IDs
-FAKE_ASSET_ID_BASE = 2**31 - 1  # 2147483647
+FAKE_ASSET_ID_BASE = 2 ** 31 - 1  # 2147483647
 
 
 def is_fake_asset_id(asset_id: Optional[int]) -> bool:
@@ -53,10 +52,15 @@ def is_fake_asset_id(asset_id: Optional[int]) -> bool:
 # =============================================================================
 
 class BRIMFileStatus(str, Enum):
-    """Status of an uploaded broker report file."""
-    UPLOADED = "uploaded"   # File uploaded, awaiting processing
-    IMPORTED = "imported"   # Successfully processed and transactions imported
-    FAILED = "failed"       # Processing failed with error
+    """Status of an uploaded broker report file.
+
+    Flow: UPLOADED → PARSED (success) or FAILED (error)
+    After parsing, the file stays in PARSED. The actual transaction import
+    uses POST /transactions and doesn't change file status.
+    """
+    UPLOADED = "uploaded"  # File uploaded, awaiting processing
+    PARSED = "parsed"  # Successfully parsed, ready for review/import
+    FAILED = "failed"  # Processing failed with error
 
 
 class BRIMMatchConfidence(str, Enum):
@@ -75,14 +79,21 @@ class BRIMMatchConfidence(str, Enum):
 
 
 class BRIMDuplicateLevel(str, Enum):
-    """Confidence level for duplicate detection.
+    """Confidence level for duplicate detection (ascending order).
 
-    Criteria:
-    - POSSIBLE: type + date + quantity + cash match
-    - CERTAIN: POSSIBLE + identical non-empty description (practically a duplicate)
+    Levels (from lowest to highest confidence):
+    1. POSSIBLE: type + date + quantity + cash match, but asset not resolved
+    2. POSSIBLE_WITH_ASSET: POSSIBLE + asset auto-resolved (1 candidate)
+    3. LIKELY: POSSIBLE + identical non-empty description, but asset not resolved
+    4. LIKELY_WITH_ASSET: LIKELY + asset auto-resolved (practically certain duplicate)
+
+    The WITH_ASSET variants are more reliable because the asset was automatically
+    matched to a single candidate in the database.
     """
     POSSIBLE = "possible"
-    CERTAIN = "certain"
+    POSSIBLE_WITH_ASSET = "possible_with_asset"
+    LIKELY = "likely"
+    LIKELY_WITH_ASSET = "likely_with_asset"
 
 
 # =============================================================================
@@ -111,15 +122,15 @@ class BRIMFileInfo(BaseModel):
     processed_at: Optional[datetime] = Field(
         default=None,
         description="UTC timestamp when processed"
-    )
+        )
     compatible_plugins: List[str] = Field(
         default_factory=list,
         description="Plugin codes that can parse this file"
-    )
+        )
     error_message: Optional[str] = Field(
         default=None,
         description="Error description if processing failed"
-    )
+        )
 
 
 # =============================================================================
@@ -142,7 +153,7 @@ class BRIMPluginInfo(BaseModel):
     supported_extensions: List[str] = Field(
         default_factory=list,
         description="Supported file extensions (e.g., ['.csv', '.xlsx'])"
-    )
+        )
 
 
 # =============================================================================
@@ -162,7 +173,7 @@ class BRIMAssetCandidate(BaseModel):
     match_confidence: BRIMMatchConfidence = Field(
         ...,
         description="How confident we are this is the right asset"
-    )
+        )
 
 
 class BRIMAssetMapping(BaseModel):
@@ -182,11 +193,11 @@ class BRIMAssetMapping(BaseModel):
     candidates: List[BRIMAssetCandidate] = Field(
         default_factory=list,
         description="Possible asset matches from database (empty = not found)"
-    )
+        )
     selected_asset_id: Optional[int] = Field(
         None,
         description="Auto-set if 1 candidate, else None (user must choose)"
-    )
+        )
 
 
 # =============================================================================
@@ -204,7 +215,7 @@ class BRIMDuplicateMatch(BaseModel):
     tx_cash_amount: Optional[Decimal] = Field(None, description="Cash amount if applicable")
     tx_cash_currency: Optional[str] = Field(None, description="Cash currency if applicable")
     tx_description: Optional[str] = Field(None, description="Transaction description")
-    match_level: BRIMDuplicateLevel = Field(..., description="POSSIBLE or CERTAIN")
+    match_level: BRIMDuplicateLevel = Field(..., description="Duplicate confidence level")
 
 
 class BRIMTXDuplicateCandidate(BaseModel):
@@ -216,7 +227,7 @@ class BRIMTXDuplicateCandidate(BaseModel):
     tx_existing_matches: List[BRIMDuplicateMatch] = Field(
         default_factory=list,
         description="Existing transactions that match"
-    )
+        )
 
 
 class BRIMDuplicateReport(BaseModel):
@@ -225,21 +236,21 @@ class BRIMDuplicateReport(BaseModel):
 
     Transactions are categorized into:
     - tx_unique_indices: Definitely new (no matches found)
-    - tx_possible_duplicates: Might be duplicates (key fields match)
-    - tx_certain_duplicates: Almost certainly duplicates (all fields match)
+    - tx_possible_duplicates: Might be duplicates (key fields match, no description match)
+    - tx_likely_duplicates: Very likely duplicates (key fields + description match)
     """
     tx_unique_indices: List[int] = Field(
         default_factory=list,
         description="Row indices of unique (non-duplicate) transactions"
-    )
+        )
     tx_possible_duplicates: List[BRIMTXDuplicateCandidate] = Field(
         default_factory=list,
-        description="Transactions that might be duplicates"
-    )
-    tx_certain_duplicates: List[BRIMTXDuplicateCandidate] = Field(
+        description="Transactions that might be duplicates (POSSIBLE level)"
+        )
+    tx_likely_duplicates: List[BRIMTXDuplicateCandidate] = Field(
         default_factory=list,
-        description="Transactions that are almost certainly duplicates"
-    )
+        description="Transactions very likely to be duplicates (LIKELY level)"
+        )
 
 
 # =============================================================================
@@ -284,46 +295,22 @@ class BRIMParseResponse(BaseModel):
     transactions: List[TXCreateItem] = Field(
         default_factory=list,
         description="Parsed transactions (may have fake asset IDs)"
-    )
+        )
     asset_mappings: List[BRIMAssetMapping] = Field(
         default_factory=list,
         description="Fake asset ID → candidate real assets mapping"
-    )
+        )
     duplicates: Optional[BRIMDuplicateReport] = Field(
         default=None,
         description="Duplicate detection results"
-    )
+        )
     warnings: List[str] = Field(
         default_factory=list,
         description="Parser warnings (skipped rows, ambiguous data, etc.)"
-    )
+        )
 
-
-# =============================================================================
-# IMPORT SCHEMAS
-# =============================================================================
-
-class BRIMImportRequest(BaseModel):
-    """
-    Request to import transactions from a parsed file.
-
-    Accepts the (potentially user-modified) list of transactions.
-    The final import uses TransactionService.create_bulk() -
-    same code path as manual transaction creation.
-
-    Attributes:
-        file_id: UUID of the file being imported
-        transactions: Transactions to import (may be modified by user)
-        tags: Additional tags to apply to all imported transactions
-    """
-    file_id: str = Field(..., description="UUID of the file being imported")
-    transactions: List[TXCreateItem] = Field(
-        ...,
-        min_length=1,
-        description="Transactions to import (may be user-modified)"
-    )
-    tags: Optional[List[str]] = Field(
-        default=None,
-        description="Additional tags to apply to all transactions"
-    )
-
+# NOTE: No BRIMImportRequest schema needed.
+# After parsing, the client should:
+# 1. Resolve fake asset IDs to real asset IDs
+# 2. Submit transactions to POST /transactions (standard endpoint)
+# 3. Call PATCH /import/files/{file_id}/status to mark file as imported/failed

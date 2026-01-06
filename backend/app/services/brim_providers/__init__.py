@@ -12,4 +12,3 @@ Each plugin must:
 Available plugins:
 - broker_generic_csv: Generic CSV import with auto-column detection
 """
-

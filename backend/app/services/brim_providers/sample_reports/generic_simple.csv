@@ -1,6 +1,7 @@
-date,type,quantity,amount,currency,description
-2025-01-02,BUY,10,-1000.00,EUR,Buy 10 shares of AAPL
-2025-01-03,SELL,-5,500.00,EUR,Sell 5 shares
-2025-01-04,DIVIDEND,0,25.50,EUR,Q4 dividend payment
-2025-01-05,DEPOSIT,0,5000.00,EUR,Account funding
-2025-01-06,WITHDRAWAL,0,-1000.00,EUR,Cash withdrawal
+date,type,quantity,amount,currency,asset,description
+2025-01-01,DEPOSIT,0,10000.00,EUR,,Initial funding
+2025-01-02,BUY,10,-1000.00,EUR,AAPL,Buy 10 shares of AAPL
+2025-01-03,SELL,-5,500.00,EUR,AAPL,Sell 5 shares
+2025-01-04,DIVIDEND,0,25.50,EUR,AAPL,Q4 dividend payment
+2025-01-05,DEPOSIT,0,5000.00,EUR,,Account funding
+2025-01-06,WITHDRAWAL,0,-1000.00,EUR,,Cash withdrawal

@@ -254,7 +254,6 @@ class TXReadItem(BaseModel):
     # Both transactions in a pair point to each other
     related_transaction_id: Optional[int] = None
 
-
     tags: Optional[List[str]] = None
     description: Optional[str] = None
 
