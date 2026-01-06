@@ -2,7 +2,25 @@
 
 **Document:** 01_test_brim_plan.md  
 **Created:** 2026-01-03  
-**Status:** 📋 READY FOR IMPLEMENTATION
+**Updated:** 2026-01-06
+**Status:** ✅ PARTIALLY IMPLEMENTED
+
+---
+
+## Implementation Progress
+
+| Category                        | Status  | Tests | File                     |
+|---------------------------------|---------|-------|--------------------------|
+| Category 1: Plugin Discovery    | ✅ Done  | 5/5   | `test_brim_providers.py` |
+| Category 2: File Parsing        | ✅ Done  | 8/8   | `test_brim_providers.py` |
+| Category 2B: Auto-Detection     | ✅ Done  | 14/14 | `test_brim_providers.py` |
+| Category 3: Asset Search        | ✅ Done  | 6/6   | `test_brim_db.py`        |
+| Category 4: Duplicate Detection | ✅ Done  | 5/5   | `test_brim_db.py`        |
+| Category 5: File Storage        | 📋 TODO | 0/5   | `test_brim_api.py`       |
+| Category 6: API Endpoints       | 📋 TODO | 0/8   | `test_brim_api.py`       |
+| Category 7: E2E Import          | 📋 TODO | 0/4   | `test_brim_api.py`       |
+
+**Total: 38/55 tests implemented**
 
 ---
 
@@ -89,6 +107,80 @@ backend/test_scripts/
 | AD-007  | `test_ibkr_auto_detected`             | IBKR detection       | `ibkr-trades-export.csv` → `broker_ibkr`      |
 | AD-008  | `test_etoro_auto_detected`            | eToro detection      | `etoro-export.csv` → `broker_etoro`           |
 | AD-009  | `test_generic_files_fallback`         | Generic fallback     | `generic_*.csv` → `broker_generic_csv`        |
+
+---
+
+### Category 2C: Parametrized Plugin Tests (TODO)
+
+**File:** `test_brim_providers.py`  
+**Requires DB:** No  
+**Status:** 📋 TO IMPLEMENT
+
+**Concept:** Each plugin should provide TEST_DATA in the class (like asset/forex providers).
+Tests are parametrized to run the same assertions against ALL plugins automatically.
+
+**Plugin Test Data Structure:**
+
+```python
+class DirectaBrokerProvider(BRIMProvider):
+    # ...existing code...
+
+    TEST_SAMPLES = [
+        {
+            "filename": "directa-export.csv",
+            "expected_tx_count": 23,
+            "expected_asset_count": 14,
+            "expected_warnings": 2,
+            "contains_types": [TransactionType.BUY, TransactionType.SELL, TransactionType.DIVIDEND],
+            }
+        ]
+```
+
+**Parametrized Test Implementation:**
+
+```python
+def get_all_plugins_with_test_data():
+    """Collect all plugins that have TEST_SAMPLES defined."""
+    plugins = []
+    for info in BRIMProviderRegistry.list_plugin_info():
+        instance = BRIMProviderRegistry.get_provider_instance(info.code)
+        if hasattr(instance, 'TEST_SAMPLES') and instance.TEST_SAMPLES:
+            for sample in instance.TEST_SAMPLES:
+                plugins.append((info.code, sample))
+    return plugins
+
+
+@pytest.mark.parametrize("plugin_code,sample_data", get_all_plugins_with_test_data())
+def test_plugin_parses_sample(plugin_code, sample_data):
+    """Test each plugin against its declared sample files."""
+    sample_dir = Path("backend/app/services/brim_providers/sample_reports")
+    file_path = sample_dir / sample_data["filename"]
+
+    assert file_path.exists(), f"Sample file not found: {file_path}"
+
+    plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
+    txs, warnings, assets = plugin.parse(file_path, broker_id=1)
+
+    # Assertions from sample_data
+    if "expected_tx_count" in sample_data:
+        assert len(txs) == sample_data["expected_tx_count"]
+    if "expected_asset_count" in sample_data:
+        assert len(assets) == sample_data["expected_asset_count"]
+    if "expected_warnings" in sample_data:
+        assert len(warnings) == sample_data["expected_warnings"]
+    if "contains_types" in sample_data:
+        found_types = {tx.type for tx in txs}
+        for expected_type in sample_data["contains_types"]:
+            assert expected_type in found_types
+```
+
+| Test ID | Test Name                         | Objective               | Expected Result                        |
+|---------|-----------------------------------|-------------------------|----------------------------------------|
+| PP-001  | `test_plugin_parses_sample`       | Parametrized parse test | Each plugin passes for its samples     |
+| PP-002  | `test_all_plugins_have_test_data` | Coverage                | Every plugin has TEST_SAMPLES          |
+| PP-003  | `test_sample_files_all_covered`   | No orphan files         | Every sample has a plugin that uses it |
+
+---
 
 **Implementation Notes:**
 

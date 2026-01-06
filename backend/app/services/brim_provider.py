@@ -759,13 +759,13 @@ async def search_asset_candidates(
     """
     Search for asset candidates in the database.
 
-    Uses FAAinfoFiltersRequest to search by ISIN, symbol, or name.
+    Uses FAAinfoFiltersRequest to search directly on Asset identifier columns.
     Returns candidates with confidence levels and auto-selects if exactly 1 match.
 
     Priority:
-    1. ISIN exact match → EXACT confidence
-    2. Symbol exact match → MEDIUM confidence
-    3. Name partial match → LOW confidence
+    1. ISIN exact match → EXACT confidence (Asset.identifier_isin)
+    2. Symbol exact match → MEDIUM confidence (Asset.identifier_ticker)
+    3. Name partial match → LOW confidence (display_name search)
 
     Args:
         session: AsyncSession for database queries
@@ -778,7 +778,6 @@ async def search_asset_candidates(
         - If exactly 1 candidate: auto_selected_id = that asset's ID
         - Otherwise: auto_selected_id = None
     """
-    from backend.app.db.models import IdentifierType
     from backend.app.schemas.assets import FAAinfoFiltersRequest
     from backend.app.schemas.brim import BRIMAssetCandidate, BRIMMatchConfidence
     from backend.app.services.asset_source import AssetCRUDService
@@ -794,8 +793,8 @@ async def search_asset_candidates(
         for asset in results:
             candidates.append(BRIMAssetCandidate(
                 asset_id=asset.id,
-                symbol=asset.identifier if asset.identifier_type == IdentifierType.TICKER else None,
-                isin=asset.identifier if asset.identifier_type == IdentifierType.ISIN else None,
+                symbol=asset.identifier_ticker,
+                isin=asset.identifier_isin,
                 name=asset.display_name,
                 match_confidence=BRIMMatchConfidence.EXACT
                 ))
@@ -803,14 +802,14 @@ async def search_asset_candidates(
     # Priority 2: Symbol exact match (MEDIUM confidence)
     if extracted_symbol and not candidates:
         results = await AssetCRUDService.list_assets(
-            filters=FAAinfoFiltersRequest(symbol=extracted_symbol),
+            filters=FAAinfoFiltersRequest(ticker=extracted_symbol),
             session=session
             )
         for asset in results:
             candidates.append(BRIMAssetCandidate(
                 asset_id=asset.id,
-                symbol=asset.identifier if asset.identifier_type == IdentifierType.TICKER else None,
-                isin=asset.identifier if asset.identifier_type == IdentifierType.ISIN else None,
+                symbol=asset.identifier_ticker,
+                isin=asset.identifier_isin,
                 name=asset.display_name,
                 match_confidence=BRIMMatchConfidence.MEDIUM
                 ))
@@ -831,8 +830,8 @@ async def search_asset_candidates(
         for asset in results:
             candidates.append(BRIMAssetCandidate(
                 asset_id=asset.id,
-                symbol=asset.identifier if asset.identifier_type == IdentifierType.TICKER else None,
-                isin=asset.identifier if asset.identifier_type == IdentifierType.ISIN else None,
+                symbol=asset.identifier_ticker,
+                isin=asset.identifier_isin,
                 name=asset.display_name,
                 match_confidence=BRIMMatchConfidence.LOW
                 ))

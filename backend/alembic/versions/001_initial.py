@@ -70,12 +70,21 @@ def upgrade() -> None:
                                 classification_params TEXT,
                                 asset_type            VARCHAR(14) NOT NULL,
                                 active                BOOLEAN     NOT NULL,
+                                identifier_isin       VARCHAR(12),
+                                identifier_ticker     VARCHAR(20),
+                                identifier_cusip      VARCHAR(9),
+                                identifier_sedol      VARCHAR(7),
+                                identifier_figi       VARCHAR(12),
+                                identifier_uuid       VARCHAR(36),
+                                identifier_other      VARCHAR(100),
                                 created_at            DATETIME    NOT NULL,
                                 updated_at            DATETIME    NOT NULL
                             )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE UNIQUE INDEX uq_assets_display_name ON assets (display_name)"))
-    print("  ✓ Index created")
+    conn.execute(sa.text("CREATE INDEX ix_assets_identifier_isin ON assets (identifier_isin)"))
+    conn.execute(sa.text("CREATE INDEX ix_assets_identifier_ticker ON assets (identifier_ticker)"))
+    print("  ✓ 3 Indexes created")
 
     # Brokers table (UPDATED with new flags)
     print("📦 Creating table: brokers...")

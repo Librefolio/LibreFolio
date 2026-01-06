@@ -645,8 +645,8 @@ class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
 class FAAssetCreateItem(BaseModel):
     """Single asset to create in bulk operation.
 
-    Note: identifier, identifier_type are now part of AssetProviderAssignment.
-    Create asset first, then assign provider separately via POST /assets/provider.
+    Identifier fields (identifier_isin, identifier_ticker, etc.) are stored directly on Asset.
+    Provider assignment can be done separately via POST /assets/provider.
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -658,10 +658,38 @@ class FAAssetCreateItem(BaseModel):
     # Classification metadata (optional)
     classification_params: Optional[FAClassificationParams] = Field(None, description="Asset classification metadata")
 
+    # Identifier fields (one per IdentifierType) - optional
+    identifier_isin: Optional[str] = Field(None, max_length=12, description="ISIN code (12 chars)")
+    identifier_ticker: Optional[str] = Field(None, max_length=20, description="Ticker symbol")
+    identifier_cusip: Optional[str] = Field(None, max_length=9, description="CUSIP code (9 chars)")
+    identifier_sedol: Optional[str] = Field(None, max_length=7, description="SEDOL code (7 chars)")
+    identifier_figi: Optional[str] = Field(None, max_length=12, description="FIGI code (12 chars)")
+    identifier_uuid: Optional[str] = Field(None, max_length=36, description="UUID for custom assets")
+    identifier_other: Optional[str] = Field(None, max_length=100, description="Other identifier")
+
     @field_validator('currency')
     @classmethod
     def currency_uppercase(cls, v: str) -> str:
         return Currency.validate_code(v)
+
+    @field_validator('identifier_isin')
+    @classmethod
+    def validate_isin(cls, v: Optional[str]) -> Optional[str]:
+        """Validate and normalize ISIN."""
+        if v is None or v == '':
+            return None
+        v = v.strip().upper()
+        if len(v) != 12:
+            raise ValueError("ISIN must be 12 characters")
+        return v
+
+    @field_validator('identifier_ticker')
+    @classmethod
+    def validate_ticker(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize ticker to uppercase."""
+        if v is None or v == '':
+            return None
+        return v.strip().upper()
 
 
 class FAAssetCreateResult(BaseModel):
@@ -687,7 +715,13 @@ class FABulkAssetCreateResponse(BaseBulkResponse[FAAssetCreateResult]):
 
 
 class FAAinfoFiltersRequest(BaseModel):
-    """Filters for asset list query - enhanced for BRIM asset matching."""
+    """Filters for asset list query - enhanced for BRIM asset matching.
+
+    Supports exact match on all identifier columns (one per IdentifierType):
+    - isin, ticker, cusip, sedol, figi, uuid: exact match
+    - identifier_other: partial match (LIKE)
+    - identifier_contains: partial match across ALL identifier columns
+    """
     model_config = ConfigDict(extra="forbid")
 
     # Filters with proper validation
@@ -698,10 +732,19 @@ class FAAinfoFiltersRequest(BaseModel):
     # Search in display_name (partial match)
     search: Optional[str] = Field(None, description="Search in display_name (partial match)")
 
-    # NEW: Identifier-based search (for BRIM asset matching)
-    isin: Optional[str] = Field(None, description="Exact ISIN match (via AssetProviderAssignment)")
-    symbol: Optional[str] = Field(None, description="Exact symbol/ticker match (via AssetProviderAssignment)")
-    identifier_contains: Optional[str] = Field(None, description="Partial match in identifier field")
+    # Identifier-based exact search (one per IdentifierType)
+    isin: Optional[str] = Field(None, description="Exact ISIN match (Asset.identifier_isin)")
+    ticker: Optional[str] = Field(None, description="Exact ticker/symbol match (Asset.identifier_ticker)")
+    cusip: Optional[str] = Field(None, description="Exact CUSIP match (Asset.identifier_cusip)")
+    sedol: Optional[str] = Field(None, description="Exact SEDOL match (Asset.identifier_sedol)")
+    figi: Optional[str] = Field(None, description="Exact FIGI match (Asset.identifier_figi)")
+    uuid: Optional[str] = Field(None, description="Exact UUID match (Asset.identifier_uuid)")
+
+    # identifier_other uses partial match (LIKE) since it can contain anything
+    identifier_other: Optional[str] = Field(None, description="Partial match in identifier_other")
+
+    # Partial match across ALL identifier columns
+    identifier_contains: Optional[str] = Field(None, description="Partial match in any identifier field")
 
     @field_validator('currency')
     @classmethod
@@ -711,6 +754,22 @@ class FAAinfoFiltersRequest(BaseModel):
             return None
         from backend.app.schemas.common import Currency
         return Currency.validate_code(v)
+
+    @field_validator('isin')
+    @classmethod
+    def validate_isin_format(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize ISIN to uppercase."""
+        if v is None:
+            return None
+        return v.strip().upper()
+
+    @field_validator('ticker', 'cusip', 'sedol', 'figi')
+    @classmethod
+    def validate_identifier_uppercase(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize identifier to uppercase."""
+        if v is None:
+            return None
+        return v.strip().upper()
 
 
 class FAinfoResponse(BaseModel):
@@ -725,9 +784,19 @@ class FAinfoResponse(BaseModel):
     active: bool = Field(..., description="Whether asset is active")
     has_provider: bool = Field(..., description="Whether asset has a provider assigned")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
-    # NEW: Identifier info for BRIM matching and frontend display
-    identifier: Optional[str] = Field(None, description="Asset identifier (ticker, ISIN, etc.)")
-    identifier_type: Optional[IdentifierType] = Field(None, description="Identifier type enum")
+
+    # Identifier columns (one per IdentifierType)
+    identifier_isin: Optional[str] = Field(None, description="ISIN code")
+    identifier_ticker: Optional[str] = Field(None, description="Ticker symbol")
+    identifier_cusip: Optional[str] = Field(None, description="CUSIP code")
+    identifier_sedol: Optional[str] = Field(None, description="SEDOL code")
+    identifier_figi: Optional[str] = Field(None, description="FIGI code")
+    identifier_uuid: Optional[str] = Field(None, description="UUID for custom assets")
+    identifier_other: Optional[str] = Field(None, description="Other identifier")
+
+    # Legacy fields for backward compatibility with provider assignment
+    identifier: Optional[str] = Field(None, description="Primary identifier (from provider assignment)")
+    identifier_type: Optional[IdentifierType] = Field(None, description="Primary identifier type")
 
 
 class FAAssetDeleteResult(BaseDeleteResult):
@@ -773,11 +842,39 @@ class FAAssetPatchItem(BaseModel):
     classification_params: Optional[FAClassificationParams] = Field(None, description="Update classification (None = clear)")
     active: Optional[bool] = Field(None, description="Update active status")
 
+    # Identifier fields (one per IdentifierType)
+    identifier_isin: Optional[str] = Field(None, max_length=12, description="Update ISIN code")
+    identifier_ticker: Optional[str] = Field(None, max_length=20, description="Update ticker symbol")
+    identifier_cusip: Optional[str] = Field(None, max_length=9, description="Update CUSIP code")
+    identifier_sedol: Optional[str] = Field(None, max_length=7, description="Update SEDOL code")
+    identifier_figi: Optional[str] = Field(None, max_length=12, description="Update FIGI code")
+    identifier_uuid: Optional[str] = Field(None, max_length=36, description="Update UUID")
+    identifier_other: Optional[str] = Field(None, max_length=100, description="Update other identifier")
+
     @field_validator('currency')
     @classmethod
     def currency_uppercase(cls, v: Optional[str]) -> Optional[str]:
         """Normalize currency to uppercase."""
         return Currency.validate_code(v) if v else None
+
+    @field_validator('identifier_isin')
+    @classmethod
+    def validate_isin(cls, v: Optional[str]) -> Optional[str]:
+        """Validate and normalize ISIN."""
+        if v is None or v == '':
+            return None
+        v = v.strip().upper()
+        if len(v) != 12:
+            raise ValueError("ISIN must be 12 characters")
+        return v
+
+    @field_validator('identifier_ticker')
+    @classmethod
+    def validate_ticker(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize ticker to uppercase."""
+        if v is None or v == '':
+            return None
+        return v.strip().upper()
 
 
 class FAAssetPatchResult(BaseModel):
