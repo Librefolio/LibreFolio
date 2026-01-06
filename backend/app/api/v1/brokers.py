@@ -370,7 +370,10 @@ async def parse_file(
 
     This is a preview operation - no data is persisted to the database.
     The user can review and modify the parsed transactions before
-    sending them to the /import endpoint.
+    sending them to POST /transactions endpoint.
+
+    If plugin_code is 'auto' (default), the system will automatically
+    detect the best plugin based on file content analysis.
 
     Returns:
     - transactions: Parsed transactions (may have fake asset IDs)
@@ -387,11 +390,35 @@ async def parse_file(
         detect_tx_duplicates
         )
 
+    # Determine plugin to use
+    plugin_code = request.plugin_code
+    if plugin_code == "auto":
+        # Auto-detect plugin based on file content
+        file_path = brim_provider.get_file_path(file_id)
+        if not file_path:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        detected_plugin = BRIMProviderRegistry.auto_detect_plugin(file_path)
+        if detected_plugin:
+            plugin_code = detected_plugin
+            logger.info(
+                "Auto-detected plugin for file",
+                file_id=file_id,
+                detected_plugin=plugin_code
+                )
+        else:
+            # Fallback to generic CSV
+            plugin_code = "broker_generic_csv"
+            logger.info(
+                "No specific plugin detected, using generic CSV",
+                file_id=file_id
+                )
+
     try:
         # 1. Parse file using plugin (plugin only reads file format)
         transactions, warnings, extracted_assets = brim_provider.parse_file(
             file_id=file_id,
-            plugin_code=request.plugin_code,
+            plugin_code=plugin_code,
             broker_id=request.broker_id
             )
 
@@ -430,7 +457,7 @@ async def parse_file(
         logger.info(
             "File parsed with asset mapping and duplicate detection",
             file_id=file_id,
-            plugin_code=request.plugin_code,
+            plugin_code=plugin_code,
             transaction_count=len(transactions),
             asset_mappings_count=len(asset_mappings),
             unique_tx_count=len(duplicates.tx_unique_indices),
@@ -440,7 +467,7 @@ async def parse_file(
 
         return BRIMParseResponse(
             file_id=file_id,
-            plugin_code=request.plugin_code,
+            plugin_code=plugin_code,  # Return actual plugin used (after auto-detection)
             broker_id=request.broker_id,
             transactions=transactions,
             asset_mappings=asset_mappings,

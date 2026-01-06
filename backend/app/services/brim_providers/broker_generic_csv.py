@@ -274,6 +274,9 @@ class GenericCSVBrokerProvider(BRIMProvider):
     This plugin can parse most simple CSV files exported from brokers.
     It auto-detects columns based on header names and handles common
     variations in date formats, number formats, and transaction types.
+
+    Detection priority is 0 (lowest) - used as fallback when no broker-specific
+    plugin matches the file.
     """
 
     @property
@@ -296,6 +299,11 @@ class GenericCSVBrokerProvider(BRIMProvider):
     def supported_extensions(self) -> List[str]:
         return [".csv"]
 
+    @property
+    def detection_priority(self) -> int:
+        """Lowest priority - used as fallback when no specific plugin matches."""
+        return 0
+
     def can_parse(self, file_path: Path) -> bool:
         """
         Check if this plugin can parse the file.
@@ -313,7 +321,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str]]:
+    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, Dict]]:
         """
         Parse CSV file and return transactions with warnings.
 
@@ -323,7 +331,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         3. Parse each row into TXCreateItem
         4. Assign fake asset IDs for asset-based transactions
         5. Collect warnings for skipped/problematic rows
-        6. Return (transactions, warnings)
+        6. Return (transactions, warnings, extracted_assets)
 
         Asset Handling:
         - Extracts asset identifier from 'asset' column (symbol, ISIN, or name)
@@ -382,7 +390,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         if not transactions:
             warnings.append("No valid transactions found in file")
 
-        return transactions, warnings
+        return transactions, warnings, self._extracted_assets
 
     def _detect_columns(self, fieldnames: List[str]) -> Dict[str, str]:
         """

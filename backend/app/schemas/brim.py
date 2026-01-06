@@ -146,6 +146,7 @@ class BRIMPluginInfo(BaseModel):
         name: Human-readable name (e.g., 'Generic CSV')
         description: Plugin description for UI
         supported_extensions: List of supported file extensions
+        icon_url: URL to the broker's icon/logo (optional)
     """
     code: str = Field(..., description="Unique plugin identifier")
     name: str = Field(..., description="Human-readable plugin name")
@@ -153,6 +154,10 @@ class BRIMPluginInfo(BaseModel):
     supported_extensions: List[str] = Field(
         default_factory=list,
         description="Supported file extensions (e.g., ['.csv', '.xlsx'])"
+        )
+    icon_url: Optional[str] = Field(
+        None,
+        description="URL to broker icon/logo (absolute URL or relative path)"
         )
 
 
@@ -265,10 +270,13 @@ class BRIMParseRequest(BaseModel):
     User can modify the transactions before sending to /import endpoint.
 
     Attributes:
-        plugin_code: Plugin to use for parsing (e.g., 'broker_generic_csv')
+        plugin_code: Plugin to use for parsing. Use 'auto' or omit for auto-detection.
         broker_id: Target broker ID for the transactions
     """
-    plugin_code: str = Field(..., description="Plugin code to use for parsing")
+    plugin_code: str = Field(
+        default="auto",
+        description="Plugin code to use for parsing. Use 'auto' for automatic detection."
+        )
     broker_id: int = Field(..., gt=0, description="Target broker ID")
 
 
