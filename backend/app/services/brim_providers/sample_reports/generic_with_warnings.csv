@@ -1,6 +1,7 @@
-date,type,quantity,amount,currency,description
-2025-01-02,BUY,10,-1000.00,EUR,Valid transaction
-INVALID_DATE,BUY,5,-500.00,EUR,Invalid date - will be skipped
-2025-01-03,UNKNOWN_TYPE,5,-500.00,EUR,Unknown type - will be skipped
-,BUY,5,-500.00,EUR,Empty date - will be skipped
-2025-01-04,SELL,-5,500.00,EUR,Valid transaction
+date,type,quantity,amount,currency,asset,description
+2025-01-01,DEPOSIT,0,5000.00,EUR,,Initial funding
+2025-01-02,BUY,10,-1000.00,EUR,AAPL,Valid transaction
+INVALID_DATE,BUY,5,-500.00,EUR,MSFT,Invalid date - will be skipped
+2025-01-03,UNKNOWN_TYPE,5,-500.00,EUR,AAPL,Unknown type - will be skipped
+,BUY,5,-500.00,EUR,GOOGL,Empty date - will be skipped
+2025-01-04,SELL,-5,500.00,EUR,AAPL,Valid transaction

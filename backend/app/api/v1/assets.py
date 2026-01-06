@@ -49,7 +49,7 @@ from backend.app.services.provider_registry import AssetProviderRegistry
 
 logger = get_logger(__name__)
 
-asset_router = APIRouter(prefix="/assets", tags=["Assets"])
+asset_router = APIRouter(prefix="/assets", tags=["FA (Financial Assets)"])
 price_router = APIRouter(prefix="/prices", tags=["FA Prices"])
 provider_router = APIRouter(prefix="/provider", tags=["FA Provider"])
 

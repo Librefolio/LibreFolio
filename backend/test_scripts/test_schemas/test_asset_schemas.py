@@ -33,7 +33,7 @@ from backend.app.schemas.assets import (
     FAGeographicArea,
     FASectorArea,
     FAClassificationParams,
-)
+    )
 
 
 # ============================================================================
@@ -51,7 +51,7 @@ class TestInterestRatePeriod:
             annual_rate=Decimal("0.05"),
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365
-        )
+            )
         assert period.annual_rate == Decimal("0.05")
         assert period.compounding == CompoundingType.SIMPLE
         assert period.compound_frequency is None
@@ -65,7 +65,7 @@ class TestInterestRatePeriod:
             compounding=CompoundingType.COMPOUND,
             compound_frequency=CompoundFrequency.MONTHLY,
             day_count=DayCountConvention.ACT_365
-        )
+            )
         assert period.compounding == CompoundingType.COMPOUND
         assert period.compound_frequency == CompoundFrequency.MONTHLY
 
@@ -76,7 +76,7 @@ class TestInterestRatePeriod:
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("-0.05"),
-            )
+                )
 
     def test_end_date_before_start_date_rejected(self):
         """Test that end_date before start_date is rejected."""
@@ -85,7 +85,7 @@ class TestInterestRatePeriod:
                 start_date=date(2025, 12, 31),
                 end_date=date(2025, 1, 1),
                 annual_rate=Decimal("0.05"),
-            )
+                )
 
     def test_same_start_end_date_allowed(self):
         """Test that same start and end date is allowed (single day period)."""
@@ -93,7 +93,7 @@ class TestInterestRatePeriod:
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 1),
             annual_rate=Decimal("0.05"),
-        )
+            )
         assert period.start_date == period.end_date
 
     @pytest.mark.skip(reason="Validation order issue - field_validator doesn't catch this")
@@ -105,7 +105,7 @@ class TestInterestRatePeriod:
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 compounding=CompoundingType.COMPOUND,
-            )
+                )
 
     def test_simple_with_frequency_rejected(self):
         """Test that SIMPLE with compound_frequency is rejected."""
@@ -116,7 +116,7 @@ class TestInterestRatePeriod:
                 annual_rate=Decimal("0.05"),
                 compounding=CompoundingType.SIMPLE,
                 compound_frequency=CompoundFrequency.MONTHLY,
-            )
+                )
 
     def test_defaults(self):
         """Test that defaults are applied correctly."""
@@ -124,7 +124,7 @@ class TestInterestRatePeriod:
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate=Decimal("0.05"),
-        )
+            )
         assert period.compounding == CompoundingType.SIMPLE
         assert period.day_count == DayCountConvention.ACT_365
         assert period.compound_frequency is None
@@ -135,7 +135,7 @@ class TestInterestRatePeriod:
             start_date=date(2025, 1, 1),
             end_date=date(2025, 12, 31),
             annual_rate="0.05",
-        )
+            )
         assert period.annual_rate == Decimal("0.05")
 
     def test_extra_fields_rejected(self):
@@ -146,7 +146,7 @@ class TestInterestRatePeriod:
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.05"),
                 extra_field="should_fail"
-            )
+                )
 
 
 # ============================================================================
@@ -161,7 +161,7 @@ class TestLateInterestConfig:
         config = FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
-        )
+            )
         assert config.annual_rate == Decimal("0.12")
         assert config.grace_period_days == 30
         assert config.compounding == CompoundingType.SIMPLE
@@ -171,7 +171,7 @@ class TestLateInterestConfig:
         with pytest.raises(ValidationError, match="non-negative"):
             FALateInterestConfig(
                 annual_rate=Decimal("-0.12"),
-            )
+                )
 
     def test_negative_grace_period_rejected(self):
         """Test that negative grace period is rejected."""
@@ -179,14 +179,14 @@ class TestLateInterestConfig:
             FALateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 grace_period_days=-10,
-            )
+                )
 
     def test_zero_grace_period_allowed(self):
         """Test that zero grace period is allowed."""
         config = FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=0,
-        )
+            )
         assert config.grace_period_days == 0
 
     def test_compound_late_interest(self):
@@ -196,7 +196,7 @@ class TestLateInterestConfig:
             grace_period_days=30,
             compounding=CompoundingType.COMPOUND,
             compound_frequency=CompoundFrequency.DAILY,
-        )
+            )
         assert config.compounding == CompoundingType.COMPOUND
         assert config.compound_frequency == CompoundFrequency.DAILY
 
@@ -207,7 +207,7 @@ class TestLateInterestConfig:
             FALateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 compounding=CompoundingType.COMPOUND,
-            )
+                )
 
     def test_simple_with_frequency_rejected(self):
         """Test that SIMPLE with frequency is rejected."""
@@ -216,7 +216,7 @@ class TestLateInterestConfig:
                 annual_rate=Decimal("0.12"),
                 compounding=CompoundingType.SIMPLE,
                 compound_frequency=CompoundFrequency.MONTHLY,
-            )
+                )
 
 
 # ============================================================================
@@ -234,9 +234,9 @@ class TestScheduledInvestmentSchedule:
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.05"),
-                )
-            ]
-        )
+                    )
+                ]
+            )
         assert len(schedule.schedule) == 1
 
     def test_valid_multiple_periods_contiguous(self):
@@ -247,14 +247,14 @@ class TestScheduledInvestmentSchedule:
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 6, 30),
                     annual_rate=Decimal("0.05"),
-                ),
+                    ),
                 FAInterestRatePeriod(
                     start_date=date(2025, 7, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),
-                )
-            ]
-        )
+                    )
+                ]
+            )
         assert len(schedule.schedule) == 2
 
     def test_empty_schedule_rejected(self):
@@ -271,14 +271,14 @@ class TestScheduledInvestmentSchedule:
                         start_date=date(2025, 1, 1),
                         end_date=date(2025, 7, 15),
                         annual_rate=Decimal("0.05"),
-                    ),
+                        ),
                     FAInterestRatePeriod(
                         start_date=date(2025, 7, 1),
                         end_date=date(2025, 12, 31),
                         annual_rate=Decimal("0.06"),
-                    )
-                ]
-            )
+                        )
+                    ]
+                )
 
     def test_gap_in_periods_rejected(self):
         """Test that gaps between periods are rejected."""
@@ -289,14 +289,14 @@ class TestScheduledInvestmentSchedule:
                         start_date=date(2025, 1, 1),
                         end_date=date(2025, 6, 30),
                         annual_rate=Decimal("0.05"),
-                    ),
+                        ),
                     FAInterestRatePeriod(
                         start_date=date(2025, 7, 5),
                         end_date=date(2025, 12, 31),
                         annual_rate=Decimal("0.06"),
-                    )
-                ]
-            )
+                        )
+                    ]
+                )
 
     def test_unsorted_periods_are_sorted(self):
         """Test that unsorted periods are automatically sorted."""
@@ -306,14 +306,14 @@ class TestScheduledInvestmentSchedule:
                     start_date=date(2025, 7, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),
-                ),
+                    ),
                 FAInterestRatePeriod(
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 6, 30),
                     annual_rate=Decimal("0.05"),
-                ),
-            ]
-        )
+                    ),
+                ]
+            )
         assert schedule.schedule[0].start_date == date(2025, 1, 1)
         assert schedule.schedule[1].start_date == date(2025, 7, 1)
 
@@ -325,13 +325,13 @@ class TestScheduledInvestmentSchedule:
                     start_date=date(2025, 1, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.05"),
-                )
-            ],
+                    )
+                ],
             late_interest=FALateInterestConfig(
                 annual_rate=Decimal("0.12"),
                 grace_period_days=30,
+                )
             )
-        )
         assert schedule.late_interest is not None
         assert schedule.late_interest.annual_rate == Decimal("0.12")
 
@@ -344,22 +344,22 @@ class TestScheduledInvestmentSchedule:
                     end_date=date(2025, 4, 30),
                     annual_rate=Decimal("0.04"),
                     compounding=CompoundingType.SIMPLE,
-                ),
+                    ),
                 FAInterestRatePeriod(
                     start_date=date(2025, 5, 1),
                     end_date=date(2025, 8, 31),
                     annual_rate=Decimal("0.05"),
                     compounding=CompoundingType.COMPOUND,
                     compound_frequency=CompoundFrequency.QUARTERLY,
-                ),
+                    ),
                 FAInterestRatePeriod(
                     start_date=date(2025, 9, 1),
                     end_date=date(2025, 12, 31),
                     annual_rate=Decimal("0.06"),
                     compounding=CompoundingType.SIMPLE,
-                )
-            ]
-        )
+                    )
+                ]
+            )
         assert len(schedule.schedule) == 3
         assert schedule.schedule[1].compounding == CompoundingType.COMPOUND
 
@@ -443,7 +443,7 @@ class TestFASectorArea:
             "Technology": Decimal("0.4"),
             "Financials": Decimal("0.3"),
             "Health Care": Decimal("0.3")
-        })
+            })
         assert sector.distribution["Technology"] == Decimal("0.4000")
         assert sector.distribution["Financials"] == Decimal("0.3000")
 
@@ -458,7 +458,7 @@ class TestFASectorArea:
         sector = FASectorArea(distribution={
             "technology": Decimal("0.5"),
             "FINANCIALS": Decimal("0.5")
-        })
+            })
         assert "Technology" in sector.distribution
         assert "Financials" in sector.distribution
 
@@ -467,7 +467,7 @@ class TestFASectorArea:
         sector = FASectorArea(distribution={
             "healthcare": Decimal("0.5"),
             "telecom": Decimal("0.5")
-        })
+            })
         assert "Health Care" in sector.distribution
         assert "Telecommunication" in sector.distribution
         assert "healthcare" not in sector.distribution
@@ -477,7 +477,7 @@ class TestFASectorArea:
         sector = FASectorArea(distribution={
             "UnknownSector": Decimal("0.5"),
             "Technology": Decimal("0.5")
-        })
+            })
         assert "Other" in sector.distribution
         assert "UnknownSector" not in sector.distribution
 
@@ -487,7 +487,7 @@ class TestFASectorArea:
             "Banking": Decimal("0.2"),
             "Insurance": Decimal("0.2"),
             "Technology": Decimal("0.6")
-        })
+            })
         assert "Other" in sector.distribution
         assert sector.distribution["Other"] == Decimal("0.4000")
         assert sector.distribution["Technology"] == Decimal("0.6000")
@@ -521,7 +521,7 @@ class TestFAClassificationParams:
         params = FAClassificationParams(
             short_description="Test asset",
             sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
-        )
+            )
         assert params.sector_area is not None
         assert params.sector_area.distribution["Technology"] == Decimal("1.0")
 
@@ -529,7 +529,7 @@ class TestFAClassificationParams:
         """Should accept geographic_area field."""
         params = FAClassificationParams(
             geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")})
-        )
+            )
         assert params.geographic_area is not None
         assert params.geographic_area.distribution["USA"] == Decimal("1.0")
 
@@ -539,7 +539,7 @@ class TestFAClassificationParams:
             short_description="Multi-region tech fund",
             geographic_area=FAGeographicArea(distribution={"USA": Decimal("0.6"), "DEU": Decimal("0.4")}),
             sector_area=FASectorArea(distribution={"Technology": Decimal("0.7"), "Financials": Decimal("0.3")})
-        )
+            )
         assert params.geographic_area is not None
         assert params.sector_area is not None
 
@@ -590,7 +590,7 @@ class TestGeographicAreaSerialization:
             short_description="Test Company",
             geographic_area=geo,
             sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
-        )
+            )
         assert params.geographic_area is not None
         assert params.geographic_area.distribution["USA"] == Decimal("0.6000")
         assert params.geographic_area.distribution["DEU"] == Decimal("0.4000")
@@ -601,7 +601,7 @@ class TestGeographicAreaSerialization:
         params = FAClassificationParams(
             geographic_area=geo,
             sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
-        )
+            )
         json_str = params.model_dump_json(exclude_none=True)
         data = json.loads(json_str)
 
@@ -627,7 +627,7 @@ class TestGeographicAreaSerialization:
         original = FAClassificationParams(
             geographic_area=geo,
             sector_area=FASectorArea(distribution={"Financials": Decimal("1.0")})
-        )
+            )
         json_str1 = original.model_dump_json(exclude_none=True)
         parsed = FAClassificationParams.model_validate_json(json_str1)
         json_str2 = parsed.model_dump_json(exclude_none=True)
@@ -640,7 +640,7 @@ class TestGeographicAreaSerialization:
         """Test that None geographic_area works correctly."""
         params = FAClassificationParams(
             sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
-        )
+            )
         json_str = params.model_dump_json(exclude_none=True)
         data = json.loads(json_str)
 
@@ -651,4 +651,3 @@ class TestGeographicAreaSerialization:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
-

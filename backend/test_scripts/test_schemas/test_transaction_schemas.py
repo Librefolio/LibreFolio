@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem, TXUpdateItem, tags_to_csv, validate_tags_list
+from backend.app.schemas.transactions import TXCreateItem, tags_to_csv, validate_tags_list
 
 
 # ============================================================================
@@ -33,7 +33,7 @@ class TestLinkUuidRequirements:
                 type=TransactionType.TRANSFER,
                 date=date.today(),
                 quantity=Decimal("10"),
-            )
+                )
 
     def test_fx_conversion_requires_link_uuid(self):
         """TX-S-002: FX_CONVERSION without link_uuid should fail."""
@@ -43,7 +43,7 @@ class TestLinkUuidRequirements:
                 type=TransactionType.FX_CONVERSION,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-            )
+                )
 
     def test_transfer_with_link_uuid_valid(self):
         """TX-S-003: TRANSFER with link_uuid should pass."""
@@ -54,7 +54,7 @@ class TestLinkUuidRequirements:
             date=date.today(),
             quantity=Decimal("10"),
             link_uuid="550e8400-e29b-41d4-a716-446655440000",
-        )
+            )
         assert tx.link_uuid == "550e8400-e29b-41d4-a716-446655440000"
 
     def test_fx_conversion_with_link_uuid_valid(self):
@@ -65,7 +65,7 @@ class TestLinkUuidRequirements:
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("100")),
             link_uuid="550e8400-e29b-41d4-a716-446655440000",
-        )
+            )
         assert tx.link_uuid == "550e8400-e29b-41d4-a716-446655440000"
 
 
@@ -85,7 +85,7 @@ class TestTransferRules:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid="uuid-123",
-            )
+                )
 
     def test_transfer_requires_nonzero_quantity(self):
         """TX-S-011: TRANSFER with quantity=0 should fail."""
@@ -97,7 +97,7 @@ class TestTransferRules:
                 date=date.today(),
                 quantity=Decimal("0"),
                 link_uuid="uuid-123",
-            )
+                )
 
     def test_transfer_no_cash_allowed(self):
         """TX-S-012: TRANSFER with cash movement should fail."""
@@ -110,7 +110,7 @@ class TestTransferRules:
                 quantity=Decimal("10"),
                 cash=Currency(code="EUR", amount=Decimal("100")),
                 link_uuid="uuid-123",
-            )
+                )
 
     def test_transfer_valid(self):
         """TX-S-013: Valid TRANSFER should pass."""
@@ -121,7 +121,7 @@ class TestTransferRules:
             date=date.today(),
             quantity=Decimal("-10"),  # Negative = outgoing
             link_uuid="uuid-123",
-        )
+            )
         assert tx.type == TransactionType.TRANSFER
         assert tx.quantity == Decimal("-10")
         assert tx.cash is None
@@ -144,7 +144,7 @@ class TestFxConversionRules:
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
                 link_uuid="uuid-123",
-            )
+                )
 
     def test_fx_requires_zero_quantity(self):
         """TX-S-021: FX_CONVERSION with quantity!=0 should fail."""
@@ -156,7 +156,7 @@ class TestFxConversionRules:
                 quantity=Decimal("10"),
                 cash=Currency(code="EUR", amount=Decimal("100")),
                 link_uuid="uuid-123",
-            )
+                )
 
     def test_fx_requires_cash(self):
         """TX-S-022: FX_CONVERSION without cash should fail."""
@@ -166,7 +166,7 @@ class TestFxConversionRules:
                 type=TransactionType.FX_CONVERSION,
                 date=date.today(),
                 link_uuid="uuid-123",
-            )
+                )
 
     def test_fx_cash_zero_not_allowed(self):
         """TX-S-023: FX_CONVERSION with cash.amount=0 should fail."""
@@ -177,7 +177,7 @@ class TestFxConversionRules:
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("0")),
                 link_uuid="uuid-123",
-            )
+                )
 
     def test_fx_valid(self):
         """TX-S-024: Valid FX_CONVERSION should pass."""
@@ -187,7 +187,7 @@ class TestFxConversionRules:
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("-100")),  # Negative = outgoing
             link_uuid="uuid-123",
-        )
+            )
         assert tx.type == TransactionType.FX_CONVERSION
         assert tx.cash.amount == Decimal("-100")
 
@@ -208,7 +208,7 @@ class TestDepositWithdrawalRules:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("1000")),
-            )
+                )
 
     def test_withdrawal_no_asset_allowed(self):
         """TX-S-031: WITHDRAWAL with asset_id should fail."""
@@ -219,7 +219,7 @@ class TestDepositWithdrawalRules:
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-1000")),
-            )
+                )
 
     def test_deposit_requires_cash(self):
         """TX-S-032: DEPOSIT without cash should fail."""
@@ -228,7 +228,7 @@ class TestDepositWithdrawalRules:
                 broker_id=1,
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
-            )
+                )
 
     def test_withdrawal_requires_cash(self):
         """TX-S-033: WITHDRAWAL without cash should fail."""
@@ -237,7 +237,7 @@ class TestDepositWithdrawalRules:
                 broker_id=1,
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
-            )
+                )
 
     def test_deposit_valid(self):
         """TX-S-034: Valid DEPOSIT should pass."""
@@ -246,7 +246,7 @@ class TestDepositWithdrawalRules:
             type=TransactionType.DEPOSIT,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("5000")),
-        )
+            )
         assert tx.type == TransactionType.DEPOSIT
         assert tx.cash.amount == Decimal("5000")
 
@@ -257,7 +257,7 @@ class TestDepositWithdrawalRules:
             type=TransactionType.WITHDRAWAL,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("-2000")),
-        )
+            )
         assert tx.type == TransactionType.WITHDRAWAL
         assert tx.cash.amount == Decimal("-2000")
 
@@ -278,7 +278,7 @@ class TestAssetRequiredTypes:
                 date=date.today(),
                 quantity=Decimal("10"),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
-            )
+                )
 
     def test_sell_requires_asset(self):
         """TX-S-041: SELL without asset_id should fail."""
@@ -289,7 +289,7 @@ class TestAssetRequiredTypes:
                 date=date.today(),
                 quantity=Decimal("-10"),
                 cash=Currency(code="EUR", amount=Decimal("500")),
-            )
+                )
 
     def test_dividend_requires_asset(self):
         """TX-S-042: DIVIDEND without asset_id should fail."""
@@ -299,7 +299,7 @@ class TestAssetRequiredTypes:
                 type=TransactionType.DIVIDEND,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("50")),
-            )
+                )
 
     def test_adjustment_requires_asset(self):
         """TX-S-043: ADJUSTMENT without asset_id should fail."""
@@ -309,7 +309,7 @@ class TestAssetRequiredTypes:
                 type=TransactionType.ADJUSTMENT,
                 date=date.today(),
                 quantity=Decimal("5"),
-            )
+                )
 
     def test_buy_valid(self):
         """TX-S-044: Valid BUY should pass."""
@@ -320,7 +320,7 @@ class TestAssetRequiredTypes:
             date=date.today(),
             quantity=Decimal("10"),
             cash=Currency(code="EUR", amount=Decimal("-500")),
-        )
+            )
         assert tx.type == TransactionType.BUY
         assert tx.asset_id == 1
 
@@ -333,7 +333,7 @@ class TestAssetRequiredTypes:
             date=date.today(),
             quantity=Decimal("-10"),
             cash=Currency(code="EUR", amount=Decimal("500")),
-        )
+            )
         assert tx.type == TransactionType.SELL
 
 
@@ -353,7 +353,7 @@ class TestCashRequiredTypes:
                 type=TransactionType.BUY,
                 date=date.today(),
                 quantity=Decimal("10"),
-            )
+                )
 
     def test_sell_requires_cash(self):
         """TX-S-051: SELL without cash should fail."""
@@ -364,7 +364,7 @@ class TestCashRequiredTypes:
                 type=TransactionType.SELL,
                 date=date.today(),
                 quantity=Decimal("-10"),
-            )
+                )
 
     def test_dividend_requires_cash(self):
         """TX-S-052: DIVIDEND without cash should fail."""
@@ -374,7 +374,7 @@ class TestCashRequiredTypes:
                 asset_id=1,
                 type=TransactionType.DIVIDEND,
                 date=date.today(),
-            )
+                )
 
     def test_interest_requires_cash(self):
         """TX-S-053: INTEREST without cash should fail."""
@@ -383,7 +383,7 @@ class TestCashRequiredTypes:
                 broker_id=1,
                 type=TransactionType.INTEREST,
                 date=date.today(),
-            )
+                )
 
     def test_fee_requires_cash(self):
         """TX-S-054: FEE without cash should fail."""
@@ -392,7 +392,7 @@ class TestCashRequiredTypes:
                 broker_id=1,
                 type=TransactionType.FEE,
                 date=date.today(),
-            )
+                )
 
     def test_tax_requires_cash(self):
         """TX-S-055: TAX without cash should fail."""
@@ -401,7 +401,7 @@ class TestCashRequiredTypes:
                 broker_id=1,
                 type=TransactionType.TAX,
                 date=date.today(),
-            )
+                )
 
 
 # ============================================================================
@@ -419,7 +419,7 @@ class TestAssetOptionalTypes:
             type=TransactionType.INTEREST,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("50")),
-        )
+            )
         assert tx.asset_id == 1
 
     def test_interest_without_asset_valid(self):
@@ -429,7 +429,7 @@ class TestAssetOptionalTypes:
             type=TransactionType.INTEREST,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("10")),
-        )
+            )
         assert tx.asset_id is None
 
     def test_fee_with_asset_valid(self):
@@ -440,7 +440,7 @@ class TestAssetOptionalTypes:
             type=TransactionType.FEE,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("-5")),
-        )
+            )
         assert tx.asset_id == 1
 
     def test_fee_without_asset_valid(self):
@@ -450,7 +450,7 @@ class TestAssetOptionalTypes:
             type=TransactionType.FEE,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("-20")),
-        )
+            )
         assert tx.asset_id is None
 
     def test_tax_with_asset_valid(self):
@@ -461,7 +461,7 @@ class TestAssetOptionalTypes:
             type=TransactionType.TAX,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("-100")),
-        )
+            )
         assert tx.asset_id == 1
 
     def test_tax_without_asset_valid(self):
@@ -471,7 +471,7 @@ class TestAssetOptionalTypes:
             type=TransactionType.TAX,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("-50")),
-        )
+            )
         assert tx.asset_id is None
 
 
@@ -492,7 +492,7 @@ class TestAdjustmentRules:
                 date=date.today(),
                 quantity=Decimal("5"),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-            )
+                )
 
     def test_adjustment_valid(self):
         """TX-S-071: Valid ADJUSTMENT should pass."""
@@ -502,7 +502,7 @@ class TestAdjustmentRules:
             type=TransactionType.ADJUSTMENT,
             date=date.today(),
             quantity=Decimal("5"),
-        )
+            )
         assert tx.type == TransactionType.ADJUSTMENT
         assert tx.quantity == Decimal("5")
         assert tx.cash is None
@@ -522,7 +522,7 @@ class TestHelperMethods:
             type=TransactionType.DEPOSIT,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("1234.56")),
-        )
+            )
         assert tx.get_amount() == Decimal("1234.56")
 
     def test_get_amount_without_cash(self):
@@ -533,7 +533,7 @@ class TestHelperMethods:
             type=TransactionType.ADJUSTMENT,
             date=date.today(),
             quantity=Decimal("10"),
-        )
+            )
         assert tx.get_amount() == Decimal("0")
 
     def test_get_currency_with_cash(self):
@@ -543,7 +543,7 @@ class TestHelperMethods:
             type=TransactionType.DEPOSIT,
             date=date.today(),
             cash=Currency(code="USD", amount=Decimal("100")),
-        )
+            )
         assert tx.get_currency() == "USD"
 
     def test_get_currency_without_cash(self):
@@ -554,7 +554,7 @@ class TestHelperMethods:
             type=TransactionType.ADJUSTMENT,
             date=date.today(),
             quantity=Decimal("10"),
-        )
+            )
         assert tx.get_currency() is None
 
     def test_get_tags_csv(self):
@@ -565,7 +565,7 @@ class TestHelperMethods:
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("100")),
             tags=["income", "salary", "monthly"],
-        )
+            )
         assert tx.get_tags_csv() == "income,salary,monthly"
 
     def test_get_tags_csv_none(self):
@@ -575,7 +575,7 @@ class TestHelperMethods:
             type=TransactionType.DEPOSIT,
             date=date.today(),
             cash=Currency(code="EUR", amount=Decimal("100")),
-        )
+            )
         assert tx.get_tags_csv() is None
 
 
@@ -620,4 +620,3 @@ class TestTagsUtilities:
         """tags_to_csv with None returns None."""
         result = tags_to_csv(None)
         assert result is None
-

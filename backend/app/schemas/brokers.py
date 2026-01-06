@@ -219,7 +219,7 @@ class BRDeleteItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., gt=0, description="Broker ID to delete")
-    force: bool = Field(default=False,description="If True, cascade delete all transactions. If False, fail if transactions exist.")
+    force: bool = Field(default=False, description="If True, cascade delete all transactions. If False, fail if transactions exist.")
 
 
 class BRDeleteResult(BaseDeleteResult):
@@ -230,7 +230,7 @@ class BRDeleteResult(BaseDeleteResult):
     - transactions_deleted: Count of transactions removed (only >0 when force=True was used)
     """
     id: int = Field(..., description="Broker ID")
-    transactions_deleted: int = Field(default=0,ge=0,description="Number of transactions cascade-deleted (only when force=True)")
+    transactions_deleted: int = Field(default=0, ge=0, description="Number of transactions cascade-deleted (only when force=True)")
 
 
 class BRBulkDeleteResponse(BaseBulkDeleteResponse[BRDeleteResult]):

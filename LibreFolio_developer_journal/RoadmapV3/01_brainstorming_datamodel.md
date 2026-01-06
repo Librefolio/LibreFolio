@@ -437,9 +437,12 @@ from backend.app.schemas.transactions import TXCreateItem
 # =============================================================================
 
 class BRIMFileStatus(str, Enum):
-    """Status of an uploaded file."""
+    """Status of an uploaded file.
+    
+    Flow: UPLOADED → PARSED (success) or FAILED (error)
+    """
     UPLOADED = "uploaded"
-    IMPORTED = "imported"
+    PARSED = "parsed"      # Successfully parsed, ready for import
     FAILED = "failed"
 
 class BRIMFileInfo(BaseModel):
@@ -507,14 +510,18 @@ class BRIMAssetMapping(BaseModel):
 # =============================================================================
 
 class BRIMDuplicateLevel(str, Enum):
-    """Confidence level for duplicate detection.
+    """Confidence level for duplicate detection (ascending order).
     
-    Criteria:
-    - POSSIBLE: type + date + quantity + cash match
-    - CERTAIN: POSSIBLE + identical non-empty description (practically a duplicate)
+    Levels:
+    - POSSIBLE: type + date + quantity + cash match, asset not resolved
+    - POSSIBLE_WITH_ASSET: POSSIBLE + asset auto-resolved (1 candidate)
+    - LIKELY: POSSIBLE + identical non-empty description, asset not resolved
+    - LIKELY_WITH_ASSET: LIKELY + asset auto-resolved (highest confidence)
     """
     POSSIBLE = "possible"
-    CERTAIN = "certain"  # More impactful than "likely" - if all fields match, it's almost sure
+    POSSIBLE_WITH_ASSET = "possible_with_asset"
+    LIKELY = "likely"
+    LIKELY_WITH_ASSET = "likely_with_asset"
 
 class BRIMDuplicateMatch(BaseModel):
     """A potential duplicate transaction found in DB."""

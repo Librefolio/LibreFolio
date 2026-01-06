@@ -40,9 +40,7 @@ from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMProvider, BRIMParseError
 from backend.app.services.provider_registry import register_provider, BRIMProviderRegistry
 
-
 logger = structlog.get_logger(__name__)
-
 
 # =============================================================================
 # COLUMN MAPPINGS
@@ -54,33 +52,32 @@ HEADER_MAPPINGS: Dict[str, List[str]] = {
     "date": [
         "date", "data", "settlement_date", "value_date", "trade_date",
         "fecha", "datum", "transaction_date", "exec_date"
-    ],
+        ],
     "type": [
         "type", "tipo", "transaction_type", "operation", "operazione",
         "action", "azione", "trans_type", "op_type"
-    ],
+        ],
     "quantity": [
         "quantity", "quantità", "qty", "shares", "azioni", "units",
         "unità", "amount_shares", "num_shares"
-    ],
+        ],
     "amount": [
         "amount", "importo", "value", "cash", "cash_amount", "total",
         "totale", "net_amount", "gross_amount", "price"
-    ],
+        ],
     "currency": [
         "currency", "valuta", "ccy", "curr", "currency_code",
         "divisa", "währung"
-    ],
+        ],
     "description": [
         "description", "descrizione", "notes", "memo", "note",
         "details", "dettagli", "comment", "commento"
-    ],
+        ],
     "asset": [
         "asset", "symbol", "ticker", "isin", "asset_id", "instrument",
         "strumento", "security", "titolo", "name", "nome"
-    ],
-}
-
+        ],
+    }
 
 # =============================================================================
 # TYPE MAPPINGS
@@ -155,8 +152,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "rettifica": TransactionType.ADJUSTMENT,
     "aggiustamento": TransactionType.ADJUSTMENT,
     "correction": TransactionType.ADJUSTMENT,
-}
-
+    }
 
 # =============================================================================
 # DATE PARSING
@@ -164,16 +160,16 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
 
 # Date formats to try, in order of preference
 DATE_FORMATS = [
-    "%Y-%m-%d",       # ISO: 2025-01-03
-    "%d/%m/%Y",       # European: 03/01/2025
-    "%m/%d/%Y",       # US: 01/03/2025
-    "%d-%m-%Y",       # European dash: 03-01-2025
-    "%Y/%m/%d",       # ISO slash: 2025/01/03
-    "%d.%m.%Y",       # German: 03.01.2025
-    "%Y%m%d",         # Compact: 20250103
-    "%d %b %Y",       # Text: 03 Jan 2025
-    "%d %B %Y",       # Full text: 03 January 2025
-]
+    "%Y-%m-%d",  # ISO: 2025-01-03
+    "%d/%m/%Y",  # European: 03/01/2025
+    "%m/%d/%Y",  # US: 01/03/2025
+    "%d-%m-%Y",  # European dash: 03-01-2025
+    "%Y/%m/%d",  # ISO slash: 2025/01/03
+    "%d.%m.%Y",  # German: 03.01.2025
+    "%Y%m%d",  # Compact: 20250103
+    "%d %b %Y",  # Text: 03 Jan 2025
+    "%d %B %Y",  # Full text: 03 January 2025
+    ]
 
 
 def parse_date(value: str) -> Optional[date]:
@@ -359,12 +355,12 @@ class GenericCSVBrokerProvider(BRIMProvider):
                     raise BRIMParseError(
                         "Required column 'date' not found in CSV header",
                         details={"headers": reader.fieldnames}
-                    )
+                        )
                 if "type" not in column_map:
                     raise BRIMParseError(
                         "Required column 'type' not found in CSV header",
                         details={"headers": reader.fieldnames}
-                    )
+                        )
 
                 # Parse rows
                 for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
@@ -381,7 +377,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
             raise BRIMParseError(
                 f"Error reading CSV file: {str(e)}",
                 details={"file": file_path.name}
-            )
+                )
 
         if not transactions:
             warnings.append("No valid transactions found in file")
@@ -419,7 +415,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         column_map: Dict[str, str],
         broker_id: int,
         row_num: int
-    ) -> Optional[TXCreateItem]:
+        ) -> Optional[TXCreateItem]:
         """
         Parse a single CSV row into a TXCreateItem.
 
@@ -435,6 +431,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         Raises:
             Exception with descriptive message if row is invalid
         """
+
         # Helper to get value from row using mapping
         def get_val(std_name: str, default: str = "") -> str:
             csv_col = column_map.get(std_name)
@@ -491,10 +488,16 @@ class GenericCSVBrokerProvider(BRIMProvider):
             TransactionType.DIVIDEND,
             TransactionType.TRANSFER,
             TransactionType.ADJUSTMENT,
-        }
+            }
 
-        # Assign fake asset ID if asset info is present
+        # Assign fake asset ID if asset info is present OR if type requires asset
         asset_id: Optional[int] = None
+
+        # If no asset identifier but type requires asset, use row-based placeholder
+        # This allows user to manually map the asset in the UI
+        if not asset_identifier and tx_type in asset_required_types:
+            asset_identifier = f"UNKNOWN_ROW_{row_num}"
+
         if asset_identifier:
             # Check if we've seen this asset before
             if asset_identifier in self._asset_id_map:
@@ -516,18 +519,19 @@ class GenericCSVBrokerProvider(BRIMProvider):
             raise ValueError(
                 "TRANSFER type requires paired transactions with link_uuid. "
                 "Please use manual entry or broker-specific plugin."
-            )
+                )
 
         # Handle FX_CONVERSION type - needs link_uuid
         if tx_type == TransactionType.FX_CONVERSION:
             raise ValueError(
                 "FX_CONVERSION type requires paired transactions with link_uuid. "
                 "Please use manual entry or broker-specific plugin."
-            )
+                )
 
-        # Build TXCreateItem using model_construct to bypass validation
-        # (validation happens at import time when user has resolved asset IDs)
-        return TXCreateItem.model_construct(
+        # Build TXCreateItem - validation will pass because:
+        # - Asset-required types now always have a fake_id assigned
+        # - TRANSFER/FX_CONVERSION are rejected above (require link_uuid)
+        return TXCreateItem(
             broker_id=broker_id,
             asset_id=asset_id,
             type=tx_type,
@@ -537,7 +541,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
             link_uuid=None,
             description=description,
             tags=["import", "csv"]
-        )
+            )
 
     # TODO: capire se invece del dizionario si riesce a ritornare direttamente l'oggetto
     def _classify_asset_identifier(self, identifier: str) -> Dict[str, Optional[str]]:
@@ -558,7 +562,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
                 "extracted_symbol": None,
                 "extracted_isin": identifier.upper(),
                 "extracted_name": None
-            }
+                }
 
         # Check if it looks like a ticker symbol (1-6 chars, alphanumeric with dots/dashes)
         if 1 <= len(identifier) <= 6 and identifier.replace(".", "").replace("-", "").isalnum():
@@ -566,14 +570,14 @@ class GenericCSVBrokerProvider(BRIMProvider):
                 "extracted_symbol": identifier.upper(),
                 "extracted_isin": None,
                 "extracted_name": None
-            }
+                }
 
         # Otherwise treat as name
         return {
             "extracted_symbol": None,
             "extracted_isin": None,
             "extracted_name": identifier
-        }
+            }
 
     def get_extracted_assets(self) -> Dict[int, Dict[str, Optional[str]]]:
         """
@@ -585,4 +589,3 @@ class GenericCSVBrokerProvider(BRIMProvider):
             Dict mapping fake_asset_id -> {extracted_symbol, extracted_isin, extracted_name}
         """
         return getattr(self, '_extracted_assets', {})
-

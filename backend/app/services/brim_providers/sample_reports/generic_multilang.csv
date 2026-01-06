@@ -1,4 +1,5 @@
-data,tipo,quantità,importo,valuta,descrizione
-2025-01-02,acquisto,10,-1000.00,EUR,Italian headers test
-2025-01-03,vendita,-5,500.00,EUR,Vendita azioni
-2025-01-04,dividendo,0,25.00,EUR,Dividendo trimestrale
+data,tipo,quantità,importo,valuta,strumento,descrizione
+2025-01-01,deposito,0,5000.00,EUR,,Deposito iniziale
+2025-01-02,acquisto,10,-1000.00,EUR,AAPL,Italian headers test
+2025-01-03,vendita,-5,500.00,EUR,AAPL,Vendita azioni
+2025-01-04,dividendo,0,25.00,EUR,AAPL,Dividendo trimestrale

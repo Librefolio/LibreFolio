@@ -93,15 +93,23 @@ backend/test_scripts/
 **File:** `test_brim_providers.py`  
 **Requires DB:** Yes (needs transactions in DB)
 
+**Logic:**
+- If asset is auto-resolved (1 candidate found), filter DB query by asset_id
+- Use `*_WITH_ASSET` levels for higher confidence
+- If asset not resolved, use base `POSSIBLE`/`LIKELY` levels
+
 | Test ID | Test Name | Objective | Expected Result |
 |---------|-----------|-----------|-----------------|
 | DD-001 | `test_detect_no_duplicates` | Fresh transactions | All in tx_unique_indices |
-| DD-002 | `test_detect_possible_duplicate` | Same type/date/qty/cash | In tx_possible_duplicates |
-| DD-003 | `test_detect_certain_duplicate` | Same + description | In tx_certain_duplicates |
+| DD-002 | `test_detect_possible_duplicate` | Same type/date/qty/cash, no asset | In tx_possible_duplicates with POSSIBLE |
+| DD-003 | `test_detect_likely_duplicate` | Same + description, no asset | In tx_likely_duplicates with LIKELY |
 | DD-004 | `test_different_broker_not_duplicate` | Same data, different broker | Not flagged as duplicate |
 | DD-005 | `test_quantity_tolerance` | Small quantity difference | Within tolerance = match |
 | DD-006 | `test_amount_tolerance` | Small amount difference | Within tolerance = match |
-| DD-007 | `test_empty_description_not_certain` | One desc empty | POSSIBLE not CERTAIN |
+| DD-007 | `test_empty_description_not_likely` | One desc empty | POSSIBLE not LIKELY |
+| DD-008 | `test_possible_with_asset` | Single asset candidate auto-resolved | POSSIBLE_WITH_ASSET level, filtered by asset |
+| DD-009 | `test_likely_with_asset` | Auto-resolved + same description | LIKELY_WITH_ASSET level |
+| DD-010 | `test_asset_filter_excludes_others` | Asset resolved, other assets exist | Only matches same asset_id |
 
 **Fixtures Required:**
 - Create test broker and transactions before tests
@@ -153,23 +161,17 @@ backend/test_scripts/
 
 | Test ID | Test Name | Endpoint | Expected Result |
 |---------|-----------|----------|-----------------|
-| API-009 | `test_parse_file` | POST /brim/files/{id}/parse | 200, BRIMParseResponse |
+| API-009 | `test_parse_file` | POST /import/files/{id}/parse | 200, BRIMParseResponse |
 | API-010 | `test_parse_returns_asset_mappings` | POST /parse | asset_mappings populated |
 | API-011 | `test_parse_returns_duplicates` | POST /parse | duplicates report populated |
 | API-012 | `test_parse_file_not_found` | POST /parse | 404 |
 | API-013 | `test_parse_invalid_plugin` | POST /parse | 400, plugin not found |
 | API-014 | `test_parse_plugin_cannot_parse` | POST /parse | 400, cannot parse |
+| API-015 | `test_parse_success_moves_to_parsed` | POST /parse | File status = PARSED |
+| API-016 | `test_parse_failure_moves_to_failed` | POST /parse | File status = FAILED |
 
-#### 6.3 Import Endpoint
-
-| Test ID | Test Name | Endpoint | Expected Result |
-|---------|-----------|----------|-----------------|
-| API-015 | `test_import_transactions` | POST /brim/files/{id}/import | 200, TXBulkCreateResponse |
-| API-016 | `test_import_moves_file_to_imported` | POST /import | File status = IMPORTED |
-| API-017 | `test_import_with_fake_asset_id_rejected` | POST /import | 400, unresolved fake ID |
-| API-018 | `test_import_file_not_found` | POST /import | 404 |
-| API-019 | `test_import_file_id_mismatch` | POST /import | 400, mismatch error |
-| API-020 | `test_import_adds_tags` | POST /import | Tags added to all transactions |
+**Note:** Transaction import uses standard `POST /transactions` endpoint, not a BRIM-specific endpoint.
+File status is automatically managed by the parse endpoint (UPLOADED → PARSED or FAILED).
 
 ---
 
@@ -178,6 +180,12 @@ backend/test_scripts/
 **File:** `test_brim_api.py`  
 **Requires DB:** Yes  
 **Requires Server:** Yes
+
+**Flow:**
+1. Upload file → `POST /import/upload` (status: UPLOADED)
+2. Parse file → `POST /import/files/{id}/parse` (status: PARSED or FAILED)
+3. Client resolves fake asset IDs to real asset IDs
+4. Import transactions → `POST /transactions` (standard endpoint)
 
 | Test ID | Test Name | Objective | Expected Result |
 |---------|-----------|-----------|-----------------|
