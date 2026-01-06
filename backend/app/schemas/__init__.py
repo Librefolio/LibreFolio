@@ -52,6 +52,28 @@ from backend.app.schemas.assets import (
     FAAssetDeleteResult,
     FABulkAssetDeleteResponse,
     )
+from backend.app.schemas.brim import (
+    # Constants and helpers
+    FAKE_ASSET_ID_BASE,
+    is_fake_asset_id,
+    # Enums
+    BRIMFileStatus,
+    BRIMMatchConfidence,
+    BRIMDuplicateLevel,
+    # File management
+    BRIMFileInfo,
+    BRIMPluginInfo,
+    # Asset mapping
+    BRIMAssetCandidate,
+    BRIMAssetMapping,
+    # Duplicate detection
+    BRIMDuplicateMatch,
+    BRIMTXDuplicateCandidate,
+    BRIMDuplicateReport,
+    # Parse (import uses POST /transactions)
+    BRIMParseRequest,
+    BRIMParseResponse,
+    )
 from backend.app.schemas.brokers import (
     BRCreateItem,
     BRReadItem,
@@ -142,29 +164,6 @@ from backend.app.schemas.transactions import (
     # Shared utilities
     validate_tags_list,
     tags_to_csv,
-    )
-from backend.app.schemas.brim import (
-    # Constants and helpers
-    FAKE_ASSET_ID_BASE,
-    is_fake_asset_id,
-    # Enums
-    BRIMFileStatus,
-    BRIMMatchConfidence,
-    BRIMDuplicateLevel,
-    # File management
-    BRIMFileInfo,
-    BRIMPluginInfo,
-    # Asset mapping
-    BRIMAssetCandidate,
-    BRIMAssetMapping,
-    # Duplicate detection
-    BRIMDuplicateMatch,
-    BRIMTXDuplicateCandidate,
-    BRIMDuplicateReport,
-    # Parse/Import
-    BRIMParseRequest,
-    BRIMParseResponse,
-    BRIMImportRequest,
     )
 
 __all__ = [
@@ -293,5 +292,4 @@ __all__ = [
     "BRIMDuplicateReport",
     "BRIMParseRequest",
     "BRIMParseResponse",
-    "BRIMImportRequest",
     ]

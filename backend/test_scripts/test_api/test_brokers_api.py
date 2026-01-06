@@ -12,18 +12,15 @@ Tests for Broker endpoints:
 See checklist: 01_test_broker_transaction_subsystem.md - Category 5
 Reference: backend/app/api/v1/brokers.py
 """
-from datetime import date, timedelta
-from decimal import Decimal
-from typing import Optional
 import uuid
+from datetime import date
 
 import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.db.models import TransactionType
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info, print_success
+from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -60,16 +57,18 @@ async def test_post_brokers(test_server):
     print_section("Test BR-A-001: POST /brokers")
 
     async with httpx.AsyncClient() as client:
-        payload = [{
-            "name": unique_name("Create Test Broker"),
-            "description": "Created via API test",
-        }]
+        payload = [
+            {
+                "name": unique_name("Create Test Broker"),
+                "description": "Created via API test",
+                }
+            ]
 
         response = await client.post(
             f"{API_BASE}/brokers",
             json=payload,
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
@@ -87,19 +86,21 @@ async def test_post_brokers_with_balances(test_server):
     print_section("Test BR-A-002: POST /brokers - with initial balances")
 
     async with httpx.AsyncClient() as client:
-        payload = [{
-            "name": unique_name("Balance Broker"),
-            "initial_balances": [
-                {"code": "EUR", "amount": "5000"},
-                {"code": "USD", "amount": "3000"},
-            ],
-        }]
+        payload = [
+            {
+                "name": unique_name("Balance Broker"),
+                "initial_balances": [
+                    {"code": "EUR", "amount": "5000"},
+                    {"code": "USD", "amount": "3000"},
+                    ],
+                }
+            ]
 
         response = await client.post(
             f"{API_BASE}/brokers",
             json=payload,
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -127,7 +128,7 @@ async def test_post_brokers_duplicate(test_server):
             f"{API_BASE}/brokers",
             json=payload2,
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -168,14 +169,14 @@ async def test_get_broker_by_id(test_server):
             f"{API_BASE}/brokers",
             json=payload,
             timeout=TIMEOUT,
-        )
+            )
         broker_id = create_resp.json()["results"][0]["broker_id"]
 
         # Get by ID
         response = await client.get(
             f"{API_BASE}/brokers/{broker_id}",
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -193,7 +194,7 @@ async def test_get_broker_not_found(test_server):
         response = await client.get(
             f"{API_BASE}/brokers/999999",
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 404
 
@@ -207,22 +208,24 @@ async def test_get_broker_summary(test_server):
 
     async with httpx.AsyncClient() as client:
         # Create broker with balance
-        payload = [{
-            "name": unique_name("Summary Broker"),
-            "initial_balances": [{"code": "EUR", "amount": "1000"}],
-        }]
+        payload = [
+            {
+                "name": unique_name("Summary Broker"),
+                "initial_balances": [{"code": "EUR", "amount": "1000"}],
+                }
+            ]
         create_resp = await client.post(
             f"{API_BASE}/brokers",
             json=payload,
             timeout=TIMEOUT,
-        )
+            )
         broker_id = create_resp.json()["results"][0]["broker_id"]
 
         # Get summary
         response = await client.get(
             f"{API_BASE}/brokers/{broker_id}/summary",
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -244,7 +247,7 @@ async def test_get_broker_summary_not_found(test_server):
         response = await client.get(
             f"{API_BASE}/brokers/999999/summary",
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 404
 
@@ -267,7 +270,7 @@ async def test_patch_broker(test_server):
             f"{API_BASE}/brokers",
             json=payload,
             timeout=TIMEOUT,
-        )
+            )
         broker_id = create_resp.json()["results"][0]["broker_id"]
 
         # Update
@@ -276,7 +279,7 @@ async def test_patch_broker(test_server):
             f"{API_BASE}/brokers/{broker_id}",
             json=update_payload,
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -296,7 +299,7 @@ async def test_patch_broker_not_found(test_server):
             f"{API_BASE}/brokers/999999",
             json={"description": "Should fail"},
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -312,24 +315,28 @@ async def test_patch_broker_flag_validation(test_server):
 
     async with httpx.AsyncClient() as client:
         # Create broker with overdraft enabled
-        payload = [{
-            "name": unique_name("Flag Validation Broker"),
-            "allow_cash_overdraft": True,
-        }]
+        payload = [
+            {
+                "name": unique_name("Flag Validation Broker"),
+                "allow_cash_overdraft": True,
+                }
+            ]
         create_resp = await client.post(
             f"{API_BASE}/brokers",
             json=payload,
             timeout=TIMEOUT,
-        )
+            )
         broker_id = create_resp.json()["results"][0]["broker_id"]
 
         # Create withdrawal (negative balance)
-        tx_payload = [{
-            "broker_id": broker_id,
-            "type": "WITHDRAWAL",
-            "date": date.today().isoformat(),
-            "cash": {"code": "EUR", "amount": "-500"},
-        }]
+        tx_payload = [
+            {
+                "broker_id": broker_id,
+                "type": "WITHDRAWAL",
+                "date": date.today().isoformat(),
+                "cash": {"code": "EUR", "amount": "-500"},
+                }
+            ]
         await client.post(f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT)
 
         # Try to disable overdraft - should fail
@@ -337,7 +344,7 @@ async def test_patch_broker_flag_validation(test_server):
             f"{API_BASE}/brokers/{broker_id}",
             json={"allow_cash_overdraft": False},
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -363,7 +370,7 @@ async def test_delete_brokers(test_server):
             f"{API_BASE}/brokers",
             json=payload,
             timeout=TIMEOUT,
-        )
+            )
         broker_id = create_resp.json()["results"][0]["broker_id"]
 
         # Delete
@@ -371,7 +378,7 @@ async def test_delete_brokers(test_server):
             f"{API_BASE}/brokers",
             params={"ids": [broker_id]},
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -387,15 +394,17 @@ async def test_delete_brokers_with_tx_no_force(test_server):
 
     async with httpx.AsyncClient() as client:
         # Create broker with balance (creates transaction)
-        payload = [{
-            "name": unique_name("Has TX Broker"),
-            "initial_balances": [{"code": "EUR", "amount": "1000"}],
-        }]
+        payload = [
+            {
+                "name": unique_name("Has TX Broker"),
+                "initial_balances": [{"code": "EUR", "amount": "1000"}],
+                }
+            ]
         create_resp = await client.post(
             f"{API_BASE}/brokers",
             json=payload,
             timeout=TIMEOUT,
-        )
+            )
         broker_id = create_resp.json()["results"][0]["broker_id"]
 
         # Try to delete without force
@@ -403,7 +412,7 @@ async def test_delete_brokers_with_tx_no_force(test_server):
             f"{API_BASE}/brokers",
             params={"ids": [broker_id], "force": False},
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -420,15 +429,17 @@ async def test_delete_brokers_with_tx_force(test_server):
 
     async with httpx.AsyncClient() as client:
         # Create broker with balance
-        payload = [{
-            "name": unique_name("Force Delete Broker"),
-            "initial_balances": [{"code": "EUR", "amount": "1000"}],
-        }]
+        payload = [
+            {
+                "name": unique_name("Force Delete Broker"),
+                "initial_balances": [{"code": "EUR", "amount": "1000"}],
+                }
+            ]
         create_resp = await client.post(
             f"{API_BASE}/brokers",
             json=payload,
             timeout=TIMEOUT,
-        )
+            )
         broker_id = create_resp.json()["results"][0]["broker_id"]
 
         # Delete with force
@@ -436,7 +447,7 @@ async def test_delete_brokers_with_tx_force(test_server):
             f"{API_BASE}/brokers",
             params={"ids": [broker_id], "force": True},
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -444,4 +455,3 @@ async def test_delete_brokers_with_tx_force(test_server):
         assert data["results"][0]["transactions_deleted"] >= 1
 
         print_success("✓ Force deleted broker with transactions")
-

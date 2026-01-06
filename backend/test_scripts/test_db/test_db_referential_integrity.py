@@ -16,10 +16,10 @@ Test Coverage:
 - All CHECK constraints (using check_constraints_hook)
 """
 import sys
+import time
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-import time
 
 import pytest
 
@@ -362,13 +362,18 @@ def test_unique_constraint_price_history_asset_date():
 
         session.rollback()
 
-        # Cleanup
-        session.exec(
+        # Cleanup - price1 is still in DB (committed before the failed price2)
+        # Need to re-query since session state was rolled back
+        existing_prices = session.exec(
             select(PriceHistory).where(PriceHistory.asset_id == asset_id)
-            )
-        for p in session.exec(select(PriceHistory).where(PriceHistory.asset_id == asset_id)).all():
+            ).all()
+        for p in existing_prices:
             session.delete(p)
-        session.delete(asset)
+
+        # Re-fetch asset since session was rolled back
+        asset_to_delete = session.get(Asset, asset_id)
+        if asset_to_delete:
+            session.delete(asset_to_delete)
         session.commit()
 
 
@@ -541,4 +546,3 @@ def test_check_constraints_present():
         f"Missing CHECK constraints: {missing_constraints}"
 
     print("✅ All CHECK constraints present in database")
-

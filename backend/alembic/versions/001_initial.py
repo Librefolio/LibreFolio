@@ -217,7 +217,7 @@ def upgrade() -> None:
                                 updated_at             DATETIME       NOT NULL,
                                 FOREIGN KEY (broker_id) REFERENCES brokers (id),
                                 FOREIGN KEY (asset_id) REFERENCES assets (id),
-                                FOREIGN KEY (related_transaction_id) REFERENCES transactions (id) 
+                                FOREIGN KEY (related_transaction_id) REFERENCES transactions (id)
                                     DEFERRABLE INITIALLY DEFERRED
                             )"""))
     print("  ✓ Table created")

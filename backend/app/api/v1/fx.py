@@ -51,7 +51,7 @@ from backend.app.services.fx import (
 from backend.app.services.provider_registry import FXProviderRegistry
 
 logger = get_logger(__name__)
-fx_router = APIRouter(prefix="/fx", tags=["FX"])
+fx_router = APIRouter(prefix="/fx", tags=["FX (Forex)"])
 router_providers = APIRouter(prefix="/providers", tags=["FX Providers"])
 router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 

@@ -6,14 +6,15 @@ This directory contains sample broker report files for testing BRIM plugins.
 
 ### Generic CSV Plugin (`broker_generic_csv`)
 
-| File                        | Description                                        | Expected Result                         |
-|-----------------------------|----------------------------------------------------|-----------------------------------------|
-| `generic_simple.csv`        | Basic CSV with all standard columns                | All rows parsed successfully            |
-| `generic_dates.csv`         | Various date formats (ISO, DD/MM/YYYY, etc.)       | All dates parsed correctly              |
-| `generic_types.csv`         | All transaction types (BUY, SELL, DIVIDEND, etc.)  | All types mapped correctly              |
-| `generic_multilang.csv`     | Mixed language headers (English, Italian, Spanish) | Headers auto-detected                   |
-| `generic_with_warnings.csv` | Some invalid rows                                  | Valid rows parsed, warnings for invalid |
-| `generic_with_assets.csv`   | Transactions with asset identifiers                | Fake IDs assigned, assets classified    |
+| File                        | Description                                        | Expected Result                                 |
+|-----------------------------|----------------------------------------------------|-------------------------------------------------|
+| `generic_simple.csv`        | Basic CSV with all standard columns                | All rows parsed successfully                    |
+| `generic_dates.csv`         | Various date formats (ISO, DD/MM/YYYY, etc.)       | All dates parsed correctly                      |
+| `generic_types.csv`         | All transaction types (BUY, SELL, DIVIDEND, etc.)  | All types mapped correctly                      |
+| `generic_multilang.csv`     | Mixed language headers (English, Italian, Spanish) | Headers auto-detected                           |
+| `generic_with_warnings.csv` | Some invalid rows                                  | Valid rows parsed, warnings for invalid         |
+| `generic_with_assets.csv`   | Transactions with asset identifiers                | Fake IDs assigned, assets classified            |
+| `generic_no_asset.csv`      | No asset column - requires manual mapping          | UNKNOWN_ROW_* fake IDs for asset-required types |
 
 ## File Format
 

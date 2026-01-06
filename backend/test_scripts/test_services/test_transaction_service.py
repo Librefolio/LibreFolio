@@ -6,7 +6,6 @@ See checklist: 01_test_broker_transaction_subsystem.md - Category 3
 
 Reference: backend/app/services/transaction_service.py
 """
-import asyncio
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
@@ -21,24 +20,23 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup test database BEFORE importing app modules
 from backend.test_scripts.test_db_config import setup_test_database
+
 setup_test_database()
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from backend.app.db.models import Transaction, TransactionType, Broker, Asset, AssetType
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import (
     TXCreateItem,
     TXUpdateItem,
     TXDeleteItem,
     TXQueryParams,
-)
+    )
 from backend.app.services.transaction_service import (
     TransactionService,
-    BalanceValidationError,
-)
+    )
 from backend.app.utils.datetime_utils import utcnow
 
 
@@ -70,7 +68,7 @@ async def test_broker(session) -> Broker:
         allow_asset_shorting=False,
         created_at=utcnow(),
         updated_at=utcnow(),
-    )
+        )
     session.add(broker)
     await session.flush()
     return broker
@@ -86,7 +84,7 @@ async def test_broker_overdraft(session) -> Broker:
         allow_asset_shorting=False,
         created_at=utcnow(),
         updated_at=utcnow(),
-    )
+        )
     session.add(broker)
     await session.flush()
     return broker
@@ -102,7 +100,7 @@ async def test_broker_shorting(session) -> Broker:
         allow_asset_shorting=True,
         created_at=utcnow(),
         updated_at=utcnow(),
-    )
+        )
     session.add(broker)
     await session.flush()
     return broker
@@ -117,7 +115,7 @@ async def test_asset(session) -> Asset:
         currency="EUR",
         created_at=utcnow(),
         updated_at=utcnow(),
-    )
+        )
     session.add(asset)
     await session.flush()
     return asset
@@ -135,12 +133,14 @@ class TestCreateBulkBasic:
         """TX-U-001: Create one DEPOSIT transaction."""
         service = TransactionService(session)
 
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            type=TransactionType.DEPOSIT,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("1000")),
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("1000")),
+                )
+            ]
 
         response = await service.create_bulk(items)
 
@@ -161,20 +161,20 @@ class TestCreateBulkBasic:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("5000")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="USD", amount=Decimal("3000")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
 
@@ -186,12 +186,14 @@ class TestCreateBulkBasic:
         """TX-U-003: Created transaction has timestamps set."""
         service = TransactionService(session)
 
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            type=TransactionType.DEPOSIT,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("100")),
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+                )
+            ]
 
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
@@ -207,13 +209,15 @@ class TestCreateBulkBasic:
         """TX-U-004: Create transaction with tags."""
         service = TransactionService(session)
 
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            type=TransactionType.DEPOSIT,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("100")),
-            tags=["income", "salary"],
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+                tags=["income", "salary"],
+                )
+            ]
 
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
@@ -227,13 +231,15 @@ class TestCreateBulkBasic:
         """TX-U-005: Create transaction with description."""
         service = TransactionService(session)
 
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            type=TransactionType.DEPOSIT,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("100")),
-            description="Monthly salary deposit",
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+                description="Monthly salary deposit",
+                )
+            ]
 
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
@@ -257,13 +263,15 @@ class TestCreateBulkLinkResolution:
 
         # First need some asset in the source broker
         # Add via ADJUSTMENT (doesn't need cash)
-        setup_items = [TXCreateItem(
-            broker_id=test_broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.ADJUSTMENT,
-            date=date.today() - timedelta(days=1),
-            quantity=Decimal("100"),
-        )]
+        setup_items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date.today() - timedelta(days=1),
+                quantity=Decimal("100"),
+                )
+            ]
         await service.create_bulk(setup_items)
         await session.flush()
 
@@ -277,7 +285,7 @@ class TestCreateBulkLinkResolution:
                 date=date.today(),
                 quantity=Decimal("-10"),  # Out from broker 1
                 link_uuid=link_uuid,
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_overdraft.id,
                 asset_id=test_asset.id,
@@ -285,8 +293,8 @@ class TestCreateBulkLinkResolution:
                 date=date.today(),
                 quantity=Decimal("10"),  # In to broker 2
                 link_uuid=link_uuid,
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
 
@@ -309,23 +317,27 @@ class TestCreateBulkLinkResolution:
         service = TransactionService(session)
 
         # Setup asset
-        setup_items = [TXCreateItem(
-            broker_id=test_broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.ADJUSTMENT,
-            date=date.today() - timedelta(days=1),
-            quantity=Decimal("100"),
-        )]
+        setup_items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date.today() - timedelta(days=1),
+                quantity=Decimal("100"),
+                )
+            ]
         await service.create_bulk(setup_items)
 
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.TRANSFER,
-            date=date.today(),
-            quantity=Decimal("-10"),
-            link_uuid="lonely-link-uuid",
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.TRANSFER,
+                date=date.today(),
+                quantity=Decimal("-10"),
+                link_uuid="lonely-link-uuid",
+                )
+            ]
 
         response = await service.create_bulk(items)
 
@@ -353,14 +365,14 @@ class TestCreateBulkBalanceValidation:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-200")),
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
 
@@ -380,14 +392,14 @@ class TestCreateBulkBalanceValidation:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_overdraft.id,
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-200")),
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
 
@@ -406,7 +418,7 @@ class TestCreateBulkBalanceValidation:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("10000")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 asset_id=test_asset.id,
@@ -414,7 +426,7 @@ class TestCreateBulkBalanceValidation:
                 date=date.today(),
                 quantity=Decimal("10"),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 asset_id=test_asset.id,
@@ -422,8 +434,8 @@ class TestCreateBulkBalanceValidation:
                 date=date.today(),
                 quantity=Decimal("-20"),
                 cash=Currency(code="EUR", amount=Decimal("1000")),
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
 
@@ -442,7 +454,7 @@ class TestCreateBulkBalanceValidation:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("10000")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_shorting.id,
                 asset_id=test_asset.id,
@@ -450,7 +462,7 @@ class TestCreateBulkBalanceValidation:
                 date=date.today(),
                 quantity=Decimal("10"),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_shorting.id,
                 asset_id=test_asset.id,
@@ -458,8 +470,8 @@ class TestCreateBulkBalanceValidation:
                 date=date.today(),
                 quantity=Decimal("-20"),
                 cash=Currency(code="EUR", amount=Decimal("1000")),
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
 
@@ -486,14 +498,14 @@ class TestQueryFiltering:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="USD", amount=Decimal("200")),
-            ),
-        ]
+                ),
+            ]
         await service.create_bulk(items)
 
         params = TXQueryParams(broker_id=test_broker.id)
@@ -513,14 +525,14 @@ class TestQueryFiltering:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_overdraft.id,
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("200")),
-            ),
-        ]
+                ),
+            ]
         await service.create_bulk(items)
 
         params = TXQueryParams(broker_id=test_broker.id)
@@ -539,20 +551,20 @@ class TestQueryFiltering:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("1000")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-100")),
-            ),
-        ]
+                ),
+            ]
         await service.create_bulk(items)
 
         params = TXQueryParams(
             broker_id=test_broker.id,
             types=[TransactionType.DEPOSIT]
-        )
+            )
         results = await service.query(params)
 
         assert all(r.type == TransactionType.DEPOSIT for r in results)
@@ -568,14 +580,14 @@ class TestQueryFiltering:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="USD", amount=Decimal("200")),
-            ),
-        ]
+                ),
+            ]
         await service.create_bulk(items)
 
         params = TXQueryParams(broker_id=test_broker.id, currency="EUR")
@@ -597,13 +609,15 @@ class TestQueryBidirectionalLink:
         service = TransactionService(session)
 
         # Setup asset
-        setup_items = [TXCreateItem(
-            broker_id=test_broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.ADJUSTMENT,
-            date=date.today() - timedelta(days=1),
-            quantity=Decimal("100"),
-        )]
+        setup_items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date.today() - timedelta(days=1),
+                quantity=Decimal("100"),
+                )
+            ]
         await service.create_bulk(setup_items)
 
         # Create transfer pair
@@ -616,7 +630,7 @@ class TestQueryBidirectionalLink:
                 date=date.today(),
                 quantity=Decimal("-10"),
                 link_uuid=link_uuid,
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_overdraft.id,
                 asset_id=test_asset.id,
@@ -624,8 +638,8 @@ class TestQueryBidirectionalLink:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
         tx1_id = response.results[0].transaction_id
@@ -644,12 +658,14 @@ class TestQueryBidirectionalLink:
         """TX-U-042: Unlinked transaction has related_transaction_id = None."""
         service = TransactionService(session)
 
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            type=TransactionType.DEPOSIT,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("100")),
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+                )
+            ]
 
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
@@ -668,13 +684,15 @@ class TestQueryBidirectionalLink:
         service = TransactionService(session)
 
         # Setup asset
-        setup_items = [TXCreateItem(
-            broker_id=test_broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.ADJUSTMENT,
-            date=date.today() - timedelta(days=1),
-            quantity=Decimal("100"),
-        )]
+        setup_items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date.today() - timedelta(days=1),
+                quantity=Decimal("100"),
+                )
+            ]
         await service.create_bulk(setup_items)
 
         # Create transfer pair
@@ -687,7 +705,7 @@ class TestQueryBidirectionalLink:
                 date=date.today(),
                 quantity=Decimal("-10"),
                 link_uuid=link_uuid,
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_overdraft.id,
                 asset_id=test_asset.id,
@@ -695,8 +713,8 @@ class TestQueryBidirectionalLink:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
         tx1_id = response.results[0].transaction_id
@@ -710,7 +728,9 @@ class TestQueryBidirectionalLink:
         assert tx1_db.related_transaction_id == tx2_id, \
             f"TX1 should point to TX2. Got: {tx1_db.related_transaction_id}"
         assert tx2_db.related_transaction_id == tx1_id, \
-            f"TX2 should point to TX1. Got: {tx2_db.related_transaction_id}"# ============================================================================
+            f"TX2 should point to TX1. Got: {tx2_db.related_transaction_id}"  # ============================================================================
+
+
 # 3.6 GET_BY_ID
 # ============================================================================
 
@@ -722,12 +742,14 @@ class TestGetById:
         """TX-U-050: Get existing transaction returns TXReadItem."""
         service = TransactionService(session)
 
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            type=TransactionType.DEPOSIT,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("100")),
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+                )
+            ]
 
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
@@ -759,12 +781,14 @@ class TestUpdateBulk:
         """TX-U-060: Update transaction date."""
         service = TransactionService(session)
 
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            type=TransactionType.DEPOSIT,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("100")),
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+                )
+            ]
 
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
@@ -784,12 +808,14 @@ class TestUpdateBulk:
         """TX-U-064: Update description."""
         service = TransactionService(session)
 
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            type=TransactionType.DEPOSIT,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("100")),
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+                )
+            ]
 
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
@@ -829,12 +855,14 @@ class TestDeleteBulkBasic:
         service = TransactionService(session)
 
         # Create and then delete
-        items = [TXCreateItem(
-            broker_id=test_broker.id,
-            type=TransactionType.DEPOSIT,
-            date=date.today(),
-            cash=Currency(code="EUR", amount=Decimal("100")),
-        )]
+        items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("100")),
+                )
+            ]
 
         response = await service.create_bulk(items)
         tx_id = response.results[0].transaction_id
@@ -863,13 +891,15 @@ class TestDeleteBulkLinkedEnforcement:
         service = TransactionService(session)
 
         # Setup asset
-        setup_items = [TXCreateItem(
-            broker_id=test_broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.ADJUSTMENT,
-            date=date.today() - timedelta(days=1),
-            quantity=Decimal("100"),
-        )]
+        setup_items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date.today() - timedelta(days=1),
+                quantity=Decimal("100"),
+                )
+            ]
         await service.create_bulk(setup_items)
 
         # Create transfer pair
@@ -882,7 +912,7 @@ class TestDeleteBulkLinkedEnforcement:
                 date=date.today(),
                 quantity=Decimal("-10"),
                 link_uuid=link_uuid,
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_overdraft.id,
                 asset_id=test_asset.id,
@@ -890,8 +920,8 @@ class TestDeleteBulkLinkedEnforcement:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
         tx1_id = response.results[0].transaction_id
@@ -910,13 +940,15 @@ class TestDeleteBulkLinkedEnforcement:
         service = TransactionService(session)
 
         # Setup asset
-        setup_items = [TXCreateItem(
-            broker_id=test_broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.ADJUSTMENT,
-            date=date.today() - timedelta(days=1),
-            quantity=Decimal("100"),
-        )]
+        setup_items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date.today() - timedelta(days=1),
+                quantity=Decimal("100"),
+                )
+            ]
         await service.create_bulk(setup_items)
 
         # Create transfer pair
@@ -929,7 +961,7 @@ class TestDeleteBulkLinkedEnforcement:
                 date=date.today(),
                 quantity=Decimal("-10"),
                 link_uuid=link_uuid,
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_overdraft.id,
                 asset_id=test_asset.id,
@@ -937,8 +969,8 @@ class TestDeleteBulkLinkedEnforcement:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
         tx1_id = response.results[0].transaction_id
@@ -962,13 +994,15 @@ class TestDeleteBulkLinkedEnforcement:
         service = TransactionService(session)
 
         # Setup asset
-        setup_items = [TXCreateItem(
-            broker_id=test_broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.ADJUSTMENT,
-            date=date.today() - timedelta(days=1),
-            quantity=Decimal("100"),
-        )]
+        setup_items = [
+            TXCreateItem(
+                broker_id=test_broker.id,
+                asset_id=test_asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date.today() - timedelta(days=1),
+                quantity=Decimal("100"),
+                )
+            ]
         await service.create_bulk(setup_items)
 
         # Create transfer pair with bidirectional linking
@@ -981,7 +1015,7 @@ class TestDeleteBulkLinkedEnforcement:
                 date=date.today(),
                 quantity=Decimal("-10"),
                 link_uuid=link_uuid,
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker_overdraft.id,
                 asset_id=test_asset.id,
@@ -989,8 +1023,8 @@ class TestDeleteBulkLinkedEnforcement:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
-            ),
-        ]
+                ),
+            ]
 
         response = await service.create_bulk(items)
         tx1_id = response.results[0].transaction_id
@@ -1035,20 +1069,20 @@ class TestBalanceQueryMethods:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("1000")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("500")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-200")),
-            ),
-        ]
+                ),
+            ]
         await service.create_bulk(items)
 
         balances = await service.get_cash_balances(test_broker.id)
@@ -1066,7 +1100,7 @@ class TestBalanceQueryMethods:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("10000")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 asset_id=test_asset.id,
@@ -1074,7 +1108,7 @@ class TestBalanceQueryMethods:
                 date=date.today(),
                 quantity=Decimal("100"),
                 cash=Currency(code="EUR", amount=Decimal("-5000")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 asset_id=test_asset.id,
@@ -1082,8 +1116,8 @@ class TestBalanceQueryMethods:
                 date=date.today(),
                 quantity=Decimal("-30"),
                 cash=Currency(code="EUR", amount=Decimal("1500")),
-            ),
-        ]
+                ),
+            ]
         await service.create_bulk(items)
 
         holdings = await service.get_asset_holdings(test_broker.id)
@@ -1101,7 +1135,7 @@ class TestBalanceQueryMethods:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("10000")),
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 asset_id=test_asset.id,
@@ -1109,7 +1143,7 @@ class TestBalanceQueryMethods:
                 date=date.today(),
                 quantity=Decimal("10"),
                 cash=Currency(code="EUR", amount=Decimal("-500")),  # Negative = spent
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 asset_id=test_asset.id,
@@ -1117,12 +1151,11 @@ class TestBalanceQueryMethods:
                 date=date.today(),
                 quantity=Decimal("20"),
                 cash=Currency(code="EUR", amount=Decimal("-1200")),
-            ),
-        ]
+                ),
+            ]
         await service.create_bulk(items)
 
         cost_basis = await service.get_cost_basis(test_broker.id, test_asset.id)
 
         # Should be absolute value of sum: |-500| + |-1200| = 1700
         assert cost_basis == Decimal("1700")
-

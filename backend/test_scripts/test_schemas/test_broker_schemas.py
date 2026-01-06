@@ -17,7 +17,7 @@ from backend.app.schemas.brokers import (
     BRReadItem,
     BRUpdateItem,
     BRDeleteItem,
-)
+    )
 from backend.app.schemas.common import Currency
 
 
@@ -85,8 +85,8 @@ class TestInitialBalancesValidation:
             initial_balances=[
                 Currency(code="EUR", amount=Decimal("5000")),
                 Currency(code="USD", amount=Decimal("3000")),
-            ]
-        )
+                ]
+            )
         assert len(broker.initial_balances) == 2
         assert broker.initial_balances[0].amount == Decimal("5000")
 
@@ -97,8 +97,8 @@ class TestInitialBalancesValidation:
             initial_balances=[
                 Currency(code="EUR", amount=Decimal("5000")),
                 Currency(code="USD", amount=Decimal("0")),  # Should be filtered
-            ]
-        )
+                ]
+            )
         assert len(broker.initial_balances) == 1
         assert broker.initial_balances[0].code == "EUR"
 
@@ -108,8 +108,8 @@ class TestInitialBalancesValidation:
             name="Test Broker",
             initial_balances=[
                 Currency(code="EUR", amount=Decimal("-1000")),  # Should be filtered
-            ]
-        )
+                ]
+            )
         # All filtered out, becomes None
         assert broker.initial_balances is None
 
@@ -118,12 +118,12 @@ class TestInitialBalancesValidation:
         broker = BRCreateItem(
             name="Test Broker",
             initial_balances=[
-                Currency(code="EUR", amount=Decimal("5000")),   # Keep
+                Currency(code="EUR", amount=Decimal("5000")),  # Keep
                 Currency(code="USD", amount=Decimal("-1000")),  # Filter
-                Currency(code="GBP", amount=Decimal("0")),      # Filter
-                Currency(code="CHF", amount=Decimal("2000")),   # Keep
-            ]
-        )
+                Currency(code="GBP", amount=Decimal("0")),  # Filter
+                Currency(code="CHF", amount=Decimal("2000")),  # Keep
+                ]
+            )
         assert len(broker.initial_balances) == 2
         codes = [c.code for c in broker.initial_balances]
         assert "EUR" in codes
@@ -254,7 +254,7 @@ class TestBrokerReadItem:
             "allow_asset_shorting": False,
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
-        }
+            }
         broker = BRReadItem(**data)
         assert broker.id == 1
         assert broker.name == "Test Broker"
@@ -270,8 +270,7 @@ class TestBrokerReadItem:
             "allow_asset_shorting": False,
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
-        }
+            }
         broker = BRReadItem(**data)
         assert broker.description is None
         assert broker.portal_url is None
-
