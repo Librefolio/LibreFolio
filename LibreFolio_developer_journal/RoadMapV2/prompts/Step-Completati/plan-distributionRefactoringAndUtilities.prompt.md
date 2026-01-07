@@ -375,8 +375,8 @@ def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, De
 ### 3.1 Aggiungere imports (dopo le import esistenti, ~linea 30):
 
 ```python
-from backend.app.utils.sector_normalization import FinancialSector, normalize_sector
-from backend.app.utils.geo_normalization import normalize_country_keys
+from backend.app.utils.sector_fin_utils import FinancialSector, normalize_sector
+from backend.app.utils.geo_utils import normalize_country_keys
 ```
 
 ### 3.2 Prima di FAScheduledYieldParams (linea ~390), aggiungere BaseDistribution:
@@ -677,17 +677,17 @@ from fastapi import APIRouter, Query
 from backend.app.schemas.utilities import (
     CountryNormalizationResponse,
     SectorListResponse
-)
-from backend.app.utils.sector_normalization import FinancialSector
-from backend.app.utils.geo_normalization import normalize_country_to_iso3
+    )
+from backend.app.utils.sector_fin_utils import FinancialSector
+from backend.app.utils.geo_utils import normalize_country_to_iso3
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
 
 
 @router.get("/countries/normalize", response_model=CountryNormalizationResponse)
 async def normalize_country(
-    name: str = Query(..., min_length=1, description="Country name or code to normalize")
-):
+        name: str = Query(..., min_length=1, description="Country name or code to normalize")
+        ):
     """
     Normalize country name/code to ISO-3166-A3 format.
     
@@ -721,7 +721,7 @@ async def normalize_country(
             query=name,
             iso3_codes=[iso3_code],
             match_type="exact"
-        )
+            )
     except ValueError as e:
         # Could be a region - for now return error
         # TODO: Implement region mapping
@@ -730,13 +730,13 @@ async def normalize_country(
             iso3_codes=[],
             match_type="not_found",
             error=str(e)
-        )
+            )
 
 
 @router.get("/sectors", response_model=SectorListResponse)
 async def list_sectors(
-    include_other: bool = Query(True, description="Include 'Other' in the list")
-):
+        include_other: bool = Query(True, description="Include 'Other' in the list")
+        ):
     """
     Get list of all standard financial sectors.
     
@@ -774,11 +774,11 @@ async def list_sectors(
         sectors = FinancialSector.list_all_with_other()
     else:
         sectors = FinancialSector.list_all()
-    
+
     return SectorListResponse(
         sectors=sectors,
         count=len(sectors)
-    )
+        )
 ```
 
 ---

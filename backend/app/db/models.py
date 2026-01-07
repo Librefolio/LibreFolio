@@ -418,6 +418,7 @@ class Asset(SQLModel, table=True):
 
     @field_validator('classification_params')
     def validate_classification_params(cls, v):
+        # Lazy import to avoid circular dependency
         from backend.app.schemas.assets import FAClassificationParams
         if v is None:
             return v

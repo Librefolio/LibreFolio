@@ -33,7 +33,7 @@ price points, asset metadata, and scheduled investment calculations.
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_EVEN
 from enum import Enum
 from typing import Optional, List
 
@@ -44,8 +44,8 @@ from backend.app.db.models import AssetType, IdentifierType
 from backend.app.schemas.common import BackwardFillInfo, BaseDeleteResult, BaseBulkResponse, OldNew, Currency
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
-from backend.app.utils.geo_normalization import normalize_country_keys
-from backend.app.utils.sector_normalization import normalize_sector
+from backend.app.utils.geo_utils import normalize_country_keys
+from backend.app.utils.sector_fin_utils import normalize_sector
 from backend.app.utils.validation_utils import validate_compound_frequency
 
 
@@ -377,8 +377,6 @@ class BaseDistribution(BaseModel):
         Raises:
             ValueError: If validation fails
         """
-        from decimal import ROUND_HALF_EVEN
-
         if not weights and not allow_empty:
             raise ValueError("Distribution cannot be empty")
 
@@ -568,7 +566,6 @@ class FAClassificationParams(BaseModel):
         ...     sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")})
         ... )
     """
-    # TODO: rendere la classe non strettamente vincolata, per permettere potenziali aggiunte plugin fuori standard
     model_config = ConfigDict(extra="forbid")
 
     short_description: Optional[str] = None
@@ -752,7 +749,6 @@ class FAAinfoFiltersRequest(BaseModel):
         """Validate currency using Currency.validate_code()."""
         if v is None:
             return None
-        from backend.app.schemas.common import Currency
         return Currency.validate_code(v)
 
     @field_validator('isin')

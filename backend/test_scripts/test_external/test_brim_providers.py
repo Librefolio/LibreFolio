@@ -14,14 +14,13 @@ These tests do NOT require a database connection.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Set
 
 import pytest
 
-from backend.app.services.provider_registry import BRIMProviderRegistry
-from backend.app.services.brim_provider import BRIMProvider
 from backend.app.schemas.transactions import TXCreateItem
-
+from backend.app.services.brim_provider import BRIMProvider
+from backend.app.services.provider_registry import BRIMProviderRegistry
 
 # =============================================================================
 # CONSTANTS
@@ -403,7 +402,7 @@ class TestGenericCSVPlugin:
         "generic_dates.csv",
         "generic_types.csv",
         "generic_with_assets.csv",
-    ]
+        ]
 
     def test_required_generic_files_exist(self):
         """Verify all required generic sample files exist."""
@@ -473,4 +472,3 @@ class TestGenericCSVPlugin:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
-

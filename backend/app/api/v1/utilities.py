@@ -6,6 +6,7 @@ Provides helper endpoints for:
 - Sector classification listing
 - Other frontend utilities
 """
+import pycountry
 from fastapi import APIRouter, Query
 
 from backend.app.schemas.utilities import (
@@ -14,8 +15,8 @@ from backend.app.schemas.utilities import (
     CountryListItem,
     SectorListResponse
     )
-from backend.app.utils.geo_normalization import normalize_country_to_iso3, is_region, expand_region
-from backend.app.utils.sector_normalization import FinancialSector
+from backend.app.utils.geo_utils import normalize_country_to_iso3, is_region, expand_region
+from backend.app.utils.sector_fin_utils import FinancialSector
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
 
@@ -133,7 +134,7 @@ async def list_sectors(
         count=len(sectors)
         )
 
-
+# TODO: portare contenuto di questa funzione dentro backend/app/utils/geo_utils.py e estendere la possibilità di essere milti lingua con babel
 @router.get("/countries", response_model=CountryListResponse)
 async def list_countries(
     language: str = Query("en", description="Language for country names (default: en)")
@@ -169,8 +170,6 @@ async def list_countries(
     }
     ```
     """
-    import pycountry
-
     countries = []
     for country in pycountry.countries:
         countries.append(CountryListItem(

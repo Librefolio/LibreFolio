@@ -180,7 +180,7 @@
         @field_validator('__root__')
         @classmethod
         def validate_geographic_area(cls, v):
-            from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
+            from backend.app.utils.geo_utils import validate_and_normalize_geographic_area
             return validate_and_normalize_geographic_area(v)
     ```
 
@@ -206,7 +206,7 @@
         def validate_geo_area(cls, v):
             if v is None:
                 return None
-            from backend.app.utils.geo_normalization import validate_and_normalize_geographic_area
+            from backend.app.utils.geo_utils import validate_and_normalize_geographic_area
             return validate_and_normalize_geographic_area(v)
     ```
 

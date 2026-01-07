@@ -141,9 +141,9 @@ class BRIMFileInfo(BaseModel):
     size_bytes: int = Field(..., ge=0, description="File size in bytes")
     status: BRIMFileStatus = Field(..., description="Current processing status")
     uploaded_at: datetime = Field(..., description="UTC timestamp when uploaded")
-    processed_at: Optional[datetime] = Field(default=None,description="UTC timestamp when processed")
-    compatible_plugins: List[str] = Field(default_factory=list,description="Plugin codes that can parse this file")
-    error_message: Optional[str] = Field(default=None,description="Error description if processing failed")
+    processed_at: Optional[datetime] = Field(default=None, description="UTC timestamp when processed")
+    compatible_plugins: List[str] = Field(default_factory=list, description="Plugin codes that can parse this file")
+    error_message: Optional[str] = Field(default=None, description="Error description if processing failed")
 
 
 # =============================================================================
@@ -164,8 +164,8 @@ class BRIMPluginInfo(BaseModel):
     code: str = Field(..., description="Unique plugin identifier")
     name: str = Field(..., description="Human-readable plugin name")
     description: str = Field(..., description="Plugin description for UI")
-    supported_extensions: List[str] = Field(default_factory=list,description="Supported file extensions (e.g., ['.csv', '.xlsx'])")
-    icon_url: Optional[str] = Field(None,description="URL to broker icon/logo (absolute URL or relative path)")
+    supported_extensions: List[str] = Field(default_factory=list, description="Supported file extensions (e.g., ['.csv', '.xlsx'])")
+    icon_url: Optional[str] = Field(None, description="URL to broker icon/logo (absolute URL or relative path)")
 
 
 # =============================================================================
@@ -182,7 +182,7 @@ class BRIMAssetCandidate(BaseModel):
     symbol: Optional[str] = Field(None, description="Asset symbol/ticker")
     isin: Optional[str] = Field(None, description="Asset ISIN")
     name: str = Field(..., description="Asset display name")
-    match_confidence: BRIMMatchConfidence = Field(...,description="How confident we are this is the right asset")
+    match_confidence: BRIMMatchConfidence = Field(..., description="How confident we are this is the right asset")
 
 
 class BRIMAssetMapping(BaseModel):
@@ -199,8 +199,8 @@ class BRIMAssetMapping(BaseModel):
     extracted_symbol: Optional[str] = Field(None, description="Symbol extracted from file")
     extracted_isin: Optional[str] = Field(None, description="ISIN extracted from file")
     extracted_name: Optional[str] = Field(None, description="Name extracted from file")
-    candidates: List[BRIMAssetCandidate] = Field(default_factory=list,description="Possible asset matches from database (empty = not found)")
-    selected_asset_id: Optional[int] = Field(None,description="Auto-set if 1 candidate, else None (user must choose)")
+    candidates: List[BRIMAssetCandidate] = Field(default_factory=list, description="Possible asset matches from database (empty = not found)")
+    selected_asset_id: Optional[int] = Field(None, description="Auto-set if 1 candidate, else None (user must choose)")
 
 
 # =============================================================================
@@ -227,7 +227,7 @@ class BRIMTXDuplicateCandidate(BaseModel):
     """
     tx_row_index: int = Field(..., description="Row index in parsed transactions list")
     tx_parsed: TXCreateItem = Field(..., description="The parsed transaction")
-    tx_existing_matches: List[BRIMDuplicateMatch] = Field(default_factory=list,description="Existing transactions that match")
+    tx_existing_matches: List[BRIMDuplicateMatch] = Field(default_factory=list, description="Existing transactions that match")
 
 
 class BRIMDuplicateReport(BaseModel):
@@ -239,9 +239,9 @@ class BRIMDuplicateReport(BaseModel):
     - tx_possible_duplicates: Might be duplicates (key fields match, no description match)
     - tx_likely_duplicates: Very likely duplicates (key fields + description match)
     """
-    tx_unique_indices: List[int] = Field(default_factory=list,description="Row indices of unique (non-duplicate) transactions")
-    tx_possible_duplicates: List[BRIMTXDuplicateCandidate] = Field(default_factory=list,description="Transactions that might be duplicates (POSSIBLE level)")
-    tx_likely_duplicates: List[BRIMTXDuplicateCandidate] = Field(default_factory=list,description="Transactions very likely to be duplicates (LIKELY level)")
+    tx_unique_indices: List[int] = Field(default_factory=list, description="Row indices of unique (non-duplicate) transactions")
+    tx_possible_duplicates: List[BRIMTXDuplicateCandidate] = Field(default_factory=list, description="Transactions that might be duplicates (POSSIBLE level)")
+    tx_likely_duplicates: List[BRIMTXDuplicateCandidate] = Field(default_factory=list, description="Transactions very likely to be duplicates (LIKELY level)")
 
 
 # =============================================================================
@@ -259,7 +259,7 @@ class BRIMParseRequest(BaseModel):
         plugin_code: Plugin to use for parsing. Use 'auto' or omit for auto-detection.
         broker_id: Target broker ID for the transactions
     """
-    plugin_code: str = Field(default="auto",description="Plugin code to use for parsing. Use 'auto' for automatic detection.")
+    plugin_code: str = Field(default="auto", description="Plugin code to use for parsing. Use 'auto' for automatic detection.")
     broker_id: int = Field(..., gt=0, description="Target broker ID")
 
 
@@ -283,10 +283,10 @@ class BRIMParseResponse(BaseModel):
     file_id: str = Field(..., description="UUID of the parsed file")
     plugin_code: str = Field(..., description="Plugin used for parsing")
     broker_id: int = Field(..., gt=0, description="Target broker ID")
-    transactions: List[TXCreateItem] = Field(default_factory=list,description="Parsed transactions (may have fake asset IDs)")
-    asset_mappings: List[BRIMAssetMapping] = Field(default_factory=list,description="Fake asset ID → candidate real assets mapping")
-    duplicates: Optional[BRIMDuplicateReport] = Field(default=None,description="Duplicate detection results")
-    warnings: List[str] = Field(default_factory=list,description="Parser warnings (skipped rows, ambiguous data, etc.)")
+    transactions: List[TXCreateItem] = Field(default_factory=list, description="Parsed transactions (may have fake asset IDs)")
+    asset_mappings: List[BRIMAssetMapping] = Field(default_factory=list, description="Fake asset ID → candidate real assets mapping")
+    duplicates: Optional[BRIMDuplicateReport] = Field(default=None, description="Duplicate detection results")
+    warnings: List[str] = Field(default_factory=list, description="Parser warnings (skipped rows, ambiguous data, etc.)")
 
 # NOTE: No BRIMImportRequest schema needed.
 # After parsing, the client should:

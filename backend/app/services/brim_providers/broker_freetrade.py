@@ -167,7 +167,7 @@ class FreetradeBrokerProvider(BRIMProvider):
         self,
         file_path: Path,
         broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Freetrade CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -298,9 +298,9 @@ class FreetradeBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-            )
+                )
             for fake_id, info in extracted_assets.items()
-        }
+            }
 
         logger.info(
             "Freetrade file parsed",

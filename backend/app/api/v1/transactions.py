@@ -31,6 +31,7 @@ from backend.app.schemas.transactions import (
     TX_TYPE_METADATA,
     )
 from backend.app.services.transaction_service import TransactionService
+from backend.app.utils.datetime_utils import parse_ISO_date
 
 logger = get_logger(__name__)
 
@@ -113,7 +114,6 @@ async def query_transactions(
     # Build date range if provided
     date_range = None
     if date_start:
-        from backend.app.utils.datetime_utils import parse_ISO_date
         start = parse_ISO_date(date_start)
         end = parse_ISO_date(date_end) if date_end else None
         date_range = DateRangeModel(start=start, end=end)

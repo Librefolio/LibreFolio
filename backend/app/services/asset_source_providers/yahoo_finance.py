@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Dict
 
+
 from backend.app.db import IdentifierType
 from backend.app.logging_config import get_logger
 from backend.app.utils.datetime_utils import utcnow
@@ -294,8 +295,7 @@ class YahooFinanceProvider(AssetSourceProvider):
 
         try:
             # Use yfinance Search for real search functionality
-            from yfinance import Search
-            search_result = Search(query)
+            search_result = yf.Search(query)
 
             results = []
             quotes = getattr(search_result, 'quotes', []) or []

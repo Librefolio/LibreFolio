@@ -9,23 +9,19 @@ Tests for Broker Report Import Manager API endpoints:
 - POST /brokers/import/files/{id}/parse: Parse file
 - GET /brokers/import/plugins: List available plugins
 
-See checklist: 01_test_brim_plan.md - Categories 5, 6, 7
+See checklist: 01_test_brim_plan.md - Categories 5, 6
+Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
 Reference: backend/app/api/v1/brokers.py
 """
 import io
 import uuid
-from datetime import date
-from decimal import Decimal
 from pathlib import Path
-from typing import List
 
 import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.db.models import TransactionType
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_info
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -61,7 +57,7 @@ def test_broker_id(test_server) -> int:
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
             assert response.status_code == 200, f"Failed to create broker: {response.text}"
             data = response.json()
 
@@ -109,7 +105,7 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200, f"Upload failed: {response.text}"
             data = response.json()
@@ -129,7 +125,7 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 400
             assert "empty" in response.json()["detail"].lower()
@@ -144,14 +140,14 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
             assert upload_response.status_code == 200
 
             # List files
             list_response = await client.get(
                 f"{API_BASE}/brokers/import/files",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert list_response.status_code == 200
             data = list_response.json()
@@ -168,13 +164,13 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
 
             # Filter by 'uploaded' status
             response = await client.get(
                 f"{API_BASE}/brokers/import/files?status=uploaded",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -191,14 +187,14 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
             file_id = upload_response.json()["file_id"]
 
             # Get file info
             response = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -212,7 +208,7 @@ class TestFileStorage:
             response = await client.get(
                 f"{API_BASE}/brokers/import/files/nonexistent-uuid",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 404
 
@@ -226,14 +222,14 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
             file_id = upload_response.json()["file_id"]
 
             # Delete file
             delete_response = await client.delete(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert delete_response.status_code == 200
             assert delete_response.json()["success"] is True
@@ -242,7 +238,7 @@ class TestFileStorage:
             get_response = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-            )
+                )
             assert get_response.status_code == 404
 
 
@@ -263,7 +259,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
             file_id = upload_response.json()["file_id"]
 
             # Parse file
@@ -272,9 +268,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": test_broker_id,
-                },
+                    },
                 timeout=TIMEOUT,
-            )
+                )
 
             if parse_response.status_code != 200:
                 print(f"Parse error: {parse_response.text}")
@@ -298,7 +294,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
             file_id = upload_response.json()["file_id"]
 
             # Parse
@@ -307,9 +303,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": test_broker_id,
-                },
+                    },
                 timeout=TIMEOUT,
-            )
+                )
 
             assert parse_response.status_code == 200
             data = parse_response.json()
@@ -332,7 +328,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
             file_id = upload_response.json()["file_id"]
 
             # Parse
@@ -341,9 +337,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": test_broker_id,
-                },
+                    },
                 timeout=TIMEOUT,
-            )
+                )
 
             assert parse_response.status_code == 200
             data = parse_response.json()
@@ -363,9 +359,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": test_broker_id,
-                },
+                    },
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 404
 
@@ -379,7 +375,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-            )
+                )
             file_id = upload_response.json()["file_id"]
 
             # Parse with invalid plugin
@@ -388,9 +384,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "nonexistent_plugin",
                     "broker_id": test_broker_id,
-                },
+                    },
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 400
             assert "plugin" in response.json()["detail"].lower()
@@ -406,7 +402,7 @@ class TestPluginsEndpoint:
             response = await client.get(
                 f"{API_BASE}/brokers/import/plugins",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -426,119 +422,9 @@ class TestPluginsEndpoint:
 
 
 # ============================================================================
-# CATEGORY 7: END-TO-END IMPORT TESTS
-# ============================================================================
-
-class TestE2EImport:
-    """End-to-end import flow tests."""
-
-    @pytest.mark.asyncio
-    async def test_full_import_flow_deposits_only(self, test_server, test_broker_id):
-        """E2E-001: Full import flow for deposit-only file (no assets)."""
-        async with httpx.AsyncClient() as client:
-            # Create CSV with only deposits/withdrawals (no assets)
-            csv_content = b"""date,type,quantity,amount,currency,description
-2025-01-10,DEPOSIT,0,10000.00,EUR,Initial deposit for E2E test
-2025-01-11,WITHDRAWAL,0,-500.00,EUR,Test withdrawal
-"""
-
-            # Step 1: Upload
-            files = {"file": ("e2e_deposits.csv", io.BytesIO(csv_content), "text/csv")}
-            upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload",
-                files=files,
-                timeout=TIMEOUT,
-            )
-            assert upload_response.status_code == 200
-            file_id = upload_response.json()["file_id"]
-
-            # Step 2: Parse
-            parse_response = await client.post(
-                f"{API_BASE}/brokers/import/files/{file_id}/parse",
-                json={
-                    "plugin_code": "broker_generic_csv",
-                    "broker_id": test_broker_id,
-                },
-                timeout=TIMEOUT,
-            )
-            assert parse_response.status_code == 200
-            parse_data = parse_response.json()
-
-            transactions = parse_data["transactions"]
-            assert len(transactions) == 2
-
-            # All transactions should be unique (first import)
-            assert len(parse_data["duplicates"]["tx_unique_indices"]) == 2
-
-            # Step 3: Import via transactions endpoint
-            import_response = await client.post(
-                f"{API_BASE}/transactions",
-                json=transactions,
-                timeout=TIMEOUT,
-            )
-
-            # Transactions endpoint returns 200 with success_count
-            assert import_response.status_code == 200, f"Import failed: {import_response.text}"
-            import_data = import_response.json()
-            assert import_data["success_count"] == 2
-
-    @pytest.mark.asyncio
-    async def test_reimport_detects_duplicates(self, test_server, test_broker_id):
-        """E2E-004: Re-importing same file shows transactions as duplicates."""
-        async with httpx.AsyncClient() as client:
-            # Create unique CSV
-            unique_id = uuid.uuid4().hex[:8]
-            csv_content = f"""date,type,quantity,amount,currency,description
-2025-01-20,DEPOSIT,0,7777.00,EUR,Unique deposit {unique_id}
-""".encode()
-
-            # First import
-            files1 = {"file": (f"dup_test_{unique_id}.csv", io.BytesIO(csv_content), "text/csv")}
-            upload1 = await client.post(
-                f"{API_BASE}/brokers/import/upload",
-                files=files1,
-                timeout=TIMEOUT,
-            )
-            file_id1 = upload1.json()["file_id"]
-
-            parse1 = await client.post(
-                f"{API_BASE}/brokers/import/files/{file_id1}/parse",
-                json={"plugin_code": "broker_generic_csv", "broker_id": test_broker_id},
-                timeout=TIMEOUT,
-            )
-            tx1 = parse1.json()["transactions"]
-
-            # Import first time
-            await client.post(f"{API_BASE}/transactions", json=tx1, timeout=TIMEOUT)
-
-            # Second upload of same content
-            files2 = {"file": (f"dup_test_{unique_id}_2.csv", io.BytesIO(csv_content), "text/csv")}
-            upload2 = await client.post(
-                f"{API_BASE}/brokers/import/upload",
-                files=files2,
-                timeout=TIMEOUT,
-            )
-            file_id2 = upload2.json()["file_id"]
-
-            # Parse again - should detect duplicate
-            parse2 = await client.post(
-                f"{API_BASE}/brokers/import/files/{file_id2}/parse",
-                json={"plugin_code": "broker_generic_csv", "broker_id": test_broker_id},
-                timeout=TIMEOUT,
-            )
-
-            duplicates = parse2.json()["duplicates"]
-
-            # Should have duplicates detected
-            total_duplicates = (
-                len(duplicates.get("tx_possible_duplicates", [])) +
-                len(duplicates.get("tx_likely_duplicates", []))
-            )
-            assert total_duplicates >= 1, "Should detect duplicate transaction"
-
-
-# ============================================================================
-# CLEANUP - handled by test server shutdown
+# Note: E2E tests are in test_e2e/test_brim_e2e.py
 # ============================================================================
 
 
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "-s"])

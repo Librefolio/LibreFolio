@@ -53,7 +53,11 @@ from backend.app.services import brim_provider
 from backend.app.services.brim_provider import BRIMParseError
 from backend.app.services.broker_service import BrokerService
 from backend.app.services.provider_registry import BRIMProviderRegistry
-
+from backend.app.schemas.brim import BRIMAssetMapping
+from backend.app.services.brim_provider import (
+    search_asset_candidates,
+    detect_tx_duplicates
+    )
 logger = get_logger(__name__)
 
 broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
@@ -384,12 +388,6 @@ async def parse_file(
     Note: Asset mapping and duplicate detection are done in CORE,
     not in the plugin. Plugins only parse the file format.
     """
-    from backend.app.schemas.brim import BRIMAssetMapping
-    from backend.app.services.brim_provider import (
-        search_asset_candidates,
-        detect_tx_duplicates
-        )
-
     # Determine plugin to use
     plugin_code = request.plugin_code
     if plugin_code == "auto":

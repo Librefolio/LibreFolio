@@ -92,7 +92,7 @@ def _country_name_to_iso3(country_name: str) -> Optional[str]:
         return None
 
     try:
-        from backend.app.utils.geo_normalization import normalize_country_to_iso3
+        from backend.app.utils.geo_utils import normalize_country_to_iso3
         return normalize_country_to_iso3(country_name)
     except (ValueError, ImportError) as e:
         logger.debug(f"Could not normalize country '{country_name}': {e}")

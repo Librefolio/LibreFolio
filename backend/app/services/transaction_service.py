@@ -37,6 +37,8 @@ from backend.app.schemas.transactions import (
     TXBulkDeleteResponse,
     )
 from backend.app.utils.datetime_utils import utcnow
+from sqlalchemy import or_
+from backend.app.schemas.transactions import tags_to_csv
 
 
 class BalanceValidationError(Exception):
@@ -189,7 +191,6 @@ class TransactionService:
         if params.tags:
             # Match any tag (OR logic)
             # Tags are stored as CSV, so we use LIKE for each tag
-            from sqlalchemy import or_
             tag_conditions = []
             for tag in params.tags:
                 tag_conditions.append(Transaction.tags.contains(tag))
@@ -267,7 +268,6 @@ class TransactionService:
                     tx.currency = item.cash.code
 
                 if item.tags is not None:
-                    from backend.app.schemas.transactions import tags_to_csv
                     tx.tags = tags_to_csv(item.tags)
 
                 if item.description is not None:

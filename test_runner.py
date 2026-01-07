@@ -638,19 +638,19 @@ def utils_compound_interest(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Compound interest tests", verbose=verbose)
 
 
-def utils_geo_normalization(verbose: bool = False, test_names: list = None) -> bool:
+def utils_geo_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test geographic area normalization utilities (country codes, weight validation)."""
     print_section("Utils: Geographic Area Normalization")
-    print_info("Testing: backend/app/utils/geo_normalization.py")
+    print_info("Testing: backend/app/utils/geo_utils.py")
     print_info("Tests: ISO-3166-A3 normalization, weight parsing, validation pipeline")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_geo_normalization.py", test_names)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_geo_utils.py", test_names)
     return run_command(cmd, "Geographic area normalization tests", verbose=verbose)
 
 
 def utils_sector_normalization(verbose: bool = False, test_names: list = None) -> bool:
     """Test FinancialSector enum and sector normalization."""
     print_section("Utils: Sector Normalization")
-    print_info("Testing: backend/app/utils/sector_normalization.py")
+    print_info("Testing: backend/app/utils/sector_fin_utils.py")
     print_info("Tests: FinancialSector enum, aliases, normalization, validation")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_sector_normalization.py", test_names)
     return run_command(cmd, "Sector normalization tests", verbose=verbose)
@@ -667,7 +667,7 @@ def utils_all(verbose: bool = False) -> bool:
         ("Financial Math", lambda: utils_financial_math(verbose)),
         ("Day Count Conventions", lambda: utils_day_count(verbose)),
         ("Compound Interest", lambda: utils_compound_interest(verbose)),
-        ("Geographic Area Normalization", lambda: utils_geo_normalization(verbose)),
+        ("Geographic Area Normalization", lambda: utils_geo_utils(verbose)),
         ("Sector Normalization", lambda: utils_sector_normalization(verbose)),
         # Note: Currency, Distribution Models, Scheduled Investment Schemas, and
         # FAGeographicArea Integration have been moved to schemas category
@@ -1072,9 +1072,25 @@ def api_test(verbose: bool = False) -> bool:
         print_error(f"{total - passed} test(s) failed")
         return False
 
+
+def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Run BRIM E2E tests.
+
+    Tests complete import flow: Upload → Parse → Import transactions.
+    """
+    print_section("E2E Test: BRIM Import Flow")
+    print_info("Testing complete broker report import workflow")
+    print_info("Tests: Upload → Parse → Asset Mapping → Duplicate Detection → Import")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_brim_e2e.py", test_names)
+    return run_command(cmd, "BRIM E2E tests", verbose=verbose)
+
+
 def e2e_test(verbose: bool = False) -> bool:
     """
-    Run all API tests.
+    Run all E2E tests.
     """
     print_header("LibreFolio E2E Tests with API interaction")
     print_info("Testing E2E workflow using REST API endpoints")
@@ -1082,6 +1098,7 @@ def e2e_test(verbose: bool = False) -> bool:
 
     tests = [
         ("E2E search-to-prices Flow", lambda: search2prices_test(verbose)),
+        ("E2E BRIM Import Flow", lambda: e2e_brim(verbose)),
         ]
 
     results = []
@@ -1091,11 +1108,11 @@ def e2e_test(verbose: bool = False) -> bool:
 
         if not success:
             print_error(f"Test failed: {test_name}")
-            print_warning("Stopping API tests execution")
+            print_warning("Stopping E2E tests execution")
             break
 
     # Summary
-    print_section("API Tests Summary")
+    print_section("E2E Tests Summary")
     passed = sum(1 for _, success in results if success)
     total = len(results)
 
@@ -1666,6 +1683,11 @@ These tests verify complete end-to-end workflows via REST API:
                       📋 Prerequisites: Database created, providers configured
                       💡 Tests: Search asset, create asset, assign provider, refresh metadata, refresh prices
                       Note: Server will be automatically started and stopped by test
+
+  brim              - Test complete BRIM import flow: Upload → Parse → Import
+                      📋 Prerequisites: Database created
+                      💡 Tests: Upload file, parse with plugin, asset mapping, duplicate detection, import
+                      Note: Server will be automatically started and stopped by test
                       
   all               - Run all E2E tests with API interaction
 
@@ -1675,7 +1697,7 @@ These tests verify complete end-to-end workflows via REST API:
 
     e2e_parser.add_argument(
         "action",
-        choices=["search-to-prices", "all"],
+        choices=["search-to-prices", "brim", "all"],
         help="End-to-End tests with API interaction (auto-starts server if needed)"
         )
 
@@ -1842,7 +1864,7 @@ def main():
         elif args.action == "compound-interest":
             success = utils_compound_interest(verbose=verbose, test_names=test_names)
         elif args.action == "geo-normalization":
-            success = utils_geo_normalization(verbose=verbose, test_names=test_names)
+            success = utils_geo_utils(verbose=verbose, test_names=test_names)
         elif args.action == "sector-normalization":
             success = utils_sector_normalization(verbose=verbose, test_names=test_names)
         elif args.action == "all":
@@ -1890,6 +1912,8 @@ def main():
         # E2E tests
         if args.action == "search-to-prices":
             success = search2prices_test(verbose=verbose, test_names=test_names)
+        elif args.action == "brim":
+            success = e2e_brim(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = e2e_test(verbose=verbose)
 
