@@ -1,11 +1,11 @@
 """
-Geographic area normalization utilities for LibreFolio.
+Geographic area utilities for LibreFolio.
 
 Provides functions to normalize country codes to ISO-3166-A3 format.
 Weight validation and quantization is handled by BaseDistribution in schemas/assets.py.
 
 Usage:
-    from backend.app.utils.geo_normalization import normalize_country_keys
+    from backend.app.utils.geo_utils import normalize_country_keys
 
     # Normalize country codes in distribution
     data = {"USA": "0.6", "Italy": 0.3, "GB": 0.1}
@@ -223,27 +223,3 @@ def normalize_country_keys(data: dict[str, Any]) -> dict[str, Decimal]:
         normalized[iso3_code] = weight
 
     return normalized
-
-
-# Backward compatibility - delegate to FAGeographicArea
-def validate_and_normalize_geographic_area(data: dict[str, Any]) -> dict[str, Decimal]:
-    """
-    Validate and normalize geographic area weight distribution.
-
-    DEPRECATED: This function is kept for backward compatibility.
-    New code should use FAGeographicArea(distribution=data).distribution
-
-    Args:
-        data: Dict of country codes/names to weights
-
-    Returns:
-        Dict of ISO-3166-A3 codes to quantized Decimal weights
-
-    Raises:
-        ValueError: If validation fails
-    """
-    # Import here to avoid circular dependency
-    from backend.app.schemas.assets import FAGeographicArea
-
-    geo_area = FAGeographicArea(distribution=data)
-    return geo_area.distribution

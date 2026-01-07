@@ -295,7 +295,7 @@ def test_identifier_columns_match_enum():
         FAAssetPatchItem,
         FAinfoResponse,
         FAAinfoFiltersRequest
-    )
+        )
 
     print("\n  Checking IdentifierType → Schema field mappings:")
 
@@ -306,7 +306,7 @@ def test_identifier_columns_match_enum():
         (FAAssetCreateItem, "identifier_{}", "Create schema field"),
         (FAAssetPatchItem, "identifier_{}", "Patch schema field"),
         (FAinfoResponse, "identifier_{}", "Response schema field"),
-    ]
+        ]
 
     # FAAinfoFiltersRequest uses short names (isin, ticker, etc.)
     # We check that separately with a mapping
@@ -318,7 +318,7 @@ def test_identifier_columns_match_enum():
         "FIGI": "figi",
         "UUID": "uuid",
         "OTHER": "identifier_other",  # OTHER uses identifier_other (partial match)
-    }
+        }
 
     all_missing = []
 
