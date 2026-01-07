@@ -326,7 +326,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         self,
         file_path: Path,
         broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """
         Parse CSV file and return transactions, warnings, and extracted assets.
 
@@ -399,9 +399,9 @@ class GenericCSVBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-            )
+                )
             for fake_id, info in self._extracted_assets_raw.items()
-        }
+            }
 
         return transactions, warnings, extracted_assets
 
@@ -599,4 +599,3 @@ class GenericCSVBrokerProvider(BRIMProvider):
             "extracted_isin": None,
             "extracted_name": identifier
             }
-

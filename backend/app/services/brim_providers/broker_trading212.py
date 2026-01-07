@@ -187,7 +187,7 @@ class Trading212BrokerProvider(BRIMProvider):
         self,
         file_path: Path,
         broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Trading212 CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -337,9 +337,9 @@ class Trading212BrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-            )
+                )
             for fake_id, info in extracted_assets.items()
-        }
+            }
 
         logger.info(
             "Trading212 file parsed",

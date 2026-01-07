@@ -480,8 +480,6 @@ class AssetSourceManager:
         if not assignments:
             return []
 
-        from backend.app.schemas.provider import FAProviderAssignmentResult
-
         results = []
         asset_ids = [a.asset_id for a in assignments]
 
@@ -490,7 +488,6 @@ class AssetSourceManager:
 
         # Bulk insert new assignments
         new_assignments = []
-        import json
         for a in assignments:
             raw_params = a.provider_params
             if isinstance(raw_params, dict):
@@ -546,8 +543,6 @@ class AssetSourceManager:
                                 patch_item.asset_id = assignment.asset_id
 
                                 # Apply metadata to asset
-                                import json
-
                                 changes_count = 0
 
                                 # Update asset_type if provided
@@ -976,7 +971,6 @@ class AssetSourceManager:
     @staticmethod
     def _parse_provider_params(raw_params):
         """Parse provider params from DB (string/dict) into dict safely."""
-        import json
         if raw_params is None:
             return {}
         if isinstance(raw_params, dict):
@@ -1215,7 +1209,6 @@ class AssetSourceManager:
 
             # Parse provider_params if stored as JSON string
             try:
-                import json
                 if isinstance(provider_params, str):
                     provider_params = json.loads(provider_params)
             except Exception:

@@ -44,11 +44,20 @@ from backend.app.schemas.brim import (
     BRIMAssetMapping,
     BRIMExtractedAssetInfo,
     BRIMDuplicateReport,
-)
+    )
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.provider_registry import BRIMProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
-
+from backend.app.schemas.assets import FAAinfoFiltersRequest
+from backend.app.schemas.brim import BRIMAssetCandidate, BRIMMatchConfidence
+from backend.app.services.asset_source import AssetCRUDService
+from decimal import Decimal
+from sqlalchemy import select, and_
+from backend.app.db.models import Transaction
+from backend.app.schemas.brim import (
+    BRIMDuplicateReport, BRIMDuplicateMatch, BRIMDuplicateLevel,
+    BRIMTXDuplicateCandidate, is_fake_asset_id
+    )
 logger = structlog.get_logger(__name__)
 
 
@@ -266,7 +275,7 @@ class BRIMProvider(ABC):
         self,
         file_path: Path,
         broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, "BRIMExtractedAssetInfo"]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, "BRIMExtractedAssetInfo"]]:
         """
         Parse file and return transactions, warnings, and extracted asset info.
 
@@ -809,10 +818,6 @@ async def search_asset_candidates(
         - If exactly 1 candidate: auto_selected_id = that asset's ID
         - Otherwise: auto_selected_id = None
     """
-    from backend.app.schemas.assets import FAAinfoFiltersRequest
-    from backend.app.schemas.brim import BRIMAssetCandidate, BRIMMatchConfidence
-    from backend.app.services.asset_source import AssetCRUDService
-
     candidates = []
 
     # Priority 1: ISIN exact match (EXACT confidence)
@@ -909,14 +914,6 @@ async def detect_tx_duplicates(
     Returns:
         BRIMDuplicateReport with categorized transactions
     """
-    from decimal import Decimal
-    from sqlalchemy import select, and_
-    from backend.app.db.models import Transaction
-    from backend.app.schemas.brim import (
-        BRIMDuplicateReport, BRIMDuplicateMatch, BRIMDuplicateLevel,
-        BRIMTXDuplicateCandidate, is_fake_asset_id
-        )
-
     tx_unique_indices = []
     tx_possible_duplicates = []
     tx_likely_duplicates = []

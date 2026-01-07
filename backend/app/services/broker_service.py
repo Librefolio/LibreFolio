@@ -42,6 +42,7 @@ from backend.app.services.transaction_service import (
     BalanceValidationError,
     )
 from backend.app.utils.datetime_utils import utcnow, today_date
+from backend.app.db.models import PriceHistory
 
 
 class BrokerService:
@@ -225,8 +226,6 @@ class BrokerService:
 
     async def _get_latest_price(self, asset_id: int) -> Optional[Decimal]:
         """Get the latest price for an asset from price_history."""
-        from backend.app.db.models import PriceHistory
-
         stmt = (
             select(PriceHistory.close)
             .where(PriceHistory.asset_id == asset_id)
