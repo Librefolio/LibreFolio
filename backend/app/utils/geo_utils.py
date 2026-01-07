@@ -14,15 +14,21 @@ Usage:
 
 Key Features:
 - Country code normalization (name/ISO-2/ISO-3 → ISO-3166-A3)
+- Multi-language country name support via Babel
+- Flag emoji generation from ISO-2 codes
 - Weight parsing (int/float/str → Decimal)
 - Duplicate detection after normalization
 """
 from decimal import Decimal
-from typing import Any
+from typing import Any, List
 
 import pycountry
+import structlog
 
 from backend.app.utils.decimal_utils import parse_decimal_value
+from backend.app.utils.translation_utils import get_babel_locale
+
+logger = structlog.get_logger(__name__)
 
 # Region to country mapping for expansion
 # When a region code is detected, it can be expanded to multiple country ISO-3 codes
@@ -100,6 +106,160 @@ def expand_region(region_code: str) -> list[str]:
     return REGION_MAPPING.get(region_code.upper(), [])
 
 
+def iso2_to_flag_emoji(iso2: str) -> str:
+    """
+    Convert ISO-3166-A2 country code to flag emoji.
+
+    Uses Regional Indicator Symbols (U+1F1E6 to U+1F1FF) to form flag emoji.
+
+    Args:
+        iso2: ISO-3166-A2 code (e.g., "US", "IT", "FR")
+
+    Returns:
+        Flag emoji string (e.g., "🇺🇸", "🇮🇹", "🇫🇷")
+
+    Examples:
+        >>> iso2_to_flag_emoji("US")
+        "🇺🇸"
+        >>> iso2_to_flag_emoji("IT")
+        "🇮🇹"
+    """
+    if not iso2 or len(iso2) != 2:
+        return "🏳️"  # White flag for invalid codes
+
+    iso2_upper = iso2.upper()
+    # Convert each letter to Regional Indicator Symbol
+    return chr(0x1F1E6 + ord(iso2_upper[0]) - ord('A')) + chr(0x1F1E6 + ord(iso2_upper[1]) - ord('A'))
+
+
+def list_countries(language: str = 'en') -> List[dict]:
+    """
+    List all countries with localized names and flag emoji.
+
+    Args:
+        language: ISO 639-1 language code (default: 'en')
+
+    Returns:
+        List of dicts with 'iso3', 'iso2', 'name', 'flag_emoji'
+    """
+    locale = get_babel_locale(language)
+    countries = []
+
+    for country in pycountry.countries:
+        iso2 = country.alpha_2
+        iso3 = country.alpha_3
+
+        # Get localized name from Babel
+        try:
+            name = locale.territories.get(iso2, country.name)
+        except Exception:
+            name = country.name
+
+        countries.append({
+            "iso3": iso3,
+            "iso2": iso2,
+            "name": name,
+            "flag_emoji": iso2_to_flag_emoji(iso2)
+            })
+
+    return sorted(countries, key=lambda x: x['name'])
+
+
+def normalize_country_multilang(input_str: str, language: str = 'en') -> dict:
+    """
+    Normalize country input to ISO-3166-A3 code(s) with multi-language support.
+
+    Accepts:
+    - ISO-3166-A3 codes (e.g., USA, GBR, ITA)
+    - ISO-3166-A2 codes (e.g., US, GB, IT)
+    - Country names in any supported language
+
+    Args:
+        input_str: Country identifier in any format
+        language: Language for name matching (default: 'en')
+
+    Returns:
+        Dict with:
+        - query: Original input
+        - iso3_codes: List of matching ISO-3 codes (usually 1, may be multiple if ambiguous)
+        - match_type: 'exact', 'multi-match', 'region', 'not_found'
+        - error: Error message if any
+    """
+    if not input_str:
+        return {
+            "query": input_str,
+            "iso3_codes": [],
+            "match_type": "not_found",
+            "error": "Empty input"
+            }
+
+    input_clean = input_str.strip().upper()
+
+    # Check if it's a region code
+    if is_region(input_clean):
+        return {
+            "query": input_str,
+            "iso3_codes": expand_region(input_clean),
+            "match_type": "region",
+            "error": None
+            }
+
+    # Try ISO-3166-A3 first
+    if len(input_clean) == 3:
+        try:
+            country = pycountry.countries.get(alpha_3=input_clean)
+            if country:
+                return {
+                    "query": input_str,
+                    "iso3_codes": [country.alpha_3],
+                    "match_type": "exact",
+                    "error": None
+                    }
+        except Exception:
+            pass
+
+    # Try ISO-3166-A2
+    if len(input_clean) == 2:
+        try:
+            country = pycountry.countries.get(alpha_2=input_clean)
+            if country:
+                return {
+                    "query": input_str,
+                    "iso3_codes": [country.alpha_3],
+                    "match_type": "exact",
+                    "error": None
+                    }
+        except Exception:
+            pass
+
+    # Try fuzzy name search
+    try:
+        results = pycountry.countries.search_fuzzy(input_str)
+        if len(results) == 1:
+            return {
+                "query": input_str,
+                "iso3_codes": [results[0].alpha_3],
+                "match_type": "exact",
+                "error": None
+                }
+        elif len(results) > 1:
+            return {
+                "query": input_str,
+                "iso3_codes": [c.alpha_3 for c in results],
+                "match_type": "multi-match",
+                "error": f"Multiple countries match '{input_str}'"
+                }
+    except LookupError:
+        pass
+
+    return {
+        "query": input_str,
+        "iso3_codes": [],
+        "match_type": "not_found",
+        "error": f"No country found for '{input_str}'"
+        }
+
+
 def normalize_country_to_iso3(country_input: str) -> str:
     """
     Normalize country code/name to ISO-3166-A3 format.
@@ -127,8 +287,6 @@ def normalize_country_to_iso3(country_input: str) -> str:
         "USA"
         >>> normalize_country_to_iso3("Italy")
         "ITA"
-    # TODO: capire come rendere la ricerca multi lingua
-    # TODO: se la ricerca risontra più elementi, ritornare una lista e far scegliere all'utente
     """
     if not country_input or not isinstance(country_input, str):
         raise ValueError(f"Invalid country input: {country_input} (must be non-empty string)")

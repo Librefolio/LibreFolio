@@ -21,6 +21,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Broker, Transaction, TransactionType, Asset
+from backend.app.db.models import PriceHistory
 from backend.app.schemas.brokers import (
     BRCreateItem,
     BRReadItem,
@@ -42,7 +43,6 @@ from backend.app.services.transaction_service import (
     BalanceValidationError,
     )
 from backend.app.utils.datetime_utils import utcnow, today_date
-from backend.app.db.models import PriceHistory
 
 
 class BrokerService:

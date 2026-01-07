@@ -9,6 +9,8 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Dict
 
+from mergedeep import merge
+
 from backend.app.db import IdentifierType
 from backend.app.logging_config import get_logger
 
@@ -53,19 +55,23 @@ class CSSScraperProvider(AssetSourceProvider):
         return [
             {
                 'identifier': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en',
+                'identifier_type': IdentifierType.OTHER,
                 'provider_params': {
                     'current_css_selector': '.summary-value strong',
                     'currency': 'EUR',
                     'decimal_format': 'us'  # English version uses US format
-                    }
+                    },
+                'expected_symbol': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en'
                 },
             {
                 'identifier': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=it',
+                'identifier_type': IdentifierType.OTHER,
                 'provider_params': {
                     'current_css_selector': '.summary-value strong',
                     'currency': 'EUR',
                     'decimal_format': 'eu'  # Italian version uses EU format
-                    }
+                    },
+                'expected_symbol': 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=it'
                 }
             ]
 
@@ -106,13 +112,16 @@ class CSSScraperProvider(AssetSourceProvider):
         user_agent = provider_params.get('user_agent', 'LibreFolio/1.0')
 
         try:
-            # Fetch page
-            # TODO: far passare heder e altri parametri di httpx via provider_params e usare quelli sotto come fallback
-            headers = {
+            # Build headers: start with defaults, then merge custom headers from params
+            default_headers = {
                 'User-Agent': user_agent,
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
                 }
+
+            # Merge custom headers from provider_params (custom headers override defaults)
+            custom_headers = provider_params.get('headers', {})
+            headers = merge({}, default_headers, custom_headers)
 
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.get(url, headers=headers, follow_redirects=True)

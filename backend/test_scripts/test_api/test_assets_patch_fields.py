@@ -265,7 +265,53 @@ async def test_patch_icon_url(test_server):
 async def test_patch_icon_url_clear(test_server):
     """Test 5: PATCH icon_url=None to clear field."""
     print_section("Test 5: PATCH /assets - icon_url clear")
-    # TODO: Implementare test
+
+    async with httpx.AsyncClient() as client:
+        # Step 1: Create asset with icon_url
+        create_item = FAAssetCreateItem(
+            display_name=f"Icon Clear Test {unique_id('ICONCLR')}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            icon_url="http://example.com/icon.png"
+            )
+        create_resp = await client.post(
+            f"{API_BASE}/assets",
+            json=[create_item.model_dump(mode="json")],
+            timeout=TIMEOUT
+            )
+        assert create_resp.status_code == 201, f"Create failed: {create_resp.status_code}"
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+        print_info(f"  Created asset {asset_id} with icon_url")
+
+        # Step 2: Verify icon_url is set
+        read_resp = await client.get(f"{API_BASE}/assets/{asset_id}", timeout=TIMEOUT)
+        assert read_resp.status_code == 200
+        asset_data = FAAssetMetadataResponse(**read_resp.json())
+        assert asset_data.icon_url == "http://example.com/icon.png"
+        print_info(f"  ✓ icon_url verified: {asset_data.icon_url}")
+
+        # Step 3: PATCH icon_url to None
+        patch_item = FAAssetPatchItem(
+            asset_id=asset_id,
+            icon_url=None
+            )
+        patch_resp = await client.patch(
+            f"{API_BASE}/assets",
+            json=[patch_item.model_dump(mode="json")],
+            timeout=TIMEOUT
+            )
+        assert patch_resp.status_code == 200, f"PATCH failed: {patch_resp.status_code}"
+        patch_data = FABulkAssetPatchResponse(**patch_resp.json())
+        assert patch_data.success_count == 1
+        print_success("✓ PATCH request succeeded")
+
+        # Step 4: Verify icon_url is cleared (None)
+        read_after = await client.get(f"{API_BASE}/assets/{asset_id}", timeout=TIMEOUT)
+        assert read_after.status_code == 200
+        asset_after = FAAssetMetadataResponse(**read_after.json())
+        assert asset_after.icon_url is None, f"Expected None, got {asset_after.icon_url}"
+        print_success("✓ icon_url cleared successfully (None)")
 
 
 # ============================================================

@@ -433,8 +433,6 @@ class AssetSourceProvider(ABC):
         """
         return None  # Default: metadata not supported
 
-    # TODO: definire metodo da far chiamare periodicamente ad un job garbage collector, per ripulire eventuali cache
-
 
 # ============================================================================
 # ASSET SOURCE MANAGER
@@ -1778,8 +1776,11 @@ class AssetCRUDService:
                             value = FAClassificationParams(**merged).model_dump(mode='json', exclude_none=True)
                             if not value:  # If result is empty dict, set to None
                                 value = None
-                    if not value:
-                        value = None  # Explicitly set to None if falsey value (e.g., empty string)
+
+                    # Convert empty strings/dicts to None, but preserve boolean False
+                    if not isinstance(value, bool) and not value:
+                        value = None
+
                     if isinstance(value, dict):
                         value = json.dumps(value)  # Transform dict as serialized JSON
                     oldVal = getattr(asset, field)

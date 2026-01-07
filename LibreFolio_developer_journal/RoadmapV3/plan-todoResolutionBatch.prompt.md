@@ -2,6 +2,105 @@
 
 Risoluzione di 11 TODO pendenti con cache centralizzata (cachetools), localizzazione multi-lingua (Babel), e miglioramenti ai test.
 
+**Status: ✅ COMPLETATO - Tutti gli 11 step implementati**
+
+---
+
+## Steps Implementativi
+
+### ✅ 1. **Aggiungere `cachetools` al Pipfile e creare cache utils**
+
+- ✅ Aggiunto `cachetools = "*"` al Pipfile (pre-esistente)
+- ✅ Creato [`backend/app/utils/cache_utils.py`](backend/app/utils/cache_utils.py) con wrapper `TTLCache`
+- ✅ Funzione `get_ttl_cache(name: str, maxsize: int, ttl: int) -> TTLCache` per cache con auto-expire
+
+### ✅ 2. **Refactoring cache nei provider asset**
+
+- ✅ [yahoo_finance.py](backend/app/services/asset_source_providers/yahoo_finance.py): Sostituito `_search_cache` dict con `TTLCache`
+- ✅ [justetf.py](backend/app/services/asset_source_providers/justetf.py): Sostituito `CachedData` class con `TTLCache`
+- ✅ Rimosso TODO garbage collector in [`asset_source.py:436`](backend/app/services/asset_source.py)
+
+### ✅ 3. **Fetch currency in Yahoo Finance search**
+
+- ✅ In [`yahoo_finance.py:312`](backend/app/services/asset_source_providers/yahoo_finance.py): Per ogni risultato, fatto `yf.Ticker(symbol).fast_info.get('currency')`
+- ✅ Usato TTLCache separata per evitare chiamate ripetute
+- ✅ Fallback a `None` se timeout/errore
+
+### ✅ 4. **Timezone handling - documentato comportamento UTC**
+
+- ✅ In [`yahoo_finance.py:230`](backend/app/services/asset_source_providers/yahoo_finance.py): yfinance DatetimeIndex convertito a UTC
+- ✅ Implementato: `idx.tz_convert('UTC').date()` con fallback
+- ✅ Documentato: "All dates normalized to UTC for backend consistency; frontend handles local display"
+
+### ✅ 5. **Localizzazione Paesi con Babel**
+
+- ✅ Refactoring [`geo_utils.py`](backend/app/utils/geo_utils.py):
+    - ✅ `list_countries(language: str) -> list[CountryInfo]`: Lista tutti i paesi con nome tradotto + flag emoji
+    - ✅ `normalize_country_multilang(input: str, language: str) -> NormalizationResult`: Accetta nome in qualsiasi lingua → ritorna ISO3 o lista candidati
+- ✅ Flag emoji: `chr(0x1F1E6 + ord(iso2[0]) - ord('A')) + chr(0x1F1E6 + ord(iso2[1]) - ord('A'))`
+- ✅ Fallback a inglese se lingua non supportata
+- ✅ Aggiornato [`utilities.py`](backend/app/api/v1/utilities.py) endpoint `/countries` con `flag_emoji`
+- ✅ Gestione ambiguità con `match_type="multi-match"`
+
+### ✅ 6. **Localizzazione Valute con Babel**
+
+- ✅ Creato [`backend/app/utils/currency_utils.py`](backend/app/utils/currency_utils.py):
+    - ✅ `normalize_currency(input: str, language: str) -> NormalizationResult`: Accetta ISO, simbolo (€/$), nome localizzato
+    - ✅ `list_currencies(language: str) -> list[CurrencyInfo]`: Lista con nome tradotto, simbolo, ISO code
+- ✅ Usato `babel.numbers.get_currency_symbol(code, locale)` e `babel.Locale(language).currencies`
+- ✅ Simboli ambigui ($) → lista candidati con `match_type="multi-match"`
+- ✅ Creato endpoint `/utilities/currencies` e `/utilities/currencies/normalize`
+- ✅ Aggiunti schemi: `CurrencyListItem`, `CurrencyListResponse`, `CurrencyNormalizationResponse`
+
+### ✅ 7. **Refactor `_classify_asset_identifier` → oggetto tipizzato**
+
+- ✅ In [`brim.py`](backend/app/schemas/brim.py): Creato `BRIMExtractedAssetInfo(BaseModel)` con `extracted_symbol`, `extracted_isin`, `extracted_name`
+- ✅ In [`broker_generic_csv.py:567`](backend/app/services/brim_providers/broker_generic_csv.py): Ritorna `BRIMExtractedAssetInfo` invece di dict
+
+### ✅ 8. **CSS scraper: header custom da provider_params**
+
+- ✅ In [`css_scraper.py:110`](backend/app/services/asset_source_providers/css_scraper.py):
+    - ✅ Legge `provider_params.get('headers', {})`
+    - ✅ Usa `mergedeep` invece di dict unpacking: `merge({}, default_headers, custom_headers)`
+
+### ✅ 9. **Implementare test `test_patch_icon_url_clear`**
+
+- ✅ In [`test_assets_patch_fields.py:268`](backend/test_scripts/test_api/test_assets_patch_fields.py):
+    - ✅ Crea asset con `icon_url="http://example.com/icon.png"`
+    - ✅ PATCH con `icon_url=None`
+    - ✅ Verifica `icon_url` è `None` nel DB
+
+### ✅ 10. **Completare test `test_list_active_filter`**
+
+- ✅ In [`test_assets_crud.py:296`](backend/test_scripts/test_api/test_assets_crud.py):
+    - ✅ Crea 2 asset: uno `active=True`, uno `active=False` (via PATCH)
+    - ✅ Testa `?active=true` ritorna solo l'attivo
+    - ✅ Testa `?active=false` ritorna solo l'inattivo
+
+### ✅ 11. **Aggiungere `expected_symbol` ai provider test_cases**
+
+- ✅ Aggiornato `test_cases` in tutti i provider:
+    - ✅ [yahoo_finance.py](backend/app/services/asset_source_providers/yahoo_finance.py): `{'identifier': 'AAPL', 'expected_symbol': 'AAPL', ...}`
+    - ✅ [justetf.py](backend/app/services/asset_source_providers/justetf.py): `{'identifier': 'IE00B4L5Y983', 'expected_symbol': 'IE00B4L5Y983', ...}` (ISIN)
+    - ✅ [mockprov.py](backend/app/services/asset_source_providers/mockprov.py): `{'identifier': 'MOCK', 'expected_symbol': 'MOCK', ...}`
+    - ✅ [css_scraper.py](backend/app/services/asset_source_providers/css_scraper.py): `{'expected_symbol': '<URL>', ...}` (identifier stesso)
+
+---
+
+## 🆕 Refactoring Aggiuntivi (Post-Review)
+
+### ✅ **Creato `translation_utils.py` per funzioni comuni**
+
+- ✅ Creato [`backend/app/utils/translation_utils.py`](backend/app/utils/translation_utils.py)
+- ✅ Centralizzata funzione `get_babel_locale(language: str) -> Locale`
+- ✅ Eliminata duplicazione in `currency_utils.py` e `geo_utils.py`
+- ✅ Fallback automatico a inglese se lingua non supportata
+
+### ✅ **Usato `mergedeep` invece di dict unpacking**
+
+- ✅ In `css_scraper.py`: Sostituito `{**default_headers, **custom_headers}` con `merge({}, default_headers, custom_headers)`
+- ✅ Più robusto per merge ricorsivi e consistente con altri usi di mergetools nel progetto
+
 ---
 
 ## Steps Implementativi
