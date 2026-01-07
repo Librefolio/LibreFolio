@@ -34,6 +34,7 @@ websocket-client = "*"
 justetf-scraping = {git = "https://github.com/Alfystar/justetf-scraping.git", ref = "main"}
 python-multipart = "*"
 babel = "*"
+cachetools = "*"
 
 [dev-packages]
 pytest = "*"
