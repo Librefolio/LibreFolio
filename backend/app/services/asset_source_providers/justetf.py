@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType
@@ -24,6 +24,7 @@ from backend.app.schemas.assets import (
     )
 from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.utils.cache_utils import get_ttl_cache
 
 try:
     import justetf_scraping
@@ -42,43 +43,11 @@ except ImportError:
 
 logger = get_logger(__name__)
 
-# Cache TTL constants
-CACHE_TTL_OVERVIEW = 3600  # 1 hour in seconds
-CACHE_TTL_CHART = 3600  # 1 hour in seconds
-CACHE_TTL_GETTEX = 30  # 30 seconds
-CACHE_TTL_ETF_LIST = 3600  # 1 hour in seconds
-
-
-class CachedData:
-    """Simple cache wrapper with TTL support."""
-
-    def __init__(self):
-        self._cache: Dict[str, Tuple[datetime, Any]] = {}
-
-    def get(self, key: str, ttl_seconds: int) -> Optional[Any]:
-        """Get cached value if not expired."""
-        if key in self._cache:
-            cached_time, value = self._cache[key]
-            if (datetime.now() - cached_time).total_seconds() < ttl_seconds:
-                return value
-            # Expired, remove from cache
-            del self._cache[key]
-        return None
-
-    def set(self, key: str, value: Any) -> None:
-        """Set cached value with current timestamp."""
-        self._cache[key] = (datetime.now(), value)
-
-    def clear(self) -> None:
-        """Clear all cached data."""
-        self._cache.clear()
-
-
-# Global caches
-_overview_cache = CachedData()
-_chart_cache = CachedData()
-_gettex_cache = CachedData()
-_etf_list_cache = CachedData()
+# Global TTL caches (auto-expire, no manual cleanup needed)
+_overview_cache = get_ttl_cache('justetf_overview', maxsize=500, ttl=3600)  # 1 hour
+_chart_cache = get_ttl_cache('justetf_chart', maxsize=500, ttl=3600)  # 1 hour
+_gettex_cache = get_ttl_cache('justetf_gettex', maxsize=200, ttl=30)  # 30 seconds
+_etf_list_cache = get_ttl_cache('justetf_etf_list', maxsize=100, ttl=3600)  # 1 hour
 
 
 def _country_name_to_iso3(country_name: str) -> Optional[str]:
@@ -106,12 +75,12 @@ class JustETFProvider(AssetSourceProvider):
     @classmethod
     def etf_list(cls) -> "pd.DataFrame":
         """Get cached ETF list."""
-        cached = _etf_list_cache.get("etf_list", CACHE_TTL_ETF_LIST)
+        cached = _etf_list_cache.get("etf_list")
         if cached is not None:
             return cached
 
         df = load_overview()
-        _etf_list_cache.set("etf_list", df)
+        _etf_list_cache["etf_list"] = df
         return df
 
     def _check_availability(self):
@@ -142,6 +111,7 @@ class JustETFProvider(AssetSourceProvider):
                 'identifier': 'IE00B4L5Y983',  # iShares Core MSCI World UCITS ETF USD (Acc)
                 'identifier_type': IdentifierType.ISIN,
                 'provider_params': None,
+                'expected_symbol': 'IE00B4L5Y983'  # JustETF uses ISIN as identifier
                 }
             ]
 
@@ -164,7 +134,7 @@ class JustETFProvider(AssetSourceProvider):
         try:
             # Check cache first
             cache_key = f"gettex_{identifier}"
-            cached = _gettex_cache.get(cache_key, CACHE_TTL_GETTEX)
+            cached = _gettex_cache.get(cache_key)
 
             if cached is None:
                 # Fetch from gettex WebSocket
@@ -174,7 +144,7 @@ class JustETFProvider(AssetSourceProvider):
                         f"No gettex quote available for {identifier}",
                         "NOT_FOUND",
                         )
-                _gettex_cache.set(cache_key, quote)
+                _gettex_cache[cache_key] = quote
             else:
                 quote = cached
 
@@ -241,11 +211,11 @@ class JustETFProvider(AssetSourceProvider):
 
             # Check cache
             cache_key = f"chart_{identifier}_{add_current}"
-            cached_df = _chart_cache.get(cache_key, CACHE_TTL_CHART)
+            cached_df = _chart_cache.get(cache_key)
 
             if cached_df is None:
                 df = await asyncio.to_thread(load_chart, identifier, "EUR", add_current)
-                _chart_cache.set(cache_key, df)
+                _chart_cache[cache_key] = df
             else:
                 df = cached_df
 
@@ -332,11 +302,11 @@ class JustETFProvider(AssetSourceProvider):
         try:
             # Check cache
             cache_key = f"overview_{identifier}"
-            cached = _overview_cache.get(cache_key, CACHE_TTL_OVERVIEW)
+            cached = _overview_cache.get(cache_key)
 
             if cached is None:
                 overview = await asyncio.to_thread(get_etf_overview, identifier, include_gettex=False)
-                _overview_cache.set(cache_key, overview)
+                _overview_cache[cache_key] = overview
             else:
                 overview = cached
 

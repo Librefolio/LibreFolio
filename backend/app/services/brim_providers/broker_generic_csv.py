@@ -351,8 +351,8 @@ class GenericCSVBrokerProvider(BRIMProvider):
         self._asset_id_map: Dict[str, int] = {}
         self._next_fake_id = FAKE_ASSET_ID_BASE
 
-        # Track extracted asset info (will be converted to BRIMExtractedAssetInfo at end)
-        self._extracted_assets_raw: Dict[int, Dict[str, Optional[str]]] = {}
+        # Track extracted asset info (BRIMExtractedAssetInfo objects)
+        self._extracted_assets_raw: Dict[int, BRIMExtractedAssetInfo] = {}
 
         try:
             with open(file_path, "r", encoding="utf-8-sig") as f:
@@ -393,17 +393,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         if not transactions:
             warnings.append("No valid transactions found in file")
 
-        # Convert raw extracted assets to BRIMExtractedAssetInfo
-        extracted_assets: Dict[int, BRIMExtractedAssetInfo] = {
-            fake_id: BRIMExtractedAssetInfo(
-                extracted_symbol=info.get("extracted_symbol"),
-                extracted_isin=info.get("extracted_isin"),
-                extracted_name=info.get("extracted_name"),
-                )
-            for fake_id, info in self._extracted_assets_raw.items()
-            }
-
-        return transactions, warnings, extracted_assets
+        return transactions, warnings, self._extracted_assets_raw
 
     def _detect_columns(self, fieldnames: List[str]) -> Dict[str, str]:
         """
@@ -564,8 +554,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
             tags=["import", "csv"]
             )
 
-    # TODO: capire se invece del dizionario si riesce a ritornare direttamente l'oggetto
-    def _classify_asset_identifier(self, identifier: str) -> Dict[str, Optional[str]]:
+    def _classify_asset_identifier(self, identifier: str) -> BRIMExtractedAssetInfo:
         """
         Try to classify what type of identifier we have.
 
@@ -573,29 +562,29 @@ class GenericCSVBrokerProvider(BRIMProvider):
         Symbol: Usually 1-5 uppercase letters
         Otherwise: Treat as name
 
-        Returns dict with extracted_symbol, extracted_isin, extracted_name
+        Returns BRIMExtractedAssetInfo with extracted_symbol, extracted_isin, extracted_name
         """
         identifier = identifier.strip()
 
         # Check if it looks like an ISIN
         if len(identifier) == 12 and identifier[:2].isalpha() and identifier[2:].isalnum():
-            return {
-                "extracted_symbol": None,
-                "extracted_isin": identifier.upper(),
-                "extracted_name": None
-                }
+            return BRIMExtractedAssetInfo(
+                extracted_symbol=None,
+                extracted_isin=identifier.upper(),
+                extracted_name=None
+                )
 
         # Check if it looks like a ticker symbol (1-6 chars, alphanumeric with dots/dashes)
         if 1 <= len(identifier) <= 6 and identifier.replace(".", "").replace("-", "").isalnum():
-            return {
-                "extracted_symbol": identifier.upper(),
-                "extracted_isin": None,
-                "extracted_name": None
-                }
+            return BRIMExtractedAssetInfo(
+                extracted_symbol=identifier.upper(),
+                extracted_isin=None,
+                extracted_name=None
+                )
 
         # Otherwise treat as name
-        return {
-            "extracted_symbol": None,
-            "extracted_isin": None,
-            "extracted_name": identifier
-            }
+        return BRIMExtractedAssetInfo(
+            extracted_symbol=None,
+            extracted_isin=None,
+            extracted_name=identifier
+            )

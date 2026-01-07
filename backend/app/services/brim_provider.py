@@ -31,33 +31,33 @@ import json
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 
 import structlog
+from sqlalchemy import select, and_
 
 from backend.app.config import PROJECT_ROOT
+from backend.app.db.models import Transaction
+from backend.app.schemas.assets import FAAinfoFiltersRequest
+from backend.app.schemas.brim import BRIMAssetCandidate, BRIMMatchConfidence
+from backend.app.schemas.brim import (
+    BRIMDuplicateReport, BRIMDuplicateMatch, BRIMDuplicateLevel,
+    BRIMTXDuplicateCandidate, is_fake_asset_id
+    )
 from backend.app.schemas.brim import (
     BRIMFileInfo,
     BRIMFileStatus,
     BRIMPluginInfo,
     BRIMAssetMapping,
     BRIMExtractedAssetInfo,
-    BRIMDuplicateReport,
     )
 from backend.app.schemas.transactions import TXCreateItem
+from backend.app.services.asset_source import AssetCRUDService
 from backend.app.services.provider_registry import BRIMProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.schemas.assets import FAAinfoFiltersRequest
-from backend.app.schemas.brim import BRIMAssetCandidate, BRIMMatchConfidence
-from backend.app.services.asset_source import AssetCRUDService
-from decimal import Decimal
-from sqlalchemy import select, and_
-from backend.app.db.models import Transaction
-from backend.app.schemas.brim import (
-    BRIMDuplicateReport, BRIMDuplicateMatch, BRIMDuplicateLevel,
-    BRIMTXDuplicateCandidate, is_fake_asset_id
-    )
+
 logger = structlog.get_logger(__name__)
 
 

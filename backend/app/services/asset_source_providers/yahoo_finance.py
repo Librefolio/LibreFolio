@@ -7,14 +7,13 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
 
-
 from backend.app.db import IdentifierType
 from backend.app.logging_config import get_logger
-from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.cache_utils import get_ttl_cache
 
 try:
     import yfinance as yf
@@ -37,11 +36,36 @@ logger = get_logger(__name__)
 class YahooFinanceProvider(AssetSourceProvider):
     """Yahoo Finance data provider using yfinance library."""
 
-    # Cache for search results (10 min TTL)
-    # TODO: implementare pulizia cache quando ttl si esaurisce, con cache system a livello di sistema
-    _search_cache: Dict[str, tuple[list[dict], datetime]] = {}
-    _CACHE_TTL_SECONDS = 600  # 10 minutes
     _MIN_SEARCH_CHARS = 2
+
+    def __init__(self):
+        super().__init__()
+        # TTLCache for search results (10 min TTL, max 1000 entries)
+        self._search_cache = get_ttl_cache('yfinance_search', maxsize=1000, ttl=600)
+        # TTLCache for currency lookups (1 hour TTL, max 2000 entries)
+        self._currency_cache = get_ttl_cache('yfinance_currency', maxsize=2000, ttl=3600)
+
+    def _fetch_currency(self, symbol: str) -> str | None:
+        """
+        Fetch currency for a symbol using yfinance fast_info.
+        Uses cache to avoid repeated API calls.
+
+        Returns:
+            Currency code (e.g., 'USD', 'EUR') or None if not available
+        """
+        cached = self._currency_cache.get(symbol)
+        if cached is not None:
+            return cached
+
+        try:
+            ticker = yf.Ticker(symbol)
+            currency = ticker.fast_info.get('currency')
+            self._currency_cache[symbol] = currency
+            return currency
+        except Exception as e:
+            logger.debug(f"Could not fetch currency for {symbol}: {e}")
+            self._currency_cache[symbol] = None
+            return None
 
     @property
     def provider_code(self) -> str:
@@ -62,7 +86,8 @@ class YahooFinanceProvider(AssetSourceProvider):
             {
                 'identifier': 'AAPL',
                 'identifier_type': IdentifierType.TICKER,
-                'provider_params': None
+                'provider_params': None,
+                'expected_symbol': 'AAPL'
                 }
             ]
 
@@ -226,8 +251,16 @@ class YahooFinanceProvider(AssetSourceProvider):
             # Convert DataFrame to FAPricePoint list
             prices = []
             for idx, row in hist.iterrows():
+                # yfinance returns DatetimeIndex with market timezone.
+                # Convert to UTC for consistent backend date handling.
+                # Frontend will handle local display.
+                if hasattr(idx, 'tz_convert'):
+                    date_utc = idx.tz_convert('UTC').date()
+                else:
+                    date_utc = idx.date()
+
                 prices.append(FAPricePoint(
-                    date=idx.date(),  # TODO: verify timezone handling
+                    date=date_utc,
                     open=Decimal(str(row['Open'])) if pd.notna(row['Open']) else None,
                     high=Decimal(str(row['High'])) if pd.notna(row['High']) else None,
                     low=Decimal(str(row['Low'])) if pd.notna(row['Low']) else None,
@@ -284,14 +317,12 @@ class YahooFinanceProvider(AssetSourceProvider):
         if len(query) < self._MIN_SEARCH_CHARS:
             return []
 
-        # Check cache
+        # Check cache (TTLCache handles expiration automatically)
         cache_key = query.lower()
-        if cache_key in self._search_cache:
-            results, timestamp = self._search_cache[cache_key]
-            age = (utcnow() - timestamp).total_seconds()
-            if age < self._CACHE_TTL_SECONDS:
-                logger.debug(f"Cache hit for '{query}' (age: {age:.0f}s)")
-                return results
+        cached_results = self._search_cache.get(cache_key)
+        if cached_results is not None:
+            logger.debug(f"Cache hit for '{query}'")
+            return cached_results
 
         try:
             # Use yfinance Search for real search functionality
@@ -305,23 +336,27 @@ class YahooFinanceProvider(AssetSourceProvider):
                 if not quote.get('isYahooFinance', True):
                     continue
 
+                symbol = quote.get('symbol', '')
+                # Fetch currency for this symbol (cached)
+                currency = self._fetch_currency(symbol) if symbol else None
+
                 results.append({
-                    "identifier": quote.get('symbol', ''),
+                    "identifier": symbol,
                     "identifier_type": IdentifierType.TICKER,  # YFinance uses ticker symbols
-                    "display_name": quote.get('longname', quote.get('shortname', quote.get('symbol', ''))),
-                    "currency": None,  # TODO: capire se un modo per avere la valuta ci può essere
+                    "display_name": quote.get('longname', quote.get('shortname', symbol)),
+                    "currency": currency,
                     "type": quote.get('quoteType', 'Unknown')  # EQUITY, ETF, CRYPTOCURRENCY, etc.
                     })
 
-            # Cache result
-            self._search_cache[cache_key] = (results, utcnow())
+            # Cache result (TTLCache handles expiration)
+            self._search_cache[cache_key] = results
             logger.info(f"Search for '{query}': found {len(results)} results")
             return results
 
         except Exception as e:
             logger.warning(f"Search failed for '{query}': {e}")
             # Cache empty result to avoid repeated failures
-            self._search_cache[cache_key] = ([], utcnow())
+            self._search_cache[cache_key] = []
             return []
 
     def validate_params(self, params: Dict | None) -> None:
