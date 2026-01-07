@@ -506,9 +506,10 @@ class TestDuplicateDetection:
         test_date: date
     ):
         """
-        DD-007: One description empty.
+        DD-007: Both descriptions empty.
 
-        Expected: POSSIBLE not LIKELY (can't confirm by description).
+        Expected: POSSIBLE not LIKELY (empty descriptions don't count as matching).
+        Empty string == empty string should NOT elevate to LIKELY.
         """
         # Insert transaction with NO description
         existing_tx = Transaction(
@@ -544,13 +545,12 @@ class TestDuplicateDetection:
                 session=async_session
             )
 
-            # Should be POSSIBLE, not LIKELY (empty descriptions don't count)
-            if report.tx_likely_duplicates:
-                # This is okay if the logic treats empty+empty as likely
-                pass
-            else:
-                # Empty descriptions shouldn't elevate to LIKELY
-                assert len(report.tx_possible_duplicates) >= 1 or len(report.tx_unique_indices) >= 1
+            # Empty descriptions should NOT elevate to LIKELY
+            # Should be flagged as POSSIBLE (same data) but not LIKELY
+            assert len(report.tx_likely_duplicates) == 0, \
+                "Empty descriptions matching should NOT be LIKELY"
+            assert len(report.tx_possible_duplicates) >= 1, \
+                "Should still be POSSIBLE duplicate (same type/date/amount)"
 
         finally:
             await async_session.delete(existing_tx)

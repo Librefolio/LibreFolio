@@ -37,7 +37,14 @@ from typing import List, Tuple, Optional, Dict, Any
 import structlog
 
 from backend.app.config import PROJECT_ROOT
-from backend.app.schemas.brim import BRIMFileInfo, BRIMFileStatus, BRIMPluginInfo, BRIMAssetMapping
+from backend.app.schemas.brim import (
+    BRIMFileInfo,
+    BRIMFileStatus,
+    BRIMPluginInfo,
+    BRIMAssetMapping,
+    BRIMExtractedAssetInfo,
+    BRIMDuplicateReport,
+)
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.provider_registry import BRIMProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
@@ -255,26 +262,54 @@ class BRIMProvider(ABC):
         pass
 
     @abstractmethod
-    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str]]:
+    def parse(
+        self,
+        file_path: Path,
+        broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, "BRIMExtractedAssetInfo"]]:
         """
-        Parse file and return transactions with warnings.
+        Parse file and return transactions, warnings, and extracted asset info.
 
-        The broker_id is set on all returned TXCreateItem objects.
-        Warnings include skipped rows, ambiguous data, etc.
+        **Plugin Responsibility:**
+        - Read the broker-specific file format
+        - Create TXCreateItem DTOs with fake_asset_ids for asset-linked transactions
+        - Extract asset identifiers (symbol, ISIN, name) from the file
+        - Group same-asset transactions under the same fake_asset_id
+        - Collect warnings for skipped/problematic rows
+
+        **Core Responsibility (NOT plugin):**
+        - Search DB for asset candidates using extracted info
+        - Map fake_asset_ids to real asset_ids
+        - Detect duplicate transactions
 
         Args:
             file_path: Path to the file to parse
             broker_id: Target broker ID for all transactions
 
         Returns:
-            Tuple of (transactions, warnings)
-            - transactions: List of TXCreateItem DTOs
-            - warnings: List of warning messages
+            Tuple of (transactions, warnings, extracted_assets)
+            - transactions: List of TXCreateItem DTOs (with fake asset IDs)
+            - warnings: List of warning messages (skipped rows, etc.)
+            - extracted_assets: Dict mapping fake_asset_id -> BRIMExtractedAssetInfo
 
         Raises:
             BRIMParseError: If file cannot be parsed
         """
         pass
+
+    @property
+    def test_file_pattern(self) -> Optional[str]:
+        """
+        Filename contain pattern for auto-detection tests.
+        Using for test with backend/app/services/brim_providers/sample_reports/* files
+
+        Override this to specify what filename substring should auto-detect
+        to this plugin. Used only for testing purposes.
+
+        Example: "directa" for broker_directa plugin
+        Returns None if no test pattern (e.g., generic fallback plugin).
+        """
+        return None
 
     def to_plugin_info(self) -> BRIMPluginInfo:
         """Convert provider to BRIMPluginInfo DTO."""
@@ -666,7 +701,7 @@ def parse_file(
     file_id: str,
     plugin_code: str,
     broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, Dict[str, Optional[str]]]]:
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
     """
     Parse a file using the specified plugin (preview only, no DB persistence).
 
@@ -678,11 +713,11 @@ def parse_file(
     3. Call plugin.can_parse(file_path)
        - Raise ValueError if plugin cannot parse this file type
     4. Call plugin.parse(file_path, broker_id)
-       - Returns Tuple[List[TXCreateItem], List[str]]
+       - Returns Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]
        - Transactions are standard DTOs ready for TransactionService
        - Warnings include skipped rows, ambiguous data, etc.
-    5. Get extracted assets info from plugin.get_extracted_assets()
-    6. Return (transactions, warnings, extracted_assets)
+       - Extracted assets is the mapping fake_id -> BRIMExtractedAssetInfo
+    5. Return (transactions, warnings, extracted_assets)
 
     IMPORTANT: This function does NOT persist anything to DB.
     It's used for preview so user can review/edit before confirming.
@@ -727,12 +762,8 @@ def parse_file(
         broker_id=broker_id
         )
 
-    transactions, warnings = plugin.parse(file_path, broker_id)
-
-    # Get extracted assets info from plugin (if available)
-    extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
-    if hasattr(plugin, 'get_extracted_assets'):
-        extracted_assets = plugin.get_extracted_assets()
+    # Plugin returns (transactions, warnings, extracted_assets)
+    transactions, warnings, extracted_assets = plugin.parse(file_path, broker_id)
 
     logger.info(
         "File parsed successfully",

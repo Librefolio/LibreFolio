@@ -175,18 +175,35 @@ def external_asset_providers(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Asset providers tests", verbose=verbose)
 
 
+def external_brim_providers(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test BRIM (Broker Report Import Manager) providers.
+
+    Tests plugin discovery, file parsing, auto-detection, and sample file coverage.
+    Does NOT require network - tests are based on local sample files.
+    """
+    print_section("External: BRIM Providers Tests")
+    print_info("Testing: Broker Report Import Manager (BRIM) plugins")
+    print_info("Tests: Plugin discovery, file parsing, auto-detection, sample coverage")
+    print_info("Brokers: Directa, DEGIRO, Trading212, IBKR, eToro, Revolut, Schwab, etc.")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_providers.py", test_names)
+    return run_command(cmd, "BRIM providers tests", verbose=verbose)
+
+
 def external_all(verbose: bool = False) -> bool:
     """
     Run all external tests (network-dependent).
     """
     print_header("LibreFolio External Tests")
     print_info("Testing external provider integrations")
-    print_info("⚠️  WARNING: Requires internet connection")
+    print_info("⚠️  WARNING: Requires internet connection for FX/Asset providers")
     print_info("⚠️  WARNING: May be slow")
 
     tests = [
         ("FX Providers (including multi-unit)", lambda: external_fx_providers(verbose)),
         ("Asset Providers", lambda: external_asset_providers(verbose)),
+        ("BRIM Providers", lambda: external_brim_providers(verbose)),
         ]
 
     results = []
@@ -336,6 +353,23 @@ def db_fx_rates(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "FX rates persistence tests", verbose=verbose)
 
 
+def db_brim(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test BRIM (Broker Report Import Manager) database operations.
+
+    Tests asset candidate search and duplicate transaction detection.
+    Requires database with test data.
+    """
+    print_section("DB Test: BRIM Asset Search & Duplicate Detection")
+
+    print_info(f"This test operates on: {TEST_DB_PATH} (test database)")
+    print_info("Testing: Asset candidate search, duplicate detection")
+    print_info("Tests: ISIN/ticker search, confidence levels, auto-selection")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_brim_db.py", test_names)
+    return run_command(cmd, "BRIM database tests", verbose=verbose)
+
+
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test Numeric column truncation behavior across all tables.
@@ -394,6 +428,7 @@ def db_all(verbose: bool = False) -> bool:
         ("Populate Mock Data", lambda: db_populate(verbose, force=True)),  # Use force in 'all' mode
         ("Referential Integrity (CASCADE/RESTRICT/UNIQUE/CHECK)", lambda: db_test_referential_integrity(verbose)),
         ("FX Rates Persistence", lambda: db_fx_rates(verbose)),
+        ("BRIM Asset Search & Duplicates", lambda: db_brim(verbose)),
         ]
 
     results = []
@@ -941,6 +976,20 @@ def api_brokers(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Brokers API tests", verbose=verbose)
 
 
+def api_brim(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Run BRIM (Broker Report Import Manager) API endpoint tests.
+    """
+    print_section("BRIM API Endpoint Tests")
+    print_info("Testing REST API endpoints for broker report import")
+    print_info("Tests: POST /import/upload, GET /import/files, POST /import/files/{id}/parse")
+    print_info("Tests: File storage, parse response, duplicate detection, E2E import flow")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_brim_api.py", test_names)
+    return run_command(cmd, "BRIM API tests", verbose=verbose)
+
+
 def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:
     """
     Run E2E (End-to-End) API tests.
@@ -974,6 +1023,7 @@ def api_test(verbose: bool = False) -> bool:
         ("Utilities API", lambda: api_utilities(verbose)),
         ("Transactions API", lambda: api_transactions(verbose)),
         ("Brokers API", lambda: api_brokers(verbose)),
+        ("BRIM API", lambda: api_brim(verbose)),
         ]
 
     results = []
@@ -1260,6 +1310,11 @@ Test commands:
                     Tests: Metadata, current value, historical data, search, error handling
                     Note: Tests auto-skip if provider doesn't support feature (e.g., search)
                     📋 Prerequisites: Internet connection
+
+  brim-providers  - Test BRIM (Broker Report Import Manager) plugins
+                    Tests: Plugin discovery, file parsing, auto-detection, sample coverage
+                    Brokers: Directa, DEGIRO, Trading212, IBKR, eToro, Revolut, etc.
+                    📋 Prerequisites: None (uses local sample files)
          
   all             - Run all external service tests
         """,
@@ -1268,7 +1323,7 @@ Test commands:
 
     external_parser.add_argument(
         "action",
-        choices=["fx-providers", "asset-providers", "all"],
+        choices=["fx-providers", "asset-providers", "brim-providers", "all"],
         help="External service test to run"
         )
 
@@ -1310,20 +1365,24 @@ Test commands:
   fx-rates              - Test FX rates persistence (fetch from ECB & persist)
                           📋 Prerequisites: External ECB API working (run: external ecb)
                           💡 Can run on database with existing data (uses UPSERT)
+
+  brim                  - Test BRIM asset search & duplicate detection
+                          📋 Prerequisites: Database created (run: db create)
+                          💡 Tests: Asset candidate search, duplicate transaction detection
     
   referential-integrity - Test unidirectional relationship between Transaction and CashMovement
                           📋 Prerequisites: Database created (run: db create)
                           💡 Validates referential integrity, CASCADE delete, CHECK constraints between the tables
                                 enum mapping, logical constraints, CashMovement consistency, etc.
                             
-  all               - Run all DB tests (create → validate → numeric-truncation → populate → fx-rates)
+  all               - Run all DB tests (create → validate → numeric-truncation → populate → fx-rates → brim)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
     db_parser.add_argument(
         "action",
-        choices=["create", "validate", "numeric-truncation", "fx-rates", "populate", "referential-integrity", "all"],
+        choices=["create", "validate", "numeric-truncation", "fx-rates", "brim", "populate", "referential-integrity", "all"],
         help="Database test to run"
         )
 
@@ -1563,6 +1622,11 @@ Test commands:
                     📋 Prerequisites: None
                     💡 Tests: GET /utilities/sectors, GET /utilities/countries/normalize
                     Note: Server will be automatically started and stopped by test
+
+  brim            - Test BRIM (Broker Report Import Manager) endpoints
+                    📋 Prerequisites: Database created (run: db create)
+                    💡 Tests: File upload/list/delete, parse, E2E import flow
+                    Note: Server will be automatically started and stopped by test
   
   e2e             - Test complete End-to-End flow
                     📋 Prerequisites: Database created, providers configured
@@ -1576,7 +1640,7 @@ Test commands:
 
     api_parser.add_argument(
         "action",
-        choices=["fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "transactions", "brokers", "all"],
+        choices=["fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "transactions", "brokers", "brim", "all"],
         help="API test to run"
         )
 
@@ -1715,6 +1779,8 @@ def main():
             success = external_fx_providers(verbose=verbose, test_names=test_names)
         elif args.action == "asset-providers":
             success = external_asset_providers(verbose=verbose, test_names=test_names)
+        elif args.action == "brim-providers":
+            success = external_brim_providers(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = external_all(verbose=verbose)
 
@@ -1728,6 +1794,8 @@ def main():
             success = db_numeric_truncation(verbose=verbose, test_names=test_names)
         elif args.action == "fx-rates":
             success = db_fx_rates(verbose=verbose, test_names=test_names)
+        elif args.action == "brim":
+            success = db_brim(verbose=verbose, test_names=test_names)
         elif args.action == "populate":
             force = getattr(args, 'force', False)
             success = db_populate(verbose=verbose, force=force)
@@ -1813,6 +1881,8 @@ def main():
             success = api_transactions(verbose=verbose, test_names=test_names)
         elif args.action == "brokers":
             success = api_brokers(verbose=verbose, test_names=test_names)
+        elif args.action == "brim":
+            success = api_brim(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = api_test(verbose=verbose)
     

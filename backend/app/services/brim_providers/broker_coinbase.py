@@ -39,7 +39,7 @@ from typing import List, Tuple, Dict, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMProvider, BRIMParseError
@@ -165,11 +165,15 @@ class CoinbaseBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, Dict]]:
+    def parse(
+        self,
+        file_path: Path,
+        broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Coinbase CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
-        extracted_assets: Dict[int, Dict] = {}
+        extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
 
@@ -285,11 +289,26 @@ class CoinbaseBrokerProvider(BRIMProvider):
         if not transactions:
             raise BRIMParseError("No valid transactions found in file")
 
+        # Convert raw dict to BRIMExtractedAssetInfo
+        extracted_assets_typed: Dict[int, BRIMExtractedAssetInfo] = {
+            fake_id: BRIMExtractedAssetInfo(
+                extracted_symbol=info.get("extracted_symbol"),
+                extracted_isin=info.get("extracted_isin"),
+                extracted_name=info.get("extracted_name"),
+            )
+            for fake_id, info in extracted_assets.items()
+        }
+
         logger.info(
             "Coinbase file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
-            asset_count=len(extracted_assets)
+            asset_count=len(extracted_assets_typed)
             )
 
-        return transactions, warnings, extracted_assets
+        return transactions, warnings, extracted_assets_typed
+
+    @property
+    def test_file_pattern(self) -> Optional[str]:
+        """Filename pattern for auto-detection tests."""
+        return "coinbase"
