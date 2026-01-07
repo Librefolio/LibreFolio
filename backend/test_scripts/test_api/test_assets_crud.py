@@ -293,17 +293,50 @@ async def test_list_active_filter(test_server):
     print_section("Test 10: GET /assets/query - Active Filter")
 
     async with httpx.AsyncClient() as client:
-        # TODO: inserire asset activi, per ora ci appoggiamo ai test precedenti
-        # Default should return only active
-        response = await client.get(f"{API_BASE}/assets/query?active=true", timeout=TIMEOUT)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        data = [FAinfoResponse(**item) for item in response.json()]
+        # Step 1: Create two assets (both active by default)
+        items = [
+            FAAssetCreateItem(display_name=f"Active Asset {unique_id('ACT1')}", currency="USD"),
+            FAAssetCreateItem(display_name=f"Inactive Asset {unique_id('ACT2')}", currency="USD")
+            ]
+        create_resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json") for item in items], timeout=TIMEOUT)
+        assert create_resp.status_code == 201
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset1_id = create_data.results[0].asset_id
+        asset2_id = create_data.results[1].asset_id
+        print_info(f"  Created assets: {asset1_id} (will stay active), {asset2_id} (will be deactivated)")
 
-        # All should be active (data is a list of assets)
-        inactive = [a for a in data if not a.active]
-        assert not inactive, f"Found inactive assets in active=true filter: {inactive}"
+        # Step 2: Deactivate second asset via PATCH
+        from backend.app.schemas.assets import FAAssetPatchItem
+        patch_item = FAAssetPatchItem(asset_id=asset2_id, active=False)
+        patch_resp = await client.patch(
+            f"{API_BASE}/assets",
+            json=[patch_item.model_dump(mode="json")],
+            timeout=TIMEOUT
+            )
+        assert patch_resp.status_code == 200, f"PATCH failed: {patch_resp.status_code}"
+        print_info(f"  Deactivated asset {asset2_id}")
 
-        print_success("✓ Active filter works")
+        # Step 3: Test active=true filter
+        response_active = await client.get(f"{API_BASE}/assets/query?active=true", timeout=TIMEOUT)
+        assert response_active.status_code == 200
+        active_assets = [FAinfoResponse(**item) for item in response_active.json()]
+
+        # Should include asset1, should NOT include asset2
+        active_ids = [a.id for a in active_assets]
+        assert asset1_id in active_ids, f"Asset {asset1_id} should be in active list"
+        assert asset2_id not in active_ids, f"Asset {asset2_id} should NOT be in active list"
+        print_success(f"✓ active=true filter works (found {len(active_assets)} active assets)")
+
+        # Step 4: Test active=false filter
+        response_inactive = await client.get(f"{API_BASE}/assets/query?active=false", timeout=TIMEOUT)
+        assert response_inactive.status_code == 200
+        inactive_assets = [FAinfoResponse(**item) for item in response_inactive.json()]
+
+        # Should include asset2, should NOT include asset1
+        inactive_ids = [a.id for a in inactive_assets]
+        assert asset2_id in inactive_ids, f"Asset {asset2_id} should be in inactive list"
+        assert asset1_id not in inactive_ids, f"Asset {asset1_id} should NOT be in inactive list"
+        print_success(f"✓ active=false filter works (found {len(inactive_assets)} inactive assets)")
 
 
 @pytest.mark.asyncio

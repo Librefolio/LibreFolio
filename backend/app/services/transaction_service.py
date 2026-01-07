@@ -19,6 +19,7 @@ from datetime import date as date_type, timedelta
 from decimal import Decimal
 from typing import List, Optional, Dict, Tuple, Set
 
+from sqlalchemy import or_
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,9 +37,8 @@ from backend.app.schemas.transactions import (
     TXDeleteResult,
     TXBulkDeleteResponse,
     )
-from backend.app.utils.datetime_utils import utcnow
-from sqlalchemy import or_
 from backend.app.schemas.transactions import tags_to_csv
+from backend.app.utils.datetime_utils import utcnow
 
 
 class BalanceValidationError(Exception):

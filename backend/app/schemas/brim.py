@@ -150,6 +150,25 @@ class BRIMFileInfo(BaseModel):
 # PLUGIN SCHEMAS
 # =============================================================================
 
+class BRIMExtractedAssetInfo(BaseModel):
+    """
+    Extracted asset information from a broker report row.
+
+    Used by plugins to classify and identify assets found in imported files.
+    All fields are optional as not all reports contain all identifiers.
+
+    Attributes:
+        extracted_symbol: Ticker/symbol extracted from report (e.g., "AAPL", "VWCE")
+        extracted_isin: ISIN code extracted from report (e.g., "US0378331005")
+        extracted_name: Asset name/description extracted from report
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    extracted_symbol: Optional[str] = Field(default=None, description="Ticker/symbol from report")
+    extracted_isin: Optional[str] = Field(default=None, description="ISIN code from report")
+    extracted_name: Optional[str] = Field(default=None, description="Asset name/description from report")
+
+
 class BRIMPluginInfo(BaseModel):
     """
     Information about an available import plugin.

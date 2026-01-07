@@ -39,7 +39,9 @@ class MockProvider(AssetSourceProvider):
         return [
             {
                 'identifier': 'MOCK',
-                'provider_params': None
+                'identifier_type': IdentifierType.UUID,
+                'provider_params': None,
+                'expected_symbol': 'MOCK'
                 }
             ]
 

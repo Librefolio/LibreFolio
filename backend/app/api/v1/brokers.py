@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
+from backend.app.schemas.brim import BRIMAssetMapping
 from backend.app.schemas.brim import (
     BRIMFileInfo,
     BRIMFileStatus,
@@ -51,13 +52,13 @@ from backend.app.schemas.brokers import (
     )
 from backend.app.services import brim_provider
 from backend.app.services.brim_provider import BRIMParseError
-from backend.app.services.broker_service import BrokerService
-from backend.app.services.provider_registry import BRIMProviderRegistry
-from backend.app.schemas.brim import BRIMAssetMapping
 from backend.app.services.brim_provider import (
     search_asset_candidates,
     detect_tx_duplicates
     )
+from backend.app.services.broker_service import BrokerService
+from backend.app.services.provider_registry import BRIMProviderRegistry
+
 logger = get_logger(__name__)
 
 broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
