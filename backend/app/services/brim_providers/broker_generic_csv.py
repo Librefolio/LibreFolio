@@ -35,6 +35,7 @@ from typing import List, Tuple, Dict, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMProvider, BRIMParseError
@@ -321,9 +322,13 @@ class GenericCSVBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> Tuple[List[TXCreateItem], List[str], Dict[int, Dict]]:
+    def parse(
+        self,
+        file_path: Path,
+        broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """
-        Parse CSV file and return transactions with warnings.
+        Parse CSV file and return transactions, warnings, and extracted assets.
 
         Process:
         1. Read CSV and detect column mappings from header
@@ -338,8 +343,6 @@ class GenericCSVBrokerProvider(BRIMProvider):
         - Groups transactions by asset identifier
         - Assigns consistent fake IDs (same asset = same fake ID)
         """
-        from backend.app.schemas.brim import FAKE_ASSET_ID_BASE
-
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
 
@@ -348,8 +351,8 @@ class GenericCSVBrokerProvider(BRIMProvider):
         self._asset_id_map: Dict[str, int] = {}
         self._next_fake_id = FAKE_ASSET_ID_BASE
 
-        # Track extracted asset info for later use
-        self._extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
+        # Track extracted asset info (will be converted to BRIMExtractedAssetInfo at end)
+        self._extracted_assets_raw: Dict[int, Dict[str, Optional[str]]] = {}
 
         try:
             with open(file_path, "r", encoding="utf-8-sig") as f:
@@ -390,7 +393,17 @@ class GenericCSVBrokerProvider(BRIMProvider):
         if not transactions:
             warnings.append("No valid transactions found in file")
 
-        return transactions, warnings, self._extracted_assets
+        # Convert raw extracted assets to BRIMExtractedAssetInfo
+        extracted_assets: Dict[int, BRIMExtractedAssetInfo] = {
+            fake_id: BRIMExtractedAssetInfo(
+                extracted_symbol=info.get("extracted_symbol"),
+                extracted_isin=info.get("extracted_isin"),
+                extracted_name=info.get("extracted_name"),
+            )
+            for fake_id, info in self._extracted_assets_raw.items()
+        }
+
+        return transactions, warnings, extracted_assets
 
     def _detect_columns(self, fieldnames: List[str]) -> Dict[str, str]:
         """
@@ -518,7 +531,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
                 # Store extracted asset info for later candidate search
                 extracted_info = self._classify_asset_identifier(asset_identifier)
-                self._extracted_assets[asset_id] = extracted_info
+                self._extracted_assets_raw[asset_id] = extracted_info
 
         # Handle TRANSFER type - needs link_uuid
         # For generic CSV, we can't auto-generate paired transfers
@@ -587,13 +600,3 @@ class GenericCSVBrokerProvider(BRIMProvider):
             "extracted_name": identifier
             }
 
-    def get_extracted_assets(self) -> Dict[int, Dict[str, Optional[str]]]:
-        """
-        Get the mapping of fake asset IDs to extracted info.
-
-        Call this after parse() to get asset info for candidate search.
-
-        Returns:
-            Dict mapping fake_asset_id -> {extracted_symbol, extracted_isin, extracted_name}
-        """
-        return getattr(self, '_extracted_assets', {})

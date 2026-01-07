@@ -2,25 +2,85 @@
 
 **Document:** 01_test_brim_plan.md  
 **Created:** 2026-01-03  
-**Updated:** 2026-01-06
-**Status:** ✅ PARTIALLY IMPLEMENTED
+**Updated:** 2026-01-07
+**Status:** ✅ MOSTLY IMPLEMENTED
+
+---
+
+## Recent Changes (2026-01-07)
+
+### Test Quality Improvements
+- Improved `test_all_plugins_used_at_least_once` to **fail** if plugins lack samples
+- Improved `test_get_extracted_assets_from_parse` to verify **consistency** between transactions and extracted_assets
+- Improved `test_empty_description_not_likely` with clearer assertions
+- Added `test_required_generic_files_exist` to ensure core test files are present
+
+### Contract Update: `parse()` now returns 3 values
+
+The `BRIMProvider.parse()` method contract was updated to:
+```python
+def parse(self, file_path, broker_id) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    """Returns (transactions, warnings, extracted_assets)"""
+```
+
+- **Removed:** `get_extracted_assets()` method from all plugins
+- **Added:** `BRIMExtractedAssetInfo` Pydantic schema for extracted asset data
+- **Added:** `test_file_pattern` property to each plugin for dynamic test detection
+
+### Plugin Updates
+- All 11 plugins updated to new contract
+- Each plugin now has `test_file_pattern` property (e.g., `"directa"`, `"degiro"`, etc.)
+- Generic CSV plugin returns `None` for `test_file_pattern`
+
+---
+
+## ⚠️ E2E Testing Note
+
+**For E2E tests, use the `generic_*.csv` files**, not broker-specific samples.
+
+Reason:
+- Broker-specific samples (e.g., `directa-export.csv`) represent real-world data
+- We can modify `generic_*.csv` files to be more incisive for testing
+- In production, broker export formats are immutable - we must adapt to them
+
+**Required generic files:**
+- `generic_simple.csv` - Basic transactions
+- `generic_dates.csv` - Multiple date formats
+- `generic_types.csv` - All transaction types
+- `generic_with_assets.csv` - Transactions with asset identifiers
 
 ---
 
 ## Implementation Progress
 
-| Category                        | Status  | Tests | File                     |
-|---------------------------------|---------|-------|--------------------------|
-| Category 1: Plugin Discovery    | ✅ Done  | 5/5   | `test_brim_providers.py` |
-| Category 2: File Parsing        | ✅ Done  | 8/8   | `test_brim_providers.py` |
-| Category 2B: Auto-Detection     | ✅ Done  | 14/14 | `test_brim_providers.py` |
-| Category 3: Asset Search        | ✅ Done  | 6/6   | `test_brim_db.py`        |
-| Category 4: Duplicate Detection | ✅ Done  | 5/5   | `test_brim_db.py`        |
-| Category 5: File Storage        | 📋 TODO | 0/5   | `test_brim_api.py`       |
-| Category 6: API Endpoints       | 📋 TODO | 0/8   | `test_brim_api.py`       |
-| Category 7: E2E Import          | 📋 TODO | 0/4   | `test_brim_api.py`       |
+| Category                        | Status  | Tests | File                               |
+|---------------------------------|---------|-------|------------------------------------|
+| Category 1: Plugin Discovery    | ✅ Done  | 6/6   | `test_external/test_brim_providers.py` |
+| Category 2: File Parsing        | ✅ Done  | 8/8   | `test_external/test_brim_providers.py` |
+| Category 2B: Auto-Detection     | ✅ Done  | 3/3   | `test_external/test_brim_providers.py` |
+| Category 3: Asset Search        | ✅ Done  | 6/6   | `test_db/test_brim_db.py`          |
+| Category 4: Duplicate Detection | ✅ Done  | 5/5   | `test_db/test_brim_db.py`          |
+| Category 5: File Storage        | 🔧 Partial | 3/5   | `test_api/test_brim_api.py`        |
+| Category 6: API Endpoints       | 🔧 Partial | 5/8   | `test_api/test_brim_api.py`        |
+| Category 7: E2E Import          | 🔧 Partial | 2/4   | `test_api/test_brim_api.py`        |
 
-**Total: 38/55 tests implemented**
+**Total: 112 tests passing, 1 skipped (parametrized tests generate many test instances)**
+
+## Test Commands
+
+```bash
+# Run BRIM provider tests (plugin discovery, parsing, auto-detection)
+./dev.sh test external brim-providers
+
+# Run BRIM database tests (asset search, duplicate detection)
+./dev.sh test db brim
+
+# Run all external tests (includes BRIM providers)
+./dev.sh test external all
+
+# Run all database tests (includes BRIM db)
+./dev.sh test db all
+```
 
 ---
 
@@ -37,10 +97,12 @@ times would create duplicate transactions, we need a cleanup mechanism before ea
 
 ```
 backend/test_scripts/
-├── test_services/
+├── test_external/
 │   └── test_brim_providers.py     # Plugin parsing tests (no DB)
+├── test_db/
+│   └── test_brim_db.py            # Asset search & duplicate detection (with DB)
 ├── test_api/
-│   └── test_brim_api.py           # API endpoint tests (with DB)
+│   └── test_brim_api.py           # API endpoint tests (with DB + server)
 └── conftest.py                    # Shared fixtures including cleanup
 ```
 

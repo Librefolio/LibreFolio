@@ -183,8 +183,13 @@ async def list_assets(
     active: bool = Query(True, description="Include only active assets (default: true)"),
     search: Optional[str] = Query(None, description="Search in display_name (partial match)"),
     isin: Optional[str] = Query(None, description="Exact ISIN match"),
-    symbol: Optional[str] = Query(None, description="Exact symbol/ticker match"),
-    identifier_contains: Optional[str] = Query(None, description="Partial match in identifier field"),
+    ticker: Optional[str] = Query(None, description="Exact ticker match"),
+    cusip: Optional[str] = Query(None, description="Exact CUSIP match"),
+    sedol: Optional[str] = Query(None, description="Exact SEDOL match"),
+    figi: Optional[str] = Query(None, description="Exact FIGI match"),
+    uuid: Optional[str] = Query(None, description="Exact UUID match"),
+    identifier_other: Optional[str] = Query(None, description="Partial match in identifier_other"),
+    identifier_contains: Optional[str] = Query(None, description="Partial match in any identifier field"),
     session: AsyncSession = Depends(get_session_generator)
     ):
     """
@@ -195,8 +200,13 @@ async def list_assets(
     - `asset_type`: Filter by type enum (STOCK, ETF, BOND, etc.)
     - `active`: Include only active assets (default: true)
     - `search`: Search text in display_name (case-insensitive partial match)
-    - `isin`: Exact ISIN match (via provider assignment)
-    - `symbol`: Exact ticker/symbol match (via provider assignment)
+    - `isin`: Exact ISIN match
+    - `ticker`: Exact ticker match
+    - `cusip`: Exact CUSIP match
+    - `sedol`: Exact SEDOL match
+    - `figi`: Exact FIGI match
+    - `uuid`: Exact UUID match
+    - `identifier_other`: Partial match in identifier_other field
     - `identifier_contains`: Partial match in any identifier
 
     **Response Fields**:
@@ -209,7 +219,7 @@ async def list_assets(
     ```
     GET /api/v1/assets/query?currency=USD&asset_type=STOCK&search=Apple
     GET /api/v1/assets/query?isin=US0378331005
-    GET /api/v1/assets/query?symbol=AAPL
+    GET /api/v1/assets/query?ticker=AAPL
     ```
     """
     try:
@@ -219,7 +229,12 @@ async def list_assets(
             active=active,
             search=search,
             isin=isin,
-            symbol=symbol,
+            ticker=ticker,
+            cusip=cusip,
+            sedol=sedol,
+            figi=figi,
+            uuid=uuid,
+            identifier_other=identifier_other,
             identifier_contains=identifier_contains
             )
         return await AssetCRUDService.list_assets(filters, session)

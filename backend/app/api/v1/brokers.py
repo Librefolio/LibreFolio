@@ -428,15 +428,15 @@ async def parse_file(
         for fake_id, info in extracted_assets.items():
             candidates, auto_selected = await search_asset_candidates(
                 session=session,
-                extracted_symbol=info.get('extracted_symbol'),
-                extracted_isin=info.get('extracted_isin'),
-                extracted_name=info.get('extracted_name')
+                extracted_symbol=info.extracted_symbol,
+                extracted_isin=info.extracted_isin,
+                extracted_name=info.extracted_name
                 )
             asset_mappings.append(BRIMAssetMapping(
                 fake_asset_id=fake_id,
-                extracted_symbol=info.get('extracted_symbol'),
-                extracted_isin=info.get('extracted_isin'),
-                extracted_name=info.get('extracted_name'),
+                extracted_symbol=info.extracted_symbol,
+                extracted_isin=info.extracted_isin,
+                extracted_name=info.extracted_name,
                 candidates=candidates,
                 selected_asset_id=auto_selected
                 ))
