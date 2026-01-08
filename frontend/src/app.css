@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+/* LibreFolio Design System */
+@theme {
+	/* Brand Colors */
+	--color-libre-green: #1a4031;
+	--color-libre-beige: #f5f4ef;
+	--color-libre-sage: #9caf9c;
+	--color-libre-dark: #111111;
+
+	/* Primary palette (green) */
+	--color-primary-50: #e8f0ed;
+	--color-primary-100: #c5d9d0;
+	--color-primary-200: #9fc0b2;
+	--color-primary-300: #78a793;
+	--color-primary-400: #5a947c;
+	--color-primary-500: #1a4031;
+	--color-primary-600: #173a2c;
+	--color-primary-700: #133125;
+	--color-primary-800: #0f281e;
+	--color-primary-900: #0a1c14;
+
+	/* Surface palette (beige) */
+	--color-surface-50: #fdfcfa;
+	--color-surface-100: #f5f4ef;
+	--color-surface-200: #edeae2;
+	--color-surface-300: #e0dcd0;
+	--color-surface-400: #d3cec0;
+	--color-surface-500: #c5c0b0;
+
+	/* Shadows */
+	--shadow-card: 0 4px 20px rgba(0, 0, 0, 0.08);
+	--shadow-card-hover: 0 8px 30px rgba(0, 0, 0, 0.12);
+
+	/* Border radius */
+	--radius-xl: 1rem;
+	--radius-2xl: 1.5rem;
+}
+
+/* Base styles */
+html {
+	font-family: Inter, system-ui, sans-serif;
+}
+

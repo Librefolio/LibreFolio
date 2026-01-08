@@ -45,6 +45,11 @@ mypy = "*"
 pytest-cov = "*"
 coverage = {extras = ["toml"], version = "*"}
 gevent = "*"
+# Test packages for browser automation and language models (uncomment if needed)
+#browser-use = "*"
+#mcp = "*"
+#langchain-google-genai = "*"
+#playwright = "*"
 
 [requires]
 python_version = "3.13"

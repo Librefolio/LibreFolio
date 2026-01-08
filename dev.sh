@@ -168,6 +168,12 @@ function print_help() {
     echo "  lint             Lint code with ruff"
     echo "  shell            Open a shell in the virtualenv"
     echo ""
+    echo "Frontend:"
+    echo "  fe:dev           Start frontend dev server (Vite + SvelteKit)"
+    echo "  fe:build         Build frontend for production"
+    echo "  fe:check         Run svelte-check for type errors"
+    echo "  fe:preview       Preview production build"
+    echo ""
     echo "Information:"
     echo "  info:api         List all API endpoints with descriptions"
     echo "  info:mk [cmd]    MkDocs helper (cmd = build | serve | clean | help)"
@@ -197,8 +203,55 @@ function path_to_url() {
 }
 
 function install_deps() {
-    echo -e "${GREEN}Installing dependencies...${NC}"
+    echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${GREEN}       Installing LibreFolio Dependencies          ${NC}"
+    echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # 1. Backend Python dependencies
+    echo -e "${BLUE}[1/4] ${NC}${BOLD}Installing Python backend dependencies...${NC}"
     pipenv install --dev
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to install Python dependencies${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✅ Python dependencies installed${NC}"
+    echo ""
+
+    # 2. Root project tools (Playwright for E2E tests)
+    echo -e "${BLUE}[2/4] ${NC}${BOLD}Installing root project tools...${NC}"
+    npm install
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to install root npm dependencies${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✅ Root project tools installed${NC}"
+    echo ""
+
+    # 3. Frontend dependencies (SvelteKit, TailwindCSS, etc.)
+    echo -e "${BLUE}[3/4] ${NC}${BOLD}Installing frontend dependencies...${NC}"
+    cd frontend && npm install && cd ..
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to install frontend dependencies${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✅ Frontend dependencies installed${NC}"
+    echo ""
+
+    # 4. Playwright browsers for E2E testing
+    echo -e "${BLUE}[4/4] ${NC}${BOLD}Installing Playwright browsers...${NC}"
+    echo -e "${YELLOW}   (This may take a while, ~500-700MB download)${NC}"
+    npx playwright install
+    if [ $? -ne 0 ]; then
+        echo -e "${YELLOW}⚠️  Playwright browser installation had issues (non-critical)${NC}"
+    else
+        echo -e "${GREEN}✅ Playwright browsers installed${NC}"
+    fi
+    echo ""
+
+    echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${GREEN}       ✅ All dependencies installed!              ${NC}"
+    echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${NC}"
 }
 
 function start_server() {
@@ -234,6 +287,41 @@ function start_server_test() {
     echo -e "${YELLOW}⚠️  Warning: This uses the TEST database, not production!${NC}"
     echo ""
     LIBREFOLIO_TEST_MODE=1 pipenv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port $port
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Frontend Commands
+# ═══════════════════════════════════════════════════════════════════════════════
+
+function frontend_dev() {
+    echo -e "${GREEN}Starting frontend development server...${NC}"
+    echo -e "${YELLOW}URL: http://localhost:5173${NC}"
+    echo ""
+    cd frontend && npm run dev
+}
+
+function frontend_build() {
+    echo -e "${GREEN}Building frontend for production...${NC}"
+    cd frontend && npm run build
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Frontend build complete!${NC}"
+        echo -e "${YELLOW}Output in: frontend/build/${NC}"
+    else
+        echo -e "${RED}❌ Frontend build failed${NC}"
+        return 1
+    fi
+}
+
+function frontend_check() {
+    echo -e "${GREEN}Running svelte-check for type errors...${NC}"
+    cd frontend && npm run check
+}
+
+function frontend_preview() {
+    echo -e "${GREEN}Previewing production build...${NC}"
+    echo -e "${YELLOW}URL: http://localhost:4173${NC}"
+    echo ""
+    cd frontend && npm run preview
 }
 
 function has_pending_migrations() {
@@ -607,6 +695,18 @@ case "$COMMAND" in
         ;;
     info:api)
         list_api_endpoints
+        ;;
+    fe:dev)
+        frontend_dev
+        ;;
+    fe:build)
+        frontend_build
+        ;;
+    fe:check)
+        frontend_check
+        ;;
+    fe:preview)
+        frontend_preview
         ;;
     test:coverage)
         echo -e "${GREEN}Running all tests with coverage tracking...${NC}"
