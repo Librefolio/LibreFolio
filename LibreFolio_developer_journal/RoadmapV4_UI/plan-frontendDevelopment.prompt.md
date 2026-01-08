@@ -1,9 +1,9 @@
 # Plan: Frontend Development - LibreFolio UI
 
 **Data Creazione**: 8 Gennaio 2026  
-**Versione**: 2.2 (Phase 0 Completata)  
+**Versione**: 2.3 (Phase 1.1 Completata)  
 **Target**: Implementazione completa UI per Phase 9  
-**Status**: 🟢 PHASE 0 COMPLETATA - Pronto per Phase 1 (i18n + Auth)
+**Status**: 🟢 PHASE 1.1 COMPLETATA - Pronto per Phase 1.2 (OpenAPI Schema Generation)
 
 ---
 
@@ -407,45 +407,56 @@ Production (Docker):
 
 ### Phase 1: Foundation & Authentication (3 giorni)
 
-#### 1.1 Setup i18n (0.5 giorni)
+#### 1.1 Setup i18n (0.5 giorni) - ✅ COMPLETATO
 
 **Obiettivo**: Internazionalizzazione 4 lingue + sync con API
 
-**Tasks**:
-
-- [ ] Installare `svelte-i18n`
-- [ ] Creare struttura traduzioni:
+**✅ Completato (8 Gen 2026)**:
+- [x] Installato `svelte-i18n` e `date-fns`
+- [x] Creata struttura traduzioni:
   ```
   src/lib/i18n/
-  ├── index.ts
-  ├── en.json
-  ├── it.json
-  ├── fr.json
-  └── es.json
+  ├── index.ts      # Config e init
+  ├── en.json       # English
+  ├── it.json       # Italiano  
+  ├── fr.json       # Français
+  └── es.json       # Español
   ```
-- [ ] Creare store per lingua corrente
-- [ ] **Importante**: Sincronizzare lingua con header `Accept-Language` nelle API calls
+- [x] Creato `src/lib/stores/language.ts` per gestione lingua
+- [x] Language selector con bandiere emoji nella login page
+- [x] Persistenza preferenza lingua in localStorage
+- [x] Auto-detect lingua browser con fallback a English
+- [x] Integrazione in `+layout.svelte` con loading state
 
-**Code Example**:
+**Modifiche Implementate**:
 
-```typescript
-// src/lib/stores/language.ts
-import {writable} from 'svelte/store';
-import {init, locale} from 'svelte-i18n';
+1. **`frontend/src/lib/i18n/index.ts`**:
+   - `initI18n()` per inizializzazione
+   - `SUPPORTED_LOCALES`, `LOCALE_NAMES`, `LOCALE_FLAGS`
+   - Re-export di `_`, `t`, `locale` da svelte-i18n
+   - `saveLocalePreference()` per localStorage
 
-export const currentLanguage = writable<'en' | 'it' | 'fr' | 'es'>('en');
+2. **`frontend/src/lib/stores/language.ts`**:
+   - Store `currentLanguage` con sync a svelte-i18n
+   - `currentLanguageName`, `currentLanguageFlag` derived stores
+   - `availableLanguages` array per UI selectors
 
-// Sync with i18n locale
-currentLanguage.subscribe(lang => {
-    locale.set(lang);
-});
-```
+3. **`frontend/src/routes/+layout.svelte`**:
+   - Inizializzazione i18n on mount
+   - Loading state durante caricamento traduzioni
+
+4. **`frontend/src/routes/+page.svelte`** (Login):
+   - Language selector in alto a destra
+   - Tutti i testi tradotti con `$_('key')`
+   - Loading state e error handling
 
 **Files**:
 
 - `src/lib/i18n/index.ts`
+- `src/lib/i18n/{en,it,fr,es}.json`
 - `src/lib/stores/language.ts`
-- `src/lib/i18n/*.json`
+- `src/routes/+layout.svelte`
+- `src/routes/+page.svelte`
 
 ---
 

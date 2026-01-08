@@ -1,73 +1,144 @@
 Ciao! Sto lavorando su un portfolio tracker finanziario self-hosted chiamato **LibreFolio**.
 
-## Stack Tecnologico
+## 🎯 Obiettivo del Progetto
 
-- **Backend Python**: FastAPI + SQLModel + SQLite + Alembic + Pipenv
-- **Frontend**: SvelteKit + Tailwind + Skeleton UI (in sviluppo)
-- **Deploy**: Single Docker image (backend serve gli asset statici del frontend)
+LibreFolio è un'alternativa self-hosted e open-source a Ghostfolio, pensata per:
+- **Privacy**: I tuoi dati finanziari restano sul tuo server
+- **Flessibilità**: Supporto per asset tradizionali, crypto, prestiti P2P, scheduled-yield
+- **Controllo**: Import da qualsiasi broker tramite plugin estensibili
+- **Multi-utenza**: Più utenti con preferenze personalizzate
 
-## Architettura
+## 🏗️ Architettura del Progetto
 
-### Database (SQLite)
-- **Users & Settings**: Multi-utenza con preferenze (valuta base, lingua, tema)
-- **Brokers**: Contenitori flessibili con flag per overdraft/shorting
-- **Assets**: Supporto per azioni, ETF, crypto, bond, prestiti P2P (scheduled-yield)
-- **Transactions**: Tabella unificata per tutti i movimenti (BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, TRANSFER, FX_CONVERSION, ADJUSTMENT)
-- **FX Rates**: Multi-provider (ECB, FED, BOE, SNB) con fallback e backward-fill
-- **Price History**: Prezzi da yfinance, JustETF, CSS scraper
+```
+LibreFolio/
+├── backend/                    # Python FastAPI
+│   ├── app/
+│   │   ├── api/v1/            # REST API endpoints
+│   │   ├── db/models.py       # SQLModel ORM models
+│   │   ├── schemas/           # Pydantic schemas (validazione I/O)
+│   │   ├── services/          # Business logic
+│   │   │   ├── asset_source_providers/   # yfinance, JustETF, etc.
+│   │   │   ├── fx_providers/             # ECB, FED, BOE, SNB
+│   │   │   └── brim_providers/           # Import broker reports
+│   │   └── utils/             # Utilities condivise
+│   ├── alembic/               # Migrazioni database
+│   └── data/sqlite/           # Database SQLite
+│
+├── frontend/                   # SvelteKit SPA
+│   ├── src/
+│   │   ├── routes/            # Pagine e routing
+│   │   ├── lib/components/    # Componenti riutilizzabili
+│   │   └── lib/i18n/          # Traduzioni (EN, IT, FR, ES)
+│   └── build/                 # Build statica (servita da FastAPI)
+│
+├── dev.sh                      # Script principale per sviluppo
+├── test_runner.py              # Orchestratore test suite
+└── LibreFolio_developer_journal/  # Documentazione e roadmap
+    └── RoadmapV4_UI/plan-frontendDevelopment.prompt.md
+```
 
-### Servizi Implementati
-- **TransactionService**: CRUD, validazione saldi giorno-per-giorno, linking bidirezionale
-- **BrokerService**: CRUD con depositi iniziali, summary con holdings
-- **FX Service**: Sync tassi multi-provider, conversioni con forward-fill
-- **Asset Services**: Metadata, pricing, scheduled-yield valuation
-- **Provider Registry**: AbstractProviderRegistry per auto-discovery di provider (FX, Asset, BRIM)
+## 🔧 Stack Tecnologico
 
-### Principi Chiave
-- Tutti i **calcoli sono nel backend** (Python); il frontend solo visualizza
-- **FIFO matching calcolato a runtime** (no split persistiti)
-- **Valutazione scheduled-yield** calcolata dalla schedule interessi
-- Le migrazioni DB sono gestite con **Alembic**
-- Codice, commenti, docstrings, README e documentazione in **inglese**
-- Solo l'UI frontend è multilingue (EN, IT, FR, ES)
+### Backend (Python)
+- **FastAPI**: Framework web async
+- **SQLModel + SQLite**: ORM + database embedded
+- **Alembic**: Migrazioni schema
+- **Pipenv**: Gestione dipendenze
 
-## Stato Attuale (Dicembre 2025)
+### Frontend (TypeScript/Svelte)
+- **SvelteKit 2.48+**: Framework UI reattivo
+- **Tailwind CSS 4.1+**: Styling utility-first (config via `@theme` in CSS)
+- **lucide-svelte**: Icone
+- **Apache ECharts**: Grafici finanziari (da implementare)
 
-### ✅ Completato
-- **Phase 1-4**: Database, Schemas, Services, API per Brokers e Transactions
-- **Test Suite**: 7/7 categorie passano (External, DB, Schemas, Utils, Services, API, E2E)
+### Deploy
+- **Single Docker Image**: Backend serve frontend come file statici
+- **Sviluppo**: Backend :8000, Frontend dev :5173 (con HMR)
+- **Produzione**: Solo :8000, frontend pre-built servito da FastAPI
+
+## 📐 Scelte Progettuali Chiave
+
+1. **Calcoli solo nel Backend**: Il frontend è pura presentazione, non fa calcoli
+2. **FIFO a Runtime**: Matching costi calcolato on-demand, non persistito
+3. **Provider Registry Pattern**: Auto-discovery per FX, Asset e BRIM providers
+4. **Multi-Provider con Fallback**: FX rates da ECB→FED→BOE→SNB con backward-fill
+5. **Scheduled-Yield Assets**: Valutazione prestiti P2P dalla schedule interessi
+6. **Tailwind v4**: Configurazione tramite `@theme {}` in CSS, no file config TS
+
+## 📊 Stato Attuale (Gennaio 2026)
+
+### ✅ Backend Completato
+- **Database**: Schema con Users, Brokers, Assets, Transactions, FX Rates, Price History
+- **API**: 60+ endpoints operativi per tutte le entità
 - **FX Multi-Provider**: ECB, FED, BOE, SNB con fallback automatico
 - **Asset Providers**: yfinance, JustETF, CSS Scraper, Scheduled Investment
+- **BRIM**: Broker Report Import Manager con plugin (Generic CSV, Directa, Degiro, eToro, etc.)
+- **Test Suite**: 7/7 categorie passano
+
+### ✅ Frontend Phase 0 Completato
+- **Login Page**: Funzionante con styling e animazioni
+- **AnimatedBackground**: Onde animate + linee grafici
+- **Build Integration**: Auto-build in dev.sh, FastAPI serve static files
+- **Design System**: Colori brand (#1a4031 verde, #f5f4ef beige, #9caf9c sage)
 
 ### 🔲 Da Implementare
-- **Phase 5 (BRIM)**: Broker Report Import Manager - import file broker con flusso parse→review→import (Generic CSV, Directa, Degiro, etc.)
-- **Phase 6-7**: Runtime Analysis (FIFO, KPIs), Portfolio Aggregations
-- **Phase 8**: Scheduler e Autenticazione
-- **Phase 9**: Frontend SvelteKit
-- **Phase 10**: Docker deploy
+- **Phase 1**: i18n (svelte-i18n) + Auth backend/frontend
+- **Phase 2-5**: Dashboard, Broker Pages, Asset Pages, Transaction Pages
+- **Phase 6-7**: Import BRIM UI, Settings
+- **Phase 8+**: Runtime Analysis (FIFO, KPIs), Docker deploy
 
-## Comandi Utili
+## 📁 Dove Trovare Cosa
+
+| Cosa cerchi? | Dove guardare |
+|--------------|---------------|
+| **Modelli DB** | `backend/app/db/models.py` |
+| **Schemi API** | `backend/app/schemas/*.py` |
+| **Business Logic** | `backend/app/services/*.py` |
+| **API Endpoints** | `backend/app/api/v1/*.py` |
+| **Provider FX** | `backend/app/services/fx_providers/` |
+| **Provider Asset** | `backend/app/services/asset_source_providers/` |
+| **Import Broker** | `backend/app/services/brim_providers/` |
+| **Test Suite** | `backend/test_scripts/` |
+| **Frontend Pages** | `frontend/src/routes/` |
+| **Componenti UI** | `frontend/src/lib/components/` |
+| **Roadmap UI** | `LibreFolio_developer_journal/RoadmapV4_UI/` |
+
+## 🛠️ Comandi Utili
 
 ```bash
-# Visualizza aiuto per i comandi disponibili
+# Visualizza tutti i comandi disponibili
 ./dev.sh --help
-./dev.sh test --help
+
+# Avvia server (auto-build frontend se modifiche)
+./dev.sh server              # Porta 8000 - UI + API
+
+# Frontend development (con hot reload)
+./dev.sh fe:dev              # Porta 5173
+
+# Build frontend manualmente
+./dev.sh fe:build
 
 # Esegui tutti i test
 ./dev.sh test all
 
-# Avvia server di sviluppo
-./dev.sh run
+# Test specifici
+./dev.sh test api assets     # Test API assets
+./dev.sh test external fx    # Test provider FX
+./dev.sh test db brim        # Test BRIM database
 ```
 
-## Note per lo Sviluppo
+## ⚠️ Note per lo Sviluppo
 
-⚠️ **Progetto embrionale**: Il codice esiste solo su questa macchina. È preferibile modificare senza mantenere backward compatibility o legacy code. L'obiettivo è avere un codebase pulito e mantenibile quando il progetto sarà pronto per la condivisione.
+- **Progetto embrionale**: Esiste solo su questa macchina
+- **No backward compatibility**: Pulisci invece di mantenere legacy
+- **Codice in inglese**: Commenti, docstrings, README
+- **UI multilingue**: Solo interfaccia grafica in EN/IT/FR/ES
+- **Obiettivo**: Codebase pulito e mantenibile per condivisione futura
 
-Prima di proseguire con il prossimo passo:
-1. ✅ Rivedi lo stato attuale del progetto (codebase, modelli, migrazioni, endpoints)
-2. ✅ Segnala eventuali inconsistenze o necessità di cleanup
-3. ✅ Poi ti invierò il prossimo prompt per continuare lo sviluppo
+Prima di proseguire:
+1. ✅ Rivedi stato attuale (codebase, modelli, endpoint)
+2. ✅ Consulta il plan: `LibreFolio_developer_journal/RoadmapV4_UI/plan-frontendDevelopment.prompt.md`
+3. ✅ Segnala inconsistenze o necessità di cleanup
 
 Grazie!
-
