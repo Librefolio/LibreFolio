@@ -32,7 +32,7 @@ from backend.app.utils.sector_fin_utils import FinancialSector
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
 
-
+# TODO: la richiesta http://localhost:8000/api/v1/utilities/countries/normalize?name=Germania fallisce ad esempio, scrivere Test per le utility in varie lingue e su molti paesi/valute!
 @router.get("/countries/normalize", response_model=CountryNormalizationResponse)
 async def normalize_country(
     name: str = Query(..., min_length=1, description="Country name or code to normalize")
