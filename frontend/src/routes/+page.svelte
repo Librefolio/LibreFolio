@@ -3,28 +3,23 @@
 	import { ShieldCheck } from 'lucide-svelte';
 	import { _ } from '$lib/i18n';
 	import { currentLanguage, availableLanguages, currentLanguageFlag } from '$lib/stores/language';
+	import { auth, authError, isAuthLoading } from '$lib/stores/auth';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 
 	// Form state
 	let username = '';
 	let password = '';
-	let isLoading = false;
-	let error = '';
+
+	// Get redirect URL from query params (if coming from protected route)
+	$: redirectTo = $page.url.searchParams.get('redirect') || '/dashboard';
 
 	async function handleLogin() {
-		isLoading = true;
-		error = '';
+		const success = await auth.login(username, password);
 
-		try {
-			console.log('Login attempt:', username);
-			// TODO: Integrate with backend /auth/login
-			// For now, just simulate a delay
-			await new Promise(resolve => setTimeout(resolve, 500));
-
-			// Placeholder - will redirect to dashboard after auth is implemented
-		} catch (e) {
-			error = $_('auth.invalidCredentials');
-		} finally {
-			isLoading = false;
+		if (success) {
+			// Redirect to dashboard or original destination
+			goto(redirectTo);
 		}
 	}
 
@@ -77,9 +72,9 @@
 			<form on:submit|preventDefault={handleLogin} class="space-y-5">
 				
 				<!-- Error Message -->
-				{#if error}
+				{#if $authError}
 					<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg text-sm">
-						{error}
+						{$authError}
 					</div>
 				{/if}
 
@@ -89,7 +84,7 @@
 						type="text" 
 						placeholder={$_('auth.usernameOrEmail')}
 						bind:value={username}
-						disabled={isLoading}
+						disabled={$isAuthLoading}
 						class="w-full px-4 py-3 rounded-lg border border-gray-400 bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:border-libre-green focus:ring-1 focus:ring-libre-green transition-all disabled:opacity-50"
 					/>
 				</div>
@@ -100,7 +95,7 @@
 						type="password" 
 						placeholder={$_('auth.password')}
 						bind:value={password}
-						disabled={isLoading}
+						disabled={$isAuthLoading}
 						class="w-full px-4 py-3 rounded-lg border border-gray-400 bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:border-libre-green focus:ring-1 focus:ring-libre-green transition-all disabled:opacity-50"
 					/>
 				</div>
@@ -115,10 +110,10 @@
 				<!-- Login Button -->
 				<button 
 					type="submit" 
-					disabled={isLoading}
+					disabled={$isAuthLoading}
 					class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
 				>
-					{#if isLoading}
+					{#if $isAuthLoading}
 						{$_('common.loading')}
 					{:else}
 						{$_('auth.login')}
