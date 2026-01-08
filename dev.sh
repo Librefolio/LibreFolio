@@ -174,6 +174,11 @@ function print_help() {
     echo "  fe:check         Run svelte-check for type errors"
     echo "  fe:preview       Preview production build"
     echo ""
+    echo "API Schema Generation:"
+    echo "  api:schema       Export OpenAPI schema to frontend/src/lib/api/openapi.json"
+    echo "  api:client       Generate TypeScript client from OpenAPI schema"
+    echo "  api:sync         Run api:schema + api:client (full sync)"
+    echo ""
     echo "Information:"
     echo "  info:api         List all API endpoints with descriptions"
     echo "  info:mk [cmd]    MkDocs helper (cmd = build | serve | clean | help)"
@@ -390,6 +395,80 @@ function frontend_preview() {
     echo -e "${YELLOW}URL: http://localhost:4173${NC}"
     echo ""
     cd frontend && npm run preview
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# API Schema Generation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+OPENAPI_OUTPUT="frontend/src/lib/api/openapi.json"
+TS_CLIENT_OUTPUT="frontend/src/lib/api/generated.ts"
+
+function api_export_schema() {
+    echo -e "${GREEN}Exporting OpenAPI schema from FastAPI...${NC}"
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$OPENAPI_OUTPUT")"
+
+    # Export OpenAPI schema using the enhanced script
+    pipenv run python backend/test_scripts/list_api_endpoints.py --openapi-file "$OPENAPI_OUTPUT"
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ OpenAPI schema exported to: $OPENAPI_OUTPUT${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ Failed to export OpenAPI schema${NC}"
+        return 1
+    fi
+}
+
+function api_generate_client() {
+    echo -e "${GREEN}Generating TypeScript client from OpenAPI schema...${NC}"
+
+    # Check if openapi.json exists
+    if [ ! -f "$OPENAPI_OUTPUT" ]; then
+        echo -e "${YELLOW}⚠️  OpenAPI schema not found. Running api:schema first...${NC}"
+        api_export_schema || return 1
+    fi
+
+    # Check if openapi-zod-client is installed
+    if ! command -v npx &> /dev/null; then
+        echo -e "${RED}❌ npx not found. Please install Node.js${NC}"
+        return 1
+    fi
+
+    # Generate TypeScript client with Zod schemas
+    cd frontend && npx openapi-zod-client "../$OPENAPI_OUTPUT" \
+        --output "src/lib/api/generated.ts" \
+        --with-alias \
+        --export-schemas
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ TypeScript client generated: $TS_CLIENT_OUTPUT${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ Failed to generate TypeScript client${NC}"
+        echo -e "${YELLOW}💡 Tip: Run 'cd frontend && npm install openapi-zod-client zod' to install dependencies${NC}"
+        return 1
+    fi
+}
+
+function api_sync() {
+    echo -e "${BLUE}${BOLD}Syncing API schema and TypeScript client...${NC}"
+    echo ""
+
+    # Step 1: Export OpenAPI schema
+    api_export_schema || return 1
+    echo ""
+
+    # Step 2: Generate TypeScript client
+    api_generate_client || return 1
+    echo ""
+
+    echo -e "${GREEN}${BOLD}✅ API sync complete!${NC}"
+    echo -e "${YELLOW}Files updated:${NC}"
+    echo -e "  📄 $OPENAPI_OUTPUT"
+    echo -e "  📄 $TS_CLIENT_OUTPUT"
 }
 
 function has_pending_migrations() {
@@ -775,6 +854,15 @@ case "$COMMAND" in
         ;;
     fe:preview)
         frontend_preview
+        ;;
+    api:schema)
+        api_export_schema
+        ;;
+    api:client)
+        api_generate_client
+        ;;
+    api:sync)
+        api_sync
         ;;
     test:coverage)
         echo -e "${GREEN}Running all tests with coverage tracking...${NC}"

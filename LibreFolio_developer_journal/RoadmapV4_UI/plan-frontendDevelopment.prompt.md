@@ -1,9 +1,9 @@
 # Plan: Frontend Development - LibreFolio UI
 
 **Data Creazione**: 8 Gennaio 2026  
-**Versione**: 2.3 (Phase 1.1 Completata)  
+**Versione**: 2.5 (Phase 1 Completata)  
 **Target**: Implementazione completa UI per Phase 9  
-**Status**: 🟢 PHASE 1.1 COMPLETATA - Pronto per Phase 1.2 (OpenAPI Schema Generation)
+**Status**: 🟢 PHASE 1 COMPLETATA - Pronto per Phase 2 (Backend Auth)
 
 ---
 
@@ -460,139 +460,94 @@ Production (Docker):
 
 ---
 
-#### 1.2 OpenAPI Schema Generation (1 giorno)
+#### 1.2 OpenAPI Schema Generation (1 giorno) - ✅ COMPLETATO
 
 **Obiettivo**: Auto-generare Zod schemas da FastAPI OpenAPI
 
-**Tasks**:
+Poi
+**✅ Completato (8 Gen 2026)**:
+- [x] Installato `openapi-zod-client@1.18.3`, `zod@3.24.1`, `@zodios/core@10.9.6`
+- [x] Esteso `backend/test_scripts/list_api_endpoints.py` con:
+  - `--list` / `-l`: Lista endpoints (default)
+  - `--openapi` / `-o`: Export OpenAPI a stdout
+  - `--openapi-file PATH` / `-f PATH`: Export a file
+- [x] Nuovi comandi in `dev.sh`:
+  - `api:schema` - Esporta a `frontend/src/lib/api/openapi.json`
+  - `api:client` - Genera TypeScript client
+  - `api:sync` - Esegue entrambi
+- [x] File `openapi.json` generato (8100+ righe)
 
-- [ ] Installare `openapi-zod-client` e `zod`
-- [ ] Creare script `scripts/generate-schemas.sh`:
-  ```bash
-  #!/bin/bash
-  # Fetch OpenAPI spec from backend
-  curl http://localhost:8000/api/v1/openapi.json > openapi.json
-  
-  # Generate Zod schemas + typed client
-  npx openapi-zod-client ./openapi.json \
-    --output ./src/lib/api/generated.ts \
-    --with-alias
-  
-  echo "✅ Generated Zod schemas and typed API client"
-  ```
-- [ ] Eseguire dopo ogni modifica backend schema
-- [ ] Aggiungere a `package.json`:
-  ```json
-  {
-    "scripts": {
-      "generate-schemas": "./scripts/generate-schemas.sh"
-    }
-  }
-  ```
+**Approccio**: Generazione statica da codice Python (Opzione B)
+- Non richiede server in esecuzione
+- Veloce e CI/CD-friendly
 
 **Files**:
-
-- `scripts/generate-schemas.sh`
-- `src/lib/api/generated.ts` (auto-generated)
+- `backend/test_scripts/list_api_endpoints.py` (esteso)
+- `frontend/src/lib/api/openapi.json` (generato)
+- `dev.sh` (nuovi comandi api:*)
 
 ---
 
-#### 1.3 API Client Base (1 giorno)
+#### 1.3 API Client Base (1 giorno) - ✅ COMPLETATO
 
 **Obiettivo**: Wrapper fetch con session cookie + language header
 
-**Tasks**:
-
-- [ ] Creare `src/lib/api/client.ts`:
-    - Base URL da env: `PUBLIC_API_BASE_URL`
-    - Wrapper fetch con:
-        - `credentials: 'include'` (session cookie)
-        - Header `Accept-Language: {currentLanguage}`
-        - Error handling centralizzato (401 → redirect login)
-        - Response parsing JSON
-        - Timeout handling
-- [ ] Creare helpers per ogni endpoint group:
-    - `src/lib/api/auth.ts`
-    - `src/lib/api/brokers.ts`
-    - `src/lib/api/assets.ts`
-    - `src/lib/api/transactions.ts`
-    - `src/lib/api/fx.ts`
-
-**Code Example**:
-
-```typescript
-// src/lib/api/client.ts
-import {currentLanguage} from '$lib/stores/language';
-import {get} from 'svelte/store';
-import {goto} from '$app/navigation';
-
-export async function apiCall<T>(
-    endpoint: string,
-    options?: RequestInit
-): Promise<T> {
-    const baseUrl = import.meta.env.PUBLIC_API_BASE_URL || '/api/v1';
-    const lang = get(currentLanguage);
-
-    const response = await fetch(`${baseUrl}${endpoint}`, {
-        ...options,
-        credentials: 'include', // Session cookie
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept-Language': lang, // Sync language with backend
-            ...options?.headers
-        }
-    });
-
-    if (!response.ok) {
-        if (response.status === 401) {
-            // Unauthorized - redirect to login
-            goto('/login');
-            throw new Error('Unauthorized');
-        }
-        throw new Error(`API Error: ${response.statusText}`);
-    }
-
-    return response.json();
-}
-```
+**✅ Completato (8 Gen 2026)**:
+- [x] Creato `src/lib/api/client.ts` con:
+  - `apiCall<T>()` generic wrapper
+  - `credentials: 'include'` per session cookie
+  - Header `Accept-Language` da localStorage
+  - Custom `ApiError` class con status/statusText/data
+  - Timeout handling con AbortController
+  - Error handling: 401→login, 403, 404, 422, network errors
+  - Convenience methods: `api.get()`, `.post()`, `.put()`, `.patch()`, `.delete()`
+- [x] Creato `src/lib/api/index.ts` per export
 
 **Files**:
-
 - `src/lib/api/client.ts`
-- `src/lib/api/auth.ts`
-- `src/lib/api/brokers.ts`
-- `src/lib/api/assets.ts`
-- `src/lib/api/transactions.ts`
-- `src/lib/api/fx.ts`
+- `src/lib/api/index.ts`
 
 ---
 
-#### 1.4 Authentication Store & Login Page (0.5 giorni)
+#### 1.4 Authentication Store & Login Page (0.5 giorni) - ✅ COMPLETATO
 
 **Obiettivo**: Gestione auth + login funzionante
 
-**Tasks**:
-
-- [ ] Creare `src/lib/stores/auth.ts`:
-    - `isAuthenticated` (writable)
-    - `currentUser` (writable)
-    - `login(username, password)` function
-    - `logout()` function
-    - `checkAuth()` function (verifica session)
-- [ ] Implementare `src/hooks.server.ts`:
-    - Server-side session check
-    - Redirect a `/login` se route protetta e non autenticato
-- [ ] Refactoring login page esistente (`src/routes/(auth)/login/+page.svelte`):
-    - Connettere form a `POST /api/v1/auth/login`
-    - Error display
-    - Loading state
-    - Redirect a `/dashboard` dopo successo
+**✅ Completato (8 Gen 2026)**:
+- [x] Creato `src/lib/stores/auth.ts`:
+  - Store `auth` con stato: `user`, `isLoading`, `error`, `isInitialized`
+  - `login(username, password)` - chiama POST /auth/login
+  - `logout()` - chiama POST /auth/logout + redirect
+  - `checkAuth()` - verifica sessione con GET /auth/me
+  - `clearError()`, `reset()`
+  - Derived stores: `currentUser`, `isAuthenticated`, `isAuthLoading`, `authError`, `isAuthInitialized`
+- [x] Creato `src/hooks.server.ts`:
+  - Route protection per pagine non pubbliche
+  - Redirect a `/login?redirect=...` se non autenticato
+  - Lista route pubbliche configurabile
+- [x] Aggiornato login page (`src/routes/+page.svelte`):
+  - Integrato con auth store
+  - Error display da `$authError`
+  - Loading state da `$isAuthLoading`
+  - Redirect a dashboard dopo successo (o redirect param)
 
 **Files**:
-
 - `src/lib/stores/auth.ts`
 - `src/hooks.server.ts`
-- `src/routes/(auth)/login/+page.svelte`
+- `src/routes/+page.svelte` (aggiornato)
+
+**Note**: Gli endpoint backend (`/auth/login`, `/auth/logout`, `/auth/me`) non esistono ancora.
+Phase 2 li implementerà.
+
+---
+
+### Phase 1 COMPLETATA ✅
+
+**Riepilogo Phase 1 - Foundation & Authentication (Frontend)**:
+- ✅ 1.1 i18n Setup - Traduzioni EN/IT/FR/ES, language store, selector
+- ✅ 1.2 OpenAPI Schema Generation - dev.sh commands, openapi.json
+- ✅ 1.3 API Client Base - apiCall wrapper, error handling, auth headers
+- ✅ 1.4 Auth Store & Login Page - auth store, hooks.server.ts, login integration
 
 ---
 
