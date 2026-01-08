@@ -1,9 +1,9 @@
 # Plan: Frontend Development - LibreFolio UI
 
 **Data Creazione**: 8 Gennaio 2026  
-**Versione**: 2.1 (Aggiornato con implementazione Phase 0.1)  
+**Versione**: 2.2 (Phase 0 Completata)  
 **Target**: Implementazione completa UI per Phase 9  
-**Status**: 🟡 IN CORSO - Phase 0.1 Completata
+**Status**: 🟢 PHASE 0 COMPLETATA - Pronto per Phase 1 (i18n + Auth)
 
 ---
 
@@ -269,44 +269,65 @@ export default {
 
 ---
 
-#### 0.2 Integrazione Build in dev.sh (0.5 giorni) - 🟡 PARZIALE
+#### 0.2 Integrazione Build in dev.sh (0.5 giorni) - ✅ COMPLETATO
 
 **Obiettivo**: Automatizzare build frontend quando si avvia il backend
 
-**✅ Completato**:
+**✅ Completato (8 Gen 2026)**:
 - [x] Comando `fe:dev` per development server frontend
 - [x] Comando `fe:build` per build production
 - [x] Comando `fe:check` per type checking (svelte-check)
 - [x] Comando `fe:preview` per preview build
 - [x] Help aggiornato con sezione "Frontend:"
 - [x] Funzione `install_deps()` migliorata
+- [x] **Auto-build frontend in `start_server()`** - Rileva modifiche e rebuilda
+- [x] **Nuove funzioni**: `frontend_needs_rebuild()`, `auto_build_frontend()`
+- [x] **Console output migliorato** con tutti gli endpoint disponibili
+- [x] **FastAPI serve frontend** da `frontend/build/` come file statici
+- [x] **SPA fallback** - Tutte le route non-API servono `index.html`
+- [x] **Adapter-static** per generare build statica
 
-**⏳ Da Fare**:
-- [ ] **Configurare FastAPI per servire static files**:
-  ```python
-  # backend/app/main.py
-  from fastapi.staticfiles import StaticFiles
-  import os
-  
-  # Serve frontend build (se esiste)
-  frontend_build = "frontend/build"
-  if os.path.exists(frontend_build):
-      app.mount("/", StaticFiles(directory=frontend_build, html=True), name="frontend")
-  ```
-- [ ] Auto-build nel comando `server` (opzionale, per ora `fe:build` manuale)
-- [ ] Comando `dev:full` per frontend + backend insieme (nice-to-have)
+**Modifiche Implementate**:
 
-**Note Architetturali**:
+1. **`backend/app/main.py`**:
+   - Aggiunto import `StaticFiles`
+   - Funzione `frontend_available()` per check build
+   - Endpoint `/` serve frontend se build esiste
+   - Mount `/_app` per asset statici SvelteKit
+   - Catch-all `/{path:path}` per SPA routing
 
-Il progetto funziona così:
-1. **Development**: Due server separati
-   - Backend: `./dev.sh server` → porta 8000
-   - Frontend: `./dev.sh fe:dev` → porta 5173 (Vite dev server con HMR)
-   
-2. **Production/Docker**: Un solo server
-   - `./dev.sh fe:build` → genera `frontend/build/`
-   - Backend FastAPI serve i file statici da `frontend/build/`
-   - API su `/api/*`, frontend su `/`
+2. **`dev.sh`**:
+   - Nuova funzione `frontend_needs_rebuild()`:
+     - Controlla se `frontend/build/index.html` esiste
+     - Confronta timestamp src vs build
+     - Controlla modifiche a `package.json`
+   - Nuova funzione `auto_build_frontend()`:
+     - Chiamata da `start_server()` e `start_server_test()`
+     - Rebuilda solo se necessario
+   - Console output migliorato con emoji e URL completi
+
+3. **`frontend/svelte.config.js`**:
+   - Cambiato da `adapter-auto` a `adapter-static`
+   - Configurato fallback per SPA
+
+4. **`frontend/src/routes/+layout.ts`** (nuovo):
+   - `prerender = true` per build statica
+   - `ssr = false` per client-side only
+
+**Architettura Risultante**:
+
+```
+Development:
+├── Backend:  ./dev.sh server    → http://localhost:8000
+│   └── Auto-builds frontend se modifiche rilevate
+└── Frontend: ./dev.sh fe:dev    → http://localhost:5173 (con HMR)
+
+Production (Docker):
+└── Backend:  ./dev.sh server    → http://localhost:8000
+    ├── /api/v1/*  → FastAPI routes
+    ├── /mkdocs/*  → User documentation
+    └── /*         → Frontend SPA (da frontend/build/)
+```
 
 **Tasks**:
 
