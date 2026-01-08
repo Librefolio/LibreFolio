@@ -44,7 +44,7 @@ git clone <repository-url>
 cd LibreFolio
 ```
 
-2. Install dependencies:
+2. Install all dependencies (development included):
 ```bash
 ./dev.sh install
 ```
@@ -81,6 +81,7 @@ The `./dev.sh` script provides convenient commands:
 - `./dev.sh shell` - Open a shell in the virtualenv
 - `./dev.sh help` - Show all available commands
 
+[//]: # TODO: aggiornare i comandi con i nuovi()
 ## 📁 Project Structure
 
 ```

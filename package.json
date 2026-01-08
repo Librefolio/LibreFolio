@@ -1,0 +1,14 @@
+{
+	"name": "librefolio",
+	"version": "0.0.1",
+	"description": "LibreFolio - Self-hosted financial portfolio tracker",
+	"private": true,
+	"scripts": {
+		"install:all": "npm install && cd frontend && npm install",
+		"test:e2e": "playwright test"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.48.2"
+	}
+}
+
