@@ -1,0 +1,52 @@
+{
+  "common": {
+    "loading": "Caricamento...",
+    "error": "Errore",
+    "success": "Successo",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "create": "Crea",
+    "close": "Chiudi",
+    "back": "Indietro",
+    "next": "Avanti",
+    "yes": "Sì",
+    "no": "No",
+    "search": "Cerca",
+    "filter": "Filtra",
+    "all": "Tutti",
+    "none": "Nessuno",
+    "select": "Seleziona",
+    "noData": "Nessun dato disponibile"
+  },
+  "auth": {
+    "login": "Accedi",
+    "logout": "Esci",
+    "register": "Registrati",
+    "username": "Nome utente",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Conferma Password",
+    "forgotPassword": "Password dimenticata?",
+    "rememberMe": "Ricordami",
+    "loginTitle": "Accedi al tuo account",
+    "registerTitle": "Crea un account",
+    "noAccount": "Non hai un account?",
+    "hasAccount": "Hai già un account?",
+    "registerHere": "Registrati qui",
+    "loginHere": "Accedi",
+    "invalidCredentials": "Nome utente o password non validi",
+    "sessionExpired": "La sessione è scaduta. Effettua nuovamente l'accesso.",
+    "usernameOrEmail": "Nome utente o Email"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "brokers": "Broker",
+    "assets": "Asset",
+    "transactions": "Transazioni",
+    "import": "Importa",
+    "settings": "Impostazioni",
+    "profile": "Profilo"
+  }
+}

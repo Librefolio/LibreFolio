@@ -1,0 +1,52 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "close": "Cerrar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "yes": "Sí",
+    "no": "No",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "all": "Todos",
+    "none": "Ninguno",
+    "select": "Seleccionar",
+    "noData": "No hay datos disponibles"
+  },
+  "auth": {
+    "login": "Iniciar Sesión",
+    "logout": "Cerrar Sesión",
+    "register": "Registrarse",
+    "username": "Nombre de Usuario",
+    "email": "Correo Electrónico",
+    "password": "Contraseña",
+    "confirmPassword": "Confirmar Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "rememberMe": "Recordarme",
+    "loginTitle": "Inicia sesión en tu cuenta",
+    "registerTitle": "Crear una cuenta",
+    "noAccount": "¿No tienes una cuenta?",
+    "hasAccount": "¿Ya tienes una cuenta?",
+    "registerHere": "Regístrate aquí",
+    "loginHere": "Inicia sesión",
+    "invalidCredentials": "Nombre de usuario o contraseña inválidos",
+    "sessionExpired": "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.",
+    "usernameOrEmail": "Nombre de Usuario o Email"
+  },
+  "nav": {
+    "dashboard": "Panel",
+    "brokers": "Brókeres",
+    "assets": "Activos",
+    "transactions": "Transacciones",
+    "import": "Importar",
+    "settings": "Configuración",
+    "profile": "Perfil"
+  }
+}
