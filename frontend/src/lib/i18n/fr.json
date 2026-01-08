@@ -1,0 +1,52 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "yes": "Oui",
+    "no": "Non",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "all": "Tout",
+    "none": "Aucun",
+    "select": "Sélectionner",
+    "noData": "Aucune donnée disponible"
+  },
+  "auth": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "register": "S'inscrire",
+    "username": "Nom d'utilisateur",
+    "email": "Email",
+    "password": "Mot de passe",
+    "confirmPassword": "Confirmer le mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "rememberMe": "Se souvenir de moi",
+    "loginTitle": "Connectez-vous à votre compte",
+    "registerTitle": "Créer un compte",
+    "noAccount": "Vous n'avez pas de compte ?",
+    "hasAccount": "Vous avez déjà un compte ?",
+    "registerHere": "Inscrivez-vous ici",
+    "loginHere": "Connectez-vous",
+    "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide",
+    "sessionExpired": "Votre session a expiré. Veuillez vous reconnecter.",
+    "usernameOrEmail": "Nom d'utilisateur ou Email"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "brokers": "Courtiers",
+    "assets": "Actifs",
+    "transactions": "Transactions",
+    "import": "Importer",
+    "settings": "Paramètres",
+    "profile": "Profil"
+  }
+}

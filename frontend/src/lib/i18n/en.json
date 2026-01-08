@@ -1,0 +1,52 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "yes": "Yes",
+    "no": "No",
+    "search": "Search",
+    "filter": "Filter",
+    "all": "All",
+    "none": "None",
+    "select": "Select",
+    "noData": "No data available"
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "register": "Register",
+    "username": "Username",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "forgotPassword": "Forgot Password?",
+    "rememberMe": "Remember me",
+    "loginTitle": "Sign in to your account",
+    "registerTitle": "Create an account",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "registerHere": "Register here",
+    "loginHere": "Sign in",
+    "invalidCredentials": "Invalid username or password",
+    "sessionExpired": "Your session has expired. Please log in again.",
+    "usernameOrEmail": "Username or Email"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "brokers": "Brokers",
+    "assets": "Assets",
+    "transactions": "Transactions",
+    "import": "Import",
+    "settings": "Settings",
+    "profile": "Profile"
+  }
+}
