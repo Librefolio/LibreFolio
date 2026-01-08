@@ -110,10 +110,10 @@ function print_help() {
     echo "Usage: ./dev.sh [command]"
     echo ""
     echo "Commands:"
-    echo "  install          Install all dependencies"
-    echo "  server           Start the FastAPI development server (production mode)"
+    echo "  install          Install all dependencies (Python + Node)"
+    echo "  server           Start the FastAPI server (auto-builds frontend if needed)"
     echo "                   Port: $prod_port | Database: $prod_db"
-    echo "  server:test      Start the FastAPI development server in TEST MODE"
+    echo "  server:test      Start the FastAPI server in TEST MODE"
     echo "                   Port: $test_port | Database: $test_db"
     echo ""
     echo "Database Management:"
@@ -254,20 +254,83 @@ function install_deps() {
     echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${NC}"
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Frontend Auto-Build Check
+# ═══════════════════════════════════════════════════════════════════════════════
+
+function frontend_needs_rebuild() {
+    # Check if frontend build is needed
+    # Returns 0 (true) if rebuild needed, 1 (false) otherwise
+
+    local build_dir="frontend/build"
+    local src_dir="frontend/src"
+
+    # No build exists at all
+    if [ ! -d "$build_dir" ]; then
+        return 0
+    fi
+
+    # No index.html in build
+    if [ ! -f "$build_dir/index.html" ]; then
+        return 0
+    fi
+
+    # Check if any source file is newer than build
+    # Find newest file in src directory
+    local newest_src=$(find "$src_dir" -type f -newer "$build_dir/index.html" 2>/dev/null | head -1)
+    if [ -n "$newest_src" ]; then
+        return 0
+    fi
+
+    # Check package.json changes
+    if [ "frontend/package.json" -nt "$build_dir/index.html" ]; then
+        return 0
+    fi
+
+    # No rebuild needed
+    return 1
+}
+
+function auto_build_frontend() {
+    # Auto-build frontend if changes detected
+    if frontend_needs_rebuild; then
+        echo -e "${BLUE}🔄 Frontend changes detected, rebuilding...${NC}"
+        cd frontend && npm run build && cd ..
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ Frontend rebuilt successfully${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Frontend build failed, continuing without frontend${NC}"
+        fi
+        echo ""
+    fi
+}
+
 function start_server() {
     local port=$(get_server_port)
     local db=$(get_database_path)
 
+    # Auto-build frontend if needed
+    auto_build_frontend
+
     echo -e "${GREEN}Starting LibreFolio API server...${NC}"
     echo -e "${YELLOW}Database: $db${NC}"
     echo -e "${YELLOW}Port: $port${NC}"
-    echo -e "${BLUE}${BOLD}API Docs available here:${NC}"
+    echo ""
+    echo -e "${BLUE}${BOLD}Available endpoints:${NC}"
+    echo -e " ├── 🏠 ${YELLOW}Frontend:  http://localhost:$port/${NC}"
     echo -e " ├── 💻 ${YELLOW}API Redoc: http://localhost:$port/api/v1/redoc${NC}"
-    echo -e " └── 🚀 ${YELLOW}API Docs: http://localhost:$port/api/v1/docs${NC}"
+    echo -e " ├── 🚀 ${YELLOW}API Docs:  http://localhost:$port/api/v1/docs${NC}"
+    echo -e " └── 📚 ${YELLOW}User Doc:  http://localhost:$port/mkdocs/${NC}"
     echo ""
-    echo -e "${BLUE}${BOLD}User Documentation available here:${NC}"
-    echo -e " └── 📚 ${YELLOW}User Doc: http://localhost:$port/mkdocs/user/${NC}"
+
+    # Check if frontend is available
+    if [ -f "frontend/build/index.html" ]; then
+        echo -e "${GREEN}✅ Frontend build found - UI available at /${NC}"
+    else
+        echo -e "${YELLOW}⚠️  No frontend build - run './dev.sh fe:build' to enable UI${NC}"
+    fi
     echo ""
+
     pipenv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port $port
 }
 
@@ -275,17 +338,22 @@ function start_server_test() {
     local port=$(get_test_server_port)
     local db=$(get_test_database_path)
 
-    echo -e "${GREEN}Starting LibreFolio API server...${NC}"
+    # Auto-build frontend if needed
+    auto_build_frontend
+
+    echo -e "${GREEN}Starting LibreFolio API server (TEST MODE)...${NC}"
     echo -e "${YELLOW}Database: $db${NC}"
     echo -e "${YELLOW}Port: $port${NC}"
-    echo -e "${RED} API Docs available here:${NC}"
-    echo -e "💻${YELLOW}API Redoc: http://localhost:$port/api/v1/redoc${NC}"
-    echo -e "🚀${YELLOW}API Docs: http://localhost:$port/api/v1/docs${NC}"
-    echo -e "${RED} User Documentation available here:${NC}"
-    echo -e "📚${YELLOW}User Doc: http://localhost:$port/mkdocs/user/${NC}"
     echo ""
-    echo -e "${YELLOW}⚠️  Warning: This uses the TEST database, not production!${NC}"
+    echo -e "${BLUE}${BOLD}Available endpoints:${NC}"
+    echo -e " ├── 🏠 ${YELLOW}Frontend:  http://localhost:$port/${NC}"
+    echo -e " ├── 💻 ${YELLOW}API Redoc: http://localhost:$port/api/v1/redoc${NC}"
+    echo -e " ├── 🚀 ${YELLOW}API Docs:  http://localhost:$port/api/v1/docs${NC}"
+    echo -e " └── 📚 ${YELLOW}User Doc:  http://localhost:$port/mkdocs/${NC}"
     echo ""
+    echo -e "${RED}${BOLD}⚠️  TEST MODE - Using test database!${NC}"
+    echo ""
+
     LIBREFOLIO_TEST_MODE=1 pipenv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port $port
 }
 
