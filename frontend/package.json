@@ -1,5 +1,5 @@
 {
-	"name": "frontend",
+	"name": "librefolio-frontend",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
@@ -11,22 +11,25 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
-	"devDependencies": {
-		"@sveltejs/adapter-static": "^3.0.10",
-		"@sveltejs/kit": "^2.48.5",
-		"@sveltejs/vite-plugin-svelte": "^6.2.1",
-		"@tailwindcss/postcss": "^4.1.17",
-		"autoprefixer": "^10.4.22",
-		"postcss": "^8.5.6",
-		"svelte": "^5.43.8",
-		"svelte-check": "^4.3.4",
-		"tailwindcss": "^4.1.17",
-		"typescript": "^5.9.3",
-		"vite": "^7.2.2"
-	},
-	"dependencies": {
-		"date-fns": "^4.1.0",
-		"lucide-svelte": "^0.559.0",
-		"svelte-i18n": "^4.0.1"
-	}
+"devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.48.5",
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@tailwindcss/postcss": "^4.1.17",
+    "autoprefixer": "^10.4.22",
+    "openapi-zod-client": "^1.18.0",
+    "postcss": "^8.5.6",
+    "svelte": "^5.43.8",
+    "svelte-check": "^4.3.4",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
+  },
+  "dependencies": {
+    "@zodios/core": "^10.9.6",
+    "date-fns": "^4.1.0",
+    "lucide-svelte": "^0.559.0",
+    "svelte-i18n": "^4.0.1",
+    "zod": "3.24.1"
+  }
 }
