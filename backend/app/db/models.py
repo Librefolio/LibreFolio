@@ -247,8 +247,10 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, index=True, nullable=False)
     hashed_password: str = Field(nullable=False)
     is_active: bool = Field(default=True)
+    is_superuser: bool = Field(default=False)
 
     created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
 
 
 class UserSettings(SQLModel, table=True):

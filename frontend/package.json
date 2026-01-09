@@ -9,7 +9,11 @@
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"i18n:audit": "python scripts/i18n-audit.py",
+		"i18n:audit:xlsx": "python scripts/i18n-audit.py --format xlsx",
+		"i18n:audit:md": "python scripts/i18n-audit.py --format md",
+		"i18n:audit:both": "python scripts/i18n-audit.py --format both"
 	},
 "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.10",

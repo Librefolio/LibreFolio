@@ -36,7 +36,9 @@ def upgrade() -> None:
                                 email           VARCHAR     NOT NULL UNIQUE,
                                 hashed_password VARCHAR     NOT NULL,
                                 is_active       BOOLEAN     NOT NULL DEFAULT 1,
-                                created_at      DATETIME    NOT NULL
+                                is_superuser    BOOLEAN     NOT NULL DEFAULT 0,
+                                created_at      DATETIME    NOT NULL,
+                                updated_at      DATETIME    NOT NULL
                             )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE UNIQUE INDEX ix_users_username ON users (username)"))

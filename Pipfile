@@ -35,6 +35,8 @@ justetf-scraping = {git = "https://github.com/Alfystar/justetf-scraping.git", re
 python-multipart = "*"
 babel = "*"
 cachetools = "*"
+bcrypt = "*"
+email-validator = "*"
 
 [dev-packages]
 pytest = "*"
@@ -45,11 +47,8 @@ mypy = "*"
 pytest-cov = "*"
 coverage = {extras = ["toml"], version = "*"}
 gevent = "*"
-# Test packages for browser automation and language models (uncomment if needed)
-#browser-use = "*"
-#mcp = "*"
-#langchain-google-genai = "*"
-#playwright = "*"
+tabulate = "*"
+openpyxl = "*"
 
 [requires]
 python_version = "3.13"

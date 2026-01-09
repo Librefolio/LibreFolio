@@ -174,10 +174,27 @@ function print_help() {
     echo "  fe:check         Run svelte-check for type errors"
     echo "  fe:preview       Preview production build"
     echo ""
+    echo "i18n (Translations):"
+    echo "  i18n:audit       Audit translations, show missing keys (Markdown)"
+    echo "  i18n:audit:md  Export translation audit to Markdown"
+    echo "  i18n:audit:xlsx  Export translation audit to Excel"
+    echo "  i18n:audit:both  Export both Markdown and Excel reports"
+    echo ""
     echo "API Schema Generation:"
     echo "  api:schema       Export OpenAPI schema to frontend/src/lib/api/openapi.json"
     echo "  api:client       Generate TypeScript client from OpenAPI schema"
     echo "  api:sync         Run api:schema + api:client (full sync)"
+    echo ""
+    echo "User Management:"
+    echo "  user:create      Create a new superuser"
+    echo "                     Usage: ./dev.sh user:create <username> <email> <password>"
+    echo "  user:reset       Reset user password"
+    echo "                     Usage: ./dev.sh user:reset <username> <new_password>"
+    echo "  user:list        List all users"
+    echo "  user:activate    Activate a user account"
+    echo "                     Usage: ./dev.sh user:activate <username>"
+    echo "  user:deactivate  Deactivate a user account"
+    echo "                     Usage: ./dev.sh user:deactivate <username>"
     echo ""
     echo "Information:"
     echo "  info:api         List all API endpoints with descriptions"
@@ -855,6 +872,22 @@ case "$COMMAND" in
     fe:preview)
         frontend_preview
         ;;
+    i18n:audit)
+        echo -e "${GREEN}Running i18n translation audit...${NC}"
+        cd frontend && npm run i18n:audit
+        ;;
+    i18n:audit:md)
+        echo -e "${GREEN}Exporting i18n audit Markdown ...${NC}"
+        cd frontend && npm run i18n:audit:md
+        ;;
+    i18n:audit:xlsx)
+        echo -e "${GREEN}Exporting i18n audit to Excel...${NC}"
+        cd frontend && npm run i18n:audit:xlsx
+        ;;
+    i18n:audit:both)
+        echo -e "${GREEN}Exporting i18n audit (Markdown + Excel)...${NC}"
+        cd frontend && npm run i18n:audit:both
+        ;;
     api:schema)
         api_export_schema
         ;;
@@ -863,6 +896,46 @@ case "$COMMAND" in
         ;;
     api:sync)
         api_sync
+        ;;
+    user:create)
+        shift
+        if [ $# -lt 3 ]; then
+            echo -e "${RED}Usage: ./dev.sh user:create <username> <email> <password>${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}Creating superuser...${NC}"
+        pipenv run python user_cli.py create-superuser "$1" "$2" "$3"
+        ;;
+    user:reset)
+        shift
+        if [ $# -lt 2 ]; then
+            echo -e "${RED}Usage: ./dev.sh user:reset <username> <new_password>${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}Resetting password...${NC}"
+        pipenv run python user_cli.py reset-password "$1" "$2"
+        ;;
+    user:list)
+        echo -e "${GREEN}Listing users...${NC}"
+        pipenv run python user_cli.py list-users
+        ;;
+    user:activate)
+        shift
+        if [ $# -lt 1 ]; then
+            echo -e "${RED}Usage: ./dev.sh user:activate <username>${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}Activating user...${NC}"
+        pipenv run python user_cli.py activate "$1"
+        ;;
+    user:deactivate)
+        shift
+        if [ $# -lt 1 ]; then
+            echo -e "${RED}Usage: ./dev.sh user:deactivate <username>${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}Deactivating user...${NC}"
+        pipenv run python user_cli.py deactivate "$1"
         ;;
     test:coverage)
         echo -e "${GREEN}Running all tests with coverage tracking...${NC}"
@@ -916,3 +989,6 @@ case "$COMMAND" in
         ;;
 esac
 
+# TODO: IDEA: in futuro potrebbe servire inviare il DB privatamente quando c'è un problema, c'è ovviamente un problema di privacy in ciò, ma necessario per risolvere eventuali problemi complessi.
+# Potrebbe essere una funzione tipo ./dev.sh db:export-for-support <path-to-export> <scale> che moltiplica o divide tutti gli importi per un fattore di scala (es. 0.01 per ridurre 100x gli importi) e rimuove tutti i dati personali (nomi, email, note, descrizioni, ecc.) lasciando solo i dati essenziali per riprodurre il problema e numeri in propozione uguali, ma in concreto casuali, a patto che l'utente non mette un fattore di scala banale.
+# Non sono sicuro basti, forse servirà poter inviare anche altro, ma è un inizio.

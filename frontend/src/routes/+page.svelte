@@ -1,37 +1,56 @@
 <script lang="ts">
 	import AnimatedBackground from '$lib/components/AnimatedBackground.svelte';
-	import { ShieldCheck } from 'lucide-svelte';
-	import { _ } from '$lib/i18n';
+	import LoginModal from '$lib/components/auth/LoginModal.svelte';
+	import RegisterModal from '$lib/components/auth/RegisterModal.svelte';
+	import ForgotPasswordModal from '$lib/components/auth/ForgotPasswordModal.svelte';
 	import { currentLanguage, availableLanguages, currentLanguageFlag } from '$lib/stores/language';
-	import { auth, authError, isAuthLoading } from '$lib/stores/auth';
-	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores/auth';
 	import { page } from '$app/stores';
 
-	// Form state
-	let username = '';
-	let password = '';
+	// Auth view state (modals)
+	type AuthView = 'login' | 'register' | 'forgot-password';
+	let currentView: AuthView = 'login';
+
+	// Success message (from registration)
+	let successMessage = '';
 
 	// Get redirect URL from query params (if coming from protected route)
 	$: redirectTo = $page.url.searchParams.get('redirect') || '/dashboard';
 
-	async function handleLogin() {
-		const success = await auth.login(username, password);
-
-		if (success) {
-			// Redirect to dashboard or original destination
-			goto(redirectTo);
-		}
-	}
-
 	// Language selector toggle
 	let showLangMenu = false;
+
+	// Handle navigation between modals
+	function handleGotoRegister() {
+		auth.clearError();
+		successMessage = '';
+		currentView = 'register';
+	}
+
+	function handleGotoForgot() {
+		auth.clearError();
+		successMessage = '';
+		currentView = 'forgot-password';
+	}
+
+	function handleGotoLogin(event: CustomEvent<{ message?: string }>) {
+		auth.clearError();
+		successMessage = event.detail?.message || '';
+		currentView = 'login';
+	}
+
+	function handleGotoLoginSimple() {
+		auth.clearError();
+		successMessage = '';
+		currentView = 'login';
+	}
 </script>
 
 <AnimatedBackground />
 
 <div class="min-h-screen flex items-center justify-center p-4">
 	<!-- Language Selector (top right) -->
-	<div class="fixed top-4 right-4">
+	<div class="fixed top-4 right-4 z-50">
 		<button
 			on:click={() => showLangMenu = !showLangMenu}
 			class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-white/80 hover:bg-white shadow-md transition-all"
@@ -55,78 +74,22 @@
 		{/if}
 	</div>
 
-	<!-- Card Container -->
-	<div class="w-full max-w-[400px] bg-libre-beige rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans">
-		
-		<!-- Header Section (Dark Green) -->
-		<div class="bg-libre-green p-8 flex flex-col items-center justify-center space-y-3">
-			<!-- Logo Area -->
-			<div class="flex items-center space-x-2 text-white">
-				<ShieldCheck size={32} />
-				<span class="text-2xl font-bold tracking-wide">LibreFolio</span>
-			</div>
-		</div>
-
-		<!-- Body Section (Beige) -->
-		<div class="p-8 pt-10">
-			<form on:submit|preventDefault={handleLogin} class="space-y-5">
-				
-				<!-- Error Message -->
-				{#if $authError}
-					<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg text-sm">
-						{$authError}
-					</div>
-				{/if}
-
-				<!-- Username Input -->
-				<div class="relative">
-					<input 
-						type="text" 
-						placeholder={$_('auth.usernameOrEmail')}
-						bind:value={username}
-						disabled={$isAuthLoading}
-						class="w-full px-4 py-3 rounded-lg border border-gray-400 bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:border-libre-green focus:ring-1 focus:ring-libre-green transition-all disabled:opacity-50"
-					/>
-				</div>
-
-				<!-- Password Input -->
-				<div class="relative">
-					<input 
-						type="password" 
-						placeholder={$_('auth.password')}
-						bind:value={password}
-						disabled={$isAuthLoading}
-						class="w-full px-4 py-3 rounded-lg border border-gray-400 bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:border-libre-green focus:ring-1 focus:ring-libre-green transition-all disabled:opacity-50"
-					/>
-				</div>
-
-				<!-- Forgot Password Link -->
-				<div class="flex justify-end">
-					<a href="/forgot-password" class="text-xs font-semibold text-libre-dark hover:text-libre-green underline decoration-1 underline-offset-2">
-						{$_('auth.forgotPassword')}
-					</a>
-				</div>
-
-				<!-- Login Button -->
-				<button 
-					type="submit" 
-					disabled={$isAuthLoading}
-					class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-				>
-					{#if $isAuthLoading}
-						{$_('common.loading')}
-					{:else}
-						{$_('auth.login')}
-					{/if}
-				</button>
-
-				<!-- Register Link -->
-				<div class="text-center pt-2 text-xs text-gray-600">
-					<span>{$_('auth.noAccount')} </span>
-					<a href="/register" class="font-bold text-libre-dark hover:underline">{$_('auth.registerHere')}</a>
-				</div>
-
-			</form>
-		</div>
-	</div>
+	<!-- Modal Container - Cambio istantaneo senza transizione -->
+	{#if currentView === 'login'}
+		<LoginModal
+			{redirectTo}
+			{successMessage}
+			on:gotoRegister={handleGotoRegister}
+			on:gotoForgot={handleGotoForgot}
+		/>
+	{:else if currentView === 'register'}
+		<RegisterModal
+			on:gotoLogin={handleGotoLogin}
+		/>
+	{:else if currentView === 'forgot-password'}
+		<ForgotPasswordModal
+			on:gotoLogin={handleGotoLoginSimple}
+		/>
+	{/if}
 </div>
+

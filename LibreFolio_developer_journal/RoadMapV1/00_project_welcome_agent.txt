@@ -71,22 +71,30 @@ LibreFolio/
 ### ✅ Backend Completato
 - **Database**: Schema con Users, Brokers, Assets, Transactions, FX Rates, Price History
 - **API**: 60+ endpoints operativi per tutte le entità
+- **Auth**: Registrazione, Login, Session cookie, Password reset (via CLI)
 - **FX Multi-Provider**: ECB, FED, BOE, SNB con fallback automatico
 - **Asset Providers**: yfinance, JustETF, CSS Scraper, Scheduled Investment
 - **BRIM**: Broker Report Import Manager con plugin (Generic CSV, Directa, Degiro, eToro, etc.)
 - **Test Suite**: 7/7 categorie passano
 
-### ✅ Frontend Phase 0 Completato
-- **Login Page**: Funzionante con styling e animazioni
+### ✅ Frontend Completato (Phase 0-2.5)
+- **Login Page**: Modale login con animazioni, cambio lingua
+- **Register Modal**: Registrazione utente funzionante
+- **Forgot Password Modal**: Istruzioni per reset via CLI
+- **Dashboard Placeholder**: Struttura base con navigazione
 - **AnimatedBackground**: Onde animate + linee grafici
 - **Build Integration**: Auto-build in dev.sh, FastAPI serve static files
-- **Design System**: Colori brand (#1a4031 verde, #f5f4ef beige, #9caf9c sage)
+- **Design System**: Colori brand (#1a4031 verde, #f5f4ef beige)
+- **i18n**: Supporto EN, IT, FR, ES
 
-### 🔲 Da Implementare
-- **Phase 1**: i18n (svelte-i18n) + Auth backend/frontend
-- **Phase 2-5**: Dashboard, Broker Pages, Asset Pages, Transaction Pages
-- **Phase 6-7**: Import BRIM UI, Settings
-- **Phase 8+**: Runtime Analysis (FIFO, KPIs), Docker deploy
+### 🔲 Da Implementare (Phase 3+)
+- **Phase 3**: Layout App + Settings Page
+- **Phase 4**: Broker Management Pages
+- **Phase 5**: FX Management Pages
+- **Phase 6**: Asset Management Pages
+- **Phase 7**: Transaction Management + BRIM Import UI
+- **Phase 8**: Dashboard con grafici e KPIs
+- **Phase 9**: Polish & Responsive (incrementale)
 
 ## 📁 Dove Trovare Cosa
 
@@ -104,29 +112,95 @@ LibreFolio/
 | **Componenti UI** | `frontend/src/lib/components/` |
 | **Roadmap UI** | `LibreFolio_developer_journal/RoadmapV4_UI/` |
 
-## 🛠️ Comandi Utili
+## 🛠️ Comandi Utili - USARE SEMPRE QUESTI SCRIPT
+
+⚠️ **REGOLA FONDAMENTALE**: Per operazioni complesse, usa SEMPRE `dev.sh`, `test_runner.py` o `user_cli.py`.
+Non eseguire comandi manuali quando esiste uno script che fa quel lavoro!
+
+### dev.sh - Script Principale
 
 ```bash
 # Visualizza tutti i comandi disponibili
 ./dev.sh --help
 
-# Avvia server (auto-build frontend se modifiche)
-./dev.sh server              # Porta 8000 - UI + API
+# === SERVER ===
+./dev.sh server              # Avvia backend+frontend su :8000 (auto-build frontend)
+./dev.sh server:test         # Avvia in test mode su :8001 (usa test_app.db)
 
-# Frontend development (con hot reload)
-./dev.sh fe:dev              # Porta 5173
+# === FRONTEND ===
+./dev.sh fe:dev              # Dev server con HMR su :5173
+./dev.sh fe:build            # Build production → frontend/build/
+./dev.sh fe:check            # Type-check Svelte/TypeScript
 
-# Build frontend manualmente
-./dev.sh fe:build
+# === DATABASE ===
+./dev.sh db:upgrade          # Applica migrazioni al DB
+./dev.sh db:check            # Verifica CHECK constraints
+./dev.sh db:current          # Mostra migrazione corrente
+./dev.sh db:migrate "msg"    # Crea nuova migrazione
 
-# Esegui tutti i test
-./dev.sh test all
+# === TESTING ===
+./dev.sh test all            # Tutti i test
+./dev.sh test api assets     # Solo test API assets
+./dev.sh test external fx    # Solo test provider FX
+./dev.sh test db brim        # Solo test BRIM database
+./dev.sh test:coverage       # Test con coverage HTML
 
-# Test specifici
-./dev.sh test api assets     # Test API assets
-./dev.sh test external fx    # Test provider FX
-./dev.sh test db brim        # Test BRIM database
+# === API SCHEMA (OpenAPI → TypeScript) ===
+./dev.sh api:schema          # Genera openapi.json
+./dev.sh api:client          # Genera client TypeScript da schema
+./dev.sh api:sync            # schema + client insieme
+
+# === USER MANAGEMENT ===
+./dev.sh user:create <user> <email> <pass>   # Crea utente
+./dev.sh user:list                            # Lista utenti
+./dev.sh user:reset <user> <new_pass>        # Reset password
+./dev.sh user:activate <user>                 # Attiva utente
+./dev.sh user:deactivate <user>               # Disattiva utente
+
+# === UTILITIES ===
+./dev.sh format              # Formatta codice con black
+./dev.sh lint                # Linting con ruff
+./dev.sh info:api            # Lista tutti gli endpoint API
+./dev.sh info:mk build       # Genera documentazione MkDocs
+
+# === i18n TRANSLATIONS ===
+./dev.sh i18n:audit          # Audit traduzioni, mostra chiavi mancanti (Markdown)
+./dev.sh i18n:audit:xlsx     # Esporta audit in Excel
+./dev.sh i18n:audit:both     # Esporta in Markdown + Excel
 ```
+
+### test_runner.py - Orchestratore Test
+
+```bash
+# Mostra help dettagliato
+./test_runner.py --help
+
+# Categorie disponibili
+./test_runner.py external fx         # Provider FX (ECB, FED, etc.)
+./test_runner.py external assets     # Provider Asset (yfinance, justETF)
+./test_runner.py external brim-providers  # BRIM plugins
+./test_runner.py db all              # Tutti i test database
+./test_runner.py api all             # Tutti i test API
+./test_runner.py schemas all         # Tutti i test schema
+
+# Opzioni utili
+./test_runner.py --reset db all      # Reset DB prima dei test
+./test_runner.py -v api auth         # Verbose mode
+```
+
+### Scenari Comuni
+
+| Scenario | Comando |
+|----------|---------|
+| **Nuovo utente dopo deploy** | `./dev.sh user:create admin admin@mail.com password123` |
+| **Password dimenticata** | `./dev.sh user:reset username newpassword` |
+| **Avviare tutto per sviluppo** | Terminal 1: `./dev.sh server` — Terminal 2: `./dev.sh fe:dev` |
+| **Verificare che tutto funzioni** | `./dev.sh test all` |
+| **Dopo modifica modelli DB** | 1. `rm backend/data/sqlite/*.db` — 2. `./dev.sh db:upgrade` |
+| **Dopo modifica API** | `./dev.sh api:sync` (rigenera client TypeScript) |
+| **Verificare traduzioni complete** | `./dev.sh i18n:audit` |
+| **Build per produzione** | `./dev.sh fe:build && ./dev.sh server` |
+| **Debug test singolo** | `./dev.sh test -v api <test_name>` |
 
 ## ⚠️ Note per lo Sviluppo
 
