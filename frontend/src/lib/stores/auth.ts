@@ -17,6 +17,7 @@ export interface AuthUser {
 	username: string;
 	email: string;
 	is_active: boolean;
+	created_at?: string;
 }
 
 /**

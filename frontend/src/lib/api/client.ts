@@ -94,7 +94,7 @@ export async function apiCall<T>(
 			// Handle 401 Unauthorized - redirect to login
 			if (response.status === 401) {
 				if (browser) {
-					goto('/login');
+					goto('/');
 				}
 				throw new ApiError(401, 'Unauthorized', errorData);
 			}

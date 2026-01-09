@@ -19,7 +19,19 @@
     "none": "Ninguno",
     "select": "Seleccionar",
     "noData": "No hay datos disponibles",
-    "welcome": "Bienvenido"
+    "welcome": "Bienvenido",
+    "comingSoon": "Próximamente"
+  },
+  "error": {
+    "pageNotFound": "Página No Encontrada",
+    "pageNotFoundMessage": "La página que buscas no existe o ha sido movida.",
+    "goHome": "Ir al Inicio",
+    "goToHome": "Ir al Inicio",
+    "goToDashboard": "Ir al Panel",
+    "goBack": "Volver",
+    "somethingWentWrong": "Algo Salió Mal",
+    "unexpectedError": "Se produjo un error inesperado.",
+    "tryAgain": "Intentar de Nuevo"
   },
   "auth": {
     "login": "Iniciar Sesión",
@@ -61,6 +73,7 @@
     "brokers": "Brókeres",
     "assets": "Activos",
     "transactions": "Transacciones",
+    "fx": "Tipos de Cambio",
     "import": "Importar",
     "settings": "Configuración",
     "profile": "Perfil"
@@ -69,8 +82,62 @@
     "manageBrokers": "Administra tus cuentas de bróker",
     "manageAssets": "Visualiza y gestiona tus activos",
     "manageTransactions": "Rastrea tus transacciones",
+    "manageFx": "Consulta los tipos de cambio",
     "configureSettings": "Configura tus preferencias",
     "welcomeTitle": "Bienvenido a LibreFolio",
-    "welcomeMessage": "Tu gestor de portafolio auto-hospedado. Comienza agregando un bróker e importando tus transacciones."
+    "welcomeMessage": "Tu gestor de portafolio auto-hospedado. Comienza agregando un bróker e importando tus transacciones.",
+    "totalValue": "Valor Total",
+    "totalGain": "Ganancia Total",
+    "assetCount": "Activos",
+    "quickActions": "Acciones Rápidas"
+  },
+  "brokers": {
+    "title": "Brókeres",
+    "subtitle": "Administra tus cuentas de bróker y posiciones de efectivo",
+    "addBroker": "Agregar Bróker",
+    "placeholderMessage": "La gestión de brókeres estará disponible pronto."
+  },
+  "assets": {
+    "title": "Activos",
+    "subtitle": "Visualiza y gestiona tus inversiones",
+    "addAsset": "Agregar Activo",
+    "placeholderMessage": "La gestión de activos estará disponible pronto."
+  },
+  "transactions": {
+    "title": "Transacciones",
+    "subtitle": "Visualiza y gestiona el historial de transacciones",
+    "addTransaction": "Agregar Transacción",
+    "import": "Importar",
+    "placeholderMessage": "La gestión de transacciones estará disponible pronto."
+  },
+  "fx": {
+    "title": "Tipos de Cambio",
+    "subtitle": "Consulta y sincroniza los tipos de cambio",
+    "syncRates": "Sincronizar Tipos",
+    "placeholderMessage": "La gestión de tipos de cambio estará disponible pronto."
+  },
+  "settings": {
+    "profile": "Perfil",
+    "preferences": "Preferencias",
+    "about": "Acerca de",
+    "profileInfo": "Información del Perfil",
+    "accountCreated": "Cuenta Creada",
+    "security": "Seguridad",
+    "changePassword": "Cambiar Contraseña",
+    "changePasswordInfo": "El cambio de contraseña estará disponible en una futura actualización.",
+    "language": "Idioma",
+    "languageHint": "Selecciona tu idioma preferido para la interfaz.",
+    "baseCurrency": "Moneda Base",
+    "theme": "Tema",
+    "themeLight": "Claro",
+    "themeDark": "Oscuro",
+    "themeAuto": "Automático",
+    "version": "Versión",
+    "aboutDescription": "LibreFolio es un gestor de portafolio auto-hospedado y de código abierto. Rastrea tus inversiones, analiza el rendimiento y mantén el control total de tus datos financieros.",
+    "viewSource": "Ver código fuente",
+    "license": "Licencia",
+    "credits": "Créditos",
+    "madeWith": "Hecho con",
+    "usingTech": "usando"
   }
 }

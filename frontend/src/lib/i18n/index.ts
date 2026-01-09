@@ -37,6 +37,22 @@ export const LOCALE_FLAGS: Record<SupportedLocale, string> = {
 };
 
 /**
+ * Language options for UI selectors
+ * Use this to populate language dropdowns consistently across the app
+ */
+export interface LanguageOption {
+	code: SupportedLocale;
+	flag: string;
+	name: string;
+}
+
+export const LANGUAGE_OPTIONS: LanguageOption[] = SUPPORTED_LOCALES.map(code => ({
+	code,
+	flag: LOCALE_FLAGS[code],
+	name: LOCALE_NAMES[code]
+}));
+
+/**
  * Get the initial locale from browser or localStorage
  */
 function getInitialLocale(): SupportedLocale {

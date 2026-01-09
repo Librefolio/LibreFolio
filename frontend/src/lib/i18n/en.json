@@ -19,7 +19,19 @@
     "none": "None",
     "select": "Select",
     "noData": "No data available",
-    "welcome": "Welcome"
+    "welcome": "Welcome",
+    "comingSoon": "Coming Soon"
+  },
+  "error": {
+    "pageNotFound": "Page Not Found",
+    "pageNotFoundMessage": "The page you're looking for doesn't exist or has been moved.",
+    "goHome": "Go Home",
+    "goToHome": "Go to Home",
+    "goToDashboard": "Go to Dashboard",
+    "goBack": "Go Back",
+    "somethingWentWrong": "Something Went Wrong",
+    "unexpectedError": "An unexpected error occurred.",
+    "tryAgain": "Try Again"
   },
   "auth": {
     "login": "Login",
@@ -61,6 +73,7 @@
     "brokers": "Brokers",
     "assets": "Assets",
     "transactions": "Transactions",
+    "fx": "FX Rates",
     "import": "Import",
     "settings": "Settings",
     "profile": "Profile"
@@ -69,8 +82,62 @@
     "manageBrokers": "Manage your broker accounts",
     "manageAssets": "View and manage your assets",
     "manageTransactions": "Track your transactions",
+    "manageFx": "View exchange rates",
     "configureSettings": "Configure your preferences",
     "welcomeTitle": "Welcome to LibreFolio",
-    "welcomeMessage": "Your self-hosted portfolio tracker. Start by adding a broker and importing your transactions."
+    "welcomeMessage": "Your self-hosted portfolio tracker. Start by adding a broker and importing your transactions.",
+    "totalValue": "Total Value",
+    "totalGain": "Total Gain",
+    "assetCount": "Assets",
+    "quickActions": "Quick Actions"
+  },
+  "brokers": {
+    "title": "Brokers",
+    "subtitle": "Manage your broker accounts and cash positions",
+    "addBroker": "Add Broker",
+    "placeholderMessage": "Broker management will be available soon."
+  },
+  "assets": {
+    "title": "Assets",
+    "subtitle": "View and manage your investment assets",
+    "addAsset": "Add Asset",
+    "placeholderMessage": "Asset management will be available soon."
+  },
+  "transactions": {
+    "title": "Transactions",
+    "subtitle": "View and manage your transaction history",
+    "addTransaction": "Add Transaction",
+    "import": "Import",
+    "placeholderMessage": "Transaction management will be available soon."
+  },
+  "fx": {
+    "title": "FX Rates",
+    "subtitle": "View and sync exchange rates",
+    "syncRates": "Sync Rates",
+    "placeholderMessage": "FX rate management will be available soon."
+  },
+  "settings": {
+    "profile": "Profile",
+    "preferences": "Preferences",
+    "about": "About",
+    "profileInfo": "Profile Information",
+    "accountCreated": "Account Created",
+    "security": "Security",
+    "changePassword": "Change Password",
+    "changePasswordInfo": "Password changes will be available in a future update.",
+    "language": "Language",
+    "languageHint": "Select your preferred language for the interface.",
+    "baseCurrency": "Base Currency",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeAuto": "Auto",
+    "version": "Version",
+    "aboutDescription": "LibreFolio is a self-hosted, open-source portfolio tracker. Track your investments, analyze performance, and maintain full control of your financial data.",
+    "viewSource": "View source code",
+    "license": "License",
+    "credits": "Credits",
+    "madeWith": "Made with",
+    "usingTech": "using"
   }
 }

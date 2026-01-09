@@ -3,27 +3,25 @@
  *
  * Handles server-side request processing:
  * - Session validation
- * - Route protection (redirect to login if not authenticated)
+ * - Route protection (redirect to / if not authenticated)
  */
 import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 
 /**
  * Routes that don't require authentication
+ * Note: '/' is the main auth page (login/register/forgot modals)
  */
 const PUBLIC_ROUTES = [
-	'/login',
-	'/register',
-	'/forgot-password',
-	'/reset-password',
-	'/api'  // API routes handle their own auth
+	'/',           // Root page handles login/register/forgot modals
+	'/api'         // API routes handle their own auth
 ];
 
 /**
  * Check if a path is a public route
  */
 function isPublicRoute(path: string): boolean {
-	return PUBLIC_ROUTES.some(route => path.startsWith(route) || path === '/');
+	return PUBLIC_ROUTES.some(route => path === route || (route !== '/' && path.startsWith(route)));
 }
 
 /**
@@ -44,8 +42,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionCookie = cookies.get('session');
 
 	if (!sessionCookie) {
-		// No session - redirect to login
-		throw redirect(303, `/login?redirect=${encodeURIComponent(path)}`);
+		// No session - redirect to root (which shows login modal)
+		throw redirect(303, `/?redirect=${encodeURIComponent(path)}`);
 	}
 
 	// Session exists - let the request proceed
