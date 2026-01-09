@@ -113,7 +113,7 @@ function createAuthStore() {
 
 			// Redirect to login
 			if (browser) {
-				goto('/login');
+				goto('/');
 			}
 		},
 

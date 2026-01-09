@@ -18,7 +18,8 @@
     "all": "All",
     "none": "None",
     "select": "Select",
-    "noData": "No data available"
+    "noData": "No data available",
+    "welcome": "Welcome"
   },
   "auth": {
     "login": "Login",
@@ -38,7 +39,22 @@
     "loginHere": "Sign in",
     "invalidCredentials": "Invalid username or password",
     "sessionExpired": "Your session has expired. Please log in again.",
-    "usernameOrEmail": "Username or Email"
+    "usernameOrEmail": "Username or Email",
+    "accountCreated": "Account created successfully! Please log in.",
+    "registrationFailed": "Registration failed. Please try again.",
+    "passwordRecovery": "Password Recovery",
+    "emailRecoveryNotAvailable": "Email recovery is not yet available. Please use the server terminal to reset your password.",
+    "serverTerminalInstructions": "Run this command on the server:",
+    "contactAdministrator": "Contact your system administrator if you don't have server access.",
+    "backToLogin": "Back to Login",
+    "validation": {
+      "usernameMinLength": "Username must be at least 3 characters",
+      "passwordMinLength": "Password must be at least 8 characters",
+      "passwordsNoMatch": "Passwords do not match",
+      "invalidEmail": "Please enter a valid email address",
+      "usernameTaken": "This username is already taken",
+      "emailTaken": "This email is already registered"
+    }
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -48,5 +64,13 @@
     "import": "Import",
     "settings": "Settings",
     "profile": "Profile"
+  },
+  "dashboard": {
+    "manageBrokers": "Manage your broker accounts",
+    "manageAssets": "View and manage your assets",
+    "manageTransactions": "Track your transactions",
+    "configureSettings": "Configure your preferences",
+    "welcomeTitle": "Welcome to LibreFolio",
+    "welcomeMessage": "Your self-hosted portfolio tracker. Start by adding a broker and importing your transactions."
   }
 }

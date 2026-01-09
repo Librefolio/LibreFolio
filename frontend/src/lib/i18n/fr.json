@@ -18,7 +18,8 @@
     "all": "Tout",
     "none": "Aucun",
     "select": "Sélectionner",
-    "noData": "Aucune donnée disponible"
+    "noData": "Aucune donnée disponible",
+    "welcome": "Bienvenue"
   },
   "auth": {
     "login": "Connexion",
@@ -38,7 +39,22 @@
     "loginHere": "Connectez-vous",
     "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide",
     "sessionExpired": "Votre session a expiré. Veuillez vous reconnecter.",
-    "usernameOrEmail": "Nom d'utilisateur ou Email"
+    "usernameOrEmail": "Nom d'utilisateur ou Email",
+    "accountCreated": "Compte créé avec succès ! Veuillez vous connecter.",
+    "registrationFailed": "L'inscription a échoué. Veuillez réessayer.",
+    "passwordRecovery": "Récupération du mot de passe",
+    "emailRecoveryNotAvailable": "La récupération par email n'est pas encore disponible. Veuillez utiliser le terminal du serveur pour réinitialiser votre mot de passe.",
+    "serverTerminalInstructions": "Exécutez cette commande sur le serveur :",
+    "contactAdministrator": "Contactez votre administrateur système si vous n'avez pas accès au serveur.",
+    "backToLogin": "Retour à la connexion",
+    "validation": {
+      "usernameMinLength": "Le nom d'utilisateur doit comporter au moins 3 caractères",
+      "passwordMinLength": "Le mot de passe doit comporter au moins 8 caractères",
+      "passwordsNoMatch": "Les mots de passe ne correspondent pas",
+      "invalidEmail": "Veuillez entrer une adresse email valide",
+      "usernameTaken": "Ce nom d'utilisateur est déjà pris",
+      "emailTaken": "Cet email est déjà enregistré"
+    }
   },
   "nav": {
     "dashboard": "Tableau de bord",
@@ -48,5 +64,13 @@
     "import": "Importer",
     "settings": "Paramètres",
     "profile": "Profil"
+  },
+  "dashboard": {
+    "manageBrokers": "Gérez vos comptes de courtiers",
+    "manageAssets": "Visualisez et gérez vos actifs",
+    "manageTransactions": "Suivez vos transactions",
+    "configureSettings": "Configurez vos préférences",
+    "welcomeTitle": "Bienvenue sur LibreFolio",
+    "welcomeMessage": "Votre gestionnaire de portefeuille auto-hébergé. Commencez par ajouter un courtier et importer vos transactions."
   }
 }
