@@ -3,6 +3,7 @@ Ciao! Sto lavorando su un portfolio tracker finanziario self-hosted chiamato **L
 ## 🎯 Obiettivo del Progetto
 
 LibreFolio è un'alternativa self-hosted e open-source a Ghostfolio, pensata per:
+
 - **Privacy**: I tuoi dati finanziari restano sul tuo server
 - **Flessibilità**: Supporto per asset tradizionali, crypto, prestiti P2P, scheduled-yield
 - **Controllo**: Import da qualsiasi broker tramite plugin estensibili
@@ -41,18 +42,21 @@ LibreFolio/
 ## 🔧 Stack Tecnologico
 
 ### Backend (Python)
+
 - **FastAPI**: Framework web async
 - **SQLModel + SQLite**: ORM + database embedded
 - **Alembic**: Migrazioni schema
 - **Pipenv**: Gestione dipendenze
 
 ### Frontend (TypeScript/Svelte)
+
 - **SvelteKit 2.48+**: Framework UI reattivo
 - **Tailwind CSS 4.1+**: Styling utility-first (config via `@theme` in CSS)
 - **lucide-svelte**: Icone
 - **Apache ECharts**: Grafici finanziari (da implementare)
 
 ### Deploy
+
 - **Single Docker Image**: Backend serve frontend come file statici
 - **Sviluppo**: Backend :8000, Frontend dev :5173 (con HMR)
 - **Produzione**: Solo :8000, frontend pre-built servito da FastAPI
@@ -69,6 +73,7 @@ LibreFolio/
 ## 📊 Stato Attuale (Gennaio 2026)
 
 ### ✅ Backend Completato
+
 - **Database**: Schema con Users, Brokers, Assets, Transactions, FX Rates, Price History
 - **API**: 60+ endpoints operativi per tutte le entità
 - **Auth**: Registrazione, Login, Session cookie, Password reset (via CLI)
@@ -78,6 +83,7 @@ LibreFolio/
 - **Test Suite**: 7/7 categorie passano
 
 ### ✅ Frontend Completato (Phase 0-2.5)
+
 - **Login Page**: Modale login con animazioni, cambio lingua
 - **Register Modal**: Registrazione utente funzionante
 - **Forgot Password Modal**: Istruzioni per reset via CLI
@@ -88,6 +94,7 @@ LibreFolio/
 - **i18n**: Supporto EN, IT, FR, ES
 
 ### 🔲 Da Implementare (Phase 3+)
+
 - **Phase 3**: Layout App + Settings Page
 - **Phase 4**: Broker Management Pages
 - **Phase 5**: FX Management Pages
@@ -98,19 +105,19 @@ LibreFolio/
 
 ## 📁 Dove Trovare Cosa
 
-| Cosa cerchi? | Dove guardare |
-|--------------|---------------|
-| **Modelli DB** | `backend/app/db/models.py` |
-| **Schemi API** | `backend/app/schemas/*.py` |
-| **Business Logic** | `backend/app/services/*.py` |
-| **API Endpoints** | `backend/app/api/v1/*.py` |
-| **Provider FX** | `backend/app/services/fx_providers/` |
+| Cosa cerchi?       | Dove guardare                                  |
+|--------------------|------------------------------------------------|
+| **Modelli DB**     | `backend/app/db/models.py`                     |
+| **Schemi API**     | `backend/app/schemas/*.py`                     |
+| **Business Logic** | `backend/app/services/*.py`                    |
+| **API Endpoints**  | `backend/app/api/v1/*.py`                      |
+| **Provider FX**    | `backend/app/services/fx_providers/`           |
 | **Provider Asset** | `backend/app/services/asset_source_providers/` |
-| **Import Broker** | `backend/app/services/brim_providers/` |
-| **Test Suite** | `backend/test_scripts/` |
-| **Frontend Pages** | `frontend/src/routes/` |
-| **Componenti UI** | `frontend/src/lib/components/` |
-| **Roadmap UI** | `LibreFolio_developer_journal/RoadmapV4_UI/` |
+| **Import Broker**  | `backend/app/services/brim_providers/`         |
+| **Test Suite**     | `backend/test_scripts/`                        |
+| **Frontend Pages** | `frontend/src/routes/`                         |
+| **Componenti UI**  | `frontend/src/lib/components/`                 |
+| **Roadmap UI**     | `LibreFolio_developer_journal/RoadmapV4_UI/`   |
 
 ## 🛠️ Comandi Utili - USARE SEMPRE QUESTI SCRIPT
 
@@ -190,17 +197,17 @@ Non eseguire comandi manuali quando esiste uno script che fa quel lavoro!
 
 ### Scenari Comuni
 
-| Scenario | Comando |
-|----------|---------|
-| **Nuovo utente dopo deploy** | `./dev.sh user:create admin admin@mail.com password123` |
-| **Password dimenticata** | `./dev.sh user:reset username newpassword` |
-| **Avviare tutto per sviluppo** | Terminal 1: `./dev.sh server` — Terminal 2: `./dev.sh fe:dev` |
-| **Verificare che tutto funzioni** | `./dev.sh test all` |
-| **Dopo modifica modelli DB** | 1. `rm backend/data/sqlite/*.db` — 2. `./dev.sh db:upgrade` |
-| **Dopo modifica API** | `./dev.sh api:sync` (rigenera client TypeScript) |
-| **Verificare traduzioni complete** | `./dev.sh i18n:audit` |
-| **Build per produzione** | `./dev.sh fe:build && ./dev.sh server` |
-| **Debug test singolo** | `./dev.sh test -v api <test_name>` |
+| Scenario                           | Comando                                                       |
+|------------------------------------|---------------------------------------------------------------|
+| **Nuovo utente dopo deploy**       | `./dev.sh user:create admin admin@mail.com password123`       |
+| **Password dimenticata**           | `./dev.sh user:reset username newpassword`                    |
+| **Avviare tutto per sviluppo**     | Terminal 1: `./dev.sh server` — Terminal 2: `./dev.sh fe:dev` |
+| **Verificare che tutto funzioni**  | `./dev.sh test all`                                           |
+| **Dopo modifica modelli DB**       | 1. `rm backend/data/sqlite/*.db` — 2. `./dev.sh db:upgrade`   |
+| **Dopo modifica API**              | `./dev.sh api:sync` (rigenera client TypeScript)              |
+| **Verificare traduzioni complete** | `./dev.sh i18n:audit`                                         |
+| **Build per produzione**           | `./dev.sh fe:build && ./dev.sh server`                        |
+| **Debug test singolo**             | `./dev.sh test -v api <test_name>`                            |
 
 ## ⚠️ Note per lo Sviluppo
 
@@ -211,6 +218,7 @@ Non eseguire comandi manuali quando esiste uno script che fa quel lavoro!
 - **Obiettivo**: Codebase pulito e mantenibile per condivisione futura
 
 Prima di proseguire:
+
 1. ✅ Rivedi stato attuale (codebase, modelli, endpoint)
 2. ✅ Consulta il plan: `LibreFolio_developer_journal/RoadmapV4_UI/plan-frontendDevelopment.prompt.md`
 3. ✅ Segnala inconsistenze o necessità di cleanup

@@ -3,7 +3,7 @@
 **Data Creazione**: 8 Gennaio 2026
 **Versione**: 3.0 (Riorganizzato con sotto-plan)
 **Target**: Implementazione completa UI per LibreFolio
-**Status**: 🟢 PHASE 2.5 COMPLETATA - Prossimo: Phase 3 (Layout & Settings)
+**Status**: 🟢 PHASE 3 COMPLETATA - Prossimo: Phase 3.5 (Settings System) o Phase 4 (Brokers)
 
 ---
 
@@ -53,7 +53,8 @@ Questo documento è l'indice principale del piano frontend. Ogni fase ha il prop
 | **1**   | Foundation & Frontend Auth | ✅ COMPLETATA | [→ phase-01-foundation.md](./phases/phase-01-foundation.md)                 | 3      |
 | **2**   | Backend Authentication     | ✅ COMPLETATA | [→ phase-02-backend-auth.md](./phases/phase-02-backend-auth.md)             | 3      |
 | **2.5** | Auth Integration (FE ↔ BE) | ✅ COMPLETATA | [→ phase-02.5-auth-integration.md](./phases/phase-02.5-auth-integration.md) | 1      |
-| **3**   | Layout & Settings          | ⏳ TODO       | [→ phase-03-layout-settings.md](./phases/phase-03-layout-settings.md)       | 3      |
+| **3**   | Layout & Settings          | ✅ COMPLETATA | [→ phase-03-layout-settings.md](./phases/phase-03-layout-settings.md)       | 1      |
+| **3.5** | Settings System (Glob+Pers)| ⏳ TODO       | [→ phase-03.5-settings-system.md](./phases/phase-03.5-settings-system.md)   | 2.5    |
 | **4**   | Brokers Management         | ⏳ TODO       | [→ phase-04-brokers.md](./phases/phase-04-brokers.md)                       | 3      |
 | **5**   | FX Management              | ⏳ TODO       | [→ phase-05-fx.md](./phases/phase-05-fx.md)                                 | 3      |
 | **6**   | Assets Management          | ⏳ TODO       | [→ phase-06-assets.md](./phases/phase-06-assets.md)                         | 4      |
@@ -97,9 +98,21 @@ Phase 2 (Backend Auth)
     ↓
 Phase 2.5 (Auth Integration) ✅
     ↓
-Phase 3 (Layout & Settings) ←── PROSSIMO STEP
+Phase 3 (Layout & Settings) ✅
     ↓
-    ├── Phase 4 (Brokers) ──────────────────┐
+    ├── Phase 3.5 (Settings System) ←── OPZIONALE (può essere fatto dopo Phase 4-7)
+    │
+    ├── Phase 4 (Brokers) ←── PROSSIMO STEP CONSIGLIATO
+    │       ↓
+    ├── Phase 5 (FX)
+    │
+    └── Phase 6 (Assets) ───────────────────┐
+                                            ↓
+                                    Phase 7 (Transactions)
+                                            ↓
+                                    Phase 8 (Dashboard)
+
+Phase 9 (Polish) ← Fatto incrementalmente durante tutte le fasi
     │       ↓                               │
     ├── Phase 5 (FX)                        │
     │                                       │

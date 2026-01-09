@@ -78,14 +78,14 @@ This page collects the UI mockups generated for LibreFolio, along with the promp
 ![Transaction 3](./transactions/Gemini_Generated_Image_transaction3.png)
 
 #### Transaction Detail / Modal
-![Asset Transaction](./transactions/asset_transaction_modal.jpg)
+![Asset Transaction](./transactions/Transaction%20system%20V1/asset_transaction_modal.jpg)
 
 ### Cash Management Page
 
 > Desktop UI mockup for the 'Cassa' (Cash) page of the LibreFolio app. Cream background, dark green sidebar. The top of the main area features two prominent rectangular cards with rounded corners displaying cash balances: one titled 'Euro Balance (Base)' showing '€ 5,300.00' and another titled 'USD Balance' showing '$ 1,250.50'. Below these cards, two large action buttons: a solid dark green one 'Add Funds (Deposit)' and an outlined one 'Withdraw Funds'. Below the buttons, a specific table titled 'Cash Movements Ledger' showing only money transfers, e.g., 'Date: 2023-11-20, Type: DEPOSIT, Amount: +€1,000', 'Date: 2023-11-15, Type: SETTLEMENT (Buy AAPL), Amount: -$450.00'.
 
-![Cash Page](./cash/Gemini_Generated_Image_cassa.png)
-![Cash Transaction](./cash/cash_transaction.jpg)
+![Cash Page](./transactions/Gemini_Generated_Image_cassa.png)
+![Cash Transaction](./transactions/Transaction%20system%20V1/cash_transaction.jpg)
 
 ### P2P Loan Asset Detail
 

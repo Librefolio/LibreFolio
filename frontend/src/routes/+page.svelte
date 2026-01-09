@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
 	import AnimatedBackground from '$lib/components/AnimatedBackground.svelte';
 	import LoginModal from '$lib/components/auth/LoginModal.svelte';
 	import RegisterModal from '$lib/components/auth/RegisterModal.svelte';
@@ -14,11 +17,26 @@
 	// Success message (from registration)
 	let successMessage = '';
 
-	// Get redirect URL from query params (if coming from protected route)
-	$: redirectTo = $page.url.searchParams.get('redirect') || '/dashboard';
+	// Loading state while checking auth
+	let checkingAuth = true;
 
 	// Language selector toggle
 	let showLangMenu = false;
+
+	// Get redirect URL from query params (if coming from protected route)
+	$: redirectTo = $page.url.searchParams.get('redirect') || '/dashboard';
+
+	// Check if already authenticated and redirect
+	onMount(async () => {
+		if (browser) {
+			const isAuth = await auth.checkAuth();
+			if (isAuth) {
+				goto('/dashboard');
+				return;
+			}
+		}
+		checkingAuth = false;
+	});
 
 	// Handle navigation between modals
 	function handleGotoRegister() {
@@ -48,26 +66,32 @@
 
 <AnimatedBackground />
 
-<div class="min-h-screen flex items-center justify-center p-4">
-	<!-- Language Selector (top right) -->
-	<div class="fixed top-4 right-4 z-50">
-		<button
-			on:click={() => showLangMenu = !showLangMenu}
-			class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-white/80 hover:bg-white shadow-md transition-all"
-		>
-			<span class="text-xl">{$currentLanguageFlag}</span>
-		</button>
+{#if checkingAuth}
+	<!-- Loading while checking authentication -->
+	<div class="min-h-screen flex items-center justify-center">
+		<div class="text-libre-green text-xl">Loading...</div>
+	</div>
+{:else}
+	<div class="min-h-screen flex items-center justify-center p-4">
+		<!-- Language Selector (top right) -->
+		<div class="fixed top-4 right-4 z-50">
+			<button
+				on:click={() => showLangMenu = !showLangMenu}
+				class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-white/80 hover:bg-white shadow-md transition-all"
+			>
+				<span class="text-xl">{$currentLanguageFlag}</span>
+			</button>
 
-		{#if showLangMenu}
-			<div class="absolute right-0 mt-2 bg-white rounded-lg shadow-xl py-2 min-w-[150px]">
-				{#each availableLanguages as lang}
-					<button
-						on:click={() => { currentLanguage.set(lang.code); showLangMenu = false; }}
-						class="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center space-x-2"
-						class:bg-gray-50={$currentLanguage === lang.code}
-					>
-						<span>{lang.flag}</span>
-						<span>{lang.name}</span>
+			{#if showLangMenu}
+				<div class="absolute right-0 mt-2 bg-white rounded-lg shadow-xl py-2 min-w-[150px]">
+					{#each availableLanguages as lang}
+						<button
+							on:click={() => { currentLanguage.set(lang.code); showLangMenu = false; }}
+							class="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center space-x-2"
+							class:bg-gray-50={$currentLanguage === lang.code}
+						>
+							<span>{lang.flag}</span>
+							<span>{lang.name}</span>
 					</button>
 				{/each}
 			</div>
@@ -91,5 +115,5 @@
 			on:gotoLogin={handleGotoLoginSimple}
 		/>
 	{/if}
-</div>
-
+	</div>
+{/if}

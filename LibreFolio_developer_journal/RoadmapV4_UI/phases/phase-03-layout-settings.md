@@ -1,7 +1,7 @@
 # Phase 3: Layout & Settings
 
-**Status**: ⏳ TODO  
-**Durata**: 3 giorni  
+**Status**: ✅ COMPLETATA  
+**Durata**: 1 giorno (completato)  
 **Priorità**: P0 (MVP)
 **Dipendenze**: Phase 2.5
 
@@ -10,6 +10,63 @@
 ## Obiettivo
 
 Creare il layout principale dell'applicazione con sidebar navigation e la pagina settings per le preferenze utente.
+
+---
+
+## ✅ Implementato
+
+### 3.1 Layout Principale con Sidebar
+
+- [x] Creato `src/routes/(app)/+layout.svelte` - Layout protetto con Sidebar + Header
+- [x] Creato `src/routes/(app)/+layout.ts` - SSR/prerender disabled
+- [x] Creato `src/lib/components/layout/Sidebar.svelte` - Navigazione verticale con:
+  - Logo LibreFolio
+  - Links: Dashboard, Brokers, Assets, Transactions, FX, Settings
+  - Language selector (4 lingue)
+  - Username display
+  - Logout button
+  - Mobile responsive (toggle con overlay)
+- [x] Creato `src/lib/components/layout/Header.svelte` - Header con:
+  - Titolo pagina dinamico basato sul path
+  - Mobile menu toggle button
+
+### 3.2 Pagine App Structure
+
+- [x] Creato `src/routes/(app)/dashboard/+page.svelte` - Dashboard con:
+  - Quick stats cards (Total Value, Gain, Asset Count)
+  - Quick actions (links a Brokers, Assets, Transactions, FX)
+  - Welcome message
+- [x] Creato `src/routes/(app)/brokers/+page.svelte` - Placeholder
+- [x] Creato `src/routes/(app)/assets/+page.svelte` - Placeholder  
+- [x] Creato `src/routes/(app)/transactions/+page.svelte` - Placeholder
+- [x] Creato `src/routes/(app)/fx/+page.svelte` - Placeholder
+
+### 3.3 Settings Page con Tabs
+
+- [x] Creato `src/routes/(app)/settings/+page.svelte` - Tabs container
+- [x] Creato `src/lib/components/settings/ProfileTab.svelte` - Mostra:
+  - Username, Email, Account Created date
+  - Change password (coming soon)
+- [x] Creato `src/lib/components/settings/PreferencesTab.svelte` - Controlli:
+  - Language selector (funzionante)
+  - Base currency (coming soon)
+  - Theme selector (coming soon)
+- [x] Creato `src/lib/components/settings/AboutTab.svelte` - Info:
+  - Version, description
+  - GitHub link, License
+  - Tech stack credits
+
+### 3.4 Traduzioni
+
+- [x] Aggiunte 46 nuove chiavi i18n in tutte e 4 le lingue
+- [x] Totale: 110 chiavi, 100% complete
+
+### 3.5 Miglioramenti UX (Aggiunti post-completamento)
+
+- [x] **LANGUAGE_OPTIONS centralizzato**: Creata costante `LANGUAGE_OPTIONS` in `$lib/i18n/index.ts` per evitare duplicazione della lista lingue nei componenti
+- [x] **Pagina 404 personalizzata**: Creato `src/routes/+error.svelte` con AnimatedBackground e stile coerente
+- [x] **Redirect automatico se autenticato**: La pagina `/` ora reindirizza a `/dashboard` se l'utente è già loggato
+- [x] **Traduzioni error pages**: Aggiunte chiavi `error.*` per pagine di errore (pageNotFound, goHome, goBack, etc.)
 
 ---
 

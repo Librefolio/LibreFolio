@@ -93,9 +93,6 @@ export const currentLanguageFlag = derived(
 
 /**
  * List of all available languages for UI selectors
+ * Re-exported from i18n for convenience
  */
-export const availableLanguages = SUPPORTED_LOCALES.map(code => ({
-	code,
-	name: LOCALE_NAMES[code],
-	flag: LOCALE_FLAGS[code]
-}));
+export { LANGUAGE_OPTIONS as availableLanguages } from '$lib/i18n';
