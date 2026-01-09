@@ -18,7 +18,8 @@
     "all": "Tutti",
     "none": "Nessuno",
     "select": "Seleziona",
-    "noData": "Nessun dato disponibile"
+    "noData": "Nessun dato disponibile",
+    "welcome": "Benvenuto"
   },
   "auth": {
     "login": "Accedi",
@@ -38,7 +39,22 @@
     "loginHere": "Accedi",
     "invalidCredentials": "Nome utente o password non validi",
     "sessionExpired": "La sessione è scaduta. Effettua nuovamente l'accesso.",
-    "usernameOrEmail": "Nome utente o Email"
+    "usernameOrEmail": "Nome utente o Email",
+    "accountCreated": "Account creato con successo! Effettua l'accesso.",
+    "registrationFailed": "Registrazione fallita. Riprova.",
+    "passwordRecovery": "Recupero Password",
+    "emailRecoveryNotAvailable": "Il recupero via email non è ancora disponibile. Utilizza il terminale del server per reimpostare la password.",
+    "serverTerminalInstructions": "Esegui questo comando sul server:",
+    "contactAdministrator": "Contatta l'amministratore di sistema se non hai accesso al server.",
+    "backToLogin": "Torna al Login",
+    "validation": {
+      "usernameMinLength": "Il nome utente deve avere almeno 3 caratteri",
+      "passwordMinLength": "La password deve avere almeno 8 caratteri",
+      "passwordsNoMatch": "Le password non corrispondono",
+      "invalidEmail": "Inserisci un indirizzo email valido",
+      "usernameTaken": "Questo nome utente è già in uso",
+      "emailTaken": "Questa email è già registrata"
+    }
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -48,5 +64,13 @@
     "import": "Importa",
     "settings": "Impostazioni",
     "profile": "Profilo"
+  },
+  "dashboard": {
+    "manageBrokers": "Gestisci i tuoi conti broker",
+    "manageAssets": "Visualizza e gestisci i tuoi asset",
+    "manageTransactions": "Traccia le tue transazioni",
+    "configureSettings": "Configura le tue preferenze",
+    "welcomeTitle": "Benvenuto in LibreFolio",
+    "welcomeMessage": "Il tuo portfolio tracker self-hosted. Inizia aggiungendo un broker e importando le tue transazioni."
   }
 }

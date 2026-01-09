@@ -18,7 +18,8 @@
     "all": "Todos",
     "none": "Ninguno",
     "select": "Seleccionar",
-    "noData": "No hay datos disponibles"
+    "noData": "No hay datos disponibles",
+    "welcome": "Bienvenido"
   },
   "auth": {
     "login": "Iniciar Sesión",
@@ -38,7 +39,22 @@
     "loginHere": "Inicia sesión",
     "invalidCredentials": "Nombre de usuario o contraseña inválidos",
     "sessionExpired": "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.",
-    "usernameOrEmail": "Nombre de Usuario o Email"
+    "usernameOrEmail": "Nombre de Usuario o Email",
+    "accountCreated": "¡Cuenta creada con éxito! Por favor, inicia sesión.",
+    "registrationFailed": "El registro falló. Por favor, inténtalo de nuevo.",
+    "passwordRecovery": "Recuperación de Contraseña",
+    "emailRecoveryNotAvailable": "La recuperación por correo electrónico aún no está disponible. Por favor, usa la terminal del servidor para restablecer tu contraseña.",
+    "serverTerminalInstructions": "Ejecuta este comando en el servidor:",
+    "contactAdministrator": "Contacta a tu administrador del sistema si no tienes acceso al servidor.",
+    "backToLogin": "Volver al Inicio de Sesión",
+    "validation": {
+      "usernameMinLength": "El nombre de usuario debe tener al menos 3 caracteres",
+      "passwordMinLength": "La contraseña debe tener al menos 8 caracteres",
+      "passwordsNoMatch": "Las contraseñas no coinciden",
+      "invalidEmail": "Por favor, introduce un correo electrónico válido",
+      "usernameTaken": "Este nombre de usuario ya está en uso",
+      "emailTaken": "Este correo electrónico ya está registrado"
+    }
   },
   "nav": {
     "dashboard": "Panel",
@@ -48,5 +64,13 @@
     "import": "Importar",
     "settings": "Configuración",
     "profile": "Perfil"
+  },
+  "dashboard": {
+    "manageBrokers": "Administra tus cuentas de bróker",
+    "manageAssets": "Visualiza y gestiona tus activos",
+    "manageTransactions": "Rastrea tus transacciones",
+    "configureSettings": "Configura tus preferencias",
+    "welcomeTitle": "Bienvenido a LibreFolio",
+    "welcomeMessage": "Tu gestor de portafolio auto-hospedado. Comienza agregando un bróker e importando tus transacciones."
   }
 }

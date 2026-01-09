@@ -12,9 +12,9 @@ const config = {
 		adapter: adapter({
 			pages: 'build',
 			assets: 'build',
-			fallback: 'index.html',  // SPA fallback for client-side routing
+			fallback: undefined,  // Disable fallback generation - FastAPI handles SPA routing
 			precompress: false,
-			strict: true
+			strict: false  // Allow pages that cannot be prerendered
 		})
 	}
 };

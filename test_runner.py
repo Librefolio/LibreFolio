@@ -1005,6 +1005,22 @@ def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "E2E API tests", verbose=verbose)
 
 
+def api_auth(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Run Authentication API endpoint tests.
+
+    Tests: register, login, logout, me, session management
+    """
+    print_section("Authentication API Tests")
+    print_info("Testing REST API endpoints for authentication")
+    print_info("Tests: POST /auth/register, POST /auth/login, POST /auth/logout, GET /auth/me")
+    print_info("Tests: Session cookies, password validation, duplicate detection")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_auth_api.py", test_names)
+    return run_command(cmd, "Auth API tests", verbose=verbose)
+
+
 def api_test(verbose: bool = False) -> bool:
     """
     Run all API tests.
@@ -1014,6 +1030,7 @@ def api_test(verbose: bool = False) -> bool:
     print_info("Note: Server will be automatically started/stopped by tests")
 
     tests = [
+        ("Auth API", lambda: api_auth(verbose)),
         ("FX API", lambda: api_fx(verbose)),
         ("FX Sync API", lambda: api_fx_sync(verbose)),
         ("Assets Metadata API", lambda: api_assets_metadata(verbose)),
@@ -1611,6 +1628,11 @@ These tests verify REST API endpoints:
   • Tests HTTP requests/responses, validation, error handling
 
 Test commands:
+  auth            - Test Authentication endpoints (register, login, logout, me)
+                    📋 Prerequisites: Database created (run: db create)
+                    💡 Tests: POST /auth/register, POST /auth/login, POST /auth/logout, GET /auth/me
+                    Note: Server will be automatically started and stopped by test
+
   fx              - Test FX endpoints (GET /currencies, POST /sync, GET /convert)
                     📋 Prerequisites: Services FX conversion subsystem (run: db fx-rates)
                     Note: Server will be automatically started and stopped by test
@@ -1657,7 +1679,7 @@ Test commands:
 
     api_parser.add_argument(
         "action",
-        choices=["fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "transactions", "brokers", "brim", "all"],
+        choices=["auth", "fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "transactions", "brokers", "brim", "all"],
         help="API test to run"
         )
 
@@ -1905,6 +1927,8 @@ def main():
             success = api_brokers(verbose=verbose, test_names=test_names)
         elif args.action == "brim":
             success = api_brim(verbose=verbose, test_names=test_names)
+        elif args.action == "auth":
+            success = api_auth(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = api_test(verbose=verbose)
     
