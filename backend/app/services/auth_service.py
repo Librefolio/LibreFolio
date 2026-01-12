@@ -89,7 +89,7 @@ def create_session(user_id: int) -> str:
         "user_id": user_id,
         "created_at": now,
         "expires_at": now + timedelta(hours=SESSION_EXPIRE_HOURS)
-    }
+        }
 
     logger.info("Session created", user_id=user_id, session_id=session_id[:8] + "...")
     return session_id
@@ -163,7 +163,7 @@ def delete_user_sessions(user_id: int) -> int:
     to_delete = [
         sid for sid, data in _sessions.items()
         if data["user_id"] == user_id
-    ]
+        ]
 
     for sid in to_delete:
         del _sessions[sid]
@@ -186,7 +186,7 @@ def cleanup_expired_sessions() -> int:
     to_delete = [
         sid for sid, data in _sessions.items()
         if now > data["expires_at"]
-    ]
+        ]
 
     for sid in to_delete:
         del _sessions[sid]
@@ -200,4 +200,3 @@ def cleanup_expired_sessions() -> int:
 def get_active_session_count() -> int:
     """Get count of active sessions."""
     return len(_sessions)
-

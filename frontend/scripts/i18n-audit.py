@@ -16,7 +16,6 @@ Examples:
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -117,7 +116,7 @@ def build_dataframe(translations: dict[str, dict[str, str]]) -> pd.DataFrame:
         row: dict[str, Any] = {
             "Section": extract_section(key),
             "Key": key,
-        }
+            }
 
         # Add each language value
         missing_count = 0
@@ -134,7 +133,7 @@ def build_dataframe(translations: dict[str, dict[str, str]]) -> pd.DataFrame:
             row["Status"] = "❌ MISSING ALL"
         else:
             missing_langs = [lang.upper() for lang in LANGUAGES
-                           if not translations.get(lang, {}).get(key)]
+                             if not translations.get(lang, {}).get(key)]
             row["Status"] = f"⚠️ Missing: {', '.join(missing_langs)}"
 
         rows.append(row)
@@ -149,7 +148,7 @@ def generate_summary(df: pd.DataFrame) -> str:
     lines = [
         "## 📊 Translation Coverage Summary\n",
         f"**Total keys**: {len(df)}\n",
-    ]
+        ]
 
     # Per-language stats
     for lang in LANGUAGES:
@@ -180,7 +179,7 @@ def generate_missing_report(df: pd.DataFrame) -> str:
     lines = [
         "\n## ⚠️ Missing Translations\n",
         "The following keys need attention:\n",
-    ]
+        ]
 
     # Group by section
     for section in incomplete["Section"].unique():
@@ -206,7 +205,7 @@ def export_markdown(df: pd.DataFrame, output_path: Path | None) -> None:
     for col in display_df.columns:
         display_df[col] = display_df[col].apply(
             lambda x: (str(x)[:10] + "...") if len(str(x)) > 13 else str(x)
-        )
+            )
 
     # Generate markdown table using tabulate
     table_md = tabulate(
@@ -214,7 +213,7 @@ def export_markdown(df: pd.DataFrame, output_path: Path | None) -> None:
         headers="keys",
         tablefmt="github",  # GitHub-flavored markdown
         showindex=False
-    )
+        )
 
     # Full report
     content = "\n".join([
@@ -225,7 +224,7 @@ def export_markdown(df: pd.DataFrame, output_path: Path | None) -> None:
         "\n## 📋 Complete Translation Table\n",
         table_md,
         ""
-    ])
+        ])
 
     # Write to file or stdout
     if output_path:
@@ -269,8 +268,8 @@ def export_excel(df: pd.DataFrame, output_path: Path) -> None:
             "Coverage %": [
                 f"{(df[lang.upper()].apply(lambda x: bool(x)).sum() / len(df)) * 100:.1f}%"
                 for lang in LANGUAGES
-            ],
-        }
+                ],
+            }
         summary_df = pd.DataFrame(summary_data)
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
 
@@ -318,19 +317,19 @@ Examples:
   python i18n-audit.py --format both      Generate both formats in current dir
   python i18n-audit.py -o ./reports/      Save to specific directory
         """
-    )
+        )
     parser.add_argument(
         "--format", "-f",
         choices=["md", "xlsx", "both"],
         default="md",
         help="Output format (default: md)"
-    )
+        )
     parser.add_argument(
         "--output", "-o",
         type=str,
         default=None,
         help="Output directory or file path (default: current directory for file output)"
-    )
+        )
 
     args = parser.parse_args()
 
@@ -394,4 +393,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-

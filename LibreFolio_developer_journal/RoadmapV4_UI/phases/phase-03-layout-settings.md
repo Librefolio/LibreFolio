@@ -20,24 +20,24 @@ Creare il layout principale dell'applicazione con sidebar navigation e la pagina
 - [x] Creato `src/routes/(app)/+layout.svelte` - Layout protetto con Sidebar + Header
 - [x] Creato `src/routes/(app)/+layout.ts` - SSR/prerender disabled
 - [x] Creato `src/lib/components/layout/Sidebar.svelte` - Navigazione verticale con:
-  - Logo LibreFolio
-  - Links: Dashboard, Brokers, Assets, Transactions, FX, Settings
-  - Language selector (4 lingue)
-  - Username display
-  - Logout button
-  - Mobile responsive (toggle con overlay)
+    - Logo LibreFolio
+    - Links: Dashboard, Brokers, Assets, Transactions, FX, Settings
+    - Language selector (4 lingue)
+    - Username display
+    - Logout button
+    - Mobile responsive (toggle con overlay)
 - [x] Creato `src/lib/components/layout/Header.svelte` - Header con:
-  - Titolo pagina dinamico basato sul path
-  - Mobile menu toggle button
+    - Titolo pagina dinamico basato sul path
+    - Mobile menu toggle button
 
 ### 3.2 Pagine App Structure
 
 - [x] Creato `src/routes/(app)/dashboard/+page.svelte` - Dashboard con:
-  - Quick stats cards (Total Value, Gain, Asset Count)
-  - Quick actions (links a Brokers, Assets, Transactions, FX)
-  - Welcome message
+    - Quick stats cards (Total Value, Gain, Asset Count)
+    - Quick actions (links a Brokers, Assets, Transactions, FX)
+    - Welcome message
 - [x] Creato `src/routes/(app)/brokers/+page.svelte` - Placeholder
-- [x] Creato `src/routes/(app)/assets/+page.svelte` - Placeholder  
+- [x] Creato `src/routes/(app)/assets/+page.svelte` - Placeholder
 - [x] Creato `src/routes/(app)/transactions/+page.svelte` - Placeholder
 - [x] Creato `src/routes/(app)/fx/+page.svelte` - Placeholder
 
@@ -45,16 +45,16 @@ Creare il layout principale dell'applicazione con sidebar navigation e la pagina
 
 - [x] Creato `src/routes/(app)/settings/+page.svelte` - Tabs container
 - [x] Creato `src/lib/components/settings/ProfileTab.svelte` - Mostra:
-  - Username, Email, Account Created date
-  - Change password (coming soon)
+    - Username, Email, Account Created date
+    - Change password (coming soon)
 - [x] Creato `src/lib/components/settings/PreferencesTab.svelte` - Controlli:
-  - Language selector (funzionante)
-  - Base currency (coming soon)
-  - Theme selector (coming soon)
+    - Language selector (funzionante)
+    - Base currency (coming soon)
+    - Theme selector (coming soon)
 - [x] Creato `src/lib/components/settings/AboutTab.svelte` - Info:
-  - Version, description
-  - GitHub link, License
-  - Tech stack credits
+    - Version, description
+    - GitHub link, License
+    - Tech stack credits
 
 ### 3.4 Traduzioni
 

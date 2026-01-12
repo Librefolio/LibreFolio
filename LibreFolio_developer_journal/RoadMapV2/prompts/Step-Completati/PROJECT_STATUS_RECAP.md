@@ -8,38 +8,42 @@
 ## 🎯 Dove Eravamo (Prima della Test Standardization)
 
 ### Fase Completata: Phase 5 + Phase 5.1 + Phase 6
+
 **Plugin Architecture & Metadata System**:
+
 - ✅ Backend API completo (FastAPI + SQLModel + Alembic)
 - ✅ Database schema con migrazioni
 - ✅ **Plugin System Completo**:
-  - 4 FX providers (ECB, FED, BOE, SNB) - unified registry
-  - 4 Asset providers (Yahoo Finance, CSS Scraper, Mock, Scheduled Investment)
-  - Provider auto-discovery con `@register_provider` decorator
-  - Bulk-first API pattern con partial success support
+    - 4 FX providers (ECB, FED, BOE, SNB) - unified registry
+    - 4 Asset providers (Yahoo Finance, CSS Scraper, Mock, Scheduled Investment)
+    - Provider auto-discovery con `@register_provider` decorator
+    - Bulk-first API pattern con partial success support
 - ✅ **Schema Organization Refactoring** (Phase 5):
-  - 6 moduli Pydantic (common, assets, provider, prices, refresh, fx)
-  - 0 inline Pydantic models
-  - FA/FX naming convention sistematica
-  - 32 esportazioni organizzate
+    - 6 moduli Pydantic (common, assets, provider, prices, refresh, fx)
+    - 0 inline Pydantic models
+    - FA/FX naming convention sistematica
+    - 32 esportazioni organizzate
 - ✅ **Database Corrections** (Phase 5 Remediation):
-  - Transaction → CashMovement **unidirezionale** (ON DELETE CASCADE)
-  - CHECK constraints per validazione tipo-CashMovement
-  - Rimosse colonne ridondanti (fees, taxes da Transaction)
-  - PRAGMA foreign_keys ON verificato
+    - Transaction → CashMovement **unidirezionale** (ON DELETE CASCADE)
+    - CHECK constraints per validazione tipo-CashMovement
+    - Rimosse colonne ridondanti (fees, taxes da Transaction)
+    - PRAGMA foreign_keys ON verificato
 - ✅ **Asset Metadata System** (Phase 5.1):
-  - `classification_params` JSON field (geographic_area, investment_type, etc.)
-  - Geographic area normalization (ISO-3166-A3 + pycountry)
-  - Provider metadata auto-populate
-  - RFC 7386 PATCH semantics
-  - 37 test functions (100% pass rate)
+    - `classification_params` JSON field (geographic_area, investment_type, etc.)
+    - Geographic area normalization (ISO-3166-A3 + pycountry)
+    - Provider metadata auto-populate
+    - RFC 7386 PATCH semantics
+    - 37 test functions (100% pass rate)
 - ✅ **Financial Math Utilities** (Phase 5):
-  - Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360)
-  - Compound interest (annual, semiannual, quarterly, monthly, daily, continuous)
-  - Scheduled investment calculations (grace period, late interest)
-  - 103/103 test functions passing
+    - Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360)
+    - Compound interest (annual, semiannual, quarterly, monthly, daily, continuous)
+    - Scheduled investment calculations (grace period, late interest)
+    - 103/103 test functions passing
 
 ### Problema Principale Identificato
+
 **Test suite disorganizzata DOPO tutto questo lavoro**:
+
 - 🔴 Mix di test legacy (con `if __name__ == "__main__"`) e pytest
 - 🔴 No coverage integration
 - 🔴 Difficile capire cosa è testato e cosa no
@@ -58,16 +62,18 @@
 #### 📦 Phase 5.0: Plugin System Foundation
 
 **Deliverables**:
+
 - ✅ Migrazione Alembic: `asset_provider_assignments` table
 - ✅ Unified Provider Registry con auto-discovery
 - ✅ Asset Source Manager (CRUD + refresh)
 - ✅ 4 Asset Providers implementati:
-  - `yfinance` - Yahoo Finance API
-  - `cssscraper` - CSS Web Scraper (Borsa Italiana)
-  - `mockprov` - Testing mock provider
-  - `scheduled_investment` - Synthetic yield calculator
+    - `yfinance` - Yahoo Finance API
+    - `cssscraper` - CSS Web Scraper (Borsa Italiana)
+    - `mockprov` - Testing mock provider
+    - `scheduled_investment` - Synthetic yield calculator
 
 **Pattern Implementati**:
+
 - Bulk-first API (singles call bulk with 1 item)
 - Partial success support (per-item results)
 - Provider metadata caching
@@ -78,6 +84,7 @@
 **Problema**: Inline Pydantic models sparsi, naming inconsistente
 
 **Soluzione**:
+
 - ✅ Creati **6 moduli schema** organizzati:
   ```
   backend/app/schemas/
@@ -89,12 +96,12 @@
   └── fx.py              # FX* models (24 models)
   ```
 - ✅ **FA/FX Naming Convention**:
-  - `FA*` = Financial Asset related
-  - `FX*` = Foreign Exchange related
-  - Eliminata ambiguità (es. Asset vs FxRate)
+    - `FA*` = Financial Asset related
+    - `FX*` = Foreign Exchange related
+    - Eliminata ambiguità (es. Asset vs FxRate)
 - ✅ **Eliminati tutti inline Pydantic** da `api/v1/`:
-  - Prima: 15+ inline models in endpoints
-  - Dopo: 0 inline, tutti importati da schemas/
+    - Prima: 15+ inline models in endpoints
+    - Dopo: 0 inline, tutti importati da schemas/
 - ✅ 32 esportazioni organizzate in `schemas/__init__.py`
 
 **Files Modificati**: 12 file (~2,500 lines refactored)
@@ -102,30 +109,33 @@
 #### 🔧 Phase 5 Mid: Database Remediation (Nov 13-14, 2025)
 
 **Problema Architetturale Identificato**:
+
 - Transaction ↔ CashMovement bidirezionale ❌
 - Colonne ridondanti (fees, taxes in Transaction)
 - Mancanza CHECK constraints
 
 **Correzioni Applicate**:
+
 1. ✅ **Transaction → CashMovement Unidirezionale**:
-   - Rimosso `CashMovement.linked_transaction_id`
-   - Aggiunto `ON DELETE CASCADE` su `Transaction.cash_movement_id`
-   - CHECK constraint: certi tipi Transaction RICHIEDONO CashMovement
-   - CHECK constraint: altri tipi NON devono avere CashMovement
-   
+    - Rimosso `CashMovement.linked_transaction_id`
+    - Aggiunto `ON DELETE CASCADE` su `Transaction.cash_movement_id`
+    - CHECK constraint: certi tipi Transaction RICHIEDONO CashMovement
+    - CHECK constraint: altri tipi NON devono avere CashMovement
+
 2. ✅ **Rimosse Colonne Ridondanti**:
-   - `Transaction.fees` → eliminato (usa CashMovement separato)
-   - `Transaction.taxes` → eliminato (usa CashMovement separato)
-   
+    - `Transaction.fees` → eliminato (usa CashMovement separato)
+    - `Transaction.taxes` → eliminato (usa CashMovement separato)
+
 3. ✅ **FX Rates Alphabetical Ordering**:
-   - CHECK constraint: `base < quote` (alfabetico)
-   - Normalizzazione automatica (EUR/USD ok, USD/EUR → invertito)
+    - CHECK constraint: `base < quote` (alfabetico)
+    - Normalizzazione automatica (EUR/USD ok, USD/EUR → invertito)
 
 4. ✅ **PRAGMA foreign_keys ON**:
-   - Verificato attivo in `session.py`
-   - Test di validazione aggiunto
+    - Verificato attivo in `session.py`
+    - Test di validazione aggiunto
 
 **Files Modificati**:
+
 - `backend/alembic/versions/001_initial.py` (modified directly, pre-beta)
 - `backend/app/db/models.py`
 - `backend/test_scripts/test_db/test_db_referential_integrity.py` (nuovo)
@@ -137,52 +147,55 @@
 **Obiettivo**: Classification & taxonomy metadata flessibile
 
 **Implementato**:
+
 1. ✅ **Database Extension**:
-   - Campo `classification_params` (TEXT/JSON) in `assets`
-   - Struttura: `{"investment_type": "stock", "short_description": "...", "geographic_area": {"USA": 0.6, "ITA": 0.4}}`
+    - Campo `classification_params` (TEXT/JSON) in `assets`
+    - Struttura: `{"investment_type": "stock", "short_description": "...", "geographic_area": {"USA": 0.6, "ITA": 0.4}}`
 
 2. ✅ **Geographic Area Normalization**:
-   - File: `backend/app/utils/geo_normalization.py` (300 lines)
-   - ISO-3166-A3 country codes (pycountry integration)
-   - Decimal weight parsing e quantization (4 decimals)
-   - Sum validation (tolerance ±0.0001)
-   - Automatic renormalization
+    - File: `backend/app/utils/geo_normalization.py` (300 lines)
+    - ISO-3166-A3 country codes (pycountry integration)
+    - Decimal weight parsing e quantization (4 decimals)
+    - Sum validation (tolerance ±0.0001)
+    - Automatic renormalization
 
 3. ✅ **Service Layer**:
-   - File: `backend/app/services/asset_metadata.py` (250 lines)
-   - Parse/serialize ClassificationParamsModel ↔ JSON
-   - Compute metadata diffs (field-by-field)
-   - **RFC 7386 PATCH semantics**:
-     - Absent field = ignore (don't change)
-     - `null` value = delete field
-     - Present value = update/replace
-   - Merge provider metadata (auto-populate)
+    - File: `backend/app/services/asset_metadata.py` (250 lines)
+    - Parse/serialize ClassificationParamsModel ↔ JSON
+    - Compute metadata diffs (field-by-field)
+    - **RFC 7386 PATCH semantics**:
+        - Absent field = ignore (don't change)
+        - `null` value = delete field
+        - Present value = update/replace
+    - Merge provider metadata (auto-populate)
 
 4. ✅ **Pydantic Models** (in `schemas/assets.py`):
-   - `ClassificationParamsModel` (with geographic_area validator)
-   - `PatchAssetMetadataRequest` (PATCH semantics)
-   - `MetadataChange` (change tracking)
-   - `MetadataRefreshResult` (refresh response)
-   - Bulk request/response models
+    - `ClassificationParamsModel` (with geographic_area validator)
+    - `PatchAssetMetadataRequest` (PATCH semantics)
+    - `MetadataChange` (change tracking)
+    - `MetadataRefreshResult` (refresh response)
+    - Bulk request/response models
 
 5. ✅ **API Endpoints** (in `api/v1/assets.py`):
-   - `PATCH /api/v1/assets/metadata` - Bulk update (partial success)
-   - `POST /api/v1/assets` - Bulk read with metadata
-   - `POST /api/v1/assets/{id}/metadata/refresh` - Single refresh
-   - `POST /api/v1/assets/metadata/refresh/bulk` - Bulk refresh
+    - `PATCH /api/v1/assets/metadata` - Bulk update (partial success)
+    - `POST /api/v1/assets` - Bulk read with metadata
+    - `POST /api/v1/assets/{id}/metadata/refresh` - Single refresh
+    - `POST /api/v1/assets/metadata/refresh/bulk` - Bulk refresh
 
 6. ✅ **Provider Integration**:
-   - Metadata auto-populate on provider assignment
-   - Validation and merge logic
-   - Change tracking (old vs new)
+    - Metadata auto-populate on provider assignment
+    - Validation and merge logic
+    - Change tracking (old vs new)
 
 **Test Coverage**:
+
 - 37 test functions (100% pass rate)
 - 12 geographic area edge cases
 - 4 PATCH semantic edge cases
 - 5 API integration tests
 
 **Documentazione Creata**:
+
 - 4 comprehensive guides (~2,135 lines)
 - API reference
 - Schema examples
@@ -193,28 +206,30 @@
 **Problema**: Logic sparsa per scheduled investment calculations
 
 **Soluzione**:
+
 - ✅ Creato `backend/app/utils/financial_math.py` (350 lines)
 - ✅ **Day Count Conventions**:
-  - ACT/365 (actual days / 365)
-  - ACT/360 (actual days / 360)
-  - ACT/ACT (actual days / actual year days)
-  - 30/360 (30-day months, 360-day year)
-  
+    - ACT/365 (actual days / 365)
+    - ACT/360 (actual days / 360)
+    - ACT/ACT (actual days / actual year days)
+    - 30/360 (30-day months, 360-day year)
+
 - ✅ **Compound Interest**:
-  - Simple interest
-  - Compound (annual, semiannual, quarterly, monthly, daily)
-  - Continuous compounding (e^rt)
-  - Helper: `periods_per_year()` mapping
-  
+    - Simple interest
+    - Compound (annual, semiannual, quarterly, monthly, daily)
+    - Continuous compounding (e^rt)
+    - Helper: `periods_per_year()` mapping
+
 - ✅ **Scheduled Investment**:
-  - Find active period in schedule
-  - Grace period handling
-  - Late interest calculation
-  - ACT/365 SIMPLE interest for P2P loans
+    - Find active period in schedule
+    - Grace period handling
+    - Late interest calculation
+    - ACT/365 SIMPLE interest for P2P loans
 
 **Test Coverage**: 103/103 test functions passing
+
 - 20 day count tests
-- 28 compound interest tests  
+- 28 compound interest tests
 - 11 financial math tests
 - 3 integration E2E tests
 
@@ -225,33 +240,36 @@
 **Totale**: 9 nuovi documenti (~5,000+ lines)
 
 1. **Financial Calculations**:
-   - `day-count-conventions.md`
-   - `compound-interest-calculations.md`
-   - `scheduled-investment-valuation.md`
-   - `interest-schedule-schema.md`
+    - `day-count-conventions.md`
+    - `compound-interest-calculations.md`
+    - `scheduled-investment-valuation.md`
+    - `interest-schedule-schema.md`
 
 2. **Testing**:
-   - `testing-philosophy.md`
-   - `test-runner-guide.md`
-   - `test-categories-overview.md`
-   - `financial-math-test-guide.md`
-   - `test-environment-safety.md`
+    - `testing-philosophy.md`
+    - `test-runner-guide.md`
+    - `test-categories-overview.md`
+    - `financial-math-test-guide.md`
+    - `test-environment-safety.md`
 
 3. **API & Schema**:
-   - `api-development-guide.md` (aggiornato)
-   - `database-schema.md` (aggiornato)
+    - `api-development-guide.md` (aggiornato)
+    - `database-schema.md` (aggiornato)
 
 ---
 
 ## 🚀 Cosa Abbiamo Fatto (Test Standardization)
 
 ### ✅ Batch 1: Utility Tests (3 file)
+
 **Convertiti a pytest**:
+
 - `test_decimal_utils.py` (19 tests) - Precision e truncation
 - `test_datetime_utils.py` (5 tests) - Timezone-aware datetime
 - `test_financial_math.py` (11 tests) - ACT/365, interest calculations
 
 **Pulizia**:
+
 - Rimossi helper legacy (`print_success`, `print_error`, etc.)
 - Aggiunti parametrized tests con `@pytest.mark.parametrize`
 - Fixture per setup/teardown
@@ -259,7 +277,9 @@
 ---
 
 ### ✅ Batch 2: Service Tests (7 file)
+
 **Convertiti a pytest**:
+
 - `test_fx_conversion.py` (12 tests) - Conversioni valute con mock data
 - `test_asset_metadata.py` (11 tests) - PATCH semantics, diff, validation
 - `test_asset_source.py` (16 tests) - Provider assignment, price upsert, backfill
@@ -269,6 +289,7 @@
 - `test_synthetic_yield_integration.py` (3 tests) - E2E P2P loan scenarios
 
 **Miglioramenti**:
+
 - Pydantic models al posto di dict
 - Fixture `@pytest.fixture(scope="module")` per DB setup
 - Async tests con `@pytest.mark.asyncio`
@@ -276,11 +297,14 @@
 ---
 
 ### ✅ Batch 3: External Tests (2 file)
+
 **Convertiti a pytest**:
+
 - `test_fx_providers.py` (28 tests) - Tutti i provider FX con multi-unit
 - `test_asset_providers.py` (20 tests) - Tutti i provider asset
 
 **Parametrizzazione**:
+
 - `@pytest.mark.parametrize("provider_code", REGISTERED_PROVIDERS)`
 - Auto-skip per provider senza feature specifiche
 - Test metadata, currencies, fetch, normalization, multi-unit
@@ -288,21 +312,25 @@
 ---
 
 ### ✅ Batch 4: Database Tests (4 file + 1 nuovo)
+
 **Convertiti a pytest**:
+
 - `test_fx_rates_persistence.py` (6 tests) - Sync, overwrite, idempotency
 - `test_numeric_truncation.py` (3 tests) - Decimal precision in DB
 - `test_transaction_cash_integrity.py` → **SOSTITUITO**
 - `test_transaction_types.py` → **SOSTITUITO**
 
 **Nuovo file comprensivo**:
+
 - `test_db_referential_integrity.py` (17 tests) ✨
-  - 7 CASCADE tests (asset→price, asset→provider, etc.)
-  - 3 Transaction↔CashMovement tests (unidirectional, CASCADE)
-  - 4 UNIQUE constraint tests
-  - 4 CHECK constraint tests (usando check_constraints_hook.py)
-  - 2 xfailed tests documentati (per future decisioni di design)
+    - 7 CASCADE tests (asset→price, asset→provider, etc.)
+    - 3 Transaction↔CashMovement tests (unidirectional, CASCADE)
+    - 4 UNIQUE constraint tests
+    - 4 CHECK constraint tests (usando check_constraints_hook.py)
+    - 2 xfailed tests documentati (per future decisioni di design)
 
 **Altro**:
+
 - `db_schema_validate.py` convertito a pytest (9 tests)
 - `populate_mock_data.py` mantenuto come script CLI (non un test)
 
@@ -310,22 +338,26 @@
 
 ### ✅ Batch 5: API Tests (3 file) - **CON COVERAGE! 🎉**
 
-**Problema Iniziale**: 
+**Problema Iniziale**:
+
 - Server subprocess con coverage → hang infinito
 - Coverage 0% per endpoint code
 
 **Soluzione Trovata**:
+
 - ✅ Server run as **THREAD** (non subprocess)
 - ✅ `.coveragerc`: `concurrency = thread,gevent`
 - ✅ Installato `gevent` per async tracking
 - ✅ **Coverage endpoint: 46-62%** (prima era 0%)
 
 **File convertiti**:
+
 - `test_fx_api.py` (11 tests) - Currencies, providers, sync, convert
 - `test_assets_metadata.py` (10 tests) - PATCH, bulk read, refresh
 - `test_assets_crud.py` (14 tests) - Create, list, filter, delete, CASCADE
 
 **Risultati Coverage**:
+
 ```
 backend/app/api/v1/fx.py:      55.59%  (era 0%)
 backend/app/api/v1/assets.py:  46.73%  (era 0%)
@@ -338,18 +370,21 @@ Total project:                 62.11%
 ## 📊 Risultato Finale
 
 ### Test Suite Completa
+
 - **Total test files**: 21 convertiti + 1 nuovo comprensivo
 - **Total tests**: ~200+ test functions
 - **All passing**: ✅ (tranne 2 xfailed documentati)
 - **Execution time**: ~30s per full suite
 
 ### Coverage Integration
+
 - ✅ `./test_runner.py --coverage all` funziona
 - ✅ Report HTML generato in `htmlcov/index.html`
 - ✅ Tabella coverage stampata a fine test
 - ✅ Async/await tracking funzionante (gevent)
 
 ### Documentazione Creata
+
 - `docs/TEST_STANDARDIZATION_PLAN.md` - Piano completo
 - `docs/COVERAGE_ASYNC_SOLUTION.md` - Soluzione tecnica gevent
 - `docs/BATCH_2_COMPLETION_REPORT.md` - Report batch 2
@@ -364,26 +399,33 @@ Total project:                 62.11%
 ## 🔮 Cosa Abbiamo Deciso di RIMANDARE
 
 ### 1. ❌ Coverage del Server Endpoint Perfetta (100%)
+
 **Decisione**: 46-62% è **accettabile** per ora
-**Motivo**: 
+**Motivo**:
+
 - Remaining uncovered = exception handlers non triggerati + edge cases
 - Aumenterà naturalmente aggiungendo test scenarios
 - Non bloccante per sviluppo feature
 
 ### 2. ❌ Migrazione pytest di populate_mock_data.py
+
 **Decisione**: Rimane script CLI
-**Motivo**: 
+**Motivo**:
+
 - Non è un test, è un tool di setup
 - Usato manualmente per populate test DB
 - Funziona bene così
 
 ### 3. ❌ Frontend Tests
+
 **Decisione**: Non fatto (frontend not ready)
 **Motivo**: Frontend React non ancora sviluppato
 
 ### 4. ❌ Integration Tests End-to-End
+
 **Decisione**: Rimandato
-**Motivo**: 
+**Motivo**:
+
 - API tests già coprono integration (server + DB)
 - E2E completo richiederebbe frontend
 - Non prioritario ora
@@ -393,20 +435,24 @@ Total project:                 62.11%
 ## 🛠️ Cosa È CAMBIATO nel Progetto
 
 ### Configurazione
+
 - ✅ `.coveragerc` aggiunto con `concurrency = thread,gevent`
 - ✅ `pytest.ini` configurato (asyncio_mode = auto)
 - ✅ `Pipfile`: aggiunti `pytest-cov`, `pytest-asyncio`, `gevent`
 - ✅ `test_runner.py`: supporto `--coverage` flag
 
 ### File Rimossi
+
 - ❌ `backend/test_scripts/test_db/test_transaction_cash_integrity.py` (old)
 - ❌ `backend/test_scripts/test_db/test_transaction_types.py` (old)
 
 ### File Nuovi/Rinominati
+
 - ✅ `backend/test_scripts/test_db/test_db_referential_integrity.py` (nuovo, comprensivo)
 - ✅ `backend/test_scripts/test_server_helper.py` (refactored con thread approach)
 
 ### Approccio Test
+
 - **Prima**: Mix legacy + pytest, no coverage
 - **Dopo**: 100% pytest, coverage integration, async support
 
@@ -416,9 +462,11 @@ Total project:                 62.11%
 
 ### 🎯 PRIORITÀ: Verificare E2E Test Assets (Phase 5.1 Remediation)
 
-**Perché ci eravamo fermati**: Durante Phase 5.1 (Asset Metadata System), ci eravamo accorti che non potevamo completare un **Manual E2E test scenario** perché mancavano endpoint API.
+**Perché ci eravamo fermati**: Durante Phase 5.1 (Asset Metadata System), ci eravamo accorti che non potevamo completare un **Manual E2E test scenario** perché mancavano endpoint
+API.
 
 **Status**: ✅ **TUTTI GLI ENDPOINT IMPLEMENTATI** (completato Nov 10, 2025)
+
 - Durante Phase 1.2, abbiamo implementato **19 endpoint Assets API**
 - Tutti gli endpoint necessari per l'E2E test sono disponibili
 
@@ -427,6 +475,7 @@ Total project:                 62.11%
 #### 📝 Piano di Test E2E Manuale (Swagger UI)
 
 **Prerequisiti**:
+
 ```bash
 # 1. Pulisci e ricrea test database
 rm -f backend/data/sqlite/test_app.db
@@ -448,6 +497,7 @@ open http://localhost:8000/api/v1/docs#/
 **Endpoint**: `POST /api/v1/assets/bulk`
 
 **Request Body**:
+
 ```json
 {
   "assets": [
@@ -464,6 +514,7 @@ open http://localhost:8000/api/v1/docs#/
 ```
 
 **Expected Response**:
+
 ```json
 {
   "results": [
@@ -486,6 +537,7 @@ open http://localhost:8000/api/v1/docs#/
 **Endpoint**: `POST /api/v1/assets/provider/bulk`
 
 **Request Body**:
+
 ```json
 {
   "assignments": [
@@ -499,6 +551,7 @@ open http://localhost:8000/api/v1/docs#/
 ```
 
 **Expected Response**:
+
 ```json
 {
   "results": [
@@ -532,6 +585,7 @@ open http://localhost:8000/api/v1/docs#/
 **Endpoint**: `POST /api/v1/assets`
 
 **Request Body**:
+
 ```json
 {
   "asset_ids": [1]
@@ -539,6 +593,7 @@ open http://localhost:8000/api/v1/docs#/
 ```
 
 **Expected Response** (excerpt):
+
 ```json
 [{
   "asset_id": 1,
@@ -557,6 +612,7 @@ open http://localhost:8000/api/v1/docs#/
 ```
 
 **Verifica**:
+
 - ✅ `investment_type`: "stock"
 - ✅ `short_description`: presente
 - ✅ `geographic_area`: null (non ancora impostato)
@@ -568,6 +624,7 @@ open http://localhost:8000/api/v1/docs#/
 **Endpoint**: `PATCH /api/v1/assets/metadata`
 
 **Request Body**:
+
 ```json
 {
   "assets": [
@@ -582,6 +639,7 @@ open http://localhost:8000/api/v1/docs#/
 ```
 
 **Expected Response**:
+
 ```json
 {
   "results": [
@@ -608,6 +666,7 @@ open http://localhost:8000/api/v1/docs#/
 **Endpoint**: `POST /api/v1/assets`
 
 **Request Body**:
+
 ```json
 {
   "asset_ids": [1]
@@ -615,6 +674,7 @@ open http://localhost:8000/api/v1/docs#/
 ```
 
 **Expected Response** (excerpt):
+
 ```json
 [
   {
@@ -641,6 +701,7 @@ open http://localhost:8000/api/v1/docs#/
 ```
 
 **Verifica**:
+
 - ✅ `geographic_area`: {"USA": "0.7000", "WORLD": "0.3000"}
 - ✅ Altri campi metadata preservati
 
@@ -651,6 +712,7 @@ open http://localhost:8000/api/v1/docs#/
 **Endpoint**: `POST /api/v1/assets/metadata/refresh/bulk`
 
 **Request Body**:
+
 ```json
 {
   "asset_ids": [1]
@@ -658,6 +720,7 @@ open http://localhost:8000/api/v1/docs#/
 ```
 
 **Expected Response**:
+
 ```json
 {
   "results": [
@@ -678,14 +741,14 @@ open http://localhost:8000/api/v1/docs#/
 
 #### ✅ Endpoint Mapping (Verification)
 
-| Step | Endpoint | Status |
-|------|----------|--------|
-| 1. Create asset | `POST /api/v1/assets/bulk` | ✅ Implemented (line 70) |
-| 2. Assign provider | `POST /api/v1/assets/provider/bulk` | ✅ Implemented (line 253) |
-| 3. Read asset | `POST /api/v1/assets` | ✅ Implemented (line 450) |
-| 4. PATCH metadata | `PATCH /api/v1/assets/metadata` | ✅ Implemented (line 591) |
-| 5. Read asset (verify) | `POST /api/v1/assets` | ✅ Implemented (line 450) |
-| 7. Refresh metadata | `POST /assets/{id}/metadata/refresh` | ✅ Implemented (line 696) |
+| Step                   | Endpoint                             | Status                   |
+|------------------------|--------------------------------------|--------------------------|
+| 1. Create asset        | `POST /api/v1/assets/bulk`           | ✅ Implemented (line 70)  |
+| 2. Assign provider     | `POST /api/v1/assets/provider/bulk`  | ✅ Implemented (line 253) |
+| 3. Read asset          | `POST /api/v1/assets`                | ✅ Implemented (line 450) |
+| 4. PATCH metadata      | `PATCH /api/v1/assets/metadata`      | ✅ Implemented (line 591) |
+| 5. Read asset (verify) | `POST /api/v1/assets`                | ✅ Implemented (line 450) |
+| 7. Refresh metadata    | `POST /assets/{id}/metadata/refresh` | ✅ Implemented (line 696) |
 
 **Total endpoints Assets API**: 19  
 **Required for E2E test**: 5 unique  
@@ -699,12 +762,14 @@ open http://localhost:8000/api/v1/docs#/
 > "ricordo di essere arrivato fino alla patch prima di doverci fermare"
 
 **Motivo**:
+
 - ✅ PATCH endpoint era stato implementato
 - ❌ Non esistevano **test automatici** per verificare il funzionamento completo
 - ❌ Coverage era 0% per endpoint code (server subprocess issue)
 - 🔴 **Decisione**: Prima di continuare con manual test, standardizzare test suite
 
 **Risultato**:
+
 - ✅ Test standardization completata
 - ✅ Coverage endpoint tracking funzionante (46-62%)
 - ✅ Ora possiamo validare E2E manualmente con confidence
@@ -714,6 +779,7 @@ open http://localhost:8000/api/v1/docs#/
 ### ✅ COMPLETATO: Phase 05 Implementation Checklist
 
 **Lavoro pendente dalla checklist originale**:
+
 - ✅ **Phase 0-5**: Database, Registry, Providers, Schemas → **100% COMPLETATO**
 - ✅ **Phase 1.2**: Asset Source Manager + API endpoints → **100% COMPLETATO** (Nov 10)
 - ✅ **Phase 1.4**: FX providers unified registry → **100% COMPLETATO** (Nov 10)
@@ -722,7 +788,8 @@ open http://localhost:8000/api/v1/docs#/
 - ✅ **Phase 4**: Synthetic Yield → **100% COMPLETATO** (Nov 18)
 - ✅ **Phase 5**: Schema Organization + DB Corrections → **100% COMPLETATO** (Nov 18)
 
-**Rimane solo**: 
+**Rimane solo**:
+
 - Phase 6: Advanced Providers (JustETF, etc.) → **NON PRIORITARIO ORA**
 - Phase 7: Search & Cache System → **NON PRIORITARIO ORA**
 - Phase 8: Final Documentation Polish → **NON PRIORITARIO ORA**
@@ -732,59 +799,62 @@ open http://localhost:8000/api/v1/docs#/
 #### 📋 Pending TODOs dalla Checklist 05 (Opzionali)
 
 **HIGH PRIORITY** (ma non bloccanti):
+
 1. ⚠️ **Advanced Refresh Tests**
-   - Provider fallback scenarios
-   - Per-item error handling
-   - Concurrency limits validation
-   - Location: `backend/test_scripts/test_services/test_asset_source_refresh.py`
-   - Current: Solo smoke test (1 test)
-   - Goal: Comprehensive test suite (10+ tests)
+    - Provider fallback scenarios
+    - Per-item error handling
+    - Concurrency limits validation
+    - Location: `backend/test_scripts/test_services/test_asset_source_refresh.py`
+    - Current: Solo smoke test (1 test)
+    - Goal: Comprehensive test suite (10+ tests)
 
 2. ⚠️ **FX Auto-Config Sync Issue** (Known Issue)
-   - Test: `test_fx_api.py` - Test 4.3
-   - Problem: Auto-config sync returns 0 rates
-   - Configuration: EUR/USD → FED priority=1
-   - Expected: FED syncs at least one rate
-   - Actual: `synced=0`, `currencies=[]`
-   - Status: Test fixed to better report error, underlying sync issue remains
+    - Test: `test_fx_api.py` - Test 4.3
+    - Problem: Auto-config sync returns 0 rates
+    - Configuration: EUR/USD → FED priority=1
+    - Expected: FED syncs at least one rate
+    - Actual: `synced=0`, `currencies=[]`
+    - Status: Test fixed to better report error, underlying sync issue remains
 
 **MEDIUM PRIORITY** (nice to have):
+
 3. 📚 **Provider Development Guide**
-   - Document: How to create new asset providers
-   - Similar to: `docs/fx/provider-development.md`
-   - Location: `docs/asset-providers/provider-development-guide.md`
-   - Content: Abstract base class, registration, testing, examples
+    - Document: How to create new asset providers
+    - Similar to: `docs/fx/provider-development.md`
+    - Location: `docs/asset-providers/provider-development-guide.md`
+    - Content: Abstract base class, registration, testing, examples
 
 4. 🔧 **Factor Utilities to number.py**
-   - File: `backend/app/utils/number.py` (NEW)
-   - Move: `get_price_column_precision()`, `truncate_price_to_db_precision()`, `parse_decimal_value()`
-   - From: `backend/app/services/asset_source.py`
-   - Goal: Reuse with FX system (avoid duplication)
+    - File: `backend/app/utils/number.py` (NEW)
+    - Move: `get_price_column_precision()`, `truncate_price_to_db_precision()`, `parse_decimal_value()`
+    - From: `backend/app/services/asset_source.py`
+    - Goal: Reuse with FX system (avoid duplication)
 
 **LOW PRIORITY** (future enhancements):
+
 5. 🕐 **Timezone-Aware last_fetch_at**
-   - Currently: Naive UTC datetime
-   - Goal: Timezone-aware (datetime.timezone.utc)
-   - Files: `asset_source.py`, `fx.py`
-   - Impact: Better logging and scheduling
+    - Currently: Naive UTC datetime
+    - Goal: Timezone-aware (datetime.timezone.utc)
+    - Files: `asset_source.py`, `fx.py`
+    - Impact: Better logging and scheduling
 
 6. 🏦 **Scheduled Investment Loan Repayment Check**
-   - File: `backend/app/services/asset_source_providers/scheduled_investment.py`
-   - TODO: Check if loan repaid via transactions
-   - Current: Only checks if past maturity+grace
-   - Goal: More accurate valuation (0 if repaid early)
+    - File: `backend/app/services/asset_source_providers/scheduled_investment.py`
+    - TODO: Check if loan repaid via transactions
+    - Current: Only checks if past maturity+grace
+    - Goal: More accurate valuation (0 if repaid early)
 
 7. 🌐 **Advanced Providers** (Phase 6)
-   - JustETF provider (European ETF data)
-   - Borsa Italiana advanced scraping
-   - Morningstar integration
-   - Status: Not started, low priority
+    - JustETF provider (European ETF data)
+    - Borsa Italiana advanced scraping
+    - Morningstar integration
+    - Status: Not started, low priority
 
 8. 🔍 **Search & Cache System** (Phase 7)
-   - Provider query caching
-   - Search result optimization
-   - Rate limiting per provider
-   - Status: Not started, low priority
+    - Provider query caching
+    - Search result optimization
+    - Rate limiting per provider
+    - Status: Not started, low priority
 
 ---
 
@@ -793,6 +863,7 @@ open http://localhost:8000/api/v1/docs#/
 **Suggerimento**: **Test E2E Manuale → Code Cleanup → Feature Development**
 
 **Motivo**:
+
 - ✅ Test infrastructure è solida ora (62% coverage baseline)
 - ✅ Tutti gli endpoint implementati
 - ⚠️ **MANCA SOLO**: Validazione manuale E2E + cleanup tecnico
@@ -801,6 +872,7 @@ open http://localhost:8000/api/v1/docs#/
 **Step Raccomandati** (in ordine):
 
 ### 1. 🧪 Test E2E Manuale (OGGI)
+
 **Tempo stimato**: 15-20 minuti
 
 ```bash
@@ -829,6 +901,7 @@ rm -f backend/data/sqlite/test_app.db
 📄 **Piano Dettagliato**: Vedi `docs/CODE_CLEANUP_PLAN.md` per guide step-by-step complete
 
 **Summary**:
+
 - **Task A**: Remove 5 single endpoints (2-3 ore)
 - **Task B**: Refactor 12 service functions: dict → Pydantic (3-4 ore)
 - **Total**: 5-7 ore di lavoro
@@ -837,14 +910,17 @@ rm -f backend/data/sqlite/test_app.db
 ---
 
 #### ✅ Task A: Remove Single Endpoints (Keep Only Bulk)
+
 **Tempo stimato**: 2-3 ore
 
-**Motivo**: 
+**Motivo**:
+
 - ✅ Bulk-first API pattern = più efficiente
 - ❌ Single endpoints = codice duplicato
 - ✅ Tutti i client possono usare bulk con array di 1 item
 
 **Endpoint da rimuovere**:
+
 1. ❌ `POST /api/v1/assets/{asset_id}/provider` → usa `POST /api/v1/assets/provider/bulk`
 2. ❌ `DELETE /api/v1/assets/{asset_id}/provider` → usa `DELETE /api/v1/assets/provider/bulk`
 3. ❌ `POST /api/v1/assets/{asset_id}/metadata/refresh` → usa `POST /api/v1/assets/metadata/refresh/bulk`
@@ -852,25 +928,30 @@ rm -f backend/data/sqlite/test_app.db
 5. ❌ `DELETE /api/v1/assets/{asset_id}/prices` → usa `DELETE /api/v1/assets/prices/bulk`
 
 **Files da modificare**:
+
 - `backend/app/api/v1/assets.py` (rimuovere ~50 lines)
 - Test files: rimuovere test per single endpoints
 
 **Documentazione**:
+
 - Aggiornare `docs/api-development-guide.md`
 - Aggiungere migration guide per API consumers
 
 ---
 
 #### ✅ Task B: Refactor dict → Pydantic Models
+
 **Tempo stimato**: 3-4 ore
 
-**Problema**: 
+**Problema**:
+
 - In molti punti, service layer ritorna `dict`
 - API endpoint wrappa immediatamente in Pydantic model
 - ❌ Duplicazione: dict → Pydantic conversion ripetuta
 - ❌ Type safety persa nel service layer
 
 **Pattern attuale (CATTIVO)**:
+
 ```python
 # services/asset_source.py
 def assign_provider(...) -> dict:  # ❌ dict
@@ -886,6 +967,7 @@ return FAProviderAssignmentResult(**result)  # ✅ Pydantic
 ```
 
 **Pattern desiderato (BUONO)**:
+
 ```python
 # services/asset_source.py
 def assign_provider(...) -> FAProviderAssignmentResult:  # ✅ Pydantic
@@ -902,33 +984,35 @@ return assign_provider(...)  # ✅ già Pydantic
 **Files da refactorare**:
 
 1. **`backend/app/services/asset_source.py`** (~350 lines affected):
-   - `bulk_assign_providers()` → return `list[FAProviderAssignmentResult]`
-   - `bulk_remove_providers()` → return `list[FAProviderRemovalResult]`
-   - `bulk_upsert_prices()` → return `list[FAPriceUpsertResult]`
-   - `bulk_delete_prices()` → return `FABulkDeletePricesResponse`
-   - `bulk_refresh_prices()` → return `FABulkPriceRefreshResponse`
+    - `bulk_assign_providers()` → return `list[FAProviderAssignmentResult]`
+    - `bulk_remove_providers()` → return `list[FAProviderRemovalResult]`
+    - `bulk_upsert_prices()` → return `list[FAPriceUpsertResult]`
+    - `bulk_delete_prices()` → return `FABulkDeletePricesResponse`
+    - `bulk_refresh_prices()` → return `FABulkPriceRefreshResponse`
 
 2. **`backend/app/services/asset_metadata.py`** (~100 lines affected):
-   - `apply_partial_update()` → return `FAMetadataPatchResult`
-   - `merge_provider_metadata()` → return `tuple[ClassificationParamsModel, list[MetadataChange]]`
+    - `apply_partial_update()` → return `FAMetadataPatchResult`
+    - `merge_provider_metadata()` → return `tuple[ClassificationParamsModel, list[MetadataChange]]`
 
 3. **`backend/app/services/asset_crud.py`** (~80 lines affected):
-   - `bulk_create_assets()` → return `list[FAAssetCreationResult]`
-   - `bulk_delete_assets()` → return `list[FAAssetDeletionResult]`
+    - `bulk_create_assets()` → return `list[FAAssetCreationResult]`
+    - `bulk_delete_assets()` → return `list[FAAssetDeletionResult]`
 
 4. **`backend/app/services/fx.py`** (~200 lines affected):
-   - `ensure_rates_multi_source()` → return `FXSyncResponse` (invece di dict)
-   - `bulk_upsert_rates()` → return `FXRateUpsertResponse`
-   - `bulk_delete_rates()` → return `FXRateDeleteResponse`
-   - `convert_bulk()` → return `FXBulkConversionResponse`
+    - `ensure_rates_multi_source()` → return `FXSyncResponse` (invece di dict)
+    - `bulk_upsert_rates()` → return `FXRateUpsertResponse`
+    - `bulk_delete_rates()` → return `FXRateDeleteResponse`
+    - `convert_bulk()` → return `FXBulkConversionResponse`
 
 **Benefits**:
+
 - ✅ Type safety nel service layer (mypy checks)
 - ✅ No conversion overhead in API layer
 - ✅ Validation centralizzata (Pydantic validators run in service)
 - ✅ Easier testing (Pydantic models have `.model_dump()`)
 
 **Testing**:
+
 - ✅ Tutti i test esistenti continueranno a passare (no breaking changes nel API)
 - ⚠️ Alcuni test service potrebbero richiedere aggiornamento (dict → Pydantic assertions)
 
@@ -937,6 +1021,7 @@ return assign_provider(...)  # ✅ già Pydantic
 ### 4. 🧹 Optional Further Cleanup (SE HAI TEMPO)
 
 **Solo se vuoi migliorare qualità**:
+
 - Fix TODOs nel codice (priorità: HIGH)
 - Refactor funzioni lunghe (>100 lines)
 - Aggiungere docstrings mancanti
@@ -947,12 +1032,14 @@ return assign_provider(...)  # ✅ già Pydantic
 ---
 
 ### Opzione B: Aumentare Coverage (RIMANDATO)
+
 **Coverage attuale**: 62%  
 **Target realistico**: 70-75%  
 **Quando farlo**: Dopo qualche feature implementata  
 **Motivo rinvio**: Coverage crescerà naturalmente con nuove feature
 
 ### Opzione C: TODOs Pending (RIMANDATO)
+
 **TODOs High Priority**: 2 (advanced refresh tests, FX auto-config)  
 **Quando farli**: Quando servono (non bloccanti ora)  
 **Motivo rinvio**: Feature development ha più valore utente
@@ -962,6 +1049,7 @@ return assign_provider(...)  # ✅ già Pydantic
 ## 📚 Quick Reference
 
 ### Comandi Utili
+
 ```bash
 # Run all tests with coverage
 ./test_runner.py --coverage all
@@ -978,6 +1066,7 @@ coverage erase
 ```
 
 ### Documentazione Chiave
+
 - `README.md` - Getting started
 - `docs/TEST_STANDARDIZATION_PLAN.md` - Test strategy
 - `docs/COVERAGE_ASYNC_SOLUTION.md` - Coverage tecnico

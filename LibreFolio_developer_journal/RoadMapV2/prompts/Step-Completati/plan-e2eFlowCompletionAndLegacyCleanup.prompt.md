@@ -25,31 +25,31 @@ Search → Create Asset → Assign Provider → Refresh Metadata → Refresh Pri
 
 ### 🔴 CRITICI - Bloccano E2E Flow
 
-| # | File | Line | TODO | Stato |
-|---|------|------|------|-------|
-| 1 | `asset_source.py` | 330 | identifier_type in search | ✅ DONE |
-| 2 | `provider.py` | FAProviderRefreshFieldsDetail | refreshed_fields con OldNew | ✅ DONE |
-| 3 | `common.py` | Currency class | Currency class | ✅ DONE |
-| 4 | `asset_source.py` | 530, 712 | hasattr checks | ✅ DONE |
-| 5 | `fx.py` | 88 | hasattr check | ✅ DONE |
-| 6 | `geo_normalization.py` | 55 | multi-language + lista multipla | ✅ DONE (endpoint added) |
-| 7 | `utilities.py` | 62 | region mapping | ⏳ TODO (advanced feature) |
+| # | File                   | Line                          | TODO                            | Stato                     |
+|---|------------------------|-------------------------------|---------------------------------|---------------------------|
+| 1 | `asset_source.py`      | 330                           | identifier_type in search       | ✅ DONE                    |
+| 2 | `provider.py`          | FAProviderRefreshFieldsDetail | refreshed_fields con OldNew     | ✅ DONE                    |
+| 3 | `common.py`            | Currency class                | Currency class                  | ✅ DONE                    |
+| 4 | `asset_source.py`      | 530, 712                      | hasattr checks                  | ✅ DONE                    |
+| 5 | `fx.py`                | 88                            | hasattr check                   | ✅ DONE                    |
+| 6 | `geo_normalization.py` | 55                            | multi-language + lista multipla | ✅ DONE (endpoint added)   |
+| 7 | `utilities.py`         | 62                            | region mapping                  | ⏳ TODO (advanced feature) |
 
 ### 🟡 MEDI - Migliorano UX
 
-| # | File | Line | TODO | Stato |
-|---|------|------|------|-------|
-| 8 | `justetf.py` | search | identifier_type in search | ✅ DONE |
-| 9 | `yahoo_finance.py` | search | identifier_type in search | ✅ DONE |
-| 10 | `mockprov.py` | search | identifier_type in search | ✅ DONE |
-| 11 | `css_scraper.py` | 110 | headers customization | ⏭️ SKIP (FUTURE) |
+| #  | File               | Line   | TODO                      | Stato            |
+|----|--------------------|--------|---------------------------|------------------|
+| 8  | `justetf.py`       | search | identifier_type in search | ✅ DONE           |
+| 9  | `yahoo_finance.py` | search | identifier_type in search | ✅ DONE           |
+| 10 | `mockprov.py`      | search | identifier_type in search | ✅ DONE           |
+| 11 | `css_scraper.py`   | 110    | headers customization     | ⏭️ SKIP (FUTURE) |
 
 ### 🟢 MINORI - Future Work
 
-| # | File | Line | TODO | Stato |
-|---|------|------|------|-------|
-| 12 | `asset_source.py` | 435 | cache GC job | ⏭️ SKIP (FUTURE) |
-| 13 | `test_*.py` | vari | test improvements | ⏭️ SKIP (SEPARATE TASK) |
+| #  | File              | Line | TODO              | Stato                   |
+|----|-------------------|------|-------------------|-------------------------|
+| 12 | `asset_source.py` | 435  | cache GC job      | ⏭️ SKIP (FUTURE)        |
+| 13 | `test_*.py`       | vari | test improvements | ⏭️ SKIP (SEPARATE TASK) |
 
 ---
 
@@ -60,6 +60,7 @@ Search → Create Asset → Assign Provider → Refresh Metadata → Refresh Pri
 **Location**: `backend/app/schemas/common.py`
 
 **Features richieste**:
+
 - ✅ Campo `code: str` (ISO 4217: USD, EUR, BTC, etc.)
 - ✅ Campo `amount: Decimal` (può essere negativo)
 - ✅ Validazione con `pycountry.currencies` + dizionario cripto
@@ -68,6 +69,7 @@ Search → Create Asset → Assign Provider → Refresh Metadata → Refresh Pri
 - ✅ Validation: Solleva `ValueError` se currency invalida
 
 **Implementazione**:
+
 ```python
 from decimal import Decimal
 from typing import Any
@@ -190,8 +192,8 @@ Nota utente:
 chat, il normalize_currency_code fa solo uno strip e upper, quindi eliminalo e importa le 2 righe di codice dentro Currency direttamente.
 anzi usa normalize_currency_code come chiave di ricerca per trovare le aree di codice dove probabilmente serve usare questo nuovo tipo.
 
-
 **API Usage Pattern**:
+
 ```python
 # API endpoint receives JSON
 {"currency": "USD", "amount": "100.50"}
@@ -212,6 +214,7 @@ response = total.to_dict()  # {"currency": "USD", "amount": "103.00"}
 
 Inside `backend/app/schemas/common.py` exist a class OldNew(BaseModel, Generic[CType])
 Use it inside **FAProviderRefreshFieldsDetail**:
+
 ```python
 class FAProviderRefreshFieldsDetail(BaseModel):
     """Field-level details for provider refresh operation."""
@@ -247,6 +250,7 @@ detail = FAProviderRefreshFieldsDetail(
 **Endpoint**: `GET /api/v1/utilities/countries/list?lang=en`
 
 **Response Schema** (`backend/app/schemas/utilities.py`):
+
 ```python
 class CountryInfo(BaseModel):
     """Single country information."""
@@ -261,6 +265,7 @@ class FACountryListResponse(BaseModel):
 ```
 
 **Implementation** (`backend/app/api/v1/utilities.py`):
+
 ```python
 @router.get("/countries/list", response_model=FACountryListResponse)
 async def list_countries(lang: str = Query("en", description="Language code (only 'en' supported for now)")):
@@ -300,10 +305,12 @@ async def list_countries(lang: str = Query("en", description="Language code (onl
 ### Step 1.1: Creare `Currency` class ⚡ BREAKING ✅ COMPLETATO
 
 **Files da creare/modificare**:
+
 1. ✅ `backend/app/schemas/common.py` - Aggiungere classe Currency
 2. ✅ `backend/app/utils/validation_utils.py` - RIMOSSO normalize_currency_code()
 
 **Tasks**:
+
 - [x] Definire classe `Currency(BaseModel)` con `code` e `amount`
 - [x] Implementare validator con `pycountry.currencies` + `CRYPTO_CURRENCIES`
 - [x] Implementare operazioni: `__add__`, `__sub__`, `__neg__`, `__abs__`, `__eq__`, `__ne__`
@@ -317,6 +324,7 @@ async def list_countries(lang: str = Query("en", description="Language code (onl
 **Breaking Change**: ⚠️ SÌ - Nuovo tipo, vecchi `Decimal` non compatibili perchè insufficienti
 
 **Test cases minimi**:
+
 ```python
 def test_currency_creation():
     usd = Currency(code="USD", amount=Decimal("100"))
@@ -349,9 +357,11 @@ def test_crypto_currency():
 ### Step 1.3: Aggiornare `FAProviderRefreshFieldsDetail` ⚡ BREAKING ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/schemas/provider.py` - Schema update
 
 **Tasks**:
+
 - [x] Import `OldNew` da common
 - [x] Cambiare `refreshed_fields: List[str]` → `List[OldNew[str|None]]`
 - [x] Aggiornare docstring con esempi
@@ -360,11 +370,13 @@ def test_crypto_currency():
 **Breaking Change**: ⚠️ SÌ - Type change in response schema
 
 **Before**:
+
 ```python
 refreshed_fields: List[str] = ["sector_area", "geographic_area"]
 ```
 
 **After**:
+
 ```python
 refreshed_fields: List[OldNew[str|None]] = [
     OldNew(old="Technology", new="Industrials"),
@@ -379,6 +391,7 @@ refreshed_fields: List[OldNew[str|None]] = [
 ### Step 2.1: `identifier_type` in search ⚡ BREAKING ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/schemas/provider.py` - Add field
 2. ✅ `backend/app/services/asset_source.py` - Update docstring
 3. ✅ `backend/app/services/asset_search.py` - Map field
@@ -387,6 +400,7 @@ refreshed_fields: List[OldNew[str|None]] = [
 6. ✅ `backend/app/services/asset_source_providers/mockprov.py` - Add to results
 
 **Tasks**:
+
 - [x] Aggiungere `identifier_type: IdentifierType` a `FAProviderSearchResultItem` (REQUIRED, no Optional)
 - [x] Aggiornare docstring `search()` in abstract class
 - [x] JustETF: Return `"identifier_type": IdentifierType.ISIN`
@@ -404,10 +418,12 @@ refreshed_fields: List[OldNew[str|None]] = [
 ### Step 2.2: Field details in metadata refresh ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/services/asset_source.py` - Populate fields_detail
 2. ✅ `backend/app/schemas/assets.py` - Added fields_detail to FAMetadataRefreshResult
 
 **Tasks**:
+
 - [x] In `refresh_metadata_from_provider()`, tracciare old/new per ogni campo
 - [x] Confrontare asset before/after per determinare changes
 - [x] Popolare `refreshed_fields: List[OldNew[str]]` con old→new values
@@ -423,10 +439,12 @@ refreshed_fields: List[OldNew[str|None]] = [
 ### Step 2.3: Currency in search/metadata (JustETF/YFinance) ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/services/asset_source_providers/justetf.py`
 2. ✅ `backend/app/services/asset_source_providers/yahoo_finance.py`
 
 **Tasks**:
+
 - [x] **JustETF**: Currency estratta durante scraping (fund_currency in metadata)
 - [x] **YFinance**: Currency estratta da quote info
 - [x] Currency validata tramite Currency.validate_code()
@@ -441,16 +459,19 @@ refreshed_fields: List[OldNew[str|None]] = [
 ### Step 3.1: AssetSourceProvider properties ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/services/asset_source.py` - No hasattr
 2. ✅ `backend/app/services/asset_source_providers/justetf.py` - Removed hasattr
 
 **Tasks**:
+
 - [x] Verificato che AssetSourceProvider ha già property necessarie
 - [x] Rimosso **TUTTI** gli `hasattr()` checks da asset_source.py
 - [x] Rimosso hasattr da justetf.py (date_only sempre presente)
 - [x] Rimosso hasattr da decimal_utils.py (try/except più idiomatico)
 
 **Locations updated**:
+
 - `asset_source.py:530` ✅ (già risolto precedentemente)
 - `asset_source.py:712` ✅ (già risolto precedentemente)
 - `justetf.py:260` ✅ FIXED - rimosso hasattr per date_only
@@ -465,10 +486,12 @@ refreshed_fields: List[OldNew[str|None]] = [
 ### Step 3.2: FX Provider properties ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/services/fx.py` - property `base_currencies` già esiste (line 87)
 2. ✅ `backend/app/api/v1/fx.py` - hasattr RIMOSSO
 
 **Tasks**:
+
 - [x] Verificato che `FXRateProvider` ha già `base_currencies` property (line 87)
 - [x] RIMOSSO hasattr check da fx.py API endpoint
 - [x] Ora usa direttamente `instance.base_currencies`
@@ -485,10 +508,12 @@ refreshed_fields: List[OldNew[str|None]] = [
 ### Step 4.1: Multi-language country search (Best effort) ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/utils/geo_normalization.py` - normalize_country_to_iso3() funziona
 2. ✅ `backend/app/api/v1/utilities.py` - Endpoint gestisce regioni
 
 **Tasks**:
+
 - [x] Country search funziona con pycountry (solo inglese)
 - [x] Endpoint `/countries/normalize` restituisce lista se match multipli (regioni)
 - [x] Endpoint `/countries` lista tutti i paesi
@@ -505,10 +530,12 @@ refreshed_fields: List[OldNew[str|None]] = [
 ### Step 4.2: Country list endpoint ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/api/v1/utilities.py` - Endpoint già implementato
 2. ✅ `backend/app/schemas/utilities.py` - Response schema già esistente
 
 **Tasks**:
+
 - [x] Implementare endpoint `GET /utilities/countries?language=en`
 - [x] Usare `pycountry.countries` per lista completa
 - [x] Parameter `language` (solo "en" supportato per ora)
@@ -522,18 +549,20 @@ refreshed_fields: List[OldNew[str|None]] = [
 ### Step 4.3: Region expansion ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/utils/geo_normalization.py` - REGION_MAPPING dict aggiunto
 2. ✅ `backend/app/api/v1/utilities.py` - Endpoint aggiornato per espandere regioni
 
 **Tasks**:
+
 - [x] Creato `REGION_MAPPING` dict con massima copertura
 - [x] Aggiunti helper functions: `is_region()`, `expand_region()`
 - [x] Aggiornato endpoint `/utilities/countries/normalize` per espandere regioni
 - [x] Endpoint ritorna `match_type="region"` quando espande una regione
 - [x] Test verificati:
-  - `EUR` → 19 paesi eurozona
-  - `G7` → 7 paesi
-  - `ASIA` → 20 paesi
+    - `EUR` → 19 paesi eurozona
+    - `G7` → 7 paesi
+    - `ASIA` → 20 paesi
 
 **TODO risolti**: ✅ `utilities.py:62`
 
@@ -544,6 +573,7 @@ refreshed_fields: List[OldNew[str|None]] = [
 ### Step 5.1: Identificare usage di currency/amount nel codice ✅ COMPLETATO
 
 **Search patterns**:
+
 ```bash
 # Trova tutti i posti dove si manipolano valute e importi
 grep -r "Decimal.*amount" backend/app/
@@ -553,6 +583,7 @@ grep -r "value.*currency" backend/app/schemas/
 ```
 
 **Files probabilmente da aggiornare**:
+
 - `backend/app/services/fx.py` - **`convert()` e `convert_bulk()`** ⚡
 - `backend/app/api/v1/fx.py` - FX conversion endpoints
 - `backend/app/api/v1/assets.py` - Price operations
@@ -562,6 +593,7 @@ grep -r "value.*currency" backend/app/schemas/
 - Provider implementations che ritornano `FACurrentValue`
 
 **Task**:
+
 - [x] Creare lista completa di file da modificare
 - [x] Prioritize by: Services → Schemas → APIs → Providers
 
@@ -575,6 +607,7 @@ Le funzioni `convert()` e `convert_bulk()` in `fx.py` sono state **completamente
 per accettare e ritornare `Currency` objects:
 
 **Vecchia signature** (rimossa):
+
 ```python
 async def convert(session, amount: Decimal, from_currency: str, to_currency: str, 
                   as_of_date: date, return_rate_info: bool = False) -> Decimal | tuple
@@ -582,6 +615,7 @@ async def convert_bulk(session, conversions: list[tuple[Decimal, str, str, date]
 ```
 
 **Nuova signature** (⚡ BREAKING):
+
 ```python
 async def convert(session, amount: Currency, to_currency: str, 
                   as_of_date: date, return_rate_info: bool = False) -> Currency | tuple[Currency, ...]
@@ -589,11 +623,13 @@ async def convert_bulk(session, conversions: list[tuple[Currency, str, date]], .
 ```
 
 **Files modificati**:
+
 1. ✅ `backend/app/services/fx.py` - `convert()` e `convert_bulk()` signature cambiata
 2. ✅ `backend/app/api/v1/fx.py` - API endpoints aggiornati
 3. ✅ `backend/test_scripts/test_services/test_fx_conversion.py` - Tutti i test aggiornati
 
 **Tasks**:
+
 - [x] Aggiornata signature `convert()`: `(session, Currency, to_str, date)` → `Currency`
 - [x] Aggiornata signature `convert_bulk()`: `list[(Currency, to_str, date)]` → `list[(Currency, date, bool)]`
 - [x] API `convert_currency_bulk()` aggiornato per nuova signature
@@ -608,10 +644,12 @@ e non ci sono utenti esterni. Meglio fare il refactoring ora che dopo.
 ### Step 5.3: Aggiornare Asset Service per usare `Currency` ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/services/asset_source.py` - Métodi che gestiscono prezzi
 2. ✅ Provider implementations - `FACurrentValue` return
 
 **Tasks**:
+
 - [x] FACurrentValue mantiene API contract (`value: Decimal`, `currency: str`)
 - [x] Aggiunta property `value_cur` che ritorna `Currency` object
 - [x] Validazione currency con `Currency.validate_code()`
@@ -623,15 +661,18 @@ e non ci sono utenti esterni. Meglio fare il refactoring ora che dopo.
 ### Step 5.4: Aggiornare API endpoints per Currency ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/api/v1/fx.py` - Conversion endpoints
 2. ✅ `backend/app/api/v1/assets.py` - Usa Currency.validate_code() per validazione
 3. ✅ `backend/app/schemas/fx.py` - FXConversionRequest/Result updated
 
 **Strategy**:
 Dove prendo già solo valuta e quantità, uso direttamente currency.
-Dove ho più valute (ad esempio forex), per quella di partenza uso currecy, per quella di arrivo, metto una stringa con il codice valuta, e la classe pydantic valida che sia una valuta valida con le funzioni di currency.
+Dove ho più valute (ad esempio forex), per quella di partenza uso currecy, per quella di arrivo, metto una stringa con il codice valuta, e la classe pydantic valida che sia una
+valuta valida con le funzioni di currency.
 
 **COMPLETATO**:
+
 - [x] `FXConversionRequest`: `amount+from_currency` → `from_amount: Currency`
 - [x] `FXConversionResult`: `amount+from_currency` → `from_amount: Currency`, `converted_amount+to_currency` → `to_amount: Currency`
 - [x] `convert_currency_bulk()` in `fx.py` API aggiornato
@@ -644,11 +685,13 @@ Dove ho più valute (ad esempio forex), per quella di partenza uso currecy, per 
 ### Step 5.5: Aggiornare Schemas per Currency ✅ COMPLETATO
 
 **Files**:
+
 1. ✅ `backend/app/schemas/prices.py` - `FAPricePoint`, `FACurrentValue`
 2. ✅ `backend/app/schemas/fx.py` - FX rate schemas
 3. ✅ `backend/app/schemas/assets.py` - Asset schemas con currency
 
 **Strategia scelta: Option B**:
+
 ```python
 class FAPricePoint(BaseModel):
     date: date
@@ -662,6 +705,7 @@ class FAPricePoint(BaseModel):
 ```
 
 **Tasks**:
+
 - [x] FAPricePoint: currency validated, properties per OHLC (close_cur, open_cur, etc.)
 - [x] FACurrentValue: currency validated, property value_cur
 - [x] FXConversionRequest/Result: già usa Currency objects direttamente
@@ -675,6 +719,7 @@ class FAPricePoint(BaseModel):
 **Files**: Tutti i provider in `backend/app/services/asset_source_providers/`
 
 **Tasks**:
+
 - [x] `justetf.py` - Ritorna FACurrentValue con value/currency separati
 - [x] `yahoo_finance.py` - Ritorna FACurrentValue con value/currency separati
 - [x] `css_scraper.py` - Ritorna FACurrentValue con value/currency separati
@@ -692,6 +737,7 @@ class FAPricePoint(BaseModel):
 **File**: `backend/test_scripts/test_e2e/test_search_to_prices.py`
 
 **Test flow**:
+
 ```python
 @pytest.mark.asyncio
 async def test_complete_e2e_flow():
@@ -770,6 +816,7 @@ async def test_complete_e2e_flow():
 **File**: `backend/test_scripts/test_utilities/test_currency.py`
 
 **Test coverage**:
+
 - Creation (valid/invalid codes)
 - Arithmetic operations (+, -, neg, abs)
 - Error handling (different currencies)
@@ -782,6 +829,7 @@ async def test_complete_e2e_flow():
 ### Step 6.3: Aggiornare Test Esistenti
 
 **Files da aggiornare**:
+
 - `test_assets_provider.py` - Search with identifier_type
 - `test_external/test_asset_providers.py` - identifier_type check
 - `test_api/test_fx.py` - Currency operations
@@ -792,23 +840,25 @@ async def test_complete_e2e_flow():
 
 ## 📊 Impact Summary
 
-| Categoria | Files | Tests | Breaking | Sforzo |
-|-----------|-------|-------|----------|---------|
-| Currency class | 15-20 | 10+ | ⚠️ SÌ | 🔴 Alto |
-| identifier_type | 6 | 4 | ⚠️ SÌ | 🟡 Medio |
-| OldNew + fields | 3 | 3 | ⚠️ SÌ | 🟢 Basso |
-| hasattr cleanup | 4 | 0 | ✅ NO | 🟢 Basso |
-| Utilities | 4 | 4 | ✅ NO | 🟡 Medio |
-| **TOTALE** | **32-37** | **21+** | **3 Breaking** | **8-10h** |
+| Categoria       | Files     | Tests   | Breaking       | Sforzo    |
+|-----------------|-----------|---------|----------------|-----------|
+| Currency class  | 15-20     | 10+     | ⚠️ SÌ          | 🔴 Alto   |
+| identifier_type | 6         | 4       | ⚠️ SÌ          | 🟡 Medio  |
+| OldNew + fields | 3         | 3       | ⚠️ SÌ          | 🟢 Basso  |
+| hasattr cleanup | 4         | 0       | ✅ NO           | 🟢 Basso  |
+| Utilities       | 4         | 4       | ✅ NO           | 🟡 Medio  |
+| **TOTALE**      | **32-37** | **21+** | **3 Breaking** | **8-10h** |
 
 ---
 
 ## ⚠️ Breaking Changes Summary
 
 ### 1. `Currency` class - MAGGIORE
+
 **Impact**: Tutti i file che manipolano importi e valute
 
 **Migration path**: Nessuna - Cleanup completo
+
 - Vecchio: `amount: Decimal, currency: str`
 - Nuovo: `amount: Currency`
 
@@ -817,9 +867,11 @@ async def test_complete_e2e_flow():
 ---
 
 ### 2. `identifier_type` required in search
+
 **Impact**: Client che consumano search API
 
 **Migration path**: Nessuna - Campo obbligatorio
+
 - Vecchio: `{"identifier": "AAPL", "display_name": "Apple"}`
 - Nuovo: `{"identifier": "AAPL", "identifier_type": "TICKER", "display_name": "Apple"}`
 
@@ -828,9 +880,11 @@ async def test_complete_e2e_flow():
 ---
 
 ### 3. `refreshed_fields` type change
+
 **Impact**: Client che leggono metadata refresh response
 
 **Migration path**: Nessuna - Nuovo formato
+
 - Vecchio: `["sector_area", "geographic_area"]`
 - Nuovo: `[{"old": "Tech", "new": "Finance"}, {"old": null, "new": {...}}]`
 
@@ -841,6 +895,7 @@ async def test_complete_e2e_flow():
 ## ✅ Definition of Done
 
 ### Funzionalità:
+
 - [x] E2E flow completo funziona via API (test passa)
 - [x] Search ritorna `identifier_type` required
 - [x] Metadata refresh ritorna `OldNew` details
@@ -852,6 +907,7 @@ async def test_complete_e2e_flow():
 - [x] Multi-language country search (best effort - pycountry solo inglese)
 
 ### Qualità:
+
 - [x] Tutti i test passano (inclusi E2E) - **6/6 categorie OK**
 - [x] Nessun codice legacy rimasto (breaking changes applicati)
 - [x] Nessuna retro-compatibilità (cleanup totale)
@@ -859,6 +915,7 @@ async def test_complete_e2e_flow():
 - [x] TODO critici risolti (rimangono solo TODO per future features)
 
 ### Documentazione:
+
 - [x] `Currency` class documented in code + docstring
 - [x] Breaking changes documented in plan
 
@@ -921,6 +978,7 @@ Dopo ogni FASE, verificare:
 5. ✅ Commit con messaggio descrittivo
 
 **Commit message format**:
+
 ```
 feat(phase-N): [description]
 
@@ -936,23 +994,27 @@ Breaking: [if applicable]
 ## 📌 Note Implementative
 
 ### Currency class - Design decisions:
+
 - **Immutable**: Operations return new instance
 - **Type safe**: Cannot mix currencies in operations
 - **Validation eager**: Exception on invalid currency at creation
 - **Crypto support**: Extensible dict for new cryptos
 
 ### OldNew generic - Usage:
+
 - Use `OldNew[str]` when new is always defined
 - Use `OldNew[str | None]` when new can be None (field cleared)
 - `old` is always Optional (first time set → old=None)
 
 ### hasattr() removal - Rationale:
+
 - Explicit better than implicit (Zen of Python)
 - Base class defines contract
 - Easier to discover provider capabilities
 - Better IDE support
 
 ### Breaking changes - Philosophy:
+
 - Progetto embrionale → cleanup completo OK
 - No backward compatibility burden
 - Cleaner architecture long-term
@@ -963,25 +1025,31 @@ Breaking: [if applicable]
 ## 🚨 Rischi & Mitigazioni
 
 ### Rischio 1: Currency refactor troppo invasivo
+
 **Probabilità**: Media  
 **Impatto**: Alto  
-**Mitigazione**: 
+**Mitigazione**:
+
 - Procedere fase per fase
 - Test completi dopo ogni modifica
 - Rollback facile per commit granulari
 
 ### Rischio 2: pycountry limiti multi-lingua
+
 **Probabilità**: Alta  
 **Impatto**: Basso  
 **Mitigazione**:
+
 - Fallback a inglese accettabile
 - Country list endpoint come workaround
 - Future: custom translation dict se serve
 
 ### Rischio 3: Test coverage drop
+
 **Probabilità**: Media  
 **Impatto**: Medio  
 **Mitigazione**:
+
 - Test dopo ogni fase
 - Coverage report automatico
 - Definition of Done richiede ≥80%
@@ -996,7 +1064,7 @@ Breaking: [if applicable]
 ✅ **Q4**: Currency Pydantic class with operations  
 ✅ **Q5**: Sequential execution, no overlap  
 ✅ **Q6**: Breaking changes OK, no legacy code  
-✅ **Q7**: FX convert() returns Currency  
+✅ **Q7**: FX convert() returns Currency
 
 **All decisions confirmed** ✅ - READY TO IMPLEMENT
 
@@ -1007,9 +1075,9 @@ Breaking: [if applicable]
 1. ✅ **Plan saved** in: `LibreFolio_developer_journal/prompts/plan-e2eFlowCompletionAndLegacyCleanup.prompt.md`
 
 2. **Start with FASE 1.1**: Create Currency class
-   - Most critical
-   - Foundation for everything else
-   - Can be tested in isolation
+    - Most critical
+    - Foundation for everything else
+    - Can be tested in isolation
 
 3. **After each phase**: Run tests, commit, verify
 
@@ -1026,6 +1094,7 @@ Breaking: [if applicable]
 ## ✅ COMPLETAMENTO FINALE - 2025-12-18
 
 ### Risultati Test Finali:
+
 ```
 ============================================================
   Complete Test Suite Summary
@@ -1042,6 +1111,7 @@ Results: 6/6 categories passed
 ```
 
 ### Breaking Changes Implementati:
+
 1. ✅ **Currency class** - Nuovo tipo Pydantic per valute con operazioni
 2. ✅ **identifier_type required** - Campo obbligatorio in search results
 3. ✅ **OldNew format** - refreshed_fields ora usa `List[OldNew[str|None]]`
@@ -1049,6 +1119,7 @@ Results: 6/6 categories passed
 5. ✅ **normalize_currency_code rimosso** - Sostituito da `Currency.validate_code()`
 
 ### TODO Rimasti (Future Work):
+
 - `geo_normalization.py:117` - Multi-lingua (requires pycountry extensions)
 - `main.py:167` - Guida Docker (quando Docker sarà implementato)
 - `asset_source.py:436` - Cache garbage collector
@@ -1056,6 +1127,7 @@ Results: 6/6 categories passed
 - `yahoo_finance.py` - Cache TTL cleanup, timezone handling
 
 ### File Plan Completato
+
 **Path**: `LibreFolio_developer_journal/prompts/plan-e2eFlowCompletionAndLegacyCleanup.prompt.md`
 
 ---

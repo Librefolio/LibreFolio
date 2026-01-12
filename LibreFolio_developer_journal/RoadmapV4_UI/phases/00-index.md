@@ -22,7 +22,7 @@ Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facil
 | **0**   | [phase-00-setup.md](./phase-00-setup.md)                           | Fix Login Page + Build Integration         | ✅      | 1      |
 | **1**   | [phase-01-foundation.md](./phase-01-foundation.md)                 | i18n, OpenAPI, API Client, Auth Store      | ✅      | 3      |
 | **2**   | [phase-02-backend-auth.md](./phase-02-backend-auth.md)             | Backend Auth: DB, Service, API, CLI, Tests | ✅      | 3      |
-| **2.5** | [phase-02.5-auth-integration.md](./phase-02.5-auth-integration.md) | Integrazione Login + Register (Modali) | ✅ | 1 |
+| **2.5** | [phase-02.5-auth-integration.md](./phase-02.5-auth-integration.md) | Integrazione Login + Register (Modali)     | ✅      | 1      |
 | **3**   | [phase-03-layout-settings.md](./phase-03-layout-settings.md)       | Layout Sidebar + Settings Page             | ⏳      | 3      |
 | **4**   | [phase-04-brokers.md](./phase-04-brokers.md)                       | Brokers List, Add/Edit, Detail             | ⏳      | 3      |
 | **5**   | [phase-05-fx.md](./phase-05-fx.md)                                 | FX Currencies, Pair Sources, Sync          | ⏳      | 3      |

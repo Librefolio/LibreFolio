@@ -1,8 +1,10 @@
 # Plan: Schema Cleanup - Remove Wrapper Classes and Consolidate Duplicates
 
-**Context**: During code review, multiple wrapper classes were identified that contain only a single `List[...]` field, violating DRY principle and adding unnecessary nesting. Additionally, some classes are nearly identical and can be consolidated.
+**Context**: During code review, multiple wrapper classes were identified that contain only a single `List[...]` field, violating DRY principle and adding unnecessary nesting.
+Additionally, some classes are nearly identical and can be consolidated.
 
-**Approach**: Remove wrapper classes and use `List[ItemType]` directly in endpoints. Consolidate duplicate/similar classes where appropriate. Use `DateRangeModel` consistently across all schemas.
+**Approach**: Remove wrapper classes and use `List[ItemType]` directly in endpoints. Consolidate duplicate/similar classes where appropriate. Use `DateRangeModel` consistently
+across all schemas.
 
 **Impact**: This is a breaking API change but acceptable since we're in pre-alpha. All affected endpoints and tests must be updated.
 
@@ -45,16 +47,16 @@ These classes have `start_date` + `end_date` fields that should use `DateRangeMo
 These classes have significant overlap and could be consolidated:
 
 1. **FAPricePoint** vs **FAUpsertItem**
-   - Both represent OHLC price data
-   - FAPricePoint has `backward_fill_info` (for queries)
-   - FAUpsertItem is for writes (no backward_fill_info)
-   - **Solution**: Merge into single `FAPricePoint` class, make `backward_fill_info` optional
-   
+    - Both represent OHLC price data
+    - FAPricePoint has `backward_fill_info` (for queries)
+    - FAUpsertItem is for writes (no backward_fill_info)
+    - **Solution**: Merge into single `FAPricePoint` class, make `backward_fill_info` optional
+
 2. **FAProviderAssignmentItem** vs **FAProviderAssignmentReadItem**
-   - AssignmentItem: For POST (write) - has validator
-   - ReadItem: For GET (read) - has `last_fetch_at`
-   - **Difference**: ReadItem has `last_fetch_at: Optional[str]`, Item has validator
-   - **Solution**: Make `last_fetch_at` optional in single class, use `model_validator` only for write operations
+    - AssignmentItem: For POST (write) - has validator
+    - ReadItem: For GET (read) - has `last_fetch_at`
+    - **Difference**: ReadItem has `last_fetch_at: Optional[str]`, Item has validator
+    - **Solution**: Make `last_fetch_at` optional in single class, use `model_validator` only for write operations
 
 ### D. Response Classes That Could Be Simplified
 
@@ -76,6 +78,7 @@ Some response classes are inconsistent in structure:
 **File**: `backend/app/schemas/provider.py`
 
 **Changes**:
+
 - ✅ Remove `FAProvidersResponse` class
 - ✅ Remove `FXProvidersResponse` class (duplicate exists in fx.py)
 - ✅ Remove `FABulkAssignRequest` class
@@ -83,11 +86,13 @@ Some response classes are inconsistent in structure:
 - ✅ Update `__all__` exports
 
 **Affected Endpoints**:
+
 - `GET /assets/provider` → Return `List[FAProviderInfo]`
 - `POST /assets/provider` → Accept `List[FAProviderAssignmentItem]`
 - `DELETE /assets/provider` → Accept `List[int]` (asset_ids as query params or body)
 
 **Affected Files**:
+
 - `backend/app/api/v1/assets.py` (list_providers, assign_providers_bulk, remove_providers_bulk)
 
 ---
@@ -97,15 +102,18 @@ Some response classes are inconsistent in structure:
 **File**: `backend/app/schemas/assets.py`
 
 **Changes**:
+
 - ✅ Remove `FABulkAssetCreateRequest` class
 - ✅ Remove `FABulkPatchMetadataRequest` class
 - ✅ Update `__all__` exports
 
 **Affected Endpoints**:
+
 - `POST /assets` → Accept `List[FAAssetCreateItem]`
 - `PATCH /metadata` → Accept `List[FAMetadataPatchItem]`
 
 **Affected Files**:
+
 - `backend/app/api/v1/assets.py` (create_assets_bulk, update_assets_metadata_bulk)
 
 ---
@@ -115,6 +123,7 @@ Some response classes are inconsistent in structure:
 **File**: `backend/app/schemas/fx.py`
 
 **Changes**:
+
 - ✅ Remove duplicate `FXProvidersResponse` class (keep only in provider.py)
 - ✅ Remove `FXConvertRequest` class
 - ✅ Remove `FXBulkUpsertRequest` class
@@ -124,6 +133,7 @@ Some response classes are inconsistent in structure:
 - ✅ Update `__all__` exports
 
 **Affected Endpoints**:
+
 - `GET /fx/providers` → Return `List[FXProviderInfo]` (use from provider.py, delete duplicate)
 - `POST /fx/convert` → Accept `List[FXConversionRequest]`
 - `POST /fx/rates` → Accept `List[FXUpsertItem]`
@@ -132,6 +142,7 @@ Some response classes are inconsistent in structure:
 - `DELETE /fx/pair-sources` → Accept `List[FXDeletePairSourceItem]`
 
 **Affected Files**:
+
 - `backend/app/api/v1/fx.py` (convert, upsert_rates, delete_rates, create_pair_sources, delete_pair_sources)
 
 ---
@@ -141,15 +152,18 @@ Some response classes are inconsistent in structure:
 **File**: `backend/app/schemas/prices.py`
 
 **Changes**:
+
 - ✅ Remove `FABulkUpsertRequest` class
 - ✅ Remove `FAPriceBulkDeleteRequest` class
 - ✅ Update `__all__` exports
 
 **Affected Endpoints**:
+
 - `POST /prices` → Accept `List[FAUpsert]`
 - `DELETE /prices` → Accept `List[FAAssetDelete]`
 
 **Affected Files**:
+
 - `backend/app/api/v1/assets.py` (upsert_prices_bulk, delete_prices_bulk)
 
 ---
@@ -159,14 +173,17 @@ Some response classes are inconsistent in structure:
 **File**: `backend/app/schemas/refresh.py`
 
 **Changes**:
+
 - ✅ Remove `FABulkRefreshRequest` class
 - ✅ Move `timeout` to query parameter in endpoint
 - ✅ Update `__all__` exports
 
 **Affected Endpoints**:
+
 - `POST /prices/refresh` → Accept `List[FARefreshItem]` + `timeout: int = Query(60)`
 
 **Affected Files**:
+
 - `backend/app/api/v1/assets.py` (refresh_prices_bulk)
 
 ---
@@ -176,6 +193,7 @@ Some response classes are inconsistent in structure:
 **File**: `backend/app/schemas/fx.py`
 
 **Changes for FXConversionRequest**:
+
 ```python
 class FXConversionRequest(BaseModel):
     """Single conversion request with optional date range."""
@@ -193,6 +211,7 @@ class FXConversionRequest(BaseModel):
 ```
 
 **Changes for FXDeleteItem**:
+
 ```python
 class FXDeleteItem(BaseModel):
     """Single rate deletion request."""
@@ -209,6 +228,7 @@ class FXDeleteItem(BaseModel):
 ```
 
 **Changes for FXDeleteResult**:
+
 ```python
 class FXDeleteResult(BaseModel):
     """Single rate deletion result."""
@@ -222,6 +242,7 @@ class FXDeleteResult(BaseModel):
 ```
 
 **Changes for FXSyncResponse**:
+
 ```python
 class FXSyncResponse(BaseModel):
     """Response for FX rate synchronization."""
@@ -233,6 +254,7 @@ class FXSyncResponse(BaseModel):
 ```
 
 **Affected Files**:
+
 - `backend/app/api/v1/fx.py` (convert, delete_rates, sync)
 - `backend/app/services/fx.py` (conversion and deletion logic)
 
@@ -243,6 +265,7 @@ class FXSyncResponse(BaseModel):
 **File**: `backend/app/schemas/refresh.py`
 
 **Changes for FARefreshItem**:
+
 ```python
 class FARefreshItem(BaseModel):
     """Single asset refresh request."""
@@ -253,6 +276,7 @@ class FARefreshItem(BaseModel):
 ```
 
 **Affected Files**:
+
 - `backend/app/api/v1/assets.py` (refresh_prices_bulk)
 - `backend/app/services/asset_source.py` (bulk_refresh_prices)
 
@@ -263,6 +287,7 @@ class FARefreshItem(BaseModel):
 **File**: `backend/app/schemas/prices.py`
 
 **Changes**:
+
 ```python
 class FAPricePoint(BaseModel):
     """Single price point with OHLC data.
@@ -296,10 +321,12 @@ class FAPricePoint(BaseModel):
 ```
 
 **Remove FAUpsertItem class entirely**:
+
 - Update `FAUpsert.prices` to use `List[FAPricePoint]`
 - Update all references from `FAUpsertItem` to `FAPricePoint`
 
 **Affected Files**:
+
 - `backend/app/schemas/prices.py` (schema definitions)
 - `backend/app/api/v1/assets.py` (upsert_prices_bulk)
 - `backend/app/services/asset_source.py` (bulk_upsert_prices)
@@ -310,7 +337,8 @@ class FAPricePoint(BaseModel):
 
 **Goal**: Create a common base class for all delete/removal operation results to ensure consistency.
 
-**Motivation**: All delete/removal operations share common fields (`success`, `deleted_count`, `message`), leading to duplication and inconsistent naming (some used `deleted`, others `deleted_count`).
+**Motivation**: All delete/removal operations share common fields (`success`, `deleted_count`, `message`), leading to duplication and inconsistent naming (some used `deleted`,
+others `deleted_count`).
 
 #### Base Class Implementation
 
@@ -340,6 +368,7 @@ class BaseDeleteResult(BaseModel):
 #### Updated Classes (5 total)
 
 **1. FAAssetDeleteResult** (assets.py):
+
 ```python
 class FAAssetDeleteResult(BaseDeleteResult):
     """Result of single asset deletion."""
@@ -348,6 +377,7 @@ class FAAssetDeleteResult(BaseDeleteResult):
 ```
 
 **2. FAPriceDeleteResult** (prices.py):
+
 ```python
 class FAPriceDeleteResult(BaseDeleteResult):
     """Result of price deletion for single asset."""
@@ -357,6 +387,7 @@ class FAPriceDeleteResult(BaseDeleteResult):
 ```
 
 **3. FAProviderRemovalResult** (provider.py):
+
 ```python
 class FAProviderRemovalResult(BaseDeleteResult):
     """Result of FA provider removal."""
@@ -365,6 +396,7 @@ class FAProviderRemovalResult(BaseDeleteResult):
 ```
 
 **4. FXDeleteResult** (fx.py):
+
 ```python
 class FXDeleteResult(BaseDeleteResult):
     """Single FX rate deletion result."""
@@ -376,6 +408,7 @@ class FXDeleteResult(BaseDeleteResult):
 ```
 
 **5. FXDeletePairSourceResult** (fx.py):
+
 ```python
 class FXDeletePairSourceResult(BaseDeleteResult):
     """Result of pair source deletion."""
@@ -388,6 +421,7 @@ class FXDeletePairSourceResult(BaseDeleteResult):
 #### Cleanup Performed
 
 **Removed incomplete wrapper class remnants**:
+
 1. ✅ `FXConvertRequest` (fx.py) - incomplete remnant
 2. ✅ `FXBulkUpsertRequest` (fx.py) - incomplete remnant
 3. ✅ `FXDeletePairSourcesRequest` (fx.py) - incomplete remnant
@@ -423,7 +457,8 @@ class FXDeletePairSourceResult(BaseDeleteResult):
 
 **Goal**: Combine `BaseBulkResponse` pattern with delete-specific aggregate field for bulk deletion operations.
 
-**Motivation**: Bulk delete responses needed both the list structure from `BaseBulkResponse` and the aggregate `total_deleted` count. Creating `BaseBulkDeleteResponse` avoids field duplication and provides consistent pattern.
+**Motivation**: Bulk delete responses needed both the list structure from `BaseBulkResponse` and the aggregate `total_deleted` count. Creating `BaseBulkDeleteResponse` avoids field
+duplication and provides consistent pattern.
 
 #### Base Class Implementation
 
@@ -456,41 +491,49 @@ class BaseBulkDeleteResponse(BaseBulkResponse[TResult]):
 #### Updated Classes (3 total)
 
 **1. FABulkDeleteResponse** (prices.py):
+
 ```python
 class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
     """Response for bulk price deletion."""
     # Inherits: results, success_count, errors, total_deleted
     pass
 ```
+
 - **Changed**: Renamed field `deleted_count` → inherits `total_deleted` from base
 - **Semantics**: `total_deleted` = sum of all price records deleted across all assets
 
 **2. FXBulkDeleteResponse** (fx.py):
+
 ```python
 class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
     """Response for bulk FX rate deletion."""
     # Inherits: results, success_count, errors, total_deleted
     pass
 ```
+
 - **Semantics**: `total_deleted` = sum of all FX rate records deleted
 
 **3. FXDeletePairSourcesResponse** (fx.py):
+
 ```python
 class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResult]):
     """Response for bulk pair source deletion."""
     # Inherits: results, success_count, errors, total_deleted
     pass
 ```
+
 - **Semantics**: `total_deleted` = sum of all pair source configuration records deleted
 
 #### Design Rationale
 
 **Why not multiple inheritance or just BaseBulkResponse?**
+
 - ❌ Multiple inheritance (BaseBulkResponse + BaseDeleteResult): Semantically wrong - BaseDeleteResult is for single items, not bulk
 - ❌ Just BaseBulkResponse with explicit field: Would duplicate `total_deleted` field in 3 places
 - ✅ BaseBulkDeleteResponse extends BaseBulkResponse: Clean single inheritance, semantic clarity, zero duplication
 
 **Naming clarity**:
+
 - `success_count`: Number of **items** successfully processed (e.g., assets, pairs)
 - `total_deleted`: Number of **records** deleted (e.g., price records, rate records)
 - Example: Delete prices for 3 assets → `success_count=3`, `total_deleted=150` (50 prices per asset)
@@ -517,15 +560,18 @@ class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResul
 **Status**: ✅ All schema changes complete
 
 ---
+
 ### Step 9: Consolidate FAProviderAssignmentItem and FAProviderAssignmentReadItem
 
 **File**: `backend/app/schemas/provider.py`
 
 **Analysis**:
+
 - `FAProviderAssignmentItem`: Used for POST (write), has validator
 - `FAProviderAssignmentReadItem`: Used for GET (read), has `last_fetch_at`
 
 **Decision**: Keep both classes separate for now because:
+
 1. Write class has `model_validator` that calls plugin validation
 2. Read class includes `last_fetch_at` which is DB-only field
 3. Mixing write + read concerns in single class would complicate validation logic
@@ -669,6 +715,7 @@ class BaseBulkResponse(BaseModel, Generic[TResult]):
     ```
 
 **Benefits**:
+
 - ✅ Consistent API contracts across all bulk operations
 - ✅ `failed_count` always available as computed property
 - ✅ Single source of truth for bulk response structure
@@ -676,6 +723,7 @@ class BaseBulkResponse(BaseModel, Generic[TResult]):
 - ✅ Type-safe with Generic[TResult]
 
 **Migration Notes**:
+
 - Existing response classes should extend `BaseBulkResponse[TheirResultType]`
 - Remove explicit `failed_count` field declarations (now computed property)
 - Keep operation-specific fields (inserted_count, updated_count, deleted_count, etc.)
@@ -688,12 +736,14 @@ class BaseBulkResponse(BaseModel, Generic[TResult]):
 **Files modified**: `backend/app/api/v1/assets.py`, `backend/app/api/v1/fx.py`
 
 **Changes completed in previous steps**:
+
 1. ✅ All endpoints now accept `List[ItemType]` directly (Steps 1-5)
 2. ✅ Wrapper class imports removed
 3. ✅ Request body documentation updated
 4. ✅ Response models updated to use BaseBulkResponse (Step 10)
 
 **Note**: Service layer calls may need adjustments for:
+
 - DateRangeModel handling (FX operations)
 - success_count population (FXConvertResponse now requires it)
 - deleted_count consistency (FAPriceDeleteResult)
@@ -703,6 +753,7 @@ These will be addressed in Step 12 (Service Layer Updates).
 ---
 
 ### Step 12: Update Service Layer
+
 ```python
 # OLD
 @asset_router.post("", response_model=FABulkAssetCreateResponse)
@@ -726,8 +777,9 @@ async def create_assets_bulk(
 ### ✅ Step 12: Update Service Layer - COMPLETATO (con TODO per implementazione futura)
 
 **Files to modify**:
+
 - `backend/app/services/asset_crud.py`
-- `backend/app/services/asset_source.py`  
+- `backend/app/services/asset_source.py`
 - `backend/app/services/fx.py`
 - `backend/app/services/asset_metadata.py`
 
@@ -736,39 +788,40 @@ async def create_assets_bulk(
 **TODO for Service Layer** (to be done during test updates - Step 13):
 
 **✅ TODO comments added to service files** for tracking during implementation:
+
 - ✅ `backend/app/services/fx.py` - 6 TODO items documented
 - ✅ `backend/app/services/asset_crud.py` - 3 TODO items documented
 - ✅ `backend/app/services/asset_source.py` - 6 TODO items documented
 - ✅ `backend/app/services/asset_metadata.py` - 1 TODO item documented
 
 1. **FX Service** (`fx.py`):
-   - Update `convert_currency` to handle `FXConversionRequest.date_range: DateRangeModel`
-   - Update `delete_rates_bulk` to handle `FXDeleteItem.date_range: DateRangeModel`
-   - Update all methods constructing `FXDeleteResult` to use `date_range: DateRangeModel`
-   - Update `FXSyncResponse` construction to use `DateRangeModel` instead of tuple
-   - Update `FXConvertResponse`: Add success_count calculation (required by BaseBulkResponse)
-   - Update `FXBulkDeleteResponse`: Use 'total_deleted' instead of 'deleted_count'
+    - Update `convert_currency` to handle `FXConversionRequest.date_range: DateRangeModel`
+    - Update `delete_rates_bulk` to handle `FXDeleteItem.date_range: DateRangeModel`
+    - Update all methods constructing `FXDeleteResult` to use `date_range: DateRangeModel`
+    - Update `FXSyncResponse` construction to use `DateRangeModel` instead of tuple
+    - Update `FXConvertResponse`: Add success_count calculation (required by BaseBulkResponse)
+    - Update `FXBulkDeleteResponse`: Use 'total_deleted' instead of 'deleted_count'
 
 2. **Price Service** (`asset_source.py` or price operations):
-   - **CRITICAL**: Update `FAPriceDeleteResult` construction: rename `deleted` → `deleted_count`
-   - Ensure `success` field is always populated
-   - Handle optional `message` field
-   - Update `FABulkDeleteResponse`: Use 'total_deleted' (from BaseBulkDeleteResponse)
+    - **CRITICAL**: Update `FAPriceDeleteResult` construction: rename `deleted` → `deleted_count`
+    - Ensure `success` field is always populated
+    - Handle optional `message` field
+    - Update `FABulkDeleteResponse`: Use 'total_deleted' (from BaseBulkDeleteResponse)
 
 3. **Asset CRUD Service** (`asset_crud.py`):
-   - Update `FAAssetDeleteResult` construction: ensure `deleted_count` is 0 or 1
-   - Populate `success_count` in all bulk responses (now required by BaseBulkResponse)
+    - Update `FAAssetDeleteResult` construction: ensure `deleted_count` is 0 or 1
+    - Populate `success_count` in all bulk responses (now required by BaseBulkResponse)
 
 4. **Provider Service** (`asset_source.py`):
-   - Update `FAProviderRemovalResult` construction: ensure `deleted_count` is 0 or 1
-   - Populate `success_count` in FABulkAssignResponse and FABulkRemoveResponse
+    - Update `FAProviderRemovalResult` construction: ensure `deleted_count` is 0 or 1
+    - Populate `success_count` in FABulkAssignResponse and FABulkRemoveResponse
 
 5. **Metadata Service** (`asset_metadata.py`):
-   - Update `FABulkMetadataRefreshResponse`: Populate success_count
+    - Update `FABulkMetadataRefreshResponse`: Populate success_count
 
 6. **Refresh Service** (`asset_source.py`):
-   - Update `FARefreshItem` to use `date_range: DateRangeModel` instead of start_date/end_date
-   - Populate `success_count` in `FABulkRefreshResponse`
+    - Update `FARefreshItem` to use `date_range: DateRangeModel` instead of start_date/end_date
+    - Populate `success_count` in `FABulkRefreshResponse`
 
 **Approach**: These changes will be validated and fixed when running tests (Step 13), allowing test failures to guide the exact service changes needed.
 
@@ -781,23 +834,27 @@ async def create_assets_bulk(
 📄 **Piano Unificato Test**: `05c_plan-testUpdates.prompt.md`
 
 **Perché un piano separato?**
+
 - Consolida test updates per piano 05 (datamodel refactoring) + piano 05b (schema cleanup)
 - Evita di dover aggiornare i test due volte
 - Fornisce checklist completa e ordinata
 
 **Modifiche da piano 05b da riflettere nei test**:
+
 - ✅ Rimozione wrapper classes (16 classi)
 - ✅ DateRangeModel integration (5 schema)
 - ✅ FAPricePoint consolidation
 - ✅ BaseBulkResponse structure validation
 
 **Modifiche da piano 05 da riflettere nei test**:
+
 - ✅ Asset model changes (removed identifier, added icon_url)
 - ✅ AssetProviderAssignment model (added identifier/identifier_type)
 - ✅ Provider method signatures (identifier_type parameter)
 - ✅ Endpoint changes (PATCH /assets, provider/refresh)
 
 **Step nel piano test**:
+
 1. Update Fixture and Setup Code
 2. Update Asset CRUD Tests
 3. Update Provider Assignment Tests
@@ -816,6 +873,7 @@ async def create_assets_bulk(
 ## 📊 Summary of Changes
 
 ### Classes to Remove (16 total):
+
 1. FAProvidersResponse
 2. FXProvidersResponse (provider.py)
 3. FXProvidersResponse (fx.py - duplicate)
@@ -834,6 +892,7 @@ async def create_assets_bulk(
 16. FAUpsertItem (merged into FAPricePoint)
 
 ### Classes to Modify with DateRangeModel (5 total):
+
 1. FXConversionRequest
 2. FXDeleteItem
 3. FXDeleteResult
@@ -841,22 +900,26 @@ async def create_assets_bulk(
 5. FARefreshItem
 
 ### Classes to Keep (with documentation update):
+
 - FAProviderAssignmentItem (write)
 - FAProviderAssignmentReadItem (read)
 - Rationale documented in Step 9
 
 ### Files to Modify:
+
 - **Schemas**: 6 files (provider.py, assets.py, fx.py, prices.py, refresh.py, common.py)
 - **API**: 2 files (assets.py, fx.py)
 - **Services**: 3 files (asset_crud.py, asset_source.py, fx.py)
 - **Tests**: ~20+ test files
 
 ### Breaking Changes:
+
 - ✅ All POST/DELETE endpoints accepting wrapper classes
 - ✅ All GET endpoints returning wrapper classes
 - ✅ Request/response JSON structure changes
 
 ### Benefits:
+
 - 🎯 Reduced code duplication
 - 🎯 Simpler API contracts
 - 🎯 Consistent use of DateRangeModel
@@ -872,8 +935,9 @@ async def create_assets_bulk(
 **Reason**: Test updates (Step 12) should work with the cleaned-up schema structure, avoiding double work.
 
 **Suggested Order**:
+
 1. Complete Steps 1-11 of main plan ✅
-2. **Execute this cleanup plan (05b)** 
+2. **Execute this cleanup plan (05b)**
 3. Continue with Step 12 of main plan (test updates)
 
 ---
@@ -891,16 +955,20 @@ async def create_assets_bulk(
 ## 🚀 Execution Priority
 
 **High Priority** (Most Impact):
+
 - Steps 1-5: Remove wrapper request classes (major simplification)
 - Step 8: Consolidate FAPricePoint and FAUpsertItem (removes duplication)
 
 **Medium Priority**:
+
 - Steps 6-7: DateRangeModel integration (consistency)
 - Steps 11-12: Update endpoints and services
 
 **Low Priority** (Nice to Have):
+
 - Step 10: Standardize response patterns (consistency, not functionality)
 
 **Final Step**:
+
 - Step 13: Update all tests (must be done last)
 

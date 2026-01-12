@@ -47,20 +47,20 @@ Questo documento è l'indice principale del piano frontend. Ogni fase ha il prop
 
 ## 📋 Fasi di Sviluppo
 
-| Fase    | Nome                       | Status       | Link Dettagli                                                               | Giorni |
-|---------|----------------------------|--------------|-----------------------------------------------------------------------------|--------|
-| **0**   | Setup & Build Integration  | ✅ COMPLETATA | [→ phase-00-setup.md](./phases/phase-00-setup.md)                           | 1      |
-| **1**   | Foundation & Frontend Auth | ✅ COMPLETATA | [→ phase-01-foundation.md](./phases/phase-01-foundation.md)                 | 3      |
-| **2**   | Backend Authentication     | ✅ COMPLETATA | [→ phase-02-backend-auth.md](./phases/phase-02-backend-auth.md)             | 3      |
-| **2.5** | Auth Integration (FE ↔ BE) | ✅ COMPLETATA | [→ phase-02.5-auth-integration.md](./phases/phase-02.5-auth-integration.md) | 1      |
-| **3**   | Layout & Settings          | ✅ COMPLETATA | [→ phase-03-layout-settings.md](./phases/phase-03-layout-settings.md)       | 1      |
-| **3.5** | Settings System (Glob+Pers)| ⏳ TODO       | [→ phase-03.5-settings-system.md](./phases/phase-03.5-settings-system.md)   | 2.5    |
-| **4**   | Brokers Management         | ⏳ TODO       | [→ phase-04-brokers.md](./phases/phase-04-brokers.md)                       | 3      |
-| **5**   | FX Management              | ⏳ TODO       | [→ phase-05-fx.md](./phases/phase-05-fx.md)                                 | 3      |
-| **6**   | Assets Management          | ⏳ TODO       | [→ phase-06-assets.md](./phases/phase-06-assets.md)                         | 4      |
-| **7**   | Transactions Management    | ⏳ TODO       | [→ phase-07-transactions.md](./phases/phase-07-transactions.md)             | 5      |
-| **8**   | Dashboard                  | ⏳ TODO       | [→ phase-08-dashboard.md](./phases/phase-08-dashboard.md)                   | 3      |
-| **9**   | Polish & Responsive        | ⏳ ONGOING    | [→ phase-09-polish.md](./phases/phase-09-polish.md)                         | 2      |
+| Fase    | Nome                        | Status       | Link Dettagli                                                               | Giorni |
+|---------|-----------------------------|--------------|-----------------------------------------------------------------------------|--------|
+| **0**   | Setup & Build Integration   | ✅ COMPLETATA | [→ phase-00-setup.md](./phases/phase-00-setup.md)                           | 1      |
+| **1**   | Foundation & Frontend Auth  | ✅ COMPLETATA | [→ phase-01-foundation.md](./phases/phase-01-foundation.md)                 | 3      |
+| **2**   | Backend Authentication      | ✅ COMPLETATA | [→ phase-02-backend-auth.md](./phases/phase-02-backend-auth.md)             | 3      |
+| **2.5** | Auth Integration (FE ↔ BE)  | ✅ COMPLETATA | [→ phase-02.5-auth-integration.md](./phases/phase-02.5-auth-integration.md) | 1      |
+| **3**   | Layout & Settings           | ✅ COMPLETATA | [→ phase-03-layout-settings.md](./phases/phase-03-layout-settings.md)       | 1      |
+| **3.5** | Settings System (Glob+Pers) | ⏳ TODO       | [→ phase-03.5-settings-system.md](./phases/phase-03.5-settings-system.md)   | 2.5    |
+| **4**   | Brokers Management          | ⏳ TODO       | [→ phase-04-brokers.md](./phases/phase-04-brokers.md)                       | 3      |
+| **5**   | FX Management               | ⏳ TODO       | [→ phase-05-fx.md](./phases/phase-05-fx.md)                                 | 3      |
+| **6**   | Assets Management           | ⏳ TODO       | [→ phase-06-assets.md](./phases/phase-06-assets.md)                         | 4      |
+| **7**   | Transactions Management     | ⏳ TODO       | [→ phase-07-transactions.md](./phases/phase-07-transactions.md)             | 5      |
+| **8**   | Dashboard                   | ⏳ TODO       | [→ phase-08-dashboard.md](./phases/phase-08-dashboard.md)                   | 3      |
+| **9**   | Polish & Responsive         | ⏳ ONGOING    | [→ phase-09-polish.md](./phases/phase-09-polish.md)                         | 2      |
 
 **Totale stimato**: ~6 settimane (~31 giorni)
 

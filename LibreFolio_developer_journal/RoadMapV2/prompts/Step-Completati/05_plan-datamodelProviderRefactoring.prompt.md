@@ -1,6 +1,8 @@
 # Plan: Rifacimento DataModel e Provider System per Asset Management
 
-Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella `asset_provider_assignments` è diventata centrale, mentre alcuni campi in `Asset` devono essere spostati o rimossi. Il plugin system deve diventare indipendente dal DB (tranne `scheduled_investment` che recupera le transazioni internamente), e gli endpoint API vanno riorganizzati per riflettere la nuova architettura. Database esistenti vanno eliminati e ricreati con Alembic.
+Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella `asset_provider_assignments` è diventata centrale, mentre alcuni campi in `Asset` devono essere
+spostati o rimossi. Il plugin system deve diventare indipendente dal DB (tranne `scheduled_investment` che recupera le transazioni internamente), e gli endpoint API vanno
+riorganizzati per riflettere la nuova architettura. Database esistenti vanno eliminati e ricreati con Alembic.
 
 ## Context
 
@@ -27,9 +29,9 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 - **Backward-fill**: scheduled_investment deve supportare per uniformità (anche se sempre None)
 - **Refresh strategy**: NO auto-refresh durante provider assignment. Refresh è ESPLICITO via POST /assets/provider/refresh
 - **Field selection in refresh**: L'endpoint refresh supporta selezione campi opzionale:
-  - Se `fields` non specificato: aggiorna tutti i campi che il provider riesce a ottenere
-  - Se `fields` specificato: aggiorna solo quei campi (keys di FAAssetPatchItem e sottochiavi, es. ['asset_type', 'classification_params.sector'])
-  - I campi sono ottenuti dinamicamente da FAAssetPatchItem.model_fields
+    - Se `fields` non specificato: aggiorna tutti i campi che il provider riesce a ottenere
+    - Se `fields` specificato: aggiorna solo quei campi (keys di FAAssetPatchItem e sottochiavi, es. ['asset_type', 'classification_params.sector'])
+    - I campi sono ottenuti dinamicamente da FAAssetPatchItem.model_fields
 - **Refresh response**: Liste dinamiche di `refreshed_fields`, `missing_data_fields`, `ignored_fields` da FAAssetPatchItem
 
 ## Steps
@@ -39,18 +41,20 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/db/models.py`
 
 **Changes**:
+
 - ✅ Eliminare completamente `ValuationModel` enum (linee 96-133)
 - ✅ Rimuovere campi da Asset: `identifier`, `identifier_type`, `valuation_model`, `interest_schedule` (linee 393-407)
 - ✅ Aggiungere `__table_args__` con `UniqueConstraint("display_name")`
 - ✅ Aggiornare docstring Asset eliminando:
-  - Riferimenti a interest_schedule e FAScheduledInvestmentSchedule schema
-  - Logica di provider assignments basata su valuation_model
-  - Esempi con face_value e maturity_date (non più applicabili a livello Asset)
+    - Riferimenti a interest_schedule e FAScheduledInvestmentSchedule schema
+    - Logica di provider assignments basata su valuation_model
+    - Esempi con face_value e maturity_date (non più applicabili a livello Asset)
 - ✅ Mantenere `classification_params` (JSON TEXT) e `asset_type` (enum)
 - ✅ Aggiornare commenti AssetType enum rimuovendo riferimenti a valuation_model
 - ✅ Rimosso da base.py e __init__.py
 
-**Rationale**: Asset diventa un contenitore "puro" di metadati generali (nome, tipo, classificazione), mentre la logica di pricing e identificazione migra completamente in AssetProviderAssignment.
+**Rationale**: Asset diventa un contenitore "puro" di metadati generali (nome, tipo, classificazione), mentre la logica di pricing e identificazione migra completamente in
+AssetProviderAssignment.
 
 ---
 
@@ -59,21 +63,23 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/db/models.py`
 
 **Changes**:
+
 - Aggiungere campi dopo `asset_id`:
   ```python
   identifier: str = Field(nullable=False, description="Asset identifier for this provider (ticker, ISIN, UUID, etc.)")
   identifier_type: IdentifierType = Field(nullable=False, description="Type of identifier (TICKER, ISIN, UUID, etc.)")
   ```
 - Aggiornare docstring con:
-  - Nuovi campi identifier/identifier_type spiegando che rappresentano come il provider vede l'asset
-  - Esempio provider_params per scheduled_investment: `{"schedule": [...], "late_interest": {...}}` (FAScheduledInvestmentSchedule JSON)
-  - Esempio provider_params per yfinance: `{}` o `{"some_config": "value"}` (identifier ora campo separato)
-  - Esempio provider_params per cssscraper: `{"url": "https://...", "selector": ".price"}` (identifier è l'URL, tipo è OTHER)
+    - Nuovi campi identifier/identifier_type spiegando che rappresentano come il provider vede l'asset
+    - Esempio provider_params per scheduled_investment: `{"schedule": [...], "late_interest": {...}}` (FAScheduledInvestmentSchedule JSON)
+    - Esempio provider_params per yfinance: `{}` o `{"some_config": "value"}` (identifier ora campo separato)
+    - Esempio provider_params per cssscraper: `{"url": "https://...", "selector": ".price"}` (identifier è l'URL, tipo è OTHER)
 - Rimuovere da docstring:
-  - Riferimenti a valuation_model (non più esistente)
-  - Frasi su "Assets with valuation_model=MANUAL/SCHEDULED_YIELD: No provider needed"
+    - Riferimenti a valuation_model (non più esistente)
+    - Frasi su "Assets with valuation_model=MANUAL/SCHEDULED_YIELD: No provider needed"
 
-**Rationale**: AssetProviderAssignment diventa la "fonte di verità" per come un asset viene identificato e prezzato, con provider_params completamente flessibile (TEXT validato dai plugin).
+**Rationale**: AssetProviderAssignment diventa la "fonte di verità" per come un asset viene identificato e prezzato, con provider_params completamente flessibile (TEXT validato dai
+plugin).
 
 ---
 
@@ -82,19 +88,21 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/alembic/versions/001_initial.py`
 
 **Changes**:
+
 - Modificare CREATE TABLE assets (linee ~33-45):
-  - Eliminare colonne: `identifier`, `identifier_type`, `valuation_model`, `interest_schedule`
-  - Aggiungere dopo la creazione tabella: `conn.execute(sa.text("CREATE UNIQUE INDEX uq_assets_display_name ON assets (display_name)"))`
+    - Eliminare colonne: `identifier`, `identifier_type`, `valuation_model`, `interest_schedule`
+    - Aggiungere dopo la creazione tabella: `conn.execute(sa.text("CREATE UNIQUE INDEX uq_assets_display_name ON assets (display_name)"))`
 - Modificare CREATE TABLE asset_provider_assignments (linee ~106-124):
-  - Aggiungere colonne dopo `provider_code`:
-    ```sql
-    identifier            VARCHAR     NOT NULL,
-    identifier_type       VARCHAR(6)  NOT NULL,
-    ```
-  - Mantenere provider_params come TEXT
+    - Aggiungere colonne dopo `provider_code`:
+      ```sql
+      identifier            VARCHAR     NOT NULL,
+      identifier_type       VARCHAR(6)  NOT NULL,
+      ```
+    - Mantenere provider_params come TEXT
 - Aggiornare print statements per riflettere nuove colonne
 
 **Post-migration actions**:
+
 - Eliminare manualmente tutti i file `backend/data/*.db` e `backend/data/*.db-journal`
 - Eseguire `cd backend && alembic upgrade head`
 - Verificare con `alembic current` che 001_initial sia applicata
@@ -109,10 +117,11 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/services/asset_source.py`
 
 **Changes**:
+
 - Aggiungere parametro `identifier_type: IdentifierType` dopo `identifier: str` nei metodi:
-  - `get_current_value` (linea ~117)
-  - `get_history_value` (linea ~144)
-  - `fetch_asset_metadata` (linea ~208)
+    - `get_current_value` (linea ~117)
+    - `get_history_value` (linea ~144)
+    - `fetch_asset_metadata` (linea ~208)
 - Rimuovere i 3 commenti TODO per identifier_type (linee ~113, 140, 205)
 - Aggiornare docstring metodi includendo il nuovo parametro:
   ```python
@@ -132,6 +141,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/services/asset_source_providers/scheduled_investment.py`
 
 **Changes**:
+
 - Mantenere logica `_transaction_override` in provider_params (linea ~87):
   ```python
   transaction_override = provider_params.get("_transaction_override")
@@ -197,6 +207,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/services/asset_source_providers/yahoo_finance.py`
 
 **Changes**:
+
 - ✅ Aggiungere parametro `identifier_type: IdentifierType` a `get_current_value`, `get_history_value`, `fetch_asset_metadata`
 - ✅ Validare identifier_type nei metodi (solo TICKER e ISIN accettati)
 - ✅ Modificare `fetch_asset_metadata` per ritornare dict con asset_type invece di FAClassificationParams
@@ -274,6 +285,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/schemas/assets.py`
 
 **Changes**:
+
 - ✅ Aggiunto FAAssetPatchItem con campi opzionali (asset_id obbligatorio + opzionali: display_name, currency, asset_type, classification_params, active)
 - ✅ Aggiunto FABulkAssetPatchRequest e FABulkAssetPatchResponse
 - ✅ Aggiunto FAAssetPatchResult con campo updated_fields
@@ -293,8 +305,9 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/schemas/provider.py`
 
 **Changes**:
+
 - ✅ Aggiunto campi obbligatori `identifier` e `identifier_type` a FAProviderAssignmentItem
-- ✅ Aggiunto validator per identifier_type che verifica enum IdentifierType  
+- ✅ Aggiunto validator per identifier_type che verifica enum IdentifierType
 - ✅ Creato FAProviderAssignmentReadItem per risposta GET
 - ✅ Creato FAProviderAssignmentsReadResponse
 - ✅ Creato FAProviderRefreshFieldsDetail
@@ -303,6 +316,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 ---
 
 ### 9. Riorganizzare API endpoints in assets.py
+
   ```python
   class FAProviderAssignmentItem(BaseModel):
       model_config = ConfigDict(extra="forbid")
@@ -328,6 +342,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
       
       # ... existing validators
   ```
+
 - Creare `FAProviderAssignmentReadItem` dopo `FAProviderAssignmentItem`:
   ```python
   class FAProviderAssignmentReadItem(BaseModel):
@@ -380,6 +395,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/api/v1/assets.py`
 
 **Changes**:
+
 - Creare nuovo endpoint PATCH /assets dopo create_assets_bulk:
   ```python
   @asset_router.patch("", response_model=FABulkAssetPatchResponse, tags=["FA CRUD"])
@@ -538,6 +554,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/services/asset_crud.py`
 
 **Changes**:
+
 - Completare i pending TODO in asset_source.py e asset_providers che sono stati lasciati in attesa di questo step
 - Aggiungere metodo `patch_assets_bulk` dopo `delete_assets_bulk`:
   ```python
@@ -659,6 +676,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 **File**: `backend/app/services/asset_source.py`
 
 **Changes**:
+
 - Rinominare `refresh_asset_metadata` in `refresh_assets_from_provider`
 - Aggiungere parametro `fields: Optional[List[str]] = None` per selezione campi
 - Implementare logica field selection:
@@ -932,6 +950,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 📄 **Vedere**: `05b_plan-datamodelProviderRefactoring.prompt.md`
 
 **Motivo**: Durante la review del codice sono stati identificati:
+
 - 16 classi wrapper inutili che contengono solo `List[...]`
 - 5 classi che dovrebbero usare `DateRangeModel`
 - 2 coppie di classi duplicate/simili da consolidare
@@ -939,6 +958,7 @@ Il progetto ha subito un'evoluzione concettuale durante lo sviluppo: la tabella 
 Eseguendo la pulizia **prima** di aggiornare i test, si evita di dover modificare i test due volte.
 
 **Contenuto del piano 05b**:
+
 - Rimozione wrapper classes (FABulkAssignRequest, FXConvertRequest, etc.)
 - Integrazione DateRangeModel in FXConversionRequest, FXDeleteItem, FARefreshItem
 - Consolidamento FAPricePoint + FAUpsertItem
@@ -956,11 +976,13 @@ Una volta completato il piano 05b, procedere con Step 12.
 📄 **Piano Unificato Test**: `05c_plan-testUpdates.prompt.md`
 
 **Perché un piano separato?**
+
 - Evita di aggiornare i test due volte
 - Consolida tutti i cambi necessari da piano 05 + 05b
 - Fornisce checklist completa di validazione
 
 **Contenuto piano test**:
+
 - Step 1-10: Aggiornamenti per fixture, CRUD, provider, prices, FX, etc.
 - Validazione wrapper classes removal
 - Validazione DateRangeModel integration
@@ -976,6 +998,7 @@ Una volta completato il piano 05b, procedere con Step 12.
 **File**: `backend/test_scripts/**/*.py`
 
 **Changes per fixture e setup**:
+
 - Eliminare setup di identifier/identifier_type in Asset fixtures:
   ```python
   # OLD
@@ -1009,6 +1032,7 @@ Una volta completato il piano 05b, procedere con Step 12.
 - Validare display_name univoco nei test (catch IntegrityError se duplicati)
 
 **Changes per test scheduled_investment**:
+
 - Aggiornare _transaction_override per essere compatibile con nuova struttura:
   ```python
   provider_params = {
@@ -1043,6 +1067,7 @@ Una volta completato il piano 05b, procedere con Step 12.
   ```
 
 **Changes per test API PATCH /assets**:
+
 - Creare test per merge logic:
   ```python
   async def test_patch_assets_merge_logic():
@@ -1081,6 +1106,7 @@ Una volta completato il piano 05b, procedere con Step 12.
   ```
 
 **Changes per test GET /provider/assignments**:
+
 - Test WHERE IN query:
   ```python
   async def test_get_provider_assignments_bulk():
@@ -1095,6 +1121,7 @@ Una volta completato il piano 05b, procedere con Step 12.
   ```
 
 **Changes per test yahoo_finance**:
+
 - Test che ritorna dict con asset_type:
   ```python
   async def test_yfinance_fetch_metadata():
@@ -1131,6 +1158,7 @@ Una volta completato il piano 05b, procedere con Step 12.
 **File**: `backend/data/`
 
 **Actions**:
+
 1. Eliminare manualmente:
    ```bash
    cd backend/data
@@ -1207,21 +1235,25 @@ Una volta completato il piano 05b, procedere con Step 12.
 ### What Changes
 
 **Database Schema**:
+
 - Asset: Removed `identifier`, `identifier_type`, `valuation_model`, `interest_schedule` → Added `UNIQUE(display_name)`
 - AssetProviderAssignment: Added `identifier`, `identifier_type` fields
 - Migration 001_initial: Modified CREATE TABLE statements
 
 **Domain Model**:
+
 - ValuationModel enum: Deleted completely
 - Asset: Simplified to pure metadata container (name, type, classification, currency)
 - AssetProviderAssignment: Now holds identification + pricing logic
 
 **Provider Interface**:
+
 - All methods now accept `identifier_type: IdentifierType` parameter
 - ScheduledInvestmentProvider reads schedule from `provider_params`
 - YahooFinanceProvider returns dict (not FAClassificationParams) with asset_type
 
 **API Endpoints**:
+
 - New: `PATCH /assets` - Bulk update with merge logic
 - New: `GET /assets/provider/assignments` - Read assignments by asset_ids
 - Renamed: `POST /metadata/refresh` → `POST /assets/provider/refresh`
@@ -1229,11 +1261,13 @@ Una volta completato il piano 05b, procedere con Step 12.
 - Updated: `POST /assets/provider` - Requires identifier/identifier_type
 
 **Service Layer**:
+
 - AssetCRUDService: New `patch_assets_bulk` method with merge logic
 - AssetSourceManager: Renamed `refresh_asset_metadata` → `refresh_assets_from_provider`
 - All provider calls propagate identifier_type
 
 **Schemas**:
+
 - New: FAAssetPatchItem, FABulkAssetPatchRequest/Response
 - New: FAProviderAssignmentReadItem, FAProviderRefreshFieldsDetail
 - Updated: FAProviderAssignmentItem includes identifier/identifier_type
@@ -1251,31 +1285,31 @@ Una volta completato il piano 05b, procedere con Step 12.
 ### Migration Path
 
 1. **Phase 1**: Models + Migration (Steps 1-3)
-   - Modify models.py
-   - Update 001_initial.py
-   - Delete DBs and recreate with alembic
+    - Modify models.py
+    - Update 001_initial.py
+    - Delete DBs and recreate with alembic
 
 2. **Phase 2**: Provider Layer (Steps 4-6)
-   - Update AssetSourceProvider interface
-   - Modify ScheduledInvestmentProvider
-   - Modify YahooFinanceProvider
+    - Update AssetSourceProvider interface
+    - Modify ScheduledInvestmentProvider
+    - Modify YahooFinanceProvider
 
 3. **Phase 3**: Schemas (Steps 7-8)
-   - Create FAAssetPatchItem and related schemas
-   - Update FAProviderAssignmentItem
+    - Create FAAssetPatchItem and related schemas
+    - Update FAProviderAssignmentItem
 
 4. **Phase 4**: API + Services (Steps 9-11)
-   - Add PATCH /assets endpoint
-   - Add GET /provider/assignments endpoint
-   - Rename refresh endpoint
-   - Implement patch_assets_bulk service
-   - Update refresh_assets_from_provider service
+    - Add PATCH /assets endpoint
+    - Add GET /provider/assignments endpoint
+    - Rename refresh endpoint
+    - Implement patch_assets_bulk service
+    - Update refresh_assets_from_provider service
 
 5. **Phase 5**: Tests + Verification (Steps 12-13)
-   - Update all test fixtures
-   - Add tests for new endpoints
-   - Verify manual creation
-   - Run full test suite
+    - Update all test fixtures
+    - Add tests for new endpoints
+    - Verify manual creation
+    - Run full test suite
 
 ### Validation Checklist
 
@@ -1295,16 +1329,19 @@ Una volta completato il piano 05b, procedere con Step 12.
 ### Risk Mitigation
 
 **High Risk Areas**:
+
 1. Database migration failure → **Mitigation**: Manual DB deletion + fresh alembic upgrade
 2. Test failures due to missing fields → **Mitigation**: Update fixtures systematically
 3. Provider calls missing identifier_type → **Mitigation**: Search codebase for provider method calls
 
 **Rollback Strategy**:
+
 - Keep git branch separate until all steps complete
 - Tag commit before starting: `git tag pre-refactoring`
 - If critical issues: `git reset --hard pre-refactoring`
 
 **Verification Points**:
+
 - After Step 3: Verify DB schema with SQLite browser
 - After Step 6: Run provider tests in isolation
 - After Step 11: Test full flow (create asset → assign provider → refresh → patch)

@@ -1,8 +1,10 @@
 # Plan: Test Updates for Plans 05 + 05b Combined
 
-**Context**: This plan consolidates all test updates needed for both the main datamodel refactoring (plan 05) and the schema cleanup (plan 05b). By combining test updates, we avoid updating tests twice.
+**Context**: This plan consolidates all test updates needed for both the main datamodel refactoring (plan 05) and the schema cleanup (plan 05b). By combining test updates, we avoid
+updating tests twice.
 
 **Execution Order**:
+
 1. Complete Steps 1-11 of Plan 05 ✅ (DONE)
 2. Complete Steps 1-11 of Plan 05b ⏳ (IN PROGRESS)
 3. **Execute this plan (5c)** - Update all tests for both changes
@@ -13,6 +15,7 @@
 ## 🎯 Changes from Plan 05 to Test
 
 ### Database Model Changes
+
 - ✅ `Asset` table: Removed `identifier`, `identifier_type`, `valuation_model`, `interest_schedule`
 - ✅ `Asset` table: Added `icon_url` field
 - ✅ `Asset` table: Added UNIQUE constraint on `display_name`
@@ -20,6 +23,7 @@
 - ✅ Removed `ValuationModel` enum entirely
 
 ### Schema Changes
+
 - ✅ `FAAssetCreateItem`: Removed identifier fields, added `icon_url`
 - ✅ `FAAssetPatchItem`: Added `icon_url`
 - ✅ `FAProviderAssignmentItem`: Added `identifier`, `identifier_type` fields
@@ -28,6 +32,7 @@
 - ✅ All providers: Added `identifier_type` parameter to methods
 
 ### Service Changes
+
 - ✅ `AssetCRUDService.create_assets_bulk()`: Updated for new Asset structure
 - ✅ `AssetCRUDService.patch_assets_bulk()`: New method for bulk PATCH
 - ✅ `AssetSourceManager.refresh_assets_from_provider()`: Renamed from `bulk_refresh_metadata`
@@ -38,6 +43,7 @@
 ## 🎯 Changes from Plan 05b to Test
 
 ### Wrapper Classes Removed (16 classes)
+
 - ❌ `FAProvidersResponse` → Use `List[FAProviderInfo]`
 - ❌ `FXProvidersResponse` (both duplicates)
 - ❌ `FABulkAssignRequest` → Use `List[FAProviderAssignmentItem]`
@@ -55,6 +61,7 @@
 - ❌ `FAUpsertItem` → Merged into `FAPricePoint`
 
 ### DateRangeModel Integration
+
 - ✅ `FXConversionRequest`: Now uses `date_range: DateRangeModel`
 - ✅ `FXDeleteItem`: Now uses `date_range: DateRangeModel`
 - ✅ `FXDeleteResult`: Now uses `date_range: DateRangeModel`
@@ -62,9 +69,11 @@
 - ✅ `FARefreshItem`: Now uses `date_range: DateRangeModel`
 
 ### Consolidation
+
 - ✅ `FAUpsertItem` merged into `FAPricePoint` (single class for read/write)
 
 ### Standardized Responses
+
 - ✅ All bulk responses now extend `BaseBulkResponse[TResult]`
 - ✅ `failed_count` is now a computed property (not stored)
 - ✅ Consistent `errors: List[str]` field across all responses
@@ -633,17 +642,20 @@
 ## 📊 Test Execution Order
 
 ### Phase 1: Unit Tests (No API calls)
+
 1. ✅ Update model tests (Asset, AssetProviderAssignment)
 2. ✅ Update schema validation tests
 3. ✅ Update utility function tests
 
 ### Phase 2: Service Layer Tests
+
 1. ✅ Update AssetCRUDService tests
 2. ✅ Update AssetSourceManager tests
 3. ✅ Update provider tests (yfinance, scheduled_investment)
 4. ✅ Update FX service tests
 
 ### Phase 3: API Integration Tests
+
 1. ✅ Update asset CRUD API tests
 2. ✅ Update provider assignment API tests
 3. ✅ Update price operation API tests
@@ -651,6 +663,7 @@
 5. ✅ Update metadata/refresh API tests
 
 ### Phase 4: End-to-End Tests
+
 1. ✅ Update complete workflow tests
 2. ✅ Update integration tests
 
@@ -680,6 +693,7 @@ After updating all tests, verify:
 **Total Test Files to Update**: ~25-30 files
 
 **Major Changes**:
+
 - Remove all wrapper class instantiation (16 classes)
 - Use DateRangeModel for date ranges (5 schema classes)
 - Update Asset creation (remove identifier fields)
@@ -691,6 +705,7 @@ After updating all tests, verify:
 **Execution Time Estimate**: 3-4 hours
 
 **Benefits**:
+
 - ✅ Tests aligned with new architecture
 - ✅ Cleaner test code (no wrappers)
 - ✅ Consistent patterns across all tests

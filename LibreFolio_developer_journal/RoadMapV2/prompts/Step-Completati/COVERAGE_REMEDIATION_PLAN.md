@@ -8,8 +8,10 @@
 ## 1. Assets API - Uncovered Endpoints
 
 ### 1.1 GET `/api/v1/assets/providers` ✅ TESTED
+
 **Status**: Never called in tests  
 **Action**: Add test in `test_assets_crud.py`
+
 ```python
 async def test_list_asset_providers():
     """Test GET /assets/providers - List all available asset pricing providers."""
@@ -22,8 +24,10 @@ async def test_list_asset_providers():
 ---
 
 ### 1.2 DELETE `/api/v1/assets/provider/bulk` ✅ TESTED
+
 **Status**: Never called in tests  
 **Action**: Add test in `test_assets_crud.py`
+
 ```python
 async def test_bulk_remove_providers():
     """Test DELETE /assets/provider/bulk - Remove provider assignments."""
@@ -38,8 +42,10 @@ async def test_bulk_remove_providers():
 ---
 
 ### 1.3 DELETE `/api/v1/assets/prices/bulk` ✅ TESTED
+
 **Status**: Never called in tests  
 **Action**: Add test in new `test_assets_crud.py`
+
 ```python
 async def test_bulk_delete_prices():
     """Test DELETE /assets/prices/bulk - Delete price ranges."""
@@ -54,8 +60,10 @@ async def test_bulk_delete_prices():
 ---
 
 ### 1.4 POST `/api/v1/assets/{asset_id}/prices` ✅ removed
+
 **Status**: Never called + Single endpoint (should be removed)  
 **Action**: **DELETE THIS ENDPOINT**
+
 - Reason: We have bulk endpoint `/prices/bulk`, single is redundant
 - Migration: All clients should use bulk with 1 item
 
@@ -63,16 +71,18 @@ async def test_bulk_delete_prices():
 
 ---
 
-
 ### 1.5 POST `/api/v1/assets/prices-refresh/bulk` ✅ COMPLETED
+
 **Status**: Tested and refactored  
-**Action Taken**: 
+**Action Taken**:
+
 - ✅ Added comprehensive test in `test_assets_crud.py`
 - ✅ Refactored service method to return `FABulkRefreshResponse` (Pydantic model) instead of `list[dict]`
 - ✅ Fixed endpoint to use Pydantic response directly (no manual conversion)
 - ✅ Fixed deprecation warning for `datetime.utcnow()` → `datetime.now(timezone.utc)`
 
 **Test Coverage**:
+
 ```python
 async def test_bulk_refresh_prices():
     """Test POST /assets/prices-refresh/bulk - Refresh prices from providers."""
@@ -90,6 +100,7 @@ async def test_bulk_refresh_prices():
 ## 2. FX API - Uncovered Scenarios
 
 ### 2.1 POST `/api/v1/fx/sync/bulk` - Auto-config branch ✅ COMPLETED
+
 **Status**: Only manual config tested, auto-config branch never executed  
 **Current test**: Passes explicit `pair_sources` list inside test_fx_api.py
 **Missing test**: Call without `pair_sources` → should use auto-discovery
@@ -103,6 +114,7 @@ async def test_fx_sync_auto_config():
 ```
 
 **Code branch**:
+
 ```python
 # Line ~200 in fx.py
 if not request.pair_sources:

@@ -20,6 +20,7 @@ Se vengono creati componenti riutilizzabili (es. form inputs, buttons), seguire 
 del componente.
 
 **Componenti creati in questa fase**:
+
 - `LoginModal.svelte` - Modal per login
 - `RegisterModal.svelte` - Modal per registrazione
 - `ForgotPasswordModal.svelte` - Modal per istruzioni recovery

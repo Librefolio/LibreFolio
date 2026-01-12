@@ -130,9 +130,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Ensure database exists and is migrated
     ensure_database_exists()
 
+    # Initialize global settings with defaults (if not already present)
+    await _initialize_global_settings()
+
     yield
     # Shutdown
     logger.info("Shutting down LibreFolio")
+
+
+async def _initialize_global_settings():
+    """Initialize global settings with default values if not present."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from backend.app.db.session import get_async_engine
+    from backend.app.services.settings_service import initialize_global_settings
+
+    engine = get_async_engine()
+    async with AsyncSession(engine) as session:
+        created = await initialize_global_settings(session)
+        if created > 0:
+            logger.info(f"Initialized {created} global setting(s)")
 
 
 # Create FastAPI app
@@ -225,7 +241,7 @@ async def root():
         "version": settings.VERSION,
         "docs": f"{settings.API_V1_PREFIX}/docs",
         "frontend": "Not built. Run: ./dev.sh fe:build"
-    }
+        }
 
 
 # Serve frontend static assets (JS, CSS, images) if build exists
@@ -234,6 +250,7 @@ if frontend_available():
     # Mount _app directory for SvelteKit assets
     if (FRONTEND_BUILD_DIR / "_app").exists():
         app.mount("/_app", StaticFiles(directory=FRONTEND_BUILD_DIR / "_app"), name="frontend_app")
+
 
     # Catch-all for other frontend routes (SPA fallback)
     @app.get("/{path:path}")

@@ -9,6 +9,7 @@
 **Last Updated**: 2025-11-07
 
 **Schema Update (2025-11-06)**:
+
 - `asset_provider_assignments.last_fetch_at` → Track last fetch attempt (NULL = never fetched)
 - `fx_currency_pair_sources.fetch_interval` → Refresh frequency in minutes (NULL = 1440 = 24h default)
 - Both columns added to support smart scheduling and monitoring (migration 001_initial updated)
@@ -23,22 +24,25 @@ Implementare un **provider system modulare** per acquisizione dati asset con:
 2. **CSS Scraper Provider**: Scraping prezzi da pagine web con CSS selectors
 3. **Synthetic Yield Logic**: Calcolo runtime per asset SCHEDULED_YIELD (interno a `pricing.py`, **NON un provider**)
 
-**Nota Importante**: Synthetic yield NON è un provider perché calcola valori a runtime basandosi su dati transazionali che possono cambiare. I valori non vengono salvati in DB ma calcolati on-demand.
+**Nota Importante**: Synthetic yield NON è un provider perché calcola valori a runtime basandosi su dati transazionali che possono cambiare. I valori non vengono salvati in DB ma
+calcolati on-demand.
 
 ---
 
 ## 📋 Requirements Overview
 
 ### Core Asset Source System
+
 - Main service file: `services/asset_source.py` (like `fx.py`)
-  - Contains abstract base class `AssetSource`
-  - Contains `AssetSourceManager` class (like FX service functions)
-  - TypedDicts: `CurrentValue`, `PricePoint`, `HistoricalData`
-  - Error handling: `AssetSourceError`
-  - Helper functions for precision
+    - Contains abstract base class `AssetSource`
+    - Contains `AssetSourceManager` class (like FX service functions)
+    - TypedDicts: `CurrentValue`, `PricePoint`, `HistoricalData`
+    - Error handling: `AssetSourceError`
+    - Helper functions for precision
 - Provider implementations in separate folder: `services/asset_source_providers/`
 
 **Folder structure**:
+
 ```
 backend/app/
 ├── schemas/                             # Shared Pydantic schemas (NEW)
@@ -75,19 +79,20 @@ backend/app/
 ```
 
 **Key Design Principles**:
+
 - **Separate DB Layers**: `fx.py` and `asset_source.py` remain SEPARATE
-  - Different tables: `fx_rates` vs `price_history`
-  - Different query patterns: (base,quote,date) vs (asset_id,date)
-  - Different fields: rate vs OHLC (open/high/low/close/volume) (Open-high-low-close chart)
-  - Backward-fill logic similar but not totally equal, implement independently
+    - Different tables: `fx_rates` vs `price_history`
+    - Different query patterns: (base,quote,date) vs (asset_id,date)
+    - Different fields: rate vs OHLC (open/high/low/close/volume) (Open-high-low-close chart)
+    - Backward-fill logic similar but not totally equal, implement independently
 - **Unified Registry**: `provider_registry.py` contains abstract base + specializations for FX and Assets
 - **Shared Schemas Only**: `BackwardFillInfo` TypedDict shared via `schemas/common.py`
 - **Auto-Discovery**: Providers auto-register on import via decorator, reading all `.py` files in provider folders
 - **Synthetic Yield**: NOT a provider, calculated on-demand in `asset_source.py`
-  - Integrated in `get_prices()` method
-  - Checks asset.valuation_model during read operations
-  - If SCHEDULED_YIELD: calculates value from asset fields + transactions
-  - Returns calculated value without DB write
+    - Integrated in `get_prices()` method
+    - Checks asset.valuation_model during read operations
+    - If SCHEDULED_YIELD: calculates value from asset fields + transactions
+    - Returns calculated value without DB write
 - **Manager Integration**: No separate `manager.py`, all manager logic in main service file
 - **Bulk-First Design**: All operations have bulk version as PRIMARY, single-item calls bulk
 
@@ -109,19 +114,22 @@ CREATE TABLE asset_provider_assignments (
 CREATE INDEX idx_asset_provider_asset_id ON asset_provider_assignments(asset_id);
 ```
 
-**Purpose**: 
+**Purpose**:
+
 - Associa ogni asset al suo provider di pricing (max 1 provider per asset)
 - Memorizza configurazione provider (provider_params JSON)
 - Sostituisce i campi deprecati in `assets`:
-  - ~~current_data_plugin_key~~
-  - ~~current_data_plugin_params~~
-  - ~~history_data_plugin_key~~
-  - ~~history_data_plugin_params~~
+    - ~~current_data_plugin_key~~
+    - ~~current_data_plugin_params~~
+    - ~~history_data_plugin_key~~
+    - ~~history_data_plugin_params~~
 
 **Note**:
+
 - UNIQUE constraint su asset_id (1 asset = 1 provider massimo)
 - CASCADE delete (se elimini asset, elimini assignment)
-- provider_params è JSON che poi viene ridato al provider ed usato per identificare asset (ticker, URL, ecc) in maniera univoca su piattaforma connessa, è il risultato della ricerca (chiamata dal metodo search descritto sotto)
+- provider_params è JSON che poi viene ridato al provider ed usato per identificare asset (ticker, URL, ecc) in maniera univoca su piattaforma connessa, è il risultato della
+  ricerca (chiamata dal metodo search descritto sotto)
 
 ### API Endpoints Overview
 
@@ -130,93 +138,103 @@ CREATE INDEX idx_asset_provider_asset_id ON asset_provider_assignments(asset_id)
 All endpoints follow **bulk-first design**: bulk operations are primary, single-item operations internally call bulk with 1 element.
 
 #### Provider Discovery
+
 - `GET /api/v1/asset-providers` - List all available asset pricing providers
-  - Response: `[{code, name, description, supports_search}, ...]`
+    - Response: `[{code, name, description, supports_search}, ...]`
 
 #### Asset Discovery
+
 - `GET /api/v1/assets` - List all assets with provider assignments
-  - Response: Asset list with `provider_assignment` field (null if manual)
+    - Response: Asset list with `provider_assignment` field (null if manual)
 - `GET /api/v1/assets/{id}` - Get single asset details with provider assignment
 
 #### Provider Search (for asset identification)
+
 - `GET /api/v1/asset-providers/{provider_code}/search?q=<query>` - Search assets via provider
-  - Example: `/api/v1/asset-providers/yfinance/search?q=AAPL`
-  - Returns list of matching assets with identifiers to use in `provider_params`
-  - Response cached 10 minutes
-  - Returns 404 if provider doesn't support search (e.g., synthetic_yield)
+    - Example: `/api/v1/asset-providers/yfinance/search?q=AAPL`
+    - Returns list of matching assets with identifiers to use in `provider_params`
+    - Response cached 10 minutes
+    - Returns 404 if provider doesn't support search (e.g., synthetic_yield)
 
 #### Provider Assignment (Associate asset with provider)
+
 - `POST /api/v1/assets/provider/bulk` - **Bulk assign/update** provider to assets
-  - Request: `[{asset_id, provider_code, provider_params}, ...]`
-  - Response: `{success_count, failed_count, results: [{asset_id, success, message}, ...]}`
-  - Optimized: 1 read query (if validation needed), 1 delete, 1 insert
+    - Request: `[{asset_id, provider_code, provider_params}, ...]`
+    - Response: `{success_count, failed_count, results: [{asset_id, success, message}, ...]}`
+    - Optimized: 1 read query (if validation needed), 1 delete, 1 insert
 - `DELETE /api/v1/assets/provider/bulk` - **Bulk remove** provider assignments
-  - Request: `[{asset_id}, ...]`
-  - Converts assets to manual pricing mode
-  - Optimized: 1 delete query with WHERE IN
+    - Request: `[{asset_id}, ...]`
+    - Converts assets to manual pricing mode
+    - Optimized: 1 delete query with WHERE IN
 
 **Single-item convenience methods** (call bulk internally):
+
 - `POST /api/v1/assets/{id}/provider` - Assign provider to single asset (calls bulk with 1 element)
 - `DELETE /api/v1/assets/{id}/provider` - Remove provider from single asset (calls bulk with 1 element)
 
 #### Price Data (Read from DB with Backfill Info)
+
 - `GET /api/v1/assets/{id}/prices?start=<date>&end=<date>` - Query stored prices
-  - `end` optional (defaults to `start` for single day)
-  - `start` required
-  - **Backfill Policy**: If no exact date match, uses most recent available price (like FX)
-  - Response includes backfill info (like FX system):
-    ```json
-    {
-      "prices": [
-        {
-          "date": "2025-11-05",
-          "close": "175.50",
-          "backward_fill_info": null
-        },
-        {
-          "date": "2025-11-06",
-          "close": "175.50",
-          "backward_fill_info": {
-            "actual_rate_date": "2025-11-05",
-            "days_back": 1
+    - `end` optional (defaults to `start` for single day)
+    - `start` required
+    - **Backfill Policy**: If no exact date match, uses most recent available price (like FX)
+    - Response includes backfill info (like FX system):
+      ```json
+      {
+        "prices": [
+          {
+            "date": "2025-11-05",
+            "close": "175.50",
+            "backward_fill_info": null
+          },
+          {
+            "date": "2025-11-06",
+            "close": "175.50",
+            "backward_fill_info": {
+              "actual_rate_date": "2025-11-05",
+              "days_back": 1
+            }
           }
-        }
-      ]
-    }
-    ```
-  - **Note**: `backward_fill_info` is `null` when exact date match, present when backfilled
-  - Returns prices as stored in DB (not multiplied by quantity - that's for portfolio valuation later)
-  - **TODO (Step 03)**: When transactions implemented, fallback to last BUY price if no price data exists
+        ]
+      }
+      ```
+    - **Note**: `backward_fill_info` is `null` when exact date match, present when backfilled
+    - Returns prices as stored in DB (not multiplied by quantity - that's for portfolio valuation later)
+    - **TODO (Step 03)**: When transactions implemented, fallback to last BUY price if no price data exists
 
 #### Manual Price Management (No provider)
+
 - `POST /api/v1/assets/prices/bulk` - **Bulk upsert** prices manually
-  - Request: `[{asset_id, prices: [{date, open?, high?, low?, close, volume?}, ...]}, ...]`
-  - Response: `{inserted_count, updated_count, failed_count, results: [...]}`
-  - Optimized: Uses shared `pricing.py` layer, batch upserts per asset
+    - Request: `[{asset_id, prices: [{date, open?, high?, low?, close, volume?}, ...]}, ...]`
+    - Response: `{inserted_count, updated_count, failed_count, results: [...]}`
+    - Optimized: Uses shared `pricing.py` layer, batch upserts per asset
 - `DELETE /api/v1/assets/prices/bulk` - **Bulk delete** price ranges
-  - Request: `[{asset_id, date_ranges: [{start, end?}, ...]}, ...]`
-  - `end` optional (single day if omitted)
-  - Response: `{deleted_count, results: [{asset_id, deleted, message}, ...]}`
-  - Optimized: Uses shared `pricing.py` layer, 1 DELETE with complex WHERE
+    - Request: `[{asset_id, date_ranges: [{start, end?}, ...]}, ...]`
+    - `end` optional (single day if omitted)
+    - Response: `{deleted_count, results: [{asset_id, deleted, message}, ...]}`
+    - Optimized: Uses shared `pricing.py` layer, 1 DELETE with complex WHERE
 
 **Single-item convenience methods** (call bulk internally):
+
 - `POST /api/v1/assets/{id}/prices` - Upsert prices for single asset (calls bulk with 1 asset)
 - `DELETE /api/v1/assets/{id}/prices` - Delete price ranges for single asset (calls bulk with 1 asset)
 
 #### Provider-Driven Price Refresh
+
 - `POST /api/v1/assets/prices-refresh/bulk` - **Bulk refresh** prices via providers
-  - Request: `[{asset_id, start_date, end_date?}, ...]`
-  - If only `start_date`: fetch single day (current price)
-  - If `start_date` + `end_date`: fetch historical range
-  - **Execution Flow**:
-    1. API groups requests by `provider_code` (from `asset_provider_assignments`)
-    2. Parallel async calls to each provider (via `asyncio.gather`)
-    3. Each provider processes its requests in parallel where possible
-    4. All providers write to DB via shared `pricing.py` in optimized batch operations
-  - Response: `{success_count, failed_count, results: [{asset_id, fetched_count, success, message, backfill_info?}, ...]}`
-  - Optimized: Parallel provider calls, batch DB writes via `pricing.py`
+    - Request: `[{asset_id, start_date, end_date?}, ...]`
+    - If only `start_date`: fetch single day (current price)
+    - If `start_date` + `end_date`: fetch historical range
+    - **Execution Flow**:
+        1. API groups requests by `provider_code` (from `asset_provider_assignments`)
+        2. Parallel async calls to each provider (via `asyncio.gather`)
+        3. Each provider processes its requests in parallel where possible
+        4. All providers write to DB via shared `pricing.py` in optimized batch operations
+    - Response: `{success_count, failed_count, results: [{asset_id, fetched_count, success, message, backfill_info?}, ...]}`
+    - Optimized: Parallel provider calls, batch DB writes via `pricing.py`
 
 **Single-item convenience methods** (call bulk internally):
+
 - `POST /api/v1/assets/{id}/prices-refresh?start=<date>&end=<date>` - Refresh single asset (calls bulk with 1 element)
 
 ---
@@ -224,26 +242,28 @@ All endpoints follow **bulk-first design**: bulk operations are primary, single-
 ### Provider Implementations
 
 #### 1. Yahoo Finance Provider
+
 - **Purpose**: Fetch market prices for stocks, ETFs, mutual funds
 - **Data Source**: Yahoo Finance API (via yfinance library)
 - **File**: `asset_source_providers/yahoo_finance.py`
 - **Class**: `YahooFinanceProvider`
-- **Methods**: 
-  - `get_current_value()` - Latest available price
-  - `get_history_value(start, end)` - OHLC historical series
-  - `search(query)` - Search tickers (cached 10 min)
+- **Methods**:
+    - `get_current_value()` - Latest available price
+    - `get_history_value(start, end)` - OHLC historical series
+    - `search(query)` - Search tickers (cached 10 min)
 - **Features**: Auto currency detection, robust error handling
 
 #### 2. CSS Scraper Provider
+
 - **Purpose**: Web scraping for generic websites
 - **Dependencies**: httpx + BeautifulSoup4
 - **File**: `asset_source_providers/css_scraper.py`
 - **Class**: `CSSScraperProvider`
 - **Configuration**: URL, CSS selector, currency
 - **Methods**:
-  - `get_current_value()` - Parse price from HTML
-  - `get_history_value()` - Not supported (returns empty)
-  - `search()` - Not applicable (requires manual configuration)
+    - `get_current_value()` - Parse price from HTML
+    - `get_history_value()` - Not supported (returns empty)
+    - `search()` - Not applicable (requires manual configuration)
 - **Features**: Robust float parsing (1,234.56 and 1.234,56), configurable selectors
 
 ---
@@ -254,77 +274,84 @@ All endpoints follow **bulk-first design**: bulk operations are primary, single-
 
 - **Purpose**: Calculate synthetic valuation for SCHEDULED_YIELD assets (loans, bonds) at runtime
 - **Location**: `backend/app/services/pricing.py` (integrated in read operations)
-- **Why Not a Provider?**: 
-  - Values calculated on-demand from asset fields + transactions
-  - Results can change based on transaction history
-  - No DB write (values are ephemeral)
-  - Automatically applied during `get_asset_prices()` when asset type = SCHEDULED_YIELD
+- **Why Not a Provider?**:
+    - Values calculated on-demand from asset fields + transactions
+    - Results can change based on transaction history
+    - No DB write (values are ephemeral)
+    - Automatically applied during `get_asset_prices()` when asset type = SCHEDULED_YIELD
 
 - **Input**: Asset fields from DB
-  - `interest_schedule` - List of {start_date, end_date, rate}
-  - `dividend_schedule` - Optional dividend payments
-  - `maturity_date` - Loan maturity
-  - `late_interest` - {rate, grace_period_days}
-  - `face_value` - Principal amount
+    - `interest_schedule` - List of {start_date, end_date, rate}
+    - `dividend_schedule` - Optional dividend payments
+    - `maturity_date` - Loan maturity
+    - `late_interest` - {rate, grace_period_days}
+    - `face_value` - Principal amount
 
 - **Output**: Calculated prices (principal + accrued interest - dividends if present)
 
-- **Features**: 
-  - Day-count: ACT/365 only (simplicity)
-  - Interest type: SIMPLE only
-  - Maturity + grace period + late interest handling
-  - **TODO (Step 03)**: Check if loan was repaid via transactions
+- **Features**:
+    - Day-count: ACT/365 only (simplicity)
+    - Interest type: SIMPLE only
+    - Maturity + grace period + late interest handling
+    - **TODO (Step 03)**: Check if loan was repaid via transactions
 
 - **Implementation**: See [Phase 0.2 - Synthetic Yield Module](./05_plugins_yfinance_css_synthetic_yield.md#02-shared-pricing-layer) for details
-  - Maturity + grace period + late interest handling
+    - Maturity + grace period + late interest handling
 
 ### Service Layer (AssetSourceManager)
 
 **Main Service** (`services/asset_source.py`):
+
 - `AssetSource` - Abstract base class (like `FXRateProvider`)
 - `AssetSourceManager` - Manager class with **bulk-first methods**:
 
 #### Plugin Assignment Methods
+
 - `bulk_assign_plugins(assignments: list[dict], session)` - **PRIMARY** bulk assignment
-  - Input: `[{asset_id, plugin_key, plugin_params}, ...]`
-  - Optimized: 1 read (if validation), 1 delete, 1 insert query
-  - Returns: List of results per asset
+    - Input: `[{asset_id, plugin_key, plugin_params}, ...]`
+    - Optimized: 1 read (if validation), 1 delete, 1 insert query
+    - Returns: List of results per asset
 - `assign_plugin(asset_id, plugin_key, params, session)` - Single assign (calls bulk with 1 element)
 - `bulk_remove_plugins(asset_ids: list[int], session)` - **PRIMARY** bulk removal
-  - Optimized: 1 DELETE query with WHERE IN
+    - Optimized: 1 DELETE query with WHERE IN
 - `remove_plugin(asset_id, session)` - Single remove (calls bulk with 1 element)
 - `get_asset_plugin(asset_id, session)` - Fetch plugin assignment from DB
 
 #### Price Refresh Methods (via plugins)
+
 - `bulk_refresh_prices(requests: list[dict], session)` - **PRIMARY** bulk refresh
-  - Input: `[{asset_id, start_date, end_date?}, ...]`
-  - Fetches current or historical based on parameters
-  - Parallel plugin calls where possible
-  - Batch DB writes for efficiency
+    - Input: `[{asset_id, start_date, end_date?}, ...]`
+    - Fetches current or historical based on parameters
+    - Parallel plugin calls where possible
+    - Batch DB writes for efficiency
 - `refresh_price(asset_id, start, end, session)` - Single refresh (calls bulk with 1 element)
 
 #### Manual Price CRUD Methods
+
 - `bulk_upsert_prices(data: list[dict], session)` - **PRIMARY** bulk upsert
-  - Input: `[{asset_id, prices: [{date, open?, high?, low?, close, volume?}, ...]}, ...]`
-  - Optimized: Batch upserts, minimize DB roundtrips
+    - Input: `[{asset_id, prices: [{date, open?, high?, low?, close, volume?}, ...]}, ...]`
+    - Optimized: Batch upserts, minimize DB roundtrips
 - `upsert_prices(asset_id, prices, session)` - Single upsert (calls bulk with 1 element)
 - `bulk_delete_prices(data: list[dict], session)` - **PRIMARY** bulk delete
-  - Input: `[{asset_id, date_ranges: [{start, end?}, ...]}, ...]`
-  - Optimized: 1 DELETE query with complex WHERE
+    - Input: `[{asset_id, date_ranges: [{start, end?}, ...]}, ...]`
+    - Optimized: 1 DELETE query with complex WHERE
 - `delete_prices(asset_id, date_ranges, session)` - Single delete (calls bulk with 1 element)
 - `get_prices(asset_id, start, end, session)` - Query stored prices
 
 #### Helper Functions
+
 - Decimal precision helpers for truncating db problem (like FX system)
 - Provider resolution from `asset_provider_assignments`
 - Date range utilities
 - **Backfill logic**: Identical to FX system
-  - Returns `backward_fill_info: {actual_rate_date, days_back}` when backfilled
-  - Returns `null` when exact date match
-  - **TODO (Step 03)**: Fallback to last BUY transaction price if no price_history data
+    - Returns `backward_fill_info: {actual_rate_date, days_back}` when backfilled
+    - Returns `null` when exact date match
+    - **TODO (Step 03)**: Fallback to last BUY transaction price if no price_history data
 
 #### Shared DB Layer
+
 All price write operations delegate to `pricing.py`:
+
 - `pricing.bulk_upsert_asset_prices()` - Batch upserts with minimal queries
 - `pricing.bulk_delete_asset_prices()` - Optimized DELETE with complex WHERE
 - Used by both manual operations and provider-driven refreshes
@@ -332,13 +359,12 @@ All price write operations delegate to `pricing.py`:
 **Note**: Like FX system, everything in one main file (`asset_source.py`)
 
 **DB Optimization Strategy**:
+
 - All bulk methods minimize DB queries (typically 1-3 max)
 - Use `WHERE IN` for batch operations
 - Parallel async operations where possible (provider fetches)
 - All DB writes go through shared `pricing.py` layer
 - Batch writes after all provider calls complete
-
-
 
 ---
 
@@ -351,6 +377,7 @@ All price write operations delegate to `pricing.py`:
 **True profits** = `sell_proceeds - buy_cost`
 
 There's no point splitting hairs for estimative calculations. ACT/365 is chosen for:
+
 - ✅ **Simplicity**: Intuitive calculation
 - ✅ **Sufficient accuracy**: For valuation purposes
 - ✅ **Standard**: Used in many markets (Europe, UK)
@@ -368,6 +395,7 @@ For complete mathematical reasoning, see [docs/financial-calculations.md](../doc
 **File**: `backend/alembic/versions/xxx_add_asset_provider_assignments.py`
 
 **Migration**:
+
 ```python
 """Add asset_provider_assignments table
 
@@ -418,11 +446,13 @@ class AssetProviderAssignment(SQLModel, table=True):
 ```
 
 **Test**: `backend/test_scripts/test_db/db_schema_validate.py`
+
 - [ ] Aggiungi verifica tabella asset_provider_assignments
 - [ ] Verifica UNIQUE constraint su asset_id
 - [ ] Verifica FK verso assets con CASCADE
 
 **Checklist**:
+
 - [ ] Migration creata con ./dev.sh db:migrate
 - [ ] Migration testata (up/down)
 - [ ] Model aggiunto a db/models.py
@@ -437,26 +467,29 @@ class AssetProviderAssignment(SQLModel, table=True):
 **Purpose**: Migrate existing plugin assignments from old `assets` table columns to new `asset_provider_assignments` table, then DROP old columns.
 
 **Old columns in `assets` table** (to be removed):
+
 - `current_data_plugin_key` → maps to `provider_code`
 - `current_data_plugin_params` → maps to `provider_params`
 - `history_data_plugin_key` → IGNORED (same as current, provider handles both)
 - `history_data_plugin_params` → IGNORED (same as current, provider handles both)
 
 **Why only 2 columns in new table?**
+
 - Single provider per asset handles BOTH current and historical data
 - Provider uses `provider_params` (e.g., ticker "AAPL") for both current and history queries
 - Simplifies design: 1-to-1 relationship between asset and provider
 
 **Migration strategy**:
+
 1. **Copy data**: For each asset with `current_data_plugin_key` NOT NULL:
-   - INSERT INTO `asset_provider_assignments` (asset_id, provider_code, provider_params)
-   - Map: `current_data_plugin_key` → `provider_code`, `current_data_plugin_params` → `provider_params`
-   - Ignore `history_data_plugin_*` fields (assumed to be same or unused)
+    - INSERT INTO `asset_provider_assignments` (asset_id, provider_code, provider_params)
+    - Map: `current_data_plugin_key` → `provider_code`, `current_data_plugin_params` → `provider_params`
+    - Ignore `history_data_plugin_*` fields (assumed to be same or unused)
 
 2. **Drop old columns**: After data copy, DROP all 4 plugin columns from `assets` table
-   - We're in DEV environment → safe to drop directly
-   - No deprecation period needed
-   
+    - We're in DEV environment → safe to drop directly
+    - No deprecation period needed
+
 3. **Update model**: Remove old fields from `Asset` model
 
 **File**: `backend/alembic/versions/xxx_migrate_plugin_data_to_assignments.py`
@@ -549,6 +582,7 @@ class Asset(SQLModel, table=True):
 ```
 
 **Checklist**:
+
 - [ ] Migration created with ./dev.sh db:migrate
 - [ ] Data migration SQL tested on copy of production data
 - [ ] **BEFORE applying**: Backup both databases (just in case)
@@ -562,6 +596,7 @@ class Asset(SQLModel, table=True):
 - [ ] Schema validation test passes
 
 **Verification Queries**:
+
 ```sql
 -- BEFORE migration: Check how many rows to migrate
 SELECT COUNT(*) FROM assets WHERE current_data_plugin_key IS NOT NULL;
@@ -584,6 +619,7 @@ SELECT COUNT(*) FROM asset_provider_assignments;
 **Share only**: Common schemas (BackwardFillInfo) and provider registry pattern.
 
 **Why separate?**
+
 - `fx_rates` table: base/quote pairs, single rate field
 - `price_history` table: asset_id, OHLC fields (open/high/low/close/volume)
 - Different query patterns, different constraints
@@ -591,6 +627,7 @@ SELECT COUNT(*) FROM asset_provider_assignments;
 - ~20 lines of duplicated backward-fill code is acceptable vs fragile generic layer
 
 **What we share**:
+
 - `BackwardFillInfo` TypedDict (common response format)
 - Provider registry pattern (abstract base for FX, Assets)
 - Common utility functions (if genuinely reusable)
@@ -627,6 +664,7 @@ Asset pricing service with DB operations for `price_history` table.
 Pattern identical to `fx.py` but for different table structure.
 
 **Synthetic Yield - Phase Implementation**:
+
 - **Phase 0.2.2 (Current)**: Only ACT/365 day count calculation implemented
 - **Phase 4 (Future)**: Full synthetic yield logic (rate schedules, accrued interest, maturity handling)
 
@@ -946,6 +984,7 @@ def calculate_accrued_interest(
 **Test**: `backend/test_scripts/test_services/test_asset_source.py`
 
 **Price CRUD operations** (price_history table):
+
 - [ ] Test bulk_upsert_prices (2 assets, multiple prices each)
 - [ ] Test bulk_delete_prices (2 assets, multiple date ranges)
 - [ ] Test upsert_prices single (calls bulk internally)
@@ -954,6 +993,7 @@ def calculate_accrued_interest(
 - [ ] Test decimal truncation handling
 
 **Price query with backward-fill**:
+
 - [ ] Test get_prices with exact date match (backward_fill_info = null)
 - [ ] Test get_prices with missing date (backward_fill_info present)
 - [ ] Test get_prices with date range
@@ -961,6 +1001,7 @@ def calculate_accrued_interest(
 - [ ] Test backward-fill respects SCHEDULED_YIELD special handling
 
 **Synthetic yield calculation** (SCHEDULED_YIELD assets):
+
 - [x] Test calculate_days_between_act365 (various date ranges) ✅ Phase 0.2.2
 - [ ] Test find_active_rate with simple schedule - **DEFERRED TO PHASE 4**
 - [ ] Test find_active_rate with maturity + grace period - **DEFERRED TO PHASE 4**
@@ -973,20 +1014,23 @@ def calculate_accrued_interest(
 - [ ] Test synthetic values NOT written to DB - **DEFERRED TO PHASE 4**
 
 **Provider assignment operations**:
+
 - [ ] Test bulk_assign_providers (3 assets)
 - [ ] Test bulk_remove_providers (3 assets)
 - [ ] Test assign_provider single (calls bulk)
 - [ ] Test remove_provider single (calls bulk)
 
 **Provider refresh operations**:
+
 - [ ] Test bulk_refresh_prices (2 assets, parallel provider calls)
 - [ ] Test refresh_price single (calls bulk)
 
 **Checklist**:
+
 - [x] common.py created with BackwardFillInfo schema ✅
 - [x] asset_source.py created (similar structure to fx.py) ✅
 - [x] Synthetic yield module (PARTIAL): ACT/365 day count only ✅ Phase 0.2.2
-  - [ ] Full implementation (rate schedules, accrued interest) - **DEFERRED TO PHASE 4**
+    - [ ] Full implementation (rate schedules, accrued interest) - **DEFERRED TO PHASE 4**
 - [ ] get_prices() checks asset.valuation_model for SCHEDULED_YIELD - **DEFERRED TO PHASE 4**
 - [x] Helper functions for decimal precision ✅
 - [x] Backward-fill logic similar to FX but independent implementation ✅
@@ -1165,13 +1209,15 @@ FXProviderRegistry.auto_discover()
 AssetProviderRegistry.auto_discover()
 ```
 
-**Note**: 
+**Note**:
+
 - Docker-friendly: Just drop `.py` file in provider folder, auto-discovered on startup
 - Decorator registers provider: `@register_provider(AssetProviderRegistry)`
 - Each provider type has its own registry (FX, Assets)
 - **TODO**: Refactor existing FX providers to use this system
 
 **Test**: `backend/test_scripts/test_services/test_provider_registry.py`
+
 - [ ] Test auto_discover scans folder correctly
 - [ ] Test register provider via decorator
 - [ ] Test get_provider by code
@@ -1182,6 +1228,7 @@ AssetProviderRegistry.auto_discover()
 - [ ] Test AssetProviderRegistry specialization
 
 **Checklist**:
+
 - [ ] provider_registry.py created with abstract base
 - [ ] FXProviderRegistry and AssetProviderRegistry implemented
 - [ ] Auto-discovery via folder scanning works
@@ -1196,6 +1243,7 @@ AssetProviderRegistry.auto_discover()
 **File**: `backend/app/services/asset_source.py`
 
 **Structure** (following `fx.py` pattern):
+
 ```python
 """
 Asset Source service.
@@ -1210,6 +1258,7 @@ Handles asset price fetching and management with support for multiple providers.
 ```
 
 **Implementa**:
+
 ```python
 from abc import ABC, abstractmethod
 from typing import TypedDict
@@ -1557,6 +1606,7 @@ class AssetSourceManager:
 ```
 
 **Helper Functions**:
+
 ```python
 def get_price_column_precision(column_name: str) -> tuple[int, int]:
     """Get precision for price_history decimal columns."""
@@ -1586,6 +1636,7 @@ def apply_backward_fill_logic(
 ```
 
 **Test**: `backend/test_scripts/test_services/test_asset_source_manager.py`
+
 - [ ] Test bulk_assign_providers (3 assets)
 - [ ] Test assign_provider (single, calls bulk)
 - [ ] Test bulk_remove_providers (3 assets)
@@ -1601,6 +1652,7 @@ def apply_backward_fill_logic(
 - [ ] Test backfill_info structure matches FX pattern
 
 **Checklist**:
+
 - [ ] All bulk methods are PRIMARY implementations
 - [ ] All single-item methods call bulk with 1 element
 - [ ] DB queries minimized (1-3 max per bulk operation)
@@ -1617,6 +1669,7 @@ def apply_backward_fill_logic(
 **Note**: Registry is now in Phase 1.1 as unified system. This phase is just folder setup.
 
 **Implementa**:
+
 ```python
 from typing import Type
 import logging
@@ -1646,13 +1699,15 @@ FXProviderRegistry.auto_discover()
 AssetProviderRegistry.auto_discover()
 ```
 
-**Note**: 
+**Note**:
+
 - Docker-friendly: Just drop `.py` file in provider folder, auto-discovered on startup
 - Decorator registers provider: `@register_provider(AssetProviderRegistry)`
 - Each provider type has its own registry (FX, Assets)
 - **TODO**: Refactor existing FX providers to use this system
 
 **Test**: `backend/test_scripts/test_services/test_provider_registry.py`
+
 - [ ] Test auto_discover scans folder correctly
 - [ ] Test register provider via decorator
 - [ ] Test get_provider by code
@@ -1663,6 +1718,7 @@ AssetProviderRegistry.auto_discover()
 - [ ] Test AssetProviderRegistry specialization
 
 **Checklist**:
+
 - [ ] provider_registry.py created with abstract base
 - [ ] FXProviderRegistry and AssetProviderRegistry implemented
 - [ ] Auto-discovery via folder scanning works
@@ -1674,9 +1730,11 @@ AssetProviderRegistry.auto_discover()
 
 #### 1.4: Migrate existing FX providers to the unified registry
 
-**Purpose**: Align legacy FX providers with the new `FXProviderRegistry` auto-registration pattern so FX providers are discovered the same way as asset providers. This centralizes provider resolution via the registry and simplifies provider lookup across the codebase.
+**Purpose**: Align legacy FX providers with the new `FXProviderRegistry` auto-registration pattern so FX providers are discovered the same way as asset providers. This centralizes
+provider resolution via the registry and simplifies provider lookup across the codebase.
 
 Tasks:
+
 - Ensure each provider in `backend/app/services/fx_providers/` exposes a `provider_code` attribute and `name` property (or equivalent).
 - Add decorator registration to each provider implementation:
   ```py
@@ -1687,10 +1745,12 @@ Tasks:
       provider_code = "ECB"
       # existing implementation
   ```
-- Update any legacy factory usage (`FXProviderFactory` or similar) to use `FXProviderRegistry.get_provider_instance(code)` during transition. Provide a thin shim `FXProviderFactory` that forwards to registry if needed.
+- Update any legacy factory usage (`FXProviderFactory` or similar) to use `FXProviderRegistry.get_provider_instance(code)` during transition. Provide a thin shim
+  `FXProviderFactory` that forwards to registry if needed.
 - Add/extend tests in `backend/test_scripts/test_services/test_provider_registry.py` to assert FX providers are present: `ECB`, `FED`, `BOE`, `SNB`.
 
 Verification:
+
 - Running the provider registry tests should list FX providers in `FXProviderRegistry.list_providers()`.
 - Any code that resolves providers by code (e.g., sync endpoints) should use the registry API.
 
@@ -1703,6 +1763,7 @@ Status: Not started — waiting for migration work.
 **File**: `backend/app/services/asset_source_providers/yahoo_finance.py`
 
 **Implementa**:
+
 ```python
 import logging
 from datetime import date, datetime, timedelta
@@ -1924,7 +1985,8 @@ class YahooFinanceProvider(AssetSourceProvider):
             )
 ```
 
-**Dependencies**: 
+**Dependencies**:
+
 - [ ] Aggiungi `yfinance` a `Pipfile`: `pipenv install yfinance`
 - [ ] Aggiungi `pandas` (dependency di yfinance)
 
@@ -1970,6 +2032,7 @@ def test_all_providers():
 All providers tested by same generic suite.
 
 **Checklist**:
+
 - [ ] @register_provider(AssetProviderRegistry) decorator
 - [ ] Provider-specific logic (yfinance: fast_info fallback, css: float parsing, synthetic: ACT/365)
 - [ ] Error handling robusto
@@ -1986,6 +2049,7 @@ All providers tested by same generic suite.
 **File**: `backend/app/services/asset_source_providers/css_scraper.py`
 
 **Implementa**:
+
 ```python
 import logging
 import re
@@ -2214,10 +2278,12 @@ class CSSScraperProvider(AssetSourceProvider):
 ```
 
 **Dependencies**:
+
 - [ ] Aggiungi `beautifulsoup4` a `Pipfile`: `pipenv install beautifulsoup4`
 - [ ] `httpx` già presente (usato per FX providers)
 
 **Test**: `backend/test_scripts/test_services/test_cssscraper_plugin.py`
+
 - [ ] Test parse_float con vari formati (US, EU, con simboli)
 - [ ] Test get_current_value con HTML mock (httpx mock)
 - [ ] Test validate_params richiede current_url, selector, currency
@@ -2226,6 +2292,7 @@ class CSSScraperProvider(AssetSourceProvider):
 - [ ] Test get_history_value ritorna empty se no history config
 
 **Checklist**:
+
 - [ ] @register_plugin decorator
 - [ ] validate_params controlla campi richiesti
 - [ ] parse_float gestisce più formati
@@ -2246,9 +2313,11 @@ class CSSScraperProvider(AssetSourceProvider):
 **Note**: Synthetic yield is NOT a separate provider. It's integrated into `asset_source.py` as runtime calculation logic for SCHEDULED_YIELD assets.
 
 **What's Already Done (Phase 0.2.2)**:
+
 - ✅ `calculate_days_between_act365(start, end)` → ACT/365 day fraction
 
 **What Needs Implementation (Phase 4)**:
+
 - [ ] `find_active_rate(schedule, target_date, maturity, late_interest)` → rate lookup from schedule
 - [ ] `calculate_accrued_interest(principal, schedule, start, end, maturity, late_interest)` → SIMPLE interest
 - [ ] `calculate_synthetic_value(asset, target_date, session)` → full valuation (face_value + accrued interest)
@@ -2258,6 +2327,7 @@ class CSSScraperProvider(AssetSourceProvider):
 **Implementation Location**: `backend/app/services/asset_source.py` (NOT a separate plugin)
 
 **Code to Add**:
+
 ```python
 import logging
 from datetime import date, timedelta
@@ -2475,6 +2545,7 @@ class SyntheticYieldPlugin(DataPlugin):
 **Note**: Questo plugin richiede accesso al database per fetch asset data. Potrebbe essere necessario passare `async_session_maker` o fetch asset prima di chiamare plugin.
 
 **Test**: `backend/test_scripts/test_services/test_synthetic_yield_plugin.py`
+
 - [ ] Test calculate_days_between per ogni convention
 - [ ] Test find_active_rate con schedule semplice
 - [ ] Test find_active_rate dopo maturity (late interest)
@@ -2492,6 +2563,7 @@ class SyntheticYieldPlugin(DataPlugin):
 **File**: `backend/app/services/plugins/manager.py`
 
 **Implementa**:
+
 ```python
 import logging
 import json
@@ -2614,6 +2686,7 @@ async def bulk_assign_plugins(
 ```
 
 **Test**: `backend/test_scripts/test_services/test_plugin_manager.py`
+
 - [ ] Test get_asset_plugin ritorna None se non assegnato
 - [ ] Test assign_plugin crea nuovo assignment
 - [ ] Test assign_plugin aggiorna esistente (UPSERT)
@@ -2631,6 +2704,7 @@ async def bulk_assign_plugins(
 **File**: `backend/app/api/v1/asset_providers.py` (nuovo)
 
 **Implementa**:
+
 ```python
 from fastapi import APIRouter
 
@@ -2651,6 +2725,7 @@ async def list_plugins():
 ```
 
 **Test**: `backend/test_scripts/test_api/test_plugins_api.py`
+
 - [ ] Test GET /plugins ritorna lista plugin
 - [ ] Test verifica presenza yfinance, cssscraper, synthetic_yield
 
@@ -2661,6 +2736,7 @@ async def list_plugins():
 **File**: `backend/app/api/v1/assets.py` (aggiorna o crea)
 
 **Implementa**:
+
 ```python
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -2874,6 +2950,7 @@ async def delete_prices(
 **Test**: `backend/test_scripts/test_api/test_assets_api.py`
 
 **Plugin Assignment CRUD**:
+
 - [ ] Test GET /assets/{id}/plugin
 - [ ] Test GET 404 se no plugin assigned
 - [ ] Test POST /assets/{id}/plugin (assign)
@@ -2885,11 +2962,13 @@ async def delete_prices(
 - [ ] Test DELETE /assets/plugin/bulk
 
 **Price Refresh**:
+
 - [ ] Test POST /assets/{id}/refresh-current
 - [ ] Test 404 se no plugin assigned
 - [ ] Test POST /assets/{id}/refresh-history
 
 **Manual Price CRUD**:
+
 - [ ] Test GET /assets/{id}/prices ritorna lista
 - [ ] Test GET vuoto se no prices
 - [ ] Test POST /assets/{id}/prices/bulk (insert)
@@ -2897,9 +2976,11 @@ async def delete_prices(
 - [ ] Test DELETE /assets/{id}/prices/bulk
 
 **Plugin Discovery**:
+
 - [ ] Test GET /plugins ritorna 3 plugin
 
 **Checklist**:
+
 - [ ] Tutti gli endpoint implementati
 - [ ] Error handling completo (404, 400, 500)
 - [ ] Pydantic models per validation
@@ -2912,16 +2993,19 @@ async def delete_prices(
 **File**: `docs/plugins/`
 
 **Crea**:
+
 1. `docs/plugins/overview.md` - Plugin system overview
 2. `docs/plugins/yfinance.md` - yfinance plugin guide
 3. `docs/plugins/cssscraper.md` - CSS scraper configuration
 4. `docs/plugins/synthetic-yield.md` - Synthetic yield calculation
 
 **Aggiorna**:
+
 - `docs/api-reference.md` - Add assets endpoints
 - `docs/testing-guide.md` - Add plugin tests
 
 **Checklist**:
+
 - [ ] Overview doc completo
 - [ ] Per ogni plugin: usage, config, examples
 - [ ] API reference aggiornato
@@ -2933,6 +3017,7 @@ async def delete_prices(
 ## ✅ Final Checklist
 
 ### Database
+
 - [ ] Migration asset_plugin_assignments creata e applicata
 - [ ] Model AssetPluginAssignment implementato
 - [ ] UNIQUE constraint su asset_id verificato
@@ -2940,6 +3025,7 @@ async def delete_prices(
 - [ ] Schema validation test aggiornato e passa
 
 ### Core System
+
 - [ ] Abstract DataPlugin class
 - [ ] Plugin registry con factory
 - [ ] TypedDicts per type safety
@@ -2947,18 +3033,21 @@ async def delete_prices(
 - [ ] @register_plugin decorator
 
 ### Plugins
+
 - [ ] yfinance plugin completo e testato
 - [ ] cssscraper plugin completo e testato
 - [ ] synthetic_yield plugin completo e testato
 - [ ] Tutti i test plugin passano (30+ test)
 
 ### Services
+
 - [ ] Plugin manager service (get, assign, remove, bulk)
 - [ ] Pricing service (refresh_current, refresh_history)
 - [ ] Manual price CRUD (upsert, delete)
 - [ ] Tutti i test service passano (15+ test)
 
 ### API Endpoints
+
 - [ ] GET /plugins (plugin discovery)
 - [ ] Plugin assignment CRUD (GET, POST, DELETE, bulk)
 - [ ] Price refresh endpoints (current, history)
@@ -2966,6 +3055,7 @@ async def delete_prices(
 - [ ] Tutti i test API passano (25+ test)
 
 ### Documentation
+
 - [ ] Day-count conventions spiegati
 - [ ] Plugin system overview
 - [ ] Per-plugin guides (yfinance, cssscraper, synthetic_yield)
@@ -2974,6 +3064,7 @@ async def delete_prices(
 - [ ] Database schema docs update
 
 ### Dependencies
+
 - [ ] yfinance installato
 - [ ] beautifulsoup4 installato
 - [ ] httpx già presente ✅
@@ -2984,6 +3075,7 @@ async def delete_prices(
 ## 🎯 Success Criteria
 
 ### Must Have ✅
+
 1. ✅ Database: asset_plugin_assignments table con UNIQUE constraint
 2. ✅ Plugin Discovery: GET /plugins ritorna 3 plugin
 3. ✅ Plugin Assignment: GET/POST/DELETE per asset funzionano
@@ -3000,12 +3092,14 @@ async def delete_prices(
 14. ✅ Documentation completa (day-count conventions spiegati)
 
 ### Should Have 🟡
+
 1. 🟡 synthetic_yield supports COMPOUND interest
 2. 🟡 cssscraper supports history scraping
 3. 🟡 Plugin performance benchmarks
 4. 🟡 Async batch price refresh (multiple assets)
 
 ### Nice to Have 🔵
+
 1. 🔵 Additional plugins (Bloomberg, Alpha Vantage, justEtf, borsa italiana, etc...)
 2. 🔵 Plugin caching layer
 3. 🔵 Async batch updates
@@ -3015,17 +3109,17 @@ async def delete_prices(
 
 ## 📊 Estimated Timeline
 
-| Phase | Description | Days | Complexity |
-|-------|-------------|------|------------|
-| 0 | Database migration (asset_plugin_assignments) | 0.5 | Low |
-| 1 | Plugin system base | 2-3 | Medium |
-| 2 | yfinance plugin | 1-2 | Low |
-| 3 | CSS scraper | 1-2 | Medium |
-| 4 | synthetic_yield | 3-4 | **High** |
-| 5 | Service layer (plugin manager + pricing) | 1-2 | Medium |
-| 6 | API endpoints (plugin CRUD + price CRUD) | 1-2 | Medium |
-| 7 | Documentation | 1 | Low |
-| **Total** | | **11-17 days** | **Medium-High** |
+| Phase     | Description                                   | Days           | Complexity      |
+|-----------|-----------------------------------------------|----------------|-----------------|
+| 0         | Database migration (asset_plugin_assignments) | 0.5            | Low             |
+| 1         | Plugin system base                            | 2-3            | Medium          |
+| 2         | yfinance plugin                               | 1-2            | Low             |
+| 3         | CSS scraper                                   | 1-2            | Medium          |
+| 4         | synthetic_yield                               | 3-4            | **High**        |
+| 5         | Service layer (plugin manager + pricing)      | 1-2            | Medium          |
+| 6         | API endpoints (plugin CRUD + price CRUD)      | 1-2            | Medium          |
+| 7         | Documentation                                 | 1              | Low             |
+| **Total** |                                               | **11-17 days** | **Medium-High** |
 
 **Note**: synthetic_yield è il componente più complesso. Day-count conventions e interest calculations richiedono attenzione ai dettagli finanziari.
 
@@ -3036,42 +3130,50 @@ async def delete_prices(
 ### 📋 Ordine di Implementazione Consigliato
 
 **Phase 0 - Database** (inizio obbligatorio):
+
 1. Crea migration `asset_plugin_assignments`
 2. Applica migration a test_app.db
 3. Verifica schema validation
 
 **Phase 1-4 - Plugins** (core implementation):
+
 4. Plugin system base (abstract class + registry)
 5. yfinance plugin (quick win, testabile subito)
 6. cssscraper plugin (utility)
 7. synthetic_yield plugin (più complesso, lascia per ultimo)
 
 **Phase 5-6 - Services & API** (integrazione):
+
 8. Plugin manager service (assign/remove)
 9. Pricing service (refresh + manual CRUD)
 10. API endpoints (tutti insieme)
 
 **Phase 7 - Docs** (chiusura):
+
 11. Documentation completa
 
 ### 🎯 Note Importanti
 
 **Day-Count Conventions**:
+
 - Default: ACT/365 (standard, accurato)
 - ACT/360 produce ~1.4% interesse in più (money market)
 - 30/360 è prevedibile ma meno accurato
 
 **Plugin Assignment**:
+
 - 1 asset = max 1 plugin (UNIQUE constraint)
 - Nessuna logica priority (diverso da FX pair-sources)
 - Configurazione in plugin_params JSON
 
 **Manual Price CRUD**:
+
 - Permette correzioni senza plugin
 - UPSERT logic (insert se nuovo, update se esiste)
 - Bulk operations dove possibile
 
 **Test Strategy**:
+
 - ~70+ test totali previsti
 - Test dopo ogni fase (incrementale)
 - Integration test finale (API → Service → Plugin)
@@ -3097,15 +3199,18 @@ pipenv install yfinance beautifulsoup4
 ### 📚 Riferimenti
 
 **Day-count conventions**:
+
 - Vedi sezione "📐 Day-Count Conventions Explained" sopra
 - ACT/365 default, ACT/360 e 30/360 supportati
 
 **Similitudini con FX system**:
+
 - Plugin registry simile a FX provider factory
 - @register_plugin simile a provider auto-discovery
 - PluginError simile a FXServiceError
 
 **Differenze chiave**:
+
 - ❌ Nessuna priority logic (1 plugin per asset massimo)
 - ❌ Nessun fallback (diverso da FX multi-provider)
 - ✅ Manual CRUD (diverso da FX che è sempre API-driven)
@@ -3119,11 +3224,13 @@ pipenv install yfinance beautifulsoup4
 ### Database Schema Changes
 
 Add to `assets` table:
+
 - `investment_type` VARCHAR(50) NULL - e.g., 'stock', 'etf', 'bond', 'crypto', 'commodity'
 - `short_description` VARCHAR(255) NULL - human-readable short description
 - `classification_params` TEXT NULL - JSON with classification data
 
 JSON structure for `classification_params`:
+
 ```json
 {
   "geographic_area": {
@@ -3140,21 +3247,25 @@ JSON structure for `classification_params`:
 ### API Endpoints
 
 **PATCH /api/v1/assets/{asset_id}/metadata**
+
 - Partial update (merge), null/empty string clears field
 - JSON schema validation for `classification_params`
 - Response: Updated asset with new metadata
 
 **GET /api/v1/assets/{asset_id}**
+
 - Include new metadata fields in response
 - Format `classification_params` as nested JSON (not string)
 
 **GET /api/v1/assets**
+
 - Include metadata in list
 - Optional filters: `?investment_type=etf`, `?base_currency=USD`
 
 ### Provider Integration: get_asset_metadata()
 
 Add method to `AssetSourceProvider` interface:
+
 ```python
 def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional[dict]:
     """
@@ -3178,16 +3289,18 @@ def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional
 ### Auto-Population Workflow
 
 **Trigger points**:
+
 1. **Asset creation**: When user assigns provider (POST `/assets/{id}/provider`)
-   - Automatically call `provider.get_asset_metadata()` and save to DB
-   - Fallback: If provider returns `None`, leave fields empty
+    - Automatically call `provider.get_asset_metadata()` and save to DB
+    - Fallback: If provider returns `None`, leave fields empty
 
 2. **Manual refresh**: POST `/api/v1/assets/{asset_id}/metadata/refresh`
-   - User explicitly requests fresh metadata from provider
-   - Re-call `provider.get_asset_metadata()` and update DB
-   - **Important**: Only triggered manually, NOT in scheduled refresh jobs
+    - User explicitly requests fresh metadata from provider
+    - Re-call `provider.get_asset_metadata()` and update DB
+    - **Important**: Only triggered manually, NOT in scheduled refresh jobs
 
 **User override persistence**:
+
 - User-edited metadata PERSISTS across refreshes
 - Manual refresh ONLY triggered by explicit user action (not scheduled jobs)
 - Allows users to customize metadata without provider overwriting
@@ -3195,6 +3308,7 @@ def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional
 ### Implementation Examples
 
 **YahooFinanceProvider**:
+
 ```python
 def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional[dict]:
     """Extract metadata from yfinance .info"""
@@ -3217,6 +3331,7 @@ def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional
 ```
 
 **CSSScraperProvider**:
+
 ```python
 def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional[dict]:
     """CSS scraper doesn't support metadata extraction"""
@@ -3242,12 +3357,14 @@ def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional
 **File**: `backend/app/services/asset_source_providers/just_etf.py`
 
 **Features**:
+
 - Base URL: `https://www.justetf.com/en/etf-profile.html?isin=<ISIN>`
 - Provider code: `justetf`
 - Supports: Current NAV, metadata extraction, search by ISIN/name
 - Test identifier: `IE00B4L5Y983` (iShares Core MSCI World)
 
 **Metadata extraction**:
+
 - ETF name, region, sector, TER (Total Expense Ratio)
 - Maps to `classification_params`: geographic area, sector
 - Sets `investment_type = "etf"`
@@ -3257,17 +3374,20 @@ def get_asset_metadata(self, identifier: str, provider_params: dict) -> Optional
 **File**: `backend/app/services/asset_source_providers/borsa_italiana.py`
 
 **Features**:
+
 - Base URL: `https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/<ISIN>.html`
 - Provider code: `borsa_italiana`
 - Supports: Current price, historical data, dividend/coupon dates, search
 - Test identifier: `IT0005634800` (BTP bond)
 
 **Decimal format support**:
+
 - English URL (`?lang=en`): US format `100.39` (decimal point)
 - Italian URL (`?lang=it`): EU format `100,39` (decimal comma)
 - Provider params include: `decimal_format` ("us" or "eu")
 
 **Test configuration**:
+
 ```python
 test_config = [
     {
@@ -3290,11 +3410,13 @@ test_config = [
 ```
 
 **Historical data**:
+
 - Research if historical price data available on page or via API
 - Parse dividend/coupon payment dates if available
 - Return `HistoricalDataModel` with `dividend_dates` list
 
 **Metadata extraction**:
+
 - Bond/stock name, issuer, maturity date (for bonds)
 - `investment_type`: "bond" or "stock"
 - `base_currency`: "EUR"
@@ -3303,6 +3425,7 @@ test_config = [
 ### Enhanced get_history() with Dividend Dates
 
 **Update interface**:
+
 ```python
 class HistoricalDataModel(BaseModel):
     prices: List[PricePointModel]
@@ -3316,12 +3439,14 @@ class HistoricalDataModel(BaseModel):
 ```
 
 **Provider implementations**:
+
 - **YahooFinanceProvider**: Use yfinance `.dividends` to get dividend history
 - **CSSScraperProvider**: Return `dividend_dates=None` (not supported)
 - **BorsaItalianaProvider**: Parse coupon payment dates if available
 - **JustETFProvider**: Return `dividend_dates=None` (not typically available)
 
 **API response example**:
+
 ```json
 {
   "prices": [...],
@@ -3342,11 +3467,13 @@ class HistoricalDataModel(BaseModel):
 **File**: `backend/app/utils/search_cache.py`
 
 **Class**: `SearchCache` (generic, reusable)
+
 - Storage: In-memory dict (or Redis in future)
 - TTL: Configurable per entry (default: 10 minutes)
 - Thread-safe: Use asyncio locks for concurrent access
 
 **Methods**:
+
 ```python
 class SearchCache:
     def set(self, key: str, value: Any, ttl: int) -> None:
@@ -3377,6 +3504,7 @@ class SearchCache:
 **Class**: `AssetSearchService`
 
 **Unified search method**:
+
 ```python
 async def search_assets(
     self,
@@ -3398,6 +3526,7 @@ async def search_assets(
 ```
 
 **Provider search interface** (formalized):
+
 ```python
 def search(self, query: str) -> List[dict]:
     """
@@ -3423,9 +3552,11 @@ def search(self, query: str) -> List[dict]:
 ### API Endpoints
 
 **GET /api/v1/assets/search?q=<query>&providers=<csv>**
+
 - `q`: Search query (required)
 - `providers`: Comma-separated provider codes (optional, default: all)
 - Response:
+
 ```json
 {
   "query": "Apple",
@@ -3444,9 +3575,11 @@ def search(self, query: str) -> List[dict]:
 ```
 
 **GET /api/v1/assets/search/cache/status**
+
 - Response: `{"entries": 123, "expired": 5, "total_size_kb": 456}`
 
 **POST /api/v1/assets/search/cache/cleanup**
+
 - Trigger manual cleanup of expired entries
 - Response: `{"deleted": 5}`
 
@@ -3468,6 +3601,7 @@ def search(self, query: str) -> List[dict]:
 **File**: `docs/assets/provider-development.md`
 
 **Structure** (based on `docs/fx/provider-development.md`):
+
 1. Overview & Architecture
 2. Provider Interface Reference
 3. Step-by-Step Implementation Guide
@@ -3476,12 +3610,14 @@ def search(self, query: str) -> List[dict]:
 6. Best Practices & Common Pitfalls
 
 **Code examples**:
+
 - Minimal provider example
 - Full-featured provider (with search, metadata, dividends)
 - Test configuration examples
 - `provider_params` structures for different use cases
 
 **Topics to cover**:
+
 - `@register_provider(AssetProviderRegistry)` decorator
 - Auto-discovery process and verification
 - `test_config` property structure
@@ -3494,6 +3630,7 @@ def search(self, query: str) -> List[dict]:
 **File**: `docs/api-reference.md` or OpenAPI spec
 
 **Document all endpoints**:
+
 - Provider discovery (`GET /asset-providers`)
 - Provider search (`GET /asset-providers/{code}/search`)
 - Provider assignment (bulk + single)
@@ -3503,6 +3640,7 @@ def search(self, query: str) -> List[dict]:
 - Search & cache endpoints
 
 **Include**:
+
 - Request/response examples (realistic payloads)
 - Error responses and validation messages
 - Bulk operation examples (3+ items)
@@ -3514,6 +3652,7 @@ def search(self, query: str) -> List[dict]:
 **File**: `docs/assets/workflow.md`
 
 **Sections**:
+
 1. Asset Lifecycle (creation → provider assignment → price refresh → metadata)
 2. Provider Assignment Workflow
 3. Manual Price Management
@@ -3522,12 +3661,14 @@ def search(self, query: str) -> List[dict]:
 6. Search & Discovery
 
 **Diagrams**:
+
 - Provider selection flowchart
 - Price refresh sequence diagram
 - Metadata population workflow
 - Search & cache interaction
 
 **Common scenarios**:
+
 - "How to add a new stock to portfolio"
 - "How to switch provider for an asset"
 - "How to manually correct prices"
@@ -3536,16 +3677,19 @@ def search(self, query: str) -> List[dict]:
 ### Update Existing Documentation
 
 **README.md**:
+
 - Add asset provider system to features list
 - Link to new documentation files
 - Update architecture overview
 
 **database-schema.md**:
+
 - Document `asset_provider_assignments` table
 - Document new asset metadata columns
 - Show relationships and constraints
 
 **testing-guide.md**:
+
 - Add asset provider tests to test suite
 - Document provider-specific test execution
 - Show test coverage reporting
@@ -3553,28 +3697,33 @@ def search(self, query: str) -> List[dict]:
 ### Code Documentation
 
 **Comprehensive docstrings**:
+
 - All public methods in `AssetSourceProvider`
 - All methods in `AssetSourceManager`
 - All provider implementations
 - All API endpoints
 
 **Inline comments**:
+
 - Complex logic (backward-fill, synthetic yield)
 - Provider-specific quirks
 - Performance optimizations
 
 **Type hints**:
+
 - Verify all methods have proper type annotations
 - Use `Optional`, `List`, `Dict` consistently
 
 ### Migration & Upgrade Guides
 
 **Document migration**:
+
 - Old: `current_data_plugin_key` in assets table
 - New: `asset_provider_assignments` table
 - Migration SQL if needed
 
 **Document breaking changes**:
+
 - API endpoint changes (if any)
 - Schema changes
 - Provider interface changes

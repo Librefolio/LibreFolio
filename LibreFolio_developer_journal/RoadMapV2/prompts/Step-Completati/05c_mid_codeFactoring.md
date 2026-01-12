@@ -274,7 +274,8 @@ Scelta utente: aggiungere, nel commento dei file appena creati, e negli altri fi
 
 ### Phase 8: Documentazione
 
-- [x] 7.8.1 Aggiornare `api-development-guide.md` (nuova organizzazione, docstring guidance, differenze FA vs FX, file refresh consolidato, tabella comparativa tra FA e FX per mostrare come la stessa esigenza ha 2 classi diverse, dovute alle peculiarita dei 2 sotto sistemi).
+- [x] 7.8.1 Aggiornare `api-development-guide.md` (nuova organizzazione, docstring guidance, differenze FA vs FX, file refresh consolidato, tabella comparativa tra FA e FX per
+  mostrare come la stessa esigenza ha 2 classi diverse, dovute alle peculiarita dei 2 sotto sistemi).
 - [x] 7.8.2 Aggiornare `database-schema.md` (colonna volume + nota refactoring, nessuna retro‑compatibilità necessaria).
 - [x] 7.8.3 Aggiornare `FEATURE_COVERAGE_REPORT.md` (stato refactoring schema).
 - [x] 7.8.4 Aggiornare `REMEDIATION_PLAN.md` (spuntare passi) + aggiungere sezione "Schema Consolidation Completed".

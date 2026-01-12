@@ -22,16 +22,19 @@ Total: 128+ tests passing
 ### Commit: fix asset query endpoint + improve BRIM tests
 
 **Bug Fix - /assets/query endpoint:**
+
 - Renamed parameter `symbol` → `ticker` (aligned with FAAinfoFiltersRequest schema)
 - Added missing identifier params: `cusip`, `sedol`, `figi`, `uuid`, `identifier_other`
 - Fixed `FAAinfoFiltersRequest` construction in endpoint
 
 **Bug Fix - BRIM API:**
+
 - Fixed `BRIMExtractedAssetInfo` attribute access (`.extracted_symbol` not `.get()`)
 - Fixed `parse_file()` return type hint to `Dict[int, BRIMExtractedAssetInfo]`
 - Added `BRIMDuplicateReport` to imports in `brim_provider.py`
 
 ### Test Quality Improvements
+
 - Improved `test_all_plugins_used_at_least_once` to **fail** if plugins lack samples
 - Improved `test_get_extracted_assets_from_parse` to verify **consistency** between transactions and extracted_assets
 - Improved `test_empty_description_not_likely` with clearer assertions
@@ -40,6 +43,7 @@ Total: 128+ tests passing
 ### Contract Update: `parse()` now returns 3 values
 
 The `BRIMProvider.parse()` method contract was updated to:
+
 ```python
 def parse(self, file_path, broker_id) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
     """Returns (transactions, warnings, extracted_assets)"""
@@ -50,6 +54,7 @@ def parse(self, file_path, broker_id) -> Tuple[List[TXCreateItem], List[str], Di
 - **Added:** `test_file_pattern` property to each plugin for dynamic test detection
 
 ### Plugin Updates
+
 - All 11 plugins updated to new contract
 - Each plugin now has `test_file_pattern` property (e.g., `"directa"`, `"degiro"`, etc.)
 - Generic CSV plugin returns `None` for `test_file_pattern`
@@ -61,11 +66,13 @@ def parse(self, file_path, broker_id) -> Tuple[List[TXCreateItem], List[str], Di
 **For E2E tests, use the `generic_*.csv` files**, not broker-specific samples.
 
 Reason:
+
 - Broker-specific samples (e.g., `directa-export.csv`) represent real-world data
 - We can modify `generic_*.csv` files to be more incisive for testing
 - In production, broker export formats are immutable - we must adapt to them
 
 **Required generic files:**
+
 - `generic_simple.csv` - Basic transactions
 - `generic_dates.csv` - Multiple date formats
 - `generic_types.csv` - All transaction types
@@ -75,20 +82,21 @@ Reason:
 
 ## Implementation Progress
 
-| Category                        | Status  | Tests | File                               |
-|---------------------------------|---------|-------|------------------------------------|
-| Category 1: Plugin Discovery    | ✅ Done  | 6/6   | `test_external/test_brim_providers.py` |
-| Category 2: File Parsing        | ✅ Done  | 8/8   | `test_external/test_brim_providers.py` |
-| Category 2B: Auto-Detection     | ✅ Done  | 3/3   | `test_external/test_brim_providers.py` |
-| Category 3: Asset Search        | ✅ Done  | 6/6   | `test_db/test_brim_db.py`          |
-| Category 4: Duplicate Detection | ✅ Done  | 5/5   | `test_db/test_brim_db.py`          |
-| Category 5: File Storage        | ✅ Done  | 7/7   | `test_api/test_brim_api.py`        |
-| Category 6: API Endpoints       | ✅ Done  | 6/6   | `test_api/test_brim_api.py`        |
-| Category 7: E2E Import          | ✅ Done  | 4/4   | `test_e2e/test_brim_e2e.py`        |
+| Category                        | Status | Tests | File                                   |
+|---------------------------------|--------|-------|----------------------------------------|
+| Category 1: Plugin Discovery    | ✅ Done | 6/6   | `test_external/test_brim_providers.py` |
+| Category 2: File Parsing        | ✅ Done | 8/8   | `test_external/test_brim_providers.py` |
+| Category 2B: Auto-Detection     | ✅ Done | 3/3   | `test_external/test_brim_providers.py` |
+| Category 3: Asset Search        | ✅ Done | 6/6   | `test_db/test_brim_db.py`              |
+| Category 4: Duplicate Detection | ✅ Done | 5/5   | `test_db/test_brim_db.py`              |
+| Category 5: File Storage        | ✅ Done | 7/7   | `test_api/test_brim_api.py`            |
+| Category 6: API Endpoints       | ✅ Done | 6/6   | `test_api/test_brim_api.py`            |
+| Category 7: E2E Import          | ✅ Done | 4/4   | `test_e2e/test_brim_e2e.py`            |
 
 **Total: 128+ tests passing (13 API + 11 DB + 100+ parametrized external + 4 E2E)**
 
 ### E2E Tests (test_e2e/test_brim_e2e.py):
+
 - E2E-001: `test_full_import_flow_deposits_only` - Deposits without assets ✅
 - E2E-002: `test_full_import_flow_with_assets` - Full flow with asset mapping ✅
 - E2E-003: `test_import_user_can_filter_duplicates` - User filters duplicates ✅

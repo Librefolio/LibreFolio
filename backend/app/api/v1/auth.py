@@ -4,13 +4,13 @@ Authentication API Endpoints
 Provides login, logout, and session management.
 """
 from typing import Literal
+
+import structlog
 from fastapi import APIRouter, HTTPException, Response, Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import structlog
-
-from backend.app.db.session import get_session_generator
 from backend.app.db.models import User
+from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import (
     AuthLoginRequest,
     AuthLoginResponse,
@@ -19,14 +19,14 @@ from backend.app.schemas.auth import (
     AuthUserResponse,
     AuthRegisterRequest,
     AuthRegisterResponse,
-)
+    )
+from backend.app.services import user_service
 from backend.app.services.auth_service import (
     verify_password,
     create_session,
     get_user_id_from_session,
     delete_session,
-)
-from backend.app.services import user_service
+    )
 
 logger = structlog.get_logger(__name__)
 
@@ -48,7 +48,7 @@ def get_session_cookie(request: Request) -> str | None:
 async def get_current_user(
     request: Request,
     session: AsyncSession = Depends(get_session_generator)
-) -> User:
+    ) -> User:
     """
     Dependency to get current authenticated user.
     Raises 401 if not authenticated.
@@ -78,7 +78,7 @@ async def get_current_user(
 async def get_optional_user(
     request: Request,
     session: AsyncSession = Depends(get_session_generator)
-) -> User | None:
+    ) -> User | None:
     """
     Dependency to get current user if authenticated, None otherwise.
     Does not raise exceptions.
@@ -94,7 +94,7 @@ async def login(
     request: AuthLoginRequest,
     response: Response,
     session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Authenticate user and create session.
 
@@ -127,21 +127,21 @@ async def login(
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
         secure=SESSION_COOKIE_SECURE,
-    )
+        )
 
     logger.info("User logged in", user_id=user.id, username=user.username)
 
     return AuthLoginResponse(
         user=AuthUserResponse.model_validate(user),
         message="Login successful"
-    )
+        )
 
 
 @router.post("/logout", response_model=AuthLogoutResponse)
 async def logout(
     request: Request,
     response: Response,
-):
+    ):
     """
     Logout current user and destroy session.
     """
@@ -156,7 +156,7 @@ async def logout(
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
         secure=SESSION_COOKIE_SECURE,
-    )
+        )
 
     return AuthLogoutResponse(message="Logged out successfully")
 
@@ -164,20 +164,20 @@ async def logout(
 @router.get("/me", response_model=AuthMeResponse)
 async def get_me(
     current_user: User = Depends(get_current_user)
-):
+    ):
     """
     Get current authenticated user info.
     """
     return AuthMeResponse(
         user=AuthUserResponse.model_validate(current_user)
-    )
+        )
 
 
 @router.post("/register", response_model=AuthRegisterResponse, status_code=201)
 async def register(
     request: AuthRegisterRequest,
     session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Register a new user.
 
@@ -191,7 +191,7 @@ async def register(
         password=request.password,
         is_superuser=False,
         is_active=True,
-    )
+        )
 
     if not user:
         raise HTTPException(status_code=400, detail=error)
@@ -201,5 +201,4 @@ async def register(
     return AuthRegisterResponse(
         user=AuthUserResponse.model_validate(user),
         message="Registration successful"
-    )
-
+        )

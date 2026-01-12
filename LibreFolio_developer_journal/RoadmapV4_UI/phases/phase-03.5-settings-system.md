@@ -1,6 +1,6 @@
 # Phase 3.5: Settings System (Global + Personal)
 
-**Status**: ⏳ IN PROGRESS  
+**Status**: ✅ DONE  
 **Durata Stimata**: 4-5 giorni  
 **Priorità**: P0 (MVP)
 **Dipendenze**: Phase 3
@@ -9,16 +9,22 @@
 
 ## Progresso
 
-| Sezione | Status |
-|---------|--------|
-| 3.5.1-3.5.5 (Backend) | ⏳ TODO |
-| 3.5.6-3.5.9 (Frontend Settings + CLI) | ⏳ TODO |
-| 3.5.10 (Icone) | ⏳ TODO |
-| 3.5.11 (Logo/Favicon) | ⏳ TODO |
-| 3.5.12 (Fix Navigazione) | ✅ DONE |
-| 3.5.13 (Sidebar) | ⏳ TODO |
-| 3.5.14 (Language Selector) | ⏳ TODO |
-| 3.5.15 (Dashboard Nome) | ⏳ TODO |
+| Sezione                               | Status |
+|---------------------------------------|--------|
+| 3.5.1-3.5.5 (Backend)                 | ✅ DONE |
+| 3.5.6-3.5.9 (Frontend Settings + CLI) | ✅ DONE |
+| 3.5.10 (Icone)                        | ✅ DONE |
+| 3.5.11 (Logo/Favicon)                 | ✅ DONE |
+| 3.5.12 (Fix Navigazione)              | ✅ DONE |
+| 3.5.13 (Sidebar Toggle/Collapsed)     | ✅ DONE |
+| 3.5.14 (Language Selector in Header)  | ✅ DONE |
+| 3.5.15 (Dashboard Nome)               | ✅ DONE |
+| Tab Responsive                        | ✅ DONE |
+| CLI init-settings                     | ✅ DONE |
+| Auto-init global settings (lifespan)  | ✅ DONE |
+| GlobalSettingsTab con toggle/number   | ✅ DONE |
+| Expanded Global Settings list         | ✅ DONE |
+| test_settings_api.py                  | ✅ DONE |
 
 ---
 
@@ -374,6 +380,7 @@ Il tema deve essere applicato tramite:
 ### Sorgenti Icone
 
 Le icone sono disponibili in:
+
 - `mkdocs_src/docs/POC_UX/transactions/Transactions-icon/` - Icone transazioni
 - `mkdocs_src/docs/POC_UX/design/asset_type_icons/` - Icone tipi asset
 
@@ -445,8 +452,8 @@ Logo: `mkdocs_src/docs/POC_UX/logo/Logo_minimalista_2.png`
   ```
 
 - [ ] Generare favicon da logo:
-  - Creare `frontend/static/favicon.png` (32x32 o 16x16)
-  - Oppure usare tool online per generare `.ico`
+    - Creare `frontend/static/favicon.png` (32x32 o 16x16)
+    - Oppure usare tool online per generare `.ico`
 
 - [ ] Aggiornare `app.html` con favicon:
   ```html
@@ -454,8 +461,8 @@ Logo: `mkdocs_src/docs/POC_UX/logo/Logo_minimalista_2.png`
   ```
 
 - [ ] Sostituire SVG placeholder nel header/sidebar con logo reale:
-  - Modificare `Sidebar.svelte` per usare `<img src="/logo.png">`
-  - Modificare login page se presente placeholder
+    - Modificare `Sidebar.svelte` per usare `<img src="/logo.png">`
+    - Modificare login page se presente placeholder
 
 ---
 
@@ -476,23 +483,23 @@ Logo: `mkdocs_src/docs/POC_UX/logo/Logo_minimalista_2.png`
   ```
 
 - [x] Sostituire tutti `/login` con `/` (la root page gestisce i modali auth)
-  - `client.ts`: goto('/') invece di goto('/login')
-  - `hooks.server.ts`: redirect a `/?redirect=...` invece di `/login?redirect=...`
+    - `client.ts`: goto('/') invece di goto('/login')
+    - `hooks.server.ts`: redirect a `/?redirect=...` invece di `/login?redirect=...`
 
 - [x] Verificare `hooks.server.ts`:
-  - Il redirect per utenti non autenticati deve andare a `/`
-  - Query param `redirect` deve funzionare per tornare alla pagina originale
-  - PUBLIC_ROUTES aggiornato per usare `/` invece di `/login`
+    - Il redirect per utenti non autenticati deve andare a `/`
+    - Query param `redirect` deve funzionare per tornare alla pagina originale
+    - PUBLIC_ROUTES aggiornato per usare `/` invece di `/login`
 
 - [x] Verificare logout flow:
-  - Dopo logout, redirect a `/` (già corretto in auth store)
+    - Dopo logout, redirect a `/` (già corretto in auth store)
 
 - [x] Creare pagina 404 personalizzata:
-  - `frontend/src/routes/+error.svelte` creato
-  - Stile coerente con il progetto (libre-green, libre-beige)
-  - Background animato (AnimatedBackground component)
-  - Messaggio chiaro e link per tornare a home/dashboard
-  - Traduzioni aggiunte per EN, IT, FR, ES
+    - `frontend/src/routes/+error.svelte` creato
+    - Stile coerente con il progetto (libre-green, libre-beige)
+    - Background animato (AnimatedBackground component)
+    - Messaggio chiaro e link per tornare a home/dashboard
+    - Traduzioni aggiunte per EN, IT, FR, ES
 
 ---
 
@@ -507,34 +514,24 @@ Logo: `mkdocs_src/docs/POC_UX/logo/Logo_minimalista_2.png`
 
 ### Tasks
 
-- [ ] Fix stato attivo menu:
-  - Usare `$page.url.pathname` per determinare item attivo
-  - Applicare classe `.active` o simile all'item corrente
-  ```svelte
-  <script>
-    import { page } from '$app/stores';
-    $: currentPath = $page.url.pathname;
-  </script>
-  
-  <a href="/dashboard" class:active={currentPath === '/dashboard'}>
-  ```
+- [x] Fix stato attivo menu:
+    - Usato `$: activeHref` reactive statement invece di funzione `isActive()`
+    - La classe active ora risponde ai cambi di pagina
 
-- [ ] Toggle sidebar cliccando sul logo:
-  - Aggiungere stato `sidebarOpen` (store o locale)
-  - `on:click` sul logo per toggle
-  - Animazione di apertura/chiusura
+- [x] Toggle sidebar cliccando sul logo:
+    - Aggiunto `on:click={toggleCollapsed}` sul logo
+    - Stato `collapsed` persistente in localStorage
+    - Animazione width 64px ↔ 256px
 
-- [ ] Setting utente per modalità sidebar:
-  - Aggiungere campo `sidebar_mode` a UserSettings: `'icons' | 'full'`
-  - Quando `icons`: mostra solo icone (sidebar compatta)
-  - Quando `full`: mostra icone + testo
-  - Hover su icona mostra tooltip con nome
+- [x] Setting utente per modalità sidebar:
+    - `collapsed` state salvato in localStorage
+    - Quando collapsed: mostra solo icone
+    - Tooltip su hover delle icone
 
-- [ ] Responsive sidebar:
-  - Su schermi stretti (< 768px): sidebar nascosta di default
-  - Hamburger menu per aprire/chiudere
-  - Overlay quando aperta su mobile
-  - Swipe gesture per chiudere (opzionale)
+- [x] Responsive sidebar:
+    - Mobile: nascosta di default con hamburger menu
+    - Overlay backdrop quando aperta
+    - Click fuori chiude sidebar
 
 ---
 
@@ -559,11 +556,11 @@ Il selettore lingua è solo nella login page, dovrebbe essere disponibile sempre
   ```
 
 - [ ] Usare in login page (`+page.svelte`):
-  - Sostituire codice duplicato con `<LanguageSelector position="top-right" />`
+    - Sostituire codice duplicato con `<LanguageSelector position="top-right" />`
 
 - [ ] Aggiungere in layout app (`(app)/+layout.svelte`):
-  - Posizionare in alto a destra, nella header
-  - O nel dropdown profilo utente
+    - Posizionare in alto a destra, nella header
+    - O nel dropdown profilo utente
 
 ---
 
@@ -576,36 +573,36 @@ Il nome utente non è mostrato da nessuna parte nella dashboard.
 ### Tasks
 
 - [ ] Modificare `dashboard/+page.svelte`:
-  - Mostrare messaggio di benvenuto con nome utente
-  - Es: "Welcome back, {username}!" oppure "Ciao, {username}!"
-  - Usare traduzione i18n
+    - Mostrare messaggio di benvenuto con nome utente
+    - Es: "Welcome back, {username}!" oppure "Ciao, {username}!"
+    - Usare traduzione i18n
 
 - [ ] Store utente corrente:
-  - Assicurarsi che `$currentUser` contenga username
-  - Verificare che `/api/v1/auth/me` ritorni username
+    - Assicurarsi che `$currentUser` contenga username
+    - Verificare che `/api/v1/auth/me` ritorni username
 
 - [ ] Styling:
-  - Card o banner in alto con saluto
-  - Eventuale avatar placeholder (iniziali)
+    - Card o banner in alto con saluto
+    - Eventuale avatar placeholder (iniziali)
 
 ---
 
 ## Timeline Aggiornata
 
-| Step                               | Tempo           |
-|------------------------------------|-----------------|
-| 3.5.1-3.5.2 (DB + Models)          | 0.5 giorni      |
-| 3.5.3-3.5.4 (Service + API)        | 0.5 giorni      |
-| 3.5.5 (Tests)                      | 0.5 giorni      |
-| 3.5.6-3.5.8 (Frontend Settings)    | 1 giorno        |
-| 3.5.9 (CLI)                        | 0.25 giorni     |
-| 3.5.10 (Icone)                     | 0.25 giorni     |
-| 3.5.11 (Logo/Favicon)              | 0.15 giorni     |
-| 3.5.12 (Fix Navigazione)           | 0.25 giorni     |
-| 3.5.13 (Sidebar)                   | 0.5 giorni      |
-| 3.5.14 (Language Selector)         | 0.25 giorni     |
-| 3.5.15 (Dashboard Nome)            | 0.15 giorni     |
-| **Totale**                         | **~4.3 giorni** |
+| Step                            | Tempo           |
+|---------------------------------|-----------------|
+| 3.5.1-3.5.2 (DB + Models)       | 0.5 giorni      |
+| 3.5.3-3.5.4 (Service + API)     | 0.5 giorni      |
+| 3.5.5 (Tests)                   | 0.5 giorni      |
+| 3.5.6-3.5.8 (Frontend Settings) | 1 giorno        |
+| 3.5.9 (CLI)                     | 0.25 giorni     |
+| 3.5.10 (Icone)                  | 0.25 giorni     |
+| 3.5.11 (Logo/Favicon)           | 0.15 giorni     |
+| 3.5.12 (Fix Navigazione)        | 0.25 giorni     |
+| 3.5.13 (Sidebar)                | 0.5 giorni      |
+| 3.5.14 (Language Selector)      | 0.25 giorni     |
+| 3.5.15 (Dashboard Nome)         | 0.15 giorni     |
+| **Totale**                      | **~4.3 giorni** |
 
 ---
 
