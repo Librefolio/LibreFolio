@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
 """
 User Management CLI
 
@@ -18,11 +19,16 @@ Or directly:
     pipenv run python user_cli.py list-users
     pipenv run python user_cli.py activate <username>
     pipenv run python user_cli.py deactivate <username>
+
+Use --test-db to operate on the test database:
+    pipenv run python user_cli.py --test-db list-users
 """
+import os
 import sys
 import argparse
 import asyncio
 from pathlib import Path
+import argcomplete
 
 # Add project root to path (file is now in root)
 PROJECT_ROOT = Path(__file__).parent
@@ -32,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_async_engine
 from backend.app.services import user_service
+from backend.app.services.settings_service import initialize_global_settings
 
 
 async def cmd_reset_password(username: str, new_password: str):
@@ -104,6 +111,37 @@ async def cmd_set_user_active(username: str, active: bool):
         return success
 
 
+async def cmd_set_admin(username: str, is_admin: bool):
+    """Promote or demote a user to/from admin."""
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        success, error = await user_service.set_user_admin(session, username, is_admin)
+
+        if success:
+            status = "promoted to admin" if is_admin else "demoted from admin"
+            print(f"✅ User '{username}' {status}")
+        else:
+            print(f"❌ {error}")
+
+        return success
+
+
+async def cmd_init_settings():
+    """Initialize global settings with default values."""
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        created = await initialize_global_settings(session)
+
+        if created > 0:
+            print(f"✅ Initialized {created} global setting(s)")
+        else:
+            print("ℹ️  Global settings already initialized (no changes)")
+
+        return True
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="LibreFolio User Management CLI",
@@ -115,7 +153,20 @@ Examples:
   python user_cli.py list-users
   python user_cli.py deactivate john
   python user_cli.py activate john
+  python user_cli.py promote john
+  python user_cli.py demote john
+  
+  # Operate on test database:
+  python user_cli.py --test-db list-users
+  python user_cli.py --test-db promote john
         """
+    )
+
+    # Global flag for test database
+    parser.add_argument(
+        "--test-db",
+        action="store_true",
+        help="Operate on test database instead of production"
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
@@ -142,11 +193,29 @@ Examples:
     act_parser = subparsers.add_parser("activate", help="Activate user")
     act_parser.add_argument("username", help="Username")
 
+    # promote (make admin)
+    promote_parser = subparsers.add_parser("promote", help="Promote user to admin")
+    promote_parser.add_argument("username", help="Username")
+
+    # demote (remove admin)
+    demote_parser = subparsers.add_parser("demote", help="Demote user from admin")
+    demote_parser.add_argument("username", help="Username")
+
+    # init-settings (initialize global settings)
+    subparsers.add_parser("init-settings", help="Initialize global settings with defaults")
+
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         return
+
+    # Set test mode environment variable if --test-db flag is used
+    if args.test_db:
+        from backend.app.config import set_test_mode
+        set_test_mode(True)
+        print("ℹ️  Operating on TEST database")
 
     if args.command == "reset-password":
         asyncio.run(cmd_reset_password(args.username, args.new_password))
@@ -158,6 +227,12 @@ Examples:
         asyncio.run(cmd_set_user_active(args.username, False))
     elif args.command == "activate":
         asyncio.run(cmd_set_user_active(args.username, True))
+    elif args.command == "promote":
+        asyncio.run(cmd_set_admin(args.username, True))
+    elif args.command == "demote":
+        asyncio.run(cmd_set_admin(args.username, False))
+    elif args.command == "init-settings":
+        asyncio.run(cmd_init_settings())
 
 
 if __name__ == "__main__":

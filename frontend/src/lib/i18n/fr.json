@@ -76,9 +76,12 @@
     "fx": "Taux de Change",
     "import": "Importer",
     "settings": "Paramètres",
-    "profile": "Profil"
+    "profile": "Profil",
+    "documentation": "Documentation"
   },
   "dashboard": {
+    "welcomeBack": "Bienvenue",
+    "welcomeSubtitle": "Voici un aperçu de votre portefeuille",
     "manageBrokers": "Gérez vos comptes de courtiers",
     "manageAssets": "Visualisez et gérez vos actifs",
     "manageTransactions": "Suivez vos transactions",
@@ -120,6 +123,7 @@
     "profile": "Profil",
     "preferences": "Préférences",
     "about": "À propos",
+    "admin": "Administration",
     "profileInfo": "Informations du Profil",
     "accountCreated": "Compte Créé",
     "security": "Sécurité",
@@ -138,6 +142,14 @@
     "license": "Licence",
     "credits": "Crédits",
     "madeWith": "Fait avec",
-    "usingTech": "utilisant"
+    "usingTech": "utilisant",
+    "globalSettings": "Paramètres Globaux",
+    "globalSettingsDescription": "Paramètres système affectant tous les utilisateurs. Accès admin requis pour modifier.",
+    "locked": "Verrouillé",
+    "unlocked": "En édition",
+    "warning": "Attention",
+    "globalSettingsWarning": "Les modifications des paramètres globaux affectent tous les utilisateurs. Assurez-vous de comprendre l'impact avant de sauvegarder.",
+    "noGlobalSettings": "Aucun paramètre global configuré. Exécutez la commande d'initialisation.",
+    "readOnlyMode": "Lecture seule (accès Admin requis)"
   }
 }

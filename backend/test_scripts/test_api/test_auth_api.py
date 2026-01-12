@@ -3,19 +3,19 @@ Authentication API Tests
 
 Tests for login, logout, register, and session management endpoints.
 """
+from datetime import datetime
+
+import httpx
 import pytest
 import pytest_asyncio
-import httpx
-from datetime import datetime
 
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_success, print_info
+from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 10.0
-
 
 
 @pytest.fixture(scope="module")
@@ -47,9 +47,9 @@ class TestRegister:
                     "username": username,
                     "email": email,
                     "password": "testpassword123"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
             data = response.json()
@@ -76,9 +76,9 @@ class TestRegister:
                     "username": username,
                     "email": f"first_{timestamp}@example.com",
                     "password": "password123"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             # Try duplicate username
             response = await client.post(
@@ -87,9 +87,9 @@ class TestRegister:
                     "username": username,
                     "email": f"second_{timestamp}@example.com",
                     "password": "password123"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 400
             assert "username" in response.json()["detail"].lower()
@@ -111,9 +111,9 @@ class TestRegister:
                     "username": f"user1_{timestamp}",
                     "email": email,
                     "password": "password123"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             # Try duplicate email
             response = await client.post(
@@ -122,9 +122,9 @@ class TestRegister:
                     "username": f"user2_{timestamp}",
                     "email": email,
                     "password": "password123"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 400
             assert "email" in response.json()["detail"].lower()
@@ -144,9 +144,9 @@ class TestRegister:
                     "username": f"shortpw_{timestamp}",
                     "email": f"shortpw_{timestamp}@example.com",
                     "password": "short"  # Less than 8 chars
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 422  # Validation error
             print_success("Short password correctly rejected")
@@ -170,9 +170,9 @@ class TestLogin:
                     "username": username,
                     "email": email,
                     "password": password
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
             assert response.status_code == 201, f"Setup failed: {response.text}"
 
             return {"username": username, "email": email, "password": password}
@@ -188,9 +188,9 @@ class TestLogin:
                 json={
                     "username": test_user["username"],
                     "password": test_user["password"]
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
@@ -212,9 +212,9 @@ class TestLogin:
                 json={
                     "username": test_user["email"],  # Using email in username field
                     "password": test_user["password"]
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 200
             assert "session" in response.cookies
@@ -231,9 +231,9 @@ class TestLogin:
                 json={
                     "username": test_user["username"],
                     "password": "wrongpassword"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 401
             assert "session" not in response.cookies
@@ -250,9 +250,9 @@ class TestLogin:
                 json={
                     "username": "nonexistent_user_12345",
                     "password": "anypassword"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 401
             print_success("Non-existent user correctly rejected")
@@ -277,15 +277,15 @@ class TestLogout:
                     "username": username,
                     "email": f"logout_{timestamp}@example.com",
                     "password": "password123"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "password123"},
                 timeout=TIMEOUT
-            )
+                )
             assert "session" in login_resp.cookies
 
             # Set cookies on client instance (not per-request)
@@ -295,7 +295,7 @@ class TestLogout:
             logout_resp = await client.post(
                 f"{API_BASE}/auth/logout",
                 timeout=TIMEOUT
-            )
+                )
 
             assert logout_resp.status_code == 200
             # Cookie should be cleared (set to empty or deleted)
@@ -321,15 +321,15 @@ class TestMe:
                     "username": username,
                     "email": f"me_{timestamp}@example.com",
                     "password": "password123"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "password123"},
                 timeout=TIMEOUT
-            )
+                )
 
             # Set cookies on client instance (not per-request)
             client.cookies.update(login_resp.cookies)
@@ -338,7 +338,7 @@ class TestMe:
             me_resp = await client.get(
                 f"{API_BASE}/auth/me",
                 timeout=TIMEOUT
-            )
+                )
 
             assert me_resp.status_code == 200
             data = me_resp.json()
@@ -354,7 +354,7 @@ class TestMe:
             response = await client.get(
                 f"{API_BASE}/auth/me",
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 401
             print_success("Unauthenticated request correctly rejected")
@@ -371,7 +371,7 @@ class TestMe:
             response = await client.get(
                 f"{API_BASE}/auth/me",
                 timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 401
             print_success("Invalid session correctly rejected")
@@ -395,15 +395,15 @@ class TestSessionPersistence:
                     "username": username,
                     "email": f"cookie_{timestamp}@example.com",
                     "password": "password123"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             response = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "password123"},
                 timeout=TIMEOUT
-            )
+                )
 
             # Check Set-Cookie header for HttpOnly flag
             set_cookie = response.headers.get("set-cookie", "")
@@ -425,15 +425,15 @@ class TestSessionPersistence:
                     "username": username,
                     "email": f"persist_{timestamp}@example.com",
                     "password": "password123"
-                },
+                    },
                 timeout=TIMEOUT
-            )
+                )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
                 json={"username": username, "password": "password123"},
                 timeout=TIMEOUT
-            )
+                )
 
             # Set cookies on client instance (not per-request)
             client.cookies.update(login_resp.cookies)
@@ -443,8 +443,7 @@ class TestSessionPersistence:
                 me_resp = await client.get(
                     f"{API_BASE}/auth/me",
                     timeout=TIMEOUT
-                )
-                assert me_resp.status_code == 200, f"Request {i+1} failed"
+                    )
+                assert me_resp.status_code == 200, f"Request {i + 1} failed"
 
             print_success("Session persists across multiple requests")
-

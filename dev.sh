@@ -195,6 +195,11 @@ function print_help() {
     echo "                     Usage: ./dev.sh user:activate <username>"
     echo "  user:deactivate  Deactivate a user account"
     echo "                     Usage: ./dev.sh user:deactivate <username>"
+    echo "  user:promote     Promote a user to admin"
+    echo "                     Usage: ./dev.sh user:promote <username>"
+    echo "  user:demote      Demote a user from admin"
+    echo "                     Usage: ./dev.sh user:demote <username>"
+    echo "  user:init-settings  Initialize global settings with defaults"
     echo ""
     echo "Information:"
     echo "  info:api         List all API endpoints with descriptions"
@@ -327,12 +332,56 @@ function auto_build_frontend() {
     fi
 }
 
+function mkdocs_needs_rebuild() {
+    # Check if mkdocs build is needed
+    # Returns 0 (true) if rebuild needed, 1 (false) otherwise
+
+    local build_dir="site"
+    local src_dir="mkdocs_src"
+
+    # No build exists at all
+    if [ ! -d "$build_dir" ]; then
+        return 0
+    fi
+
+    # No index.html in build
+    if [ ! -f "$build_dir/index.html" ]; then
+        return 0
+    fi
+
+    # Check if any source file is newer than build
+    local newest_src=$(find "$src_dir" -type f -newer "$build_dir/index.html" 2>/dev/null | head -1)
+    if [ -n "$newest_src" ]; then
+        return 0
+    fi
+
+    # No rebuild needed
+    return 1
+}
+
+function auto_build_mkdocs() {
+    # Auto-build mkdocs if changes detected
+    if mkdocs_needs_rebuild; then
+        echo -e "${BLUE}📚 Documentation changes detected, rebuilding...${NC}"
+        pipenv run mkdocs build -f mkdocs_src/mkdocs.yml 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ Documentation rebuilt successfully${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Documentation build failed, continuing without docs${NC}"
+        fi
+        echo ""
+    fi
+}
+
 function start_server() {
     local port=$(get_server_port)
     local db=$(get_database_path)
 
     # Auto-build frontend if needed
     auto_build_frontend
+
+    # Auto-build mkdocs if needed
+    auto_build_mkdocs
 
     echo -e "${GREEN}Starting LibreFolio API server...${NC}"
     echo -e "${YELLOW}Database: $db${NC}"
@@ -362,6 +411,9 @@ function start_server_test() {
 
     # Auto-build frontend if needed
     auto_build_frontend
+
+    # Auto-build mkdocs if needed
+    auto_build_mkdocs
 
     echo -e "${GREEN}Starting LibreFolio API server (TEST MODE)...${NC}"
     echo -e "${YELLOW}Database: $db${NC}"
@@ -936,6 +988,28 @@ case "$COMMAND" in
         fi
         echo -e "${GREEN}Deactivating user...${NC}"
         pipenv run python user_cli.py deactivate "$1"
+        ;;
+    user:promote)
+        shift
+        if [ $# -lt 1 ]; then
+            echo -e "${RED}Usage: ./dev.sh user:promote <username>${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}Promoting user to admin...${NC}"
+        pipenv run python user_cli.py promote "$1"
+        ;;
+    user:demote)
+        shift
+        if [ $# -lt 1 ]; then
+            echo -e "${RED}Usage: ./dev.sh user:demote <username>${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}Demoting user from admin...${NC}"
+        pipenv run python user_cli.py demote "$1"
+        ;;
+    user:init-settings)
+        echo -e "${GREEN}Initializing global settings...${NC}"
+        pipenv run python user_cli.py init-settings
         ;;
     test:coverage)
         echo -e "${GREEN}Running all tests with coverage tracking...${NC}"

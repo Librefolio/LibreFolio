@@ -3,8 +3,9 @@ Authentication Schemas
 
 Pydantic models for auth API requests/responses.
 """
-from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 # =============================================================================
@@ -71,4 +72,3 @@ class AuthRegisterResponse(BaseModel):
 class AuthErrorResponse(BaseModel):
     """Error response for auth failures."""
     detail: str
-
