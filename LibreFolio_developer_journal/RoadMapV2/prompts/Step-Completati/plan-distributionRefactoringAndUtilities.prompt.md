@@ -6,6 +6,7 @@
 **Report di verifica**: `/VERIFICATION_REPORT.md`
 
 ### Punti Completati e Verificati:
+
 1. ✅ **Creato** `/backend/app/utils/sector_normalization.py` - ENUM FinancialSector con 12 settori
 2. ✅ **Modificato** `/backend/app/utils/geo_normalization.py` - semplificato, delega a BaseDistribution
 3. ✅ **Modificato** `/backend/app/schemas/assets.py` - BaseDistribution, FASectorArea, FAGeographicArea refactored
@@ -21,18 +22,21 @@
 13. ✅ **Aggiornato** tutti i test files - DELETE usa query params
 
 ### Test Completati:
+
 - ✅ `./test_runner.py api all` - **PASS**
 - ✅ `./test_runner.py external asset-providers` - **PASS**
 - ✅ `./test_runner.py utils` - **PASS**
 - ✅ `./test_runner.py services` - **PASS**
 
 ### TODO Futuri (Non Bloccanti):
+
 - ⏳ Espansione regioni in `/utilities/countries/normalize` (EUR → lista paesi)
 - ⏳ Sector hierarchy opzionale (sub-settori GICS completi)
 
 ---
 
 ## Obiettivo
+
 Refactoring completo del sistema di distribuzione (Geographic/Sector) con classe base comune e creazione di endpoint utilities per supporto frontend.
 
 ---
@@ -40,17 +44,20 @@ Refactoring completo del sistema di distribuzione (Geographic/Sector) con classe
 ## Modifiche Principali
 
 ### 1. Sistema Distribution con ENUM
+
 - Creare classe base `BaseDistribution` per gestire validazione pesi comuni
 - Specializzare in `FAGeographicArea` e `FASectorArea`
 - Usare ENUM `FinancialSector` per classificazione settori standard
 - Rimuovere campo deprecato `sector` (stringa) da `FAClassificationParams`
 
 ### 2. Endpoint Utilities
+
 - Nuovo router `/api/v1/utilities` per supporto frontend
 - Endpoint per normalizzazione country (preparato per espansione regioni EUR/ASIA)
 - Endpoint per lista settori standard riconosciuti dal sistema
 
 ### 3. Cleanup
+
 - Eliminare `FABulkAssetDeleteRequest` - usare direttamente `List[int]` come query params
 - Rimuovere campo `changes` deprecato da `FAMetadataRefreshResult`
 - Refactoring `geo_normalization.py` per delegare validazione pesi a `BaseDistribution`
@@ -197,10 +204,12 @@ def validate_sector(sector_name: str) -> bool:
 ## File 2: Modificare `/backend/app/utils/geo_normalization.py`
 
 **Rimuovere funzioni** che saranno nella classe base:
+
 - `quantize_weight()` → Va in `BaseDistribution`
 - Logica validazione somma in `validate_and_normalize_geographic_area()` → Va in `BaseDistribution`
 
 **Mantenere solo**:
+
 - `normalize_country_to_iso3()` - normalizzazione ISO-3166-A3
 - Nuova funzione `normalize_country_keys()` - delega validazione pesi a BaseDistribution
 
@@ -920,10 +929,12 @@ results.append(FAMetadataRefreshResult(
 Modificare tutte le chiamate DELETE per usare query params invece di body JSON.
 
 **Files da modificare**:
+
 - `backend/test_scripts/test_api/test_assets_provider.py` (linee 763, 882, 1003)
 - `backend/test_scripts/test_api/test_assets_crud.py` (linee 382-383, 426-427, 460-461)
 
 **Cambio**:
+
 ```python
 # PRIMA
 await client.request(
@@ -946,6 +957,7 @@ await client.delete(
 ## Note sulla Migrazione Dati
 
 ### Database Schema
+
 `classification_params` è un campo JSON - **NON serve migration Alembic**.
 Le modifiche sono solo a livello di validazione Python.
 
@@ -1025,6 +1037,7 @@ if __name__ == "__main__":
 ## Testing
 
 ### Test Unitari
+
 ```bash
 # Test geo/sector normalization
 ./test_runner.py utils
@@ -1040,6 +1053,7 @@ if __name__ == "__main__":
 ```
 
 ### Test Integrazione
+
 ```bash
 # Test completo
 ./test_runner.py api all
@@ -1051,17 +1065,17 @@ if __name__ == "__main__":
 ## TODO Futuri
 
 1. **Espansione regioni** in `normalize_country()`:
-   - EUR → [DEU, FRA, ITA, ESP, PRT, GRC, IRL, ...]
-   - ASIA → [CHN, JPN, IND, KOR, SGP, ...]
-   - Usare pycountry per mappare continenti/regioni
+    - EUR → [DEU, FRA, ITA, ESP, PRT, GRC, IRL, ...]
+    - ASIA → [CHN, JPN, IND, KOR, SGP, ...]
+    - Usare pycountry per mappare continenti/regioni
 
 2. **Sector hierarchy** (opzionale):
-   - Sub-settori (es. Technology → Software, Hardware, Semiconductors)
-   - Mappatura GICS completa
+    - Sub-settori (es. Technology → Software, Hardware, Semiconductors)
+    - Mappatura GICS completa
 
 3. **API endpoint per upsert prices**:
-   - `POST /api/v1/assets/prices/{asset_id}`
-   - Body: `List[FAPricePoint]`
+    - `POST /api/v1/assets/prices/{asset_id}`
+    - Body: `List[FAPricePoint]`
 
 ---
 

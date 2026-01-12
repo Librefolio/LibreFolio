@@ -4,8 +4,8 @@
  * Supported languages: English, Italian, French, Spanish
  * Uses svelte-i18n for internationalization
  */
-import { browser } from '$app/environment';
-import { init, register, getLocaleFromNavigator } from 'svelte-i18n';
+import {browser} from '$app/environment';
+import {getLocaleFromNavigator, init, register} from 'svelte-i18n';
 
 // Register language files
 register('en', () => import('./en.json'));
@@ -22,18 +22,18 @@ export const DEFAULT_LOCALE: SupportedLocale = 'en';
 
 // Locale display names (in their own language)
 export const LOCALE_NAMES: Record<SupportedLocale, string> = {
-	en: 'English',
-	it: 'Italiano',
-	fr: 'Français',
-	es: 'Español'
+    en: 'English',
+    it: 'Italiano',
+    fr: 'Français',
+    es: 'Español'
 };
 
 // Locale flags (emoji)
 export const LOCALE_FLAGS: Record<SupportedLocale, string> = {
-	en: '🇬🇧',
-	it: '🇮🇹',
-	fr: '🇫🇷',
-	es: '🇪🇸'
+    en: '🇬🇧',
+    it: '🇮🇹',
+    fr: '🇫🇷',
+    es: '🇪🇸'
 };
 
 /**
@@ -41,40 +41,40 @@ export const LOCALE_FLAGS: Record<SupportedLocale, string> = {
  * Use this to populate language dropdowns consistently across the app
  */
 export interface LanguageOption {
-	code: SupportedLocale;
-	flag: string;
-	name: string;
+    code: SupportedLocale;
+    flag: string;
+    name: string;
 }
 
 export const LANGUAGE_OPTIONS: LanguageOption[] = SUPPORTED_LOCALES.map(code => ({
-	code,
-	flag: LOCALE_FLAGS[code],
-	name: LOCALE_NAMES[code]
+    code,
+    flag: LOCALE_FLAGS[code],
+    name: LOCALE_NAMES[code]
 }));
 
 /**
  * Get the initial locale from browser or localStorage
  */
 function getInitialLocale(): SupportedLocale {
-	if (!browser) return DEFAULT_LOCALE;
+    if (!browser) return DEFAULT_LOCALE;
 
-	// Try localStorage first
-	const stored = localStorage.getItem('librefolio-locale');
-	if (stored && SUPPORTED_LOCALES.includes(stored as SupportedLocale)) {
-		return stored as SupportedLocale;
-	}
+    // Try localStorage first
+    const stored = localStorage.getItem('librefolio-locale');
+    if (stored && SUPPORTED_LOCALES.includes(stored as SupportedLocale)) {
+        return stored as SupportedLocale;
+    }
 
-	// Try browser locale
-	const browserLocale = getLocaleFromNavigator();
-	if (browserLocale) {
-		// Extract language code (e.g., 'en-US' -> 'en')
-		const lang = browserLocale.split('-')[0];
-		if (SUPPORTED_LOCALES.includes(lang as SupportedLocale)) {
-			return lang as SupportedLocale;
-		}
-	}
+    // Try browser locale
+    const browserLocale = getLocaleFromNavigator();
+    if (browserLocale) {
+        // Extract language code (e.g., 'en-US' -> 'en')
+        const lang = browserLocale.split('-')[0];
+        if (SUPPORTED_LOCALES.includes(lang as SupportedLocale)) {
+            return lang as SupportedLocale;
+        }
+    }
 
-	return DEFAULT_LOCALE;
+    return DEFAULT_LOCALE;
 }
 
 /**
@@ -82,28 +82,28 @@ function getInitialLocale(): SupportedLocale {
  * Call this in your root layout
  */
 export function initI18n() {
-	init({
-		fallbackLocale: DEFAULT_LOCALE,
-		initialLocale: getInitialLocale(),
-	});
+    init({
+        fallbackLocale: DEFAULT_LOCALE,
+        initialLocale: getInitialLocale(),
+    });
 }
 
 /**
  * Save locale preference to localStorage
  */
 export function saveLocalePreference(locale: SupportedLocale) {
-	if (browser) {
-		localStorage.setItem('librefolio-locale', locale);
-	}
+    if (browser) {
+        localStorage.setItem('librefolio-locale', locale);
+    }
 }
 
 // Re-export commonly used functions from svelte-i18n
 export {
-	locale,
-	t,
-	_,
-	date,
-	time,
-	number,
-	isLoading as i18nLoading
+    locale,
+    t,
+    _,
+    date,
+    time,
+    number,
+    isLoading as i18nLoading
 } from 'svelte-i18n';

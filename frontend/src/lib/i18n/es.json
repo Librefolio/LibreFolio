@@ -76,9 +76,12 @@
     "fx": "Tipos de Cambio",
     "import": "Importar",
     "settings": "Configuración",
-    "profile": "Perfil"
+    "profile": "Perfil",
+    "documentation": "Documentación"
   },
   "dashboard": {
+    "welcomeBack": "Bienvenido de nuevo",
+    "welcomeSubtitle": "Aquí tienes una visión general de tu cartera",
     "manageBrokers": "Administra tus cuentas de bróker",
     "manageAssets": "Visualiza y gestiona tus activos",
     "manageTransactions": "Rastrea tus transacciones",
@@ -120,6 +123,7 @@
     "profile": "Perfil",
     "preferences": "Preferencias",
     "about": "Acerca de",
+    "admin": "Administración",
     "profileInfo": "Información del Perfil",
     "accountCreated": "Cuenta Creada",
     "security": "Seguridad",
@@ -138,6 +142,14 @@
     "license": "Licencia",
     "credits": "Créditos",
     "madeWith": "Hecho con",
-    "usingTech": "usando"
+    "usingTech": "usando",
+    "globalSettings": "Configuración Global",
+    "globalSettingsDescription": "Configuración del sistema que afecta a todos los usuarios. Se requiere acceso de admin para modificar.",
+    "locked": "Bloqueado",
+    "unlocked": "En edición",
+    "warning": "Advertencia",
+    "globalSettingsWarning": "Los cambios en la configuración global afectan a todos los usuarios. Asegúrese de comprender el impacto antes de guardar.",
+    "noGlobalSettings": "No hay configuración global. Ejecute el comando de inicialización.",
+    "readOnlyMode": "Solo lectura (se requiere acceso Admin)"
   }
 }

@@ -8,9 +8,9 @@ Usage:
     python list_api_endpoints.py --openapi    # Export OpenAPI schema to stdout
     python list_api_endpoints.py --openapi-file [path]  # Export to file
 """
-import sys
-import json
 import argparse
+import json
+import sys
 from pathlib import Path
 
 # Add project root to path
@@ -95,24 +95,24 @@ Examples:
   python list_api_endpoints.py --openapi          # Print OpenAPI to stdout
   python list_api_endpoints.py --openapi-file frontend/src/lib/api/openapi.json
         """
-    )
+        )
 
     parser.add_argument(
         '--list', '-l',
         action='store_true',
         help='List all API endpoints with descriptions'
-    )
+        )
     parser.add_argument(
         '--openapi', '-o',
         action='store_true',
         help='Export OpenAPI schema to stdout'
-    )
+        )
     parser.add_argument(
         '--openapi-file', '-f',
         type=str,
         metavar='PATH',
         help='Export OpenAPI schema to file'
-    )
+        )
 
     args = parser.parse_args()
 
@@ -132,4 +132,3 @@ Examples:
 
 if __name__ == '__main__':
     main()
-

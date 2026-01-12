@@ -61,6 +61,20 @@ def upgrade() -> None:
                             )"""))
     print("  ✓ Table created")
 
+    # Global Settings table (NEW)
+    print("📦 Creating table: global_settings...")
+    conn.execute(sa.text("""CREATE TABLE global_settings
+                            (
+                                key                VARCHAR(100) PRIMARY KEY,
+                                value              TEXT        NOT NULL,
+                                value_type         VARCHAR(20) NOT NULL,
+                                description        TEXT,
+                                updated_at         DATETIME    NOT NULL,
+                                updated_by_user_id INTEGER,
+                                FOREIGN KEY (updated_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+                            )"""))
+    print("  ✓ Table created")
+
     # Assets table
     print("📦 Creating table: assets...")
     conn.execute(sa.text("""CREATE TABLE assets
@@ -242,8 +256,8 @@ def upgrade() -> None:
 
     print("=" * 60)
     print("✅ Migration 001_initial (v2) completed successfully!")
-    print("📊 Created 10 tables with all indexes and constraints")
-    print("🆕 New: users, user_settings, broker_user_access")
+    print("📊 Created 11 tables with all indexes and constraints")
+    print("🆕 New: users, user_settings, global_settings, broker_user_access")
     print("🔄 Updated: brokers (flags), transactions (unified)")
     print("🗑️  Removed: cash_accounts, cash_movements")
 
@@ -254,6 +268,6 @@ def downgrade() -> None:
     for table in [
         'transactions', 'price_history', 'asset_provider_assignments',
         'fx_currency_pair_sources', 'fx_rates', 'broker_user_access',
-        'brokers', 'assets', 'user_settings', 'users'
+        'brokers', 'assets', 'global_settings', 'user_settings', 'users'
         ]:
         conn.execute(sa.text(f"DROP TABLE IF EXISTS {table}"))

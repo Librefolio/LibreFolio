@@ -15,6 +15,7 @@
 ### Cosa È Stato Implementato
 
 #### 1. Core Implementation (100% ✅)
+
 - ✅ **Abstract class FXRateProvider** con factory pattern
 - ✅ **4 provider centrali bancarie**: ECB (EUR), FED (USD), BOE (GBP), SNB (CHF)
 - ✅ **Multi-base currency support**: Architettura pronta per provider commerciali
@@ -22,6 +23,7 @@
 - ✅ **Multi-unit currencies**: Gestione corretta JPY, SEK, NOK, DKK
 
 #### 2. Advanced Features (100% ✅)
+
 - ✅ **fx_currency_pair_sources table**: Auto-configuration system
 - ✅ **Provider fallback logic**: Retry automatico su priority crescenti
 - ✅ **Inverse pairs support**: EUR/USD e USD/EUR possono coesistere
@@ -30,6 +32,7 @@
 - ✅ **Parallel queries**: API + DB in parallelo (~28% speedup)
 
 #### 3. API Endpoints (11/11 ✅)
+
 1. ✅ GET /fx/currencies
 2. ✅ GET /fx/providers
 3. ✅ GET /fx/pair-sources
@@ -41,12 +44,14 @@
 9. ✅ DELETE /fx/rate-set/bulk
 
 #### 4. Test Coverage (45/45 - 100% ✅)
+
 - ✅ **External**: 28/28 (4 providers × 4 tests + 12 multi-unit)
 - ✅ **Database**: 5/5 (create, validate, truncation, populate, fx-rates)
 - ✅ **Services**: 1/1 (conversion logic con backward-fill)
 - ✅ **API**: 11/11 (tutti endpoint coperti, inclusi auto-config e inverse pairs)
 
 #### 5. Documentazione (5 guide - 100% ✅)
+
 - ✅ **fx/api-reference.md**: ~650 linee, esempi cURL completi
 - ✅ **fx-implementation.md**: ~300 linee, advanced features
 - ✅ **testing-guide.md**: Aggiornato con 11/11 API tests
@@ -58,57 +63,58 @@
 ### 🏆 Punti di Forza
 
 1. **Architettura Eccellente**
-   - Plugin pattern ben implementato
-   - Factory registration automatico
-   - Separation of concerns chiaro
-   - Extensible per futuri provider
+    - Plugin pattern ben implementato
+    - Factory registration automatico
+    - Separation of concerns chiaro
+    - Extensible per futuri provider
 
 2. **Test Coverage Completo**
-   - 45/45 test (100%)
-   - Test isolati e riproducibili
-   - Coverage di tutti gli edge case
-   - Test auto-config, fallback, inverse pairs
+    - 45/45 test (100%)
+    - Test isolati e riproducibili
+    - Coverage di tutti gli edge case
+    - Test auto-config, fallback, inverse pairs
 
 3. **Performance Ottimizzate**
-   - Parallel queries (~28% speedup)
-   - Chunked operations (SQLite limits)
-   - Numeric truncation (no false updates)
-   - Batch validation (1 query vs N)
+    - Parallel queries (~28% speedup)
+    - Chunked operations (SQLite limits)
+    - Numeric truncation (no false updates)
+    - Batch validation (1 query vs N)
 
 4. **Documentazione Esaustiva**
-   - ~15000 parole totali
-   - Esempi cURL funzionanti
-   - Multi-base provider template
-   - Testing guide completa
+    - ~15000 parole totali
+    - Esempi cURL funzionanti
+    - Multi-base provider template
+    - Testing guide completa
 
 5. **Production Ready**
-   - Error handling robusto
-   - Type hints completi
-   - Async/await best practices
-   - Logging comprehensivo
+    - Error handling robusto
+    - Type hints completi
+    - Async/await best practices
+    - Logging comprehensivo
 
 ### ⚠️ Note Minori (Non Bloccanti)
 
 1. **Provider API Availability**
-   - Dipende da disponibilità API esterne (ECB, FED, BOE, SNB)
-   - Graceful degradation implementato
-   - Fallback logic gestisce failures
+    - Dipende da disponibilità API esterne (ECB, FED, BOE, SNB)
+    - Graceful degradation implementato
+    - Fallback logic gestisce failures
 
 2. **SQLite Limits**
-   - Chunked deletion necessario per grandi volumi
-   - Ben gestito (500 IDs/batch)
-   - Scalabilità verificata
+    - Chunked deletion necessario per grandi volumi
+    - Ben gestito (500 IDs/batch)
+    - Scalabilità verificata
 
 3. **Future Enhancements**
-   - Commercial API providers (non urgente)
-   - WebSocket real-time rates (nice-to-have)
-   - Redis caching layer (ottimizzazione futura)
+    - Commercial API providers (non urgente)
+    - WebSocket real-time rates (nice-to-have)
+    - Redis caching layer (ottimizzazione futura)
 
 ### ✅ Completezza della Richiesta
 
 **Richiesta originale (04_fx_rates.txt)**: ✅ **COMPLETAMENTE SODDISFATTA E SUPERATA**
 
 Oltre ai requisiti base, è stato implementato:
+
 - ✅ Multi-provider system (non richiesto, solo ECB era necessario)
 - ✅ Auto-configuration system (enhancement)
 - ✅ Provider fallback logic (enhancement)
@@ -141,11 +147,13 @@ Oltre ai requisiti base, è stato implementato:
 ### 📊 Analisi Dipendenze
 
 **Step 05 dipende da:**
+
 - ✅ Database schema (Step 02) - COMPLETATO
 - ✅ FX service (Step 04) - COMPLETATO
 - ❌ Nessuna dipendenza bloccante rimanente
 
 **Step 05 sblocca:**
+
 - → Step 06 (Analysis) - richiede valutazioni asset
 - → Step 07 (Portfolio) - richiede pricing
 - → Step 03 può continuare senza Step 05 ma è meglio dopo Step 06
@@ -153,7 +161,9 @@ Oltre ai requisiti base, è stato implementato:
 ### 💡 Perché Step 05 Ora?
 
 #### 1. **Fondamentale per Analysis (Step 06)**
+
 Step 06 (Runtime Analysis) richiede valutazioni asset per calcolare:
+
 - Market Value nel tempo
 - Serie Invested vs Market
 - ROI metrics
@@ -161,7 +171,9 @@ Step 06 (Runtime Analysis) richiede valutazioni asset per calcolare:
 Senza pricing plugins, Step 06 sarebbe incompleto.
 
 #### 2. **synthetic_yield Critico per Loan Assets**
+
 Asset type HOLD con SCHEDULED_YIELD richiedono:
+
 - Calcolo accrued interest
 - Day-count conventions (ACT/365, ACT/360, 30/360)
 - Maturity + grace period + late interest
@@ -169,7 +181,9 @@ Asset type HOLD con SCHEDULED_YIELD richiedono:
 Questo è **core business logic** per gestire P2P lending.
 
 #### 3. **Indipendente da Transazioni**
+
 Step 05 non richiede:
+
 - Inventory tracking
 - FIFO matching
 - Oversell guard
@@ -177,13 +191,17 @@ Step 05 non richiede:
 Può essere implementato completamente in parallelo a eventuali altri lavori.
 
 #### 4. **Sistema Plugin Riusabile**
+
 L'architettura plugin implementata sarà riusabile per:
+
 - Future data sources (Bloomberg, Alpha Vantage, etc.)
 - Custom scrapers
 - Internal calculation engines
 
 #### 5. **Testabile in Isolamento**
+
 Ogni plugin può essere testato indipendentemente:
+
 - yfinance con ticker reali (AAPL, MSFT)
 - CSS scraper con HTML mock
 - synthetic_yield con schedule test
@@ -193,6 +211,7 @@ Ogni plugin può essere testato indipendentemente:
 **Tempo stimato**: 8-12 giorni
 
 **Breakdown**:
+
 1. Plugin system base: 2-3 giorni
 2. yfinance plugin: 1-2 giorni
 3. CSS scraper: 1-2 giorni
@@ -206,36 +225,42 @@ Ogni plugin può essere testato indipendentemente:
 ### 🎯 Deliverables Step 05
 
 #### Core Implementation
+
 - [ ] Abstract `DataPlugin` class
 - [ ] Plugin registry con factory pattern
 - [ ] TypedDicts: `CurrentValue`, `PricePoint`, `HistoricalData`
 - [ ] Error handling: `PluginError`
 
 #### Plugins
+
 - [ ] **yfinance_plugin**: get_current_value(), get_history_value()
 - [ ] **cssscraper_plugin**: HTTP + BeautifulSoup4, robust parsing
 - [ ] **synthetic_yield_plugin**: Interest calculation engine
-  - [ ] Day-count conventions (ACT/365, ACT/360, 30/360)
-  - [ ] SIMPLE and COMPOUND interest
-  - [ ] Maturity + grace period + late_interest
-  - [ ] Daily series generation
+    - [ ] Day-count conventions (ACT/365, ACT/360, 30/360)
+    - [ ] SIMPLE and COMPOUND interest
+    - [ ] Maturity + grace period + late_interest
+    - [ ] Daily series generation
 
 #### API Endpoints
+
 - [ ] POST /api/v1/assets/{id}/refresh-current
 - [ ] POST /api/v1/assets/{id}/refresh-history?start=&end=
 - [ ] POST /api/v1/plugins/test (validation)
 
 #### Service Layer
+
 - [ ] `services/pricing.py` - orchestration
 - [ ] Plugin selection logic
 - [ ] Error handling & fallbacks
 
 #### Testing
+
 - [ ] Unit tests per ogni plugin
 - [ ] Integration tests con API
 - [ ] Test con schedule complessi (synthetic_yield)
 
 #### Documentazione
+
 - [ ] Plugin development guide
 - [ ] API reference update
 - [ ] Example configurations
@@ -245,6 +270,7 @@ Ogni plugin può essere testato indipendentemente:
 Questo è il **plugin più complesso** dello Step 05.
 
 **Caratteristiche richieste**:
+
 1. **Day-count conventions**: ACT/365, ACT/360, 30/360
 2. **Interest types**: SIMPLE (linear), COMPOUND (exponential)
 3. **Frequency**: DAILY, MONTHLY, QUARTERLY, ANNUAL
@@ -252,6 +278,7 @@ Questo è il **plugin più complesso** dello Step 05.
 5. **Accrued calculation**: Per ogni giorno, somma interest rate attivi
 
 **Perché è complesso**:
+
 - Calcoli finanziari precisi
 - Gestione date e periodi
 - Multiple convention combinations
@@ -287,17 +314,20 @@ Questo è il **plugin più complesso** dello Step 05.
 ### Motivazioni
 
 **Perché Step 05 prima di Step 06?**
+
 - Step 06 richiede valutazioni asset (Market Value)
 - Senza plugins, Step 06 sarebbe incompleto
 - synthetic_yield è core per loan assets
 
 **Perché Step 06 prima di Step 03?**
+
 - Step 06 implementa FIFO matching completo
 - Step 03 richiede oversell guard (usa stessa logica FIFO)
 - Evita duplicazione codice
 - Step 03 diventa più semplice
 
 **Perché Step 07 per ultimo?**
+
 - Richiede tutti gli step precedenti
 - Aggregazioni usano: FX, Plugins, Analysis
 - È il "collante finale" del sistema
@@ -311,6 +341,7 @@ Questo è il **plugin più complesso** dello Step 05.
 **Rating**: ⭐⭐⭐⭐⭐ (5/5)
 
 **Punti di forza**:
+
 - Architettura solida ed estensibile
 - Test coverage completo (100%)
 - Documentazione esaustiva
@@ -324,6 +355,7 @@ Questo è il **plugin più complesso** dello Step 05.
 **Priorità**: ⭐⭐⭐⭐⭐ (Massima)
 
 **Motivazioni**:
+
 1. Fondamentale per Step 06 (Analysis)
 2. synthetic_yield critico per loan assets
 3. Indipendente da transazioni
@@ -337,18 +369,21 @@ Questo è il **plugin più complesso** dello Step 05.
 ### 📋 Action Items
 
 **Immediato**:
+
 1. ✅ Review Step 04 completata
 2. ✅ Aggiornato step-suggeriti.md
 3. ✅ Spostato 04_fx_rates.txt in Step-Completati
 4. → **Inizia Step 05 (Plugins)**
 
 **Step 05 Focus**:
+
 - Inizia con plugin system base (foundation)
 - Poi yfinance (più semplice, quick win)
 - Poi CSS scraper (utility)
 - Infine synthetic_yield (più complesso, core)
 
 **Dopo Step 05**:
+
 - Step 06 (Analysis) con FIFO completo
 - Step 03 (Transactions) riusa logica Step 06
 - Step 07 (Portfolio) integra tutto
@@ -357,15 +392,15 @@ Questo è il **plugin più complesso** dello Step 05.
 
 ## 📊 Summary Metriche Progetto
 
-| Metrica | Valore | Status |
-|---------|--------|--------|
-| **Step completati** | 3/14 | 21% ✅ |
-| **Test passing** | 45/45 | 100% ✅ |
-| **DB migrations** | 7 | ✅ |
-| **API endpoints** | 11 (FX only) | ✅ |
-| **Documentazione** | ~15000 parole | ✅ |
-| **Tempo investito** | ~25 ore | ✅ |
-| **Qualità codice** | Eccellente | ⭐⭐⭐⭐⭐ |
+| Metrica             | Valore        | Status |
+|---------------------|---------------|--------|
+| **Step completati** | 3/14          | 21% ✅  |
+| **Test passing**    | 45/45         | 100% ✅ |
+| **DB migrations**   | 7             | ✅      |
+| **API endpoints**   | 11 (FX only)  | ✅      |
+| **Documentazione**  | ~15000 parole | ✅      |
+| **Tempo investito** | ~25 ore       | ✅      |
+| **Qualità codice**  | Eccellente    | ⭐⭐⭐⭐⭐  |
 
 ---
 
@@ -373,7 +408,8 @@ Questo è il **plugin più complesso** dello Step 05.
 
 ### ✅ PROCEDI CON STEP 05 (PLUGINS SYSTEM)
 
-**Sei pronto per iniziare Step 05**. Il sistema FX è solido, completo e production-ready. Fornisce la foundation perfetta per il plugin system che supporterà valutazioni multi-asset.
+**Sei pronto per iniziare Step 05**. Il sistema FX è solido, completo e production-ready. Fornisce la foundation perfetta per il plugin system che supporterà valutazioni
+multi-asset.
 
 **Focus su synthetic_yield**: È il plugin più complesso ma anche il più critico per il business model (P2P lending). Dedica il tempo necessario per implementarlo correttamente.
 

@@ -5,10 +5,9 @@ Business logic for user management, used by both API and CLI.
 """
 from typing import Optional
 
-from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from backend.app.db.models import User
 from backend.app.services.auth_service import hash_password, delete_user_sessions
@@ -62,7 +61,7 @@ async def get_user_by_username_or_email(session: AsyncSession, identifier: str) 
     """
     stmt = select(User).where(
         (User.username == identifier) | (User.email == identifier)
-    )
+        )
     result = await session.execute(stmt)
     return result.scalars().first()
 
@@ -105,7 +104,7 @@ async def create_user(
     password: str,
     is_superuser: bool = False,
     is_active: bool = True,
-) -> tuple[Optional[User], Optional[str]]:
+    ) -> tuple[Optional[User], Optional[str]]:
     """
     Create a new user.
 
@@ -137,7 +136,7 @@ async def create_user(
         hashed_password=hash_password(password),
         is_active=is_active,
         is_superuser=is_superuser,
-    )
+        )
 
     session.add(user)
     await session.commit()
@@ -151,7 +150,7 @@ async def reset_password(
     session: AsyncSession,
     username: str,
     new_password: str,
-) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, Optional[str]]:
     """
     Reset a user's password.
 
@@ -183,7 +182,7 @@ async def set_user_active(
     session: AsyncSession,
     username: str,
     active: bool,
-) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, Optional[str]]:
     """
     Activate or deactivate a user.
 
@@ -212,3 +211,39 @@ async def set_user_active(
     logger.info(f"User {status}", user_id=user.id, username=username)
     return True, None
 
+
+async def set_user_admin(
+    session: AsyncSession,
+    username: str,
+    is_admin: bool,
+    ) -> tuple[bool, Optional[str]]:
+    """
+    Promote or demote a user to/from admin.
+
+    Args:
+        session: Database session
+        username: Username
+        is_admin: True to promote, False to demote
+
+    Returns:
+        Tuple of (success, error_message)
+    """
+    user = await get_user_by_username(session, username)
+    if not user:
+        return False, f"User '{username}' not found"
+
+    if user.is_superuser == is_admin:
+        status = "already an admin" if is_admin else "not an admin"
+        return False, f"User '{username}' is {status}"
+
+    # Store user_id before commit (to avoid lazy load after commit)
+    user_id = user.id
+
+    user.is_superuser = is_admin
+    user.updated_at = utcnow()
+    session.add(user)
+    await session.commit()
+
+    status = "promoted to admin" if is_admin else "demoted from admin"
+    logger.info(f"User {status}", user_id=user_id, username=username)
+    return True, None

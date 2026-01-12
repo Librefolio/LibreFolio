@@ -76,9 +76,12 @@
     "fx": "FX Rates",
     "import": "Import",
     "settings": "Settings",
-    "profile": "Profile"
+    "profile": "Profile",
+    "documentation": "Documentation"
   },
   "dashboard": {
+    "welcomeBack": "Welcome back",
+    "welcomeSubtitle": "Here's an overview of your portfolio",
     "manageBrokers": "Manage your broker accounts",
     "manageAssets": "View and manage your assets",
     "manageTransactions": "Track your transactions",
@@ -120,6 +123,7 @@
     "profile": "Profile",
     "preferences": "Preferences",
     "about": "About",
+    "admin": "Admin",
     "profileInfo": "Profile Information",
     "accountCreated": "Account Created",
     "security": "Security",
@@ -138,6 +142,14 @@
     "license": "License",
     "credits": "Credits",
     "madeWith": "Made with",
-    "usingTech": "using"
+    "usingTech": "using",
+    "globalSettings": "Global Settings",
+    "globalSettingsDescription": "System-wide settings that affect all users. Admin access required to modify.",
+    "locked": "Locked",
+    "unlocked": "Editing",
+    "warning": "Warning",
+    "globalSettingsWarning": "Changes to global settings affect all users. Make sure you understand the impact before saving.",
+    "noGlobalSettings": "No global settings configured. Run the initialization command.",
+    "readOnlyMode": "Read-only (Admin access required)"
   }
 }

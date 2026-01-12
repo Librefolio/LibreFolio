@@ -9,12 +9,14 @@
 ## 🎯 When to Squash Migrations
 
 ### ✅ Good Cases (Safe to Squash)
+
 - **DEV environment** with no production deployments
 - **Rapid prototyping** phase with many experimental migrations
 - **Before initial release** to clean up development history
 - **Team agrees** on losing granular history
 
 ### ❌ Bad Cases (DON'T Squash)
+
 - **Production databases** already deployed
 - **Multiple developers** using different migration states
 - **Need rollback capability** to specific intermediate states
@@ -85,6 +87,7 @@ grep "CREATE TABLE" /tmp/working_schema.sql
 ```
 
 **Why this works**:
+
 - Gets **actual working SQL** from production database
 - Includes all CHECK constraints automatically
 - Preserves exact column types and constraints
@@ -220,15 +223,15 @@ def downgrade() -> None:
 2. **One statement per table** - don't combine CREATE TABLE + CREATE INDEX
 3. **Add logging** with `print()` to track progress
 4. **Correct order**: parent tables before child tables
-   - assets, brokers, fx_rates, fx_currency_pair_sources (no dependencies)
-   - asset_provider_assignments, cash_accounts (depend on assets/brokers)
-   - price_history, transactions (depend on assets/brokers)
-   - cash_movements (depends on cash_accounts, transactions)
+    - assets, brokers, fx_rates, fx_currency_pair_sources (no dependencies)
+    - asset_provider_assignments, cash_accounts (depend on assets/brokers)
+    - price_history, transactions (depend on assets/brokers)
+    - cash_movements (depends on cash_accounts, transactions)
 
 5. **Copy SQL directly** from `/tmp/working_schema.sql`
-   - CHECK constraints included automatically
-   - UNIQUE constraints included
-   - Foreign keys included
+    - CHECK constraints included automatically
+    - UNIQUE constraints included
+    - Foreign keys included
 
 ---
 
@@ -381,6 +384,7 @@ sqlite3 backend/data/sqlite/test_app.db "SELECT name FROM sqlite_master WHERE ty
 **Cause**: Silent failure in table creation (wrong order, SQL error).
 
 **Solution**:
+
 - Check logging output - did all "✓ Table created" appear?
 - Verify table order (parent tables first)
 - Check for typos in SQL
@@ -392,6 +396,7 @@ sqlite3 backend/data/sqlite/test_app.db "SELECT name FROM sqlite_master WHERE ty
 **Cause**: Child table created before parent table.
 
 **Solution**:
+
 - Review table order in `upgrade()`
 - Ensure assets/brokers created before tables that reference them
 
@@ -402,6 +407,7 @@ sqlite3 backend/data/sqlite/test_app.db "SELECT name FROM sqlite_master WHERE ty
 **Cause**: CHECK constraint not copied from schema.
 
 **Solution**:
+
 - Check `/tmp/working_schema.sql` for CHECK constraints
 - Ensure they're in CREATE TABLE statement
 - Example: `CONSTRAINT ck_fx_rates_base_less_than_quote CHECK (base < quote)`
@@ -413,6 +419,7 @@ sqlite3 backend/data/sqlite/test_app.db "SELECT name FROM sqlite_master WHERE ty
 **Cause**: Using `./dev.sh db:upgrade` hides output.
 
 **Solution**:
+
 - Run directly: `pipenv run alembic -c backend/alembic.ini upgrade head`
 - This shows all print() output
 
@@ -484,14 +491,14 @@ Backup location:
 
 ## 📊 Why Manual SQL Works Better Than Autogenerate
 
-| Aspect | Alembic Autogenerate | Manual SQL |
-|--------|---------------------|------------|
-| **Reliability** | ⚠️ Partial (4/9 tables) | ✅ Complete (9/9 tables) |
-| **CHECK constraints** | ❌ Not detected | ✅ Included automatically |
-| **SQLModel compatibility** | ❌ Import issues | ✅ No dependencies |
-| **Debugging** | ❌ Silent failures | ✅ Explicit logging |
-| **Control** | ⚠️ Alembic decides | ✅ Full control |
-| **Error visibility** | ❌ Hidden | ✅ Clear print output |
+| Aspect                     | Alembic Autogenerate    | Manual SQL               |
+|----------------------------|-------------------------|--------------------------|
+| **Reliability**            | ⚠️ Partial (4/9 tables) | ✅ Complete (9/9 tables)  |
+| **CHECK constraints**      | ❌ Not detected          | ✅ Included automatically |
+| **SQLModel compatibility** | ❌ Import issues         | ✅ No dependencies        |
+| **Debugging**              | ❌ Silent failures       | ✅ Explicit logging       |
+| **Control**                | ⚠️ Alembic decides      | ✅ Full control           |
+| **Error visibility**       | ❌ Hidden                | ✅ Clear print output     |
 
 ---
 
@@ -500,19 +507,19 @@ Backup location:
 ### What We Tried:
 
 1. **Alembic autogenerate** (`alembic revision --autogenerate`)
-   - Generated migration file
-   - Added `import sqlmodel` manually
-   - Applied migration
-   - **Result**: Only 4/9 tables created ❌
+    - Generated migration file
+    - Added `import sqlmodel` manually
+    - Applied migration
+    - **Result**: Only 4/9 tables created ❌
 
 2. **Multi-statement SQL block**
-   - One `conn.exec_driver_sql()` with all CREATE TABLEs
-   - **Result**: Empty database ❌
+    - One `conn.exec_driver_sql()` with all CREATE TABLEs
+    - **Result**: Empty database ❌
 
 3. **Manual SQL with individual statements** ✅
-   - One `conn.execute(sa.text(...))` per table
-   - Detailed logging with `print()`
-   - **Result**: All 9 tables created successfully! ✅
+    - One `conn.execute(sa.text(...))` per table
+    - Detailed logging with `print()`
+    - **Result**: All 9 tables created successfully! ✅
 
 ### Why Manual SQL Won:
 
@@ -538,6 +545,7 @@ Backup location:
 **Tables**: 9 (assets, brokers, fx_rates, fx_currency_pair_sources, asset_provider_assignments, cash_accounts, price_history, transactions, cash_movements)
 
 **Timeline**:
+
 1. ❌ Alembic autogenerate attempt failed
 2. ✅ Extracted schema: `sqlite3 test_app.db .schema`
 3. ✅ Created manual migration with raw SQL
@@ -548,11 +556,13 @@ Backup location:
 8. ✅ All tests passed
 
 **Files**:
+
 - Migration: `backend/alembic/versions/001_initial.py`
 - Backup migrations: `backend/alembic/versions.backup_20251106_152012/`
 - Backup databases: `backend/data/sqlite/*.pre_squash_20251106_152000`
 
 **Key learnings**:
+
 - Manual SQL > autogenerate for SQLite + SQLModel
 - Logging essential for debugging
 - Schema extraction gives exact working SQL
@@ -563,11 +573,13 @@ Backup location:
 ## 📚 Quick Reference
 
 ### Extract Schema
+
 ```bash
 sqlite3 database.db .schema > schema.sql
 ```
 
 ### Create Migration Template
+
 ```python
 def upgrade() -> None:
     conn = op.get_bind()
@@ -578,6 +590,7 @@ def upgrade() -> None:
 ```
 
 ### Apply Migration
+
 ```bash
 # With output
 pipenv run alembic -c backend/alembic.ini upgrade head
@@ -587,6 +600,7 @@ pipenv run alembic -c backend/alembic.ini upgrade head
 ```
 
 ### Verify
+
 ```bash
 sqlite3 database.db "SELECT name FROM sqlite_master WHERE type='table';"
 ./test_runner.py db validate

@@ -281,6 +281,30 @@ class UserSettings(SQLModel, table=True):
         return _validate_currency_field(v)
 
 
+class GlobalSetting(SQLModel, table=True):
+    """
+    System-wide settings.
+
+    Key-value store for global configuration.
+    Only administrators can modify these settings.
+
+    Predefined keys:
+    - session_ttl_hours: Session cookie TTL in hours (int, default: 24)
+    - max_file_upload_mb: Max file upload size in MB (int, default: 10)
+    - enable_registration: Allow new user registration (bool, default: true)
+    """
+    __tablename__ = "global_settings"
+
+    key: str = Field(primary_key=True, max_length=100)
+    value: str = Field(...)  # Stored as string, converted based on value_type
+    value_type: str = Field(max_length=20)  # "string", "int", "bool", "json"
+    description: Optional[str] = Field(default=None)
+    updated_at: datetime = Field(default_factory=utcnow)
+    updated_by_user_id: Optional[int] = Field(
+        default=None, foreign_key="users.id", nullable=True
+        )
+
+
 # ============================================================================
 # BROKER MODELS
 # ============================================================================

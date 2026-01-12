@@ -11,8 +11,9 @@ from pydantic_settings import BaseSettings
 # Get project root (two levels up from this file)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
+
 # Global flag to indicate test mode (set via --test flag or LIBREFOLIO_TEST_MODE env var)
-_test_mode = os.environ.get("LIBREFOLIO_TEST_MODE", "").lower() in ("1", "true", "yes")
+# NOTE: This is updated by set_test_mode() but is_test_mode() also checks env var
 
 
 def set_test_mode(enabled: bool = True):
@@ -23,14 +24,28 @@ def set_test_mode(enabled: bool = True):
     Args:
         enabled: True to enable test mode, False to disable
     """
-    global _test_mode
-    _test_mode = enabled
     os.environ["LIBREFOLIO_TEST_MODE"] = "1" if enabled else "0"
+
+    # Reset engine singletons so they get recreated with new settings
+    _reset_engine_singletons()
+
+
+def _reset_engine_singletons():
+    """Reset engine singletons to allow recreation with new settings."""
+    # Import here to avoid circular imports
+    from backend.app.db import session as session_module
+    session_module.sync_engine = None
+    session_module.async_engine = None
 
 
 def is_test_mode() -> bool:
-    """Check if test mode is enabled."""
-    return _test_mode
+    """
+    Check if test mode is enabled.
+
+    Checks the environment variable directly to support dynamic switching
+    (e.g., when --test-db flag is passed after module import).
+    """
+    return os.environ.get("LIBREFOLIO_TEST_MODE", "").lower() in ("1", "true", "yes")
 
 
 class Settings(BaseSettings):
