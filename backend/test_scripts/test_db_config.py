@@ -33,7 +33,6 @@ else:
 TEST_DB_PATH = Path(db_path_str)
 
 # Project root and database directory
-PROJECT_ROOT = Path(__file__).parent.parent.parent
 DB_DIR = TEST_DB_PATH.parent
 
 

@@ -20,7 +20,8 @@
     "select": "Select",
     "noData": "No data available",
     "welcome": "Welcome",
-    "comingSoon": "Coming Soon"
+    "comingSoon": "Coming Soon",
+    "copied": "Copied!"
   },
   "error": {
     "pageNotFound": "Page Not Found",
@@ -79,6 +80,12 @@
     "profile": "Profile",
     "documentation": "Documentation"
   },
+  "help": {
+    "helpAndSupport": "Help & Support",
+    "faq": "FAQ",
+    "documentation": "Documentation",
+    "reportBug": "Report Bug"
+  },
   "dashboard": {
     "welcomeBack": "Welcome back",
     "welcomeSubtitle": "Here's an overview of your portfolio",
@@ -128,7 +135,16 @@
     "accountCreated": "Account Created",
     "security": "Security",
     "changePassword": "Change Password",
-    "changePasswordInfo": "Password changes will be available in a future update.",
+    "changePasswordDescription": "Update your account password",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmNewPassword": "Confirm New Password",
+    "passwordChanged": "Password changed successfully",
+    "passwordChangeFailed": "Failed to change password",
+    "currentPasswordIncorrect": "Current password is incorrect",
+    "passwordsMustMatch": "Passwords must match",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "passwordMustBeDifferent": "New password must be different from current",
     "language": "Language",
     "languageHint": "Select your preferred language for the interface.",
     "baseCurrency": "Base Currency",
@@ -139,10 +155,22 @@
     "version": "Version",
     "aboutDescription": "LibreFolio is a self-hosted, open-source portfolio tracker. Track your investments, analyze performance, and maintain full control of your financial data.",
     "viewSource": "View source code",
+    "sourceCode": "Source Code",
+    "githubRepo": "GitHub Repository",
+    "officialWebsite": "Official Website",
+    "visitWebsite": "Visit the main website",
     "license": "License",
     "credits": "Credits",
     "madeWith": "Made with",
-    "usingTech": "using",
+    "inItaly": "in Italy",
+    "backendLibraries": "Backend Libraries",
+    "frontendLibraries": "Frontend Libraries",
+    "systemInfo": "System Information",
+    "copyForIssue": "Copy for Issue",
+    "appVersion": "App Version",
+    "pythonVersion": "Python",
+    "operatingSystem": "OS",
+    "platform": "Platform",
     "globalSettings": "Global Settings",
     "globalSettingsDescription": "System-wide settings that affect all users. Admin access required to modify.",
     "locked": "Locked",
@@ -150,6 +178,52 @@
     "warning": "Warning",
     "globalSettingsWarning": "Changes to global settings affect all users. Make sure you understand the impact before saving.",
     "noGlobalSettings": "No global settings configured. Run the initialization command.",
-    "readOnlyMode": "Read-only (Admin access required)"
+    "readOnlyMode": "Read-only (Admin access required)",
+    "saveAll": "Save All",
+    "undoAll": "Undo All",
+    "resetAllToDefault": "Reset All",
+    "undo": "Undo",
+    "resetToDefault": "Reset to Default",
+    "savedSuccessfully": "saved successfully",
+    "adminRequired": "Admin access required to modify global settings",
+    "saveFailed": "Failed to save setting",
+    "clickToEdit": "Click to unlock and edit",
+    "clickToLock": "Click to lock (discard unsaved changes)",
+    "discardChangesConfirm": "You have unsaved changes. Discard all changes?",
+    "globalSettingCategories": {
+      "session": "Session",
+      "security": "Security",
+      "sync": "Sync & Upload",
+      "defaults": "Defaults",
+      "all": "All Settings"
+    },
+    "globalSettingNames": {
+      "session_ttl_hours": "Session Duration",
+      "enable_registration": "Enable Registration",
+      "require_email_verification": "Require Email Verification",
+      "max_file_upload_mb": "Max File Upload Size",
+      "auto_sync_fx_rates": "Auto-Sync FX Rates",
+      "auto_sync_prices": "Auto-Sync Prices",
+      "price_sync_interval_hours": "Price Sync Interval",
+      "default_currency": "Default Currency",
+      "default_language": "Default Language"
+    },
+    "globalSettingDescriptions": {
+      "session_ttl_hours": "How long a user session remains valid before requiring re-login",
+      "enable_registration": "Allow new users to create accounts",
+      "require_email_verification": "Require email verification for new accounts",
+      "max_file_upload_mb": "Maximum file size allowed for uploads",
+      "auto_sync_fx_rates": "Automatically fetch exchange rates daily",
+      "auto_sync_prices": "Automatically fetch asset prices",
+      "price_sync_interval_hours": "How often to sync asset prices",
+      "default_currency": "Default currency for new users",
+      "default_language": "Default language for new users"
+    },
+    "globalSettingUnits": {
+      "session_ttl_hours": "hours",
+      "price_sync_interval_hours": "hours",
+      "max_file_upload_mb": "MB"
+    },
+    "selectCurrency": "Select currency..."
   }
 }

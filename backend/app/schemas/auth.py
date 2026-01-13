@@ -31,6 +31,12 @@ class AuthPasswordResetRequest(BaseModel):
     new_password: str = Field(..., min_length=8, description="New password")
 
 
+class ChangePasswordRequest(BaseModel):
+    """Change password request (for authenticated users)."""
+    current_password: str = Field(..., min_length=1, description="Current password")
+    new_password: str = Field(..., min_length=8, description="New password (min 8 chars)")
+
+
 # =============================================================================
 # Response Schemas
 # =============================================================================
@@ -67,6 +73,11 @@ class AuthRegisterResponse(BaseModel):
     """Response after successful registration."""
     user: AuthUserResponse
     message: str = "Registration successful"
+
+
+class ChangePasswordResponse(BaseModel):
+    """Response after successful password change."""
+    message: str = "Password changed successfully"
 
 
 class AuthErrorResponse(BaseModel):

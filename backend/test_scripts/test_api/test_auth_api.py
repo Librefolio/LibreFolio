@@ -447,3 +447,201 @@ class TestSessionPersistence:
                 assert me_resp.status_code == 200, f"Request {i + 1} failed"
 
             print_success("Session persists across multiple requests")
+
+
+class TestChangePassword:
+    """Tests for POST /auth/change-password."""
+
+    @pytest.mark.asyncio
+    async def test_change_password_success(self, test_server):
+        """CHPWD-001: Successfully change password."""
+        print_section("CHPWD-001: Change password success")
+
+        async with httpx.AsyncClient() as client:
+            timestamp = int(datetime.now().timestamp() * 1000)
+            username = f"chpwd_{timestamp}"
+            old_password = "oldpassword123"
+            new_password = "newpassword456"
+
+            # Register user
+            await client.post(
+                f"{API_BASE}/auth/register",
+                json={
+                    "username": username,
+                    "email": f"chpwd_{timestamp}@example.com",
+                    "password": old_password
+                    },
+                timeout=TIMEOUT
+                )
+
+            # Login
+            login_resp = await client.post(
+                f"{API_BASE}/auth/login",
+                json={"username": username, "password": old_password},
+                timeout=TIMEOUT
+                )
+            client.cookies.update(login_resp.cookies)
+
+            # Change password
+            response = await client.post(
+                f"{API_BASE}/auth/change-password",
+                json={"current_password": old_password, "new_password": new_password},
+                timeout=TIMEOUT
+                )
+
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+            data = response.json()
+            assert "message" in data
+            assert "success" in data["message"].lower()
+
+            # Verify old password no longer works
+            client.cookies.clear()
+            old_login = await client.post(
+                f"{API_BASE}/auth/login",
+                json={"username": username, "password": old_password},
+                timeout=TIMEOUT
+                )
+            assert old_login.status_code == 401, "Old password should not work"
+
+            # Verify new password works
+            new_login = await client.post(
+                f"{API_BASE}/auth/login",
+                json={"username": username, "password": new_password},
+                timeout=TIMEOUT
+                )
+            assert new_login.status_code == 200, "New password should work"
+
+            print_success("Password changed successfully")
+
+    @pytest.mark.asyncio
+    async def test_change_password_wrong_current(self, test_server):
+        """CHPWD-002: Cannot change password with wrong current password."""
+        print_section("CHPWD-002: Wrong current password rejected")
+
+        async with httpx.AsyncClient() as client:
+            timestamp = int(datetime.now().timestamp() * 1000)
+            username = f"chpwd_wrong_{timestamp}"
+
+            # Register and login
+            await client.post(
+                f"{API_BASE}/auth/register",
+                json={
+                    "username": username,
+                    "email": f"chpwd_wrong_{timestamp}@example.com",
+                    "password": "correctpassword123"
+                    },
+                timeout=TIMEOUT
+                )
+
+            login_resp = await client.post(
+                f"{API_BASE}/auth/login",
+                json={"username": username, "password": "correctpassword123"},
+                timeout=TIMEOUT
+                )
+            client.cookies.update(login_resp.cookies)
+
+            # Try to change with wrong current password
+            response = await client.post(
+                f"{API_BASE}/auth/change-password",
+                json={"current_password": "wrongpassword", "new_password": "newpassword456"},
+                timeout=TIMEOUT
+                )
+
+            assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+            assert "incorrect" in response.json()["detail"].lower()
+
+            print_success("Wrong current password correctly rejected")
+
+    @pytest.mark.asyncio
+    async def test_change_password_same_password(self, test_server):
+        """CHPWD-003: Cannot change to same password."""
+        print_section("CHPWD-003: Same password rejected")
+
+        async with httpx.AsyncClient() as client:
+            timestamp = int(datetime.now().timestamp() * 1000)
+            username = f"chpwd_same_{timestamp}"
+            password = "samepassword123"
+
+            # Register and login
+            await client.post(
+                f"{API_BASE}/auth/register",
+                json={
+                    "username": username,
+                    "email": f"chpwd_same_{timestamp}@example.com",
+                    "password": password
+                    },
+                timeout=TIMEOUT
+                )
+
+            login_resp = await client.post(
+                f"{API_BASE}/auth/login",
+                json={"username": username, "password": password},
+                timeout=TIMEOUT
+                )
+            client.cookies.update(login_resp.cookies)
+
+            # Try to change to same password
+            response = await client.post(
+                f"{API_BASE}/auth/change-password",
+                json={"current_password": password, "new_password": password},
+                timeout=TIMEOUT
+                )
+
+            assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+            assert "different" in response.json()["detail"].lower()
+
+            print_success("Same password correctly rejected")
+
+    @pytest.mark.asyncio
+    async def test_change_password_unauthenticated(self, test_server):
+        """CHPWD-004: Cannot change password when not authenticated."""
+        print_section("CHPWD-004: Unauthenticated request rejected")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{API_BASE}/auth/change-password",
+                json={"current_password": "oldpass", "new_password": "newpass123"},
+                timeout=TIMEOUT
+                )
+
+            assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+
+            print_success("Unauthenticated request correctly rejected")
+
+    @pytest.mark.asyncio
+    async def test_change_password_too_short(self, test_server):
+        """CHPWD-005: New password must be at least 8 characters."""
+        print_section("CHPWD-005: Short password rejected")
+
+        async with httpx.AsyncClient() as client:
+            timestamp = int(datetime.now().timestamp() * 1000)
+            username = f"chpwd_short_{timestamp}"
+
+            # Register and login
+            await client.post(
+                f"{API_BASE}/auth/register",
+                json={
+                    "username": username,
+                    "email": f"chpwd_short_{timestamp}@example.com",
+                    "password": "longpassword123"
+                    },
+                timeout=TIMEOUT
+                )
+
+            login_resp = await client.post(
+                f"{API_BASE}/auth/login",
+                json={"username": username, "password": "longpassword123"},
+                timeout=TIMEOUT
+                )
+            client.cookies.update(login_resp.cookies)
+
+            # Try short password
+            response = await client.post(
+                f"{API_BASE}/auth/change-password",
+                json={"current_password": "longpassword123", "new_password": "short"},
+                timeout=TIMEOUT
+                )
+
+            assert response.status_code == 422, f"Expected 422, got {response.status_code}"
+
+            print_success("Short password correctly rejected")

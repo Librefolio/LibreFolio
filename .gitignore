@@ -61,7 +61,7 @@ Pipfile.lock
 **/pnpm-debug.log*
 
 # MkDocs
-site/
+mkdocs_src/site/
 
 # Coverage reports
 htmlcov/
@@ -71,3 +71,5 @@ coverage.xml
 *.cover
 .hypothesis/
 
+# Development stuff
+_backup_docs/

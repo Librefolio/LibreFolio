@@ -9,11 +9,31 @@ import {browser} from '$app/environment';
 import {DEFAULT_LOCALE, LOCALE_FLAGS, LOCALE_NAMES, saveLocalePreference, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
 
 /**
+ * Get initial locale from localStorage (browser only)
+ */
+function getStoredLocale(): SupportedLocale {
+    if (!browser) return DEFAULT_LOCALE;
+    const stored = localStorage.getItem('librefolio-locale');
+    if (stored && SUPPORTED_LOCALES.includes(stored as SupportedLocale)) {
+        return stored as SupportedLocale;
+    }
+    return DEFAULT_LOCALE;
+}
+
+/**
  * Current language store
  * Synced with svelte-i18n locale
+ * Initialized from localStorage immediately
  */
 function createLanguageStore() {
-    const {subscribe, set, update} = writable<SupportedLocale>(DEFAULT_LOCALE);
+    // Initialize with stored value immediately
+    const initialLocale = getStoredLocale();
+    const {subscribe, set, update} = writable<SupportedLocale>(initialLocale);
+
+    // Also set the svelte-i18n locale immediately to stay in sync
+    if (browser) {
+        locale.set(initialLocale);
+    }
 
     return {
         subscribe,
@@ -52,11 +72,12 @@ function createLanguageStore() {
 
         /**
          * Initialize from browser/localStorage
+         * Called after mount to ensure sync
          */
         init: () => {
             if (!browser) return;
 
-            // Get from localStorage or browser
+            // Get from localStorage
             const stored = localStorage.getItem('librefolio-locale');
             if (stored && SUPPORTED_LOCALES.includes(stored as SupportedLocale)) {
                 set(stored as SupportedLocale);
