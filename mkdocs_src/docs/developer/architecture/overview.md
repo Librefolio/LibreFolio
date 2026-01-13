@@ -1,48 +1,66 @@
-# Overall Architecture
+# 🏗️ System Architecture Overview
 
-LibreFolio is a modern web application with a decoupled frontend and backend, designed to be deployed as a single Docker container.
+LibreFolio is designed as a modern web application with a clear separation between the backend API and the frontend user interface.
 
-## 🏛️ High-Level Diagram
+## High-Level Diagram
 
+The architecture can be visualized as three main components:
+
+```mermaid
+graph TD
+    subgraph User's Browser
+        Frontend[SvelteKit Frontend]
+    end
+
+    subgraph Server
+        Backend[FastAPI Backend]
+        Database[(SQLite Database)]
+    end
+
+    subgraph External Services
+        direction TB
+        BrokerAPIs[Broker APIs / CSVs]
+        PricingAPIs[Pricing APIs]
+        FXAPIs[FX Rate APIs]
+    end
+    
+    subgraph Plugins
+        direction TB
+        B_Plugins[BRIM Plugins]
+        A_Plugins[Asset Plugins]
+        F_Plugins[FX Plugins]
+    end
+
+    Frontend -- HTTP API Calls --> Backend
+    Backend -- SQLAlchemy ORM --> Database
+    
+    Backend -- Uses --> Plugins
+    
+    B_Plugins -- Parses --> BrokerAPIs
+    A_Plugins -- Fetches --> PricingAPIs
+    F_Plugins -- Fetches --> FXAPIs
 ```
-┌───────────────────┐      ┌───────────────────────────┐      ┌────────────────┐
-│   Web Browser     │◄───►│        Web Server         │◄───►│    Backend     │
-│ (React Frontend)  │      │  (FastAPI serves static)  │      │ (FastAPI API)  │
-└───────────────────┘      └───────────────────────────┘      └───────┬────────┘
-                                                                     │
-                                                                     ▼
-                                                          ┌────────────────┐
-                                                          │    Database    │
-                                                          │    (SQLite)    │
-                                                          └────────────────┘
-```
 
-## 🥞 Core Components
+### Components
 
-### 1. Frontend
-- **Framework**: React with TypeScript and Vite.
-- **UI Components**: Material UI (MUI).
-- **State Management**: React Query for server state and Zustand/Context for global UI state.
-- **Functionality**: Provides the user interface for portfolio visualization, data entry, and reporting. It is a pure client-side application that communicates with the backend via a REST API.
+1.  **Frontend (SvelteKit)**: A single-page application (SPA) that runs in the user's browser. It communicates with the backend via a RESTful API to fetch and display data.
 
-### 2. Backend
-- **Framework**: FastAPI (Python).
-- **Architecture**: A 3-layer architecture is used to separate concerns:
-    - **API Layer**: Handles HTTP requests, validation (Pydantic), and response formatting.
-    - **Service Layer**: Contains the core business logic (e.g., portfolio analysis, FX conversion, data fetching).
-    - **Database Layer**: Manages data persistence using SQLModel and SQLAlchemy.
-- **Database**: SQLite for simplicity and self-hosting.
-- **Async**: The entire backend is built on an `async` foundation for high performance.
+2.  **Backend (FastAPI)**: A Python-based API server that handles all business logic, including:
+    -   User authentication and authorization.
+    -   Database operations (CRUD).
+    -   Data import from brokers (BRIM).
+    -   Fetching asset prices and FX rates from external sources.
 
-### 3. Deployment
-- **Containerization**: The frontend and backend are bundled into a **single Docker image**.
-- **Serving**: The FastAPI backend serves the static frontend files, simplifying deployment.
+3.  **Database (SQLite)**: A single-file database that stores all user data, including transactions, assets, user settings, and cached data.
 
-## 🕵️ How to get information about the overall architecture
+4.  **Provider Plugins**: A system of pluggable modules that abstract the interaction with external data sources. This makes it easy to add support for new brokers, pricing APIs, or FX rate providers without modifying the core application logic.
 
-To get information about the overall architecture an Agent can:
+## Request Flow Example: Displaying Portfolio
 
-1. Read this file.
-2. Read the `LibreFolio_developer_journal/01-Riassunto_generale.md` file.
-3. Inspect the directory structure of the project.
-4. Read the `mkdocs.yml` file to understand the documentation structure.
+1.  User logs in and navigates to the dashboard.
+2.  The **Frontend** makes an API request to `GET /api/v1/portfolio`.
+3.  The **Backend** receives the request, authenticates the user, and queries the **Database** for the user's transactions.
+4.  For each asset, the backend may need to fetch the latest price. It calls the appropriate **Asset Provider Plugin** (e.g., Yahoo Finance).
+5.  If currency conversion is needed, the backend calls the **FX Provider Plugin** to get the latest exchange rate.
+6.  The backend processes the data, calculates portfolio metrics, and returns a JSON response to the frontend.
+7.  The **Frontend** receives the JSON data and renders the portfolio dashboard.

@@ -203,7 +203,7 @@ function print_help() {
     echo ""
     echo "Information:"
     echo "  info:api         List all API endpoints with descriptions"
-    echo "  info:mk [cmd]    MkDocs helper (cmd = build | serve | clean | help)"
+    echo "  info:mk [cmd]    MkDocs helper (cmd = build | serve | clean | deploy | help)"
     echo "                     Use: ./dev.sh info:mk help for details"
     echo ""
     echo "Help:"
@@ -336,8 +336,9 @@ function mkdocs_needs_rebuild() {
     # Check if mkdocs build is needed
     # Returns 0 (true) if rebuild needed, 1 (false) otherwise
 
-    local build_dir="site"
-    local src_dir="mkdocs_src"
+    # CORRECTED PATH: MkDocs builds to mkdocs_src/site by default
+    local build_dir="mkdocs_src/site"
+    local src_dir="mkdocs_src/docs"
 
     # No build exists at all
     if [ ! -d "$build_dir" ]; then
@@ -350,8 +351,14 @@ function mkdocs_needs_rebuild() {
     fi
 
     # Check if any source file is newer than build
+    # Use find to check all files in docs folder
     local newest_src=$(find "$src_dir" -type f -newer "$build_dir/index.html" 2>/dev/null | head -1)
     if [ -n "$newest_src" ]; then
+        return 0
+    fi
+
+    # Check if config changed
+    if [ "mkdocs_src/mkdocs.yml" -nt "$build_dir/index.html" ]; then
         return 0
     fi
 
@@ -359,10 +366,19 @@ function mkdocs_needs_rebuild() {
     return 1
 }
 
+function copy_docs_assets() {
+    # Copy logo and favicon from frontend to docs
+    echo -e "${BLUE}Copying documentation assets...${NC}"
+    mkdir -p mkdocs_src/docs/static
+    cp frontend/static/logo.png mkdocs_src/docs/static/logo.png
+    cp frontend/static/favicon.png mkdocs_src/docs/static/favicon.png
+}
+
 function auto_build_mkdocs() {
     # Auto-build mkdocs if changes detected
     if mkdocs_needs_rebuild; then
         echo -e "${BLUE}📚 Documentation changes detected, rebuilding...${NC}"
+        copy_docs_assets
         pipenv run mkdocs build -f mkdocs_src/mkdocs.yml 2>/dev/null
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✅ Documentation rebuilt successfully${NC}"
@@ -1024,26 +1040,35 @@ case "$COMMAND" in
             echo "  build    Build documentation (mkdocs build)"
             echo "  serve    Serve documentation locally (mkdocs serve)"
             echo "  clean    Remove built site/ directory"
+            echo "  deploy   Deploy documentation to GitHub Pages (gh-deploy)"
             echo "  help     Show this help message"
             echo ""
             echo "Examples:"
             echo "  ./dev.sh info:mk build"
             echo "  ./dev.sh info:mk serve"
+            echo "  ./dev.sh info:mk deploy"
             echo ""
             exit 0
         fi
         case "$subcommand" in
             build)
                 echo -e "${GREEN}Building MkDocs site...${NC}"
+                copy_docs_assets
                 pipenv run mkdocs build -f mkdocs_src/mkdocs.yml
                 ;;
             serve)
                 echo -e "${GREEN}Serving MkDocs site (http://127.0.0.1:8002)${NC}"
+                copy_docs_assets
                 pipenv run mkdocs serve -f mkdocs_src/mkdocs.yml -a 127.0.0.1:8002
                 ;;
             clean)
                 echo -e "${YELLOW}Removing site directory...${NC}"
                 rm -rf site
+                ;;
+            deploy)
+                echo -e "${GREEN}Deploying MkDocs site to GitHub Pages...${NC}"
+                copy_docs_assets
+                pipenv run mkdocs gh-deploy -f mkdocs_src/mkdocs.yml
                 ;;
             *)
                 echo -e "${RED}Unknown mkdocs info subcommand${NC}"

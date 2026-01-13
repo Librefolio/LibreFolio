@@ -1,33 +1,30 @@
 # API Reference
 
-Welcome to the LibreFolio REST API documentation.
+LibreFolio provides a comprehensive RESTful API built with **FastAPI**.
 
-## Interactive API Documentation (Swagger UI)
+## Interactive Documentation
 
-For a complete and interactive API reference, please visit the **Swagger UI** documentation, which is automatically generated from the FastAPI backend.
+When the LibreFolio server is running, you can access the auto-generated interactive documentation. These pages allow you to explore the API endpoints, see the expected request/response schemas, and even execute requests directly from your browser.
 
--   **URL**: `http://localhost:8000/docs`
+-   🚀 **Swagger UI**: `http://localhost:8000/api/v1/docs`
+    -   Best for exploring and testing endpoints.
+-   💻 **ReDoc**: `http://localhost:8000/api/v1/redoc`
+    -   Best for reading the documentation in a structured format.
 
-The Swagger UI allows you to:
--   View all available endpoints.
--   See detailed request and response models.
--   Execute API calls directly from your browser.
+## Dynamic Route Generation
 
-## Endpoint Summary
+FastAPI generates the API routes dynamically at startup based on the Python function definitions. This ensures that the documentation is always perfectly in sync with the code.
 
-The API is organized into several categories:
+The API is structured into routers, each handling a specific domain:
 
-### Asset Management
--   **[Asset Management API](./assets/index.md)**
+-   `/auth`: Authentication (login, token refresh).
+-   `/users`: User management.
+-   `/assets`: Asset management (CRUD, price history).
+-   `/transactions`: Transaction management.
+-   `/portfolio`: Portfolio analysis and metrics.
+-   `/fx`: Foreign exchange operations.
+-   `/brim`: Broker report import.
 
-### FX System
--   **[FX System API](./fx/index.md)
+## Pydantic Schemas
 
-## 🕵️ How to get information about the API
-
-To get information about the API an Agent can:
-
-1.  Read this file and the [API Examples](./examples.md) page.
-2.  Inspect the directory `backend/app/api/v1/` to see the endpoint implementations.
-3.  Read the auto-generated Swagger UI documentation at `http://localhost:8000/docs`.
-4.  Run the API tests in `backend/test_scripts/test_api/` to see the endpoints in action.
+The API uses **Pydantic** models for data validation and serialization. These schemas define the structure of the data exchanged between the frontend and backend. You can find the schema definitions in the `backend/app/schemas/` directory.
