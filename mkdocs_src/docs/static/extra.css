@@ -1,0 +1,248 @@
+/* LibreFolio Documentation Theme */
+
+:root {
+    /* Brand Colors from Frontend */
+    --md-primary-fg-color: #1a4031; /* libre-green */
+    --md-primary-bg-color: #f5f4ef; /* libre-beige */
+    --md-accent-fg-color: #5a947c;  /* primary-400 */
+
+    --md-sidebar-width: 12rem;
+}
+
+/* Dark mode overrides */
+[data-md-color-scheme="slate"] {
+    --md-primary-fg-color: #5a947c; /* Lighter green for dark mode */
+    --md-primary-bg-color: #111111; /* libre-dark */
+}
+
+/* --- LAYOUT & WIDTH --- */
+
+.md-grid {
+    max-width: 96% !important;
+    margin-right: auto;
+    margin-left: auto;
+}
+
+/* --- PAGE CONTENT --- */
+
+/* H1 Style - Gradient Background, Full Width, Centered */
+.md-typeset h1 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+    padding: 0.8rem 1rem;
+    color: white;
+    background: linear-gradient(135deg, var(--md-primary-fg-color) 0%, var(--md-accent-fg-color) 100%);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: block; /* Full width */
+    width: 100%;
+    text-align: center; /* Centered text */
+    box-sizing: border-box; /* Include padding in width */
+}
+
+/* --- LEFT SIDEBAR (Navigation) --- */
+
+/* LEVEL 1: Main Sections - Gradient Style, Centered */
+.md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link {
+    font-size: 0.95rem !important; /* Reduced size */
+    font-weight: 800 !important;
+    color: white !important;
+    background: linear-gradient(135deg, var(--md-primary-fg-color) 0%, var(--md-accent-fg-color) 100%);
+    border-radius: 4px;
+    margin-top: 1.2rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-bottom: none;
+    text-align: center; /* Centered text */
+    display: block; /* Ensure block display for centering */
+}
+
+/* LEVEL 2: Sub-sections */
+.md-nav__item--nested > .md-nav__link {
+    font-weight: 700;
+    color: var(--md-default-fg-color);
+    margin-top: 0.5rem;
+}
+
+/* Specific styling for Level 2 headers */
+.md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav > .md-nav__list > .md-nav__item--section > .md-nav__link {
+    font-size: 0.9rem !important;
+    font-weight: 700 !important;
+    color: var(--md-primary-fg-color) !important;
+    border-bottom: 1px solid var(--md-default-fg-color--lightest);
+    margin-top: 0.8rem;
+    margin-bottom: 0.3rem;
+    padding-bottom: 0.2rem;
+    text-transform: none;
+    background: none;
+    box-shadow: none;
+    padding-left: 0;
+    text-align: left; /* Keep level 2 left-aligned */
+}
+
+/* Active link styling */
+.md-nav__item .md-nav__link--active {
+    font-weight: bold;
+    border-left: 3px solid var(--md-primary-fg-color);
+    padding-left: 0.5rem;
+    background-color: rgba(0,0,0,0.03);
+}
+
+/* --- RIGHT SIDEBAR (Table of Contents) --- */
+
+.md-sidebar--secondary {
+    font-size: 0.85rem;
+}
+
+/* --- EXTRAS --- */
+
+.mermaid {
+    background-color: var(--md-code-bg-color);
+    padding: 1rem;
+    border-radius: 4px;
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+}
+
+/* --- HOMEPAGE STYLES --- */
+
+.home-header {
+    display: flex;
+    align-items: flex-start; /* Align top */
+    gap: 3rem;
+    margin-bottom: 3rem;
+    margin-top: 2rem;
+}
+
+.home-logo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+.home-logo img {
+    width: 250px; /* Increased width */
+    height: auto;
+}
+
+.home-content {
+    flex-grow: 1;
+    padding-top: 1rem;
+}
+
+.home-content h1 {
+    margin-top: 0;
+    background: none; /* Override default H1 style for home */
+    color: var(--md-default-fg-color);
+    box-shadow: none;
+    padding: 0;
+    font-size: 3rem;
+    text-align: left; /* Left align for home header */
+    width: auto;
+    display: block;
+}
+
+.home-content h2 {
+    margin-top: 0.5rem;
+    color: var(--md-accent-fg-color);
+    font-weight: 600;
+    font-size: 1.5rem;
+}
+
+.mission {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    color: var(--md-default-fg-color--light);
+    margin-top: 1.5rem;
+}
+
+/* Clickable Cards */
+.grid.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Slightly wider min */
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.card-link {
+    display: flex;
+    flex-direction: row; /* Horizontal layout */
+    align-items: flex-start; /* Align top */
+    padding: 1.5rem;
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 0.8rem;
+    background-color: var(--md-default-bg-color);
+    text-decoration: none !important;
+    color: var(--md-default-fg-color) !important;
+    transition: all 0.2s ease-in-out;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    gap: 1.5rem; /* Space between icon and text */
+}
+
+/* Hover Effect */
+.card-link:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    border-color: var(--md-accent-fg-color);
+    background-color: var(--md-primary-bg-color); /* Use brand beige on hover */
+}
+
+/* Icon styling */
+.card-icon {
+    flex-shrink: 0;
+    color: var(--md-primary-fg-color);
+    transition: transform 0.2s;
+    padding-top: 0.2rem; /* Align with title */
+}
+
+.card-link:hover .card-icon {
+    transform: scale(1.1);
+}
+
+.card-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.card-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--md-primary-fg-color);
+    display: block;
+}
+
+.card-desc {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--md-default-fg-color--light);
+    display: block;
+}
+
+/* Responsive Home Header */
+@media screen and (max-width: 768px) {
+    .home-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .home-content h1 {
+        text-align: center;
+    }
+
+    .card-link {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+}

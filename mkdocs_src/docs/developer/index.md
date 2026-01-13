@@ -1,19 +1,21 @@
-# Developer Manual
+# 👨‍💻 Developer Manual
 
-Welcome, developer! This manual provides all the technical information you need to understand, extend, and contribute to LibreFolio.
+Welcome to the Developer Manual. This section contains in-depth technical documentation about the LibreFolio architecture, codebase, and development practices.
 
-## 🗺️ Where to Start
+## Core Concepts
 
-- **New to the project?** Start with the [Architecture Overview](./architecture/overview.md) to understand the big picture.
-- **Want to add an API endpoint?** Follow the [API Development Guide](./backend/api-development.md).
-- **Need to understand the database?** Check the [Database Schema](./architecture/database.md) documentation.
-- **Want to add a new data source?** Read the guides on adding [FX Providers](./contributing/new-fx-provider.md) or [Asset Providers](./contributing/new-asset-provider.md).
-- **Curious about the tests?** The [Testing Guide](./backend/testing.md) is the place to go.
+-   **[Technologies](technologies/overview.md)**: An overview of the libraries and frameworks used in the project.
+-   **[Architecture](architecture/overview.md)**: High-level diagrams and explanations of the system architecture.
 
-## 🕵️ How to get information about the developer manual
+## Backend Development
 
-To get information about the developer manual an Agent can:
+-   **[BRIM (Broker Report Import Manager)](backend/brim/architecture.md)**: The architecture of the CSV import system.
+-   **[Asset Pricing & Metadata](backend/assets/architecture.md)**: How asset prices and metadata are fetched and managed.
+-   **[Foreign Exchange (FX)](backend/fx/architecture.md)**: The multi-provider currency conversion system.
 
-1. Read the files in this directory (`developer/`).
-2. Each subdirectory corresponds to a specific topic (e.g., `architecture/`, `backend/`, `features/`).
-3. The `mkdocs.yml` file in the `mkdocs_src/` directory defines the navigation structure.
+## Guides
+
+-   **[Creating a New Plugin](architecture/registry_pattern.md#guide-how-to-create-a-new-plugin)**: A step-by-step guide to adding a new provider for BRIM, Assets, or FX.
+-   **[Database Migrations (Alembic)](technologies/alembic.md)**: How to manage database schema changes.
+-   **[API Reference](api/index.md)**: Information on the FastAPI endpoints and how to use them.
+-   **[Test Walkthrough](test-walkthrough/index.md)**: An explanation of the project's test suite.
