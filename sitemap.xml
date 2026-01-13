@@ -1,183 +1,187 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://alfy.github.io/LibreFolio/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/POC_UX/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/faq/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/admin/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/POC_UX/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/admin/cli_tools/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/admin/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/admin/docker_advanced/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/admin/cli_tools/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/admin/docker_advanced/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/api/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/api/overview/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/api/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/architecture/database/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/api/overview/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/architecture/overview/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/architecture/database/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/architecture/registry_pattern/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/architecture/overview/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/architecture/security/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/architecture/registry_pattern/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/architecture/settings/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/architecture/security/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/architecture/users_and_brokers/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/architecture/settings/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/backend/assets/architecture/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/architecture/users_and_brokers/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/backend/assets/providers_list/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/backend/assets/architecture/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/backend/assets/system_providers/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/backend/assets/providers_list/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/backend/brim/architecture/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/backend/assets/system_providers/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/backend/brim/generic_csv/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/backend/brim/architecture/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/backend/brim/providers_list/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/backend/brim/generic_csv/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/backend/fx/architecture/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/backend/brim/providers_list/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/backend/fx/providers_list/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/backend/fx/architecture/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/frontend/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/backend/fx/providers_list/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/technologies/alembic/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/frontend/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/technologies/async_architecture/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/technologies/alembic/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/technologies/configuration/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/technologies/async_architecture/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/technologies/overview/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/technologies/configuration/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/test-walkthrough/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/technologies/overview/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/test-walkthrough/api/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/test-walkthrough/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/test-walkthrough/db/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/test-walkthrough/api/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/test-walkthrough/e2e/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/test-walkthrough/db/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/test-walkthrough/external/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/test-walkthrough/e2e/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/test-walkthrough/schemas/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/test-walkthrough/external/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/test-walkthrough/services/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/test-walkthrough/schemas/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/developer/test-walkthrough/utils/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/test-walkthrough/services/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/financial-calculations/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/developer/test-walkthrough/utils/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/financial-calculations/compounding/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/financial-calculations/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/financial-calculations/day-count/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/financial-calculations/compounding/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/financial-calculations/interest-types/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/financial-calculations/day-count/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/getting-started/installation/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/financial-calculations/interest-types/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/getting-started/introduction/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/getting-started/installation/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/tutorials/track-first-stock/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/getting-started/introduction/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/tutorials/track-p2p-loan/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/tutorials/track-first-stock/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/user/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/tutorials/track-p2p-loan/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
     <url>
-         <loc>https://alfy.github.io/LibreFolio/user/installation/</loc>
+         <loc>https://alfystar.github.io/LibreFolio/user/</loc>
+         <lastmod>2026-01-13</lastmod>
+    </url>
+    <url>
+         <loc>https://alfystar.github.io/LibreFolio/user/installation/</loc>
          <lastmod>2026-01-13</lastmod>
     </url>
 </urlset>
