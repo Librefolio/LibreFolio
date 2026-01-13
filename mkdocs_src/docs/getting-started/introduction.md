@@ -1,35 +1,29 @@
-# Introduction to LibreFolio
+# Introduction
 
-**LibreFolio** is a self-hosted, open-source application designed for private and personal tracking of financial investments.
+## What is LibreFolio?
 
-## 🎯 Project Goals
+**LibreFolio** is a self-hosted financial portfolio tracker designed for privacy and flexibility. It allows you to aggregate data from multiple brokers and asset sources into a single, unified dashboard.
 
-- **Privacy First**: Keep track of your financial investments in a private, self-hosted environment.
-- **Diverse Asset Support**: Supports both traditional assets (ETFs, stocks, crypto) and scheduled-yield loans (e.g., P2P lending).
-- **Comprehensive Analytics**: Calculate performance, ROI, and historical trends.
-- **Cash Management**: Manage cash movements associated with transactions.
-- **Modern UI**: A modern, multilingual web interface.
-- **Simple Deployment**: Distributed as a single, easy-to-deploy Docker container.
+### Key Features
 
-## 🧰 Technology Stack
+-   **Privacy First**: Your data stays on your server. No third-party cloud storage.
+-   **Multi-Broker Support**: Import data from Interactive Brokers, Degiro, eToro, Trading212, and many others via CSV.
+-   **Asset Tracking**: Track Stocks, ETFs, Cryptocurrencies, and P2P Loans.
+-   **Automated Pricing**: Fetch prices from Yahoo Finance, JustETF, or custom web scrapers.
+-   **FX Handling**: Automatic currency conversion using official rates (ECB, FED, etc.).
+-   **Modern Stack**: Built with Python (FastAPI), SvelteKit, and SQLite.
 
-### Backend
-- **Language**: Python
-- **Framework**: FastAPI
-- **Database**: SQLModel (on top of SQLAlchemy) with SQLite
-- **Migrations**: Alembic
-- **Dependencies**: Pipenv
+## Technology Stack
 
-### Frontend
-- **Framework**: React
-- **Language**: TypeScript
-- **Builder**: Vite
-- **UI**: Material UI (MUI)
+LibreFolio is built on a modern, efficient stack:
 
-## 🧠 How to get information about the project idea
+-   **Backend**: Python 3.11+, FastAPI, SQLAlchemy (Async), Pydantic.
+-   **Frontend**: SvelteKit, TypeScript, TailwindCSS.
+-   **Database**: SQLite (with strict mode and WAL journal).
+-   **Containerization**: Docker & Docker Compose.
 
-To get information about the project idea an Agent can:
+## Project Goals
 
-1. Read the file `LibreFolio_developer_journal/01-Riassunto_generale.md` to get a general overview of the project.
-2. Read the files in `LibreFolio_developer_journal/prompts/` to understand the original requirements for each feature.
-3. Read the files in `docs/` to see the existing detailed documentation.
+1.  **Data Sovereignty**: Users should own their financial data.
+2.  **Extensibility**: Easy to add new brokers and data sources via a plugin system.
+3.  **Simplicity**: Easy to deploy via Docker for non-technical users.

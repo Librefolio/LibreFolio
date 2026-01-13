@@ -1,77 +1,130 @@
 site_name: LibreFolio Documentation
-site_description: "Developer and user manuals for LibreFolio"
-site_url: http://localhost:8000/mkdocs/
-repo_url: https://github.com/LibreFolio/LibreFolio
-edit_uri: ""
-docs_dir: docs
-site_dir: ../site
+site_url: https://ea-enel.github.io/LibreFolio/
+repo_url: https://github.com/ea-enel/LibreFolio
+repo_name: ea-enel/LibreFolio
 
 theme:
   name: material
-  logo: static/logo.png
-  features:
-    - navigation.instant
-    - navigation.tracking
-    - content.action.edit
-    - toc.integrate
   palette:
+    # Light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: deep purple
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+
+    # Dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: deep purple
-  language: en
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.follow
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+  logo: static/logo.png
+  favicon: static/favicon.png
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  # Math support (LaTeX)
+  - pymdownx.arithmatex:
+      generic: true
+  # Emoji support (Updated syntax)
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - javascripts/dashboard-check.js
 
 nav:
-  - 'Home': 'index.md'
-  - 'Getting Started':
-    - 'Introduction': 'getting-started/introduction.md'
-    - 'Installation': 'getting-started/installation.md'
-  - 'User Manual':
-    - 'Introduction': 'user/index.md'
-    - 'Installation & Updates': 'user/installation.md'
-  - 'Developer Manual':
-    - 'Introduction': 'developer/index.md'
-    - 'Architecture':
-      - 'Overall Architecture': 'developer/architecture/overview.md'
-      - 'Backend Architecture': 'developer/architecture/backend.md'
-      - 'Frontend Architecture': 'developer/architecture/frontend.md'
-      - 'Async Architecture': 'developer/architecture/async.md'
-      - 'Database Schema': 'developer/architecture/database.md'
-    - 'Backend Development':
-      - 'Getting Started': 'developer/backend/getting-started.md'
-      - 'Plugin System': 'developer/backend/plugins/index.md'
-      - 'Testing Guide': 'developer/backend/testing.md'
-    - 'API Reference':
-      - 'Summary': 'developer/api/index.md'
-      - 'Asset Management': 'developer/api/assets/index.md'
-      - 'FX System': 'developer/api/fx/index.md'
-    - 'Financial Calculations':
-      - 'Overview': 'developer/financial-calculations/index.md'
-      - 'Day Count Conventions': 'developer/financial-calculations/day-count.md'
-      - 'Interest Types': 'developer/financial-calculations/interest-types.md'
-      - 'Compounding Frequencies': 'developer/financial-calculations/compounding.md'
-    - 'Test Walkthrough':
-      - 'Introduction': 'developer/test-walkthrough/index.md'
-      - 'Backend Tests': 'developer/test-walkthrough/backend.md'
-      - 'Frontend Tests': 'developer/test-walkthrough/frontend.md'
-    - 'Contributing':
-      - 'New FX Provider': 'developer/contributing/new-fx-provider.md'
-      - 'New Asset Provider': 'developer/contributing/new-asset-provider.md'
-  - 'Tutorials':
-    - 'Track your first Stock': 'tutorials/track-first-stock.md'
-    - 'Track a P2P Loan': 'tutorials/track-p2p-loan.md'
-  - 'UI/UX Mockups':
-    - 'Generated Mockups': 'POC_UX/index.md'
-    - 'Prompts for Missing UIs': 'POC_UX/missing_uis.md'
+  - Home: index.md
+  - 🚀 Dashboard: http://localhost:8000
+  - Getting Started:
+    - Introduction: getting-started/introduction.md
+    - Installation: getting-started/installation.md
+  - User Manual:
+    - Overview: user/index.md
+    - Installation (Docker): user/installation.md
+  - Admin Manual:
+    - Overview: admin/index.md
+    - CLI Tools: admin/cli_tools.md
+    - Advanced Docker: admin/docker_advanced.md
+  - Financial Math:
+    - Overview: financial-calculations/index.md
+    - Day Count Conventions: financial-calculations/day-count.md
+    - Interest Types: financial-calculations/interest-types.md
+    - Compounding: financial-calculations/compounding.md
+  - Developer Manual:
+    - Overview: developer/index.md
+    - Technologies:
+      - Overview: developer/technologies/overview.md
+      - Async Architecture: developer/technologies/async_architecture.md
+      - Database Migrations (Alembic): developer/technologies/alembic.md
+      - Configuration: developer/technologies/configuration.md
+    - Architecture:
+      - System Overview: developer/architecture/overview.md
+      - Database Schema: developer/architecture/database.md
+      - Users & Brokers: developer/architecture/users_and_brokers.md
+      - Settings System: developer/architecture/settings.md
+      - Registry Pattern: developer/architecture/registry_pattern.md
+      - Security: developer/architecture/security.md
+    - API & Communication:
+      - Overview: developer/api/overview.md
+      - Reference: developer/api/index.md
+    - Backend Development:
+      - BRIM (Import):
+        - Architecture: developer/backend/brim/architecture.md
+        - Generic CSV Provider: developer/backend/brim/generic_csv.md
+        - Providers List: developer/backend/brim/providers_list.md
+      - Assets (Pricing):
+        - Architecture: developer/backend/assets/architecture.md
+        - System Providers: developer/backend/assets/system_providers.md
+        - Providers List: developer/backend/assets/providers_list.md
+      - FX (Currency):
+        - Architecture: developer/backend/fx/architecture.md
+        - Providers List: developer/backend/fx/providers_list.md
+    - Frontend Development:
+      - Overview: developer/frontend/index.md
+    - Test Walkthrough:
+      - Overview: developer/test-walkthrough/index.md
+      - External: developer/test-walkthrough/external.md
+      - Database: developer/test-walkthrough/db.md
+      - Services: developer/test-walkthrough/services.md
+      - Utils: developer/test-walkthrough/utils.md
+      - Schemas: developer/test-walkthrough/schemas.md
+      - API: developer/test-walkthrough/api.md
+      - E2E: developer/test-walkthrough/e2e.md
+  - Tutorials:
+    - Track First Stock: tutorials/track-first-stock.md
+    - Track P2P Loan: tutorials/track-p2p-loan.md
+  - POC UX: POC_UX/index.md
 
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/LibreFolio/LibreFolio
-      name: LibreFolio on GitHub
-plugins:
-  - search
+extra_css:
+  - static/extra.css

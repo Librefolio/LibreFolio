@@ -1,55 +1,63 @@
-# Installation
+# 🛠️ Installation (Development)
 
-This guide covers the setup for a local development environment. For production, please refer to the Docker deployment guide (coming soon).
+This guide covers setting up a local development environment. For production deployment, see the [User Manual Installation](../user/installation.md).
 
-## 1. Prerequisites
+## Prerequisites
 
-- Python 3.11+
-- `pipenv`
+-   **Python 3.11+**
+-   **Node.js 18+**
+-   **Pipenv** (Python package manager)
+-   **Docker** (Optional, for running a clean database)
 
-## 2. Clone the Repository
+## Setup Instructions
+
+The project includes a helper script, `dev.sh`, to automate most tasks.
+
+### 1. Install Dependencies
+
+This command installs all Python and Node.js dependencies for both the backend and frontend.
 
 ```bash
-git clone https://github.com/LibreFolio/LibreFolio.git
-cd LibreFolio
+./dev.sh install
 ```
 
-## 3. Install Dependencies
+This will:
+1.  Install backend packages via `pipenv`.
+2.  Install frontend packages via `npm`.
+3.  Install Playwright browsers for E2E testing.
 
-Use `pipenv` to install all required packages from the `Pipfile`.
+### 2. Initialize the Database
 
-```bash
-pipenv install --dev
-```
-This command creates a virtual environment and installs both production and development dependencies.
+Before starting the server for the first time, you need to apply the database migrations.
 
-## 4. Environment Variables
-
-Copy the example environment file:
-```bash
-cp .env.example .env
-```
-You can edit the `.env` file to change default settings like the database path or log level.
-
-## 5. Database Setup
-
-Initialize the database and apply all migrations:
 ```bash
 ./dev.sh db:upgrade
 ```
-This will create the SQLite database file at `backend/data/sqlite/app.db`.
 
-## 6. Run the Application
+This command uses **Alembic** to create the SQLite database and apply all schema changes.
 
-Start the backend server:
+### 3. Start the Server
+
+To start the FastAPI server with auto-reload:
+
 ```bash
 ./dev.sh server
 ```
-The API will be available at `http://localhost:8000`. You can access the interactive API documentation (Swagger UI) at `http://localhost:8000/docs`.
 
-## AGENT-ACTION
-To get info on how to install and run the project an Agent should:
-1. Read this file.
-2. Read the `README.md` file in the root directory.
-3. Inspect the `Pipfile` to see the project dependencies.
-4. Inspect the `dev.sh` script to understand the available commands.
+The server will be available at `http://localhost:8000`.
+
+The first time you run this, it will automatically build the frontend. On subsequent runs, it will only rebuild if it detects changes in the `frontend/src` directory.
+
+### 4. Create a Superuser
+
+To log in, you need to create a user account.
+
+```bash
+./dev.sh user:create <username> <email> <password>
+```
+
+Replace `<username>`, `<email>`, and `<password>` with your desired credentials.
+
+---
+
+You are now ready to start developing!
