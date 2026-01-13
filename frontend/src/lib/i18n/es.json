@@ -20,7 +20,8 @@
     "select": "Seleccionar",
     "noData": "No hay datos disponibles",
     "welcome": "Bienvenido",
-    "comingSoon": "Próximamente"
+    "comingSoon": "Próximamente",
+    "copied": "¡Copiado!"
   },
   "error": {
     "pageNotFound": "Página No Encontrada",
@@ -79,6 +80,12 @@
     "profile": "Perfil",
     "documentation": "Documentación"
   },
+  "help": {
+    "helpAndSupport": "Ayuda y Soporte",
+    "faq": "Preguntas Frecuentes",
+    "documentation": "Documentación",
+    "reportBug": "Reportar Bug"
+  },
   "dashboard": {
     "welcomeBack": "Bienvenido de nuevo",
     "welcomeSubtitle": "Aquí tienes una visión general de tu cartera",
@@ -128,7 +135,16 @@
     "accountCreated": "Cuenta Creada",
     "security": "Seguridad",
     "changePassword": "Cambiar Contraseña",
-    "changePasswordInfo": "El cambio de contraseña estará disponible en una futura actualización.",
+    "changePasswordDescription": "Actualizar la contraseña de tu cuenta",
+    "currentPassword": "Contraseña Actual",
+    "newPassword": "Nueva Contraseña",
+    "confirmNewPassword": "Confirmar Nueva Contraseña",
+    "passwordChanged": "Contraseña cambiada con éxito",
+    "passwordChangeFailed": "Error al cambiar la contraseña",
+    "currentPasswordIncorrect": "La contraseña actual es incorrecta",
+    "passwordsMustMatch": "Las contraseñas deben coincidir",
+    "passwordTooShort": "La contraseña debe tener al menos 8 caracteres",
+    "passwordMustBeDifferent": "La nueva contraseña debe ser diferente de la actual",
     "language": "Idioma",
     "languageHint": "Selecciona tu idioma preferido para la interfaz.",
     "baseCurrency": "Moneda Base",
@@ -139,10 +155,22 @@
     "version": "Versión",
     "aboutDescription": "LibreFolio es un gestor de portafolio auto-hospedado y de código abierto. Rastrea tus inversiones, analiza el rendimiento y mantén el control total de tus datos financieros.",
     "viewSource": "Ver código fuente",
+    "sourceCode": "Código Fuente",
+    "githubRepo": "Repositorio GitHub",
+    "officialWebsite": "Sitio Web Oficial",
+    "visitWebsite": "Visitar el sitio principal",
     "license": "Licencia",
     "credits": "Créditos",
     "madeWith": "Hecho con",
-    "usingTech": "usando",
+    "inItaly": "en Italia",
+    "backendLibraries": "Bibliotecas Backend",
+    "frontendLibraries": "Bibliotecas Frontend",
+    "systemInfo": "Información del Sistema",
+    "copyForIssue": "Copiar para Issue",
+    "appVersion": "Versión App",
+    "pythonVersion": "Python",
+    "operatingSystem": "Sistema Operativo",
+    "platform": "Plataforma",
     "globalSettings": "Configuración Global",
     "globalSettingsDescription": "Configuración del sistema que afecta a todos los usuarios. Se requiere acceso de admin para modificar.",
     "locked": "Bloqueado",
@@ -150,6 +178,52 @@
     "warning": "Advertencia",
     "globalSettingsWarning": "Los cambios en la configuración global afectan a todos los usuarios. Asegúrese de comprender el impacto antes de guardar.",
     "noGlobalSettings": "No hay configuración global. Ejecute el comando de inicialización.",
-    "readOnlyMode": "Solo lectura (se requiere acceso Admin)"
+    "readOnlyMode": "Solo lectura (se requiere acceso Admin)",
+    "saveAll": "Guardar Todo",
+    "undoAll": "Deshacer Todo",
+    "resetAllToDefault": "Restablecer Todo",
+    "undo": "Deshacer",
+    "resetToDefault": "Restablecer por Defecto",
+    "savedSuccessfully": "guardado con éxito",
+    "adminRequired": "Acceso admin requerido para modificar la configuración global",
+    "saveFailed": "Error al guardar",
+    "clickToEdit": "Haga clic para desbloquear y editar",
+    "clickToLock": "Haga clic para bloquear (los cambios no guardados se descartarán)",
+    "discardChangesConfirm": "Tiene cambios sin guardar. ¿Descartar todos los cambios?",
+    "globalSettingCategories": {
+      "session": "Sesión",
+      "security": "Seguridad",
+      "sync": "Sincronización",
+      "defaults": "Valores Predeterminados",
+      "all": "Toda la Configuración"
+    },
+    "globalSettingNames": {
+      "session_ttl_hours": "Duración de Sesión",
+      "enable_registration": "Habilitar Registro",
+      "require_email_verification": "Verificación Email Requerida",
+      "max_file_upload_mb": "Tamaño Máx. Subida",
+      "auto_sync_fx_rates": "Sincronización Auto Tasas FX",
+      "auto_sync_prices": "Sincronización Auto Precios",
+      "price_sync_interval_hours": "Intervalo Sincronización Precios",
+      "default_currency": "Moneda Predeterminada",
+      "default_language": "Idioma Predeterminado"
+    },
+    "globalSettingDescriptions": {
+      "session_ttl_hours": "Tiempo de validez de una sesión de usuario antes de requerir nuevo login",
+      "enable_registration": "Permitir que nuevos usuarios creen cuentas",
+      "require_email_verification": "Requerir verificación de email para nuevas cuentas",
+      "max_file_upload_mb": "Tamaño máximo de archivo permitido para subidas",
+      "auto_sync_fx_rates": "Obtener tasas de cambio automáticamente cada día",
+      "auto_sync_prices": "Obtener precios de activos automáticamente",
+      "price_sync_interval_hours": "Frecuencia de sincronización de precios de activos",
+      "default_currency": "Moneda predeterminada para nuevos usuarios",
+      "default_language": "Idioma predeterminado para nuevos usuarios"
+    },
+    "globalSettingUnits": {
+      "session_ttl_hours": "horas",
+      "price_sync_interval_hours": "horas",
+      "max_file_upload_mb": "MB"
+    },
+    "selectCurrency": "Seleccionar moneda..."
   }
 }

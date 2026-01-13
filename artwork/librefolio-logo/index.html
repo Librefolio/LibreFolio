@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>LibreFolio – Wallet logo demo</title>
+    <style>
+      :root{
+        --wallet:#2d6b49;
+        --wallet-dark:#1f4e35;
+        --accent:#9ad28a;
+        --accent-2:#69b36f;
+        --bg:#f7f4ea;
+      }
+      html,body{ height:100% }
+      body{
+        margin:0; display:grid; place-items:center; min-height:100%;
+        background:var(--bg); font-family:system-ui, Segoe UI, Roboto, sans-serif;
+      }
+      #scene{
+        width:420px; max-width:90vw;
+        perspective: 900px;
+        transform-style: preserve-3d;
+        filter: drop-shadow(0 8px 18px rgba(0,0,0,.18));
+      }
+      svg{ width:100%; height:auto; overflow:visible }
+      @media (prefers-reduced-motion: reduce){
+        .animate-once{ animation: none !important }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="scene"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

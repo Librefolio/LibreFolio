@@ -26,10 +26,10 @@ from pathlib import Path
 
 import pytest
 
+from backend.app.config import PROJECT_ROOT
 from backend.app.utils.datetime_utils import utcnow
 
 # Add project root to path
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup test database BEFORE importing app modules

@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 from typing import Type, Dict, List
 
+from backend.app.config import PROJECT_ROOT
 from backend.app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -102,8 +103,7 @@ class AbstractProviderRegistry:
             return
         folder = cls._get_provider_folder()
         # Resolve to absolute path: project_root/backend/app/services/<folder>
-        project_root = Path(__file__).parent.parent.parent
-        target_dir = project_root / 'app' / 'services' / folder
+        target_dir = PROJECT_ROOT / 'app' / 'services' / folder
 
         if not target_dir.exists():
             return
