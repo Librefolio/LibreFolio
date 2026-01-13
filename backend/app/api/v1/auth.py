@@ -19,10 +19,13 @@ from backend.app.schemas.auth import (
     AuthUserResponse,
     AuthRegisterRequest,
     AuthRegisterResponse,
+    ChangePasswordRequest,
+    ChangePasswordResponse,
     )
 from backend.app.services import user_service
 from backend.app.services.auth_service import (
     verify_password,
+    hash_password,
     create_session,
     get_user_id_from_session,
     delete_session,
@@ -30,7 +33,7 @@ from backend.app.services.auth_service import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 # Session cookie configuration
 SESSION_COOKIE_NAME = "session"
@@ -202,3 +205,33 @@ async def register(
         user=AuthUserResponse.model_validate(user),
         message="Registration successful"
         )
+
+
+@router.post("/change-password", response_model=ChangePasswordResponse)
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator)
+    ):
+    """
+    Change password for the currently authenticated user.
+
+    Requires the current password for verification.
+    """
+    # Verify current password
+    if not verify_password(request.current_password, current_user.hashed_password):
+        logger.warning("Password change failed: wrong current password", user_id=current_user.id)
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    # Check new password is different
+    if request.current_password == request.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+
+    # Update password
+    current_user.hashed_password = hash_password(request.new_password)
+    session.add(current_user)
+    await session.commit()
+
+    logger.info("Password changed", user_id=current_user.id, username=current_user.username)
+
+    return ChangePasswordResponse(message="Password changed successfully")

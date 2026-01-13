@@ -20,7 +20,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from backend.app.config import get_settings
+from backend.app.config import get_settings, PROJECT_ROOT
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
 settings = get_settings()
@@ -28,7 +28,7 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 
 # Sample file paths
-SAMPLE_DIR = Path(__file__).parent.parent.parent / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = PROJECT_ROOT / "app" / "services" / "brim_providers" / "sample_reports"
 
 
 # ============================================================================

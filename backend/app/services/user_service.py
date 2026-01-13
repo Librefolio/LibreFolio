@@ -166,15 +166,18 @@ async def reset_password(
     if not user:
         return False, f"User '{username}' not found"
 
+    # Save user_id before commit (to avoid expired attribute access)
+    user_id = user.id
+
     user.hashed_password = hash_password(new_password)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
 
     # Invalidate all existing sessions for this user
-    delete_user_sessions(user.id)
+    delete_user_sessions(user_id)
 
-    logger.info("Password reset", user_id=user.id, username=username)
+    logger.info("Password reset", user_id=user_id, username=username)
     return True, None
 
 

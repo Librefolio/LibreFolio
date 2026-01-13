@@ -17,10 +17,10 @@ from pathlib import Path
 
 import pytest
 
+from backend.app.config import PROJECT_ROOT
 from backend.app.utils.decimal_utils import truncate_priceHistory, get_model_column_precision
 
 # Add project root to path
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup test database BEFORE importing app modules

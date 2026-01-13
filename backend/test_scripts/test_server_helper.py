@@ -31,7 +31,7 @@ import httpx
 import uvicorn
 
 # Import settings to get TEST_PORT
-from backend.app.config import Settings
+from backend.app.config import Settings, PROJECT_ROOT
 
 # Get settings
 _settings = Settings()
@@ -116,7 +116,7 @@ class _TestingServerManager:
     def __init__(self):
         self.server_thread = None
         self.server_started = threading.Event()
-        self.project_root = Path(__file__).parent.parent.parent
+        self.project_root = PROJECT_ROOT
         self.health_url = f"{TEST_API_BASE_URL}/health"
 
     def is_server_running(self) -> bool:

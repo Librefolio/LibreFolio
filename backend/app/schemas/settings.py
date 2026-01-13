@@ -38,9 +38,9 @@ class GlobalSettingRead(BaseModel):
     value_type: str = Field(..., description="Value type: string, int, bool, json")
     description: Optional[str] = Field(None, description="Human-readable description")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
-    updated_by: Optional[int] = Field(None, alias="updated_by_user_id", description="User ID who last updated")
+    updated_by: Optional[int] = Field(None, description="User ID who last updated")
 
-    model_config = {"from_attributes": True, "populate_by_name": True}
+    model_config = {"from_attributes": True}
 
 
 class GlobalSettingUpdate(BaseModel):

@@ -18,6 +18,7 @@ from typing import List, Set
 
 import pytest
 
+from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry
@@ -26,7 +27,7 @@ from backend.app.services.provider_registry import BRIMProviderRegistry
 # CONSTANTS
 # =============================================================================
 
-SAMPLE_DIR = Path(__file__).parent.parent.parent / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = PROJECT_ROOT / "app" / "services" / "brim_providers" / "sample_reports"
 
 
 # =============================================================================

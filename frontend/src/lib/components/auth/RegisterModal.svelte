@@ -2,6 +2,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {api} from '$lib/api';
+    import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
 
     const dispatch = createEventDispatcher<{
         gotoLogin: { message?: string };
@@ -163,20 +164,13 @@
 
             <!-- Password Input -->
             <div>
-                <input
-                        autocomplete="new-password"
+                <PasswordInput
                         bind:value={password}
-                        class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
-                        class:border-gray-400={!passwordError}
-                        class:border-red-400={passwordError}
-                        class:focus:border-libre-green={!passwordError}
-                        class:focus:border-red-400={passwordError}
-                        class:focus:ring-libre-green={!passwordError}
-                        class:focus:ring-red-400={passwordError}
                         disabled={loading}
-                        on:blur={validatePassword}
                         placeholder={$_('auth.password')}
-                        type="password"
+                        autocomplete="new-password"
+                        hasError={!!passwordError}
+                        on:blur={validatePassword}
                 />
                 {#if passwordError}
                     <p class="text-red-600 text-xs mt-1">{passwordError}</p>
@@ -185,20 +179,13 @@
 
             <!-- Confirm Password Input -->
             <div>
-                <input
-                        autocomplete="new-password"
+                <PasswordInput
                         bind:value={confirmPassword}
-                        class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
-                        class:border-gray-400={!confirmPasswordError}
-                        class:border-red-400={confirmPasswordError}
-                        class:focus:border-libre-green={!confirmPasswordError}
-                        class:focus:border-red-400={confirmPasswordError}
-                        class:focus:ring-libre-green={!confirmPasswordError}
-                        class:focus:ring-red-400={confirmPasswordError}
                         disabled={loading}
-                        on:blur={validateConfirmPassword}
                         placeholder={$_('auth.confirmPassword')}
-                        type="password"
+                        autocomplete="new-password"
+                        hasError={!!confirmPasswordError}
+                        on:blur={validateConfirmPassword}
                 />
                 {#if confirmPasswordError}
                     <p class="text-red-600 text-xs mt-1">{confirmPasswordError}</p>

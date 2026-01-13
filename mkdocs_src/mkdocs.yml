@@ -1,7 +1,7 @@
 site_name: LibreFolio Documentation
-site_url: https://ea-enel.github.io/LibreFolio/
-repo_url: https://github.com/ea-enel/LibreFolio
-repo_name: ea-enel/LibreFolio
+site_url: https://alfystar.github.io/LibreFolio/
+repo_url: https://github.com/Alfystar/LibreFolio
+repo_name: Alfystar/LibreFolio
 
 theme:
   name: material
@@ -66,6 +66,7 @@ extra_javascript:
 nav:
   - Home: index.md
   - 🚀 Dashboard: http://localhost:8000
+  - FAQ: faq.md
   - Getting Started:
     - Introduction: getting-started/introduction.md
     - Installation: getting-started/installation.md

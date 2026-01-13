@@ -2,6 +2,7 @@
     import {createEventDispatcher} from 'svelte';
     import {Menu} from 'lucide-svelte';
     import LanguageSelector from '$lib/components/LanguageSelector.svelte';
+    import HelpMenu from '$lib/components/HelpMenu.svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -24,8 +25,9 @@
         <!-- Spacer for desktop (sidebar visible) -->
         <div class="hidden lg:block"></div>
 
-        <!-- Right side - Language Selector -->
-        <div class="flex items-center">
+        <!-- Right side - Help Menu & Language Selector -->
+        <div class="flex items-center space-x-2">
+            <HelpMenu/>
             <LanguageSelector variant="dropdown"/>
         </div>
     </div>

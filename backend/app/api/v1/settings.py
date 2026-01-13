@@ -30,7 +30,7 @@ from backend.app.services.settings_service import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/settings", tags=["settings"])
+router = APIRouter(prefix="/settings", tags=["Settings"])
 
 
 # ============================================================================

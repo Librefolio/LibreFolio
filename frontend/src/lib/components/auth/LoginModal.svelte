@@ -3,6 +3,7 @@
     import {_} from '$lib/i18n';
     import {auth, authError, isAuthLoading} from '$lib/stores/auth';
     import {goto} from '$app/navigation';
+    import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
 
     const dispatch = createEventDispatcher<{
         gotoRegister: void;
@@ -64,16 +65,12 @@
             </div>
 
             <!-- Password Input -->
-            <div class="relative">
-                <input
-                        autocomplete="current-password"
-                        bind:value={password}
-                        class="w-full px-4 py-3 rounded-lg border border-gray-400 bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:border-libre-green focus:ring-1 focus:ring-libre-green transition-all disabled:opacity-50"
-                        disabled={$isAuthLoading}
-                        placeholder={$_('auth.password')}
-                        type="password"
-                />
-            </div>
+            <PasswordInput
+                    bind:value={password}
+                    disabled={$isAuthLoading}
+                    placeholder={$_('auth.password')}
+                    autocomplete="current-password"
+            />
 
             <!-- Forgot Password Link -->
             <div class="flex justify-end">
