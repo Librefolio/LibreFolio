@@ -8,7 +8,6 @@ import platform
 import re
 import sys
 from importlib.metadata import version as pkg_version
-from pathlib import Path
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -49,7 +48,7 @@ BACKEND_NAME_MAP = {
     "python-multipart": "python-multipart",
     "justetf-scraping": "JustETF Scraping",
     "email-validator": "email-validator",
-}
+    }
 
 FRONTEND_NAME_MAP = {
     "@sveltejs/kit": "SvelteKit",
@@ -62,8 +61,7 @@ FRONTEND_NAME_MAP = {
     "svelte-i18n": "svelte-i18n",
     "date-fns": "date-fns",
     "@zodios/core": "Zodios",
-}
-
+    }
 
 
 def get_display_name(pkg_name: str, name_map: dict) -> str:
@@ -166,5 +164,4 @@ async def get_system_info() -> SystemInfoResponse:
         platform=platform.platform(),
         backend_dependencies=get_backend_deps(),
         frontend_dependencies=get_frontend_deps(),
-    )
-
+        )

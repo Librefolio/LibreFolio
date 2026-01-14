@@ -15,7 +15,6 @@ Reference: backend/app/api/v1/brokers.py
 """
 import io
 import uuid
-from pathlib import Path
 
 import httpx
 import pytest

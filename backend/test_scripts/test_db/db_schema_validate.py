@@ -15,7 +15,6 @@ Usage:
     or via test_runner.py: python test_runner.py db validate
 """
 import sys
-from pathlib import Path
 
 import pytest
 
