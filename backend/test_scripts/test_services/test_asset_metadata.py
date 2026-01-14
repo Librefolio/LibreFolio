@@ -6,7 +6,6 @@ for asset classification metadata.
 """
 import sys
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 

@@ -27,7 +27,7 @@ from backend.app.services.provider_registry import BRIMProviderRegistry
 # CONSTANTS
 # =============================================================================
 
-SAMPLE_DIR = PROJECT_ROOT / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
 
 
 # =============================================================================

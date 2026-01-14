@@ -5,7 +5,6 @@ Tests all registered FX providers (ECB, FED, BOE, etc.) with uniform test suite.
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 

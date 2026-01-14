@@ -25,7 +25,6 @@ This is achieved by:
 """
 import threading
 import time
-from pathlib import Path
 
 import httpx
 import uvicorn

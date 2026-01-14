@@ -22,7 +22,6 @@ This ensures:
 import sys
 from datetime import date
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 
