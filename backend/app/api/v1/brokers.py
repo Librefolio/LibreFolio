@@ -98,17 +98,20 @@ async def create_brokers(
     Returns:
         BRBulkCreateResponse with results for each item
     """
-    logger.info(f"Creating {len(items)} brokers", user_id=current_user.id)
+    # Cache user_id before session operations (avoid lazy load issues after rollback)
+    user_id = current_user.id
+
+    logger.info(f"Creating {len(items)} brokers", user_id=user_id)
 
     service = BrokerService(session)
-    response = await service.create_bulk(items, user_id=current_user.id)
+    response = await service.create_bulk(items, user_id=user_id)
 
     if not response.errors:
         await session.commit()
-        logger.info(f"Created {response.success_count} brokers successfully", user_id=current_user.id)
+        logger.info(f"Created {response.success_count} brokers successfully", user_id=user_id)
     else:
         await session.rollback()
-        logger.warning(f"Broker creation had errors: {response.errors}", user_id=current_user.id)
+        logger.warning(f"Broker creation had errors: {response.errors}", user_id=user_id)
 
     return response
 
@@ -248,22 +251,25 @@ async def update_broker(
     Returns:
         BRBulkUpdateResponse with result
     """
+    # Cache user_id before session operations (avoid lazy load issues after rollback)
+    user_id = current_user.id
+
     # Validate as_user_id permission
     if as_user_id is not None and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
 
-    logger.info(f"Updating broker {broker_id}", user_id=current_user.id)
+    logger.info(f"Updating broker {broker_id}", user_id=user_id)
 
     service = BrokerService(session)
-    response = await service.update_bulk([item], [broker_id], user_id=current_user.id, as_user_id=as_user_id)
+    response = await service.update_bulk([item], [broker_id], user_id=user_id, as_user_id=as_user_id)
 
     if not response.errors and response.success_count > 0:
         await session.commit()
-        logger.info(f"Updated broker {broker_id} successfully", user_id=current_user.id)
+        logger.info(f"Updated broker {broker_id} successfully", user_id=user_id)
     else:
         await session.rollback()
         if response.results and not response.results[0].success:
-            logger.warning(f"Broker update failed: {response.results[0].error}", user_id=current_user.id)
+            logger.warning(f"Broker update failed: {response.results[0].error}", user_id=user_id)
 
     return response
 
@@ -296,23 +302,26 @@ async def delete_brokers(
     Returns:
         BRBulkDeleteResponse with results
     """
+    # Cache user_id before session operations (avoid lazy load issues after rollback)
+    user_id = current_user.id
+
     # Validate as_user_id permission
     if as_user_id is not None and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
 
-    logger.info(f"Deleting {len(ids)} brokers (force={force})", user_id=current_user.id)
+    logger.info(f"Deleting {len(ids)} brokers (force={force})", user_id=user_id)
 
     items = [BRDeleteItem(id=id_, force=force) for id_ in ids]
 
     service = BrokerService(session)
-    response = await service.delete_bulk(items, user_id=current_user.id, as_user_id=as_user_id)
+    response = await service.delete_bulk(items, user_id=user_id, as_user_id=as_user_id)
 
     if not response.errors:
         await session.commit()
-        logger.info(f"Deleted {response.total_deleted} brokers successfully", user_id=current_user.id)
+        logger.info(f"Deleted {response.total_deleted} brokers successfully", user_id=user_id)
     else:
         await session.rollback()
-        logger.warning(f"Broker deletion had errors: {response.errors}", user_id=current_user.id)
+        logger.warning(f"Broker deletion had errors: {response.errors}", user_id=user_id)
 
     return response
 

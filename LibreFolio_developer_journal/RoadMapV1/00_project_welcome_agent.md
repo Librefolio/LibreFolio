@@ -195,9 +195,50 @@ Non eseguire comandi manuali quando esiste uno script che fa quel lavoro!
 ./test_runner.py -v api auth         # Verbose mode
 ```
 
-[//]: # (TODO: aggiungi user_cli.py)
+### user_cli.py - Gestione Utenti
 
-[//]: # (TODO: aggiungi spiegazione all'agente che quando deve operare sul frontend, lo deve fare attraverso il browser con un tool mcp, curl lo può usare solo per testare l'output degli endpoint.)
+```bash
+# Lista utenti (usa il DB di produzione di default)
+python user_cli.py list-users
+
+# Operazioni su DB di test (--test-db)
+python user_cli.py --test-db list-users
+
+# Creazione utente
+python user_cli.py create-user <username> <email> <password>
+
+# Promuovi a superuser
+python user_cli.py promote-user <username>
+
+# Reset password
+python user_cli.py reset-password <username> <new_password>
+
+# Attiva/Disattiva utente
+python user_cli.py activate-user <username>
+python user_cli.py deactivate-user <username>
+```
+
+## 🖥️ Note per AI Agent - Frontend e MCP Browser
+
+⚠️ **IMPORTANTE per operazioni UI**:
+
+Quando devi lavorare sul frontend o verificare il comportamento dell'interfaccia:
+
+1. **Usa il browser MCP tool** (Playwright) per interagire con la UI
+2. **NON usare curl** per verificare comportamenti visivi/UI
+3. **curl è solo per testare endpoint API** (risposte JSON, status code, ecc.)
+
+```bash
+# Per verificare endpoint API → usa curl o httpx
+curl http://localhost:8000/api/v1/auth/me
+
+# Per verificare UI → usa browser MCP tools:
+# - mcp_microsoft_pla_browser_navigate: navigare URL
+# - mcp_microsoft_pla_browser_snapshot: catturare stato accessibilità
+# - mcp_microsoft_pla_browser_click: cliccare elementi
+# - mcp_microsoft_pla_browser_type: digitare in form
+# - mcp_microsoft_pla_browser_take_screenshot: screenshot per debug
+```
 
 ### Scenari Comuni
 
@@ -213,6 +254,13 @@ Non eseguire comandi manuali quando esiste uno script che fa quel lavoro!
 | **Build per produzione**           | `./dev.sh fe:build && ./dev.sh server`                        |
 | **Debug test singolo**             | `./dev.sh test -v api <test_name>`                            |
 
+## 🔗 Link Utili
+
+- **Repository GitHub**: https://github.com/Alfystar/LibreFolio
+- **Documentazione Locale**: http://localhost:8000/mkdocs/
+- **API Swagger**: http://localhost:8000/docs
+- **API ReDoc**: http://localhost:8000/redoc
+
 ## ⚠️ Note per lo Sviluppo
 
 - **Progetto embrionale**: Esiste solo su questa macchina
@@ -220,6 +268,14 @@ Non eseguire comandi manuali quando esiste uno script che fa quel lavoro!
 - **Codice in inglese**: Commenti, docstrings, README
 - **UI multilingue**: Solo interfaccia grafica in EN/IT/FR/ES
 - **Obiettivo**: Codebase pulito e mantenibile per condivisione futura
+- **Migrazioni DB**: Durante lo sviluppo, modifica `001_initial.py` e ricrea DB invece di creare migrazioni
+
+## 📝 Convenzioni DB
+
+- **Primo utente = Superuser**: Il primo utente registrato diventa automaticamente superuser
+- **BrokerUserAccess**: Ogni broker ha ownership tramite tabella `broker_user_access`
+  - Ruoli: `OWNER` (tutto), `EDITOR` (modifica, no delete/share), `VIEWER` (solo lettura)
+- **Creazione broker**: Automaticamente crea accesso OWNER per l'utente creatore
 
 Prima di proseguire:
 

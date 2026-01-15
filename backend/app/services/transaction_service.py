@@ -19,11 +19,11 @@ from datetime import date as date_type, timedelta
 from decimal import Decimal
 from typing import List, Optional, Dict, Tuple, Set
 
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Transaction, TransactionType, Broker
+from backend.app.db.models import Transaction, TransactionType, Broker, BrokerUserAccess, UserRole
 from backend.app.schemas.transactions import (
     TXCreateItem,
     TXReadItem,
@@ -69,20 +69,65 @@ class TransactionService:
         self.session = session
 
     # =========================================================================
+    # ACCESS CONTROL
+    # =========================================================================
+
+    async def _check_broker_access(
+        self,
+        broker_id: int,
+        user_id: int,
+        min_role: UserRole = UserRole.VIEWER
+    ) -> Optional[UserRole]:
+        """
+        Check if user has access to a broker and return their role.
+
+        Args:
+            broker_id: Broker ID
+            user_id: User ID
+            min_role: Minimum role required (OWNER > EDITOR > VIEWER)
+
+        Returns:
+            User's role if they have at least min_role access, None otherwise
+        """
+        stmt = select(BrokerUserAccess).where(
+            and_(
+                BrokerUserAccess.broker_id == broker_id,
+                BrokerUserAccess.user_id == user_id
+            )
+        )
+        result = await self.session.execute(stmt)
+        access = result.scalar_one_or_none()
+
+        if not access:
+            return None
+
+        # Role hierarchy: OWNER > EDITOR > VIEWER
+        role_order = {UserRole.OWNER: 3, UserRole.EDITOR: 2, UserRole.VIEWER: 1}
+        if role_order.get(access.role, 0) >= role_order.get(min_role, 0):
+            return access.role
+        return None
+
+    # =========================================================================
     # CREATE OPERATIONS
     # =========================================================================
 
-    async def create_bulk(self, items: List[TXCreateItem]) -> TXBulkCreateResponse:
+    async def create_bulk(
+        self,
+        items: List[TXCreateItem],
+        user_id: Optional[int] = None
+    ) -> TXBulkCreateResponse:
         """
         Create multiple transactions in a single database transaction.
 
         Process:
-        1. Insert all transactions
-        2. Resolve link_uuid pairs (set related_transaction_id)
-        3. Validate balances for affected brokers
+        1. Validate user has EDITOR access to all broker_ids
+        2. Insert all transactions
+        3. Resolve link_uuid pairs (set related_transaction_id)
+        4. Validate balances for affected brokers
 
         Args:
             items: List of TXCreateItem DTOs
+            user_id: User creating the transactions (required for access check)
 
         Returns:
             TXBulkCreateResponse with results for each item
@@ -97,9 +142,26 @@ class TransactionService:
         affected_brokers: Set[int] = set()
         earliest_date_by_broker: Dict[int, date_type] = {}
 
-        # Phase 1: Insert all transactions
+        # Cache for broker access checks
+        broker_access_cache: Dict[int, Optional[UserRole]] = {}
+
+        # Phase 1: Insert all transactions (with access check)
         for item in items:
             try:
+                # Check user access to broker (EDITOR required for create)
+                if user_id is not None:
+                    broker_id = item.broker_id
+                    if broker_id not in broker_access_cache:
+                        role = await self._check_broker_access(broker_id, user_id, min_role=UserRole.EDITOR)
+                        broker_access_cache[broker_id] = role
+
+                    if broker_access_cache[broker_id] is None:
+                        results.append(TXCreateResultItem(
+                            success=False,
+                            error=f"Access denied: EDITOR role required for broker {broker_id}",
+                        ))
+                        continue
+
                 tx = Transaction(
                     broker_id=item.broker_id,
                     asset_id=item.asset_id,
@@ -152,6 +214,9 @@ class TransactionService:
                 await self._validate_broker_balances(broker_id, from_date)
             except BalanceValidationError as e:
                 errors.append(str(e))
+            except Exception as e:
+                # Catch any other validation error to prevent 500
+                errors.append(f"Balance validation error for broker {broker_id}: {str(e)}")
 
         return TXBulkCreateResponse(results=results, success_count=success_count, errors=errors)
 

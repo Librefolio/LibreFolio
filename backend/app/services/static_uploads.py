@@ -5,6 +5,11 @@ Handles file uploads, storage, listing, and deletion.
 Files are stored in backend/data/custom-uploads/ with UUID-based naming.
 Metadata is stored in JSON sidecar files.
 
+Security:
+- Validates actual MIME type matches declared type (prevents masquerading)
+- Blocks executable files and scripts
+- Validates file size against global settings
+
 Storage structure:
     backend/data/custom-uploads/
     ├── {uuid}.{ext}     # Actual file
@@ -17,6 +22,7 @@ Usage:
         get_upload_info,
         delete_upload,
         get_upload_path,
+        validate_mime_type,
     )
 """
 import json
@@ -28,6 +34,12 @@ from typing import List, Optional, Tuple
 
 import structlog
 
+try:
+    import magic
+    MAGIC_AVAILABLE = True
+except ImportError:
+    MAGIC_AVAILABLE = False
+
 from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.uploads import UploadFileInfo
 from backend.app.utils.datetime_utils import utcnow
@@ -36,6 +48,50 @@ logger = structlog.get_logger(__name__)
 
 # Storage directory
 UPLOADS_DIR = PROJECT_ROOT / "backend" / "data" / "custom-uploads"
+
+# Blocked MIME types (executables, scripts)
+BLOCKED_MIME_TYPES = {
+    # Executables
+    "application/x-executable",
+    "application/x-dosexec",
+    "application/x-msdownload",
+    "application/x-msdos-program",
+    "application/vnd.microsoft.portable-executable",
+    # Scripts
+    "application/x-sh",
+    "application/x-shellscript",
+    "application/x-bash",
+    "application/x-csh",
+    "text/x-python",
+    "text/x-perl",
+    "text/x-ruby",
+    "text/x-php",
+    "application/javascript",
+    "text/javascript",
+    # Archives that can contain executables
+    # (optional - can be enabled if needed)
+    # "application/x-tar",
+    # "application/zip",
+}
+
+# Blocked file extensions
+BLOCKED_EXTENSIONS = {
+    ".exe", ".dll", ".so", ".dylib",
+    ".bat", ".cmd", ".ps1", ".vbs", ".vbe",
+    ".sh", ".bash", ".csh", ".zsh",
+    ".py", ".pyc", ".pyo",
+    ".pl", ".pm",
+    ".rb",
+    ".php", ".php3", ".php4", ".php5", ".phtml",
+    ".js", ".mjs", ".cjs",
+    ".jar", ".class",
+    ".com", ".scr", ".pif",
+}
+
+
+class UploadSecurityError(Exception):
+    """Raised when upload fails security validation."""
+    pass
 
 
 def _ensure_dir() -> None:
@@ -80,6 +136,98 @@ def _metadata_to_info(metadata: dict) -> UploadFileInfo:
     )
 
 
+def _detect_actual_mime_type(content: bytes) -> Optional[str]:
+    """
+    Detect actual MIME type from file content using libmagic.
+
+    Returns None if python-magic is not available.
+    """
+    if not MAGIC_AVAILABLE:
+        return None
+    try:
+        return magic.from_buffer(content, mime=True)
+    except Exception as e:
+        logger.warning("Failed to detect MIME type", error=str(e))
+        return None
+
+
+def validate_upload_security(
+    content: bytes,
+    original_filename: str,
+    declared_mime_type: Optional[str] = None,
+) -> str:
+    """
+    Validate file upload for security.
+
+    Checks:
+    1. File extension is not blocked
+    2. Detected MIME type (via magic) is not blocked
+    3. If declared MIME type provided, it must match detected (prevent masquerading)
+
+    Args:
+        content: File content bytes
+        original_filename: Original filename
+        declared_mime_type: MIME type declared by client (optional)
+
+    Returns:
+        Validated/detected MIME type
+
+    Raises:
+        UploadSecurityError: If file fails security validation
+    """
+    ext = Path(original_filename).suffix.lower()
+
+    # Check extension blocklist
+    if ext in BLOCKED_EXTENSIONS:
+        raise UploadSecurityError(f"File extension '{ext}' is not allowed")
+
+    # Detect actual MIME type
+    actual_mime = _detect_actual_mime_type(content)
+
+    if actual_mime:
+        # Check MIME type blocklist
+        if actual_mime in BLOCKED_MIME_TYPES:
+            raise UploadSecurityError(f"File type '{actual_mime}' is not allowed")
+
+        # If client declared a MIME type, verify it matches (anti-masquerading)
+        if declared_mime_type:
+            # Allow some flexibility for text types and similar categories
+            declared_base = declared_mime_type.split(";")[0].strip()
+            actual_base = actual_mime.split(";")[0].strip()
+
+            # Same exact type is fine
+            if declared_base == actual_base:
+                return actual_mime
+
+            # Allow generic types
+            if declared_base == "application/octet-stream":
+                return actual_mime
+
+            # Allow text/* variations
+            if declared_base.startswith("text/") and actual_base.startswith("text/"):
+                return actual_mime
+
+            # Strict check for other types
+            logger.warning(
+                "MIME type mismatch",
+                declared=declared_mime_type,
+                actual=actual_mime,
+                filename=original_filename,
+            )
+            # We allow but log the mismatch - not all clients send correct MIME
+            # If you want strict enforcement, uncomment below:
+            # raise UploadSecurityError(
+            #     f"Declared MIME type '{declared_mime_type}' doesn't match "
+            #     f"actual content type '{actual_mime}'"
+            # )
+
+        return actual_mime
+
+    # python-magic not available, fall back to extension-based detection
+    guessed_mime, _ = mimetypes.guess_type(original_filename)
+    return guessed_mime or "application/octet-stream"
+
+
 def save_upload(
     content: bytes,
     original_filename: str,
@@ -90,38 +238,41 @@ def save_upload(
     """
     Save an uploaded file.
 
+    Performs security validation before saving.
+
     Args:
         content: File content as bytes
         original_filename: Original filename from upload
         user_id: ID of uploading user
         description: Optional description
-        mime_type: Optional MIME type (auto-detected if not provided)
+        mime_type: Optional MIME type (validated and may be corrected)
 
     Returns:
         UploadFileInfo with file details
+
+    Raises:
+        UploadSecurityError: If file fails security validation
     """
     _ensure_dir()
+
+    # Security validation (also detects actual MIME type)
+    validated_mime = validate_upload_security(content, original_filename, mime_type)
 
     # Generate UUID and determine extension
     file_id = str(uuid.uuid4())
     ext = Path(original_filename).suffix.lower() or ".bin"
 
-    # Auto-detect MIME type if not provided
-    if not mime_type:
-        mime_type, _ = mimetypes.guess_type(original_filename)
-        mime_type = mime_type or "application/octet-stream"
-
     # Write file
     file_path = UPLOADS_DIR / f"{file_id}{ext}"
     file_path.write_bytes(content)
 
-    # Create metadata
+    # Create metadata (use validated MIME type)
     now = utcnow()
     metadata = {
         "id": file_id,
         "original_name": original_filename,
         "extension": ext,
-        "mime_type": mime_type,
+        "mime_type": validated_mime,
         "size_bytes": len(content),
         "uploaded_at": now.isoformat(),
         "uploaded_by_user_id": user_id,

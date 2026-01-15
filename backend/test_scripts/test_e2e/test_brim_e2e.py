@@ -15,6 +15,7 @@ These tests require:
 See checklist: 01_test_brim_plan.md - Category 7
 """
 import io
+import time
 import uuid
 
 import httpx
@@ -26,6 +27,38 @@ from backend.test_scripts.test_server_helper import _TestingServerManager
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+
+
+# ============================================================================
+# AUTH HELPERS
+# ============================================================================
+
+def unique_username() -> str:
+    """Generate unique username for test isolation."""
+    ts = int(time.time() * 1000) % 1000000
+    return f"brim_e2e_{ts}_{uuid.uuid4().hex[:8]}"
+
+
+async def create_test_user(client: httpx.AsyncClient) -> int:
+    """Register and login a test user, return user_id."""
+    username = unique_username()
+    email = f"{username}@example.com"
+    password = "testpass123"
+
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 201, f"Register failed: {resp.text}"
+
+    resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"Login failed: {resp.text}"
+    return resp.json()["user"]["id"]
 
 
 # ============================================================================
@@ -41,31 +74,6 @@ def test_server():
         yield server_manager
 
 
-@pytest.fixture(scope="module")
-def test_broker_id(test_server) -> int:
-    """Create a test broker and return its ID."""
-    import asyncio
-
-    async def create_broker():
-        async with httpx.AsyncClient() as client:
-            unique_name = f"BRIM_E2E_Test_Broker_{uuid.uuid4().hex[:8]}"
-            payload = [{"name": unique_name, "allow_cash_overdraft": True}]
-            response = await client.post(
-                f"{API_BASE}/brokers",
-                json=payload,
-                timeout=TIMEOUT,
-                )
-            assert response.status_code == 200, f"Failed to create broker: {response.text}"
-            data = response.json()
-
-            if data["results"] and data["results"][0]["success"]:
-                return data["results"][0]["broker_id"]
-
-            pytest.fail(f"Could not create broker: {data}")
-
-    return asyncio.run(create_broker())
-
-
 # ============================================================================
 # E2E IMPORT TESTS
 # ============================================================================
@@ -73,8 +81,20 @@ def test_broker_id(test_server) -> int:
 class TestBRIME2EImport:
     """End-to-end import flow tests."""
 
+    async def _create_broker_for_test(self, client: httpx.AsyncClient) -> int:
+        """Authenticate and create a broker, return broker_id."""
+        await create_test_user(client)
+        unique_name = f"BRIM_E2E_Broker_{uuid.uuid4().hex[:8]}"
+        resp = await client.post(
+            f"{API_BASE}/brokers",
+            json=[{"name": unique_name, "allow_cash_overdraft": True}],
+            timeout=TIMEOUT,
+        )
+        assert resp.status_code == 200, f"Failed to create broker: {resp.text}"
+        return resp.json()["results"][0]["broker_id"]
+
     @pytest.mark.asyncio
-    async def test_full_import_flow_deposits_only(self, test_server, test_broker_id):
+    async def test_full_import_flow_deposits_only(self, test_server):
         """
         E2E-001: Full import flow for deposit-only file (no assets).
 
@@ -85,6 +105,8 @@ class TestBRIME2EImport:
         4. Verify transactions created
         """
         async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
             # Create CSV with only deposits/withdrawals (no assets)
             csv_content = b"""date,type,quantity,amount,currency,description
 2025-01-10,DEPOSIT,0,10000.00,EUR,Initial deposit for E2E test
@@ -106,7 +128,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/files/{file_id}/parse",
                 json={
                     "plugin_code": "broker_generic_csv",
-                    "broker_id": test_broker_id,
+                    "broker_id": broker_id,
                     },
                 timeout=TIMEOUT,
                 )
@@ -132,7 +154,7 @@ class TestBRIME2EImport:
             assert import_data["success_count"] == 2
 
     @pytest.mark.asyncio
-    async def test_full_import_flow_with_assets(self, test_server, test_broker_id):
+    async def test_full_import_flow_with_assets(self, test_server):
         """
         E2E-002: Full import flow with asset transactions.
 
@@ -143,6 +165,8 @@ class TestBRIME2EImport:
         4. Verify asset mappings structure
         """
         async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
             # CSV with asset identifiers
             csv_content = b"""date,type,quantity,amount,currency,asset,description
 2025-02-01,DEPOSIT,0,10000.00,EUR,,Initial deposit
@@ -166,7 +190,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/files/{file_id}/parse",
                 json={
                     "plugin_code": "broker_generic_csv",
-                    "broker_id": test_broker_id,
+                    "broker_id": broker_id,
                     },
                 timeout=TIMEOUT,
                 )
@@ -186,8 +210,6 @@ class TestBRIME2EImport:
             for mapping in asset_mappings:
                 assert "fake_asset_id" in mapping
                 assert "candidates" in mapping
-                # Since these are test assets, candidates should be empty
-                # (no matching assets in DB)
 
             # Transactions with assets should have fake_asset_id
             asset_txs = [tx for tx in transactions if tx.get("asset_id") is not None]
@@ -199,7 +221,7 @@ class TestBRIME2EImport:
             assert deposit_txs[0].get("asset_id") is None
 
     @pytest.mark.asyncio
-    async def test_import_user_can_filter_duplicates(self, test_server, test_broker_id):
+    async def test_import_user_can_filter_duplicates(self, test_server):
         """
         E2E-003: User can choose to skip duplicates during import.
 
@@ -211,6 +233,8 @@ class TestBRIME2EImport:
         5. Only unique transactions are imported
         """
         async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
             # Create unique CSV
             unique_id = uuid.uuid4().hex[:8]
             csv_content = f"""date,type,quantity,amount,currency,description
@@ -229,7 +253,7 @@ class TestBRIME2EImport:
 
             parse1 = await client.post(
                 f"{API_BASE}/brokers/import/files/{file_id1}/parse",
-                json={"plugin_code": "broker_generic_csv", "broker_id": test_broker_id},
+                json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
                 )
             tx1 = parse1.json()["transactions"]
@@ -254,7 +278,7 @@ class TestBRIME2EImport:
 
             parse2 = await client.post(
                 f"{API_BASE}/brokers/import/files/{file_id2}/parse",
-                json={"plugin_code": "broker_generic_csv", "broker_id": test_broker_id},
+                json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
                 )
             parse2_data = parse2.json()
@@ -279,7 +303,7 @@ class TestBRIME2EImport:
                 assert import2.json()["success_count"] == len(unique_indices)
 
     @pytest.mark.asyncio
-    async def test_reimport_detects_duplicates(self, test_server, test_broker_id):
+    async def test_reimport_detects_duplicates(self, test_server):
         """
         E2E-004: Re-importing same file shows transactions as duplicates.
 
@@ -289,6 +313,8 @@ class TestBRIME2EImport:
         3. Parse should detect all as duplicates
         """
         async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
             # Create unique CSV
             unique_id = uuid.uuid4().hex[:8]
             csv_content = f"""date,type,quantity,amount,currency,description
@@ -306,7 +332,7 @@ class TestBRIME2EImport:
 
             parse1 = await client.post(
                 f"{API_BASE}/brokers/import/files/{file_id1}/parse",
-                json={"plugin_code": "broker_generic_csv", "broker_id": test_broker_id},
+                json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
                 )
             tx1 = parse1.json()["transactions"]
@@ -326,7 +352,7 @@ class TestBRIME2EImport:
             # Parse again - should detect duplicate
             parse2 = await client.post(
                 f"{API_BASE}/brokers/import/files/{file_id2}/parse",
-                json={"plugin_code": "broker_generic_csv", "broker_id": test_broker_id},
+                json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
                 )
 

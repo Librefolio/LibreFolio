@@ -252,12 +252,14 @@ class TestBrokerReadItem:
             "portal_url": "https://test.com",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
+            "is_active": True,
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
             }
         broker = BRReadItem(**data)
         assert broker.id == 1
         assert broker.name == "Test Broker"
+        assert broker.is_active is True
 
     def test_read_item_optional_fields(self):
         """BRReadItem optional fields can be None."""
@@ -268,9 +270,11 @@ class TestBrokerReadItem:
             "portal_url": None,
             "allow_cash_overdraft": True,
             "allow_asset_shorting": False,
+            "is_active": False,
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
             }
         broker = BRReadItem(**data)
         assert broker.description is None
         assert broker.portal_url is None
+        assert broker.is_active is False

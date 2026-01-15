@@ -37,6 +37,7 @@ babel = "*"
 cachetools = "*"
 bcrypt = "*"
 email-validator = "*"
+python-magic = "*"
 
 [dev-packages]
 pytest = "*"

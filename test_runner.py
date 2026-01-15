@@ -38,6 +38,132 @@ from backend.test_scripts.test_utils import (Colors, print_header, print_section
 _COVERAGE_MODE = False
 
 
+def _run_test_suite(
+    suite_name: str,
+    tests: list[tuple[str, callable]],
+    verbose: bool = False,
+    header_msg: str = None,
+    info_msgs: list[str] = None,
+    summary_title: str = None,
+    success_msg: str = None,
+    combine_coverage: bool = False,
+) -> bool:
+    """
+    Generic function to run a suite of tests with consistent output format.
+
+    Args:
+        suite_name: Name of the test suite (e.g., "API Tests", "Database Tests")
+        tests: List of (test_name, test_function) tuples
+        verbose: Pass to test functions
+        header_msg: Optional custom header message (default: "LibreFolio {suite_name}")
+        info_msgs: Optional list of info messages to print before tests
+        summary_title: Optional custom summary section title (default: "{suite_name} Summary")
+        success_msg: Optional custom success message (default: "All {suite_name.lower()} passed! 🎉")
+        combine_coverage: If True, combine coverage data after tests (for API/E2E tests)
+
+    Returns:
+        bool: True if all tests passed
+    """
+    # Print header (unless None to skip)
+    if header_msg is not None or header_msg != "":
+        print_header(header_msg or f"LibreFolio {suite_name}")
+
+    # Print info messages
+    if info_msgs:
+        for msg in info_msgs:
+            print_info(msg)
+
+    total_tests = len(tests)
+    results = {}
+
+    # Initialize all as pending
+    for test_name, _ in tests:
+        results[test_name] = None
+
+    # Run tests
+    for test_name, test_func in tests:
+        success = test_func()
+        results[test_name] = success
+
+        if not success:
+            print_error(f"Test failed: {test_name}")
+            print_warning(f"Stopping {suite_name.lower()} execution")
+            break
+
+    # Summary
+    print_section(summary_title or f"{suite_name} Summary")
+    passed = sum(1 for success in results.values() if success is True)
+    failed = sum(1 for success in results.values() if success is False)
+    pending = sum(1 for success in results.values() if success is None)
+
+    for test_name, _ in tests:
+        success = results[test_name]
+        if success is True:
+            status = f"{Colors.GREEN}✅ PASS{Colors.NC}"
+        elif success is False:
+            status = f"{Colors.RED}❌ FAIL{Colors.NC}"
+        else:
+            status = f"{Colors.YELLOW}⏳ PENDING{Colors.NC}"
+        print(f"{status} - {test_name}")
+
+    print(f"\nResults: {passed}/{total_tests} tests passed")
+    if pending > 0:
+        print(f"{Colors.YELLOW}⏳ {pending} test(s) not run (stopped early){Colors.NC}")
+
+    # Combine coverage if requested
+    if combine_coverage and _COVERAGE_MODE:
+        print_section("Combining Coverage Data")
+        print_info("Merging coverage from test server subprocess...")
+        try:
+            result = subprocess.run(
+                ["coverage", "combine"],
+                capture_output=True,
+                text=True,
+                cwd=Path(__file__).parent
+            )
+            if result.returncode == 0:
+                print_success("Coverage data combined successfully")
+            else:
+                print_warning(f"Coverage combine had warnings: {result.stderr}")
+        except Exception as e:
+            print_warning(f"Could not combine coverage: {e}")
+
+    if passed == total_tests:
+        print_success(success_msg or f"All {suite_name.lower()} passed! 🎉")
+        return True
+    else:
+        if failed > 0:
+            print_error(f"{failed} test(s) failed")
+        return False
+
+
+def _get_category_tests_for_all(category: str, verbose: bool) -> list:
+    """
+    Generate list of (name, lambda) tuples for a category's all test.
+
+    Automatically excludes the 'all' action itself and uses registry
+    as single source of truth.
+
+    Args:
+        category: Category key in TEST_REGISTRY
+        verbose: Verbose flag to pass to test functions
+
+    Returns:
+        List of (test_name, test_lambda) tuples for _run_test_suite
+    """
+    if category not in TEST_REGISTRY:
+        return []
+
+    tests = []
+    for action, info in TEST_REGISTRY[category].items():
+        if action == "_meta" or action == "all":
+            continue
+        func = info["func"]
+        name = info.get("name", action)
+        tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
+    return tests
+
+
 def _build_pytest_cmd(test_path: str, test_names: list = None) -> list:
     """
     Build pytest command with optional test name filter.
@@ -192,47 +318,17 @@ def external_brim_providers(verbose: bool = False, test_names: list = None) -> b
 
 
 def external_all(verbose: bool = False) -> bool:
-    """
-    Run all external tests (network-dependent).
-    """
-    print_header("LibreFolio External Tests")
-    print_info("Testing external provider integrations")
-    print_info("⚠️  WARNING: Requires internet connection for FX/Asset providers")
-    print_info("⚠️  WARNING: May be slow")
-
-    tests = [
-        ("FX Providers (including multi-unit)", lambda: external_fx_providers(verbose)),
-        ("Asset Providers", lambda: external_asset_providers(verbose)),
-        ("BRIM Providers", lambda: external_brim_providers(verbose)),
-        ]
-
-    results = []
-    for test_name, test_func in tests:
-        success = test_func()
-        results.append((test_name, success))
-
-        if not success:
-            print_error(f"Test failed: {test_name}")
-            print_warning("Stopping external tests execution")
-            break
-
-    # Summary
-    print_section("External Tests Summary")
-    passed = sum(1 for _, success in results if success)
-    total = len(results)
-
-    for test_name, success in results:
-        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
-        print(f"{status} - {test_name}")
-
-    print(f"\nResults: {passed}/{total} tests passed")
-
-    if passed == total:
-        print_success("All external tests passed! 🎉")
-        return True
-    else:
-        print_error(f"{total - passed} test(s) failed")
-        return False
+    """Run all external tests (network-dependent)."""
+    return _run_test_suite(
+        suite_name="External Tests",
+        tests=_get_category_tests_for_all("external", verbose),
+        verbose=verbose,
+        info_msgs=[
+            "Testing external provider integrations",
+            "⚠️  WARNING: Requires internet connection for FX/Asset providers",
+            "⚠️  WARNING: May be slow",
+        ],
+    )
 
 
 # ============================================================================
@@ -411,53 +507,43 @@ def db_test_referential_integrity(verbose: bool = False, test_names: list = None
 def db_all(verbose: bool = False) -> bool:
     """
     Run all database tests in sequence.
+
+    Order is critical:
+    1. create - Must be first (creates empty DB)
+    2. validate - Schema must exist
+    3. numeric-truncation - DB must exist
+    4. populate - Adds test data (force=True to recreate)
+    5. referential-integrity - Needs data
+    6. fx-rates - Uses UPSERT (can run with existing data)
+    7. brim - Needs populated data
     """
-    print_header("LibreFolio Database Tests")
-    print_info("Testing the database layer (SQLite file)")
-    print_info("Backend server is NOT required for these tests")
-    print_info("Target: backend/data/sqlite/test_app.db")
+    # DB tests have critical ordering - define explicitly
+    db_order = ["create", "validate", "numeric-truncation", "populate",
+                "referential-integrity", "fx-rates", "brim"]
 
-    # Test order matters!
-    # Note: populate comes before fx-rates because:
-    #   - populate requires empty DB (or --force to delete)
-    #   - fx-rates can run on DB with existing data (uses UPSERT)
-    tests = [
-        ("Create Fresh Database", lambda: db_create(verbose)),
-        ("Validate Schema", lambda: db_validate(verbose)),
-        ("Numeric Truncation", lambda: db_numeric_truncation(verbose)),
-        ("Populate Mock Data", lambda: db_populate(verbose, force=True)),  # Use force in 'all' mode
-        ("Referential Integrity (CASCADE/RESTRICT/UNIQUE/CHECK)", lambda: db_test_referential_integrity(verbose)),
-        ("FX Rates Persistence", lambda: db_fx_rates(verbose)),
-        ("BRIM Asset Search & Duplicates", lambda: db_brim(verbose)),
-        ]
+    tests = []
+    for action in db_order:
+        if action in TEST_REGISTRY["db"]:
+            info = TEST_REGISTRY["db"][action]
+            func = info["func"]
+            name = info.get("name", action)
+            # Special case: populate needs force=True in all
+            if action == "populate":
+                tests.append((name, lambda v=verbose: db_populate(verbose=v, force=True)))
+            else:
+                tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
 
-    results = []
-    for test_name, test_func in tests:
-        success = test_func()
-        results.append((test_name, success))
-
-        if not success:
-            print_error(f"Test failed: {test_name}")
-            print_warning("Stopping test execution")
-            break
-
-    # Summary
-    print_section("Database Test Summary")
-    passed = sum(1 for _, success in results if success)
-    total = len(results)
-
-    for test_name, success in results:
-        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
-        print(f"{status} - {test_name}")
-
-    print(f"\nResults: {passed}/{total} tests passed")
-
-    if passed == total:
-        print_success("All database tests passed! 🎉")
-        return True
-    else:
-        print_error(f"{total - passed} test(s) failed")
-        return False
+    return _run_test_suite(
+        suite_name="Database Tests",
+        tests=tests,
+        verbose=verbose,
+        info_msgs=[
+            "Testing the database layer (SQLite file)",
+            "Backend server is NOT required for these tests",
+            f"Target: {TEST_DB_PATH}",
+        ],
+        summary_title="Database Test Summary",
+    )
 
 
 # ============================================================================
@@ -658,48 +744,12 @@ def utils_sector_normalization(verbose: bool = False, test_names: list = None) -
 
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
-    print_header("LibreFolio Utility Tests")
-    print_info("Testing utility modules and helper functions")
-
-    tests = [
-        ("Decimal Precision", lambda: utils_decimal_precision(verbose)),
-        ("Datetime Utils", lambda: utils_datetime(verbose)),
-        ("Financial Math", lambda: utils_financial_math(verbose)),
-        ("Day Count Conventions", lambda: utils_day_count(verbose)),
-        ("Compound Interest", lambda: utils_compound_interest(verbose)),
-        ("Geographic Area Normalization", lambda: utils_geo_utils(verbose)),
-        ("Sector Normalization", lambda: utils_sector_normalization(verbose)),
-        # Note: Currency, Distribution Models, Scheduled Investment Schemas, and
-        # FAGeographicArea Integration have been moved to schemas category
-        ]
-
-    results = []
-    for test_name, test_func in tests:
-        success = test_func()
-        results.append((test_name, success))
-
-        if not success:
-            print_error(f"Test failed: {test_name}")
-            print_warning("Stopping utils tests execution")
-            break
-
-    # Summary
-    print_section("Utility Tests Summary")
-    passed = sum(1 for _, success in results if success)
-    total = len(results)
-
-    for test_name, success in results:
-        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
-        print(f"{status} - {test_name}")
-
-    print(f"\nResults: {passed}/{total} tests passed")
-
-    if passed == total:
-        print_success("All utility tests passed! 🎉")
-        return True
-    else:
-        print_error(f"{total - passed} test(s) failed")
-        return False
+    return _run_test_suite(
+        suite_name="Utility Tests",
+        tests=_get_category_tests_for_all("utils", verbose),
+        verbose=verbose,
+        info_msgs=["Testing utility modules and helper functions"],
+    )
 
 
 # ============================================================================
@@ -750,48 +800,18 @@ def schemas_brokers(verbose: bool = False, test_names: list = None) -> bool:
 
 def schemas_all(verbose: bool = False) -> bool:
     """Run all schema validation tests."""
-    print_header("LibreFolio Schema Validation Tests")
-    print_info("Testing Pydantic schema validation rules")
-
-    tests = [
-        ("Common Schemas", lambda: schemas_common(verbose)),
-        ("Asset Schemas", lambda: schemas_assets(verbose)),
-        ("Transaction Schemas", lambda: schemas_transactions(verbose)),
-        ("Broker Schemas", lambda: schemas_brokers(verbose)),
-    ]
-
-    results = []
-    for test_name, test_func in tests:
-        success = test_func()
-        results.append((test_name, success))
-        if not success:
-            print_error(f"Test failed: {test_name}")
-            print_warning("Stopping schema tests execution")
-            break
-
-    # Summary
-    print_section("Schema Tests Summary")
-    passed = sum(1 for _, success in results if success)
-    total = len(results)
-
-    for test_name, success in results:
-        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
-        print(f"{status} - {test_name}")
-
-    print(f"\nResults: {passed}/{total} tests passed")
-
-    if passed == total:
-        print_success("All schema tests passed! 🎉")
-        return True
-    else:
-        print_error(f"{total - passed} test(s) failed")
-        return False
+    return _run_test_suite(
+        suite_name="Schema Validation Tests",
+        tests=_get_category_tests_for_all("schemas", verbose),
+        verbose=verbose,
+        info_msgs=["Testing Pydantic schema validation rules"],
+        summary_title="Schema Tests Summary",
+        success_msg="All schema tests passed! 🎉",
+    )
 
 
 def services_all(verbose: bool = False) -> bool:
-    """
-    Run all backend service tests.
-    """
+    """Run all backend service tests."""
     print_header("LibreFolio Backend Services Tests")
     print_info("Testing business logic and service layer")
     print_info("No backend server required")
@@ -801,50 +821,17 @@ def services_all(verbose: bool = False) -> bool:
     if not db_create(verbose=False):
         print_error("Failed to create clean test database")
         print_warning("Services tests may fail due to dirty database state")
-        # Continue anyway, don't block tests
     else:
         print_success("Clean test database created\n")
 
-    tests = [
-        ("FX Conversion Logic", lambda: services_fx_conversion(verbose)),
-        ("Asset Source Logic", lambda: services_asset_source(verbose)),
-        ("Asset Metadata Service", lambda: services_asset_metadata(verbose)),
-        ("Asset Source Refresh (smoke)", lambda: services_asset_source_refresh(verbose)),
-        ("Provider Registry", lambda: services_provider_registry(verbose)),
-        ("Synthetic Yield Calculation", lambda: services_synthetic_yield(verbose)),
-        ("Synthetic Yield Integration E2E", lambda: services_synthetic_yield_integration(verbose)),
-        ("Transaction Service", lambda: services_transaction(verbose)),
-        ("Broker Service", lambda: services_broker(verbose)),
-        ("Transaction Edge Cases", lambda: services_edge_cases(verbose)),
-        ]
-
-    results = []
-    for test_name, test_func in tests:
-        success = test_func()
-        results.append((test_name, success))
-
-        if not success:
-            print_error(f"Test failed: {test_name}")
-            print_warning("Stopping services tests execution")
-            break
-
-    # Summary
-    print_section("Backend Services Test Summary")
-    passed = sum(1 for _, success in results if success)
-    total = len(results)
-
-    for test_name, success in results:
-        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
-        print(f"{status} - {test_name}")
-
-    print(f"\nResults: {passed}/{total} tests passed")
-
-    if passed == total:
-        print_success("All backend services tests passed! 🎉")
-        return True
-    else:
-        print_error(f"{total - passed} test(s) failed")
-        return False
+    return _run_test_suite(
+        suite_name="Backend Services Tests",
+        tests=_get_category_tests_for_all("services", verbose),
+        verbose=verbose,
+        header_msg=None,  # Already printed above
+        summary_title="Backend Services Test Summary",
+        success_msg="All backend services tests passed! 🎉",
+    )
 
 
 # ============================================================================
@@ -1088,76 +1075,17 @@ def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = N
 
 
 def api_test(verbose: bool = False) -> bool:
-    """
-    Run all API tests.
-    """
-    print_header("LibreFolio API Tests")
-    print_info("Testing REST API endpoints")
-    print_info("Note: Server will be automatically started/stopped by tests")
-
-    tests = [
-        ("Auth API", lambda: api_auth(verbose)),
-        ("Settings API", lambda: api_settings(verbose)),
-        ("Uploads API", lambda: api_uploads(verbose)),
-        ("FX API", lambda: api_fx(verbose)),
-        ("FX Sync API", lambda: api_fx_sync(verbose)),
-        ("Assets Metadata API", lambda: api_assets_metadata(verbose)),
-        ("Assets CRUD API", lambda: api_assets_crud(verbose)),
-        ("Assets Price API", lambda: api_assets_price(verbose)),
-        ("Assets Provider API", lambda: api_assets_provider(verbose)),
-        ("Utilities API", lambda: api_utilities(verbose)),
-        ("Transactions API", lambda: api_transactions(verbose)),
-        ("Brokers API", lambda: api_brokers(verbose)),
-        ("Broker Access API", lambda: api_broker_access(verbose)),
-        ("Broker Multi-User API", lambda: api_broker_multiuser(verbose)),
-        ("BRIM API", lambda: api_brim(verbose)),
-        ]
-
-    results = []
-    for test_name, test_func in tests:
-        success = test_func()
-        results.append((test_name, success))
-
-        if not success:
-            print_error(f"Test failed: {test_name}")
-            print_warning("Stopping API tests execution")
-            break
-
-    # Summary
-    print_section("API Tests Summary")
-    passed = sum(1 for _, success in results if success)
-    total = len(results)
-
-    for test_name, success in results:
-        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
-        print(f"{status} - {test_name}")
-
-    print(f"\nResults: {passed}/{total} tests passed")
-
-    # If coverage mode, combine coverage from all processes
-    if _COVERAGE_MODE:
-        print_section("Combining Coverage Data")
-        print_info("Merging coverage from test server subprocess...")
-        try:
-            result = subprocess.run(
-                ["coverage", "combine"],
-                capture_output=True,
-                text=True,
-                cwd=Path(__file__).parent
-            )
-            if result.returncode == 0:
-                print_success("Coverage data combined successfully")
-            else:
-                print_warning(f"Coverage combine had warnings: {result.stderr}")
-        except Exception as e:
-            print_warning(f"Could not combine coverage: {e}")
-
-    if passed == total:
-        print_success("All API tests passed! 🎉")
-        return True
-    else:
-        print_error(f"{total - passed} test(s) failed")
-        return False
+    """Run all API tests."""
+    return _run_test_suite(
+        suite_name="API Tests",
+        tests=_get_category_tests_for_all("api", verbose),
+        verbose=verbose,
+        info_msgs=[
+            "Testing REST API endpoints",
+            "Note: Server will be automatically started/stopped by tests",
+        ],
+        combine_coverage=True,
+    )
 
 
 def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
@@ -1176,64 +1104,18 @@ def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
 
 
 def e2e_test(verbose: bool = False) -> bool:
-    """
-    Run all E2E tests.
-    """
-    print_header("LibreFolio E2E Tests with API interaction")
-    print_info("Testing E2E workflow using REST API endpoints")
-    print_info("Note: Server will be automatically started/stopped by tests")
-
-    tests = [
-        ("E2E search-to-prices Flow", lambda: search2prices_test(verbose)),
-        ("E2E BRIM Import Flow", lambda: e2e_brim(verbose)),
-        ]
-
-    results = []
-    for test_name, test_func in tests:
-        success = test_func()
-        results.append((test_name, success))
-
-        if not success:
-            print_error(f"Test failed: {test_name}")
-            print_warning("Stopping E2E tests execution")
-            break
-
-    # Summary
-    print_section("E2E Tests Summary")
-    passed = sum(1 for _, success in results if success)
-    total = len(results)
-
-    for test_name, success in results:
-        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
-        print(f"{status} - {test_name}")
-
-    print(f"\nResults: {passed}/{total} tests passed")
-
-    # If coverage mode, combine coverage from all processes
-    if _COVERAGE_MODE:
-        print_section("Combining Coverage Data")
-        print_info("Merging coverage from test server subprocess...")
-        try:
-            result = subprocess.run(
-                ["coverage", "combine"],
-                capture_output=True,
-                text=True,
-                cwd=Path(__file__).parent
-            )
-            if result.returncode == 0:
-                print_success("Coverage data combined successfully")
-            else:
-                print_warning(f"Coverage combine had warnings: {result.stderr}")
-        except Exception as e:
-            print_warning(f"Could not combine coverage: {e}")
-
-    if passed == total:
-        print_success("All API tests passed! 🎉")
-        return True
-    else:
-        print_error(f"{total - passed} test(s) failed")
-        return False
-
+    """Run all E2E tests."""
+    return _run_test_suite(
+        suite_name="E2E Tests",
+        tests=_get_category_tests_for_all("e2e", verbose),
+        verbose=verbose,
+        header_msg="LibreFolio E2E Tests with API interaction",
+        info_msgs=[
+            "Testing E2E workflow using REST API endpoints",
+            "Note: Server will be automatically started/stopped by tests",
+        ],
+        combine_coverage=True,
+    )
 
 
 # ============================================================================
@@ -1244,590 +1126,813 @@ def run_all_tests(verbose: bool = False) -> bool:
     """
     Run ALL tests in the optimal order.
 
-    Order:
-      1. External services (ECB API, etc.)
-      2. Database (schema, persistence)
-      3. Backend services (conversion logic, calculations)
-      4. API endpoints (REST API - auto-starts test server on port 8001)
+    Order is determined by the order of categories in TEST_REGISTRY
+    (Python 3.7+ guarantees dict ordering):
+      1. External services - No dependencies, tests external APIs
+      2. Database - Creates/validates DB structure
+      3. Schemas - Tests validation rules (pure unit tests)
+      4. Utils - Tests helper functions (pure unit tests)
+      5. Services - Tests business logic (needs DB)
+      6. API endpoints - Tests HTTP layer (needs server)
+      7. E2E - Complete workflows (needs everything)
 
     Note: API tests will automatically start and stop the test server.
           If port 8001 is occupied, tests will fail with helpful instructions.
     """
-    print_header("LibreFolio Complete Test Suite")
-    print_info("Running all test categories in optimal order")
-    print_info("This will take a few minutes...\n")
+    # Generate tests from registry - order comes from dict key order
+    tests = []
+    for category in TEST_REGISTRY.keys():
+        # Get the 'all' function for each category
+        all_info = TEST_REGISTRY[category].get("all", {})
+        func = all_info.get("func")
+        name = all_info.get("name", f"{category.title()} Tests")
+        if func:
+            tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
 
-    # Define test categories in order
-    test_categories = [
-        ("External Services", lambda: external_all(verbose)),
-        ("Database Layer", lambda: db_all(verbose)),
-        ("Schema Validation", lambda: schemas_all(verbose)),
-        ("Utility Modules", lambda: utils_all(verbose)),
-        ("Services layers", lambda: services_all(verbose)),
-        ("API Endpoints", lambda: api_test(verbose)),  # Auto-starts server via TestServerManager
-        ("E2E Tests", lambda: e2e_test(verbose)), # Auto-starts server via TestServerManager
-        ]
-
-    results = []
-    for category_name, test_func in test_categories:
-        print(f"\n{'=' * 70}")
-        print(f"Starting: {category_name}")
-        print('=' * 70)
-
-        success = test_func()
-        results.append((category_name, success))
-
-        if not success:
-            print_error(f"\nCategory failed: {category_name}")
-            print_warning("Stopping complete test suite execution")
-            print_info("Fix the failing tests before continuing")
-            break
-
-    # Global Summary
-    print_section("Complete Test Suite Summary")
-    passed = sum(1 for _, success in results if success)
-    total = len(results)
-
-    for category_name, success in results:
-        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if success else f"{Colors.RED}❌ FAIL{Colors.NC}"
-        print(f"{status} - {category_name}")
-
-    print(f"\nResults: {passed}/{total} categories passed")
-
-    if passed == total:
-        print_success("\n🎉 ALL TESTS PASSED! 🎉")
-        print_info("Your LibreFolio instance is working correctly!")
-        return True
-    else:
-        print_error(f"\n{total - passed} category(ies) failed")
-        return False
+    return _run_test_suite(
+        suite_name="Complete Test Suite",
+        tests=tests,
+        verbose=verbose,
+        info_msgs=[
+            "Running all test categories in optimal order",
+            "This will take a few minutes...\n",
+        ],
+        success_msg="\n🎉 ALL TESTS PASSED! 🎉\nYour LibreFolio instance is working correctly!",
+    )
 
 
 # ============================================================================
-# MAIN ARGUMENT PARSER
+# TEST REGISTRY - Single source of truth for all tests
 # ============================================================================
+# Structure:
+#   category -> {
+#       "_meta": { parser metadata: description, help },
+#       action: {
+#           "func": test_function,
+#           "test_names": bool - whether accepts test_names parameter,
+#           "name": display name for help,
+#           "desc": description for epilog,
+#           "prereq": prerequisites (optional),
+#           "tests": what it tests (optional),
+#           "note": additional notes (optional),
+#       }
+#   }
+#
+# The "all" action in each category runs all tests in that category.
+# accepts_test_names=True means you can pass specific test names to run.
 
-def create_parser() -> argparse.ArgumentParser:
-    """Create and configure argument parser."""
-    parser = argparse.ArgumentParser(
-        description="LibreFolio Test Runner - Organized test execution",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Test Categories:
-  
-  external - External Services Tests
-             Tests external API integrations (no backend server needed).
-             Verifies: External Forex API, yfinance, other data sources.
-  
-  db       - Database Layer Tests
-             Tests the SQLite database file directly (no backend server needed).
-             Verifies: schema, constraints, data integrity, persistence.
-             Target: backend/data/sqlite/app.db
-  
-  services - Backend Services Tests
-             Tests business logic and service layer (no backend server needed).
-             Verifies: conversions, calculations, algorithms.
-
-  utils    - Utility Module Tests
-             Tests utility modules and helper functions (no backend server needed).
-             Verifies: Decimal precision, datetime utils, financial math, ...
-
-  schemas  - Schema Validation Tests
-             Tests Pydantic schema validation rules (no backend server needed).
-  
-  api      - API Endpoint Tests  
-             Tests REST API endpoints (requires running backend server).
-             Verifies: HTTP endpoints, validation, error handling.
-             Target: http://localhost:8000
-  
-  e2e      - E2E Tests with API interaction
-  
-  all      - Run ALL tests in optimal order
-
-Examples:
-  # Run everything
-  python test_runner.py all                 # All tests (optimal order)
-  python test_runner.py -v all              # All tests with all log
-  
-  # Quick shortcuts via dev.sh
-  ./dev.sh test all                         # Run complete test suite
-  ./dev.sh test db all                      # All database tests
-        """
-        )
-
-    # Global flags
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Show full test output (like calling test scripts directly)",
-        default=False
-        )
-
-    parser.add_argument(
-        "--coverage",
-        action="store_true",
-        help="Run tests with code coverage tracking (generates htmlcov/index.html report)",
-        default=False
-        )
-
-    parser.add_argument(
-        "--cov-clean",
-        action="store_true",
-        help="Clean coverage database before running tests (use with --coverage)",
-        default=False
-        )
-
-    parser.add_argument(
-        "--db-reset",
-        action="store_true",
-        help="Reset test database before running db tests",
-        default=False
-        )
-
-    subparsers = parser.add_subparsers(
-        dest="category",
-        help="Test category to run",
-        required=False  # Allow 'all' without category
-        )
-
-    # ========================================================================
-    # EXTERNAL SERVICES TESTS SUBPARSER
-    # ========================================================================
-    external_parser = subparsers.add_parser(
-        "external",
-        help="External service integration tests (no backend server)",
-        description="""
+TEST_REGISTRY = {
+    "external": {
+        "_meta": {
+            "help": "External service integration tests (no backend server)",
+            "description": """
 External Services Tests
 
 These tests verify external API integrations:
   • No backend server required
-  • Tests connections to live external APIs (requires internet)
-  • Verifies data availability and format
-
-Test commands:
-  fx-providers    - Test all FX providers (ECB, FED, BOE, etc.)
-                    Tests: Metadata, API connection, rate fetching, normalization
-                    📋 Prerequisites: Internet connection
-                    💡 Repeats tests for all configured FX providers
-  
-  asset-providers - Test all asset providers (yfinance, cssscraper, etc.)
-                    Tests: Metadata, current value, historical data, search, error handling
-                    Note: Tests auto-skip if provider doesn't support feature (e.g., search)
-                    📋 Prerequisites: Internet connection
-
-  brim-providers  - Test BRIM (Broker Report Import Manager) plugins
-                    Tests: Plugin discovery, file parsing, auto-detection, sample coverage
-                    Brokers: Directa, DEGIRO, Trading212, IBKR, eToro, Revolut, etc.
-                    📋 Prerequisites: None (uses local sample files)
-         
-  all             - Run all external service tests
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
-        )
-
-    external_parser.add_argument(
-        "action",
-        choices=["fx-providers", "asset-providers", "brim-providers", "all"],
-        help="External service test to run"
-        )
-
-    external_parser.add_argument(
-        "test_names",
-        nargs="*",
-        help="Optional: specific test names to run (e.g., test_ecb_provider)"
-        )
-
-    # ========================================================================
-    # DATABASE TESTS SUBPARSER
-    # ========================================================================
-    db_parser = subparsers.add_parser(
-        "db",
-        help="Database layer tests (SQLite file, no backend)",
-        description="""
+  • Tests network calls to external APIs
+  • May be slow or fail if external services are down
+""",
+        },
+        "fx-providers": {
+            "func": external_fx_providers,
+            "test_names": True,
+            "name": "FX Providers",
+            "desc": "Test FX rate providers (ECB, FED, BOE, SNB)",
+            "prereq": "Internet connection",
+            "tests": "ECB, FED, BOE, SNB API calls",
+        },
+        "asset-providers": {
+            "func": external_asset_providers,
+            "test_names": True,
+            "name": "Asset Providers",
+            "desc": "Test asset data providers (yfinance, JustETF)",
+            "prereq": "Internet connection",
+            "tests": "yfinance, JustETF scraping",
+        },
+        "brim-providers": {
+            "func": external_brim_providers,
+            "test_names": True,
+            "name": "BRIM Providers",
+            "desc": "Test broker import plugins",
+            "prereq": "Sample files in samples/",
+            "tests": "CSV parsing, transaction mapping",
+        },
+        "all": {
+            "func": external_all,
+            "test_names": False,
+            "name": "All External Tests",
+            "desc": "Run all external service tests",
+        },
+    },
+    "db": {
+        "_meta": {
+            "help": "Database layer tests (SQLite file, no backend)",
+            "description": """
 Database Layer Tests
 
-These tests operate directly on the SQLite database file:
-  • Target: backend/data/sqlite/app.db
+These tests verify SQLite database operations:
   • No backend server required
-  • Tests schema, constraints, data persistence
-
-Test commands:
-  create                - Delete existing DB and create fresh from migrations
-                        📋 Prerequisites: None - this is the first test to run
-    
-  validate              - Verify all tables, constraints, indexes, foreign keys
-                          📋 Prerequisites: Database created (run: db create)
-    
-  numeric-truncation     - Test Numeric column truncation for ALL tables
-                         📋 Prerequisites: Database created (run: db create)
-                         💡 Tests helper functions and database precision handling
-    
-  populate              - Populate database with MOCK DATA for testing/frontend dev
-                          📋 Prerequisites: Database created (run: db create)
-                          💡 Use --force to delete existing data and recreate
-                
-  fx-rates              - Test FX rates persistence (fetch from ECB & persist)
-                          📋 Prerequisites: External ECB API working (run: external ecb)
-                          💡 Can run on database with existing data (uses UPSERT)
-
-  brim                  - Test BRIM asset search & duplicate detection
-                          📋 Prerequisites: Database created (run: db create)
-                          💡 Tests: Asset candidate search, duplicate transaction detection
-    
-  referential-integrity - Test unidirectional relationship between Transaction and CashMovement
-                          📋 Prerequisites: Database created (run: db create)
-                          💡 Validates referential integrity, CASCADE delete, CHECK constraints between the tables
-                                enum mapping, logical constraints, CashMovement consistency, etc.
-                            
-  all               - Run all DB tests (create → validate → numeric-truncation → populate → fx-rates → brim)
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
-        )
-
-    db_parser.add_argument(
-        "action",
-        choices=["create", "validate", "numeric-truncation", "fx-rates", "brim", "populate", "referential-integrity", "all"],
-        help="Database test to run"
-        )
-
-    db_parser.add_argument(
-        "test_names",
-        nargs="*",
-        help="Optional: specific test names to run (e.g., test_tables_exist)"
-        )
-
-    db_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="[populate only] Delete existing database and recreate from scratch"
-        )
-
-    # ========================================================================
-    # SERVICES TESTS SUBPARSER
-    # ========================================================================
-    services_parser = subparsers.add_parser(
-        "services",
-        help="Backend service logic tests (no backend server)",
-        description="""
+  • Tests schema, constraints, data integrity
+  • Uses test_app.db (separate from production)
+""",
+        },
+        "create": {
+            "func": db_create,
+            "test_names": False,
+            "name": "Create Database",
+            "desc": "Create database via Alembic migrations",
+            "prereq": "None",
+            "tests": "Migration execution",
+        },
+        "validate": {
+            "func": db_validate,
+            "test_names": True,
+            "name": "Validate Schema",
+            "desc": "Validate database schema (tables, columns, indexes)",
+            "prereq": "Database created (run: db create)",
+            "tests": "Schema validation, constraints",
+        },
+        "numeric-truncation": {
+            "func": db_numeric_truncation,
+            "test_names": True,
+            "name": "Numeric Truncation",
+            "desc": "Test numeric precision handling",
+            "prereq": "Database created",
+            "tests": "Decimal precision, truncation",
+        },
+        "fx-rates": {
+            "func": db_fx_rates,
+            "test_names": True,
+            "name": "FX Rates",
+            "desc": "Test FX rates persistence and queries",
+            "prereq": "Database created",
+            "tests": "FX rate CRUD, date queries",
+        },
+        "brim": {
+            "func": db_brim,
+            "test_names": True,
+            "name": "BRIM Database",
+            "desc": "Test BRIM file storage and metadata",
+            "prereq": "Database created",
+            "tests": "File upload, metadata persistence",
+        },
+        "populate": {
+            "func": db_populate,
+            "test_names": False,
+            "name": "Populate Database",
+            "desc": "Populate database with test data",
+            "prereq": "Database created",
+            "tests": "Test data insertion",
+            "note": "Use --force to recreate from scratch",
+        },
+        "referential-integrity": {
+            "func": db_test_referential_integrity,
+            "test_names": True,
+            "name": "Referential Integrity",
+            "desc": "Test foreign key constraints",
+            "prereq": "Database created",
+            "tests": "FK constraints, cascades",
+        },
+        "all": {
+            "func": db_all,
+            "test_names": False,
+            "name": "All Database Tests",
+            "desc": "Run all database tests",
+        },
+    },
+    "services": {
+        "_meta": {
+            "help": "Backend service logic tests (no backend server)",
+            "description": """
 Backend Services Tests
 
-These tests verify business logic and service layer:
+These tests verify business logic in service layer:
   • No backend server required
-  • Tests conversions, calculations, algorithms
-  • Uses data from database
-
-Test commands:
-  fx-conversion        - Test FX conversion service logic (identity, direct, inverse, cross-currency, forward-fill)
-                         📋 Prerequisites: DB FX rates subsystem (run: db fx-rates)
-
-  asset-source         - Test Asset Source service logic (provider assignment, helpers, synthetic yield)
-                         📋 Prerequisites: Database created (run: db create)
-                         💡 Tests: Helper functions (truncation, ACT/365), Provider assignment (bulk/single), Synthetic yield
-  
-  asset-source-refresh - Smoke test: Asset Source refresh orchestration
-                         📋 Prerequisites: Database created (run: db create)
-                         💡 Runs lightweight refresh orchestration smoke test using a mock provider
-
-  asset-metadata      - Test AssetMetadataService static utility behavior
-                        📋 Prerequisites: Database created (run: db create)
-                        💡 Tests: parse/serialize, diff, patch semantics
-  
-  provider-registry   - Test provider registry (asset & fx)
-                        📋 Prerequisites: Database created (run: db create)
-                        💡 Tests: Registration, lookup, priority, fallback
-  
-  synthetic-yield      - Test synthetic yield calculation for SCHEDULED_YIELD assets
-                         📋 Prerequisites: Database created (run: db create)
-                         💡 Tests: ACT/365 day count, rate lookup, accrued interest, full valuation
-  
-  synthetic-yield-integration - Test E2E synthetic yield integration scenarios (P2P loan, bond, mixed schedule)
-                              📋 Prerequisites: Database created (run: db create)
-                              💡 Scenarios: P2P loan (grace + late), bond compound quarterly, mixed SIMPLE/COMPOUND
-  
-  all                   - Run all backend service tests
-  
-Future: FIFO calculations, portfolio aggregations, loan schedules will be added here
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
-        )
-
-    services_parser.add_argument(
-        "action",
-        choices=["fx-conversion", "asset-source", "asset-metadata", "asset-source-refresh", "provider-registry", "synthetic-yield", "synthetic-yield-integration", "transaction", "broker", "edge-cases", "all"],
-        help="Service test to run"
-        )
-
-    services_parser.add_argument(
-        "test_names",
-        nargs="*",
-        help="Optional: specific test names to run (e.g., test_direct_conversion)"
-        )
-
-    # ========================================================================
-    # UTILS TESTS SUBPARSER
-    # ========================================================================
-    utils_parser = subparsers.add_parser(
-        "utils",
-        help="Utility module tests (helper functions)",
-        description="""
+  • Tests calculations, conversions, algorithms
+  • Uses in-memory or test database
+""",
+        },
+        "fx-conversion": {
+            "func": services_fx_conversion,
+            "test_names": True,
+            "name": "FX Conversion",
+            "desc": "Test currency conversion service",
+            "prereq": "Database with FX rates",
+            "tests": "Direct/triangulated conversion, date handling",
+        },
+        "asset-source": {
+            "func": services_asset_source,
+            "test_names": True,
+            "name": "Asset Source",
+            "desc": "Test asset data source service",
+            "prereq": "Database created",
+            "tests": "Provider selection, data fetching",
+        },
+        "asset-metadata": {
+            "func": services_asset_metadata,
+            "test_names": True,
+            "name": "Asset Metadata",
+            "desc": "Test asset metadata service",
+            "prereq": "Database created",
+            "tests": "Metadata refresh, caching",
+        },
+        "asset-source-refresh": {
+            "func": services_asset_source_refresh,
+            "test_names": True,
+            "name": "Asset Source Refresh",
+            "desc": "Test asset price refresh service",
+            "prereq": "Database with assets",
+            "tests": "Price history updates",
+        },
+        "provider-registry": {
+            "func": services_provider_registry,
+            "test_names": True,
+            "name": "Provider Registry",
+            "desc": "Test provider auto-discovery",
+            "prereq": "None",
+            "tests": "Registry pattern, plugin loading",
+        },
+        "synthetic-yield": {
+            "func": services_synthetic_yield,
+            "test_names": True,
+            "name": "Synthetic Yield",
+            "desc": "Test scheduled investment calculations",
+            "prereq": "None",
+            "tests": "Interest calculations, schedules",
+        },
+        "synthetic-yield-integration": {
+            "func": services_synthetic_yield_integration,
+            "test_names": True,
+            "name": "Synthetic Yield Integration",
+            "desc": "Test E2E synthetic yield scenarios",
+            "prereq": "Database created",
+            "tests": "P2P loan, bond, mixed schedules",
+        },
+        "transaction": {
+            "func": services_transaction,
+            "test_names": True,
+            "name": "Transaction Service",
+            "desc": "Test transaction service",
+            "prereq": "Database created",
+            "tests": "CRUD, validation, balances",
+        },
+        "broker": {
+            "func": services_broker,
+            "test_names": True,
+            "name": "Broker Service",
+            "desc": "Test broker service",
+            "prereq": "Database created",
+            "tests": "CRUD, access control, summary",
+        },
+        "edge-cases": {
+            "func": services_edge_cases,
+            "test_names": True,
+            "name": "Edge Cases",
+            "desc": "Test edge cases and error handling",
+            "prereq": "Database created",
+            "tests": "Error paths, boundary conditions",
+        },
+        "all": {
+            "func": services_all,
+            "test_names": False,
+            "name": "All Service Tests",
+            "desc": "Run all service tests",
+        },
+    },
+    "utils": {
+        "_meta": {
+            "help": "Utility module tests (helper functions)",
+            "description": """
 Utility Module Tests
 
 These tests verify utility modules and helper functions:
   • No backend server required
   • Tests pure functions and helpers
   • Foundational code used across the application
-
-Test commands:
-  decimal-precision - Test decimal precision utilities (Phase 2 task 3.2)
-                      📋 Prerequisites: None
-                      💡 Tests: get_model_column_precision(), truncate_to_db_precision()
-                      
-  datetime         - Test datetime utilities (Phase 1 task 3.1)
-                     📋 Prerequisites: None
-                     💡 Tests: utcnow() timezone-aware datetime helper
-                     
-  financial-math   - Test financial math utilities
-                     📋 Prerequisites: None
-                     💡 Tests: Day count conventions (ACT/365), Interest calculations, Rate finding
-  
-  day-count        - Test day count conventions (Phase 4 task 2.1)
-                     📋 Prerequisites: None
-                     💡 Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions with exact comparisons
-  
-  compound-interest - Test compound interest calculations (Phase 4 task 2.1)
-                      📋 Prerequisites: None
-                      💡 Tests: Simple, Compound (annual, semiannual, quarterly, monthly, daily, continuous)
-  
-  geo-normalization - Test geographic area normalization utilities (Phase 5.1)
-                      📋 Prerequisites: pycountry installed
-                      💡 Tests: ISO-3166-A3 conversion, weight validation, sum normalization
-  
-  sector-normalization - Test FinancialSector enum and sector normalization
-                         📋 Prerequisites: None
-                         💡 Tests: Sector enum values, aliases, normalization to standard names
-  
-  all              - Run all utility tests
-
-Note: Currency, Distribution Models, Scheduled Investment Schemas and Geographic Area 
-      Integration tests have been migrated to the 'schemas' category.
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
-        )
-
-    utils_parser.add_argument(
-        "action",
-        choices=[
-            "decimal-precision",
-            "datetime",
-            "financial-math",
-            "day-count",
-            "compound-interest",
-            "geo-normalization",
-            "sector-normalization",
-            "all",
-            ],
-        help="Utility test to run",
-        )
-
-    utils_parser.add_argument(
-        "test_names",
-        nargs="*",
-        help="Optional: specific test names to run (e.g., test_utcnow)"
-        )
-
-    # ========================================================================
-    # SCHEMAS TESTS SUBPARSER
-    # ========================================================================
-    schemas_parser = subparsers.add_parser(
-        "schemas",
-        help="Pydantic schema validation tests",
-        description="""
+""",
+        },
+        "decimal-precision": {
+            "func": utils_decimal_precision,
+            "test_names": True,
+            "name": "Decimal Precision",
+            "desc": "Test decimal precision utilities",
+            "prereq": "None",
+            "tests": "get_model_column_precision(), truncate_to_db_precision()",
+        },
+        "datetime": {
+            "func": utils_datetime,
+            "test_names": True,
+            "name": "Datetime",
+            "desc": "Test datetime utilities",
+            "prereq": "None",
+            "tests": "utcnow() timezone-aware helper",
+        },
+        "financial-math": {
+            "func": utils_financial_math,
+            "test_names": True,
+            "name": "Financial Math",
+            "desc": "Test financial math utilities",
+            "prereq": "None",
+            "tests": "Day count, interest calculations",
+        },
+        "day-count": {
+            "func": utils_day_count,
+            "test_names": True,
+            "name": "Day Count",
+            "desc": "Test day count conventions",
+            "prereq": "None",
+            "tests": "ACT/365, ACT/360, ACT/ACT, 30/360",
+        },
+        "compound-interest": {
+            "func": utils_compound_interest,
+            "test_names": True,
+            "name": "Compound Interest",
+            "desc": "Test compound interest calculations",
+            "prereq": "None",
+            "tests": "Simple, compound (annual, monthly, daily, continuous)",
+        },
+        "geo-normalization": {
+            "func": utils_geo_utils,
+            "test_names": True,
+            "name": "Geo Normalization",
+            "desc": "Test geographic area normalization",
+            "prereq": "pycountry installed",
+            "tests": "ISO-3166-A3 conversion, weight validation",
+        },
+        "sector-normalization": {
+            "func": utils_sector_normalization,
+            "test_names": True,
+            "name": "Sector Normalization",
+            "desc": "Test FinancialSector enum and normalization",
+            "prereq": "None",
+            "tests": "Sector enum values, aliases",
+        },
+        "all": {
+            "func": utils_all,
+            "test_names": False,
+            "name": "All Utility Tests",
+            "desc": "Run all utility tests",
+        },
+    },
+    "schemas": {
+        "_meta": {
+            "help": "Pydantic schema validation tests",
+            "description": """
 Schema Validation Tests
 
 These tests verify Pydantic schema validation rules:
   • No backend server required
   • Tests DTO validation, business rules, serialization
   • Pure unit tests (no database needed)
-
-Test commands:
-  common           - Test common schemas (Currency, DateRangeModel, OldNew)
-                     📋 Prerequisites: None
-                     💡 Tests: Creation, validation, arithmetic, serialization
-  
-  assets           - Test asset-related schemas (FAGeographicArea, FAInterestRatePeriod, etc.)
-                     📋 Prerequisites: None
-                     💡 Tests: Distribution validation, interest periods, schedule continuity
-  
-  transactions     - Test transaction schemas (TXCreateItem, TXReadItem, TXUpdateItem)
-                     📋 Prerequisites: None
-                     💡 Tests: Type rules, link_uuid, cash/asset requirements, sign validation
-  
-  brokers          - Test broker schemas (BRCreateItem, BRReadItem, BRUpdateItem)
-                     📋 Prerequisites: None
-                     💡 Tests: Name validation, initial_balances, delete force flag
-  
-  all              - Run all schema tests
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
-        )
-
-    schemas_parser.add_argument(
-        "action",
-        choices=["common", "assets", "transactions", "brokers", "all"],
-        help="Schema test to run"
-        )
-
-    schemas_parser.add_argument(
-        "test_names",
-        nargs="*",
-        help="Optional: specific test names to run (e.g., test_transfer_requires_link_uuid)"
-        )
-
-    # ========================================================================
-    # API TESTS SUBPARSER
-    # ========================================================================
-    api_parser = subparsers.add_parser(
-        "api",
-        help="API endpoint tests (auto-starts server if needed)",
-        description="""
+""",
+        },
+        "common": {
+            "func": schemas_common,
+            "test_names": True,
+            "name": "Common Schemas",
+            "desc": "Test common schemas (Currency, DateRangeModel)",
+            "prereq": "None",
+            "tests": "Creation, validation, arithmetic, serialization",
+        },
+        "assets": {
+            "func": schemas_assets,
+            "test_names": True,
+            "name": "Asset Schemas",
+            "desc": "Test asset-related schemas",
+            "prereq": "None",
+            "tests": "Distribution validation, interest periods",
+        },
+        "transactions": {
+            "func": schemas_transactions,
+            "test_names": True,
+            "name": "Transaction Schemas",
+            "desc": "Test transaction schemas",
+            "prereq": "None",
+            "tests": "Type rules, link_uuid, sign validation",
+        },
+        "brokers": {
+            "func": schemas_brokers,
+            "test_names": True,
+            "name": "Broker Schemas",
+            "desc": "Test broker schemas",
+            "prereq": "None",
+            "tests": "Name validation, initial_balances",
+        },
+        "all": {
+            "func": schemas_all,
+            "test_names": False,
+            "name": "All Schema Tests",
+            "desc": "Run all schema tests",
+        },
+    },
+    "api": {
+        "_meta": {
+            "help": "API endpoint tests (auto-starts server if needed)",
+            "description": """
 API Endpoint Tests
 
 These tests verify REST API endpoints:
   • Target: http://localhost:8001 (test server)
   • Backend server auto-started if not running
   • Tests HTTP requests/responses, validation, error handling
-
-Test commands:
-  auth            - Test Authentication endpoints (register, login, logout, me)
-                    📋 Prerequisites: Database created (run: db create)
-                    💡 Tests: POST /auth/register, POST /auth/login, POST /auth/logout, GET /auth/me
-                    Note: Server will be automatically started and stopped by test
-
-  settings        - Test Settings endpoints (GET /settings/user, PUT /settings/user,
-                    GET /settings/global, PUT /settings/global)
-                    📋 Prerequisites: Database created (run: db create)
-
-  fx              - Test FX endpoints (GET /currencies, POST /sync, GET /convert)
-                    📋 Prerequisites: Services FX conversion subsystem (run: db fx-rates)
-                    Note: Server will be automatically started and stopped by test
-
-  fx-sync         - Test FX sync endpoints (GET /currencies/sync)
-                    📋 Prerequisite: External FX API working (run: external all)
-                    Note: Server will be automatically started and stopped by test
-  
-  assets-metadata - Test Assets Metadata endpoints (PATCH, bulk read, refresh)
-                    📋 Prerequisites: Database created (run: db create)
-                    💡 Tests: PATCH metadata, bulk read, single/bulk refresh, provider assignments
-                    Note: Server will be automatically started and stopped by test
-  
-  assets-crud     - Test Assets CRUD endpoints (create, list, delete)
-                    📋 Prerequisites: Database created (run: db create)
-                    💡 Tests: POST /bulk (create), GET /list (filter), DELETE /bulk
-                    Note: Server will be automatically started and stopped by test
-
-  assets-provider - Test Asset provider assignment enpoint
-                    Note: Server will be automatically started and stopped by test
-                    
-  assets-price    - Test Asset price data endpoint
-                    Note: Server will be automatically started and stopped by test
-  
-  utilities       - Test Utilities endpoints (sectors list, country normalization)
-                    📋 Prerequisites: None
-                    💡 Tests: GET /utilities/sectors, GET /utilities/countries/normalize
-                    Note: Server will be automatically started and stopped by test
-
-  brim            - Test BRIM (Broker Report Import Manager) endpoints
-                    📋 Prerequisites: Database created (run: db create)
-                    💡 Tests: File upload/list/delete, parse, E2E import flow
-                    Note: Server will be automatically started and stopped by test
-  
-  e2e             - Test complete End-to-End flow
-                    📋 Prerequisites: Database created, providers configured
-                    💡 Tests: Search → Create → Assign Provider → Metadata → Prices
-                    Note: Server will be automatically started and stopped by test
-                    
-  all             - Run all API tests (FX + Assets Metadata + Assets CRUD + ...)
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
-        )
-
-    api_parser.add_argument(
-        "action",
-        choices=["auth", "settings", "uploads", "fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "transactions", "brokers", "broker-access", "broker-multiuser", "brim", "all"],
-        help="API test to run"
-        )
-
-    api_parser.add_argument(
-        "test_names",
-        nargs="*",
-        help="Optional: specific test names to run (e.g., test_get_currencies)"
-        )
-
-    # ========================================================================
-    # E2E TESTS SUBPARSER
-    # ========================================================================
-    e2e_parser = subparsers.add_parser(
-        "e2e",
-        help="E2E Tests with API Interaction",
-        description="""
+""",
+        },
+        "auth": {
+            "func": api_auth,
+            "test_names": True,
+            "name": "Auth API",
+            "desc": "Test Authentication endpoints",
+            "prereq": "Database created",
+            "tests": "POST /auth/register, /login, /logout, GET /auth/me",
+            "note": "Server auto-started",
+        },
+        "settings": {
+            "func": api_settings,
+            "test_names": True,
+            "name": "Settings API",
+            "desc": "Test Settings endpoints",
+            "prereq": "Database created",
+            "tests": "GET/PUT /settings/user, /settings/global",
+        },
+        "uploads": {
+            "func": api_uploads,
+            "test_names": True,
+            "name": "Uploads API",
+            "desc": "Test file upload endpoints",
+            "prereq": "Database created",
+            "tests": "POST /uploads, GET /uploads, DELETE",
+        },
+        "fx": {
+            "func": api_fx,
+            "test_names": True,
+            "name": "FX API",
+            "desc": "Test FX endpoints",
+            "prereq": "FX rates populated",
+            "tests": "GET /currencies, POST /sync, GET /convert",
+        },
+        "fx-sync": {
+            "func": api_fx_sync,
+            "test_names": True,
+            "name": "FX Sync API",
+            "desc": "Test FX sync endpoints",
+            "prereq": "External FX API working",
+            "tests": "GET /currencies/sync",
+        },
+        "assets-metadata": {
+            "func": api_assets_metadata,
+            "test_names": True,
+            "name": "Assets Metadata API",
+            "desc": "Test asset metadata endpoints",
+            "prereq": "Database created",
+            "tests": "PATCH metadata, bulk read, refresh",
+        },
+        "assets-crud": {
+            "func": api_assets_crud,
+            "test_names": True,
+            "name": "Assets CRUD API",
+            "desc": "Test asset CRUD endpoints",
+            "prereq": "Database created",
+            "tests": "POST /bulk, GET /list, DELETE /bulk",
+        },
+        "assets-price": {
+            "func": api_assets_price,
+            "test_names": True,
+            "name": "Assets Price API",
+            "desc": "Test asset price endpoints",
+            "prereq": "Database with assets",
+            "tests": "Price history queries",
+        },
+        "assets-provider": {
+            "func": api_assets_provider,
+            "test_names": True,
+            "name": "Assets Provider API",
+            "desc": "Test asset provider assignment",
+            "prereq": "Database created",
+            "tests": "Provider assignment, validation",
+        },
+        "utilities": {
+            "func": api_utilities,
+            "test_names": True,
+            "name": "Utilities API",
+            "desc": "Test utility endpoints",
+            "prereq": "None",
+            "tests": "GET /utilities/sectors, /countries/normalize",
+        },
+        "transactions": {
+            "func": api_transactions,
+            "test_names": True,
+            "name": "Transactions API",
+            "desc": "Test transaction endpoints",
+            "prereq": "Database created",
+            "tests": "CRUD, validation, balance checks",
+        },
+        "brokers": {
+            "func": api_brokers,
+            "test_names": True,
+            "name": "Brokers API",
+            "desc": "Test broker endpoints",
+            "prereq": "Database created",
+            "tests": "CRUD, summary, access control",
+        },
+        "broker-access": {
+            "func": api_broker_access,
+            "test_names": True,
+            "name": "Broker Access API",
+            "desc": "Test broker access management",
+            "prereq": "Database created",
+            "tests": "Access grants, role validation",
+        },
+        "broker-multiuser": {
+            "func": api_broker_multiuser,
+            "test_names": True,
+            "name": "Broker Multi-User API",
+            "desc": "Test multi-user broker scenarios",
+            "prereq": "Database created",
+            "tests": "Sharing, permissions, isolation",
+        },
+        "brim": {
+            "func": api_brim,
+            "test_names": True,
+            "name": "BRIM API",
+            "desc": "Test BRIM endpoints",
+            "prereq": "Database created",
+            "tests": "File upload, parse, import",
+        },
+        "all": {
+            "func": api_test,
+            "test_names": False,
+            "name": "All API Tests",
+            "desc": "Run all API tests",
+        },
+    },
+    "e2e": {
+        "_meta": {
+            "help": "E2E Tests with API Interaction",
+            "description": """
 E2E Tests with API Interaction
+
 These tests verify complete end-to-end workflows via REST API:
   • Target: http://localhost:8001 (test server)
   • Backend server auto-started if not running
+  • Tests complete user journeys
+""",
+        },
+        "search-to-prices": {
+            "func": search2prices_test,
+            "test_names": True,
+            "name": "Search to Prices E2E",
+            "desc": "Test complete asset flow",
+            "prereq": "Database created, providers configured",
+            "tests": "Search → Create → Assign → Metadata → Prices",
+        },
+        "brim": {
+            "func": e2e_brim,
+            "test_names": True,
+            "name": "BRIM E2E",
+            "desc": "Test complete BRIM import flow",
+            "prereq": "Database created",
+            "tests": "Upload → Parse → Asset Mapping → Import",
+        },
+        "all": {
+            "func": e2e_test,
+            "test_names": False,
+            "name": "All E2E Tests",
+            "desc": "Run all E2E tests",
+        },
+    },
+}
 
-  search-to-prices  - Test complete flow: Search → Create → Assign → Metadata → Prices
-                      📋 Prerequisites: Database created, providers configured
-                      💡 Tests: Search asset, create asset, assign provider, refresh metadata, refresh prices
-                      Note: Server will be automatically started and stopped by test
 
-  brim              - Test complete BRIM import flow: Upload → Parse → Import
-                      📋 Prerequisites: Database created
-                      💡 Tests: Upload file, parse with plugin, asset mapping, duplicate detection, import
-                      Note: Server will be automatically started and stopped by test
-                      
-  all               - Run all E2E tests with API interaction
+def get_category_choices(category: str) -> list[str]:
+    """Get list of valid actions for a category from TEST_REGISTRY (excluding _meta)."""
+    if category not in TEST_REGISTRY:
+        return []
+    return [k for k in TEST_REGISTRY[category].keys() if k != "_meta"]
 
-        """,
+
+def generate_epilog(category: str) -> str:
+    """Generate epilog text for a category parser from TEST_REGISTRY."""
+    if category not in TEST_REGISTRY:
+        return ""
+
+    cat_data = TEST_REGISTRY[category]
+    lines = []
+
+    # Add category description from _meta
+    if "_meta" in cat_data:
+        lines.append(cat_data["_meta"].get("description", ""))
+        lines.append("\nTest commands:")
+
+    # Add each action
+    for action, info in cat_data.items():
+        if action == "_meta":
+            continue
+
+        desc = info.get("desc", "")
+        prereq = info.get("prereq", "")
+        tests = info.get("tests", "")
+        note = info.get("note", "")
+
+        lines.append(f"  {action:20} - {desc}")
+        if prereq:
+            lines.append(f"                       📋 Prerequisites: {prereq}")
+        if tests:
+            lines.append(f"                       💡 Tests: {tests}")
+        if note:
+            lines.append(f"                       Note: {note}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def run_test_from_registry(category: str, action: str, verbose: bool = False,
+                           test_names: list = None, **kwargs) -> bool:
+    """
+    Run a test from the registry.
+
+    Args:
+        category: Test category (e.g., "api", "db")
+        action: Test action (e.g., "auth", "all")
+        verbose: Verbose output
+        test_names: Optional specific test names
+        **kwargs: Additional args (e.g., force for db populate)
+
+    Returns:
+        bool: True if test passed
+    """
+    if category not in TEST_REGISTRY:
+        print_error(f"Unknown category: {category}")
+        return False
+
+    if action not in TEST_REGISTRY[category] or action == "_meta":
+        print_error(f"Unknown action '{action}' for category '{category}'")
+        return False
+
+    test_info = TEST_REGISTRY[category][action]
+    test_func = test_info["func"]
+    accepts_test_names = test_info.get("test_names", False)
+
+    # Special case for db populate (has force flag)
+    if category == "db" and action == "populate":
+        force = kwargs.get("force", False)
+        return test_func(verbose=verbose, force=force)
+
+    # Build arguments
+    if accepts_test_names and test_names:
+        return test_func(verbose=verbose, test_names=test_names)
+    else:
+        return test_func(verbose=verbose)
+
+
+def create_subparser_from_registry(subparsers, category: str, extra_args: list = None):
+    """
+    Create a subparser for a category from TEST_REGISTRY.
+
+    Args:
+        subparsers: argparse subparsers object
+        category: Category key in TEST_REGISTRY
+        extra_args: Optional list of tuples (arg_name, arg_kwargs) for extra arguments
+
+    Returns:
+        Created subparser
+    """
+    if category not in TEST_REGISTRY:
+        raise ValueError(f"Unknown category: {category}")
+
+    meta = TEST_REGISTRY[category].get("_meta", {})
+
+    parser = subparsers.add_parser(
+        category,
+        help=meta.get("help", f"{category} tests"),
+        description=generate_epilog(category),
         formatter_class=argparse.RawDescriptionHelpFormatter
-        )
+    )
 
-    e2e_parser.add_argument(
+    parser.add_argument(
         "action",
-        choices=["search-to-prices", "brim", "all"],
-        help="End-to-End tests with API interaction (auto-starts server if needed)"
-        )
+        choices=get_category_choices(category),
+        help=f"{category.capitalize()} test to run"
+    )
 
-    e2e_parser.add_argument(
+    parser.add_argument(
         "test_names",
         nargs="*",
         help="Optional: specific test names to run"
-        )
+    )
 
-    # ========================================================================
-    # ALL TESTS CATEGORY
-    # ========================================================================
-    all_parser = subparsers.add_parser(
+    # Add any extra arguments
+    if extra_args:
+        for arg_name, arg_kwargs in extra_args:
+            parser.add_argument(arg_name, **arg_kwargs)
+
+    return parser
+
+
+# ============================================================================
+# MAIN ARGUMENT PARSER
+# ============================================================================
+
+def _generate_main_epilog() -> str:
+    """Generate main parser epilog from TEST_REGISTRY."""
+    lines = ["\nTest Categories:\n"]
+
+    for category in TEST_REGISTRY.keys():
+        meta = TEST_REGISTRY[category].get("_meta", {})
+        help_text = meta.get("help", f"{category} tests")
+        lines.append(f"  {category:8} - {help_text}")
+
+    lines.append(f"  {'all':8} - Run ALL tests in optimal order")
+    lines.append("")
+    lines.append("Examples:")
+    lines.append("  python test_runner.py all                 # All tests (optimal order)")
+    lines.append("  python test_runner.py -v all              # All tests with verbose output")
+    lines.append("  python test_runner.py api auth            # Only auth API tests")
+    lines.append("  python test_runner.py db create           # Create database")
+    lines.append("")
+    lines.append("  # Via dev.sh")
+    lines.append("  ./dev.sh test all                         # Complete test suite")
+    lines.append("  ./dev.sh test api all                     # All API tests")
+
+    return "\n".join(lines)
+
+
+def create_parser() -> argparse.ArgumentParser:
+    """Create and configure argument parser using TEST_REGISTRY."""
+    parser = argparse.ArgumentParser(
+        description="LibreFolio Test Runner - Organized test execution",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_generate_main_epilog()
+    )
+
+    # Global flags
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Show full test output",
+        default=False
+    )
+
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help="Run tests with code coverage tracking",
+        default=False
+    )
+
+    parser.add_argument(
+        "--cov-clean",
+        action="store_true",
+        help="Clean coverage database before running tests",
+        default=False
+    )
+
+    parser.add_argument(
+        "--db-reset",
+        action="store_true",
+        help="Reset test database before running db tests",
+        default=False
+    )
+
+    subparsers = parser.add_subparsers(
+        dest="category",
+        help="Test category to run",
+        required=False
+    )
+
+    # Auto-generate subparsers from TEST_REGISTRY
+    for category in TEST_REGISTRY.keys():
+        extra_args = None
+        if category == "db":
+            extra_args = [
+                ("--force", {
+                    "action": "store_true",
+                    "help": "[populate only] Recreate from scratch",
+                    "default": False,
+                }),
+            ]
+        create_subparser_from_registry(subparsers, category, extra_args)
+
+    # Special "all" category
+    subparsers.add_parser(
         "all",
         help="Run ALL tests in optimal order",
         description="""
 Complete Test Suite
 
-Runs all test categories in the optimal order:
-  1. External Services (ECB API, etc.)
-  2. Database Layer (schema, persistence)
-  3. Backend Services (conversion logic, calculations)
-  4. API Endpoints (REST API - auto-starts test server on port 8001)
+Runs all test categories in optimal order:
+  1. External Services
+  2. Database Layer
+  3. Schema Validation
+  4. Utility Modules
+  5. Services Layer
+  6. API Endpoints
+  7. E2E Tests
 
-This is the recommended way to verify your LibreFolio installation.
-
-Expected time: 3-7 minutes (depending on network speed for ECB API)
-
-✅ API tests now INCLUDED with automatic server start/stop
-   Test server runs on port 8001 (configurable via TEST_PORT env var)
-   If port 8001 is occupied, you'll see helpful troubleshooting instructions
+Expected time: 3-7 minutes
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
-        )
+    )
 
     return parser
 
@@ -1884,144 +1989,31 @@ def main():
                 coverage_file.unlink()
                 print(f"{Colors.YELLOW}🗑️  Cleared previous coverage data{Colors.NC}\n")
 
-    # Route to appropriate test handler (normal mode - coverage handled by run_command)
+    # Route to appropriate test handler using TEST_REGISTRY
     success = False
 
     if args.category == "all":
         # Run complete test suite
         success = run_all_tests(verbose=verbose)
-
-    elif args.category == "external":
-        # External services tests
-        if args.action == "fx-providers":
-            success = external_fx_providers(verbose=verbose, test_names=test_names)
-        elif args.action == "asset-providers":
-            success = external_asset_providers(verbose=verbose, test_names=test_names)
-        elif args.action == "brim-providers":
-            success = external_brim_providers(verbose=verbose, test_names=test_names)
-        elif args.action == "all":
-            success = external_all(verbose=verbose)
-
-    elif args.category == "db":
-        # Database tests
-        if args.action == "create":
-            success = db_create(verbose=verbose)
-        elif args.action == "validate":
-            success = db_validate(verbose=verbose, test_names=test_names)
-        elif args.action == "numeric-truncation":
-            success = db_numeric_truncation(verbose=verbose, test_names=test_names)
-        elif args.action == "fx-rates":
-            success = db_fx_rates(verbose=verbose, test_names=test_names)
-        elif args.action == "brim":
-            success = db_brim(verbose=verbose, test_names=test_names)
-        elif args.action == "populate":
-            force = getattr(args, 'force', False)
-            success = db_populate(verbose=verbose, force=force)
-        elif args.action == "referential-integrity":
-            success = db_test_referential_integrity(verbose=verbose, test_names=test_names)
-        elif args.action == "all":
-            success = db_all(verbose=verbose)
-
-    elif args.category == "services":
-        # Backend services tests
-        if args.action == "fx-conversion":
-            success = services_fx_conversion(verbose=verbose, test_names=test_names)
-        elif args.action == "asset-source":
-            success = services_asset_source(verbose=verbose, test_names=test_names)
-        elif args.action == "asset-metadata":
-            success = services_asset_metadata(verbose=verbose, test_names=test_names)
-        elif args.action == "asset-source-refresh":
-            success = services_asset_source_refresh(verbose=verbose, test_names=test_names)
-        elif args.action == "provider-registry":
-            success = services_provider_registry(verbose=verbose, test_names=test_names)
-        elif args.action == "synthetic-yield":
-            success = services_synthetic_yield(verbose=verbose, test_names=test_names)
-        elif args.action == "synthetic-yield-integration":
-            success = services_synthetic_yield_integration(verbose=verbose, test_names=test_names)
-        elif args.action == "transaction":
-            success = services_transaction(verbose=verbose, test_names=test_names)
-        elif args.action == "broker":
-            success = services_broker(verbose=verbose, test_names=test_names)
-        elif args.action == "edge-cases":
-            success = services_edge_cases(verbose=verbose, test_names=test_names)
-        elif args.action == "all":
-            success = services_all(verbose=verbose)
-
-    elif args.category == "utils":
-        # Utility module tests
-        if args.action == "decimal-precision":
-            success = utils_decimal_precision(verbose=verbose, test_names=test_names)
-        elif args.action == "datetime":
-            success = utils_datetime(verbose=verbose, test_names=test_names)
-        elif args.action == "financial-math":
-            success = utils_financial_math(verbose=verbose, test_names=test_names)
-        elif args.action == "day-count":
-            success = utils_day_count(verbose=verbose, test_names=test_names)
-        elif args.action == "compound-interest":
-            success = utils_compound_interest(verbose=verbose, test_names=test_names)
-        elif args.action == "geo-normalization":
-            success = utils_geo_utils(verbose=verbose, test_names=test_names)
-        elif args.action == "sector-normalization":
-            success = utils_sector_normalization(verbose=verbose, test_names=test_names)
-        elif args.action == "all":
-            success = utils_all(verbose=verbose)
-
-    elif args.category == "schemas":
-        # Schema validation tests
-        if args.action == "common":
-            success = schemas_common(verbose=verbose, test_names=test_names)
-        elif args.action == "assets":
-            success = schemas_assets(verbose=verbose, test_names=test_names)
-        elif args.action == "transactions":
-            success = schemas_transactions(verbose=verbose, test_names=test_names)
-        elif args.action == "brokers":
-            success = schemas_brokers(verbose=verbose, test_names=test_names)
-        elif args.action == "all":
-            success = schemas_all(verbose=verbose)
-
-    elif args.category == "api":
-        # API tests
-        if args.action == "fx":
-            success = api_fx(verbose=verbose, test_names=test_names)
-        elif args.action == "fx-sync":
-            success = api_fx_sync(verbose=verbose, test_names=test_names)
-        elif args.action == "assets-metadata":
-            success = api_assets_metadata(verbose=verbose, test_names=test_names)
-        elif args.action == "assets-crud":
-            success = api_assets_crud(verbose=verbose, test_names=test_names)
-        elif args.action == "assets-price":
-            success = api_assets_price(verbose=verbose, test_names=test_names)
-        elif args.action == "assets-provider":
-            success = api_assets_provider(verbose=verbose, test_names=test_names)
-        elif args.action == "utilities":
-            success = api_utilities(verbose=verbose, test_names=test_names)
-        elif args.action == "transactions":
-            success = api_transactions(verbose=verbose, test_names=test_names)
-        elif args.action == "brokers":
-            success = api_brokers(verbose=verbose, test_names=test_names)
-        elif args.action == "broker-access":
-            success = api_broker_access(verbose=verbose, test_names=test_names)
-        elif args.action == "broker-multiuser":
-            success = api_broker_multiuser(verbose=verbose, test_names=test_names)
-        elif args.action == "brim":
-            success = api_brim(verbose=verbose, test_names=test_names)
-        elif args.action == "auth":
-            success = api_auth(verbose=verbose, test_names=test_names)
-        elif args.action == "settings":
-            success = api_settings(verbose=verbose, test_names=test_names)
-        elif args.action == "uploads":
-            success = api_uploads(verbose=verbose, test_names=test_names)
-        elif args.action == "all":
-            success = api_test(verbose=verbose)
-    
-    elif args.category == "e2e":
-        # E2E tests
-        if args.action == "search-to-prices":
-            success = search2prices_test(verbose=verbose, test_names=test_names)
-        elif args.action == "brim":
-            success = e2e_brim(verbose=verbose, test_names=test_names)
-        elif args.action == "all":
-            success = e2e_test(verbose=verbose)
+    elif args.category in TEST_REGISTRY:
+        # Use registry for all other categories
+        action = getattr(args, 'action', None)
+        if action:
+            # Special handling for db populate (has force flag)
+            force = getattr(args, 'force', False) if args.category == "db" else False
+            success = run_test_from_registry(
+                category=args.category,
+                action=action,
+                verbose=verbose,
+                test_names=test_names,
+                force=force
+            )
+        else:
+            print_error(f"No action specified for category '{args.category}'")
+            return 1
+    else:
+        print_error(f"Unknown category: {args.category}")
+        return 1
 
     # If coverage mode, show final summary
     if _COVERAGE_MODE:

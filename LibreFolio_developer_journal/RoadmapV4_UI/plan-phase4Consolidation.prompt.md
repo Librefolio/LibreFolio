@@ -113,56 +113,110 @@ Piano strutturato per risolvere bug bloccanti, implementare sistema upload con r
 
 ---
 
-### 6. Test API Backend (dopo tutti i fix backend) ✅ COMPLETATO
+### 6. Test API Backend (dopo tutti i fix backend) ✅ COMPLETATO + REFACTORING
 
-**File esistenti aggiornati:**
+**Refactoring test_runner.py:**
+- ✅ Creato `TEST_REGISTRY` come dizionario a 2 livelli (categoria → action → info)
+- ✅ Ogni action ha: `func`, `test_names`, `name`, `desc`, `prereq`, `tests`, `note`
+- ✅ Funzione `get_category_choices(category)` genera choices da registry
+- ✅ Funzione `generate_epilog(category)` genera descrizione automatica per parser
+- ✅ Funzione `run_test_from_registry(category, action, ...)` esegue test
+- ✅ Funzione `create_subparser_from_registry(subparsers, category, extra_args)` crea parser automaticamente
+- ✅ Rimossi ~500 linee di codice duplicato negli elif del main
+- ✅ Singola fonte di verità: aggiungere test = aggiornare solo registry
 
-1. ✅ **`backend/test_scripts/test_api/test_brokers_api.py`**:
-   - Aggiornato per richiedere autenticazione su tutti gli endpoint
-   - Test che utente creatore diventa OWNER automaticamente
-   - Test filtraggio: utente vede solo i propri broker
-   - Riorganizzato in classi: TestBrokerCreate, TestBrokerRead, TestBrokerUpdate, TestBrokerDelete
+**Conteggio Test Totali:**
+| File | Test | Passati | Skip |
+|------|------|---------|------|
+| test_brokers_api.py | 21 | 21 | 0 |
+| test_broker_access_api.py | 25 | 24 | 1 |
+| test_broker_multiuser_api.py | 8 | 8 | 0 |
+| test_uploads_api.py | 14 | 14 | 0 |
+| test_transactions_api.py | 14 | 13 | 1 |
+| test_broker_schemas.py | 29 | 29 | 0 |
+| test_broker_service.py | 30 | 30 | 0 |
+| **TOTALE** | **141** | **~139** | **~2** |
 
-**File nuovi creati:**
+**File aggiornati:**
 
-2. ✅ **`backend/test_scripts/test_api/test_uploads_api.py`**:
-   - TestUpload: upload file, requires auth
-   - TestListUploads: lista file, my_files_only
-   - TestFileInfo: info singolo file
-   - TestDownload: download binary
-   - TestDelete: elimina file, cannot delete others
-   - TestPluginStatic: 404 per file non esistente
+1. ✅ **`test_brokers_api.py`** (21 test):
+   - Classi: TestBrokerCreate, TestBrokerRead, TestBrokerUpdate, TestBrokerDelete
+   - NEW: TestBrokerBulkOperations (bulk create/delete, partial failure, duplicate name)
+   - NEW: TestMultipleOwners (multiple owners, one removes another)
+   - Tutti richiedono autenticazione
 
-3. ✅ **`backend/test_scripts/test_api/test_broker_access_api.py`**:
-   - TestAccessList: lista accessi, 404 senza accesso
-   - TestAddAccess: OWNER aggiunge VIEWER/EDITOR/OWNER, EDITOR/VIEWER non possono
-   - TestUpdateAccess: promozione/degradazione ruoli, ultimo OWNER non degradabile
-   - TestRemoveAccess: rimozione accessi, auto-rimozione, ultimo OWNER non rimovibile
-   - TestMultiUserIsolation: utente A non vede broker utente B
+2. ✅ **`test_broker_access_api.py`** (25 test):
+   - Classi: TestAccessList, TestAddAccess, TestUpdateAccess, TestRemoveAccess
+   - Classi: TestMultiUserIsolation, TestSuperuserAccess, TestSelfModification
+   - test_superuser_sees_all_brokers_with_as_user_id_all (SKIP se DB non pulito - corretto)
+   - test_non_superuser_cannot_use_as_user_id
+   - test_owner_cannot_degrade_self_if_last
+   - test_owner_can_degrade_self_if_not_last
 
-4. ✅ **`backend/test_scripts/test_api/test_broker_multiuser_api.py`**:
-   - MULTI-001: Creazione broker crea BrokerUserAccess con OWNER
-   - MULTI-002: EDITOR può modificare broker
-   - MULTI-003: EDITOR non può eliminare broker
-   - MULTI-004: VIEWER non può modificare broker
-   - MULTI-005: VIEWER può leggere broker
-   - MULTI-006: OWNER può eliminare broker
+3. ✅ **`test_broker_multiuser_api.py`** (8 test):
+   - Tutti i test ruoli (OWNER/EDITOR/VIEWER)
+   - test_editor_can_create_transactions
+   - test_viewer_cannot_create_transactions ✅ FIX APPLICATO
 
-**Aggiornato `test_runner.py`:**
-- ✅ Aggiunta funzione `api_uploads()`
-- ✅ Aggiunta funzione `api_broker_access()`
-- ✅ Aggiunta funzione `api_broker_multiuser()`
-- ✅ Aggiunte nuove categorie alle choices del parser
-- ✅ Aggiunti handler nel router principale
-- ✅ Aggiunti alla lista `api_test()` per esecuzione "all"
+4. ✅ **`test_uploads_api.py`** (14 test):
+   - Classi: TestUpload, TestListUploads, TestFileInfo, TestDownload, TestDelete
+   - TestPluginStatic
+   - TestFileSizeLimit (max_file_upload_mb check)
+   - TestSuperuserDelete (SKIP se DB non pulito)
+   - NEW: TestUploadSecurity (3 test: exe blocked, script blocked, image allowed)
 
-**Esecuzione test:**
+5. ✅ **`test_transactions_api.py`** (14 test) - AGGIORNATO:
+   - FIX: Tutti i test ora si autenticano prima di usare le API
+   - FIX: Ogni test crea il proprio broker per isolamento
+   - FIX: test_post_transactions_balance_error gestisce errori
+   - FIX: Backend cattura Exception generica in _validate_broker_balances
+   - FIX: Endpoint transactions.py ha try-catch globale per prevenire 500
+
+6. ✅ **`test_broker_schemas.py`** (29 test):
+   - FIX: Aggiunto `is_active` a TestBrokerReadItem
+
+7. ✅ **`test_broker_service.py`** (30 test):
+   - FIX: Aggiunta fixture `test_user` per creare utente test
+   - FIX: Tutti i metodi service ora ricevono `user_id=test_user.id`
+
+**Bug fixati:**
+- ✅ Transactions API ora verifica ruoli broker (VIEWER bloccato)
+- ✅ Upload security validation (blocca exe/script, valida MIME type)
+- ✅ Test service broker aggiornati per nuova signature con user_id
+- ✅ transaction_service.py: catch Exception in balance validation per evitare 500
+- ✅ transactions.py endpoint: try-catch globale restituisce errore invece di 500
+
+**Refactoring test_runner.py:**
+- ✅ Creato `TEST_REGISTRY` come dizionario a 2 livelli con struttura completa:
+  - `_meta`: info parser (`help`, `description`)
+  - action: `{func, test_names, name, desc, prereq, tests, note}`
+- ✅ `get_category_choices(category)` - genera choices da registry
+- ✅ `generate_epilog(category)` - genera descrizione automatica per parser
+- ✅ `run_test_from_registry()` - esegue test dal registry
+- ✅ `create_subparser_from_registry()` - crea parser automaticamente da registry
+- ✅ `_get_category_tests_for_all()` - genera lista test per funzioni `*_all`
+- ✅ `_generate_main_epilog()` - genera epilog principale da registry
+- ✅ `create_parser()` - itera su TEST_REGISTRY per creare tutti i subparser
+- ✅ Tutte le funzioni `*_all` ora usano il registry (non più liste hardcoded):
+  - `external_all()`, `db_all()`, `utils_all()`, `schemas_all()`
+  - `services_all()`, `api_test()`, `e2e_test()`, `run_all_tests()`
+- ✅ `GLOBAL_ALL_ORDER` - ordine esplicito per global all
+- ✅ Rimossi ~450+ linee di codice duplicato
+- ✅ Singola fonte di verità: aggiungere test = aggiornare solo registry
+
+**Nuove dipendenze:**
+- `python-magic` aggiunto a Pipfile per MIME type detection
+
+**Esecuzione:**
 ```bash
-./dev.sh test api brokers           # Test broker base con auth
-./dev.sh test api broker-access     # Test gestione accessi
-./dev.sh test api broker-multiuser  # Test ruoli multi-utente
-./dev.sh test api uploads           # Test upload files
-./dev.sh test api all               # Tutti i test API
+./dev.sh test api brokers           # 21 test
+./dev.sh test api broker-access     # 25 test  
+./dev.sh test api broker-multiuser  # 8 test
+./dev.sh test api uploads           # 14 test
+./dev.sh test api transactions      # 14 test
+./dev.sh test schemas brokers       # 29 test
+./dev.sh test services broker       # 30 test
+./dev.sh test all                   # Tutti i test
 ```
 
 ---
@@ -304,6 +358,7 @@ Creare in [components/ui/](../../frontend/src/lib/components/ui/):
 
 2. **Documentazione multilingua (phase-final #7)**: scrivere docs base in EN/IT/FR/ES — da fare in batch separato dopo stabilizzazione UI?
 
+3. Creare della documentazione in mkdocs_src per spiegare i nuovi sistemi di upload e la nuova configurazione del progetto con distinzione tra super utente e utente normale.
 ---
 
 ## File da Creare (Riepilogo)
