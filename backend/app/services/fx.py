@@ -70,6 +70,30 @@ class FXRateProvider(ABC):
         """
         return None  # Default: no icon
 
+    @classmethod
+    def generate_static_url(cls, relative_path: str) -> str:
+        """
+        Generate URL for a static asset in the plugin's static folder.
+
+        Use this to reference icons, images, or other static files
+        bundled with your plugin.
+
+        Structure:
+            fx_providers/static/{relative_path}
+
+        Args:
+            relative_path: Path relative to static folder (e.g., "ecb/logo.png")
+
+        Returns:
+            Full URL path (e.g., "/api/v1/uploads/plugin/fx/ecb/logo.png")
+
+        Example:
+            class ECBProvider(FXRateProvider):
+                def get_icon(self) -> str:
+                    return self.generate_static_url("ecb/logo.svg")
+        """
+        return f"/api/v1/uploads/plugin/fx/{relative_path}"
+
     @property
     @abstractmethod
     def base_currency(self) -> str:

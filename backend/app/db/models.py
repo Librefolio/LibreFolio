@@ -222,10 +222,12 @@ class UserRole(str, Enum):
     """
     User role for broker access control.
 
-    - OWNER: Full access (create, read, update, delete)
+    - OWNER: Full access (CRUD broker, manage access, delete broker)
+    - EDITOR: Modify broker and transactions, can only remove self
     - VIEWER: Read-only access
     """
     OWNER = "OWNER"
+    EDITOR = "EDITOR"
     VIEWER = "VIEWER"
 
 
@@ -317,8 +319,9 @@ class Broker(SQLModel, table=True):
     Examples: Interactive Brokers, Degiro, Recrowd, etc.
 
     Flags:
-    - allow_cash_overdraft: If True, cash balance can go negative (margin trading)
+    - allow_cash_overdraft: If True, cash balance can go negative (margin/leveraged trading)
     - allow_asset_shorting: If True, asset quantity can go negative (short selling)
+    - is_active: If False, the account is closed in reality (but we keep historical data)
     """
     __tablename__ = "brokers"
 
@@ -326,10 +329,16 @@ class Broker(SQLModel, table=True):
     name: str = Field(unique=True, index=True, nullable=False)
     description: Optional[str] = Field(default=None, sa_column=Column(Text))
     portal_url: Optional[str] = Field(default=None)
+    icon_url: Optional[str] = Field(default=None, description="Custom icon URL for the broker")
+    default_import_plugin: Optional[str] = Field(default=None, description="Default BRIM plugin for importing transactions")
 
     # New flags for advanced trading scenarios
-    allow_cash_overdraft: bool = Field(default=False, description="Allow negative cash balance")
-    allow_asset_shorting: bool = Field(default=False, description="Allow negative asset quantities")
+    allow_cash_overdraft: bool = Field(default=False, description="Allow leveraged buying (negative cash balance)")
+    allow_asset_shorting: bool = Field(default=False, description="Allow short selling (negative asset quantities)")
+
+    # Account status
+    is_active: bool = Field(default=True, description="Whether the broker account is currently active")
+    opened_at: Optional[date_type] = Field(default=None, description="Date when the account was opened in reality")
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

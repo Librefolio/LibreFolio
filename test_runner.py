@@ -1037,6 +1037,56 @@ def api_settings(verbose: bool = False, test_names: list[str] | None = None) -> 
     return run_command(cmd, "Settings API tests", verbose=verbose)
 
 
+def api_uploads(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """
+    Run uploads API tests.
+
+    Tests: file upload, list, download, delete, plugin static assets
+    """
+    print_section("Uploads API Tests")
+    print_info("Testing REST API endpoints for file uploads")
+    print_info("Tests: POST /uploads, GET /uploads, DELETE /uploads/{id}")
+    print_info("Tests: Download, plugin static assets")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_uploads_api.py", test_names)
+    return run_command(cmd, "Uploads API tests", verbose=verbose)
+
+
+def api_broker_access(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """
+    Run broker access API tests.
+
+    Tests: broker access management (add, update, remove access)
+    Tests role permissions: OWNER, EDITOR, VIEWER
+    """
+    print_section("Broker Access API Tests")
+    print_info("Testing REST API endpoints for broker access management")
+    print_info("Tests: GET/POST/PATCH/DELETE /brokers/{id}/access")
+    print_info("Tests: Role hierarchy (OWNER > EDITOR > VIEWER)")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_broker_access_api.py", test_names)
+    return run_command(cmd, "Broker Access API tests", verbose=verbose)
+
+
+def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """
+    Run broker multi-user role tests.
+
+    Tests: role-based permissions on broker operations
+    OWNER can do everything, EDITOR can modify, VIEWER read-only
+    """
+    print_section("Broker Multi-User Role Tests")
+    print_info("Testing role-based permissions on broker operations")
+    print_info("Tests: OWNER permissions, EDITOR permissions, VIEWER permissions")
+    print_info("Tests: User isolation between different users")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_broker_multiuser_api.py", test_names)
+    return run_command(cmd, "Broker Multi-User API tests", verbose=verbose)
+
+
 def api_test(verbose: bool = False) -> bool:
     """
     Run all API tests.
@@ -1048,6 +1098,7 @@ def api_test(verbose: bool = False) -> bool:
     tests = [
         ("Auth API", lambda: api_auth(verbose)),
         ("Settings API", lambda: api_settings(verbose)),
+        ("Uploads API", lambda: api_uploads(verbose)),
         ("FX API", lambda: api_fx(verbose)),
         ("FX Sync API", lambda: api_fx_sync(verbose)),
         ("Assets Metadata API", lambda: api_assets_metadata(verbose)),
@@ -1057,6 +1108,8 @@ def api_test(verbose: bool = False) -> bool:
         ("Utilities API", lambda: api_utilities(verbose)),
         ("Transactions API", lambda: api_transactions(verbose)),
         ("Brokers API", lambda: api_brokers(verbose)),
+        ("Broker Access API", lambda: api_broker_access(verbose)),
+        ("Broker Multi-User API", lambda: api_broker_multiuser(verbose)),
         ("BRIM API", lambda: api_brim(verbose)),
         ]
 
@@ -1700,7 +1753,7 @@ Test commands:
 
     api_parser.add_argument(
         "action",
-        choices=["auth", "settings", "fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "transactions", "brokers", "brim", "all"],
+        choices=["auth", "settings", "uploads", "fx", "fx-sync", "assets-metadata", "assets-crud", "assets-provider", "assets-price", "utilities", "transactions", "brokers", "broker-access", "broker-multiuser", "brim", "all"],
         help="API test to run"
         )
 
@@ -1946,12 +1999,18 @@ def main():
             success = api_transactions(verbose=verbose, test_names=test_names)
         elif args.action == "brokers":
             success = api_brokers(verbose=verbose, test_names=test_names)
+        elif args.action == "broker-access":
+            success = api_broker_access(verbose=verbose, test_names=test_names)
+        elif args.action == "broker-multiuser":
+            success = api_broker_multiuser(verbose=verbose, test_names=test_names)
         elif args.action == "brim":
             success = api_brim(verbose=verbose, test_names=test_names)
         elif args.action == "auth":
             success = api_auth(verbose=verbose, test_names=test_names)
         elif args.action == "settings":
             success = api_settings(verbose=verbose, test_names=test_names)
+        elif args.action == "uploads":
+            success = api_uploads(verbose=verbose, test_names=test_names)
         elif args.action == "all":
             success = api_test(verbose=verbose)
     

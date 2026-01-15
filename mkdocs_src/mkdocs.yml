@@ -65,7 +65,7 @@ extra_javascript:
 
 nav:
   - Home: index.md
-  - 🚀 Dashboard: http://localhost:8000
+  - 🚀 Dashboard: /
   - FAQ: faq.md
   - Getting Started:
     - Introduction: getting-started/introduction.md

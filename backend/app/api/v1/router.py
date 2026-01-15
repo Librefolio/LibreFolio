@@ -4,7 +4,7 @@ Aggregates all v1 endpoints.
 """
 from fastapi import APIRouter
 
-from backend.app.api.v1 import fx, assets, transactions, brokers, backup, auth, settings, system
+from backend.app.api.v1 import fx, assets, transactions, brokers, backup, auth, settings, system, uploads
 from backend.app.api.v1.utilities import router as utilities_router
 from backend.app.logging_config import get_logger
 
@@ -16,6 +16,7 @@ router = APIRouter()
 router.include_router(auth.router)  # Auth first (no prefix, uses /auth)
 router.include_router(settings.router)  # Settings
 router.include_router(system.router)  # System info
+router.include_router(uploads.router)  # File uploads
 router.include_router(fx.fx_router)
 router.include_router(assets.asset_router)
 router.include_router(transactions.tx_router)
@@ -23,15 +24,3 @@ router.include_router(brokers.broker_router)
 router.include_router(backup.backup_router)
 router.include_router(utilities_router)
 
-
-@router.get("/health")
-async def health_check():
-    """
-    Health check endpoint.
-    Returns service status.
-
-    Returns:
-        dict: Status message
-    """
-    logger.info("Health check requested")
-    return {"status": "ok"}

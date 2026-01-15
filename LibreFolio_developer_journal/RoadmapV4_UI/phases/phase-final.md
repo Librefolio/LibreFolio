@@ -1,8 +1,16 @@
 Note migliorative da fare ma alla fine:
 
-1. Quando si cambia pw o si crea un utente, aggiungere un componente che indica il livello di sicurezza della pw, e quando non si rispettano i parametri, far comparire una nuvoletta che evidenza le regole rispettate e quelle mancanti.
+1. ✅ COMPLETATO (14-01-2026): Quando si cambia pw o si crea un utente, aggiungere un componente che indica il livello di sicurezza della pw, e quando non si rispettano i parametri, far comparire una nuvoletta che evidenza le regole rispettate e quelle mancanti.
+   - Creato `PasswordStrength.svelte` con zxcvbn-ts
+   - Aggiunto a RegisterModal e ProfileTab (cambio password)
+   - Traduzioni in EN/IT/FR/ES
 2. Attuare a backend la lettura dei vari global settings per renderli efficaci, con dei metodi utility così che le varie aree di codice non debbano accedere direttamente al DB
 3. Creare il tema chiaro e il tema scuro, copiando lo stile della documentazione, e magari mettendo un sole e una nuvola in un bottone tra il selettore lingua e l'help
-4. Mettere il salva, e annulla tra i settings normali dell'utente, per ora non c'è
+4. Modificare la pagina delle preferenze dell'utente normale per renderla come quella delle impostazioni globali, con un selettore verticale del "capitolo" e una parte destra con le varie voci, che alla loro modifica mostrano salva, annulla e ripristina, e sopra ci siano salva tutto, modifica tutto e ripristina tutto (come nel global)
 5. nell'icona della valuta nel cerca, rendere il background più grande e gradevole
-6. 
+6. gli strumenti di rendering grafici come mermaid o flow della documentazioni, vengono caricati molto lentamente dal browser. Sarebbe preferibile cashare la versione in locale, e solo come fallback andare a prendere quella remota, così da vincolare anche la versione di pacchetto.
+7. aggiornare la documentazione nelle parti "per tutti/base" e scriverle in tutte le lingue del frontend
+8. ✅ COMPLETATO (14-01-2026): Primo utente registrato diventa automaticamente admin (is_superuser=True)
+9. ✅ COMPLETATO (14-01-2026): Messaggi di errore migliorati per registrazione (es. dominio email non valido)
+10. Dovrebbe essere possibile gestrire un sistema di upload di file di personalizzazione, come icone personalizzate o immagini per l'avatar e così via. Si dovrebbe creare un sistema che ricalchi quanto già fatto per l'upload dei file di transazione, permettendo l'elenco e la cancellazione. Mi aspetto che i file uplodati possano essere visti da tutti gli utenti, e che vengano salvati in backend/data/custom-uploads. bisogna aggiungere una pagina, sopra impostazioni, che listi il contenuto sia di broker_reports, attraverso le API del sistema delle transazioni, che questo nuovo custom-uploads. Indagare se si puù estendere il sistema attuale per gestire anche file diversi da quelli delle transazioni, o crearne uno adock. Sicuramente questo sistema deve essere usato intanto nella selezione dell'icona del broker, e poi andrà esteso agli altri oggetti.
+11. Creare nei settings, un altro tab "plugins", anche lui con un selettore verticale a sinistra tra i vari sotto sistemi (brim, fx, asset per ora) e che una volta selezionato mostri varie card per i vari plugin con le info del caso, icone, ed eventuali url per maggiori info o crediti. I vari plugin devono esporre da API le stringhe da mostrare nei vari campi, e lo devono fare nativamente multilingua, in caso una lingua manchi si fa fallback sull'inglese, e se anche lui manca, una a caso tra quelle implementate, la prima direi)

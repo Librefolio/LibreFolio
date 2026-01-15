@@ -4,6 +4,7 @@
     import {api, ApiError} from '$lib/api';
     import {Calendar, Check, Key, Mail, User, X} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
+    import PasswordStrength from '$lib/components/ui/PasswordStrength.svelte';
 
     // Format date for display
     function formatDate(dateStr: string | undefined): string {
@@ -25,6 +26,18 @@
     let passwordSuccess = '';
     let isChangingPassword = false;
 
+    // Password rules for validation
+    const passwordRules = {
+        minLength: (pwd: string) => pwd.length >= 8,
+        hasUppercase: (pwd: string) => /[A-Z]/.test(pwd),
+        hasLowercase: (pwd: string) => /[a-z]/.test(pwd),
+        hasNumber: (pwd: string) => /\d/.test(pwd),
+        hasSpecial: (pwd: string) => /[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/`~;']/.test(pwd),
+    };
+
+    // Check if password meets all rules
+    $: passwordMeetsRules = Object.values(passwordRules).every(check => check(newPassword));
+
     function togglePasswordForm() {
         showPasswordForm = !showPasswordForm;
         if (!showPasswordForm) {
@@ -44,9 +57,9 @@
         passwordError = '';
         passwordSuccess = '';
 
-        // Validation
-        if (newPassword.length < 8) {
-            passwordError = $_('settings.passwordTooShort');
+        // Validation - check all password rules
+        if (!passwordMeetsRules) {
+            passwordError = $_('auth.validation.passwordTooWeak');
             return;
         }
 
@@ -185,6 +198,7 @@
                             autocomplete="new-password"
                             disabled={isChangingPassword}
                     />
+                    <PasswordStrength password={newPassword} />
                 </div>
 
                 <div class="space-y-2">
@@ -212,7 +226,7 @@
                     <button
                             type="submit"
                             class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                            disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword}
+                            disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword || !passwordMeetsRules}
                     >
                         {#if isChangingPassword}
                             {$_('common.loading')}

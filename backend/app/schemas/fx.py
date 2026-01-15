@@ -45,9 +45,7 @@ from backend.app.utils.datetime_utils import parse_ISO_date
 
 class FXProviderInfo(BaseModel):
     """Information about a single FX rate provider."""
-    model_config = ConfigDict(
-        str_strip_whitespace=True,
-        )
+    model_config = ConfigDict(str_strip_whitespace=True)
 
     code: str = Field(..., description="Provider code (e.g., ECB, FED, BOE, SNB)")
     name: str = Field(..., description="Provider full name")

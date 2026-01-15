@@ -1,6 +1,6 @@
 # Phase 4: Brokers Management
 
-**Status**: ⏳ TODO  
+**Status**: 🔄 IN PROGRESS  
 **Durata**: 3 giorni  
 **Priorità**: P0 (MVP)
 **Dipendenze**: Phase 3
@@ -19,9 +19,9 @@ Se vengono creati componenti riutilizzabili, seguire le linee guida in [Phase 9:
 
 **Componenti previsti per questa fase**:
 
-- `BrokerCard.svelte` - Card display broker
+- `BrokerCard.svelte` - Card display broker ✅
 - `Modal.svelte` - Se non già esistente in Phase 9
-- `CurrencySelect.svelte` - Selector valuta riutilizzabile
+- `CurrencySelect.svelte` → `FuzzySelect.svelte` ✅ (riutilizzabile)
 
 ---
 
@@ -29,10 +29,25 @@ Se vengono creati componenti riutilizzabili, seguire le linee guida in [Phase 9:
 
 ### Tasks
 
-- [ ] Creare `src/routes/(app)/brokers/+page.svelte`
-- [ ] Creare `src/routes/(app)/brokers/+page.ts` (load function)
-- [ ] Creare `src/lib/components/brokers/BrokerCard.svelte`
-- [ ] Implementare button "Add Broker"
+- [x] Creare `src/routes/(app)/brokers/+page.svelte`
+- [x] Creare `src/routes/(app)/brokers/+page.ts` (load function)
+- [x] Creare `src/lib/components/brokers/BrokerCard.svelte`
+- [x] Implementare button "Add Broker"
+
+### Miglioramenti Implementati (14-01-2026)
+
+- [x] BrokerCard cliccabile ovunque (navigazione al dettaglio)
+- [x] Hover animation sulla card
+- [x] Icona broker (custom o favicon da portal_url)
+- [x] Rimosso pulsante "occhio" (ridondante)
+- [x] Nuovi campi DB: `icon_url`, `default_import_plugin`
+- [x] Toggle per "Conto Attivo" invece di checkbox
+- [x] Data apertura default = oggi
+- [x] Checkbox trading in layout verticale con tooltip condizionali
+- [x] Label aggiornate: "Consenti Acquisto con Leva", "Consenti Vendita allo Scoperto (Short)"
+- [x] Initial balances: ordine invertito (amount, currency), dropdown verso l'alto
+- [x] Prima valuta suggerita = default currency dell'utente
+- [x] Conferma se si chiude modal con modifiche non salvate
 
 ### Load Function
 

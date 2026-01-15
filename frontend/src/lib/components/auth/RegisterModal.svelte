@@ -3,6 +3,7 @@
     import {_} from '$lib/i18n';
     import {api} from '$lib/api';
     import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
+    import PasswordStrength from '$lib/components/ui/PasswordStrength.svelte';
 
     const dispatch = createEventDispatcher<{
         gotoLogin: { message?: string };
@@ -20,6 +21,15 @@
     let emailError = '';
     let passwordError = '';
     let confirmPasswordError = '';
+
+    // Password rules for validation
+    const passwordRules = {
+        minLength: (pwd: string) => pwd.length >= 8,
+        hasUppercase: (pwd: string) => /[A-Z]/.test(pwd),
+        hasLowercase: (pwd: string) => /[a-z]/.test(pwd),
+        hasNumber: (pwd: string) => /\d/.test(pwd),
+        hasSpecial: (pwd: string) => /[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/`~;']/.test(pwd),
+    };
 
     function validateUsername() {
         if (username.length < 3) {
@@ -41,8 +51,10 @@
     }
 
     function validatePassword() {
-        if (password.length < 8) {
-            passwordError = $_('auth.validation.passwordMinLength');
+        // Check all password rules
+        const allPassed = Object.values(passwordRules).every(check => check(password));
+        if (!allPassed) {
+            passwordError = $_('auth.validation.passwordTooWeak');
             return false;
         }
         passwordError = '';
@@ -79,7 +91,23 @@
         } catch (e: any) {
             // Handle specific error messages from backend
             const detail = e.data?.detail;
-            if (typeof detail === 'string') {
+            if (Array.isArray(detail)) {
+                // Pydantic validation errors
+                const firstError = detail[0];
+                if (firstError?.loc?.includes('email')) {
+                    if (firstError.msg?.includes('special-use') || firstError.msg?.includes('reserved')) {
+                        error = $_('auth.validation.invalidEmailDomain');
+                    } else {
+                        error = $_('auth.validation.invalidEmail');
+                    }
+                } else if (firstError?.loc?.includes('username')) {
+                    error = $_('auth.validation.usernameMinLength');
+                } else if (firstError?.loc?.includes('password')) {
+                    error = $_('auth.validation.passwordTooWeak');
+                } else {
+                    error = $_('auth.registrationFailed');
+                }
+            } else if (typeof detail === 'string') {
                 if (detail.includes('username')) {
                     error = $_('auth.validation.usernameTaken');
                 } else if (detail.includes('email')) {
@@ -172,6 +200,7 @@
                         hasError={!!passwordError}
                         on:blur={validatePassword}
                 />
+                <PasswordStrength {password} />
                 {#if passwordError}
                     <p class="text-red-600 text-xs mt-1">{passwordError}</p>
                 {/if}

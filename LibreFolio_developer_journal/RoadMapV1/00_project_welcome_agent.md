@@ -195,6 +195,10 @@ Non eseguire comandi manuali quando esiste uno script che fa quel lavoro!
 ./test_runner.py -v api auth         # Verbose mode
 ```
 
+[//]: # (TODO: aggiungi user_cli.py)
+
+[//]: # (TODO: aggiungi spiegazione all'agente che quando deve operare sul frontend, lo deve fare attraverso il browser con un tool mcp, curl lo può usare solo per testare l'output degli endpoint.)
+
 ### Scenari Comuni
 
 | Scenario                           | Comando                                                       |

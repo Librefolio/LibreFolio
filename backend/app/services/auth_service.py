@@ -68,16 +68,17 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 _sessions: dict[str, dict] = {}
 
 # Session configuration
-SESSION_EXPIRE_HOURS = 24
+DEFAULT_SESSION_EXPIRE_HOURS = 24  # Fallback if DB read fails
 SESSION_ID_LENGTH = 64  # 256 bits of entropy
 
 
-def create_session(user_id: int) -> str:
+def create_session(user_id: int, ttl_hours: int) -> str:
     """
     Create a new session for a user.
 
     Args:
         user_id: ID of the authenticated user
+        ttl_hours: Session TTL in hours (read from global settings by caller)
 
     Returns:
         Session ID (to be stored in cookie)
@@ -88,7 +89,7 @@ def create_session(user_id: int) -> str:
     _sessions[session_id] = {
         "user_id": user_id,
         "created_at": now,
-        "expires_at": now + timedelta(hours=SESSION_EXPIRE_HOURS)
+        "expires_at": now + timedelta(hours=ttl_hours)
         }
 
     logger.info("Session created", user_id=user_id, session_id=session_id[:8] + "...")

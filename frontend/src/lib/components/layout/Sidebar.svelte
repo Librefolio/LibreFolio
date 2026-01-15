@@ -4,7 +4,7 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {auth} from '$lib/stores/auth';
-    import {ArrowRightLeft, BarChart3, BookOpen, Briefcase, Coins, LayoutDashboard, LogOut, Settings, X} from 'lucide-svelte';
+    import {ArrowRightLeft, BarChart3, Briefcase, Coins, LayoutDashboard, LogOut, Settings, X} from 'lucide-svelte';
 
     // Mobile sidebar state (exported so parent can control it)
     export let isOpen = false;
@@ -25,18 +25,30 @@
         }
     });
 
-    // Navigation items
-    const navItems = [
+    // Navigation groups
+    // Group 1: My Portfolio (user-specific data)
+    const portfolioItems = [
         {href: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard'},
         {href: '/brokers', icon: Briefcase, labelKey: 'nav.brokers'},
+        {href: '/transactions', icon: ArrowRightLeft, labelKey: 'nav.transactions'}
+    ];
+
+    // Group 2: Market Data (global/shared data)
+    const marketDataItems = [
         {href: '/assets', icon: BarChart3, labelKey: 'nav.assets'},
-        {href: '/transactions', icon: ArrowRightLeft, labelKey: 'nav.transactions'},
-        {href: '/fx', icon: Coins, labelKey: 'nav.fx'},
+        {href: '/fx', icon: Coins, labelKey: 'nav.fx'}
+    ];
+
+    // Group 3: Settings
+    const settingsItems = [
         {href: '/settings', icon: Settings, labelKey: 'nav.settings'}
     ];
 
+    // All items flat for active check
+    const allNavItems = [...portfolioItems, ...marketDataItems, ...settingsItems];
+
     // Reactive: compute active item based on current path
-    $: activeHref = navItems.find(item =>
+    $: activeHref = allNavItems.find(item =>
         currentPath === item.href || currentPath.startsWith(item.href + '/')
     )?.href ?? '';
 
@@ -95,50 +107,100 @@
     </div>
 
     <!-- Navigation -->
-    <ul class="flex-1 py-4 overflow-y-auto overflow-x-hidden">
-        {#each navItems as item (item.href)}
-            <li>
-                <a
-                        href={item.href}
-                        on:click={closeSidebar}
-                        class="flex items-center px-4 py-3 transition-all relative group
+    <div class="flex-1 py-4 overflow-y-auto overflow-x-hidden">
+        <!-- Portfolio Group -->
+        <ul>
+            {#each portfolioItems as item (item.href)}
+                <li>
+                    <a
+                            href={item.href}
+                            on:click={closeSidebar}
+                            class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
 						{activeHref === item.href
 						? 'bg-white/20 border-r-4 border-white'
 						: 'hover:bg-white/10'}"
-                        title={collapsed ? $_(item.labelKey) : ''}
-                >
-                    <svelte:component this={item.icon} size={20} class="flex-shrink-0"/>
-                    {#if !collapsed}
-                        <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
-                    {/if}
-                    <!-- Tooltip for collapsed mode -->
-                    {#if collapsed}
-						<span class="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-							{$_(item.labelKey)}
-						</span>
-                    {/if}
-                </a>
-            </li>
-        {/each}
-    </ul>
+                            title={collapsed ? $_(item.labelKey) : ''}
+                    >
+                        <svelte:component this={item.icon} size={20} class="flex-shrink-0"/>
+                        {#if !collapsed}
+                            <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
+                        {/if}
+                        {#if collapsed}
+                            <span class="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                                {$_(item.labelKey)}
+                            </span>
+                        {/if}
+                    </a>
+                </li>
+            {/each}
+        </ul>
+
+        <!-- Divider -->
+        <div class="my-3 mx-4 border-t border-white/20"></div>
+
+        <!-- Market Data Group -->
+        <ul>
+            {#each marketDataItems as item (item.href)}
+                <li>
+                    <a
+                            href={item.href}
+                            on:click={closeSidebar}
+                            class="flex items-center px-4 py-3 transition-all relative group
+						{collapsed ? 'justify-center' : 'space-x-3'}
+						{activeHref === item.href
+						? 'bg-white/20 border-r-4 border-white'
+						: 'hover:bg-white/10'}"
+                            title={collapsed ? $_(item.labelKey) : ''}
+                    >
+                        <svelte:component this={item.icon} size={20} class="flex-shrink-0"/>
+                        {#if !collapsed}
+                            <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
+                        {/if}
+                        {#if collapsed}
+                            <span class="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                                {$_(item.labelKey)}
+                            </span>
+                        {/if}
+                    </a>
+                </li>
+            {/each}
+        </ul>
+
+        <!-- Divider -->
+        <div class="my-3 mx-4 border-t border-white/20"></div>
+
+        <!-- Settings Group -->
+        <ul>
+            {#each settingsItems as item (item.href)}
+                <li>
+                    <a
+                            href={item.href}
+                            on:click={closeSidebar}
+                            class="flex items-center px-4 py-3 transition-all relative group
+						{collapsed ? 'justify-center' : 'space-x-3'}
+						{activeHref === item.href
+						? 'bg-white/20 border-r-4 border-white'
+						: 'hover:bg-white/10'}"
+                            title={collapsed ? $_(item.labelKey) : ''}
+                    >
+                        <svelte:component this={item.icon} size={20} class="flex-shrink-0"/>
+                        {#if !collapsed}
+                            <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
+                        {/if}
+                        {#if collapsed}
+                            <span class="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                                {$_(item.labelKey)}
+                            </span>
+                        {/if}
+                    </a>
+                </li>
+            {/each}
+        </ul>
+    </div>
 
     <!-- Bottom Section -->
     <div class="border-t border-white/10 p-4 space-y-2">
-        <!-- Documentation Link -->
-        <a
-                class="w-full flex items-center justify-center px-4 py-2
-				hover:bg-white/10 rounded-lg transition-all text-sm
-				{collapsed ? '' : 'space-x-2'}"
-                href="/mkdocs/"
-                target="_blank"
-                title={collapsed ? $_('nav.documentation') : ''}
-        >
-            <BookOpen class="flex-shrink-0" size={16}/>
-            {#if !collapsed}
-                <span class="whitespace-nowrap">{$_('nav.documentation')}</span>
-            {/if}
-        </a>
 
         <!-- Logout Button -->
         <button
