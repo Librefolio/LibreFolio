@@ -106,14 +106,18 @@ def upgrade() -> None:
     print("📦 Creating table: brokers...")
     conn.execute(sa.text("""CREATE TABLE brokers
                             (
-                                id                   INTEGER PRIMARY KEY,
-                                name                 VARCHAR  NOT NULL UNIQUE,
-                                description          TEXT,
-                                portal_url           VARCHAR,
-                                allow_cash_overdraft BOOLEAN  NOT NULL DEFAULT 0,
-                                allow_asset_shorting BOOLEAN  NOT NULL DEFAULT 0,
-                                created_at           DATETIME NOT NULL,
-                                updated_at           DATETIME NOT NULL
+                                id                    INTEGER PRIMARY KEY,
+                                name                  VARCHAR  NOT NULL UNIQUE,
+                                description           TEXT,
+                                portal_url            VARCHAR,
+                                icon_url              VARCHAR,
+                                default_import_plugin VARCHAR,
+                                allow_cash_overdraft  BOOLEAN  NOT NULL DEFAULT 0,
+                                allow_asset_shorting  BOOLEAN  NOT NULL DEFAULT 0,
+                                is_active             BOOLEAN  NOT NULL DEFAULT 1,
+                                opened_at             DATE,
+                                created_at            DATETIME NOT NULL,
+                                updated_at            DATETIME NOT NULL
                             )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE UNIQUE INDEX ix_brokers_name ON brokers (name)"))
@@ -131,7 +135,8 @@ def upgrade() -> None:
                                 updated_at DATETIME    NOT NULL,
                                 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
                                 FOREIGN KEY (broker_id) REFERENCES brokers (id) ON DELETE CASCADE,
-                                CONSTRAINT uq_broker_user_access UNIQUE (user_id, broker_id)
+                                CONSTRAINT uq_broker_user_access UNIQUE (user_id, broker_id),
+                                CONSTRAINT chk_broker_user_access_role CHECK (role IN ('OWNER', 'EDITOR', 'VIEWER'))
                             )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE INDEX ix_broker_user_access_user_id ON broker_user_access (user_id)"))

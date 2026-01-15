@@ -158,6 +158,30 @@ class AssetSourceProvider(ABC):
         """
         return None
 
+    @classmethod
+    def generate_static_url(cls, relative_path: str) -> str:
+        """
+        Generate URL for a static asset in the plugin's static folder.
+
+        Use this to reference icons, images, or other static files
+        bundled with your plugin.
+
+        Structure:
+            asset_source_providers/static/{relative_path}
+
+        Args:
+            relative_path: Path relative to static folder (e.g., "yfinance/logo.png")
+
+        Returns:
+            Full URL path (e.g., "/api/v1/uploads/plugin/asset/yfinance/logo.png")
+
+        Example:
+            class YahooFinanceProvider(AssetSourceProvider):
+                def get_icon(self) -> str:
+                    return self.generate_static_url("yfinance/logo.png")
+        """
+        return f"/api/v1/uploads/plugin/asset/{relative_path}"
+
     @property
     @abstractmethod
     def test_cases(self) -> list[dict]:

@@ -71,7 +71,7 @@ function createLanguageStore() {
         },
 
         /**
-         * Initialize from browser/localStorage
+         * Initialize from browser/localStorage and sync with svelte-i18n
          * Called after mount to ensure sync
          */
         init: () => {
@@ -80,8 +80,18 @@ function createLanguageStore() {
             // Get from localStorage
             const stored = localStorage.getItem('librefolio-locale');
             if (stored && SUPPORTED_LOCALES.includes(stored as SupportedLocale)) {
-                set(stored as SupportedLocale);
-                locale.set(stored);
+                const lang = stored as SupportedLocale;
+                set(lang);
+                locale.set(lang);
+            } else {
+                // No stored value - sync with svelte-i18n's current locale
+                const unsub = locale.subscribe(currentLocale => {
+                    if (currentLocale && SUPPORTED_LOCALES.includes(currentLocale as SupportedLocale)) {
+                        set(currentLocale as SupportedLocale);
+                    }
+                });
+                // Only need to read once
+                unsub();
             }
         }
     };

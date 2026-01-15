@@ -165,3 +165,15 @@ async def get_system_info() -> SystemInfoResponse:
         backend_dependencies=get_backend_deps(),
         frontend_dependencies=get_frontend_deps(),
         )
+
+
+@router.get("/health")
+async def health_check():
+    """
+    Health check endpoint for monitoring and load balancers.
+
+    Returns:
+        dict: Status message with "ok" status
+    """
+    return {"status": "ok"}
+

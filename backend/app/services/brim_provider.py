@@ -247,11 +247,37 @@ class BRIMProvider(ABC):
         Can be:
         - Absolute URL (https://...)
         - Relative path served by backend (e.g., /static/icons/broker_xxx.png)
+        - Local static path via generate_static_url()
         - None if no icon available
 
         Default: None
         """
         return None
+
+    @classmethod
+    def generate_static_url(cls, relative_path: str) -> str:
+        """
+        Generate URL for a static asset in the plugin's static folder.
+
+        Use this to reference icons, images, or other static files
+        bundled with your plugin.
+
+        Structure:
+            brim_providers/static/{relative_path}
+
+        Args:
+            relative_path: Path relative to static folder (e.g., "directa/logo.png")
+
+        Returns:
+            Full URL path (e.g., "/api/v1/uploads/plugin/brim/directa/logo.png")
+
+        Example:
+            class DirectaCSVProvider(BRIMProvider):
+                @property
+                def icon_url(self) -> str:
+                    return self.generate_static_url("directa/logo.png")
+        """
+        return f"/api/v1/uploads/plugin/brim/{relative_path}"
 
     @abstractmethod
     def can_parse(self, file_path: Path) -> bool:

@@ -159,8 +159,8 @@ export const api = {
     patch: <T>(endpoint: string, body?: unknown, options?: Omit<ApiCallOptions, 'method' | 'body'>) =>
         apiCall<T>(endpoint, {...options, method: 'PATCH', body}),
 
-    delete: <T>(endpoint: string, options?: Omit<ApiCallOptions, 'method' | 'body'>) =>
-        apiCall<T>(endpoint, {...options, method: 'DELETE'})
+    delete: <T>(endpoint: string, body?: unknown, options?: Omit<ApiCallOptions, 'method' | 'body'>) =>
+        apiCall<T>(endpoint, {...options, method: 'DELETE', body})
 };
 
 export default api;

@@ -28,6 +28,7 @@
     export let placeholder: string = 'Search...';
     export let disabled: boolean = false;
     export let loading: boolean = false;
+    export let dropdownPosition: 'bottom' | 'top' = 'bottom';
 
     // Internal state
     let isOpen = false;
@@ -145,7 +146,8 @@
 
     <!-- Dropdown -->
     {#if isOpen}
-        <div class="absolute z-50 w-full min-w-80 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+        <div class="absolute z-50 w-full min-w-80 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden
+                    {dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}">
             <!-- Search Input -->
             <div class="p-2 border-b border-gray-100">
                 <div class="relative">

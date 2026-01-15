@@ -31,6 +31,9 @@
   },
   "dependencies": {
     "@zodios/core": "^10.9.6",
+    "@zxcvbn-ts/core": "^3.0.4",
+    "@zxcvbn-ts/language-common": "^3.0.4",
+    "@zxcvbn-ts/language-en": "^3.0.2",
     "date-fns": "^4.1.0",
     "lucide-svelte": "^0.559.0",
     "svelte-i18n": "^4.0.1",

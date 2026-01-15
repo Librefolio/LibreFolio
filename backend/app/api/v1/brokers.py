@@ -25,11 +25,13 @@ Provides RESTful endpoints for broker report file management and parsing:
 3. Client resolves fake asset IDs to real asset IDs
 4. Import transactions → POST /transactions (standard endpoint)
 """
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.v1.auth import get_current_user
+from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.brim import BRIMAssetMapping
@@ -49,6 +51,12 @@ from backend.app.schemas.brokers import (
     BRBulkCreateResponse,
     BRBulkUpdateResponse,
     BRBulkDeleteResponse,
+    BRAccessItem,
+    BRAccessListResponse,
+    BRAccessCreateRequest,
+    BRAccessUpdateRequest,
+    BRAccessCreateResponse,
+    BRAccessDeleteResponse,
     )
 from backend.app.services import brim_provider
 from backend.app.services.brim_provider import BRIMParseError
@@ -73,6 +81,7 @@ brim_router = APIRouter(prefix="/import", tags=["BR Import"])
 @broker_router.post("", response_model=BRBulkCreateResponse)
 async def create_brokers(
     items: List[BRCreateItem],
+    current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
     ) -> BRBulkCreateResponse:
     """
@@ -81,23 +90,25 @@ async def create_brokers(
     If initial_balances is provided, automatically creates DEPOSIT
     transactions for each currency.
 
+    The current user becomes the OWNER of all created brokers.
+
     Args:
         items: List of brokers to create
 
     Returns:
         BRBulkCreateResponse with results for each item
     """
-    logger.info(f"Creating {len(items)} brokers")
+    logger.info(f"Creating {len(items)} brokers", user_id=current_user.id)
 
     service = BrokerService(session)
-    response = await service.create_bulk(items)
+    response = await service.create_bulk(items, user_id=current_user.id)
 
     if not response.errors:
         await session.commit()
-        logger.info(f"Created {response.success_count} brokers successfully")
+        logger.info(f"Created {response.success_count} brokers successfully", user_id=current_user.id)
     else:
         await session.rollback()
-        logger.warning(f"Broker creation had errors: {response.errors}")
+        logger.warning(f"Broker creation had errors: {response.errors}", user_id=current_user.id)
 
     return response
 
@@ -108,10 +119,14 @@ async def create_brokers(
 
 @broker_router.get("", response_model=List[BRReadItem])
 async def list_brokers(
+    current_user: Annotated[User, Depends(get_current_user)],
+    as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
     ) -> List[BRReadItem]:
     """
-    List all brokers.
+    List brokers accessible by the current user.
+
+    Superusers can use as_user_id to impersonate another user or see all brokers.
 
     Returns basic broker information without balances.
     Use GET /brokers/{id}/summary for full details.
@@ -119,17 +134,25 @@ async def list_brokers(
     Returns:
         List of brokers ordered by name
     """
+    # Validate as_user_id permission
+    if as_user_id is not None and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
+
     service = BrokerService(session)
-    return await service.get_all()
+    return await service.get_all(user_id=current_user.id, as_user_id=as_user_id)
 
 
 @broker_router.get("/{broker_id}", response_model=BRReadItem)
 async def get_broker(
     broker_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
     ) -> BRReadItem:
     """
     Get a single broker by ID.
+
+    Superusers can use as_user_id to impersonate another user.
 
     Returns basic broker information without balances.
     Use GET /brokers/{id}/summary for full details.
@@ -141,10 +164,14 @@ async def get_broker(
         Broker details
 
     Raises:
-        HTTPException 404: If broker not found
+        HTTPException 404: If broker not found or not accessible
     """
+    # Validate as_user_id permission
+    if as_user_id is not None and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
+
     service = BrokerService(session)
-    result = await service.get_by_id(broker_id)
+    result = await service.get_by_id(broker_id, user_id=current_user.id, as_user_id=as_user_id)
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found")
@@ -155,10 +182,14 @@ async def get_broker(
 @broker_router.get("/{broker_id}/summary", response_model=BRSummary)
 async def get_broker_summary(
     broker_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
     ) -> BRSummary:
     """
     Get broker with full summary.
+
+    Superusers can use as_user_id to impersonate another user.
 
     Includes:
     - Basic broker info
@@ -172,10 +203,14 @@ async def get_broker_summary(
         BRSummary with full details
 
     Raises:
-        HTTPException 404: If broker not found
+        HTTPException 404: If broker not found or not accessible
     """
+    # Validate as_user_id permission
+    if as_user_id is not None and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
+
     service = BrokerService(session)
-    result = await service.get_summary(broker_id)
+    result = await service.get_summary(broker_id, user_id=current_user.id, as_user_id=as_user_id)
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found")
@@ -191,12 +226,17 @@ async def get_broker_summary(
 async def update_broker(
     broker_id: int,
     item: BRUpdateItem,
+    current_user: Annotated[User, Depends(get_current_user)],
+    as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
     ) -> BRBulkUpdateResponse:
     """
     Update a broker.
 
     Only provided fields will be updated.
+    Requires at least EDITOR access (OWNER or EDITOR can modify).
+
+    Superusers can use as_user_id to impersonate another user.
 
     If disabling overdraft/shorting flags, validates that current
     balances don't violate the new constraints.
@@ -208,18 +248,22 @@ async def update_broker(
     Returns:
         BRBulkUpdateResponse with result
     """
-    logger.info(f"Updating broker {broker_id}")
+    # Validate as_user_id permission
+    if as_user_id is not None and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
+
+    logger.info(f"Updating broker {broker_id}", user_id=current_user.id)
 
     service = BrokerService(session)
-    response = await service.update_bulk([item], [broker_id])
+    response = await service.update_bulk([item], [broker_id], user_id=current_user.id, as_user_id=as_user_id)
 
     if not response.errors and response.success_count > 0:
         await session.commit()
-        logger.info(f"Updated broker {broker_id} successfully")
+        logger.info(f"Updated broker {broker_id} successfully", user_id=current_user.id)
     else:
         await session.rollback()
         if response.results and not response.results[0].success:
-            logger.warning(f"Broker update failed: {response.results[0].error}")
+            logger.warning(f"Broker update failed: {response.results[0].error}", user_id=current_user.id)
 
     return response
 
@@ -230,12 +274,17 @@ async def update_broker(
 
 @broker_router.delete("", response_model=BRBulkDeleteResponse)
 async def delete_brokers(
+    current_user: Annotated[User, Depends(get_current_user)],
     ids: List[int] = Query(..., description="Broker IDs to delete"),
     force: bool = Query(False, description="Force delete with transactions"),
+    as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
     ) -> BRBulkDeleteResponse:
     """
     Delete multiple brokers.
+
+    Requires OWNER access to each broker.
+    Superusers can use as_user_id to impersonate another user.
 
     If force=False (default), fails if broker has any transactions.
     If force=True, cascade deletes all transactions.
@@ -247,21 +296,175 @@ async def delete_brokers(
     Returns:
         BRBulkDeleteResponse with results
     """
-    logger.info(f"Deleting {len(ids)} brokers (force={force})")
+    # Validate as_user_id permission
+    if as_user_id is not None and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
+
+    logger.info(f"Deleting {len(ids)} brokers (force={force})", user_id=current_user.id)
 
     items = [BRDeleteItem(id=id_, force=force) for id_ in ids]
 
     service = BrokerService(session)
-    response = await service.delete_bulk(items)
+    response = await service.delete_bulk(items, user_id=current_user.id, as_user_id=as_user_id)
 
     if not response.errors:
         await session.commit()
-        logger.info(f"Deleted {response.total_deleted} brokers successfully")
+        logger.info(f"Deleted {response.total_deleted} brokers successfully", user_id=current_user.id)
     else:
         await session.rollback()
-        logger.warning(f"Broker deletion had errors: {response.errors}")
+        logger.warning(f"Broker deletion had errors: {response.errors}", user_id=current_user.id)
 
     return response
+
+
+# =============================================================================
+# BROKER ACCESS MANAGEMENT
+# =============================================================================
+
+@broker_router.get("/{broker_id}/access", response_model=BRAccessListResponse)
+async def list_broker_access(
+    broker_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRAccessListResponse:
+    """
+    List all users with access to a broker.
+
+    Any user with access to the broker can view the access list.
+    Superusers can view any broker's access list.
+    """
+    service = BrokerService(session)
+    accesses = await service.list_accesses(
+        broker_id=broker_id,
+        user_id=current_user.id,
+        is_superuser=current_user.is_superuser,
+    )
+
+    if not accesses and not current_user.is_superuser:
+        raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found or access denied")
+
+    return BRAccessListResponse(
+        accesses=[BRAccessItem(**a) for a in accesses],
+        total=len(accesses),
+    )
+
+
+@broker_router.post("/{broker_id}/access", response_model=BRAccessCreateResponse)
+async def add_broker_access(
+    broker_id: int,
+    request: BRAccessCreateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRAccessCreateResponse:
+    """
+    Add user access to a broker.
+
+    Only OWNERs can add access. Superusers can always add access.
+    """
+    service = BrokerService(session)
+    success, message = await service.add_access(
+        broker_id=broker_id,
+        target_user_id=request.user_id,
+        role=request.role,
+        current_user_id=current_user.id,
+        is_superuser=current_user.is_superuser,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    await session.commit()
+
+    # Get the created access info
+    accesses = await service.list_accesses(broker_id, current_user.id, is_superuser=True)
+    new_access = next((a for a in accesses if a["user_id"] == request.user_id), None)
+
+    if not new_access:
+        raise HTTPException(status_code=500, detail="Failed to retrieve created access")
+
+    logger.info(f"Added access for user {request.user_id} to broker {broker_id}", user_id=current_user.id)
+
+    return BRAccessCreateResponse(
+        success=True,
+        message=message,
+        access=BRAccessItem(**new_access),
+    )
+
+
+@broker_router.patch("/{broker_id}/access/{target_user_id}", response_model=BRAccessCreateResponse)
+async def update_broker_access(
+    broker_id: int,
+    target_user_id: int,
+    request: BRAccessUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRAccessCreateResponse:
+    """
+    Update user access role.
+
+    Only OWNERs can modify access. Superusers can always modify.
+    Cannot degrade the last OWNER.
+    """
+    service = BrokerService(session)
+    success, message = await service.update_access(
+        broker_id=broker_id,
+        target_user_id=target_user_id,
+        new_role=request.role,
+        current_user_id=current_user.id,
+        is_superuser=current_user.is_superuser,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    await session.commit()
+
+    # Get the updated access info
+    accesses = await service.list_accesses(broker_id, current_user.id, is_superuser=True)
+    updated_access = next((a for a in accesses if a["user_id"] == target_user_id), None)
+
+    if not updated_access:
+        raise HTTPException(status_code=500, detail="Failed to retrieve updated access")
+
+    logger.info(f"Updated access for user {target_user_id} on broker {broker_id}", user_id=current_user.id)
+
+    return BRAccessCreateResponse(
+        success=True,
+        message=message,
+        access=BRAccessItem(**updated_access),
+    )
+
+
+@broker_router.delete("/{broker_id}/access/{target_user_id}", response_model=BRAccessDeleteResponse)
+async def remove_broker_access(
+    broker_id: int,
+    target_user_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRAccessDeleteResponse:
+    """
+    Remove user access from a broker.
+
+    - OWNERs can remove others
+    - Anyone can remove themselves (except last OWNER)
+    - Superusers can remove anyone (except last OWNER)
+    """
+    service = BrokerService(session)
+    success, message = await service.remove_access(
+        broker_id=broker_id,
+        target_user_id=target_user_id,
+        current_user_id=current_user.id,
+        is_superuser=current_user.is_superuser,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    await session.commit()
+
+    logger.info(f"Removed access for user {target_user_id} from broker {broker_id}", user_id=current_user.id)
+
+    return BRAccessDeleteResponse(success=True, message=message)
 
 
 # =============================================================================

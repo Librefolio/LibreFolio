@@ -6,6 +6,7 @@ Business logic for user management, used by both API and CLI.
 from typing import Optional
 
 import structlog
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -95,6 +96,21 @@ async def list_users(session: AsyncSession) -> list[User]:
     stmt = select(User).order_by(User.id)
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def count_users(session: AsyncSession) -> int:
+    """
+    Count total users in the database.
+
+    Args:
+        session: Database session
+
+    Returns:
+        Number of users
+    """
+    stmt = select(func.count()).select_from(User)
+    result = await session.execute(stmt)
+    return result.scalar() or 0
 
 
 async def create_user(

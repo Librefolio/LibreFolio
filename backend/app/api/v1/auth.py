@@ -30,6 +30,7 @@ from backend.app.services.auth_service import (
     get_user_id_from_session,
     delete_session,
     )
+from backend.app.services.global_settings_service import get_session_ttl_hours
 
 logger = structlog.get_logger(__name__)
 
@@ -119,14 +120,22 @@ async def login(
         logger.warning("Login failed: wrong password", username=request.username)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Create session
-    session_id = create_session(user.id)
+    # Get session TTL from global settings (with fallback)
+    try:
+        ttl_hours = await get_session_ttl_hours(session)
+    except Exception as e:
+        logger.warning("Failed to read session TTL from DB, using default 24h", error=str(e))
+        ttl_hours = 24
 
-    # Set session cookie
+    # Create session with dynamic TTL
+    session_id = create_session(user.id, ttl_hours)
+
+    # Set session cookie (max_age in seconds)
+    cookie_max_age = ttl_hours * 60 * 60
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_id,
-        max_age=SESSION_COOKIE_MAX_AGE,
+        max_age=cookie_max_age,
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
         secure=SESSION_COOKIE_SECURE,
@@ -184,26 +193,31 @@ async def register(
     """
     Register a new user.
 
-    Note: In production, you may want to add email verification.
+    Note: The first user registered becomes admin (is_superuser=True).
+    In production, you may want to add email verification.
     """
+    # Check if this is the first user - make them admin
+    user_count = await user_service.count_users(session)
+    is_first_user = user_count == 0
+
     # Create user using service
     user, error = await user_service.create_user(
         session,
         username=request.username,
         email=request.email,
         password=request.password,
-        is_superuser=False,
+        is_superuser=is_first_user,  # First user becomes admin
         is_active=True,
         )
 
     if not user:
         raise HTTPException(status_code=400, detail=error)
 
-    logger.info("User registered", user_id=user.id, username=user.username)
+    logger.info("User registered", user_id=user.id, username=user.username, is_first_user=is_first_user)
 
     return AuthRegisterResponse(
         user=AuthUserResponse.model_validate(user),
-        message="Registration successful"
+        message="Registration successful" + (" (Admin)" if is_first_user else "")
         )
 
 

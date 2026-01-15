@@ -16,7 +16,7 @@ These schemas provide strict validation for API input/output.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date as date_type
 from decimal import Decimal
 from typing import Optional, List
 
@@ -50,9 +50,14 @@ class BRCreateItem(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Broker name (must be unique)")
     description: Optional[str] = Field(default=None, max_length=500, description="Broker description")
     portal_url: Optional[str] = Field(default=None, max_length=255, description="URL to broker's web portal")
+    icon_url: Optional[str] = Field(default=None, max_length=500, description="Custom icon URL for the broker")
+    default_import_plugin: Optional[str] = Field(default=None, max_length=100, description="Default BRIM plugin for importing transactions")
 
-    allow_cash_overdraft: bool = Field(default=False, description="Allow negative cash balance (margin trading)")
-    allow_asset_shorting: bool = Field(default=False, description="Allow negative asset quantities (short selling)")
+    allow_cash_overdraft: bool = Field(default=False, description="Allow leveraged buying (negative cash balance)")
+    allow_asset_shorting: bool = Field(default=False, description="Allow short selling (negative asset quantities)")
+
+    is_active: bool = Field(default=True, description="Whether the broker account is currently active")
+    opened_at: Optional[date_type] = Field(default=None, description="Date when the account was opened in reality")
 
     # Auto-creates DEPOSIT transactions - using Currency objects
     initial_balances: Optional[List[Currency]] = Field(default=None, description="Initial cash balances. Creates DEPOSIT transactions.")
@@ -95,9 +100,14 @@ class BRReadItem(BaseModel):
     name: str
     description: Optional[str] = None
     portal_url: Optional[str] = None
+    icon_url: Optional[str] = None
+    default_import_plugin: Optional[str] = None
 
     allow_cash_overdraft: bool
     allow_asset_shorting: bool
+
+    is_active: bool
+    opened_at: Optional[date_type] = None
 
     created_at: datetime
     updated_at: datetime
@@ -186,9 +196,14 @@ class BRUpdateItem(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100, description="New broker name")
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
     portal_url: Optional[str] = Field(default=None, max_length=255, description="New portal URL")
+    icon_url: Optional[str] = Field(default=None, max_length=500, description="Custom icon URL for the broker")
+    default_import_plugin: Optional[str] = Field(default=None, max_length=100, description="Default BRIM plugin for importing transactions")
 
-    allow_cash_overdraft: Optional[bool] = Field(default=None, description="Update overdraft permission")
-    allow_asset_shorting: Optional[bool] = Field(default=None, description="Update shorting permission")
+    allow_cash_overdraft: Optional[bool] = Field(default=None, description="Update leveraged buying permission")
+    allow_asset_shorting: Optional[bool] = Field(default=None, description="Update short selling permission")
+
+    is_active: Optional[bool] = Field(default=None, description="Update account active status")
+    opened_at: Optional[date_type] = Field(default=None, description="Update account opening date")
 
     @field_validator('name')
     @classmethod
@@ -281,36 +296,56 @@ class BRBulkUpdateResponse(BaseBulkResponse[BRUpdateResult]):
 # BROKER USER ACCESS
 # =============================================================================
 
-class BRUserAccessCreateItem(BaseModel):
+class BRAccessItem(BaseModel):
     """
-    DTO for granting user access to a broker.
-    """
-    model_config = ConfigDict(extra="forbid")
-
-    user_id: int = Field(..., gt=0, description="User ID")
-    broker_id: int = Field(..., gt=0, description="Broker ID")
-    role: UserRole = Field(default=UserRole.VIEWER, description="Access role")
-
-
-class BRUserAccessReadItem(BaseModel):
-    """
-    DTO for reading broker user access.
+    DTO for broker access with user details.
+    Used in list responses to show who has access.
     """
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
-    id: int
-    user_id: int
-    broker_id: int
-    role: UserRole
-
-    created_at: datetime
-    updated_at: datetime
+    user_id: int = Field(..., description="User ID")
+    username: str = Field(..., description="Username")
+    email: str = Field(..., description="User email")
+    role: UserRole = Field(..., description="Access role")
+    created_at: datetime = Field(..., description="When access was granted")
 
 
-class BRUserAccessUpdateItem(BaseModel):
-    """
-    DTO for updating broker user access.
-    """
+class BRAccessListResponse(BaseModel):
+    """Response for listing broker accesses."""
+    model_config = ConfigDict(extra="forbid")
+
+    accesses: List[BRAccessItem] = Field(default_factory=list)
+    total: int = Field(..., description="Total number of users with access")
+
+
+class BRAccessCreateRequest(BaseModel):
+    """Request to add user access to a broker."""
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: int = Field(..., gt=0, description="User ID to grant access")
+    role: UserRole = Field(default=UserRole.VIEWER, description="Access role")
+
+
+class BRAccessUpdateRequest(BaseModel):
+    """Request to update user access role."""
     model_config = ConfigDict(extra="forbid")
 
     role: UserRole = Field(..., description="New access role")
+
+
+class BRAccessCreateResponse(BaseModel):
+    """Response after creating access."""
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool = True
+    message: str = "Access granted successfully"
+    access: BRAccessItem
+
+
+class BRAccessDeleteResponse(BaseModel):
+    """Response after removing access."""
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool = True
+    message: str = "Access removed successfully"
+
