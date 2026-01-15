@@ -20,6 +20,7 @@ backend/data/sqlite/*.db-wal
 backend/data/broker_reports/failed/*
 backend/data/broker_reports/parsed/*
 backend/data/broker_reports/uploaded/*
+backend/data/custom-uploads/*
 
 
 # Logs

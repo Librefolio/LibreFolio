@@ -14,6 +14,7 @@ Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
 Reference: backend/app/api/v1/brokers.py
 """
 import io
+import time
 import uuid
 
 import httpx
@@ -31,6 +32,40 @@ SAMPLE_DIR = PROJECT_ROOT / "app" / "services" / "brim_providers" / "sample_repo
 
 
 # ============================================================================
+# AUTH HELPERS
+# ============================================================================
+
+def unique_username() -> str:
+    """Generate unique username for test isolation."""
+    ts = int(time.time() * 1000) % 1000000
+    return f"brim_test_{ts}_{uuid.uuid4().hex[:8]}"
+
+
+async def create_test_user(client: httpx.AsyncClient) -> int:
+    """Register and login a test user, return user_id."""
+    username = unique_username()
+    email = f"{username}@example.com"
+    password = "testpass123"
+
+    # Register
+    resp = await client.post(
+        f"{API_BASE}/auth/register",
+        json={"username": username, "email": email, "password": password},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 201, f"Register failed: {resp.text}"
+
+    # Login
+    resp = await client.post(
+        f"{API_BASE}/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"Login failed: {resp.text}"
+    return resp.json()["user"]["id"]
+
+
+# ============================================================================
 # PYTEST FIXTURES
 # ============================================================================
 
@@ -41,31 +76,6 @@ def test_server():
         if not server_manager.start_server():
             pytest.fail("Failed to start test server")
         yield server_manager
-
-
-@pytest.fixture(scope="module")
-def test_broker_id(test_server) -> int:
-    """Create a test broker and return its ID."""
-    import asyncio
-
-    async def create_broker():
-        async with httpx.AsyncClient() as client:
-            unique_name = f"BRIM_API_Test_Broker_{uuid.uuid4().hex[:8]}"
-            payload = [{"name": unique_name, "allow_cash_overdraft": True}]
-            response = await client.post(
-                f"{API_BASE}/brokers",
-                json=payload,
-                timeout=TIMEOUT,
-                )
-            assert response.status_code == 200, f"Failed to create broker: {response.text}"
-            data = response.json()
-
-            if data["results"] and data["results"][0]["success"]:
-                return data["results"][0]["broker_id"]
-
-            pytest.fail(f"Could not create broker: {data}")
-
-    return asyncio.run(create_broker())
 
 
 @pytest.fixture
@@ -99,6 +109,7 @@ class TestFileStorage:
     async def test_upload_file_success(self, test_server, sample_csv_content):
         """FS-001: Upload a valid CSV file successfully."""
         async with httpx.AsyncClient() as client:
+            await create_test_user(client)
             files = {"file": ("test_upload.csv", io.BytesIO(sample_csv_content), "text/csv")}
             response = await client.post(
                 f"{API_BASE}/brokers/import/upload",
@@ -119,6 +130,7 @@ class TestFileStorage:
     async def test_upload_empty_file(self, test_server):
         """FS-002: Reject empty file upload."""
         async with httpx.AsyncClient() as client:
+            await create_test_user(client)
             files = {"file": ("empty.csv", io.BytesIO(b""), "text/csv")}
             response = await client.post(
                 f"{API_BASE}/brokers/import/upload",
@@ -133,6 +145,7 @@ class TestFileStorage:
     async def test_list_files(self, test_server, sample_csv_content):
         """FS-003: List uploaded files."""
         async with httpx.AsyncClient() as client:
+            await create_test_user(client)
             # Upload a file first
             files = {"file": ("list_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
@@ -157,6 +170,7 @@ class TestFileStorage:
     async def test_list_files_by_status(self, test_server, sample_csv_content):
         """FS-004: Filter files by status."""
         async with httpx.AsyncClient() as client:
+            await create_test_user(client)
             # Upload a file
             files = {"file": ("status_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             await client.post(
@@ -180,6 +194,7 @@ class TestFileStorage:
     async def test_get_file_info(self, test_server, sample_csv_content):
         """FS-005: Get single file info."""
         async with httpx.AsyncClient() as client:
+            await create_test_user(client)
             # Upload a file
             files = {"file": ("info_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
@@ -204,6 +219,7 @@ class TestFileStorage:
     async def test_get_file_not_found(self, test_server):
         """FS-006: 404 for non-existent file."""
         async with httpx.AsyncClient() as client:
+            await create_test_user(client)
             response = await client.get(
                 f"{API_BASE}/brokers/import/files/nonexistent-uuid",
                 timeout=TIMEOUT,
@@ -215,6 +231,7 @@ class TestFileStorage:
     async def test_delete_file(self, test_server, sample_csv_content):
         """FS-007: Delete a file."""
         async with httpx.AsyncClient() as client:
+            await create_test_user(client)
             # Upload a file
             files = {"file": ("delete_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
@@ -248,10 +265,24 @@ class TestFileStorage:
 class TestParseEndpoint:
     """Tests for parse endpoint functionality."""
 
+    async def _create_broker_for_test(self, client: httpx.AsyncClient) -> int:
+        """Authenticate and create a broker, return broker_id."""
+        await create_test_user(client)
+        unique_name = f"BRIM_Parse_Test_{uuid.uuid4().hex[:8]}"
+        resp = await client.post(
+            f"{API_BASE}/brokers",
+            json=[{"name": unique_name, "allow_cash_overdraft": True}],
+            timeout=TIMEOUT,
+        )
+        assert resp.status_code == 200, f"Failed to create broker: {resp.text}"
+        return resp.json()["results"][0]["broker_id"]
+
     @pytest.mark.asyncio
-    async def test_parse_file_success(self, test_server, test_broker_id, sample_csv_content):
+    async def test_parse_file_success(self, test_server, sample_csv_content):
         """API-009: Parse file successfully."""
         async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
             # Upload file
             files = {"file": ("parse_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
@@ -266,7 +297,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/files/{file_id}/parse",
                 json={
                     "plugin_code": "broker_generic_csv",
-                    "broker_id": test_broker_id,
+                    "broker_id": broker_id,
                     },
                 timeout=TIMEOUT,
                 )
@@ -284,9 +315,11 @@ class TestParseEndpoint:
             assert len(data["transactions"]) == 2  # DEPOSIT + BUY
 
     @pytest.mark.asyncio
-    async def test_parse_returns_asset_mappings(self, test_server, test_broker_id, sample_csv_with_assets):
+    async def test_parse_returns_asset_mappings(self, test_server, sample_csv_with_assets):
         """API-010: Parse returns asset mappings for transactions with assets."""
         async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
             # Upload file with assets
             files = {"file": ("assets_test.csv", io.BytesIO(sample_csv_with_assets), "text/csv")}
             upload_response = await client.post(
@@ -301,7 +334,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/files/{file_id}/parse",
                 json={
                     "plugin_code": "broker_generic_csv",
-                    "broker_id": test_broker_id,
+                    "broker_id": broker_id,
                     },
                 timeout=TIMEOUT,
                 )
@@ -318,9 +351,11 @@ class TestParseEndpoint:
                 assert "candidates" in mapping
 
     @pytest.mark.asyncio
-    async def test_parse_returns_duplicates_report(self, test_server, test_broker_id, sample_csv_content):
+    async def test_parse_returns_duplicates_report(self, test_server, sample_csv_content):
         """API-011: Parse returns duplicates report."""
         async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
             # Upload file
             files = {"file": ("dup_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
@@ -335,7 +370,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/files/{file_id}/parse",
                 json={
                     "plugin_code": "broker_generic_csv",
-                    "broker_id": test_broker_id,
+                    "broker_id": broker_id,
                     },
                 timeout=TIMEOUT,
                 )
@@ -350,14 +385,16 @@ class TestParseEndpoint:
             assert "tx_likely_duplicates" in duplicates
 
     @pytest.mark.asyncio
-    async def test_parse_file_not_found(self, test_server, test_broker_id):
+    async def test_parse_file_not_found(self, test_server):
         """API-012: 404 when parsing non-existent file."""
         async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
             response = await client.post(
                 f"{API_BASE}/brokers/import/files/nonexistent-uuid/parse",
                 json={
                     "plugin_code": "broker_generic_csv",
-                    "broker_id": test_broker_id,
+                    "broker_id": broker_id,
                     },
                 timeout=TIMEOUT,
                 )
@@ -365,9 +402,11 @@ class TestParseEndpoint:
             assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_parse_invalid_plugin(self, test_server, test_broker_id, sample_csv_content):
+    async def test_parse_invalid_plugin(self, test_server, sample_csv_content):
         """API-013: 400 for invalid plugin code."""
         async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
             # Upload file
             files = {"file": ("plugin_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
@@ -382,7 +421,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/files/{file_id}/parse",
                 json={
                     "plugin_code": "nonexistent_plugin",
-                    "broker_id": test_broker_id,
+                    "broker_id": broker_id,
                     },
                 timeout=TIMEOUT,
                 )
@@ -398,6 +437,7 @@ class TestPluginsEndpoint:
     async def test_list_plugins(self, test_server):
         """API-008: List available plugins."""
         async with httpx.AsyncClient() as client:
+            await create_test_user(client)
             response = await client.get(
                 f"{API_BASE}/brokers/import/plugins",
                 timeout=TIMEOUT,

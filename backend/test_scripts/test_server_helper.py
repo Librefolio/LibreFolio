@@ -116,7 +116,7 @@ class _TestingServerManager:
         self.server_thread = None
         self.server_started = threading.Event()
         self.project_root = PROJECT_ROOT
-        self.health_url = f"{TEST_API_BASE_URL}/health"
+        self.health_url = f"{TEST_API_BASE_URL}/system/health"
 
     def is_server_running(self) -> bool:
         """Check if test server is responding on TEST_SERVER_PORT."""

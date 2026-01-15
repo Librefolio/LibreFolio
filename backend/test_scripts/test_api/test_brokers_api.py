@@ -541,3 +541,273 @@ class TestBrokerDelete:
 
             print_success("✓ Force deleted broker with transactions")
 
+
+# ============================================================================
+# BROKER API - BULK OPERATIONS
+# ============================================================================
+
+class TestBrokerBulkOperations:
+    """Tests for bulk broker operations."""
+
+    @pytest.mark.asyncio
+    async def test_bulk_create_multiple_brokers(self, test_server):
+        """BR-A-040: POST /brokers creates multiple brokers in one request."""
+        print_section("Test BR-A-040: Bulk create multiple brokers")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            payload = [
+                {"name": unique_name("Bulk Broker 1"), "description": "First"},
+                {"name": unique_name("Bulk Broker 2"), "description": "Second"},
+                {"name": unique_name("Bulk Broker 3"), "description": "Third"},
+            ]
+
+            response = await client.post(
+                f"{API_BASE}/brokers",
+                json=payload,
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success_count"] == 3
+            assert len(data["results"]) == 3
+            assert all(r["success"] for r in data["results"])
+
+            print_success("✓ Created 3 brokers in bulk")
+
+    @pytest.mark.asyncio
+    async def test_bulk_create_partial_failure(self, test_server):
+        """BR-A-041: Bulk create with one duplicate fails only that item."""
+        print_section("Test BR-A-041: Bulk create partial failure")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            # Create first broker
+            first_name = unique_name("First Broker")
+            await client.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": first_name}],
+                timeout=TIMEOUT,
+            )
+
+            # Try to create 3 brokers, one with duplicate name
+            payload = [
+                {"name": unique_name("New Broker 1")},
+                {"name": first_name},  # Duplicate!
+                {"name": unique_name("New Broker 2")},
+            ]
+
+            response = await client.post(
+                f"{API_BASE}/brokers",
+                json=payload,
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success_count"] == 2
+            assert data["results"][0]["success"] is True
+            assert data["results"][1]["success"] is False
+            assert "already exists" in data["results"][1]["error"]
+            assert data["results"][2]["success"] is True
+
+            print_success("✓ Bulk create with partial failure handled correctly")
+
+    @pytest.mark.asyncio
+    async def test_bulk_delete_multiple_brokers(self, test_server):
+        """BR-A-042: DELETE /brokers deletes multiple brokers in one request."""
+        print_section("Test BR-A-042: Bulk delete multiple brokers")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            # Create 3 brokers
+            broker_ids = []
+            for i in range(3):
+                resp = await client.post(
+                    f"{API_BASE}/brokers",
+                    json=[{"name": unique_name(f"Delete Bulk {i}")}],
+                    timeout=TIMEOUT,
+                )
+                broker_ids.append(resp.json()["results"][0]["broker_id"])
+
+            # Delete all 3
+            response = await client.delete(
+                f"{API_BASE}/brokers",
+                params={"ids": broker_ids},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_deleted"] == 3
+            assert all(r["success"] for r in data["results"])
+
+            print_success("✓ Deleted 3 brokers in bulk")
+
+    @pytest.mark.asyncio
+    async def test_update_with_duplicate_name(self, test_server):
+        """BR-A-043: PATCH with duplicate name fails."""
+        print_section("Test BR-A-043: Update with duplicate name")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            # Create two brokers
+            name1 = unique_name("Broker One")
+            name2 = unique_name("Broker Two")
+
+            resp1 = await client.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": name1}],
+                timeout=TIMEOUT,
+            )
+            broker1_id = resp1.json()["results"][0]["broker_id"]
+
+            await client.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": name2}],
+                timeout=TIMEOUT,
+            )
+
+            # Try to rename broker1 to broker2's name
+            response = await client.patch(
+                f"{API_BASE}/brokers/{broker1_id}",
+                json={"name": name2},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["results"][0]["success"] is False
+            assert "already exists" in data["results"][0]["error"]
+
+            print_success("✓ Update with duplicate name correctly rejected")
+
+
+# ============================================================================
+# BROKER API - MULTIPLE OWNERS
+# ============================================================================
+
+class TestMultipleOwners:
+    """Tests for brokers with multiple owners."""
+
+    @pytest.mark.asyncio
+    async def test_broker_with_multiple_owners(self, test_server):
+        """BR-A-050: Broker can have multiple OWNERs."""
+        print_section("Test BR-A-050: Multiple owners on same broker")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
+            # User 1 creates broker
+            await create_test_user(client1)
+            resp = await client1.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": unique_name("Multi Owner Broker")}],
+                timeout=TIMEOUT,
+            )
+            broker_id = resp.json()["results"][0]["broker_id"]
+
+            # Create user 2 and add as OWNER
+            user2_resp = await client2.post(
+                f"{API_BASE}/auth/register",
+                json={
+                    "username": unique_username(),
+                    "email": f"{unique_username()}@test.com",
+                    "password": "TestPass123!",
+                },
+                timeout=TIMEOUT,
+            )
+            user2_id = user2_resp.json()["user"]["id"]
+
+            # User 1 adds user 2 as OWNER
+            await client1.post(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                json={"user_id": user2_id, "role": "OWNER"},
+                timeout=TIMEOUT,
+            )
+
+            # Login user 2
+            await client2.post(
+                f"{API_BASE}/auth/login",
+                json={
+                    "username": user2_resp.json()["user"]["username"],
+                    "password": "TestPass123!",
+                },
+                timeout=TIMEOUT,
+            )
+            client2.cookies.set("session", client2.cookies.get("session"))
+
+            # User 2 (also OWNER) can modify broker
+            response = await client2.patch(
+                f"{API_BASE}/brokers/{broker_id}",
+                json={"description": "Modified by second owner"},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200
+            assert response.json()["results"][0]["success"] is True
+
+            # Verify both are OWNERs
+            access_resp = await client1.get(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                timeout=TIMEOUT,
+            )
+            owners = [a for a in access_resp.json()["accesses"] if a["role"] == "OWNER"]
+            assert len(owners) == 2
+
+            print_success("✓ Broker with multiple owners works correctly")
+
+    @pytest.mark.asyncio
+    async def test_one_owner_can_remove_another(self, test_server):
+        """BR-A-051: One OWNER can remove another OWNER (if not last)."""
+        print_section("Test BR-A-051: One owner removes another")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
+            # Setup: user1 creates broker, adds user2 as OWNER
+            user1_id, _, _ = await create_test_user(client1)
+            resp = await client1.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": unique_name("Remove Owner Test")}],
+                timeout=TIMEOUT,
+            )
+            broker_id = resp.json()["results"][0]["broker_id"]
+
+            # Create and add user 2
+            user2_resp = await client2.post(
+                f"{API_BASE}/auth/register",
+                json={
+                    "username": unique_username(),
+                    "email": f"{unique_username()}@test.com",
+                    "password": "TestPass123!",
+                },
+                timeout=TIMEOUT,
+            )
+            user2_id = user2_resp.json()["user"]["id"]
+
+            await client1.post(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                json={"user_id": user2_id, "role": "OWNER"},
+                timeout=TIMEOUT,
+            )
+
+            # User 1 removes user 2
+            response = await client1.delete(
+                f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200
+            assert response.json()["success"] is True
+
+            # Verify only user1 remains
+            access_resp = await client1.get(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                timeout=TIMEOUT,
+            )
+            assert access_resp.json()["total"] == 1
+
+            print_success("✓ Owner removed another owner successfully")
+

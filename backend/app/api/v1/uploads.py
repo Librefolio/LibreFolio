@@ -3,8 +3,11 @@ Uploads API endpoints.
 
 Handles file uploads, listing, retrieval, and deletion.
 Also serves static assets from plugins.
+
+Security:
+- Files are validated for MIME type (prevents executable/script uploads)
+- File size is checked against global settings
 """
-from pathlib import Path
 from typing import Annotated, Optional
 
 import structlog
@@ -24,6 +27,7 @@ from backend.app.schemas.uploads import (
 )
 from backend.app.services.global_settings_service import get_max_upload_mb
 from backend.app.services.static_uploads import (
+    UploadSecurityError,
     delete_upload,
     get_upload_info,
     get_upload_mime_type,
@@ -55,7 +59,7 @@ async def upload_file(
     Upload a file.
 
     Files are stored with UUID-based names for security.
-    All users can upload files (shared resource).
+    Executable files and scripts are blocked.
 
     Args:
         file: File to upload
@@ -63,6 +67,10 @@ async def upload_file(
 
     Returns:
         UploadResponse with file info
+
+    Raises:
+        400: If file type is not allowed (executable/script)
+        413: If file is too large
     """
     # Check file size
     max_mb = await get_max_upload_mb(session)
@@ -75,7 +83,7 @@ async def upload_file(
             detail=f"File too large. Maximum size is {max_mb} MB"
         )
 
-    # Save file
+    # Save file (includes security validation)
     try:
         file_info = save_upload(
             content=content,
@@ -94,6 +102,14 @@ async def upload_file(
 
         return UploadResponse(file=file_info)
 
+    except UploadSecurityError as e:
+        logger.warning(
+            "Upload blocked by security",
+            error=str(e),
+            filename=file.filename,
+            user_id=current_user.id,
+        )
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("Upload failed", error=str(e), user_id=current_user.id)
         raise HTTPException(status_code=500, detail="Failed to save file")

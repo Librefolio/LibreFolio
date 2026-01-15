@@ -691,3 +691,140 @@ class TestMultiUserIsolation:
 
             print_success("✓ User isolation works correctly")
 
+
+# ============================================================================
+# SUPERUSER TESTS
+# ============================================================================
+
+class TestSuperuserAccess:
+    """Tests for superuser bypass capabilities.
+
+    Note: These tests require a clean database where the first user
+    becomes superuser. When running after other tests, the DB already
+    has users so these will be skipped.
+
+    To test manually:
+    1. Stop server: pkill -f uvicorn
+    2. Delete test DB: rm backend/data/sqlite/test_app.db
+    3. Start test server: ./dev.sh server:test
+    4. Run only this test: ./dev.sh test api broker-access -k superuser
+    """
+
+    @pytest.mark.asyncio
+    async def test_superuser_sees_all_brokers_with_as_user_id_all(self, test_server):
+        """ACCESS-050: Superuser with as_user_id=all sees all brokers.
+
+        MANUAL TEST: Requires clean DB. See class docstring for instructions.
+        """
+        print_section("ACCESS-050: Superuser sees all with as_user_id=all")
+
+        async with httpx.AsyncClient() as admin_client, httpx.AsyncClient() as user_client:
+            # Create admin (first user becomes superuser)
+            # Note: This test assumes clean DB or first user is admin
+            admin_id, admin_name, _, _ = await create_user_and_login(admin_client)
+
+            # Check if admin is superuser
+            me_resp = await admin_client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            is_superuser = me_resp.json().get("user", {}).get("is_superuser", False)
+
+            if not is_superuser:
+                pytest.skip(
+                    "First user is not superuser (DB not clean). "
+                    "To test manually: rm backend/data/sqlite/test_app.db && "
+                    "./dev.sh server:test && ./dev.sh test api broker-access -k superuser"
+                )
+
+            # Create regular user with broker
+            await create_user_and_login(user_client)
+            broker_id = await create_broker(user_client, unique_name("UserBroker"))
+
+            # Admin queries with as_user_id=all
+            response = await admin_client.get(
+                f"{API_BASE}/brokers",
+                params={"as_user_id": "all"},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200
+            broker_ids = [b["id"] for b in response.json()]
+            assert broker_id in broker_ids
+
+            print_success("✓ Superuser sees all brokers with as_user_id=all")
+
+    @pytest.mark.asyncio
+    async def test_non_superuser_cannot_use_as_user_id(self, test_server):
+        """ACCESS-051: Non-superuser cannot use as_user_id parameter."""
+        print_section("ACCESS-051: Non-superuser cannot use as_user_id")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            response = await client.get(
+                f"{API_BASE}/brokers",
+                params={"as_user_id": "all"},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 403
+            assert "superuser" in response.json()["detail"].lower()
+
+            print_success("✓ Non-superuser correctly rejected")
+
+
+# ============================================================================
+# SELF-MODIFICATION TESTS
+# ============================================================================
+
+class TestSelfModification:
+    """Tests for modifying own role."""
+
+    @pytest.mark.asyncio
+    async def test_owner_cannot_degrade_self_if_last(self, test_server):
+        """ACCESS-060: Last OWNER cannot degrade self."""
+        print_section("ACCESS-060: Last owner cannot degrade self")
+
+        async with httpx.AsyncClient() as client:
+            user_id, _, _, _ = await create_user_and_login(client)
+            broker_id = await create_broker(client)
+
+            # Try to degrade self to EDITOR
+            response = await client.patch(
+                f"{API_BASE}/brokers/{broker_id}/access/{user_id}",
+                json={"role": "EDITOR"},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 400
+            assert "last OWNER" in response.json()["detail"]
+
+            print_success("✓ Last owner cannot degrade self")
+
+    @pytest.mark.asyncio
+    async def test_owner_can_degrade_self_if_not_last(self, test_server):
+        """ACCESS-061: OWNER can degrade self if not last owner."""
+        print_section("ACCESS-061: Owner can degrade self if not last")
+
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
+            user1_id, _, _, _ = await create_user_and_login(client1)
+            broker_id = await create_broker(client1)
+
+            # Add second owner
+            user2_id, _, _, _ = await create_user_and_login(client2)
+            await client1.post(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                json={"user_id": user2_id, "role": "OWNER"},
+                timeout=TIMEOUT,
+            )
+
+            # User 1 can now degrade self
+            response = await client1.patch(
+                f"{API_BASE}/brokers/{broker_id}/access/{user1_id}",
+                json={"role": "EDITOR"},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200
+            assert response.json()["access"]["role"] == "EDITOR"
+
+            print_success("✓ Owner degraded self successfully")
+

@@ -26,7 +26,7 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from backend.app.db.models import Broker, Transaction, TransactionType, Asset, AssetType
+from backend.app.db.models import Broker, Transaction, TransactionType, Asset, AssetType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import (
     BRCreateItem,
@@ -59,6 +59,23 @@ async def session(engine):
 
 
 @pytest_asyncio.fixture
+async def test_user(session) -> User:
+    """Create a test user for broker ownership."""
+    user = User(
+        username=f"testuser_{utcnow().timestamp()}",
+        email=f"test_{utcnow().timestamp()}@test.com",
+        hashed_password="fakehash",
+        is_active=True,
+        is_superuser=False,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
+@pytest_asyncio.fixture
 async def test_asset(session) -> Asset:
     """Create a test asset."""
     asset = Asset(
@@ -81,7 +98,7 @@ class TestCreateBulkBasic:
     """Test basic broker creation."""
 
     @pytest.mark.asyncio
-    async def test_create_single_broker(self, session):
+    async def test_create_single_broker(self, session, test_user):
         """BR-U-001: Create one broker."""
         service = BrokerService(session)
 
@@ -92,7 +109,7 @@ class TestCreateBulkBasic:
                 )
             ]
 
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
 
         assert response.success_count == 1
         assert response.results[0].success is True
@@ -100,7 +117,7 @@ class TestCreateBulkBasic:
         assert not response.errors
 
     @pytest.mark.asyncio
-    async def test_create_duplicate_name(self, session):
+    async def test_create_duplicate_name(self, session, test_user):
         """BR-U-002: Create broker with existing name fails."""
         service = BrokerService(session)
 
@@ -108,23 +125,23 @@ class TestCreateBulkBasic:
 
         # Create first
         items1 = [BRCreateItem(name=name)]
-        await service.create_bulk(items1)
+        await service.create_bulk(items1, user_id=test_user.id)
 
         # Try to create duplicate
         items2 = [BRCreateItem(name=name)]
-        response = await service.create_bulk(items2)
+        response = await service.create_bulk(items2, user_id=test_user.id)
 
         assert response.results[0].success is False
         assert "already exists" in response.results[0].error
 
     @pytest.mark.asyncio
-    async def test_create_sets_timestamps(self, session):
+    async def test_create_sets_timestamps(self, session, test_user):
         """BR-U-003: Created broker has timestamps set."""
         service = BrokerService(session)
 
         items = [BRCreateItem(name=f"Timestamp Broker {utcnow().timestamp()}")]
 
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         broker = await session.get(Broker, broker_id)
@@ -141,7 +158,7 @@ class TestCreateBulkInitialBalances:
     """Test initial balance handling during broker creation."""
 
     @pytest.mark.asyncio
-    async def test_create_with_initial_balances(self, session):
+    async def test_create_with_initial_balances(self, session, test_user):
         """BR-U-010: Create broker with initial balances creates DEPOSIT transactions."""
         service = BrokerService(session)
 
@@ -152,7 +169,7 @@ class TestCreateBulkInitialBalances:
                 )
             ]
 
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
 
         assert response.success_count == 1
         assert response.results[0].deposits_created == 1
@@ -171,7 +188,7 @@ class TestCreateBulkInitialBalances:
         assert tx.currency == "EUR"
 
     @pytest.mark.asyncio
-    async def test_create_deposits_count(self, session):
+    async def test_create_deposits_count(self, session, test_user):
         """BR-U-011: Create with 2 currencies creates 2 deposits."""
         service = BrokerService(session)
 
@@ -185,12 +202,12 @@ class TestCreateBulkInitialBalances:
                 )
             ]
 
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
 
         assert response.results[0].deposits_created == 2
 
     @pytest.mark.asyncio
-    async def test_create_balances_filtered(self, session):
+    async def test_create_balances_filtered(self, session, test_user):
         """BR-U-012: Zero and negative amounts in initial_balances are filtered."""
         service = BrokerService(session)
 
@@ -205,7 +222,7 @@ class TestCreateBulkInitialBalances:
                 )
             ]
 
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
 
         # Only EUR should create a deposit
         assert response.results[0].deposits_created == 1
@@ -219,21 +236,21 @@ class TestGetOperations:
     """Test read operations."""
 
     @pytest.mark.asyncio
-    async def test_get_all(self, session):
+    async def test_get_all(self, session, test_user):
         """BR-U-020: Get all brokers returns list."""
         service = BrokerService(session)
 
         # Create a broker
         items = [BRCreateItem(name=f"List Broker {utcnow().timestamp()}")]
-        await service.create_bulk(items)
+        await service.create_bulk(items, user_id=test_user.id)
 
-        result = await service.get_all()
+        result = await service.get_all(user_id=test_user.id)
 
         assert isinstance(result, list)
         assert len(result) >= 1
 
     @pytest.mark.asyncio
-    async def test_get_all_ordered(self, session):
+    async def test_get_all_ordered(self, session, test_user):
         """BR-U-021: Get all brokers returns ordered by name."""
         service = BrokerService(session)
 
@@ -243,34 +260,34 @@ class TestGetOperations:
             BRCreateItem(name=f"ZZZ Broker {ts}"),
             BRCreateItem(name=f"AAA Broker {ts}"),
             ]
-        await service.create_bulk(items)
+        await service.create_bulk(items, user_id=test_user.id)
 
-        result = await service.get_all()
+        result = await service.get_all(user_id=test_user.id)
 
         # Extract names and check they are sorted
         names = [b.name for b in result]
         assert names == sorted(names)
 
     @pytest.mark.asyncio
-    async def test_get_by_id_exists(self, session):
+    async def test_get_by_id_exists(self, session, test_user):
         """BR-U-022: Get existing broker returns BRReadItem."""
         service = BrokerService(session)
 
         items = [BRCreateItem(name=f"Get Broker {utcnow().timestamp()}")]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
-        result = await service.get_by_id(broker_id)
+        result = await service.get_by_id(broker_id, user_id=test_user.id)
 
         assert result is not None
         assert result.id == broker_id
 
     @pytest.mark.asyncio
-    async def test_get_by_id_not_found(self, session):
+    async def test_get_by_id_not_found(self, session, test_user):
         """BR-U-023: Get non-existent ID returns None."""
         service = BrokerService(session)
 
-        result = await service.get_by_id(999999)
+        result = await service.get_by_id(999999, user_id=test_user.id)
 
         assert result is None
 
@@ -283,21 +300,21 @@ class TestGetSummary:
     """Test broker summary retrieval."""
 
     @pytest.mark.asyncio
-    async def test_get_summary_basic(self, session):
+    async def test_get_summary_basic(self, session, test_user):
         """BR-U-030: Get summary returns BRSummary."""
         service = BrokerService(session)
 
         items = [BRCreateItem(name=f"Summary Broker {utcnow().timestamp()}")]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
-        summary = await service.get_summary(broker_id)
+        summary = await service.get_summary(broker_id, user_id=test_user.id)
 
         assert summary is not None
         assert summary.id == broker_id
 
     @pytest.mark.asyncio
-    async def test_get_summary_cash_balances(self, session):
+    async def test_get_summary_cash_balances(self, session, test_user):
         """BR-U-031: Summary includes cash balances after deposits."""
         service = BrokerService(session)
 
@@ -307,17 +324,17 @@ class TestGetSummary:
                 initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
-        summary = await service.get_summary(broker_id)
+        summary = await service.get_summary(broker_id, user_id=test_user.id)
 
         assert len(summary.cash_balances) == 1
         assert summary.cash_balances[0].code == "EUR"
         assert summary.cash_balances[0].amount == Decimal("1000")
 
     @pytest.mark.asyncio
-    async def test_get_summary_holdings(self, session, test_asset):
+    async def test_get_summary_holdings(self, session, test_user, test_asset):
         """BR-U-032: Summary includes holdings after BUYs."""
         service = BrokerService(session)
         tx_service = TransactionService(session)
@@ -329,7 +346,7 @@ class TestGetSummary:
                 initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Buy some assets
@@ -345,14 +362,14 @@ class TestGetSummary:
             ]
         await tx_service.create_bulk(buy_items)
 
-        summary = await service.get_summary(broker_id)
+        summary = await service.get_summary(broker_id, user_id=test_user.id)
 
         assert len(summary.holdings) == 1
         assert summary.holdings[0].asset_id == test_asset.id
         assert summary.holdings[0].quantity == Decimal("10")
 
     @pytest.mark.asyncio
-    async def test_get_summary_cost_basis(self, session, test_asset):
+    async def test_get_summary_cost_basis(self, session, test_user, test_asset):
         """BR-U-033: Summary includes cost basis calculation."""
         service = BrokerService(session)
         tx_service = TransactionService(session)
@@ -363,7 +380,7 @@ class TestGetSummary:
                 initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Multiple buys
@@ -387,7 +404,7 @@ class TestGetSummary:
             ]
         await tx_service.create_bulk(buy_items)
 
-        summary = await service.get_summary(broker_id)
+        summary = await service.get_summary(broker_id, user_id=test_user.id)
 
         assert len(summary.holdings) == 1
         holding = summary.holdings[0]
@@ -396,11 +413,11 @@ class TestGetSummary:
         assert holding.average_cost_per_unit == Decimal("1700") / Decimal("30")
 
     @pytest.mark.asyncio
-    async def test_get_summary_not_found(self, session):
+    async def test_get_summary_not_found(self, session, test_user):
         """BR-U-035: Get summary for non-existent broker returns None."""
         service = BrokerService(session)
 
-        summary = await service.get_summary(999999)
+        summary = await service.get_summary(999999, user_id=test_user.id)
 
         assert summary is None
 
@@ -413,18 +430,18 @@ class TestUpdateBulkBasic:
     """Test basic update functionality."""
 
     @pytest.mark.asyncio
-    async def test_update_name(self, session):
+    async def test_update_name(self, session, test_user):
         """BR-U-040: Update broker name."""
         service = BrokerService(session)
 
         items = [BRCreateItem(name=f"Original Name {utcnow().timestamp()}")]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         new_name = f"Updated Name {utcnow().timestamp()}"
         update_items = [BRUpdateItem(name=new_name)]
 
-        update_response = await service.update_bulk(update_items, [broker_id])
+        update_response = await service.update_bulk(update_items, [broker_id], user_id=test_user.id)
 
         assert update_response.success_count == 1
 
@@ -432,17 +449,17 @@ class TestUpdateBulkBasic:
         assert broker.name == new_name
 
     @pytest.mark.asyncio
-    async def test_update_description(self, session):
+    async def test_update_description(self, session, test_user):
         """BR-U-041: Update broker description."""
         service = BrokerService(session)
 
         items = [BRCreateItem(name=f"Desc Broker {utcnow().timestamp()}")]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         update_items = [BRUpdateItem(description="Updated description")]
 
-        update_response = await service.update_bulk(update_items, [broker_id])
+        update_response = await service.update_bulk(update_items, [broker_id], user_id=test_user.id)
 
         assert update_response.success_count == 1
 
@@ -450,17 +467,17 @@ class TestUpdateBulkBasic:
         assert broker.description == "Updated description"
 
     @pytest.mark.asyncio
-    async def test_update_portal_url(self, session):
+    async def test_update_portal_url(self, session, test_user):
         """BR-U-042: Update portal_url."""
         service = BrokerService(session)
 
         items = [BRCreateItem(name=f"URL Broker {utcnow().timestamp()}")]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         update_items = [BRUpdateItem(portal_url="https://updated.example.com")]
 
-        update_response = await service.update_bulk(update_items, [broker_id])
+        update_response = await service.update_bulk(update_items, [broker_id], user_id=test_user.id)
 
         assert update_response.success_count == 1
 
@@ -468,7 +485,7 @@ class TestUpdateBulkBasic:
         assert broker.portal_url == "https://updated.example.com"
 
     @pytest.mark.asyncio
-    async def test_update_duplicate_name(self, session):
+    async def test_update_duplicate_name(self, session, test_user):
         """BR-U-043: Update to existing name fails."""
         service = BrokerService(session)
 
@@ -477,24 +494,24 @@ class TestUpdateBulkBasic:
             BRCreateItem(name=f"Broker A {ts}"),
             BRCreateItem(name=f"Broker B {ts}"),
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_a_id = response.results[0].broker_id
         broker_b_name = f"Broker B {ts}"
 
         # Try to rename A to B's name
         update_items = [BRUpdateItem(name=broker_b_name)]
-        update_response = await service.update_bulk(update_items, [broker_a_id])
+        update_response = await service.update_bulk(update_items, [broker_a_id], user_id=test_user.id)
 
         assert update_response.results[0].success is False
         assert "already exists" in update_response.results[0].error
 
     @pytest.mark.asyncio
-    async def test_update_not_found(self, session):
+    async def test_update_not_found(self, session, test_user):
         """BR-U-044: Update non-existent ID fails."""
         service = BrokerService(session)
 
         update_items = [BRUpdateItem(description="Should fail")]
-        update_response = await service.update_bulk(update_items, [999999])
+        update_response = await service.update_bulk(update_items, [999999], user_id=test_user.id)
 
         assert update_response.results[0].success is False
         assert "not found" in update_response.results[0].error
@@ -508,7 +525,7 @@ class TestUpdateBulkFlagValidation:
     """Test flag validation when disabling overdraft/shorting."""
 
     @pytest.mark.asyncio
-    async def test_update_disable_overdraft_valid(self, session):
+    async def test_update_disable_overdraft_valid(self, session, test_user):
         """BR-U-050: Disable overdraft succeeds when no negative balance."""
         service = BrokerService(session)
 
@@ -520,18 +537,18 @@ class TestUpdateBulkFlagValidation:
                 initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Disable overdraft - should succeed (balance is positive)
         update_items = [BRUpdateItem(allow_cash_overdraft=False)]
-        update_response = await service.update_bulk(update_items, [broker_id])
+        update_response = await service.update_bulk(update_items, [broker_id], user_id=test_user.id)
 
         assert update_response.results[0].success is True
         assert update_response.results[0].validation_triggered is True
 
     @pytest.mark.asyncio
-    async def test_update_disable_overdraft_invalid(self, session):
+    async def test_update_disable_overdraft_invalid(self, session, test_user):
         """BR-U-051: Disable overdraft fails when negative balance exists."""
         service = BrokerService(session)
         tx_service = TransactionService(session)
@@ -543,7 +560,7 @@ class TestUpdateBulkFlagValidation:
                 allow_cash_overdraft=True,
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Create a withdrawal without deposit (negative balance)
@@ -559,13 +576,13 @@ class TestUpdateBulkFlagValidation:
 
         # Try to disable overdraft - should fail
         update_items = [BRUpdateItem(allow_cash_overdraft=False)]
-        update_response = await service.update_bulk(update_items, [broker_id])
+        update_response = await service.update_bulk(update_items, [broker_id], user_id=test_user.id)
 
         assert update_response.results[0].success is False
         assert update_response.results[0].validation_triggered is True
 
     @pytest.mark.asyncio
-    async def test_update_disable_shorting_valid(self, session, test_asset):
+    async def test_update_disable_shorting_valid(self, session, test_user, test_asset):
         """BR-U-052: Disable shorting succeeds when no negative holdings."""
         service = BrokerService(session)
         tx_service = TransactionService(session)
@@ -578,7 +595,7 @@ class TestUpdateBulkFlagValidation:
                 initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Buy some assets (positive holding)
@@ -596,13 +613,13 @@ class TestUpdateBulkFlagValidation:
 
         # Disable shorting - should succeed
         update_items = [BRUpdateItem(allow_asset_shorting=False)]
-        update_response = await service.update_bulk(update_items, [broker_id])
+        update_response = await service.update_bulk(update_items, [broker_id], user_id=test_user.id)
 
         assert update_response.results[0].success is True
         assert update_response.results[0].validation_triggered is True
 
     @pytest.mark.asyncio
-    async def test_update_disable_shorting_invalid(self, session, test_asset):
+    async def test_update_disable_shorting_invalid(self, session, test_user, test_asset):
         """BR-U-053: Disable shorting fails when negative holdings exist."""
         service = BrokerService(session)
         tx_service = TransactionService(session)
@@ -615,7 +632,7 @@ class TestUpdateBulkFlagValidation:
                 initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Sell without owning (short sale)
@@ -633,13 +650,13 @@ class TestUpdateBulkFlagValidation:
 
         # Try to disable shorting - should fail
         update_items = [BRUpdateItem(allow_asset_shorting=False)]
-        update_response = await service.update_bulk(update_items, [broker_id])
+        update_response = await service.update_bulk(update_items, [broker_id], user_id=test_user.id)
 
         assert update_response.results[0].success is False
         assert update_response.results[0].validation_triggered is True
 
     @pytest.mark.asyncio
-    async def test_update_enable_flags_no_validation(self, session):
+    async def test_update_enable_flags_no_validation(self, session, test_user):
         """BR-U-054: Enabling overdraft (False→True) doesn't trigger validation."""
         service = BrokerService(session)
 
@@ -650,12 +667,12 @@ class TestUpdateBulkFlagValidation:
                 allow_cash_overdraft=False,
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Enable overdraft - should succeed without validation
         update_items = [BRUpdateItem(allow_cash_overdraft=True)]
-        update_response = await service.update_bulk(update_items, [broker_id])
+        update_response = await service.update_bulk(update_items, [broker_id], user_id=test_user.id)
 
         assert update_response.results[0].success is True
         assert update_response.results[0].validation_triggered is False
@@ -669,16 +686,16 @@ class TestDeleteBulkBasic:
     """Test basic delete functionality."""
 
     @pytest.mark.asyncio
-    async def test_delete_empty_broker(self, session):
+    async def test_delete_empty_broker(self, session, test_user):
         """BR-U-060: Delete broker with no transactions succeeds."""
         service = BrokerService(session)
 
         items = [BRCreateItem(name=f"Empty Broker {utcnow().timestamp()}")]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         delete_items = [BRDeleteItem(id=broker_id)]
-        delete_response = await service.delete_bulk(delete_items)
+        delete_response = await service.delete_bulk(delete_items, user_id=test_user.id)
 
         assert delete_response.success_count == 1
         assert delete_response.total_deleted == 1
@@ -691,12 +708,12 @@ class TestDeleteBulkBasic:
         assert broker is None
 
     @pytest.mark.asyncio
-    async def test_delete_not_found(self, session):
+    async def test_delete_not_found(self, session, test_user):
         """BR-U-061: Delete non-existent ID fails."""
         service = BrokerService(session)
 
         delete_items = [BRDeleteItem(id=999999)]
-        delete_response = await service.delete_bulk(delete_items)
+        delete_response = await service.delete_bulk(delete_items, user_id=test_user.id)
 
         assert delete_response.results[0].success is False
         assert "not found" in delete_response.results[0].message
@@ -710,7 +727,7 @@ class TestDeleteBulkForceBehavior:
     """Test force delete behavior with transactions."""
 
     @pytest.mark.asyncio
-    async def test_delete_with_tx_no_force(self, session):
+    async def test_delete_with_tx_no_force(self, session, test_user):
         """BR-U-070: Delete broker with transactions without force fails."""
         service = BrokerService(session)
 
@@ -721,18 +738,18 @@ class TestDeleteBulkForceBehavior:
                 initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Try to delete without force
         delete_items = [BRDeleteItem(id=broker_id, force=False)]
-        delete_response = await service.delete_bulk(delete_items)
+        delete_response = await service.delete_bulk(delete_items, user_id=test_user.id)
 
         assert delete_response.results[0].success is False
         assert "transactions" in delete_response.results[0].message.lower()
 
     @pytest.mark.asyncio
-    async def test_delete_with_tx_force(self, session):
+    async def test_delete_with_tx_force(self, session, test_user):
         """BR-U-071: Delete broker with transactions with force succeeds."""
         service = BrokerService(session)
 
@@ -743,18 +760,18 @@ class TestDeleteBulkForceBehavior:
                 initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Delete with force
         delete_items = [BRDeleteItem(id=broker_id, force=True)]
-        delete_response = await service.delete_bulk(delete_items)
+        delete_response = await service.delete_bulk(delete_items, user_id=test_user.id)
 
         assert delete_response.results[0].success is True
         assert delete_response.results[0].transactions_deleted == 1
 
     @pytest.mark.asyncio
-    async def test_delete_force_cascade(self, session):
+    async def test_delete_force_cascade(self, session, test_user):
         """BR-U-072: Force delete actually removes transactions."""
         service = BrokerService(session)
         tx_service = TransactionService(session)
@@ -769,7 +786,7 @@ class TestDeleteBulkForceBehavior:
                     ],
                 )
             ]
-        response = await service.create_bulk(items)
+        response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
         # Verify transactions exist
@@ -778,7 +795,7 @@ class TestDeleteBulkForceBehavior:
 
         # Force delete
         delete_items = [BRDeleteItem(id=broker_id, force=True)]
-        delete_response = await service.delete_bulk(delete_items)
+        delete_response = await service.delete_bulk(delete_items, user_id=test_user.id)
 
         assert delete_response.results[0].success is True
         assert delete_response.results[0].transactions_deleted == 2

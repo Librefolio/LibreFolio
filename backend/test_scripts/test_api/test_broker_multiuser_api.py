@@ -263,3 +263,133 @@ class TestMultiUserRoles:
 
             print_success("✓ Owner deleted broker")
 
+    @pytest.mark.asyncio
+    async def test_editor_can_create_transactions(self, test_server):
+        """MULTI-007: EDITOR can create transactions."""
+        print_section("MULTI-007: Editor can create transactions")
+
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client:
+            from datetime import date
+
+            await create_user_and_login(owner_client)
+            broker_id = await create_broker(owner_client)
+
+            editor_id, _ = await create_user_and_login(editor_client)
+            await add_access(owner_client, broker_id, editor_id, "EDITOR")
+
+            # Editor creates a deposit transaction
+            tx_payload = [{
+                "broker_id": broker_id,
+                "type": "DEPOSIT",
+                "date": date.today().isoformat(),
+                "cash": {"code": "EUR", "amount": "1000"},
+            }]
+
+            resp = await editor_client.post(
+                f"{API_BASE}/transactions",
+                json=tx_payload,
+                timeout=TIMEOUT
+            )
+
+            assert resp.status_code == 200
+            assert resp.json()["success_count"] == 1
+
+            print_success("✓ Editor created transaction")
+
+    @pytest.mark.asyncio
+    async def test_viewer_cannot_create_transactions(self, test_server):
+        """MULTI-008: VIEWER cannot create transactions (requires EDITOR role)."""
+        print_section("MULTI-008: Viewer cannot create transactions")
+
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client:
+            from datetime import date
+
+            await create_user_and_login(owner_client)
+            broker_id = await create_broker(owner_client)
+
+            viewer_id, _ = await create_user_and_login(viewer_client)
+            await add_access(owner_client, broker_id, viewer_id, "VIEWER")
+
+            # Viewer tries to create transaction
+            tx_payload = [{
+                "broker_id": broker_id,
+                "type": "DEPOSIT",
+                "date": date.today().isoformat(),
+                "cash": {"code": "EUR", "amount": "1000"},
+            }]
+
+            resp = await viewer_client.post(
+                f"{API_BASE}/transactions",
+                json=tx_payload,
+                timeout=TIMEOUT
+            )
+
+            # Should fail - viewer has read-only access, EDITOR required
+            assert resp.status_code == 200
+            assert resp.json()["success_count"] == 0
+            assert resp.json()["results"][0]["success"] is False
+            assert "access denied" in resp.json()["results"][0]["error"].lower()
+
+            print_success("✓ Viewer correctly blocked from creating transactions")
+
+
+class TestEditorRestrictions:
+    """Tests for EDITOR role restrictions."""
+
+    @pytest.mark.asyncio
+    async def test_editor_cannot_delete_broker(self, test_server):
+        """MULTI-009: EDITOR cannot delete broker (requires OWNER)."""
+        print_section("MULTI-009: Editor cannot delete broker")
+
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client:
+            await create_user_and_login(owner_client)
+            broker_id = await create_broker(owner_client)
+
+            editor_id, _ = await create_user_and_login(editor_client)
+            await add_access(owner_client, broker_id, editor_id, "EDITOR")
+
+            # Editor tries to delete broker
+            resp = await editor_client.delete(
+                f"{API_BASE}/brokers",
+                params={"ids": [broker_id]},
+                timeout=TIMEOUT
+            )
+
+            # Should fail - EDITOR cannot delete, only OWNER can
+            assert resp.status_code == 200
+            assert resp.json()["total_deleted"] == 0
+            # The broker should still exist
+            check_resp = await editor_client.get(
+                f"{API_BASE}/brokers/{broker_id}",
+                timeout=TIMEOUT
+            )
+            assert check_resp.status_code == 200
+
+            print_success("✓ Editor correctly blocked from deleting broker")
+
+    @pytest.mark.asyncio
+    async def test_editor_cannot_share_broker(self, test_server):
+        """MULTI-010: EDITOR cannot add access to broker (requires OWNER)."""
+        print_section("MULTI-010: Editor cannot share broker")
+
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client, httpx.AsyncClient() as third_client:
+            await create_user_and_login(owner_client)
+            broker_id = await create_broker(owner_client)
+
+            editor_id, _ = await create_user_and_login(editor_client)
+            await add_access(owner_client, broker_id, editor_id, "EDITOR")
+
+            third_id, _ = await create_user_and_login(third_client)
+
+            # Editor tries to add third user
+            resp = await editor_client.post(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                json={"user_id": third_id, "role": "VIEWER"},
+                timeout=TIMEOUT
+            )
+
+            # Should fail with 403
+            assert resp.status_code == 403
+
+            print_success("✓ Editor correctly blocked from sharing broker")
+

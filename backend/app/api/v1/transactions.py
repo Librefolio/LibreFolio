@@ -8,13 +8,18 @@ Provides RESTful endpoints for transaction management:
 - PATCH /transactions: Bulk update transactions
 - DELETE /transactions: Bulk delete transactions
 - GET /transactions/types: Get transaction type metadata
+
+All endpoints require authentication. Users can only create/modify/delete
+transactions for brokers they have EDITOR or OWNER access to.
 """
+import traceback
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import TransactionType
+from backend.app.api.v1.auth import get_current_user
+from backend.app.db.models import TransactionType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
@@ -46,12 +51,13 @@ tx_router = APIRouter(prefix="/transactions", tags=["TX (Transactions)"])
 async def create_transactions(
     items: List[TXCreateItem],
     session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
     ) -> TXBulkCreateResponse:
     """
     Create multiple transactions.
 
-    For linked transactions (TRANSFER, FX_CONVERSION), use the same
-    link_uuid for both transactions in the request.
+    Requires EDITOR or OWNER role on each broker. For linked transactions
+    (TRANSFER, FX_CONVERSION), use the same link_uuid for both transactions.
 
     Args:
         items: List of transactions to create
@@ -59,20 +65,39 @@ async def create_transactions(
     Returns:
         TXBulkCreateResponse with results for each item
     """
-    logger.info(f"Creating {len(items)} transactions")
+    logger.info("Creating %d transactions", len(items), user_id=current_user.id)
 
-    service = TransactionService(session)
-    response = await service.create_bulk(items)
+    try:
+        logger.debug("Starting transaction creation service call", user_id=current_user.id)
+        service = TransactionService(session)
+        response = await service.create_bulk(items, user_id=current_user.id)
+        logger.debug("Service call completed, success_count=%d, errors=%d",
+                    response.success_count, len(response.errors), user_id=current_user.id)
 
-    # Commit if no validation errors
-    if not response.errors:
-        await session.commit()
-        logger.info(f"Created {response.success_count} transactions successfully")
-    else:
-        await session.rollback()
-        logger.warning(f"Transaction creation had errors: {response.errors}")
+        # Commit if all succeeded
+        if response.success_count > 0 and not response.errors:
+            await session.commit()
+            logger.info("Created %d transactions successfully", response.success_count, user_id=current_user.id)
+        else:
+            await session.rollback()
+            if response.errors:
+                logger.warning("Transaction creation had errors: %s", response.errors, user_id=current_user.id)
 
-    return response
+        return response
+    except Exception as e:
+        # Catch any unexpected error and return it as a response instead of 500
+        import sys
+        print(f"[CRITICAL] Transaction creation error: {e}", file=sys.stderr)
+        print(f"[CRITICAL] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        try:
+            await session.rollback()
+        except Exception as rollback_error:
+            print(f"[CRITICAL] Rollback error: {rollback_error}", file=sys.stderr)
+        return TXBulkCreateResponse(
+            results=[],
+            success_count=0,
+            errors=[f"Unexpected error: {str(e)}"]
+        )
 
 
 # =============================================================================

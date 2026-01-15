@@ -105,7 +105,7 @@ class TestUpload:
             data = response.json()
             assert data["success"] is True
             assert data["file"]["original_name"] == filename
-            assert data["file"]["size"] == len(content)
+            assert data["file"]["size_bytes"] == len(content)
             assert "id" in data["file"]
 
             print_success("✓ File uploaded successfully")
@@ -328,4 +328,154 @@ class TestPluginStatic:
             assert response.status_code == 404
 
             print_success("✓ Got 404 for non-existent asset")
+
+
+# ============================================================================
+# FILE SIZE LIMIT TESTS
+# ============================================================================
+
+class TestFileSizeLimit:
+    """Tests for max file upload size."""
+
+    @pytest.mark.asyncio
+    async def test_file_too_large_rejected(self, test_server):
+        """UPLOAD-012: File larger than max_file_upload_mb is rejected."""
+        print_section("UPLOAD-012: File too large rejected")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            # Get current max file size setting
+            settings_resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+            max_mb = 10  # Default fallback
+            for setting in settings_resp.json().get("settings", []):
+                if setting.get("key") == "max_file_upload_mb":
+                    max_mb = int(setting.get("value", 10))
+                    break
+
+            # Create file larger than max (max_mb + 1 MB)
+            large_content = b"X" * ((max_mb + 1) * 1024 * 1024)
+            files = {"file": ("large_file.bin", BytesIO(large_content), "application/octet-stream")}
+
+            response = await client.post(
+                f"{API_BASE}/uploads",
+                files=files,
+                timeout=60  # Longer timeout for large file
+            )
+
+            # Should be rejected with 413 or 400
+            assert response.status_code in [400, 413], f"Expected 400/413, got {response.status_code}"
+
+            print_success("✓ Large file correctly rejected")
+
+
+# ============================================================================
+# SUPERUSER DELETE TESTS
+# ============================================================================
+
+class TestSuperuserDelete:
+    """Tests for superuser file deletion capabilities."""
+
+    @pytest.mark.asyncio
+    async def test_superuser_can_delete_any_file(self, test_server):
+        """UPLOAD-013: Superuser can delete any user's file."""
+        print_section("UPLOAD-013: Superuser deletes any file")
+
+        async with httpx.AsyncClient() as admin_client, httpx.AsyncClient() as user_client:
+            # Create admin (first user)
+            await create_user_and_login(admin_client)
+            me_resp = await admin_client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            is_superuser = me_resp.json().get("user", {}).get("is_superuser", False)
+
+            if not is_superuser:
+                pytest.skip("First user is not superuser")
+
+            # Regular user uploads file
+            await create_user_and_login(user_client)
+            files = {"file": ("user_file.txt", BytesIO(b"User content"), "text/plain")}
+            upload_resp = await user_client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            file_id = upload_resp.json()["file"]["id"]
+
+            # Superuser deletes it
+            response = await admin_client.delete(
+                f"{API_BASE}/uploads/{file_id}",
+                timeout=TIMEOUT
+            )
+
+            assert response.status_code == 200
+            assert response.json()["success"] is True
+
+            print_success("✓ Superuser deleted user's file")
+
+
+# ============================================================================
+# SECURITY VALIDATION TESTS
+# ============================================================================
+
+class TestUploadSecurity:
+    """Tests for upload security validation."""
+
+    @pytest.mark.asyncio
+    async def test_blocked_executable_extension(self, test_server):
+        """UPLOAD-014: Executable file extension is blocked."""
+        print_section("UPLOAD-014: Blocked executable extension")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            # Try to upload .exe file
+            files = {"file": ("malware.exe", BytesIO(b"MZ\x90\x00"), "application/octet-stream")}
+            response = await client.post(
+                f"{API_BASE}/uploads",
+                files=files,
+                timeout=TIMEOUT
+            )
+
+            assert response.status_code == 400
+            assert "not allowed" in response.json()["detail"].lower()
+
+            print_success("✓ Executable extension blocked")
+
+    @pytest.mark.asyncio
+    async def test_blocked_script_extension(self, test_server):
+        """UPLOAD-015: Script file extension is blocked."""
+        print_section("UPLOAD-015: Blocked script extension")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            # Try to upload .sh script
+            files = {"file": ("script.sh", BytesIO(b"#!/bin/bash\nrm -rf /"), "text/plain")}
+            response = await client.post(
+                f"{API_BASE}/uploads",
+                files=files,
+                timeout=TIMEOUT
+            )
+
+            assert response.status_code == 400
+            assert "not allowed" in response.json()["detail"].lower()
+
+            print_success("✓ Script extension blocked")
+
+    @pytest.mark.asyncio
+    async def test_allowed_image_upload(self, test_server):
+        """UPLOAD-016: Image files are allowed."""
+        print_section("UPLOAD-016: Image upload allowed")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            # PNG magic bytes
+            png_header = b'\x89PNG\r\n\x1a\n'
+            files = {"file": ("test.png", BytesIO(png_header + b'\x00' * 100), "image/png")}
+            response = await client.post(
+                f"{API_BASE}/uploads",
+                files=files,
+                timeout=TIMEOUT
+            )
+
+            assert response.status_code == 200
+            assert response.json()["success"] is True
+
+            print_success("✓ Image upload allowed")
 
