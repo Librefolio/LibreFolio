@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", function() {
-    const healthUrl = "http://localhost:8000/api/v1/health";
-    const dashboardUrl = "http://localhost:8000";
+    // Use relative paths for deployment flexibility
+    const healthUrl = "/api/v1/system/health";
+    const dashboardUrl = "/";
     const fallbackUrl = "getting-started/installation/"; // Relative to index.md
 
     // 1. Check Homepage Button
@@ -8,7 +9,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // 2. Check Navigation Links (Sidebar and Top Tabs)
     // We look for any link pointing to the dashboard URL
-    const allLinks = document.querySelectorAll('a[href="' + dashboardUrl + '"], a[href="' + dashboardUrl + '/"]');
+    const allLinks = document.querySelectorAll('a[href="' + dashboardUrl + '"], a[href="/"]');
     const navItemsToHide = [];
 
     allLinks.forEach(link => {
@@ -31,7 +32,8 @@ document.addEventListener("DOMContentLoaded", function() {
         if (dashboardBtn) {
             if (isOnline) {
                 dashboardBtn.href = dashboardUrl;
-                dashboardBtn.classList.remove("md-button--disabled");
+                dashboardBtn.classList.remove("md-button--disabled", "md-button--secondary");
+                dashboardBtn.innerHTML = "Go to Dashboard 🚀";
                 dashboardBtn.title = "Go to Dashboard";
             } else {
                 dashboardBtn.href = fallbackUrl;
@@ -50,7 +52,10 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // Perform Check
+    // Offline-first: Start with offline state, then check server
+    updateUI(false);
+
+    // Perform health check
     fetch(healthUrl)
         .then(response => {
             if (response.ok) {
@@ -66,7 +71,7 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         })
         .catch(error => {
-            // console.log("Dashboard server not reachable:", error);
-            updateUI(false);
+            // Server not reachable - keep offline state
+            console.log("Dashboard server not reachable:", error.message);
         });
 });
