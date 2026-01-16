@@ -6,6 +6,7 @@ SNB provides daily rates with CHF as base currency.
 
 API Documentation: https://data.snb.ch/en/topics/uvo#!/doc/explanations
 """
+
 from datetime import date
 from decimal import Decimal
 
@@ -37,17 +38,17 @@ class SNBProvider(FXRateProvider):
     # Currency mapping to SNB codes
     # SNB uses special codes in their API
     CURRENCY_CODES = {
-        'USD': 'USD',  # US Dollar
-        'EUR': 'EUR',  # Euro
-        'GBP': 'GBP',  # British Pound
-        'JPY': 'JPY',  # Japanese Yen (100 units)
-        'CAD': 'CAD',  # Canadian Dollar
-        'AUD': 'AUD',  # Australian Dollar
-        'SEK': 'SEK',  # Swedish Krona (100 units)
-        'NOK': 'NOK',  # Norwegian Krone (100 units)
-        'DKK': 'DKK',  # Danish Krone (100 units)
-        'CNY': 'CNY',  # Chinese Yuan
-        }
+        "USD": "USD",  # US Dollar
+        "EUR": "EUR",  # Euro
+        "GBP": "GBP",  # British Pound
+        "JPY": "JPY",  # Japanese Yen (100 units)
+        "CAD": "CAD",  # Canadian Dollar
+        "AUD": "AUD",  # Australian Dollar
+        "SEK": "SEK",  # Swedish Krona (100 units)
+        "NOK": "NOK",  # Norwegian Krone (100 units)
+        "DKK": "DKK",  # Danish Krone (100 units)
+        "CNY": "CNY",  # Chinese Yuan
+    }
 
     @property
     def code(self) -> str:
@@ -82,7 +83,7 @@ class SNBProvider(FXRateProvider):
             "EUR",  # Euro
             "GBP",  # British Pound
             "JPY",  # Japanese Yen
-            ]
+        ]
 
     @property
     def multi_unit_currencies(self) -> set[str]:
@@ -92,7 +93,7 @@ class SNBProvider(FXRateProvider):
         These currencies have small unit values, so SNB quotes them per 100
         to make rates more readable (e.g., 100 JPY = 1.5 CHF instead of 1 JPY = 0.015 CHF).
         """
-        return {'JPY', 'SEK', 'NOK', 'DKK'}
+        return {"JPY", "SEK", "NOK", "DKK"}
 
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -104,15 +105,12 @@ class SNBProvider(FXRateProvider):
             List of ISO 4217 currency codes supported by SNB
         """
         # Include CHF as base currency + all quote currencies
-        currencies = ['CHF'] + list(self.CURRENCY_CODES.keys())
+        currencies = ["CHF"] + list(self.CURRENCY_CODES.keys())
         return sorted(currencies)
 
     async def fetch_rates(
-        self,
-        date_range: tuple[date, date],
-        currencies: list[str],
-        base_currency: str | None = None
-        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
+    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from SNB API for given date range and currencies.
 
@@ -135,7 +133,7 @@ class SNBProvider(FXRateProvider):
         if base_currency is not None and base_currency != "CHF":
             raise ValueError(
                 f"SNB provider only supports CHF as base currency, got {base_currency}"
-                )
+            )
 
         start_date, end_date = date_range
         results = {}
@@ -159,16 +157,16 @@ class SNBProvider(FXRateProvider):
             # Series format for exchange rates: {FREQ}.{UNIT}.{CURRENCY}
             url = f"{self.BASE_URL}/{self.DATASET}/data/csv/en"
             params = {
-                'from': start_date.isoformat(),
-                'to': end_date.isoformat(),
+                "from": start_date.isoformat(),
+                "to": end_date.isoformat(),
                 # Series: D (daily), M (monthly average), currency code
                 # We want: D.M.{currency} = daily, monthly average for currency
                 # Example: D.M.USD for USD/CHF exchange rate
-                }
+            }
 
             # Add series parameter - SNB uses dimension:value format
             # The series structure is: D (daily) . M (monthly avg) . {currency}
-            params['series'] = f'D.M.{snb_code}'
+            params["series"] = f"D.M.{snb_code}"
 
             try:
                 async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -209,7 +207,7 @@ class SNBProvider(FXRateProvider):
         """
         observations = []
 
-        lines = csv_text.strip().split('\n')
+        lines = csv_text.strip().split("\n")
 
         # Skip header
         if len(lines) < 2:
@@ -222,7 +220,7 @@ class SNBProvider(FXRateProvider):
             if not line.strip():
                 continue
 
-            parts = line.split(',')
+            parts = line.split(",")
             if len(parts) < 2:
                 continue
 
@@ -236,13 +234,13 @@ class SNBProvider(FXRateProvider):
 
                 # Skip empty values (no data available for this date)
                 # This can happen on weekends, holidays, or during API maintenance
-                if not rate_str or rate_str == '':
+                if not rate_str or rate_str == "":
                     continue
 
                 # SNB gives: X CHF = 1 foreign currency (or 100 for multi-unit)
                 # Example: 0.9 CHF = 1 USD
                 # Example: 1.5 CHF = 100 JPY
-                # 
+                #
                 # We adjust multi-unit to per-1-unit, then return raw rate
                 snb_rate = Decimal(rate_str)
 

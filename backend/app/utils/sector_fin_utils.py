@@ -3,6 +3,7 @@ Sector normalization utilities.
 
 Provides ENUM-based sector classification and validation for financial assets.
 """
+
 from enum import Enum
 
 import structlog
@@ -16,6 +17,7 @@ class FinancialSector(str, Enum):
 
     Based on GICS (Global Industry Classification Standard) sectors.
     """
+
     INDUSTRIALS = "Industrials"
     TECHNOLOGY = "Technology"
     FINANCIALS = "Financials"
@@ -68,8 +70,8 @@ class FinancialSector(str, Enum):
             "telecommunication": cls.TELECOMMUNICATION,
             "telecom": cls.TELECOMMUNICATION,  # Alias
             "utilities": cls.UTILITIES,
-            "other": cls.OTHER
-            }
+            "other": cls.OTHER,
+        }
 
         if normalized_key in mapping:
             return mapping[normalized_key]
@@ -78,8 +80,8 @@ class FinancialSector(str, Enum):
         logger.warning(
             "Sector not in standard classification",
             original_sector=sector_name,
-            normalized_to="Other"
-            )
+            normalized_to="Other",
+        )
         return cls.OTHER
 
     @classmethod

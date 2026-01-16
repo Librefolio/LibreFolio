@@ -26,6 +26,7 @@ This plugin parses CSV exports from Charles Schwab.
 - Amount: Total value (with $)
 - Fees & Comm: Commission
 """
+
 from __future__ import annotations
 
 import csv
@@ -68,7 +69,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "credit interest": TransactionType.INTEREST,
     "wire funds": TransactionType.DEPOSIT,
     "moneylink transfer": TransactionType.DEPOSIT,
-    }
+}
 
 
 def _parse_schwab_date(value: str) -> Optional[date_type]:
@@ -90,7 +91,7 @@ def _parse_schwab_amount(value: str) -> Optional[Decimal]:
         return None
 
     # Remove $ and quotes
-    value = value.replace("$", "").replace('"', '')
+    value = value.replace("$", "").replace('"', "")
 
     # Remove thousands separator (but keep decimal point)
     value = value.replace(",", "")
@@ -104,6 +105,7 @@ def _parse_schwab_amount(value: str) -> Optional[Decimal]:
 # =============================================================================
 # PLUGIN IMPLEMENTATION
 # =============================================================================
+
 
 @register_provider(BRIMProviderRegistry)
 class SchwabBrokerProvider(BRIMProvider):
@@ -143,20 +145,26 @@ class SchwabBrokerProvider(BRIMProvider):
 
         try:
             content = self._read_file_head(file_path, num_lines=3)
-            first_line = content.split('\n')[0].lower() if content else ""
+            first_line = content.split("\n")[0].lower() if content else ""
 
             # Schwab specific columns
-            required = ["date", "action", "symbol", "description", "quantity", "fees & comm", "amount"]
+            required = [
+                "date",
+                "action",
+                "symbol",
+                "description",
+                "quantity",
+                "fees & comm",
+                "amount",
+            ]
             return all(col in first_line for col in required)
 
         except Exception:
             return False
 
     def parse(
-        self,
-        file_path: Path,
-        broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        self, file_path: Path, broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Charles Schwab CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -203,11 +211,13 @@ class SchwabBrokerProvider(BRIMProvider):
                         TransactionType.BUY,
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
-                        ]
+                    ]
 
                     if asset_required:
                         if not symbol:
-                            warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
+                            warnings.append(
+                                f"Row {row_num}: {tx_type.value} requires asset, skipping"
+                            )
                             continue
 
                         if symbol in asset_to_fake_id:
@@ -220,7 +230,7 @@ class SchwabBrokerProvider(BRIMProvider):
                                 "extracted_symbol": symbol,
                                 "extracted_isin": None,
                                 "extracted_name": description if description else None,
-                                }
+                            }
 
                             next_fake_id -= 1
 
@@ -247,7 +257,7 @@ class SchwabBrokerProvider(BRIMProvider):
                             cash=Currency(code="USD", amount=amount) if amount else None,
                             description=f"{action}: {description}" if description else action,
                             tags=["import", "schwab"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -267,7 +277,7 @@ class SchwabBrokerProvider(BRIMProvider):
                                 cash=Currency(code="USD", amount=-abs(fees)),
                                 description=f"Commission: {symbol}" if symbol else "Commission",
                                 tags=["import", "schwab", "commission"],
-                                )
+                            )
                             transactions.append(fee_tx)
                         except Exception as e:
                             warnings.append(f"Row {row_num}: error creating fee transaction: {e}")
@@ -286,16 +296,16 @@ class SchwabBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "Schwab file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
-            asset_count=len(extracted_assets_typed)
-            )
+            asset_count=len(extracted_assets_typed),
+        )
 
         return transactions, warnings, extracted_assets_typed
 

@@ -3,6 +3,7 @@ User Service
 
 Business logic for user management, used by both API and CLI.
 """
+
 from typing import Optional
 
 import structlog
@@ -60,9 +61,7 @@ async def get_user_by_username_or_email(session: AsyncSession, identifier: str) 
     Returns:
         User or None if not found
     """
-    stmt = select(User).where(
-        (User.username == identifier) | (User.email == identifier)
-        )
+    stmt = select(User).where((User.username == identifier) | (User.email == identifier))
     result = await session.execute(stmt)
     return result.scalars().first()
 
@@ -120,7 +119,7 @@ async def create_user(
     password: str,
     is_superuser: bool = False,
     is_active: bool = True,
-    ) -> tuple[Optional[User], Optional[str]]:
+) -> tuple[Optional[User], Optional[str]]:
     """
     Create a new user.
 
@@ -152,7 +151,7 @@ async def create_user(
         hashed_password=hash_password(password),
         is_active=is_active,
         is_superuser=is_superuser,
-        )
+    )
 
     session.add(user)
     await session.commit()
@@ -166,7 +165,7 @@ async def reset_password(
     session: AsyncSession,
     username: str,
     new_password: str,
-    ) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, Optional[str]]:
     """
     Reset a user's password.
 
@@ -201,7 +200,7 @@ async def set_user_active(
     session: AsyncSession,
     username: str,
     active: bool,
-    ) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, Optional[str]]:
     """
     Activate or deactivate a user.
 
@@ -235,7 +234,7 @@ async def set_user_admin(
     session: AsyncSession,
     username: str,
     is_admin: bool,
-    ) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, Optional[str]]:
     """
     Promote or demote a user to/from admin.
 

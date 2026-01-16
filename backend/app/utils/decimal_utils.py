@@ -16,6 +16,7 @@ Usage:
     truncated = truncate_to_db_precision(value, PriceHistory, "close")
     # Returns: Decimal("175.123456")
 """
+
 from decimal import Decimal, ROUND_DOWN
 from typing import Type, Tuple, Optional
 
@@ -56,7 +57,9 @@ def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple
     try:
         table = model.__table__
     except AttributeError:
-        raise ValueError(f"Model {model.__name__} is not a valid SQLModel/SQLAlchemy model (no __table__)")
+        raise ValueError(
+            f"Model {model.__name__} is not a valid SQLModel/SQLAlchemy model (no __table__)"
+        )
 
     if column_name not in table.columns:
         raise ValueError(f"Column '{column_name}' not found in {model.__name__}")
@@ -69,13 +72,15 @@ def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple
         raise ValueError(
             f"Column '{column_name}' in {model.__name__} is not Numeric type "
             f"(found: {type(column_type).__name__})"
-            )
+        )
 
     precision = column_type.precision
     scale = column_type.scale
 
     if precision is None or scale is None:
-        raise ValueError(f"Column '{column_name}' in {model.__name__} has undefined precision/scale")
+        raise ValueError(
+            f"Column '{column_name}' in {model.__name__} has undefined precision/scale"
+        )
 
     return precision, scale
 
@@ -119,6 +124,7 @@ def truncate_to_db_precision(value: Decimal, model: Type[SQLModel], column_name:
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
 
 def truncate_priceHistory(value: Decimal, column_name: str = "close") -> Decimal:
     """Truncate value with the precision used in DB price_history.<column_name>."""

@@ -3,6 +3,7 @@ Authentication Schemas
 
 Pydantic models for auth API requests/responses.
 """
+
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
@@ -12,14 +13,17 @@ from pydantic import BaseModel, EmailStr, Field
 # Request Schemas
 # =============================================================================
 
+
 class AuthLoginRequest(BaseModel):
     """Login request with username/email and password."""
+
     username: str = Field(..., min_length=1, description="Username or email")
     password: str = Field(..., min_length=1, description="Password")
 
 
 class AuthRegisterRequest(BaseModel):
     """Registration request."""
+
     username: str = Field(..., min_length=3, max_length=50, description="Username")
     email: EmailStr = Field(..., description="Email address")
     password: str = Field(..., min_length=8, description="Password (min 8 chars)")
@@ -27,12 +31,14 @@ class AuthRegisterRequest(BaseModel):
 
 class AuthPasswordResetRequest(BaseModel):
     """Password reset request (for terminal CLI)."""
+
     username: str = Field(..., description="Username to reset")
     new_password: str = Field(..., min_length=8, description="New password")
 
 
 class ChangePasswordRequest(BaseModel):
     """Change password request (for authenticated users)."""
+
     current_password: str = Field(..., min_length=1, description="Current password")
     new_password: str = Field(..., min_length=8, description="New password (min 8 chars)")
 
@@ -41,8 +47,10 @@ class ChangePasswordRequest(BaseModel):
 # Response Schemas
 # =============================================================================
 
+
 class AuthUserResponse(BaseModel):
     """User info returned after login or from /me endpoint."""
+
     id: int
     username: str
     email: str
@@ -55,31 +63,37 @@ class AuthUserResponse(BaseModel):
 
 class AuthLoginResponse(BaseModel):
     """Response after successful login."""
+
     user: AuthUserResponse
     message: str = "Login successful"
 
 
 class AuthLogoutResponse(BaseModel):
     """Response after logout."""
+
     message: str = "Logged out successfully"
 
 
 class AuthMeResponse(BaseModel):
     """Response from /me endpoint."""
+
     user: AuthUserResponse
 
 
 class AuthRegisterResponse(BaseModel):
     """Response after successful registration."""
+
     user: AuthUserResponse
     message: str = "Registration successful"
 
 
 class ChangePasswordResponse(BaseModel):
     """Response after successful password change."""
+
     message: str = "Password changed successfully"
 
 
 class AuthErrorResponse(BaseModel):
     """Error response for auth failures."""
+
     detail: str

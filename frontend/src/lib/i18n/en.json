@@ -93,6 +93,7 @@
     "transactions": "Transactions",
     "fx": "FX Rates",
     "import": "Import",
+    "files": "Files",
     "settings": "Settings",
     "profile": "Profile",
     "documentation": "Documentation"
@@ -296,5 +297,26 @@
       "max_file_upload_mb": "MB"
     },
     "selectCurrency": "Select currency..."
+  },
+  "uploads": {
+    "dropOrClick": "Drop file here or click to browse",
+    "maxSize": "Max size: {size}MB",
+    "imageSize": "Image size",
+    "upload": "Upload",
+    "uploading": "Uploading...",
+    "uploadSuccess": "File uploaded successfully",
+    "uploadError": "Upload failed",
+    "invalidType": "Invalid file type",
+    "fileTooLarge": "File is too large",
+    "title": "Files",
+    "staticResources": "Static Resources",
+    "brokerReports": "Broker Reports",
+    "noFiles": "No files uploaded yet",
+    "fileName": "File Name",
+    "fileSize": "Size",
+    "uploadDate": "Uploaded",
+    "actions": "Actions",
+    "download": "Download",
+    "deleteConfirm": "Are you sure you want to delete this file?"
   }
 }

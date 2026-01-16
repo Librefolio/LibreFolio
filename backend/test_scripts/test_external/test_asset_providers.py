@@ -4,6 +4,7 @@ Generic test suite for ALL asset pricing providers.
 Tests all registered asset providers (yfinance, cssscraper, etc.) with uniform test suite.
 Similar pattern to test_fx_providers.py.
 """
+
 import sys
 from datetime import date, timedelta
 
@@ -24,7 +25,7 @@ from backend.test_scripts.test_utils import (
     print_section,
     print_success,
     print_warning,
-    )
+)
 import traceback
 
 # ============================================================================
@@ -58,7 +59,7 @@ def get_all_asset_providers():
     # Extract provider codes
     provider_codes = []
     for p in providers:
-        code = p['code'] if isinstance(p, dict) else p
+        code = p["code"] if isinstance(p, dict) else p
         provider_codes.append(code)
 
     return provider_codes
@@ -71,6 +72,7 @@ pytestmark = pytest.mark.parametrize("provider_code", get_all_asset_providers())
 # ============================================================================
 # INDIVIDUAL TEST FUNCTIONS (run for each provider via parametrize)
 # ============================================================================
+
 
 def test_provider_metadata(provider_code: str):
     """Test provider metadata (code, name, registration)."""
@@ -120,14 +122,16 @@ async def test_current_value(provider_code: str):
         print_info(f"Testing {len(provider.test_cases)} test case(s)...")
 
         for test_case in provider.test_cases:
-            identifier = test_case['identifier']
+            identifier = test_case["identifier"]
             # TODO: modificare i provider affichè forniscano nella test list anche l'expected_symbol
-            expected_symbol = test_case.get('expected_symbol', identifier)
+            expected_symbol = test_case.get("expected_symbol", identifier)
             # Get provider_params and identifier_type if specified in test_case
-            provider_params = test_case.get('provider_params')
-            if isinstance(provider_params, dict) and '_transaction_override' in test_case:
-                provider_params['_transaction_override'] = test_case.get('_transaction_override')
-            identifier_type = test_case.get('identifier_type', IdentifierType.TICKER)  # Default to TICKER
+            provider_params = test_case.get("provider_params")
+            if isinstance(provider_params, dict) and "_transaction_override" in test_case:
+                provider_params["_transaction_override"] = test_case.get("_transaction_override")
+            identifier_type = test_case.get(
+                "identifier_type", IdentifierType.TICKER
+            )  # Default to TICKER
 
             print_info(f"  Testing: {identifier} (expects: {expected_symbol})")
 
@@ -139,18 +143,24 @@ async def test_current_value(provider_code: str):
             # Call with all required parameters
             try:
                 if provider_params:
-                    result = await provider.get_current_value(identifier, identifier_type, provider_params)
+                    result = await provider.get_current_value(
+                        identifier, identifier_type, provider_params
+                    )
                 else:
                     result = await provider.get_current_value(identifier, identifier_type)
             except TypeError as e:
                 # Provider requires provider_params but test_case doesn't have it
                 if "provider_params" in str(e):
-                    print_warning(f"{provider_code} requires provider_params but none in test_case - SKIPPING")
+                    print_warning(
+                        f"{provider_code} requires provider_params but none in test_case - SKIPPING"
+                    )
                     pytest.skip(f"{provider_code} test_case missing provider_params")
                 raise
 
             # Validate result is FACurrentValue Pydantic model
-            assert isinstance(result, FACurrentValue), f"Result is not FACurrentValue: {type(result)}"
+            assert isinstance(
+                result, FACurrentValue
+            ), f"Result is not FACurrentValue: {type(result)}"
 
             # Access Pydantic model attributes directly (FACurrentValue has: value, currency, as_of_date, source)
             current_price = result.value
@@ -202,11 +212,11 @@ async def test_historical_data(provider_code: str):
             pytest.skip("No test_cases defined")
 
         test_case = provider.test_cases[0]
-        identifier = test_case['identifier']
-        identifier_type = test_case.get('identifier_type', IdentifierType.ISIN)
-        provider_params = test_case.get('provider_params')
-        if isinstance(provider_params, dict) and '_transaction_override' in test_case:
-            provider_params['_transaction_override'] = test_case.get('_transaction_override')
+        identifier = test_case["identifier"]
+        identifier_type = test_case.get("identifier_type", IdentifierType.ISIN)
+        provider_params = test_case.get("provider_params")
+        if isinstance(provider_params, dict) and "_transaction_override" in test_case:
+            provider_params["_transaction_override"] = test_case.get("_transaction_override")
 
         print_info(f"Testing historical data for: {identifier}")
 
@@ -216,10 +226,12 @@ async def test_historical_data(provider_code: str):
 
         print_info(f"  Date range: {start_date} to {end_date}")
 
-        result = await provider.get_history_value(identifier, identifier_type, provider_params, start_date, end_date)
+        result = await provider.get_history_value(
+            identifier, identifier_type, provider_params, start_date, end_date
+        )
 
         # Validate result structure - FAHistoricalData has .prices attribute
-        assert hasattr(result, 'prices'), f"Result missing 'prices' attribute: {type(result)}"
+        assert hasattr(result, "prices"), f"Result missing 'prices' attribute: {type(result)}"
 
         prices = result.prices
         assert isinstance(prices, list), f"prices is not a list: {type(prices)}"
@@ -231,8 +243,8 @@ async def test_historical_data(provider_code: str):
 
             # Check first price structure - FAPricePoint object
             first_price = prices[0]
-            assert hasattr(first_price, 'date'), "Price point missing 'date'"
-            assert hasattr(first_price, 'close'), "Price point missing 'close'"
+            assert hasattr(first_price, "date"), "Price point missing 'date'"
+            assert hasattr(first_price, "close"), "Price point missing 'close'"
 
             print_success(f"  ✓ First price: {first_price.date} close={first_price.close}")
 
@@ -257,7 +269,7 @@ async def test_search(provider_code: str):
         provider = AssetProviderRegistry.get_provider_instance(provider_code)
 
         # Check if search is supported
-        supports_search = hasattr(provider, 'search') and callable(provider.search)
+        supports_search = hasattr(provider, "search") and callable(provider.search)
 
         if not supports_search:
             print_info(f"{provider_code} does not support search - SKIPPING")
@@ -289,14 +301,26 @@ async def test_search(provider_code: str):
             assert isinstance(first_result, dict), "Search result is not a dict"
 
             # Different providers may return different keys (symbol/identifier, name/description/display_name)
-            has_symbol = 'symbol' in first_result or 'identifier' in first_result
-            has_name = 'name' in first_result or 'description' in first_result or 'display_name' in first_result
+            has_symbol = "symbol" in first_result or "identifier" in first_result
+            has_name = (
+                "name" in first_result
+                or "description" in first_result
+                or "display_name" in first_result
+            )
 
-            assert has_symbol, f"Search result missing 'symbol' or 'identifier': {first_result.keys()}"
-            assert has_name, f"Search result missing 'name', 'description', or 'display_name': {first_result.keys()}"
+            assert (
+                has_symbol
+            ), f"Search result missing 'symbol' or 'identifier': {first_result.keys()}"
+            assert (
+                has_name
+            ), f"Search result missing 'name', 'description', or 'display_name': {first_result.keys()}"
 
-            symbol = first_result.get('symbol') or first_result.get('identifier')
-            name = first_result.get('name') or first_result.get('description') or first_result.get('display_name')
+            symbol = first_result.get("symbol") or first_result.get("identifier")
+            name = (
+                first_result.get("name")
+                or first_result.get("description")
+                or first_result.get("display_name")
+            )
             print_success(f"  ✓ First result: {symbol} - {name}")
 
         print_success("Search functionality OK")
@@ -347,8 +371,8 @@ def test_validate_params(provider_code: str):
             print_info(f"Testing {len(provider.test_cases)} test case(s) with provider_params...")
 
             for idx, test_case in enumerate(provider.test_cases, 1):
-                provider_params = test_case.get('provider_params')
-                identifier = test_case.get('identifier', 'N/A')
+                provider_params = test_case.get("provider_params")
+                identifier = test_case.get("identifier", "N/A")
 
                 print_info(f"  Test case {idx}/{len(provider.test_cases)}: {identifier[:50]}...")
 
@@ -367,11 +391,17 @@ def test_validate_params(provider_code: str):
                         print_warning(f"    Provider requires params but test_case has None!")
 
             # If any test_case has params, ensure None/empty were rejected (provider requires params)
-            any_test_case_has_params = any(tc.get('provider_params') is not None for tc in provider.test_cases)
+            any_test_case_has_params = any(
+                tc.get("provider_params") is not None for tc in provider.test_cases
+            )
             if any_test_case_has_params and none_accepted:
-                print_warning(f"  Provider has test_cases with params but also accepts None - may be intentional")
+                print_warning(
+                    f"  Provider has test_cases with params but also accepts None - may be intentional"
+                )
         else:
-            print_info(f"  {provider_code} has no test_cases - skipping params validation from test_cases")
+            print_info(
+                f"  {provider_code} has no test_cases - skipping params validation from test_cases"
+            )
 
         print_success("Provider params validation test passed")
 
@@ -409,7 +439,7 @@ async def test_error_handling(provider_code: str):
                 print_warning(f"  Provider returned result for invalid identifier: {result.symbol}")
                 print_info(f"  This may be acceptable for test/mock providers")
                 # Don't fail for mock providers
-                if 'mock' in provider_code.lower() or 'test' in provider_code.lower():
+                if "mock" in provider_code.lower() or "test" in provider_code.lower():
                     error_raised = True
                 else:
                     print_error("  Real provider should have raised AssetSourceError")

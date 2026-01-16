@@ -9,12 +9,13 @@ Removed: cash_accounts, cash_movements
 Added: users, user_settings, broker_user_access
 Updated: transactions (unified), brokers (new flags)
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '001_initial'
+revision: str = "001_initial"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -29,7 +30,9 @@ def upgrade() -> None:
 
     # Users table (NEW)
     print("📦 Creating table: users...")
-    conn.execute(sa.text("""CREATE TABLE users
+    conn.execute(
+        sa.text(
+            """CREATE TABLE users
                             (
                                 id              INTEGER PRIMARY KEY,
                                 username        VARCHAR(50) NOT NULL UNIQUE,
@@ -39,7 +42,9 @@ def upgrade() -> None:
                                 is_superuser    BOOLEAN     NOT NULL DEFAULT 0,
                                 created_at      DATETIME    NOT NULL,
                                 updated_at      DATETIME    NOT NULL
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE UNIQUE INDEX ix_users_username ON users (username)"))
     conn.execute(sa.text("CREATE UNIQUE INDEX ix_users_email ON users (email)"))
@@ -47,7 +52,9 @@ def upgrade() -> None:
 
     # User Settings table (NEW)
     print("📦 Creating table: user_settings...")
-    conn.execute(sa.text("""CREATE TABLE user_settings
+    conn.execute(
+        sa.text(
+            """CREATE TABLE user_settings
                             (
                                 id            INTEGER PRIMARY KEY,
                                 user_id       INTEGER     NOT NULL UNIQUE,
@@ -58,12 +65,16 @@ def upgrade() -> None:
                                 updated_at    DATETIME    NOT NULL,
                                 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
                                 CONSTRAINT uq_user_settings_user_id UNIQUE (user_id)
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
 
     # Global Settings table (NEW)
     print("📦 Creating table: global_settings...")
-    conn.execute(sa.text("""CREATE TABLE global_settings
+    conn.execute(
+        sa.text(
+            """CREATE TABLE global_settings
                             (
                                 key                VARCHAR(100) PRIMARY KEY,
                                 value              TEXT        NOT NULL,
@@ -72,12 +83,16 @@ def upgrade() -> None:
                                 updated_at         DATETIME    NOT NULL,
                                 updated_by_user_id INTEGER,
                                 FOREIGN KEY (updated_by_user_id) REFERENCES users (id) ON DELETE SET NULL
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
 
     # Assets table
     print("📦 Creating table: assets...")
-    conn.execute(sa.text("""CREATE TABLE assets
+    conn.execute(
+        sa.text(
+            """CREATE TABLE assets
                             (
                                 id                    INTEGER PRIMARY KEY,
                                 display_name          VARCHAR     NOT NULL UNIQUE,
@@ -95,7 +110,9 @@ def upgrade() -> None:
                                 identifier_other      VARCHAR(100),
                                 created_at            DATETIME    NOT NULL,
                                 updated_at            DATETIME    NOT NULL
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE UNIQUE INDEX uq_assets_display_name ON assets (display_name)"))
     conn.execute(sa.text("CREATE INDEX ix_assets_identifier_isin ON assets (identifier_isin)"))
@@ -104,7 +121,9 @@ def upgrade() -> None:
 
     # Brokers table (UPDATED with new flags)
     print("📦 Creating table: brokers...")
-    conn.execute(sa.text("""CREATE TABLE brokers
+    conn.execute(
+        sa.text(
+            """CREATE TABLE brokers
                             (
                                 id                    INTEGER PRIMARY KEY,
                                 name                  VARCHAR  NOT NULL UNIQUE,
@@ -118,14 +137,18 @@ def upgrade() -> None:
                                 opened_at             DATE,
                                 created_at            DATETIME NOT NULL,
                                 updated_at            DATETIME NOT NULL
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE UNIQUE INDEX ix_brokers_name ON brokers (name)"))
     print("  ✓ Index created")
 
     # Broker User Access table (NEW)
     print("📦 Creating table: broker_user_access...")
-    conn.execute(sa.text("""CREATE TABLE broker_user_access
+    conn.execute(
+        sa.text(
+            """CREATE TABLE broker_user_access
                             (
                                 id         INTEGER PRIMARY KEY,
                                 user_id    INTEGER     NOT NULL,
@@ -137,15 +160,23 @@ def upgrade() -> None:
                                 FOREIGN KEY (broker_id) REFERENCES brokers (id) ON DELETE CASCADE,
                                 CONSTRAINT uq_broker_user_access UNIQUE (user_id, broker_id),
                                 CONSTRAINT chk_broker_user_access_role CHECK (role IN ('OWNER', 'EDITOR', 'VIEWER'))
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX ix_broker_user_access_user_id ON broker_user_access (user_id)"))
-    conn.execute(sa.text("CREATE INDEX ix_broker_user_access_broker_id ON broker_user_access (broker_id)"))
+    conn.execute(
+        sa.text("CREATE INDEX ix_broker_user_access_user_id ON broker_user_access (user_id)")
+    )
+    conn.execute(
+        sa.text("CREATE INDEX ix_broker_user_access_broker_id ON broker_user_access (broker_id)")
+    )
     print("  ✓ 2 Indexes created")
 
     # FX rates table
     print("📦 Creating table: fx_rates...")
-    conn.execute(sa.text("""CREATE TABLE fx_rates
+    conn.execute(
+        sa.text(
+            """CREATE TABLE fx_rates
                             (
                                 id         INTEGER PRIMARY KEY,
                                 date       DATE            NOT NULL,
@@ -156,14 +187,20 @@ def upgrade() -> None:
                                 fetched_at DATETIME        NOT NULL,
                                 CONSTRAINT ck_fx_rates_base_less_than_quote CHECK (base < quote),
                                 CONSTRAINT uq_fx_rates_date_base_quote UNIQUE (date, base, quote)
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_fx_rates_base_quote_date ON fx_rates (base, quote, date)"))
+    conn.execute(
+        sa.text("CREATE INDEX idx_fx_rates_base_quote_date ON fx_rates (base, quote, date)")
+    )
     print("  ✓ Index created")
 
     # FX currency pair sources table
     print("📦 Creating table: fx_currency_pair_sources...")
-    conn.execute(sa.text("""CREATE TABLE fx_currency_pair_sources
+    conn.execute(
+        sa.text(
+            """CREATE TABLE fx_currency_pair_sources
                             (
                                 id             INTEGER PRIMARY KEY,
                                 base           VARCHAR  NOT NULL,
@@ -174,16 +211,28 @@ def upgrade() -> None:
                                 created_at     DATETIME NOT NULL,
                                 updated_at     DATETIME NOT NULL,
                                 CONSTRAINT uq_pair_source_base_quote_priority UNIQUE (base, quote, priority)
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_pair_source_base_quote ON fx_currency_pair_sources (base, quote)"))
-    conn.execute(sa.text("CREATE INDEX ix_fx_currency_pair_sources_base ON fx_currency_pair_sources (base)"))
-    conn.execute(sa.text("CREATE INDEX ix_fx_currency_pair_sources_quote ON fx_currency_pair_sources (quote)"))
+    conn.execute(
+        sa.text("CREATE INDEX idx_pair_source_base_quote ON fx_currency_pair_sources (base, quote)")
+    )
+    conn.execute(
+        sa.text("CREATE INDEX ix_fx_currency_pair_sources_base ON fx_currency_pair_sources (base)")
+    )
+    conn.execute(
+        sa.text(
+            "CREATE INDEX ix_fx_currency_pair_sources_quote ON fx_currency_pair_sources (quote)"
+        )
+    )
     print("  ✓ 3 Indexes created")
 
     # Asset provider assignments table
     print("📦 Creating table: asset_provider_assignments...")
-    conn.execute(sa.text("""CREATE TABLE asset_provider_assignments
+    conn.execute(
+        sa.text(
+            """CREATE TABLE asset_provider_assignments
                             (
                                 id              INTEGER PRIMARY KEY,
                                 asset_id        INTEGER     NOT NULL UNIQUE,
@@ -197,14 +246,20 @@ def upgrade() -> None:
                                 updated_at      DATETIME    NOT NULL,
                                 FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
                                 CONSTRAINT uq_asset_provider_asset_id UNIQUE (asset_id)
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_asset_provider_asset_id ON asset_provider_assignments (asset_id)"))
+    conn.execute(
+        sa.text("CREATE INDEX idx_asset_provider_asset_id ON asset_provider_assignments (asset_id)")
+    )
     print("  ✓ Index created")
 
     # Price history table
     print("📦 Creating table: price_history...")
-    conn.execute(sa.text("""CREATE TABLE price_history
+    conn.execute(
+        sa.text(
+            """CREATE TABLE price_history
                             (
                                 id                INTEGER PRIMARY KEY,
                                 asset_id          INTEGER  NOT NULL,
@@ -220,9 +275,13 @@ def upgrade() -> None:
                                 fetched_at        DATETIME NOT NULL,
                                 FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
                                 CONSTRAINT uq_price_history_asset_date UNIQUE (asset_id, date)
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_price_history_asset_date ON price_history (asset_id, date)"))
+    conn.execute(
+        sa.text("CREATE INDEX idx_price_history_asset_date ON price_history (asset_id, date)")
+    )
     print("  ✓ Index created")
 
     # Unified Transactions table (REFACTORED)
@@ -230,7 +289,9 @@ def upgrade() -> None:
     # This allows bidirectional linking (A->B and B->A) within the same transaction.
     # The FK constraint is only checked at COMMIT, not at INSERT/UPDATE time.
     print("📦 Creating table: transactions (UNIFIED)...")
-    conn.execute(sa.text("""CREATE TABLE transactions
+    conn.execute(
+        sa.text(
+            """CREATE TABLE transactions
                             (
                                 id                     INTEGER PRIMARY KEY,
                                 broker_id              INTEGER        NOT NULL,
@@ -249,11 +310,19 @@ def upgrade() -> None:
                                 FOREIGN KEY (asset_id) REFERENCES assets (id),
                                 FOREIGN KEY (related_transaction_id) REFERENCES transactions (id)
                                     DEFERRABLE INITIALLY DEFERRED
-                            )"""))
+                            )"""
+        )
+    )
     print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_transactions_broker_date ON transactions (broker_id, date, id)"))
-    conn.execute(sa.text("CREATE INDEX idx_transactions_asset_date ON transactions (asset_id, date)"))
-    conn.execute(sa.text("CREATE INDEX idx_transactions_related ON transactions (related_transaction_id)"))
+    conn.execute(
+        sa.text("CREATE INDEX idx_transactions_broker_date ON transactions (broker_id, date, id)")
+    )
+    conn.execute(
+        sa.text("CREATE INDEX idx_transactions_asset_date ON transactions (asset_id, date)")
+    )
+    conn.execute(
+        sa.text("CREATE INDEX idx_transactions_related ON transactions (related_transaction_id)")
+    )
     conn.execute(sa.text("CREATE INDEX ix_transactions_broker_id ON transactions (broker_id)"))
     conn.execute(sa.text("CREATE INDEX ix_transactions_asset_id ON transactions (asset_id)"))
     conn.execute(sa.text("CREATE INDEX ix_transactions_date ON transactions (date)"))
@@ -271,8 +340,16 @@ def downgrade() -> None:
     """Drop all tables."""
     conn = op.get_bind()
     for table in [
-        'transactions', 'price_history', 'asset_provider_assignments',
-        'fx_currency_pair_sources', 'fx_rates', 'broker_user_access',
-        'brokers', 'assets', 'global_settings', 'user_settings', 'users'
-        ]:
+        "transactions",
+        "price_history",
+        "asset_provider_assignments",
+        "fx_currency_pair_sources",
+        "fx_rates",
+        "broker_user_access",
+        "brokers",
+        "assets",
+        "global_settings",
+        "user_settings",
+        "users",
+    ]:
         conn.execute(sa.text(f"DROP TABLE IF EXISTS {table}"))

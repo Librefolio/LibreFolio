@@ -77,17 +77,11 @@ class AbstractProviderRegistry:
         for code, provider_class in cls._providers.items():
             try:
                 instance = provider_class()
-                name = getattr(instance, 'provider_name', None) or getattr(instance, 'name', code)
-                providers.append({
-                    'code': code,
-                    'name': name
-                    })
+                name = getattr(instance, "provider_name", None) or getattr(instance, "name", code)
+                providers.append({"code": code, "name": name})
             except Exception:
                 # Fallback if instantiation fails
-                providers.append({
-                    'code': code,
-                    'name': code
-                    })
+                providers.append({"code": code, "name": code})
         return providers
 
     @classmethod
@@ -102,13 +96,13 @@ class AbstractProviderRegistry:
             return
         folder = cls._get_provider_folder()
         # Resolve to absolute path: project_root/backend/app/services/<folder>
-        target_dir = PROJECT_ROOT / 'backend' / 'app' / 'services' / folder
+        target_dir = PROJECT_ROOT / "backend" / "app" / "services" / folder
 
         if not target_dir.exists():
             return
 
-        for py in target_dir.glob('*.py'):
-            if py.name == '__init__.py' or not py.is_file():
+        for py in target_dir.glob("*.py"):
+            if py.name == "__init__.py" or not py.is_file():
                 continue
             module_name = f"backend.app.services.{folder}.{py.stem}"
             try:
@@ -118,7 +112,9 @@ class AbstractProviderRegistry:
                     spec.loader.exec_module(mod)
             except Exception as e:
                 # Log error but don't stop discovery on single-module errors
-                logger.error("Error importing provider module", module_name=module_name, error=str(e))
+                logger.error(
+                    "Error importing provider module", module_name=module_name, error=str(e)
+                )
                 continue
         cls._discovery_done = True
 
@@ -177,7 +173,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         for code, plugin_cls in cls._providers.items():
             try:
                 instance = plugin_cls()
-                priority = getattr(instance, 'detection_priority', 100)
+                priority = getattr(instance, "detection_priority", 100)
                 plugins_with_priority.append((code, instance, priority))
             except Exception:
                 continue
@@ -193,15 +189,11 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
                         "Auto-detected plugin for file",
                         plugin_code=code,
                         priority=priority,
-                        file_path=str(file_path)
-                        )
+                        file_path=str(file_path),
+                    )
                     return code
             except Exception as e:
-                logger.warning(
-                    "Error checking plugin can_parse",
-                    plugin_code=code,
-                    error=str(e)
-                    )
+                logger.warning("Error checking plugin can_parse", plugin_code=code, error=str(e))
                 continue
 
         return None

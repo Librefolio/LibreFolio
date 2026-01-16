@@ -93,6 +93,7 @@
     "transactions": "Transactions",
     "fx": "Taux de Change",
     "import": "Importer",
+    "files": "Fichiers",
     "settings": "Paramètres",
     "profile": "Profil",
     "documentation": "Documentation"
@@ -296,5 +297,26 @@
       "max_file_upload_mb": "Mo"
     },
     "selectCurrency": "Sélectionner devise..."
+  },
+  "uploads": {
+    "dropOrClick": "Déposer un fichier ici ou cliquer pour parcourir",
+    "maxSize": "Taille max: {size}Mo",
+    "imageSize": "Taille de l'image",
+    "upload": "Téléverser",
+    "uploading": "Téléversement...",
+    "uploadSuccess": "Fichier téléversé avec succès",
+    "uploadError": "Échec du téléversement",
+    "invalidType": "Type de fichier invalide",
+    "fileTooLarge": "Fichier trop volumineux",
+    "title": "Fichiers",
+    "staticResources": "Ressources Statiques",
+    "brokerReports": "Rapports Courtier",
+    "noFiles": "Aucun fichier téléversé",
+    "fileName": "Nom du Fichier",
+    "fileSize": "Taille",
+    "uploadDate": "Téléversé",
+    "actions": "Actions",
+    "download": "Télécharger",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce fichier?"
   }
 }

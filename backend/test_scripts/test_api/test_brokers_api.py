@@ -16,6 +16,7 @@ Users only see brokers they have access to.
 See checklist: 01_test_broker_transaction_subsystem.md - Category 5
 Reference: backend/app/api/v1/brokers.py
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -47,6 +48,7 @@ def unique_username() -> str:
 # HELPER FUNCTIONS
 # ============================================================================
 
+
 async def create_test_user(client: httpx.AsyncClient) -> tuple[str, str, Optional[str]]:
     """
     Create a test user and return (username, email, session_cookie).
@@ -60,7 +62,7 @@ async def create_test_user(client: httpx.AsyncClient) -> tuple[str, str, Optiona
     resp = await client.post(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
-        timeout=TIMEOUT
+        timeout=TIMEOUT,
     )
 
     if resp.status_code != 201:
@@ -68,9 +70,7 @@ async def create_test_user(client: httpx.AsyncClient) -> tuple[str, str, Optiona
 
     # Login
     login_resp = await client.post(
-        f"{API_BASE}/auth/login",
-        json={"username": username, "password": password},
-        timeout=TIMEOUT
+        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
     )
 
     session_cookie = login_resp.cookies.get("session")
@@ -83,9 +83,7 @@ async def create_test_user(client: httpx.AsyncClient) -> tuple[str, str, Optiona
 async def login_user(client: httpx.AsyncClient, username: str, password: str) -> Optional[str]:
     """Login and return session cookie. Also sets cookie on client."""
     resp = await client.post(
-        f"{API_BASE}/auth/login",
-        json={"username": username, "password": password},
-        timeout=TIMEOUT
+        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
     )
     session_cookie = resp.cookies.get("session")
     if session_cookie:
@@ -96,6 +94,7 @@ async def login_user(client: httpx.AsyncClient, username: str, password: str) ->
 # ============================================================================
 # PYTEST FIXTURES
 # ============================================================================
+
 
 @pytest.fixture(scope="module")
 def test_server():
@@ -109,6 +108,7 @@ def test_server():
 # ============================================================================
 # BROKER API - CREATE (with auth)
 # ============================================================================
+
 
 class TestBrokerCreate:
     """Tests for POST /brokers with authentication."""
@@ -150,7 +150,9 @@ class TestBrokerCreate:
                 timeout=TIMEOUT,
             )
 
-            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+            assert (
+                response.status_code == 200
+            ), f"Expected 200, got {response.status_code}: {response.text}"
 
             data = response.json()
             assert data["success_count"] == 1
@@ -252,6 +254,7 @@ class TestBrokerCreate:
 # ============================================================================
 # BROKER API - READ (with auth)
 # ============================================================================
+
 
 class TestBrokerRead:
     """Tests for GET /brokers with authentication."""
@@ -376,6 +379,7 @@ class TestBrokerRead:
 # BROKER API - UPDATE (with auth)
 # ============================================================================
 
+
 class TestBrokerUpdate:
     """Tests for PATCH /brokers with authentication."""
 
@@ -435,6 +439,7 @@ class TestBrokerUpdate:
 # ============================================================================
 # BROKER API - DELETE (with auth)
 # ============================================================================
+
 
 class TestBrokerDelete:
     """Tests for DELETE /brokers with authentication."""
@@ -545,6 +550,7 @@ class TestBrokerDelete:
 # ============================================================================
 # BROKER API - BULK OPERATIONS
 # ============================================================================
+
 
 class TestBrokerBulkOperations:
     """Tests for bulk broker operations."""
@@ -692,6 +698,7 @@ class TestBrokerBulkOperations:
 # BROKER API - MULTIPLE OWNERS
 # ============================================================================
 
+
 class TestMultipleOwners:
     """Tests for brokers with multiple owners."""
 
@@ -810,4 +817,3 @@ class TestMultipleOwners:
             assert access_resp.json()["total"] == 1
 
             print_success("✓ Owner removed another owner successfully")
-

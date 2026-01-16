@@ -31,6 +31,7 @@ This plugin parses CSV exports from DEGIRO (European broker).
 - Mutatie: Amount change (with currency column after)
 - Saldo: Balance (with currency column after)
 """
+
 from __future__ import annotations
 
 import csv
@@ -73,31 +74,25 @@ TYPE_PATTERNS: Dict[str, Tuple[TransactionType, bool]] = {
     r"buy \d+": (TransactionType.BUY, True),
     r"compra \d+": (TransactionType.BUY, True),
     r"achat \d+": (TransactionType.BUY, True),
-
     # SELL patterns
     r"verkoop \d+": (TransactionType.SELL, True),
     r"sell \d+": (TransactionType.SELL, True),
     r"venta \d+": (TransactionType.SELL, True),
     r"vente \d+": (TransactionType.SELL, True),
-
     # DIVIDEND
     r"^dividend": (TransactionType.DIVIDEND, True),
     r"^dividende": (TransactionType.DIVIDEND, True),
-
     # TAX on dividends
     r"dividendbelasting": (TransactionType.TAX, True),
     r"impôts sur dividende": (TransactionType.TAX, True),
     r"dividend tax": (TransactionType.TAX, True),
-
     # DEPOSIT
     r"ideal deposit": (TransactionType.DEPOSIT, False),
     r"^ingreso$": (TransactionType.DEPOSIT, False),
     r"^deposit": (TransactionType.DEPOSIT, False),
-
     # WITHDRAWAL
     r"withdrawal": (TransactionType.WITHDRAWAL, False),
     r"prelievo": (TransactionType.WITHDRAWAL, False),
-
     # FEES
     r"transactiekosten": (TransactionType.FEE, True),
     r"kosten van derden": (TransactionType.FEE, True),
@@ -105,7 +100,7 @@ TYPE_PATTERNS: Dict[str, Tuple[TransactionType, bool]] = {
     r"comissões": (TransactionType.FEE, True),
     r"aansluitingskosten": (TransactionType.FEE, False),  # Connection fees
     r"connection fee": (TransactionType.FEE, False),
-    }
+}
 
 # Patterns to skip (FX conversions, internal transfers, etc.)
 SKIP_PATTERNS = [
@@ -125,7 +120,7 @@ SKIP_PATTERNS = [
     r"conversion fonds",
     r"corporate action",
     r"courtesy",  # DEGIRO courtesy refunds
-    ]
+]
 
 
 def _parse_degiro_date(value: str) -> Optional[date_type]:
@@ -146,26 +141,26 @@ def _parse_degiro_number(value: str) -> Optional[Decimal]:
         return None
 
     # Remove currency symbols and whitespace
-    value = re.sub(r'[€$£¥]', '', value).strip()
+    value = re.sub(r"[€$£¥]", "", value).strip()
 
     # Handle Dutch format: 1.234,56 → 1234.56
     # If both . and , present and comma is after dot, it's Dutch format
-    if '.' in value and ',' in value:
-        if value.rfind(',') > value.rfind('.'):
+    if "." in value and "," in value:
+        if value.rfind(",") > value.rfind("."):
             # Dutch: thousands separator is ., decimal is ,
-            value = value.replace('.', '').replace(',', '.')
+            value = value.replace(".", "").replace(",", ".")
         else:
             # US: thousands separator is ,, decimal is .
-            value = value.replace(',', '')
-    elif ',' in value:
+            value = value.replace(",", "")
+    elif "," in value:
         # Only comma - could be decimal separator or thousands
-        parts = value.split(',')
+        parts = value.split(",")
         if len(parts) == 2 and len(parts[1]) <= 2:
             # Likely decimal separator
-            value = value.replace(',', '.')
+            value = value.replace(",", ".")
         else:
             # Might be thousands separator
-            value = value.replace(',', '')
+            value = value.replace(",", "")
 
     try:
         return Decimal(value)
@@ -201,10 +196,13 @@ def _extract_quantity_from_description(description: str) -> Decimal:
     # Pattern 2: (Compra|Venta) <quantity> <PRODUCT>@<price> (with space before @)
 
     # First try standard pattern
-    match = re.search(r'(?:koop|verkoop|buy|sell|compra|venta|achat|vente)\s+(\d+(?:[.,]\d+)?)\s*@',
-                      description, re.IGNORECASE)
+    match = re.search(
+        r"(?:koop|verkoop|buy|sell|compra|venta|achat|vente)\s+(\d+(?:[.,]\d+)?)\s*@",
+        description,
+        re.IGNORECASE,
+    )
     if match:
-        qty_str = match.group(1).replace(',', '.')
+        qty_str = match.group(1).replace(",", ".")
         try:
             return Decimal(qty_str)
         except InvalidOperation:
@@ -212,10 +210,13 @@ def _extract_quantity_from_description(description: str) -> Decimal:
 
     # Try pattern with product name between quantity and @
     # e.g., "Compra 6 ISHARES MSCI WOR A@49,785 EUR"
-    match = re.search(r'(?:koop|verkoop|buy|sell|compra|venta|achat|vente)\s+(\d+(?:[.,]\d+)?)\s+[^@]+@',
-                      description, re.IGNORECASE)
+    match = re.search(
+        r"(?:koop|verkoop|buy|sell|compra|venta|achat|vente)\s+(\d+(?:[.,]\d+)?)\s+[^@]+@",
+        description,
+        re.IGNORECASE,
+    )
     if match:
-        qty_str = match.group(1).replace(',', '.')
+        qty_str = match.group(1).replace(",", ".")
         try:
             return Decimal(qty_str)
         except InvalidOperation:
@@ -227,6 +228,7 @@ def _extract_quantity_from_description(description: str) -> Decimal:
 # =============================================================================
 # PLUGIN IMPLEMENTATION
 # =============================================================================
+
 
 @register_provider(BRIMProviderRegistry)
 class DegiroBrokerProvider(BRIMProvider):
@@ -285,7 +287,7 @@ class DegiroBrokerProvider(BRIMProvider):
             required_columns = ["datum", "tijd", "isin", "omschrijving"]
 
             # Check first line contains required columns
-            first_line = content.split('\n')[0].lower() if content else ""
+            first_line = content.split("\n")[0].lower() if content else ""
 
             return all(col in first_line for col in required_columns)
 
@@ -293,10 +295,8 @@ class DegiroBrokerProvider(BRIMProvider):
             return False
 
     def parse(
-        self,
-        file_path: Path,
-        broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        self, file_path: Path, broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """
         Parse DEGIRO CSV export file.
 
@@ -344,7 +344,9 @@ class DegiroBrokerProvider(BRIMProvider):
 
                     if requires_asset:
                         if not isin and not product:
-                            warnings.append(f"Row {row_num}: {tx_type.value} requires asset but none found, skipping")
+                            warnings.append(
+                                f"Row {row_num}: {tx_type.value} requires asset but none found, skipping"
+                            )
                             continue
 
                         asset_key = isin if isin else product
@@ -359,7 +361,7 @@ class DegiroBrokerProvider(BRIMProvider):
                                 "extracted_symbol": None,  # DEGIRO doesn't provide symbols
                                 "extracted_isin": isin if isin else None,
                                 "extracted_name": product if product else None,
-                                }
+                            }
 
                             next_fake_id -= 1
 
@@ -397,7 +399,9 @@ class DegiroBrokerProvider(BRIMProvider):
                     if tx_type in [TransactionType.BUY, TransactionType.SELL]:
                         quantity = _extract_quantity_from_description(description)
                         if quantity == 0:
-                            warnings.append(f"Row {row_num}: could not extract quantity from '{description}'")
+                            warnings.append(
+                                f"Row {row_num}: could not extract quantity from '{description}'"
+                            )
 
                     # Adjust signs
                     if tx_type == TransactionType.SELL and quantity > 0:
@@ -414,7 +418,7 @@ class DegiroBrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=description,
                             tags=["import", "degiro"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -435,16 +439,16 @@ class DegiroBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "DEGIRO file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
-            asset_count=len(extracted_assets_typed)
-            )
+            asset_count=len(extracted_assets_typed),
+        )
 
         return transactions, warnings, extracted_assets_typed
 

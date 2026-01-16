@@ -25,6 +25,7 @@ This plugin parses CSV exports from Interactive Brokers.
 - IBCommission: Broker commission
 - IBCommissionCurrency: Commission currency
 """
+
 from __future__ import annotations
 
 import csv
@@ -60,7 +61,7 @@ COL_COMMISSION_CURRENCY = "IBCommissionCurrency"
 
 def _parse_ibkr_date(value: str) -> Optional[date_type]:
     """Parse IBKR date format (YYYYMMDD)."""
-    value = value.strip().replace('"', '')
+    value = value.strip().replace('"', "")
     if not value:
         return None
     try:
@@ -71,7 +72,7 @@ def _parse_ibkr_date(value: str) -> Optional[date_type]:
 
 def _parse_ibkr_number(value: str) -> Optional[Decimal]:
     """Parse IBKR number (quoted, US format)."""
-    value = value.strip().replace('"', '')
+    value = value.strip().replace('"', "")
     if not value:
         return None
     try:
@@ -83,6 +84,7 @@ def _parse_ibkr_number(value: str) -> Optional[Decimal]:
 # =============================================================================
 # PLUGIN IMPLEMENTATION
 # =============================================================================
+
 
 @register_provider(BRIMProviderRegistry)
 class IBKRBrokerProvider(BRIMProvider):
@@ -125,7 +127,7 @@ class IBKRBrokerProvider(BRIMProvider):
 
         try:
             content = self._read_file_head(file_path, num_lines=3)
-            first_line = content.split('\n')[0].lower() if content else ""
+            first_line = content.split("\n")[0].lower() if content else ""
 
             # IBKR specific: quoted headers
             required = ['"buy/sell"', '"tradedate"', '"isin"', '"ibcommission"']
@@ -135,10 +137,8 @@ class IBKRBrokerProvider(BRIMProvider):
             return False
 
     def parse(
-        self,
-        file_path: Path,
-        broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        self, file_path: Path, broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse IBKR CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -154,7 +154,7 @@ class IBKRBrokerProvider(BRIMProvider):
                 for row in reader:
                     row_num += 1
 
-                    direction = row.get(COL_DIRECTION, "").strip().upper().replace('"', '')
+                    direction = row.get(COL_DIRECTION, "").strip().upper().replace('"', "")
                     if not direction:
                         continue
 
@@ -174,7 +174,7 @@ class IBKRBrokerProvider(BRIMProvider):
                         continue
 
                     # Get ISIN
-                    isin = row.get(COL_ISIN, "").strip().replace('"', '')
+                    isin = row.get(COL_ISIN, "").strip().replace('"', "")
 
                     # Handle FX trades (no ISIN, negative large quantity)
                     quantity = _parse_ibkr_number(row.get(COL_QUANTITY, ""))
@@ -197,13 +197,13 @@ class IBKRBrokerProvider(BRIMProvider):
                             "extracted_symbol": None,
                             "extracted_isin": isin,
                             "extracted_name": None,
-                            }
+                        }
 
                         next_fake_id -= 1
 
                     # Parse amount
                     trade_money = _parse_ibkr_number(row.get(COL_TRADE_MONEY, ""))
-                    currency = row.get(COL_CURRENCY, "USD").strip().upper().replace('"', '')
+                    currency = row.get(COL_CURRENCY, "USD").strip().upper().replace('"', "")
                     if not currency:
                         currency = "USD"
 
@@ -221,10 +221,12 @@ class IBKRBrokerProvider(BRIMProvider):
                             type=tx_type,
                             date=tx_date,
                             quantity=quantity,
-                            cash=Currency(code=currency, amount=trade_money) if trade_money else None,
+                            cash=(
+                                Currency(code=currency, amount=trade_money) if trade_money else None
+                            ),
                             description=f"IBKR {direction}: {isin}",
                             tags=["import", "ibkr"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -234,7 +236,12 @@ class IBKRBrokerProvider(BRIMProvider):
                     # Handle commission as separate FEE transaction
                     commission = _parse_ibkr_number(row.get(COL_COMMISSION, ""))
                     if commission and commission != 0:
-                        comm_currency = row.get(COL_COMMISSION_CURRENCY, currency).strip().upper().replace('"', '')
+                        comm_currency = (
+                            row.get(COL_COMMISSION_CURRENCY, currency)
+                            .strip()
+                            .upper()
+                            .replace('"', "")
+                        )
                         if not comm_currency:
                             comm_currency = currency
 
@@ -248,7 +255,7 @@ class IBKRBrokerProvider(BRIMProvider):
                                 cash=Currency(code=comm_currency, amount=commission),
                                 description=f"IBKR commission: {isin}",
                                 tags=["import", "ibkr", "commission"],
-                                )
+                            )
                             transactions.append(fee_tx)
                         except Exception as e:
                             warnings.append(f"Row {row_num}: error creating fee transaction: {e}")
@@ -267,16 +274,16 @@ class IBKRBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "IBKR file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
-            asset_count=len(extracted_assets_typed)
-            )
+            asset_count=len(extracted_assets_typed),
+        )
 
         return transactions, warnings, extracted_assets_typed
 

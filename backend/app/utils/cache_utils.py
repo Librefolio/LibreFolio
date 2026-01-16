@@ -34,12 +34,7 @@ def get_ttl_cache(name: str, maxsize: int = 1000, ttl: int = 3600) -> TTLCache:
         value = cache.get('key', default_value)
     """
     if name not in _cache_registry:
-        logger.info(
-            "Creating new TTL cache",
-            cache_name=name,
-            maxsize=maxsize,
-            ttl_seconds=ttl
-            )
+        logger.info("Creating new TTL cache", cache_name=name, maxsize=maxsize, ttl_seconds=ttl)
         _cache_registry[name] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     return _cache_registry[name]
@@ -90,12 +85,7 @@ def get_cache_stats(name: str) -> dict[str, Any] | None:
         return None
 
     cache = _cache_registry[name]
-    return {
-        "name": name,
-        "current_size": len(cache),
-        "maxsize": cache.maxsize,
-        "ttl": cache.ttl
-        }
+    return {"name": name, "current_size": len(cache), "maxsize": cache.maxsize, "ttl": cache.ttl}
 
 
 def list_caches() -> list[dict[str, Any]]:
@@ -105,7 +95,4 @@ def list_caches() -> list[dict[str, Any]]:
     Returns:
         List of cache statistics
     """
-    return [
-        get_cache_stats(name)
-        for name in _cache_registry.keys()
-        ]
+    return [get_cache_stats(name) for name in _cache_registry.keys()]

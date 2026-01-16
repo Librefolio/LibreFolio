@@ -3,6 +3,7 @@ Settings service layer for LibreFolio.
 
 Handles user settings and global settings operations.
 """
+
 from typing import Optional
 
 import structlog
@@ -15,7 +16,7 @@ from backend.app.schemas.settings import (
     GlobalSettingRead,
     UserSettingsRead,
     UserSettingsUpdate,
-    )
+)
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -25,25 +26,19 @@ logger = structlog.get_logger(__name__)
 # USER SETTINGS
 # ============================================================================
 
+
 async def get_user_settings(user_id: int, session: AsyncSession) -> Optional[UserSettingsRead]:
     """Get settings for a user. Returns None if not found."""
-    result = await session.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-        )
+    result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     settings = result.scalar_one_or_none()
     if settings:
         return UserSettingsRead(
-            language=settings.language,
-            base_currency=settings.base_currency,
-            theme=settings.theme
-            )
+            language=settings.language, base_currency=settings.base_currency, theme=settings.theme
+        )
     return None
 
 
-async def get_or_create_user_settings(
-    user_id: int,
-    session: AsyncSession
-    ) -> UserSettingsRead:
+async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> UserSettingsRead:
     """Get user settings, creating with defaults if not exists."""
     settings = await get_user_settings(user_id, session)
     if settings:
@@ -56,8 +51,8 @@ async def get_or_create_user_settings(
         base_currency="EUR",
         theme="light",
         created_at=utcnow(),
-        updated_at=utcnow()
-        )
+        updated_at=utcnow(),
+    )
     session.add(new_settings)
     await session.commit()
     await session.refresh(new_settings)
@@ -67,20 +62,16 @@ async def get_or_create_user_settings(
     return UserSettingsRead(
         language=new_settings.language,
         base_currency=new_settings.base_currency,
-        theme=new_settings.theme
-        )
+        theme=new_settings.theme,
+    )
 
 
 async def update_user_settings(
-    user_id: int,
-    updates: UserSettingsUpdate,
-    session: AsyncSession
-    ) -> UserSettingsRead:
+    user_id: int, updates: UserSettingsUpdate, session: AsyncSession
+) -> UserSettingsRead:
     """Update user settings. Creates if not exists."""
     # Get existing settings
-    result = await session.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-        )
+    result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     settings = result.scalar_one_or_none()
 
     if not settings:
@@ -91,8 +82,8 @@ async def update_user_settings(
             base_currency=updates.base_currency or "EUR",
             theme=updates.theme or "light",
             created_at=utcnow(),
-            updated_at=utcnow()
-            )
+            updated_at=utcnow(),
+        )
         session.add(settings)
     else:
         # Update existing
@@ -110,21 +101,18 @@ async def update_user_settings(
     logger.info("Updated user settings", user_id=user_id)
 
     return UserSettingsRead(
-        language=settings.language,
-        base_currency=settings.base_currency,
-        theme=settings.theme
-        )
+        language=settings.language, base_currency=settings.base_currency, theme=settings.theme
+    )
 
 
 # ============================================================================
 # GLOBAL SETTINGS
 # ============================================================================
 
+
 async def get_global_setting(key: str, session: AsyncSession) -> Optional[GlobalSettingRead]:
     """Get a single global setting by key."""
-    result = await session.execute(
-        select(GlobalSetting).where(GlobalSetting.key == key)
-        )
+    result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
     setting = result.scalar_one_or_none()
     if setting:
         return GlobalSettingRead(
@@ -133,8 +121,8 @@ async def get_global_setting(key: str, session: AsyncSession) -> Optional[Global
             value_type=setting.value_type,
             description=setting.description,
             updated_at=setting.updated_at,
-            updated_by=setting.updated_by_user_id
-            )
+            updated_by=setting.updated_by_user_id,
+        )
     return None
 
 
@@ -149,22 +137,17 @@ async def get_all_global_settings(session: AsyncSession) -> list[GlobalSettingRe
             value_type=s.value_type,
             description=s.description,
             updated_at=s.updated_at,
-            updated_by=s.updated_by_user_id
-            )
+            updated_by=s.updated_by_user_id,
+        )
         for s in settings
-        ]
+    ]
 
 
 async def update_global_setting(
-    key: str,
-    value: str,
-    user_id: int,
-    session: AsyncSession
-    ) -> Optional[GlobalSettingRead]:
+    key: str, value: str, user_id: int, session: AsyncSession
+) -> Optional[GlobalSettingRead]:
     """Update a global setting. Returns None if key doesn't exist."""
-    result = await session.execute(
-        select(GlobalSetting).where(GlobalSetting.key == key)
-        )
+    result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
     setting = result.scalar_one_or_none()
 
     if not setting:
@@ -185,8 +168,8 @@ async def update_global_setting(
         value_type=setting.value_type,
         description=setting.description,
         updated_at=setting.updated_at,
-        updated_by=setting.updated_by_user_id
-        )
+        updated_by=setting.updated_by_user_id,
+    )
 
 
 async def initialize_global_settings(session: AsyncSession) -> int:
@@ -200,9 +183,7 @@ async def initialize_global_settings(session: AsyncSession) -> int:
 
     for key, config in GLOBAL_SETTINGS_DEFAULTS.items():
         # Check if exists
-        result = await session.execute(
-            select(GlobalSetting).where(GlobalSetting.key == key)
-            )
+        result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
         if result.scalar_one_or_none() is None:
             # Create
             setting = GlobalSetting(
@@ -210,8 +191,8 @@ async def initialize_global_settings(session: AsyncSession) -> int:
                 value=config["value"],
                 value_type=config["type"],
                 description=config["description"],
-                updated_at=utcnow()
-                )
+                updated_at=utcnow(),
+            )
             session.add(setting)
             created += 1
 

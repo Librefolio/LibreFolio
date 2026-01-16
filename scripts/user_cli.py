@@ -23,15 +23,15 @@ Or directly:
 Use --test-db to operate on the test database:
     pipenv run python user_cli.py --test-db list-users
 """
-import os
-import sys
 import argparse
 import asyncio
+import sys
 from pathlib import Path
+
 import argcomplete
 
-# Add project root to path (file is now in root)
-PROJECT_ROOT = Path(__file__).parent
+# Add project root to path (file is in scripts/)
+PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,7 +63,7 @@ async def cmd_create_superuser(username: str, email: str, password: str):
     async with AsyncSession(engine) as session:
         user, error = await user_service.create_user(
             session, username, email, password, is_superuser=True
-        )
+            )
 
         if user:
             print(f"✅ Superuser '{username}' created with ID {user.id}")
@@ -160,14 +160,14 @@ Examples:
   python user_cli.py --test-db list-users
   python user_cli.py --test-db promote john
         """
-    )
+        )
 
     # Global flag for test database
     parser.add_argument(
         "--test-db",
         action="store_true",
         help="Operate on test database instead of production"
-    )
+        )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
@@ -211,8 +211,13 @@ Examples:
         parser.print_help()
         return
 
+    _dispatch_user_command(args)
+
+
+def _dispatch_user_command(args):
+    """Dispatch to appropriate user command."""
     # Set test mode environment variable if --test-db flag is used
-    if args.test_db:
+    if getattr(args, 'test_db', False):
         from backend.app.config import set_test_mode
         set_test_mode(True)
         print("ℹ️  Operating on TEST database")
@@ -235,6 +240,94 @@ Examples:
         asyncio.run(cmd_init_settings())
 
 
+def register_subparser(parent_subparsers):
+    """
+    Register user commands as a subparser of dev.py.
+
+    This allows dev.py to import and integrate user_cli's full parser.
+    """
+    user_parser = parent_subparsers.add_parser(
+        "user",
+        help="👤 User management (create, list, reset, activate, promote...)",
+        description="User Management CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  ./dev.py user list                           List all users
+  ./dev.py user create admin admin@ex.com pw   Create user
+  ./dev.py user reset admin newpassword        Reset password
+  ./dev.py user promote admin                  Make admin
+  ./dev.py user --test-db list                 Use test database
+"""
+        )
+
+    user_parser.add_argument(
+        "--test-db",
+        action="store_true",
+        help="Use test database instead of production"
+        )
+
+    user_subparsers = user_parser.add_subparsers(
+        dest="command",
+        title="User commands",
+        metavar=""
+        )
+
+    # create-superuser
+    p = user_subparsers.add_parser("create", help="Create new user")
+    p.add_argument("username", help="Username")
+    p.add_argument("email", help="Email address")
+    p.add_argument("password", help="Password")
+
+    # list-users
+    user_subparsers.add_parser("list", help="List all users")
+
+    # reset-password
+    p = user_subparsers.add_parser("reset", help="Reset user password")
+    p.add_argument("username", help="Username")
+    p.add_argument("new_password", help="New password")
+
+    # deactivate
+    p = user_subparsers.add_parser("deactivate", help="Deactivate user")
+    p.add_argument("username", help="Username")
+
+    # activate
+    p = user_subparsers.add_parser("activate", help="Activate user")
+    p.add_argument("username", help="Username")
+
+    # promote
+    p = user_subparsers.add_parser("promote", help="Promote user to admin")
+    p.add_argument("username", help="Username")
+
+    # demote
+    p = user_subparsers.add_parser("demote", help="Demote from admin")
+    p.add_argument("username", help="Username")
+
+    # init-settings
+    user_subparsers.add_parser("init-settings", help="Initialize global settings")
+
+    user_parser.set_defaults(func=_dispatch_user_from_devpy)
+
+    return user_parser
+
+
+def _dispatch_user_from_devpy(args):
+    """Handle user commands when called from dev.py."""
+    if not args.command:
+        print("Error: user command required. Use: ./dev.py user --help")
+        return 1
+
+    # Map dev.py command names to internal names
+    command_map = {
+        "create": "create-superuser",
+        "list": "list-users",
+        "reset": "reset-password",
+        }
+    args.command = command_map.get(args.command, args.command)
+
+    _dispatch_user_command(args)
+    return 0
+
+
 if __name__ == "__main__":
     main()
-

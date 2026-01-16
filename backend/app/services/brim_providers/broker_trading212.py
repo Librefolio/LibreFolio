@@ -30,6 +30,7 @@ This plugin parses CSV exports from Trading212 (UK/EU broker).
 - Currency (Total): Currency code
 - Withholding tax: Tax withheld
 """
+
 from __future__ import annotations
 
 import csv
@@ -78,7 +79,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "withdrawal": TransactionType.WITHDRAWAL,
     "dividend": TransactionType.DIVIDEND,
     "interest on cash": TransactionType.INTEREST,
-    }
+}
 
 # Types to skip
 SKIP_TYPES = [
@@ -86,7 +87,7 @@ SKIP_TYPES = [
     "stock distribution",
     "transfer",
     "currency conversion",
-    ]
+]
 
 
 def _parse_trading212_datetime(value: str) -> Optional[date_type]:
@@ -100,7 +101,7 @@ def _parse_trading212_datetime(value: str) -> Optional[date_type]:
         "%Y-%m-%d %H:%M:%S.%f",
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d",
-        ]
+    ]
 
     for fmt in formats:
         try:
@@ -118,7 +119,7 @@ def _parse_trading212_number(value: str) -> Optional[Decimal]:
         return None
 
     # Remove currency symbols and quotes
-    value = re.sub(r'[€$£""]', '', value).strip()
+    value = re.sub(r'[€$£""]', "", value).strip()
 
     # Handle comma as thousands separator
     value = value.replace(",", "")
@@ -132,6 +133,7 @@ def _parse_trading212_number(value: str) -> Optional[Decimal]:
 # =============================================================================
 # PLUGIN IMPLEMENTATION
 # =============================================================================
+
 
 @register_provider(BRIMProviderRegistry)
 class Trading212BrokerProvider(BRIMProvider):
@@ -174,7 +176,7 @@ class Trading212BrokerProvider(BRIMProvider):
 
         try:
             content = self._read_file_head(file_path, num_lines=3)
-            first_line = content.split('\n')[0].lower() if content else ""
+            first_line = content.split("\n")[0].lower() if content else ""
 
             # Trading212 specific columns
             required = ["action", "time", "isin", "ticker", "no. of shares"]
@@ -184,10 +186,8 @@ class Trading212BrokerProvider(BRIMProvider):
             return False
 
     def parse(
-        self,
-        file_path: Path,
-        broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        self, file_path: Path, broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Trading212 CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -239,11 +239,13 @@ class Trading212BrokerProvider(BRIMProvider):
                         TransactionType.BUY,
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
-                        ]
+                    ]
 
                     if asset_required:
                         if not isin and not ticker:
-                            warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
+                            warnings.append(
+                                f"Row {row_num}: {tx_type.value} requires asset, skipping"
+                            )
                             continue
 
                         asset_key = isin if isin else ticker
@@ -258,7 +260,7 @@ class Trading212BrokerProvider(BRIMProvider):
                                 "extracted_symbol": ticker if ticker else None,
                                 "extracted_isin": isin if isin else None,
                                 "extracted_name": name if name else None,
-                                }
+                            }
 
                             next_fake_id -= 1
 
@@ -290,7 +292,7 @@ class Trading212BrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=f"{action}: {name}" if name else action,
                             tags=["import", "trading212"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -316,9 +318,11 @@ class Trading212BrokerProvider(BRIMProvider):
                                 date=tx_date,
                                 quantity=Decimal("0"),
                                 cash=Currency(code=tax_currency, amount=tax_amount),
-                                description=f"Withholding tax: {name}" if name else "Withholding tax",
+                                description=(
+                                    f"Withholding tax: {name}" if name else "Withholding tax"
+                                ),
                                 tags=["import", "trading212", "tax"],
-                                )
+                            )
                             transactions.append(tax_tx)
                         except Exception as e:
                             warnings.append(f"Row {row_num}: error creating tax transaction: {e}")
@@ -337,16 +341,16 @@ class Trading212BrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "Trading212 file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
-            asset_count=len(extracted_assets_typed)
-            )
+            asset_count=len(extracted_assets_typed),
+        )
 
         return transactions, warnings, extracted_assets_typed
 
