@@ -93,6 +93,7 @@
     "transactions": "Transacciones",
     "fx": "Tipos de Cambio",
     "import": "Importar",
+    "files": "Archivos",
     "settings": "Configuración",
     "profile": "Perfil",
     "documentation": "Documentación"
@@ -296,5 +297,26 @@
       "max_file_upload_mb": "MB"
     },
     "selectCurrency": "Seleccionar moneda..."
+  },
+  "uploads": {
+    "dropOrClick": "Arrastra un archivo aquí o haz clic para explorar",
+    "maxSize": "Tamaño máx: {size}MB",
+    "imageSize": "Tamaño de imagen",
+    "upload": "Subir",
+    "uploading": "Subiendo...",
+    "uploadSuccess": "Archivo subido con éxito",
+    "uploadError": "Error al subir",
+    "invalidType": "Tipo de archivo inválido",
+    "fileTooLarge": "Archivo demasiado grande",
+    "title": "Archivos",
+    "staticResources": "Recursos Estáticos",
+    "brokerReports": "Informes de Broker",
+    "noFiles": "Ningún archivo subido",
+    "fileName": "Nombre del Archivo",
+    "fileSize": "Tamaño",
+    "uploadDate": "Subido",
+    "actions": "Acciones",
+    "download": "Descargar",
+    "deleteConfirm": "¿Estás seguro de que quieres eliminar este archivo?"
   }
 }

@@ -3,6 +3,7 @@ JustETF provider for asset pricing.
 
 Uses the justetf-scraping library to fetch ETF data from justetf.com.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,7 +22,7 @@ from backend.app.schemas.assets import (
     FAClassificationParams,
     FAGeographicArea,
     FASectorArea,
-    )
+)
 from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 from backend.app.utils.cache_utils import get_ttl_cache
@@ -44,10 +45,10 @@ except ImportError:
 logger = get_logger(__name__)
 
 # Global TTL caches (auto-expire, no manual cleanup needed)
-_overview_cache = get_ttl_cache('justetf_overview', maxsize=500, ttl=3600)  # 1 hour
-_chart_cache = get_ttl_cache('justetf_chart', maxsize=500, ttl=3600)  # 1 hour
-_gettex_cache = get_ttl_cache('justetf_gettex', maxsize=200, ttl=30)  # 30 seconds
-_etf_list_cache = get_ttl_cache('justetf_etf_list', maxsize=100, ttl=3600)  # 1 hour
+_overview_cache = get_ttl_cache("justetf_overview", maxsize=500, ttl=3600)  # 1 hour
+_chart_cache = get_ttl_cache("justetf_chart", maxsize=500, ttl=3600)  # 1 hour
+_gettex_cache = get_ttl_cache("justetf_gettex", maxsize=200, ttl=30)  # 30 seconds
+_etf_list_cache = get_ttl_cache("justetf_etf_list", maxsize=100, ttl=3600)  # 1 hour
 
 
 def _country_name_to_iso3(country_name: str) -> Optional[str]:
@@ -62,6 +63,7 @@ def _country_name_to_iso3(country_name: str) -> Optional[str]:
 
     try:
         from backend.app.utils.geo_utils import normalize_country_to_iso3
+
         return normalize_country_to_iso3(country_name)
     except (ValueError, ImportError) as e:
         logger.debug(f"Could not normalize country '{country_name}': {e}")
@@ -89,7 +91,7 @@ class JustETFProvider(AssetSourceProvider):
             raise AssetSourceError(
                 "justetf-scraping library not available - install with: pipenv install justetf-scraping",
                 "NOT_AVAILABLE",
-                )
+            )
 
     @property
     def provider_code(self) -> str:
@@ -108,19 +110,19 @@ class JustETFProvider(AssetSourceProvider):
         """Test cases with identifier and provider_params."""
         return [
             {
-                'identifier': 'IE00B4L5Y983',  # iShares Core MSCI World UCITS ETF USD (Acc)
-                'identifier_type': IdentifierType.ISIN,
-                'provider_params': None,
-                'expected_symbol': 'IE00B4L5Y983'  # JustETF uses ISIN as identifier
-                }
-            ]
+                "identifier": "IE00B4L5Y983",  # iShares Core MSCI World UCITS ETF USD (Acc)
+                "identifier_type": IdentifierType.ISIN,
+                "provider_params": None,
+                "expected_symbol": "IE00B4L5Y983",  # JustETF uses ISIN as identifier
+            }
+        ]
 
     async def get_current_value(
         self,
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-        ) -> FACurrentValue:
+    ) -> FACurrentValue:
         """
         Fetch current price from JustETF using gettex real-time WebSocket data.
         """
@@ -129,7 +131,7 @@ class JustETFProvider(AssetSourceProvider):
             raise AssetSourceError(
                 f"JustETF provider only supports ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
-                )
+            )
 
         try:
             # Check cache first
@@ -143,21 +145,21 @@ class JustETFProvider(AssetSourceProvider):
                     raise AssetSourceError(
                         f"No gettex quote available for {identifier}",
                         "NOT_FOUND",
-                        )
+                    )
                 _gettex_cache[cache_key] = quote
             else:
                 quote = cached
 
             # Use 'last' price as the current value
-            price = quote.get('last') or quote.get('mid')
+            price = quote.get("last") or quote.get("mid")
             if price is None:
                 raise AssetSourceError(
                     f"No price data in gettex quote for {identifier}",
                     "NOT_FOUND",
-                    )
+                )
 
-            currency = quote.get('currency', 'EUR')
-            timestamp = quote.get('timestamp')
+            currency = quote.get("currency", "EUR")
+            timestamp = quote.get("timestamp")
 
             # Convert timestamp to date
             if isinstance(timestamp, datetime):
@@ -172,7 +174,7 @@ class JustETFProvider(AssetSourceProvider):
                 currency=currency,
                 as_of_date=as_of_date,
                 source=self.provider_name,
-                )
+            )
         except AssetSourceError:
             raise
         except Exception as e:
@@ -180,7 +182,7 @@ class JustETFProvider(AssetSourceProvider):
                 f"Failed to fetch current value for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
                 {"identifier": identifier, "error": str(e)},
-                ) from e
+            ) from e
 
     @property
     def supports_history(self) -> bool:
@@ -193,7 +195,7 @@ class JustETFProvider(AssetSourceProvider):
         provider_params: Dict | None,
         start_date: date,
         end_date: date,
-        ) -> FAHistoricalData:
+    ) -> FAHistoricalData:
         """
         Fetch historical data from JustETF using load_chart.
         Adds current value only if end_date is today.
@@ -203,7 +205,7 @@ class JustETFProvider(AssetSourceProvider):
             raise AssetSourceError(
                 f"JustETF provider only supports ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
-                )
+            )
 
         try:
             currency: str = "EUR"
@@ -222,23 +224,25 @@ class JustETFProvider(AssetSourceProvider):
             df = df.reset_index()
 
             # Filter by date range
-            df['date_only'] = pd.to_datetime(df['date']).dt.date
-            df = df[(df['date_only'] >= start_date) & (df['date_only'] <= end_date)]
+            df["date_only"] = pd.to_datetime(df["date"]).dt.date
+            df = df[(df["date_only"] >= start_date) & (df["date_only"] <= end_date)]
 
             prices: List[FAPricePoint] = []
             for row in df.itertuples():
                 # date_only is added above, always available
                 row_date = row.date_only
-                prices.append(FAPricePoint(
-                    date=row_date,
-                    open=None,
-                    high=None,
-                    low=None,
-                    close=Decimal(str(row.quote)),
-                    volume=None,
-                    currency=currency,
-                    backward_fill_info=None,
-                    ))
+                prices.append(
+                    FAPricePoint(
+                        date=row_date,
+                        open=None,
+                        high=None,
+                        low=None,
+                        close=Decimal(str(row.quote)),
+                        volume=None,
+                        currency=currency,
+                        backward_fill_info=None,
+                    )
+                )
 
             return FAHistoricalData(prices=prices, currency=currency, source=self.provider_name)
         except Exception as e:
@@ -246,7 +250,7 @@ class JustETFProvider(AssetSourceProvider):
                 f"Failed to fetch history for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
                 {"identifier": identifier, "error": str(e)},
-                ) from e
+            ) from e
 
     @property
     def test_search_query(self) -> str | None:
@@ -258,9 +262,11 @@ class JustETFProvider(AssetSourceProvider):
         try:
             df_all = await asyncio.to_thread(JustETFProvider.etf_list)
             # Define only the normal columns (exclude index 'isin' from here)
-            cols_only = ['name', 'ticker', 'wkn']
+            cols_only = ["name", "ticker", "wkn"]
             # Search in columns (Vectorized)
-            mask_cols = df_all[cols_only].astype(str).agg(' '.join, axis=1).str.contains(query, case=False)
+            mask_cols = (
+                df_all[cols_only].astype(str).agg(" ".join, axis=1).str.contains(query, case=False)
+            )
             # Search in Index (Directly, without reset_index)
             mask_index = df_all.index.to_series().astype(str).str.contains(query, case=False)
             # Combine results with logical OR
@@ -271,18 +277,18 @@ class JustETFProvider(AssetSourceProvider):
                 {
                     "identifier": idx,
                     "identifier_type": IdentifierType.ISIN,  # JustETF always uses ISIN
-                    "display_name": row['name'],
-                    "currency": row['currency'],  # Currency from DataFrame
+                    "display_name": row["name"],
+                    "currency": row["currency"],  # Currency from DataFrame
                     "type": "ETF",
-                    }
+                }
                 for idx, row in result.iterrows()
-                ]
+            ]
         except Exception as e:
             raise AssetSourceError(
                 f"Search failed for '{query}' on JustETF: {e}",
                 "SEARCH_ERROR",
                 {"query": query, "error": str(e)},
-                ) from e
+            ) from e
 
     def validate_params(self, params: Dict | None) -> None:
         """JustETF provider does not require any params."""
@@ -293,7 +299,7 @@ class JustETFProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-        ) -> FAAssetPatchItem | None:
+    ) -> FAAssetPatchItem | None:
         """Fetch asset metadata from JustETF using get_etf_overview."""
         self._check_availability()
         if identifier_type != IdentifierType.ISIN:
@@ -305,7 +311,9 @@ class JustETFProvider(AssetSourceProvider):
             cached = _overview_cache.get(cache_key)
 
             if cached is None:
-                overview = await asyncio.to_thread(get_etf_overview, identifier, include_gettex=False)
+                overview = await asyncio.to_thread(
+                    get_etf_overview, identifier, include_gettex=False
+                )
                 _overview_cache[cache_key] = overview
             else:
                 overview = cached
@@ -313,14 +321,14 @@ class JustETFProvider(AssetSourceProvider):
             # Build description
             description_parts = []
 
-            if overview.get('description'):
-                description_parts.append(overview['description'])
+            if overview.get("description"):
+                description_parts.append(overview["description"])
 
-            ter = overview.get('ter')
+            ter = overview.get("ter")
             if ter:
                 description_parts.append(f"TER: {ter}%")
 
-            dist_policy = overview.get('distribution_policy')
+            dist_policy = overview.get("distribution_policy")
             if dist_policy:
                 description_parts.append(f"Distribution: {dist_policy}")
 
@@ -330,22 +338,22 @@ class JustETFProvider(AssetSourceProvider):
 
             # Build geographic area from countries
             geographic_area = None
-            countries = overview.get('countries', [])
+            countries = overview.get("countries", [])
             if countries:
                 distribution = {}
-                total = Decimal('0')
+                total = Decimal("0")
                 for country in countries:
-                    country_name = country.get('name')
-                    percentage = country.get('percentage')
+                    country_name = country.get("name")
+                    percentage = country.get("percentage")
                     if country_name and percentage is not None:
                         iso3 = _country_name_to_iso3(country_name)
                         if iso3:  # Skip "Other" and unknown countries
-                            weight = Decimal(str(percentage)) / Decimal('100')
+                            weight = Decimal(str(percentage)) / Decimal("100")
                             distribution[iso3] = weight
                             total += weight
 
                 # Only create geographic_area if we have valid data
-                if distribution and total > Decimal('0'):
+                if distribution and total > Decimal("0"):
                     # Renormalize to sum to 1.0
                     distribution = {k: v / total for k, v in distribution.items()}
                     try:
@@ -355,15 +363,15 @@ class JustETFProvider(AssetSourceProvider):
 
             # Build sector distribution using FASectorArea
             sector_area = None
-            sectors = overview.get('sectors', [])
+            sectors = overview.get("sectors", [])
             if sectors:
                 sector_distribution = {}
-                sector_total = Decimal('0')
+                sector_total = Decimal("0")
                 for sector_item in sectors:
-                    sector_name = sector_item.get('name')
-                    percentage = sector_item.get('percentage')
+                    sector_name = sector_item.get("name")
+                    percentage = sector_item.get("percentage")
                     if sector_name and percentage is not None:
-                        weight = Decimal(str(percentage)) / Decimal('100')
+                        weight = Decimal(str(percentage)) / Decimal("100")
                         # Accumulate if sector appears multiple times
                         if sector_name in sector_distribution:
                             sector_distribution[sector_name] += weight
@@ -371,9 +379,11 @@ class JustETFProvider(AssetSourceProvider):
                             sector_distribution[sector_name] = weight
                         sector_total += weight
 
-                if sector_distribution and sector_total > Decimal('0'):
+                if sector_distribution and sector_total > Decimal("0"):
                     # Renormalize to sum to 1.0
-                    sector_distribution = {k: v / sector_total for k, v in sector_distribution.items()}
+                    sector_distribution = {
+                        k: v / sector_total for k, v in sector_distribution.items()
+                    }
                     try:
                         # FASectorArea will normalize sector names using FinancialSector enum
                         sector_area = FASectorArea(distribution=sector_distribution)
@@ -384,10 +394,10 @@ class JustETFProvider(AssetSourceProvider):
                 short_description=short_description,
                 geographic_area=geographic_area,
                 sector_area=sector_area,
-                )
+            )
 
             # Extract currency from overview
-            fund_currency = overview.get('fund_currency')
+            fund_currency = overview.get("fund_currency")
 
             return FAAssetPatchItem(
                 asset_id=0,  # Placeholder, will be set by caller
@@ -397,7 +407,7 @@ class JustETFProvider(AssetSourceProvider):
                 icon_url=None,
                 classification_params=classification,
                 active=None,
-                )
+            )
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {identifier} from JustETF: {e}")
             return None

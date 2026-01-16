@@ -6,6 +6,7 @@ ECB provides daily rates with EUR as base currency.
 
 API Documentation: https://data.ecb.europa.eu/help/api/overview
 """
+
 from datetime import date
 from decimal import Decimal
 
@@ -51,7 +52,7 @@ class ECBProvider(FXRateProvider):
         return "European Central Bank"
 
     def get_icon(self) -> str | None:
-        """ Returns the icon for the ECB provider """
+        """Returns the icon for the ECB provider"""
         return "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Logo_European_Central_Bank.svg/2484px-Logo_European_Central_Bank.svg.png"  # Default: no icon
 
     @property
@@ -72,7 +73,7 @@ class ECBProvider(FXRateProvider):
             "CAD",  # Canadian Dollar
             "AUD",  # Australian Dollar
             "EUR",  # Euro (base currency)
-            ]
+        ]
 
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -89,8 +90,8 @@ class ECBProvider(FXRateProvider):
         params = {
             "format": "jsondata",
             "detail": "dataonly",
-            "lastNObservations": 1  # We only need structure, not all data
-            }
+            "lastNObservations": 1,  # We only need structure, not all data
+        }
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -136,11 +137,8 @@ class ECBProvider(FXRateProvider):
             raise FXServiceError(f"Invalid ECB response format: {e}") from e
 
     async def fetch_rates(
-        self,
-        date_range: tuple[date, date],
-        currencies: list[str],
-        base_currency: str | None = None
-        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
+    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from ECB API for given date range and currencies.
 
@@ -162,7 +160,7 @@ class ECBProvider(FXRateProvider):
         if base_currency is not None and base_currency != "EUR":
             raise ValueError(
                 f"ECB provider only supports EUR as base currency, got {base_currency}"
-                )
+            )
 
         start_date, end_date = date_range
         results = {}
@@ -178,8 +176,8 @@ class ECBProvider(FXRateProvider):
             params = {
                 "format": "jsondata",
                 "startPeriod": start_date.isoformat(),
-                "endPeriod": end_date.isoformat()
-                }
+                "endPeriod": end_date.isoformat(),
+            }
 
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
@@ -196,7 +194,7 @@ class ECBProvider(FXRateProvider):
                         logger.info(
                             f"No FX rates available for {currency} ({start_date} to {end_date}). "
                             f"This is normal for weekends/holidays when ECB doesn't publish rates."
-                            )
+                        )
                         results[currency] = []
                         continue
 
@@ -219,7 +217,9 @@ class ECBProvider(FXRateProvider):
                             # Get time period dimension to map observation indices to dates
                             # ECB structure: dimensions.observation contains TIME_PERIOD values
                             dimensions = data["structure"]["dimensions"]["observation"]
-                            time_periods = next(d["values"] for d in dimensions if d["id"] == "TIME_PERIOD")
+                            time_periods = next(
+                                d["values"] for d in dimensions if d["id"] == "TIME_PERIOD"
+                            )
 
                             # Iterate through observations
                             # Format: {"0": [1.0850], "1": [1.0860], ...}
@@ -234,7 +234,9 @@ class ECBProvider(FXRateProvider):
                                 ecb_rate = Decimal(str(obs_value[0]))
                                 rate_date = date.fromisoformat(rate_date_str)
 
-                                observations.append((rate_date, self.base_currency, currency, ecb_rate))
+                                observations.append(
+                                    (rate_date, self.base_currency, currency, ecb_rate)
+                                )
 
                     results[currency] = observations
 

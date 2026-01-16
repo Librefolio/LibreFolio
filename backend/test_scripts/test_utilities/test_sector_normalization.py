@@ -3,18 +3,16 @@ Tests for sector normalization utilities.
 
 Tests the FinancialSector enum and normalization functions.
 """
+
 import pytest
 
-from backend.app.utils.sector_fin_utils import (
-    FinancialSector,
-    normalize_sector,
-    validate_sector
-    )
+from backend.app.utils.sector_fin_utils import FinancialSector, normalize_sector, validate_sector
 
 
 # ============================================================
 # FinancialSector Enum Tests
 # ============================================================
+
 
 class TestFinancialSectorEnum:
     """Tests for FinancialSector enum."""
@@ -28,10 +26,19 @@ class TestFinancialSectorEnum:
     def test_expected_sectors_exist(self):
         """All expected GICS-inspired sectors should exist."""
         expected = [
-            "Industrials", "Technology", "Financials", "Consumer Discretionary",
-            "Health Care", "Real Estate", "Basic Materials", "Energy",
-            "Consumer Staples", "Telecommunication", "Utilities", "Other"
-            ]
+            "Industrials",
+            "Technology",
+            "Financials",
+            "Consumer Discretionary",
+            "Health Care",
+            "Real Estate",
+            "Basic Materials",
+            "Energy",
+            "Consumer Staples",
+            "Telecommunication",
+            "Utilities",
+            "Other",
+        ]
         actual = [s.value for s in FinancialSector]
         for sector in expected:
             assert sector in actual, f"Missing sector: {sector}"
@@ -53,54 +60,64 @@ class TestFinancialSectorEnum:
 # from_string Tests
 # ============================================================
 
+
 class TestFinancialSectorFromString:
     """Tests for FinancialSector.from_string() method."""
 
-    @pytest.mark.parametrize("input_val,expected", [
-        # Exact matches (case-insensitive)
-        ("Technology", FinancialSector.TECHNOLOGY),
-        ("technology", FinancialSector.TECHNOLOGY),
-        ("TECHNOLOGY", FinancialSector.TECHNOLOGY),
-        ("Financials", FinancialSector.FINANCIALS),
-        ("financials", FinancialSector.FINANCIALS),
-        ("Industrials", FinancialSector.INDUSTRIALS),
-        ("Consumer Discretionary", FinancialSector.CONSUMER_DISCRETIONARY),
-        ("consumer discretionary", FinancialSector.CONSUMER_DISCRETIONARY),
-        ("Health Care", FinancialSector.HEALTH_CARE),
-        ("Real Estate", FinancialSector.REAL_ESTATE),
-        ("Basic Materials", FinancialSector.BASIC_MATERIALS),
-        ("Energy", FinancialSector.ENERGY),
-        ("Consumer Staples", FinancialSector.CONSUMER_STAPLES),
-        ("Telecommunication", FinancialSector.TELECOMMUNICATION),
-        ("Utilities", FinancialSector.UTILITIES),
-        ("Other", FinancialSector.OTHER),
-        ])
+    @pytest.mark.parametrize(
+        "input_val,expected",
+        [
+            # Exact matches (case-insensitive)
+            ("Technology", FinancialSector.TECHNOLOGY),
+            ("technology", FinancialSector.TECHNOLOGY),
+            ("TECHNOLOGY", FinancialSector.TECHNOLOGY),
+            ("Financials", FinancialSector.FINANCIALS),
+            ("financials", FinancialSector.FINANCIALS),
+            ("Industrials", FinancialSector.INDUSTRIALS),
+            ("Consumer Discretionary", FinancialSector.CONSUMER_DISCRETIONARY),
+            ("consumer discretionary", FinancialSector.CONSUMER_DISCRETIONARY),
+            ("Health Care", FinancialSector.HEALTH_CARE),
+            ("Real Estate", FinancialSector.REAL_ESTATE),
+            ("Basic Materials", FinancialSector.BASIC_MATERIALS),
+            ("Energy", FinancialSector.ENERGY),
+            ("Consumer Staples", FinancialSector.CONSUMER_STAPLES),
+            ("Telecommunication", FinancialSector.TELECOMMUNICATION),
+            ("Utilities", FinancialSector.UTILITIES),
+            ("Other", FinancialSector.OTHER),
+        ],
+    )
     def test_exact_matches(self, input_val, expected):
         """Exact sector names should be recognized."""
         assert FinancialSector.from_string(input_val) == expected
 
-    @pytest.mark.parametrize("input_val,expected", [
-        # Aliases
-        ("healthcare", FinancialSector.HEALTH_CARE),  # No space
-        ("materials", FinancialSector.BASIC_MATERIALS),  # Short form
-        ("telecom", FinancialSector.TELECOMMUNICATION),  # Short form
-        ])
+    @pytest.mark.parametrize(
+        "input_val,expected",
+        [
+            # Aliases
+            ("healthcare", FinancialSector.HEALTH_CARE),  # No space
+            ("materials", FinancialSector.BASIC_MATERIALS),  # Short form
+            ("telecom", FinancialSector.TELECOMMUNICATION),  # Short form
+        ],
+    )
     def test_aliases(self, input_val, expected):
         """Aliases should be recognized."""
         assert FinancialSector.from_string(input_val) == expected
 
-    @pytest.mark.parametrize("input_val", [
-        # Unknown sectors should map to OTHER
-        "Unknown",
-        "Software",
-        "Hardware",
-        "Banking",
-        "Insurance",
-        "Aerospace",
-        "Gaming",
-        "Automotive",
-        "SomeRandomSector",
-        ])
+    @pytest.mark.parametrize(
+        "input_val",
+        [
+            # Unknown sectors should map to OTHER
+            "Unknown",
+            "Software",
+            "Hardware",
+            "Banking",
+            "Insurance",
+            "Aerospace",
+            "Gaming",
+            "Automotive",
+            "SomeRandomSector",
+        ],
+    )
     def test_unknown_sectors_map_to_other(self, input_val):
         """Unknown sector names should map to OTHER."""
         result = FinancialSector.from_string(input_val)
@@ -123,6 +140,7 @@ class TestFinancialSectorFromString:
 # ============================================================
 # normalize_sector Function Tests
 # ============================================================
+
 
 class TestNormalizeSector:
     """Tests for normalize_sector() function."""
@@ -155,6 +173,7 @@ class TestNormalizeSector:
 # validate_sector Function Tests
 # ============================================================
 
+
 class TestValidateSector:
     """Tests for validate_sector() function."""
 
@@ -179,6 +198,7 @@ class TestValidateSector:
 # Edge Cases
 # ============================================================
 
+
 class TestEdgeCases:
     """Edge case tests."""
 
@@ -192,10 +212,7 @@ class TestEdgeCases:
 
     def test_sector_in_dict_key(self):
         """Sectors should work as dict keys."""
-        data = {
-            FinancialSector.TECHNOLOGY: 0.5,
-            FinancialSector.FINANCIALS: 0.5
-            }
+        data = {FinancialSector.TECHNOLOGY: 0.5, FinancialSector.FINANCIALS: 0.5}
         assert data[FinancialSector.TECHNOLOGY] == 0.5
         # Also works with string lookup since it's a str enum
         assert data["Technology"] == 0.5

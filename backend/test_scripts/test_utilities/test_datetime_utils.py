@@ -2,6 +2,7 @@
 Test datetime utilities.
 All test is independent of the others, so help use pytest features.
 """
+
 from datetime import datetime, timezone
 
 import pytest
@@ -12,6 +13,7 @@ from backend.app.utils.datetime_utils import utcnow
 # ============================================================================
 # TESTS: utcnow
 # ============================================================================
+
 
 def test_utcnow_returns_datetime():
     """Test that utcnow() returns a datetime object."""

@@ -24,6 +24,7 @@ It uses header mapping to identify columns regardless of language or naming conv
     plugin = BRIMProviderRegistry.get_provider_instance('broker_generic_csv')
     transactions, warnings = plugin.parse(file_path, broker_id=1)
 """
+
 from __future__ import annotations
 
 import csv
@@ -51,34 +52,76 @@ logger = structlog.get_logger(__name__)
 # Each list contains possible header variations (lowercase)
 HEADER_MAPPINGS: Dict[str, List[str]] = {
     "date": [
-        "date", "data", "settlement_date", "value_date", "trade_date",
-        "fecha", "datum", "transaction_date", "exec_date"
-        ],
+        "date",
+        "data",
+        "settlement_date",
+        "value_date",
+        "trade_date",
+        "fecha",
+        "datum",
+        "transaction_date",
+        "exec_date",
+    ],
     "type": [
-        "type", "tipo", "transaction_type", "operation", "operazione",
-        "action", "azione", "trans_type", "op_type"
-        ],
+        "type",
+        "tipo",
+        "transaction_type",
+        "operation",
+        "operazione",
+        "action",
+        "azione",
+        "trans_type",
+        "op_type",
+    ],
     "quantity": [
-        "quantity", "quantità", "qty", "shares", "azioni", "units",
-        "unità", "amount_shares", "num_shares"
-        ],
+        "quantity",
+        "quantità",
+        "qty",
+        "shares",
+        "azioni",
+        "units",
+        "unità",
+        "amount_shares",
+        "num_shares",
+    ],
     "amount": [
-        "amount", "importo", "value", "cash", "cash_amount", "total",
-        "totale", "net_amount", "gross_amount", "price"
-        ],
-    "currency": [
-        "currency", "valuta", "ccy", "curr", "currency_code",
-        "divisa", "währung"
-        ],
+        "amount",
+        "importo",
+        "value",
+        "cash",
+        "cash_amount",
+        "total",
+        "totale",
+        "net_amount",
+        "gross_amount",
+        "price",
+    ],
+    "currency": ["currency", "valuta", "ccy", "curr", "currency_code", "divisa", "währung"],
     "description": [
-        "description", "descrizione", "notes", "memo", "note",
-        "details", "dettagli", "comment", "commento"
-        ],
+        "description",
+        "descrizione",
+        "notes",
+        "memo",
+        "note",
+        "details",
+        "dettagli",
+        "comment",
+        "commento",
+    ],
     "asset": [
-        "asset", "symbol", "ticker", "isin", "asset_id", "instrument",
-        "strumento", "security", "titolo", "name", "nome"
-        ],
-    }
+        "asset",
+        "symbol",
+        "ticker",
+        "isin",
+        "asset_id",
+        "instrument",
+        "strumento",
+        "security",
+        "titolo",
+        "name",
+        "nome",
+    ],
+}
 
 # =============================================================================
 # TYPE MAPPINGS
@@ -93,7 +136,6 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "compra": TransactionType.BUY,
     "bought": TransactionType.BUY,
     "b": TransactionType.BUY,
-
     # SELL
     "sell": TransactionType.SELL,
     "vendita": TransactionType.SELL,
@@ -101,59 +143,51 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "vendi": TransactionType.SELL,
     "sold": TransactionType.SELL,
     "s": TransactionType.SELL,
-
     # DIVIDEND
     "dividend": TransactionType.DIVIDEND,
     "dividendo": TransactionType.DIVIDEND,
     "div": TransactionType.DIVIDEND,
     "dividends": TransactionType.DIVIDEND,
-
     # INTEREST
     "interest": TransactionType.INTEREST,
     "interesse": TransactionType.INTEREST,
     "interessi": TransactionType.INTEREST,
     "int": TransactionType.INTEREST,
-
     # DEPOSIT
     "deposit": TransactionType.DEPOSIT,
     "deposito": TransactionType.DEPOSIT,
     "versamento": TransactionType.DEPOSIT,
     "dep": TransactionType.DEPOSIT,
     "cash_in": TransactionType.DEPOSIT,
-
     # WITHDRAWAL
     "withdrawal": TransactionType.WITHDRAWAL,
     "prelievo": TransactionType.WITHDRAWAL,
     "ritiro": TransactionType.WITHDRAWAL,
     "withdraw": TransactionType.WITHDRAWAL,
     "cash_out": TransactionType.WITHDRAWAL,
-
     # FEE
     "fee": TransactionType.FEE,
     "commissione": TransactionType.FEE,
     "fees": TransactionType.FEE,
     "commissioni": TransactionType.FEE,
     "charge": TransactionType.FEE,
-
     # TAX
     "tax": TransactionType.TAX,
     "tassa": TransactionType.TAX,
     "imposta": TransactionType.TAX,
     "taxes": TransactionType.TAX,
     "withholding": TransactionType.TAX,
-
     # TRANSFER (requires link_uuid - rarely from CSV)
     "transfer": TransactionType.TRANSFER,
     "trasferimento": TransactionType.TRANSFER,
     "transfer_in": TransactionType.TRANSFER,
     "transfer_out": TransactionType.TRANSFER,
-
     # ADJUSTMENT
     "adjustment": TransactionType.ADJUSTMENT,
     "rettifica": TransactionType.ADJUSTMENT,
     "aggiustamento": TransactionType.ADJUSTMENT,
     "correction": TransactionType.ADJUSTMENT,
-    }
+}
 
 # =============================================================================
 # DATE PARSING
@@ -170,7 +204,7 @@ DATE_FORMATS = [
     "%Y%m%d",  # Compact: 20250103
     "%d %b %Y",  # Text: 03 Jan 2025
     "%d %B %Y",  # Full text: 03 January 2025
-    ]
+]
 
 
 def parse_date(value: str) -> Optional[date]:
@@ -199,6 +233,7 @@ def parse_date(value: str) -> Optional[date]:
 # =============================================================================
 # NUMBER PARSING
 # =============================================================================
+
 
 def parse_decimal(value: str) -> Optional[Decimal]:
     """
@@ -267,6 +302,7 @@ def parse_decimal(value: str) -> Optional[Decimal]:
 # PLUGIN IMPLEMENTATION
 # =============================================================================
 
+
 @register_provider(BRIMProviderRegistry)
 class GenericCSVBrokerProvider(BRIMProvider):
     """
@@ -323,10 +359,8 @@ class GenericCSVBrokerProvider(BRIMProvider):
             return False
 
     def parse(
-        self,
-        file_path: Path,
-        broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        self, file_path: Path, broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """
         Parse CSV file and return transactions, warnings, and extracted assets.
 
@@ -365,13 +399,13 @@ class GenericCSVBrokerProvider(BRIMProvider):
                 if "date" not in column_map:
                     raise BRIMParseError(
                         "Required column 'date' not found in CSV header",
-                        details={"headers": reader.fieldnames}
-                        )
+                        details={"headers": reader.fieldnames},
+                    )
                 if "type" not in column_map:
                     raise BRIMParseError(
                         "Required column 'type' not found in CSV header",
-                        details={"headers": reader.fieldnames}
-                        )
+                        details={"headers": reader.fieldnames},
+                    )
 
                 # Parse rows
                 for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
@@ -386,9 +420,8 @@ class GenericCSVBrokerProvider(BRIMProvider):
             raise
         except Exception as e:
             raise BRIMParseError(
-                f"Error reading CSV file: {str(e)}",
-                details={"file": file_path.name}
-                )
+                f"Error reading CSV file: {str(e)}", details={"file": file_path.name}
+            )
 
         if not transactions:
             warnings.append("No valid transactions found in file")
@@ -421,12 +454,8 @@ class GenericCSVBrokerProvider(BRIMProvider):
         return column_map
 
     def _parse_row(
-        self,
-        row: Dict[str, str],
-        column_map: Dict[str, str],
-        broker_id: int,
-        row_num: int
-        ) -> Optional[TXCreateItem]:
+        self, row: Dict[str, str], column_map: Dict[str, str], broker_id: int, row_num: int
+    ) -> Optional[TXCreateItem]:
         """
         Parse a single CSV row into a TXCreateItem.
 
@@ -499,7 +528,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
             TransactionType.DIVIDEND,
             TransactionType.TRANSFER,
             TransactionType.ADJUSTMENT,
-            }
+        }
 
         # Assign fake asset ID if asset info is present OR if type requires asset
         asset_id: Optional[int] = None
@@ -530,14 +559,14 @@ class GenericCSVBrokerProvider(BRIMProvider):
             raise ValueError(
                 "TRANSFER type requires paired transactions with link_uuid. "
                 "Please use manual entry or broker-specific plugin."
-                )
+            )
 
         # Handle FX_CONVERSION type - needs link_uuid
         if tx_type == TransactionType.FX_CONVERSION:
             raise ValueError(
                 "FX_CONVERSION type requires paired transactions with link_uuid. "
                 "Please use manual entry or broker-specific plugin."
-                )
+            )
 
         # Build TXCreateItem - validation will pass because:
         # - Asset-required types now always have a fake_id assigned
@@ -551,8 +580,8 @@ class GenericCSVBrokerProvider(BRIMProvider):
             cash=cash,
             link_uuid=None,
             description=description,
-            tags=["import", "csv"]
-            )
+            tags=["import", "csv"],
+        )
 
     def _classify_asset_identifier(self, identifier: str) -> BRIMExtractedAssetInfo:
         """
@@ -569,22 +598,16 @@ class GenericCSVBrokerProvider(BRIMProvider):
         # Check if it looks like an ISIN
         if len(identifier) == 12 and identifier[:2].isalpha() and identifier[2:].isalnum():
             return BRIMExtractedAssetInfo(
-                extracted_symbol=None,
-                extracted_isin=identifier.upper(),
-                extracted_name=None
-                )
+                extracted_symbol=None, extracted_isin=identifier.upper(), extracted_name=None
+            )
 
         # Check if it looks like a ticker symbol (1-6 chars, alphanumeric with dots/dashes)
         if 1 <= len(identifier) <= 6 and identifier.replace(".", "").replace("-", "").isalnum():
             return BRIMExtractedAssetInfo(
-                extracted_symbol=identifier.upper(),
-                extracted_isin=None,
-                extracted_name=None
-                )
+                extracted_symbol=identifier.upper(), extracted_isin=None, extracted_name=None
+            )
 
         # Otherwise treat as name
         return BRIMExtractedAssetInfo(
-            extracted_symbol=None,
-            extracted_isin=None,
-            extracted_name=identifier
-            )
+            extracted_symbol=None, extracted_isin=None, extracted_name=identifier
+        )

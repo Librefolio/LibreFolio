@@ -8,6 +8,7 @@ Tests for role-based permissions on broker operations:
 
 Tests verify that operations are correctly allowed/denied based on role.
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -39,9 +40,9 @@ def unique_username() -> str:
 # HELPERS
 # ============================================================================
 
+
 async def create_user_and_login(
-    client: httpx.AsyncClient,
-    username: Optional[str] = None
+    client: httpx.AsyncClient, username: Optional[str] = None
 ) -> tuple[int, str]:
     """Create user, login, return (user_id, username)."""
     username = username or unique_username()
@@ -51,14 +52,12 @@ async def create_user_and_login(
     resp = await client.post(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
-        timeout=TIMEOUT
+        timeout=TIMEOUT,
     )
     user_id = resp.json()["user"]["id"]
 
     login_resp = await client.post(
-        f"{API_BASE}/auth/login",
-        json={"username": username, "password": password},
-        timeout=TIMEOUT
+        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
     )
     session = login_resp.cookies.get("session")
     if session:
@@ -70,31 +69,23 @@ async def create_user_and_login(
 async def create_broker(client: httpx.AsyncClient, name: Optional[str] = None) -> int:
     """Create broker, return ID."""
     name = name or unique_name("Broker")
-    resp = await client.post(
-        f"{API_BASE}/brokers",
-        json=[{"name": name}],
-        timeout=TIMEOUT
-    )
+    resp = await client.post(f"{API_BASE}/brokers", json=[{"name": name}], timeout=TIMEOUT)
     return resp.json()["results"][0]["broker_id"]
 
 
-async def add_access(
-    client: httpx.AsyncClient,
-    broker_id: int,
-    user_id: int,
-    role: str
-) -> None:
+async def add_access(client: httpx.AsyncClient, broker_id: int, user_id: int, role: str) -> None:
     """Add user access to broker."""
     await client.post(
         f"{API_BASE}/brokers/{broker_id}/access",
         json={"user_id": user_id, "role": role},
-        timeout=TIMEOUT
+        timeout=TIMEOUT,
     )
 
 
 # ============================================================================
 # FIXTURES
 # ============================================================================
+
 
 @pytest.fixture(scope="module")
 def test_server():
@@ -109,6 +100,7 @@ def test_server():
 # TESTS
 # ============================================================================
 
+
 class TestMultiUserRoles:
     """Tests for role-based permissions."""
 
@@ -122,10 +114,7 @@ class TestMultiUserRoles:
             broker_id = await create_broker(client)
 
             # Check access
-            resp = await client.get(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                timeout=TIMEOUT
-            )
+            resp = await client.get(f"{API_BASE}/brokers/{broker_id}/access", timeout=TIMEOUT)
 
             assert resp.status_code == 200
             data = resp.json()
@@ -153,7 +142,7 @@ class TestMultiUserRoles:
             resp = await editor_client.patch(
                 f"{API_BASE}/brokers/{broker_id}",
                 json={"description": "Modified by editor"},
-                timeout=TIMEOUT
+                timeout=TIMEOUT,
             )
 
             assert resp.status_code == 200
@@ -175,9 +164,7 @@ class TestMultiUserRoles:
 
             # Editor tries to delete
             resp = await editor_client.delete(
-                f"{API_BASE}/brokers",
-                params={"ids": [broker_id], "force": True},
-                timeout=TIMEOUT
+                f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT
             )
 
             # Should get success=False with "Access denied"
@@ -203,7 +190,7 @@ class TestMultiUserRoles:
             resp = await viewer_client.patch(
                 f"{API_BASE}/brokers/{broker_id}",
                 json={"description": "Should fail"},
-                timeout=TIMEOUT
+                timeout=TIMEOUT,
             )
 
             assert resp.status_code == 200
@@ -225,18 +212,14 @@ class TestMultiUserRoles:
             await add_access(owner_client, broker_id, viewer_id, "VIEWER")
 
             # Viewer reads broker
-            resp = await viewer_client.get(
-                f"{API_BASE}/brokers/{broker_id}",
-                timeout=TIMEOUT
-            )
+            resp = await viewer_client.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)
 
             assert resp.status_code == 200
             assert resp.json()["id"] == broker_id
 
             # Viewer reads summary
             summary_resp = await viewer_client.get(
-                f"{API_BASE}/brokers/{broker_id}/summary",
-                timeout=TIMEOUT
+                f"{API_BASE}/brokers/{broker_id}/summary", timeout=TIMEOUT
             )
 
             assert summary_resp.status_code == 200
@@ -253,9 +236,7 @@ class TestMultiUserRoles:
             broker_id = await create_broker(client)
 
             resp = await client.delete(
-                f"{API_BASE}/brokers",
-                params={"ids": [broker_id]},
-                timeout=TIMEOUT
+                f"{API_BASE}/brokers", params={"ids": [broker_id]}, timeout=TIMEOUT
             )
 
             assert resp.status_code == 200
@@ -278,17 +259,17 @@ class TestMultiUserRoles:
             await add_access(owner_client, broker_id, editor_id, "EDITOR")
 
             # Editor creates a deposit transaction
-            tx_payload = [{
-                "broker_id": broker_id,
-                "type": "DEPOSIT",
-                "date": date.today().isoformat(),
-                "cash": {"code": "EUR", "amount": "1000"},
-            }]
+            tx_payload = [
+                {
+                    "broker_id": broker_id,
+                    "type": "DEPOSIT",
+                    "date": date.today().isoformat(),
+                    "cash": {"code": "EUR", "amount": "1000"},
+                }
+            ]
 
             resp = await editor_client.post(
-                f"{API_BASE}/transactions",
-                json=tx_payload,
-                timeout=TIMEOUT
+                f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT
             )
 
             assert resp.status_code == 200
@@ -311,17 +292,17 @@ class TestMultiUserRoles:
             await add_access(owner_client, broker_id, viewer_id, "VIEWER")
 
             # Viewer tries to create transaction
-            tx_payload = [{
-                "broker_id": broker_id,
-                "type": "DEPOSIT",
-                "date": date.today().isoformat(),
-                "cash": {"code": "EUR", "amount": "1000"},
-            }]
+            tx_payload = [
+                {
+                    "broker_id": broker_id,
+                    "type": "DEPOSIT",
+                    "date": date.today().isoformat(),
+                    "cash": {"code": "EUR", "amount": "1000"},
+                }
+            ]
 
             resp = await viewer_client.post(
-                f"{API_BASE}/transactions",
-                json=tx_payload,
-                timeout=TIMEOUT
+                f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT
             )
 
             # Should fail - viewer has read-only access, EDITOR required
@@ -350,19 +331,14 @@ class TestEditorRestrictions:
 
             # Editor tries to delete broker
             resp = await editor_client.delete(
-                f"{API_BASE}/brokers",
-                params={"ids": [broker_id]},
-                timeout=TIMEOUT
+                f"{API_BASE}/brokers", params={"ids": [broker_id]}, timeout=TIMEOUT
             )
 
             # Should fail - EDITOR cannot delete, only OWNER can
             assert resp.status_code == 200
             assert resp.json()["total_deleted"] == 0
             # The broker should still exist
-            check_resp = await editor_client.get(
-                f"{API_BASE}/brokers/{broker_id}",
-                timeout=TIMEOUT
-            )
+            check_resp = await editor_client.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)
             assert check_resp.status_code == 200
 
             print_success("✓ Editor correctly blocked from deleting broker")
@@ -372,7 +348,11 @@ class TestEditorRestrictions:
         """MULTI-010: EDITOR cannot add access to broker (requires OWNER)."""
         print_section("MULTI-010: Editor cannot share broker")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client, httpx.AsyncClient() as third_client:
+        async with (
+            httpx.AsyncClient() as owner_client,
+            httpx.AsyncClient() as editor_client,
+            httpx.AsyncClient() as third_client,
+        ):
             await create_user_and_login(owner_client)
             broker_id = await create_broker(owner_client)
 
@@ -385,11 +365,10 @@ class TestEditorRestrictions:
             resp = await editor_client.post(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": third_id, "role": "VIEWER"},
-                timeout=TIMEOUT
+                timeout=TIMEOUT,
             )
 
             # Should fail with 403
             assert resp.status_code == 403
 
             print_success("✓ Editor correctly blocked from sharing broker")
-

@@ -3,6 +3,7 @@ Authentication Service
 
 Provides password hashing/verification and session management.
 """
+
 import secrets
 from datetime import timedelta
 from typing import Optional
@@ -23,6 +24,7 @@ BCRYPT_ROUNDS = 12
 # Password Hashing
 # =============================================================================
 
+
 def hash_password(password: str) -> str:
     """
     Hash a password using bcrypt.
@@ -34,10 +36,10 @@ def hash_password(password: str) -> str:
         Hashed password string
     """
     # bcrypt has a 72-byte limit, truncate if necessary
-    password_bytes = password.encode('utf-8')[:72]
+    password_bytes = password.encode("utf-8")[:72]
     salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
     hashed = bcrypt.hashpw(password_bytes, salt)
-    return hashed.decode('utf-8')
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -52,8 +54,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         True if password matches, False otherwise
     """
     try:
-        password_bytes = plain_password.encode('utf-8')[:72]
-        hashed_bytes = hashed_password.encode('utf-8')
+        password_bytes = plain_password.encode("utf-8")[:72]
+        hashed_bytes = hashed_password.encode("utf-8")
         return bcrypt.checkpw(password_bytes, hashed_bytes)
     except Exception as e:
         logger.warning("Password verification failed", error=str(e))
@@ -89,8 +91,8 @@ def create_session(user_id: int, ttl_hours: int) -> str:
     _sessions[session_id] = {
         "user_id": user_id,
         "created_at": now,
-        "expires_at": now + timedelta(hours=ttl_hours)
-        }
+        "expires_at": now + timedelta(hours=ttl_hours),
+    }
 
     logger.info("Session created", user_id=user_id, session_id=session_id[:8] + "...")
     return session_id
@@ -161,10 +163,7 @@ def delete_user_sessions(user_id: int) -> int:
     Returns:
         Number of sessions deleted
     """
-    to_delete = [
-        sid for sid, data in _sessions.items()
-        if data["user_id"] == user_id
-        ]
+    to_delete = [sid for sid, data in _sessions.items() if data["user_id"] == user_id]
 
     for sid in to_delete:
         del _sessions[sid]
@@ -184,10 +183,7 @@ def cleanup_expired_sessions() -> int:
         Number of sessions cleaned up
     """
     now = utcnow()
-    to_delete = [
-        sid for sid, data in _sessions.items()
-        if now > data["expires_at"]
-        ]
+    to_delete = [sid for sid, data in _sessions.items() if now > data["expires_at"]]
 
     for sid in to_delete:
         del _sessions[sid]

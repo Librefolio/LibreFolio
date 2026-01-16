@@ -20,11 +20,11 @@ config = context.config
 # Override sqlalchemy.url with our config or from -x parameter
 # Check if database URL was passed via -x sqlalchemy.url="..."
 db_url = None
-if hasattr(config, 'cmd_opts') and hasattr(config.cmd_opts, 'x'):
+if hasattr(config, "cmd_opts") and hasattr(config.cmd_opts, "x"):
     if config.cmd_opts.x:
         for x_arg in config.cmd_opts.x:
-            if x_arg.startswith('sqlalchemy.url='):
-                db_url = x_arg.split('=', 1)[1]
+            if x_arg.startswith("sqlalchemy.url="):
+                db_url = x_arg.split("=", 1)[1]
                 break
 
 if db_url:
@@ -73,7 +73,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         render_as_batch=True,  # Enable batch mode for SQLite
-        )
+    )
 
     with context.begin_transaction():
         context.run_migrations()
@@ -90,14 +90,14 @@ def run_migrations_online() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        )
+    )
 
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             render_as_batch=True,  # Enable batch mode for SQLite
-            )
+        )
 
         with context.begin_transaction():
             context.run_migrations()

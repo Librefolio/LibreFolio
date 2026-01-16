@@ -22,6 +22,7 @@ Design principles:
 - DB optimization: Minimize queries (typically 1-3 max)
 - Parallel provider calls where possible
 """
+
 import asyncio
 import json
 from abc import ABC, abstractmethod
@@ -33,20 +34,51 @@ from sqlalchemy import select, delete, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
-    Asset, AssetProviderAssignment,
-    PriceHistory, IdentifierType, AssetType,
-    )
+    Asset,
+    AssetProviderAssignment,
+    PriceHistory,
+    IdentifierType,
+    AssetType,
+)
 from backend.app.schemas import (
-    FACurrentValue, FAHistoricalData,
-    FAMetadataRefreshResult, BackwardFillInfo,
-    FAUpsert, FAPricePoint, FAAssetDelete, FAProviderAssignmentItem,
-    FAProviderAssignmentResult, FARefreshItem, FABulkMetadataRefreshResponse,
-    FABulkDeleteResponse, FAPriceDeleteResult, FABulkRemoveResponse,
-    FAProviderRemovalResult, FABulkRefreshResponse, FARefreshResult)
-from backend.app.schemas.assets import FAAssetPatchItem, FAClassificationParams, FAAssetCreateItem, FABulkAssetCreateResponse, FAAssetCreateResult, FAAinfoFiltersRequest, \
-    FAinfoResponse, FABulkAssetDeleteResponse, FAAssetDeleteResult, FABulkAssetPatchResponse, FAAssetPatchResult, FAMetadataChangeDetail
+    FACurrentValue,
+    FAHistoricalData,
+    FAMetadataRefreshResult,
+    BackwardFillInfo,
+    FAUpsert,
+    FAPricePoint,
+    FAAssetDelete,
+    FAProviderAssignmentItem,
+    FAProviderAssignmentResult,
+    FARefreshItem,
+    FABulkMetadataRefreshResponse,
+    FABulkDeleteResponse,
+    FAPriceDeleteResult,
+    FABulkRemoveResponse,
+    FAProviderRemovalResult,
+    FABulkRefreshResponse,
+    FARefreshResult,
+)
+from backend.app.schemas.assets import (
+    FAAssetPatchItem,
+    FAClassificationParams,
+    FAAssetCreateItem,
+    FABulkAssetCreateResponse,
+    FAAssetCreateResult,
+    FAAinfoFiltersRequest,
+    FAinfoResponse,
+    FABulkAssetDeleteResponse,
+    FAAssetDeleteResult,
+    FABulkAssetPatchResponse,
+    FAAssetPatchResult,
+    FAMetadataChangeDetail,
+)
 from backend.app.schemas.common import OldNew
-from backend.app.schemas.provider import FAProviderRefreshFieldsDetail, FAProviderSearchResponse, FAProviderSearchResultItem
+from backend.app.schemas.provider import (
+    FAProviderRefreshFieldsDetail,
+    FAProviderSearchResponse,
+    FAProviderSearchResultItem,
+)
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -215,7 +247,7 @@ class AssetSourceProvider(ABC):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: dict,
-        ) -> FACurrentValue:
+    ) -> FACurrentValue:
         """
         Fetch current/latest price for an asset.
 
@@ -270,7 +302,7 @@ class AssetSourceProvider(ABC):
         provider_params: Dict | None,
         start_date: date_type,
         end_date: date_type,
-        ) -> FAHistoricalData:
+    ) -> FAHistoricalData:
         """
         Fetch historical prices for a date range.
 
@@ -364,8 +396,8 @@ class AssetSourceProvider(ABC):
         raise AssetSourceError(
             f"Search not supported by {self.provider_name}",
             "NOT_SUPPORTED",
-            {"provider": self.provider_code}
-            )
+            {"provider": self.provider_code},
+        )
 
     @abstractmethod
     def validate_params(self, params: dict | None) -> None:
@@ -413,7 +445,7 @@ class AssetSourceProvider(ABC):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: dict | None = None,
-        ) -> FAAssetPatchItem | None:
+    ) -> FAAssetPatchItem | None:
         """
         Fetch asset metadata from provider (optional feature).
 
@@ -486,7 +518,7 @@ class AssetSourceManager:
     async def bulk_assign_providers(
         assignments: List[FAProviderAssignmentItem],
         session: AsyncSession,
-        ) -> list[FAProviderAssignmentResult]:
+    ) -> list[FAProviderAssignmentResult]:
         """
         Bulk assign/update providers to assets (PRIMARY bulk method).
 
@@ -506,7 +538,9 @@ class AssetSourceManager:
         asset_ids = [a.asset_id for a in assignments]
 
         # Delete existing assignments (upsert pattern)
-        await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids)))
+        await session.execute(
+            delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids))
+        )
 
         # Bulk insert new assignments
         new_assignments = []
@@ -526,8 +560,8 @@ class AssetSourceManager:
                     provider_params=params_to_store,
                     fetch_interval=a.fetch_interval,  # Already has default from Pydantic
                     last_fetch_at=None,  # Never fetched yet
-                    )
                 )
+            )
 
         session.add_all(new_assignments)
         await session.commit()
@@ -538,8 +572,8 @@ class AssetSourceManager:
                 asset_id=assignment.asset_id,
                 success=True,
                 message=f"Provider {assignment.provider_code} assigned",
-                fields_detail=None  # No auto-refresh during assignment
-                )
+                fields_detail=None,  # No auto-refresh during assignment
+            )
 
             # Try to auto-populate metadata from provider
             try:
@@ -548,7 +582,9 @@ class AssetSourceManager:
 
                 if provider:
                     # Get asset to fetch currency and current metadata
-                    asset_result = await session.execute(select(Asset).where(Asset.id == assignment.asset_id))
+                    asset_result = await session.execute(
+                        select(Asset).where(Asset.id == assignment.asset_id)
+                    )
                     asset = asset_result.scalar_one_or_none()
 
                     if asset:
@@ -557,8 +593,8 @@ class AssetSourceManager:
                             patch_item = await provider.fetch_asset_metadata(
                                 assignment.identifier,
                                 assignment.identifier_type,
-                                assignment.provider_params
-                                )
+                                assignment.provider_params,
+                            )
 
                             if patch_item:
                                 # Set correct asset_id
@@ -568,7 +604,10 @@ class AssetSourceManager:
                                 changes_count = 0
 
                                 # Update asset_type if provided
-                                if patch_item.asset_type and patch_item.asset_type != asset.asset_type:
+                                if (
+                                    patch_item.asset_type
+                                    and patch_item.asset_type != asset.asset_type
+                                ):
                                     asset.asset_type = patch_item.asset_type
                                     changes_count += 1
 
@@ -584,10 +623,14 @@ class AssetSourceManager:
                                             pass  # Invalid JSON, start fresh
 
                                     # Apply partial update
-                                    updated_params = AssetMetadataService.apply_partial_update(current_params, patch_item.classification_params)
+                                    updated_params = AssetMetadataService.apply_partial_update(
+                                        current_params, patch_item.classification_params
+                                    )
 
                                     # Serialize back to JSON
-                                    asset.classification_params = json.dumps(updated_params.model_dump(mode="json", exclude_none=True))
+                                    asset.classification_params = json.dumps(
+                                        updated_params.model_dump(mode="json", exclude_none=True)
+                                    )
                                     changes_count += 1
 
                                 if changes_count > 0:
@@ -597,8 +640,8 @@ class AssetSourceManager:
                                     "Metadata auto-populated from provider",
                                     asset_id=assignment.asset_id,
                                     provider=assignment.provider_code,
-                                    changes_count=changes_count
-                                    )
+                                    changes_count=changes_count,
+                                )
                             else:
                                 result.metadata_updated = False
                         except Exception as e:
@@ -607,22 +650,24 @@ class AssetSourceManager:
                                 "Failed to fetch metadata from provider",
                                 asset_id=assignment.asset_id,
                                 provider=assignment.provider_code,
-                                error=str(e)
-                                )
+                                error=str(e),
+                            )
             except Exception as e:
                 # Log but don't fail assignment
                 logger.warning(
                     "Error during metadata auto-populate",
                     asset_id=assignment.asset_id,
-                    error=str(e)
-                    )
+                    error=str(e),
+                )
 
             results.append(result)
 
         return results
 
     @staticmethod
-    async def bulk_remove_providers(asset_ids: list[int], session: AsyncSession) -> FABulkRemoveResponse:
+    async def bulk_remove_providers(
+        asset_ids: list[int], session: AsyncSession
+    ) -> FABulkRemoveResponse:
         """
         Bulk remove provider assignments (PRIMARY bulk method).
 
@@ -637,24 +682,25 @@ class AssetSourceManager:
         """
         if not asset_ids:
             return FABulkRemoveResponse(results=[], success_count=0)
-        await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids)))
+        await session.execute(
+            delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids))
+        )
         await session.commit()
         results = [
             FAProviderRemovalResult(
                 asset_id=aid,
                 success=True,
                 deleted_count=1,  # Always 1 for successful provider removal
-                message="Provider removed"
-                ) for aid in asset_ids
-            ]
-        return FABulkRemoveResponse(
-            results=results,
-            success_count=len(results),
-            errors=[]
+                message="Provider removed",
             )
+            for aid in asset_ids
+        ]
+        return FABulkRemoveResponse(results=results, success_count=len(results), errors=[])
 
     @staticmethod
-    async def refresh_assets_from_provider(asset_ids: list[int], session: AsyncSession) -> FABulkMetadataRefreshResponse:
+    async def refresh_assets_from_provider(
+        asset_ids: list[int], session: AsyncSession
+    ) -> FABulkMetadataRefreshResponse:
         """
         Refresh asset data from assigned providers (bulk operation).
 
@@ -684,7 +730,7 @@ class AssetSourceManager:
         asset_fields_map = {}  # Map asset_id -> fields_detail
 
         # Get all patchable fields from FAAssetPatchItem
-        all_possible_fields = set(FAAssetPatchItem.model_fields.keys()) - {'asset_id'}
+        all_possible_fields = set(FAAssetPatchItem.model_fields.keys()) - {"asset_id"}
 
         for asset_id in asset_ids:
             try:
@@ -694,65 +740,75 @@ class AssetSourceManager:
                 asset = asset_result.scalar_one_or_none()
 
                 if not asset:
-                    results.append(FAMetadataRefreshResult(
-                        asset_id=asset_id,
-                        success=False,
-                        message=f"Asset {asset_id} not found"
-                        ))
+                    results.append(
+                        FAMetadataRefreshResult(
+                            asset_id=asset_id, success=False, message=f"Asset {asset_id} not found"
+                        )
+                    )
                     continue
 
-                assignment_stmt = select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id)
+                assignment_stmt = select(AssetProviderAssignment).where(
+                    AssetProviderAssignment.asset_id == asset_id
+                )
                 assignment_result = await session.execute(assignment_stmt)
                 assignment = assignment_result.scalar_one_or_none()
 
                 if not assignment:
-                    results.append(FAMetadataRefreshResult(
-                        asset_id=asset_id,
-                        success=False,
-                        message=f"No provider assigned to asset {asset_id}"
-                        ))
+                    results.append(
+                        FAMetadataRefreshResult(
+                            asset_id=asset_id,
+                            success=False,
+                            message=f"No provider assigned to asset {asset_id}",
+                        )
+                    )
                     continue
 
                 # Get provider instance
                 provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
                 if not provider:
-                    results.append(FAMetadataRefreshResult(
-                        asset_id=asset_id,
-                        success=False,
-                        message=f"Provider {assignment.provider_code} not found"
-                        ))
+                    results.append(
+                        FAMetadataRefreshResult(
+                            asset_id=asset_id,
+                            success=False,
+                            message=f"Provider {assignment.provider_code} not found",
+                        )
+                    )
                     continue
 
                 # Fetch metadata from provider (returns None if not supported)
-                provider_params = json.loads(assignment.provider_params) if assignment.provider_params else None
+                provider_params = (
+                    json.loads(assignment.provider_params) if assignment.provider_params else None
+                )
 
                 try:
                     patch_item = await provider.fetch_asset_metadata(
-                        assignment.identifier,
-                        assignment.identifier_type,
-                        provider_params
-                        )
+                        assignment.identifier, assignment.identifier_type, provider_params
+                    )
                 except Exception as e:
-                    results.append(FAMetadataRefreshResult(
-                        asset_id=asset_id,
-                        success=False,
-                        message=f"Failed to fetch metadata: {str(e)}"
-                        ))
+                    results.append(
+                        FAMetadataRefreshResult(
+                            asset_id=asset_id,
+                            success=False,
+                            message=f"Failed to fetch metadata: {str(e)}",
+                        )
+                    )
                     continue
 
                 if not patch_item:
-                    results.append(FAMetadataRefreshResult(
-                        asset_id=asset_id,
-                        success=False,
-                        message=f"Provider {assignment.provider_code} returned no metadata (may not support metadata fetch)"
-                        ))
+                    results.append(
+                        FAMetadataRefreshResult(
+                            asset_id=asset_id,
+                            success=False,
+                            message=f"Provider {assignment.provider_code} returned no metadata (may not support metadata fetch)",
+                        )
+                    )
                     continue
 
                 # Set correct asset_id
                 patch_item.asset_id = asset_id
 
                 # Calculate refreshed_fields with old/new values from patch_item
-                patch_dict = patch_item.model_dump(exclude={'asset_id'}, exclude_unset=True)
+                patch_dict = patch_item.model_dump(exclude={"asset_id"}, exclude_unset=True)
 
                 # Build OldNew list by comparing asset's current values with patch values
                 refreshed_fields_with_changes: list[OldNew[str | None]] = []
@@ -763,16 +819,14 @@ class AssetSourceManager:
                     old_str = str(old_value) if old_value is not None else None
                     new_str = str(new_value) if new_value is not None else None
 
-                    refreshed_fields_with_changes.append(OldNew(
-                        info=field_name,
-                        old=old_str,
-                        new=new_str
-                        ))
+                    refreshed_fields_with_changes.append(
+                        OldNew(info=field_name, old=old_str, new=new_str)
+                    )
 
                 # Calculate missing_data_fields
                 # Fields that are patchable but not returned by provider
                 # Exclude fields that are not typically refreshable: display_name, currency, active
-                refreshable_fields = all_possible_fields - {'display_name', 'currency', 'active'}
+                refreshable_fields = all_possible_fields - {"display_name", "currency", "active"}
                 provider_returned_fields = set(patch_dict.keys())
                 missing_data_fields = list(refreshable_fields - provider_returned_fields)
 
@@ -781,16 +835,16 @@ class AssetSourceManager:
                 asset_fields_map[asset_id] = FAProviderRefreshFieldsDetail(
                     refreshed_fields=refreshed_fields_with_changes,
                     missing_data_fields=missing_data_fields,
-                    ignored_fields=[]  # Future use
-                    )
+                    ignored_fields=[],  # Future use
+                )
 
             except Exception as e:
                 logger.error(f"Error preparing refresh for asset {asset_id}: {e}")
-                results.append(FAMetadataRefreshResult(
-                    asset_id=asset_id,
-                    success=False,
-                    message=f"Error: {str(e)}"
-                    ))
+                results.append(
+                    FAMetadataRefreshResult(
+                        asset_id=asset_id, success=False, message=f"Error: {str(e)}"
+                    )
+                )
 
         # Apply all patches in bulk using AssetCRUDService
         if patches_to_apply:
@@ -801,23 +855,25 @@ class AssetSourceManager:
                 fields_detail = asset_fields_map.get(patch_result.asset_id)
 
                 # Convert to FAMetadataRefreshResult with fields_detail
-                results.append(FAMetadataRefreshResult(
-                    asset_id=patch_result.asset_id,
-                    success=patch_result.success,
-                    message=patch_result.message,
-                    fields_detail=fields_detail
-                    ))
+                results.append(
+                    FAMetadataRefreshResult(
+                        asset_id=patch_result.asset_id,
+                        success=patch_result.success,
+                        message=patch_result.message,
+                        fields_detail=fields_detail,
+                    )
+                )
 
         success_count = sum(1 for r in results if r.success)
 
         return FABulkMetadataRefreshResponse(
-            results=results,
-            success_count=success_count,
-            errors=[]
-            )
+            results=results, success_count=success_count, errors=[]
+        )
 
     @staticmethod
-    async def get_asset_provider(asset_id: int, session: AsyncSession) -> Optional[AssetProviderAssignment]:
+    async def get_asset_provider(
+        asset_id: int, session: AsyncSession
+    ) -> Optional[AssetProviderAssignment]:
         """
         Fetch provider assignment for asset.
 
@@ -828,7 +884,9 @@ class AssetSourceManager:
         Returns:
             AssetProviderAssignment or None if not assigned
         """
-        result = await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))
+        result = await session.execute(
+            select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id)
+        )
         return result.scalar_one_or_none()
 
     # ========================================================================
@@ -867,7 +925,9 @@ class AssetSourceManager:
             asset_result = await session.execute(select(Asset).where(Asset.id == asset_id))
             asset = asset_result.scalar_one_or_none()
             if not asset:
-                results.append({"asset_id": asset_id, "count": 0, "message": f"Asset {asset_id} not found"})
+                results.append(
+                    {"asset_id": asset_id, "count": 0, "message": f"Asset {asset_id} not found"}
+                )
                 continue
 
             default_currency = asset.currency
@@ -883,20 +943,30 @@ class AssetSourceManager:
                 price_obj = PriceHistory(
                     asset_id=asset_id,
                     date=price.date,
-                    open=truncate_priceHistory(price.open, "open") if price.open is not None else None,
-                    high=truncate_priceHistory(price.high, "high") if price.high is not None else None,
+                    open=(
+                        truncate_priceHistory(price.open, "open")
+                        if price.open is not None
+                        else None
+                    ),
+                    high=(
+                        truncate_priceHistory(price.high, "high")
+                        if price.high is not None
+                        else None
+                    ),
                     low=truncate_priceHistory(price.low, "low") if price.low is not None else None,
                     close=truncate_priceHistory(price.close, "close"),
                     volume=price.volume,
                     currency=price.currency or default_currency,
                     source_plugin_key="MANUAL",
                     fetched_at=None,
-                    )
+                )
                 price_objects.append(price_obj)
 
             # Delete existing prices for these dates (upsert = delete + insert)
             if dates_to_upsert:
-                delete_stmt = delete(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates_to_upsert)))
+                delete_stmt = delete(PriceHistory).where(
+                    and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates_to_upsert))
+                )
                 await session.execute(delete_stmt)
 
             # Bulk insert new prices
@@ -906,12 +976,20 @@ class AssetSourceManager:
             # Count as inserted
             total_inserted += len(price_objects)
 
-            results.append({"asset_id": asset_id, "count": len(price_objects), "message": f"Upserted {len(price_objects)} prices"})
+            results.append(
+                {
+                    "asset_id": asset_id,
+                    "count": len(price_objects),
+                    "message": f"Upserted {len(price_objects)} prices",
+                }
+            )
         # update_count = 0 because SQLite doesn't distinguish
         return {"inserted_count": total_inserted, "updated_count": 0, "results": results}
 
     @staticmethod
-    async def bulk_delete_prices(data: List[FAAssetDelete], session: AsyncSession) -> FABulkDeleteResponse:
+    async def bulk_delete_prices(
+        data: List[FAAssetDelete], session: AsyncSession
+    ) -> FABulkDeleteResponse:
         """
         Bulk delete price ranges (PRIMARY bulk method).
 
@@ -941,7 +1019,17 @@ class AssetSourceManager:
                 end = date_range.end or start  # Single day if no end
 
                 # Count rows for this specific range
-                count_stmt = select(func.count()).select_from(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date >= start, PriceHistory.date <= end))
+                count_stmt = (
+                    select(func.count())
+                    .select_from(PriceHistory)
+                    .where(
+                        and_(
+                            PriceHistory.asset_id == asset_id,
+                            PriceHistory.date >= start,
+                            PriceHistory.date <= end,
+                        )
+                    )
+                )
                 result = await session.execute(count_stmt)
                 count += result.scalar()
 
@@ -956,7 +1044,13 @@ class AssetSourceManager:
             for date_range in ranges:
                 start = date_range.start
                 end = date_range.end or start  # Single day if no end
-                conditions.append(and_(PriceHistory.asset_id == asset_id, PriceHistory.date >= start, PriceHistory.date <= end))
+                conditions.append(
+                    and_(
+                        PriceHistory.asset_id == asset_id,
+                        PriceHistory.date >= start,
+                        PriceHistory.date <= end,
+                    )
+                )
 
         if not conditions:
             return FABulkDeleteResponse(deleted_count=0, results=[])
@@ -974,17 +1068,14 @@ class AssetSourceManager:
                 asset_id=item.asset_id,
                 success=True,
                 deleted_count=asset_delete_counts.get(item.asset_id, 0),
-                message=f"Deleted prices in {len(item.date_ranges)} range(s)"
-                )
+                message=f"Deleted prices in {len(item.date_ranges)} range(s)",
+            )
             for item in data
-            ]
+        ]
 
         return FABulkDeleteResponse(
-            results=results,
-            success_count=len(results),
-            total_deleted=deleted_count,
-            errors=[]
-            )
+            results=results, success_count=len(results), total_deleted=deleted_count, errors=[]
+        )
 
     # ========================================================================
     # PRICE QUERY WITH BACKWARD-FILL + Special logic for PROVIDER DELEGATION
@@ -1010,7 +1101,7 @@ class AssetSourceManager:
         asset_id: int,
         start_date: date_type,
         end_date: date_type,
-        ) -> Optional[list[FAPricePoint]]:
+    ) -> Optional[list[FAPricePoint]]:
         """Delegate to provider history fetch, returning FAPricePoint list or None on failure.
 
         Logs warnings with context when provider fetch fails for diagnostics.
@@ -1024,14 +1115,16 @@ class AssetSourceManager:
                 provider_code=provider_code,
                 asset_id=asset_id,
                 start_date=str(start_date),
-                end_date=str(end_date)
-                )
+                end_date=str(end_date),
+            )
             return None
 
         params = AssetSourceManager._parse_provider_params(assignment.provider_params)
 
         try:
-            historical = await provider.get_history_value(str(asset_id), params, start_date, end_date)
+            historical = await provider.get_history_value(
+                str(asset_id), params, start_date, end_date
+            )
             # historical expected FAHistoricalData with prices: List[FAPricePoint]
             return historical.prices
         except Exception as e:
@@ -1042,8 +1135,8 @@ class AssetSourceManager:
                 start_date=str(start_date),
                 end_date=str(end_date),
                 exception_type=type(e).__name__,
-                exception_message=str(e)
-                )
+                exception_message=str(e),
+            )
             return None
 
     @staticmethod
@@ -1052,19 +1145,27 @@ class AssetSourceManager:
         asset_id: int,
         start_date: date_type,
         end_date: date_type,
-        ) -> dict[date_type, PriceHistory]:
-        stmt = select(PriceHistory).where(
-            and_(
-                PriceHistory.asset_id == asset_id,
-                PriceHistory.date >= start_date,
-                PriceHistory.date <= end_date,
+    ) -> dict[date_type, PriceHistory]:
+        stmt = (
+            select(PriceHistory)
+            .where(
+                and_(
+                    PriceHistory.asset_id == asset_id,
+                    PriceHistory.date >= start_date,
+                    PriceHistory.date <= end_date,
                 )
-            ).order_by(PriceHistory.date)
+            )
+            .order_by(PriceHistory.date)
+        )
         db_result = await session.execute(stmt)
         return {p.date: p for p in db_result.scalars().all()}
 
     @staticmethod
-    def _build_backward_filled_series(price_map: dict[date_type, PriceHistory], start_date: date_type, end_date: date_type, ) -> list[FAPricePoint]:
+    def _build_backward_filled_series(
+        price_map: dict[date_type, PriceHistory],
+        start_date: date_type,
+        end_date: date_type,
+    ) -> list[FAPricePoint]:
         results: list[FAPricePoint] = []
         last_known: Optional[PriceHistory] = None
         current = start_date
@@ -1082,8 +1183,8 @@ class AssetSourceManager:
                         volume=ph.volume,
                         currency=ph.currency,
                         backward_fill_info=None,
-                        )
                     )
+                )
             elif last_known:
                 days_back = (current - last_known.date).days
                 results.append(
@@ -1095,9 +1196,11 @@ class AssetSourceManager:
                         close=last_known.close,
                         volume=last_known.volume,
                         currency=last_known.currency,
-                        backward_fill_info=BackwardFillInfo(actual_rate_date=last_known.date, days_back=days_back),
-                        )
+                        backward_fill_info=BackwardFillInfo(
+                            actual_rate_date=last_known.date, days_back=days_back
+                        ),
                     )
+                )
             # else: skip days before first known price
             current += timedelta(days=1)
         return results
@@ -1108,7 +1211,7 @@ class AssetSourceManager:
         start_date: date_type,
         end_date: date_type,
         session: AsyncSession,
-        ) -> list[FAPricePoint]:
+    ) -> list[FAPricePoint]:
         """Get prices for asset with backward-fill and provider delegation.
 
         Logic:
@@ -1129,11 +1232,15 @@ class AssetSourceManager:
 
         assignment = await AssetSourceManager.get_asset_provider(asset_id, session)
         if assignment:
-            provider_prices = await AssetSourceManager._fetch_provider_history(assignment, asset_id, start_date, end_date)
+            provider_prices = await AssetSourceManager._fetch_provider_history(
+                assignment, asset_id, start_date, end_date
+            )
             if provider_prices is not None:
                 return provider_prices
         # Fallback DB if no provider is assigned at current asset
-        price_map = await AssetSourceManager._fetch_db_price_map(session, asset_id, start_date, end_date)
+        price_map = await AssetSourceManager._fetch_db_price_map(
+            session, asset_id, start_date, end_date
+        )
         return AssetSourceManager._build_backward_filled_series(price_map, start_date, end_date)
 
     # ========================================================================
@@ -1146,7 +1253,7 @@ class AssetSourceManager:
         session: AsyncSession,
         concurrency: int = 5,
         semaphore_timeout: int = 60,
-        ) -> FABulkRefreshResponse:
+    ) -> FABulkRefreshResponse:
         """
         Refresh prices for multiple assets using their configured providers.
 
@@ -1187,8 +1294,8 @@ class AssetSourceManager:
                         fetched_count=fetched_count,
                         inserted_count=inserted_count,
                         updated_count=updated_count,
-                        errors=errors
-                        )
+                        errors=errors,
+                    )
 
                 provider_code = assignment.provider_code
                 provider_params = assignment.provider_params or {}
@@ -1205,8 +1312,8 @@ class AssetSourceManager:
                         fetched_count=fetched_count,
                         inserted_count=inserted_count,
                         updated_count=updated_count,
-                        errors=errors
-                        )
+                        errors=errors,
+                    )
             except Exception as e:
                 errors.append(f"Failed to resolve provider or asset: {str(e)}")
                 return FARefreshResult(
@@ -1214,8 +1321,8 @@ class AssetSourceManager:
                     fetched_count=fetched_count,
                     inserted_count=inserted_count,
                     updated_count=updated_count,
-                    errors=errors
-                    )
+                    errors=errors,
+                )
 
             # Instantiate provider from registry
             prov = AssetProviderRegistry.get_provider_instance(provider_code)
@@ -1226,8 +1333,8 @@ class AssetSourceManager:
                     fetched_count=fetched_count,
                     inserted_count=inserted_count,
                     updated_count=updated_count,
-                    errors=errors
-                    )
+                    errors=errors,
+                )
 
             # Parse provider_params if stored as JSON string
             try:
@@ -1247,8 +1354,8 @@ class AssetSourceManager:
                     fetched_count=fetched_count,
                     inserted_count=inserted_count,
                     updated_count=updated_count,
-                    errors=errors
-                    )
+                    errors=errors,
+                )
 
             # Fetch existing DB entries (prefetch) while calling remote
             async def _fetch_db_existing():
@@ -1258,8 +1365,8 @@ class AssetSourceManager:
                         PriceHistory.asset_id == asset_id,
                         PriceHistory.date >= start,
                         PriceHistory.date <= end,
-                        )
                     )
+                )
                 db_res = await session.execute(stmt)
                 return {p.date: p for p in db_res.scalars().all()}
 
@@ -1274,14 +1381,18 @@ class AssetSourceManager:
                     if prov.supports_history and start < today:
                         try:
                             # Fetch history up to yesterday (or end if end < today)
-                            history_end = min(end, today - timedelta(days=1)) if end >= today else end
+                            history_end = (
+                                min(end, today - timedelta(days=1)) if end >= today else end
+                            )
                             if start <= history_end:
                                 hist_data = await prov.get_history_value(
                                     identifier, identifier_type, provider_params, start, history_end
-                                    )
+                                )
                                 if hist_data and hist_data.prices:
                                     prices_data = [p.model_dump() for p in hist_data.prices]
-                                    logger.debug(f"Fetched {len(prices_data)} historical prices for asset {asset_id}")
+                                    logger.debug(
+                                        f"Fetched {len(prices_data)} historical prices for asset {asset_id}"
+                                    )
                         except Exception as hist_e:
                             logger.warning(f"History fetch failed for asset {asset_id}: {hist_e}")
                             # Continue - we'll try current value
@@ -1291,38 +1402,43 @@ class AssetSourceManager:
                         try:
                             current_data = await prov.get_current_value(
                                 identifier, identifier_type, provider_params
-                                )
+                            )
                             if current_data and current_data.value:
                                 # Create a price point for today
                                 current_price = {
                                     "date": current_data.as_of_date or today,
                                     "close": current_data.value,
-                                    "currency": current_data.currency or "USD"
-                                    }
+                                    "currency": current_data.currency or "USD",
+                                }
 
                                 # Remove any existing entry for today from history (current value takes precedence)
-                                prices_data = [p for p in prices_data if p.get("date") != current_price["date"]]
+                                prices_data = [
+                                    p for p in prices_data if p.get("date") != current_price["date"]
+                                ]
                                 prices_data.append(current_price)
-                                logger.debug(f"Added current price for asset {asset_id}: {current_data.value}")
+                                logger.debug(
+                                    f"Added current price for asset {asset_id}: {current_data.value}"
+                                )
                         except Exception as curr_e:
-                            logger.warning(f"Current value fetch failed for asset {asset_id}: {curr_e}")
+                            logger.warning(
+                                f"Current value fetch failed for asset {asset_id}: {curr_e}"
+                            )
                             # Continue - we may still have history data
 
                     if not prices_data:
                         raise AssetSourceError(
                             "No price data available from provider",
                             "NO_DATA",
-                            {"asset_id": asset_id, "provider": provider_code}
-                            )
+                            {"asset_id": asset_id, "provider": provider_code},
+                        )
 
-                    return {
-                        "prices": prices_data,
-                        "source": provider_code
-                        }
+                    return {"prices": prices_data, "source": provider_code}
                 except AssetSourceError:
                     raise
                 except Exception as e:
-                    raise AssetSourceError(f"Provider fetch failed: {str(e)}", "PROVIDER_FETCH_ERROR", {})
+                    raise AssetSourceError(
+                        f"Provider fetch failed: {str(e)}", "PROVIDER_FETCH_ERROR", {}
+                    )
 
             # Run both in parallel with semaphore
             try:
@@ -1339,8 +1455,8 @@ class AssetSourceManager:
                     fetched_count=fetched_count,
                     inserted_count=inserted_count,
                     updated_count=updated_count,
-                    errors=errors
-                    )
+                    errors=errors,
+                )
 
             # remote_data expected shape: {"prices": [ {date, open?, high?, low?, close, volume?, currency}, ... ], "source": "..."}
             prices = remote_data.get("prices", []) if isinstance(remote_data, dict) else []
@@ -1351,21 +1467,23 @@ class AssetSourceManager:
                     fetched_count=fetched_count,
                     inserted_count=inserted_count,
                     updated_count=updated_count,
-                    errors=errors
-                    )
+                    errors=errors,
+                )
 
             # Convert prices to FAPricePoint objects
             price_items = []
             for p in prices:
-                price_items.append(FAPricePoint(
-                    date=p["date"],
-                    open=p.get("open"),
-                    high=p.get("high"),
-                    low=p.get("low"),
-                    close=p["close"],
-                    volume=p.get("volume"),
-                    currency=p.get("currency", "USD")
-                    ))
+                price_items.append(
+                    FAPricePoint(
+                        date=p["date"],
+                        open=p.get("open"),
+                        high=p.get("high"),
+                        low=p.get("low"),
+                        close=p["close"],
+                        volume=p.get("volume"),
+                        currency=p.get("currency", "USD"),
+                    )
+                )
 
             # Build FAUpsert object
             upsert_obj = FAUpsert(asset_id=asset_id, prices=price_items)
@@ -1391,8 +1509,8 @@ class AssetSourceManager:
                 fetched_count=fetched_count,
                 inserted_count=inserted_count,
                 updated_count=updated_count,
-                errors=errors
-                )
+                errors=errors,
+            )
 
         # Create tasks for all items
         tasks = [asyncio.create_task(_process_single(item)) for item in requests]
@@ -1404,8 +1522,8 @@ class AssetSourceManager:
         return FABulkRefreshResponse(
             results=results,
             success_count=sum(1 for r in results if not r.errors),  # Success = no errors
-            errors=[]
-            )
+            errors=[],
+        )
 
 
 # ============================================================================
@@ -1418,9 +1536,8 @@ class AssetCRUDService:
 
     @staticmethod
     async def create_assets_bulk(
-        assets: List[FAAssetCreateItem],
-        session: AsyncSession
-        ) -> FABulkAssetCreateResponse:
+        assets: List[FAAssetCreateItem], session: AsyncSession
+    ) -> FABulkAssetCreateResponse:
         """
         Create multiple assets in bulk (partial success allowed).
 
@@ -1439,13 +1556,15 @@ class AssetCRUDService:
                 stmt = select(Asset).where(Asset.display_name == item.display_name)
                 existing = await session.execute(stmt)
                 if existing.scalar_one_or_none():
-                    results.append(FAAssetCreateResult(
-                        asset_id=None,
-                        success=False,
-                        message=f"Asset with display_name '{item.display_name}' already exists",
-                        display_name=item.display_name,
-                        identifier=None
-                        ))
+                    results.append(
+                        FAAssetCreateResult(
+                            asset_id=None,
+                            success=False,
+                            message=f"Asset with display_name '{item.display_name}' already exists",
+                            display_name=item.display_name,
+                            identifier=None,
+                        )
+                    )
                     continue
 
                 # Create asset record
@@ -1463,32 +1582,38 @@ class AssetCRUDService:
                     identifier_figi=item.identifier_figi,
                     identifier_uuid=item.identifier_uuid,
                     identifier_other=item.identifier_other,
-                    )
+                )
 
                 # Handle classification_params
                 if item.classification_params:
-                    asset.classification_params = item.classification_params.model_dump_json(exclude_none=True)
+                    asset.classification_params = item.classification_params.model_dump_json(
+                        exclude_none=True
+                    )
 
                 session.add(asset)
                 await session.flush()  # Get ID without committing
 
-                results.append(FAAssetCreateResult(
-                    asset_id=asset.id,
-                    success=True,
-                    message="Asset created successfully",
-                    display_name=item.display_name
-                    ))
+                results.append(
+                    FAAssetCreateResult(
+                        asset_id=asset.id,
+                        success=True,
+                        message="Asset created successfully",
+                        display_name=item.display_name,
+                    )
+                )
 
                 logger.info(f"Asset created: id={asset.id}, display_name={item.display_name}")
 
             except Exception as e:
                 logger.error(f"Error creating asset {item.display_name}: {e}")
-                results.append(FAAssetCreateResult(
-                    asset_id=None,
-                    success=False,
-                    message=f"Error: {str(e)}",
-                    display_name=item.display_name
-                    ))
+                results.append(
+                    FAAssetCreateResult(
+                        asset_id=None,
+                        success=False,
+                        message=f"Error: {str(e)}",
+                        display_name=item.display_name,
+                    )
+                )
 
         # Commit all successful creates
         try:
@@ -1504,17 +1629,12 @@ class AssetCRUDService:
                     result.asset_id = None
 
         success_count = sum(1 for r in results if r.success)
-        return FABulkAssetCreateResponse(
-            results=results,
-            success_count=success_count,
-            errors=[]
-            )
+        return FABulkAssetCreateResponse(results=results, success_count=success_count, errors=[])
 
     @staticmethod
     async def list_assets(
-        filters: FAAinfoFiltersRequest,
-        session: AsyncSession
-        ) -> List[FAinfoResponse]:
+        filters: FAAinfoFiltersRequest, session: AsyncSession
+    ) -> List[FAinfoResponse]:
         """
         List assets with optional filters - enhanced for BRIM asset matching.
 
@@ -1535,13 +1655,10 @@ class AssetCRUDService:
         # Build base query with LEFT JOIN to get provider assignment data
         stmt = select(
             Asset,
-            AssetProviderAssignment.id.label('provider_id'),
-            AssetProviderAssignment.identifier.label('provider_identifier'),
-            AssetProviderAssignment.identifier_type.label('provider_identifier_type')
-            ).outerjoin(
-            AssetProviderAssignment,
-            Asset.id == AssetProviderAssignment.asset_id
-            )
+            AssetProviderAssignment.id.label("provider_id"),
+            AssetProviderAssignment.identifier.label("provider_identifier"),
+            AssetProviderAssignment.identifier_type.label("provider_identifier_type"),
+        ).outerjoin(AssetProviderAssignment, Asset.id == AssetProviderAssignment.asset_id)
 
         # Apply filters
         conditions = []
@@ -1584,15 +1701,17 @@ class AssetCRUDService:
         # Partial identifier match (across all identifier columns)
         if filters.identifier_contains:
             pattern = f"%{filters.identifier_contains}%"
-            conditions.append(or_(
-                Asset.identifier_isin.ilike(pattern),
-                Asset.identifier_ticker.ilike(pattern),
-                Asset.identifier_cusip.ilike(pattern),
-                Asset.identifier_sedol.ilike(pattern),
-                Asset.identifier_figi.ilike(pattern),
-                Asset.identifier_uuid.ilike(pattern),
-                Asset.identifier_other.ilike(pattern)
-                ))
+            conditions.append(
+                or_(
+                    Asset.identifier_isin.ilike(pattern),
+                    Asset.identifier_ticker.ilike(pattern),
+                    Asset.identifier_cusip.ilike(pattern),
+                    Asset.identifier_sedol.ilike(pattern),
+                    Asset.identifier_figi.ilike(pattern),
+                    Asset.identifier_uuid.ilike(pattern),
+                    Asset.identifier_other.ilike(pattern),
+                )
+            )
 
         if conditions:
             stmt = stmt.where(and_(*conditions))
@@ -1612,35 +1731,36 @@ class AssetCRUDService:
             provider_identifier = row[2]  # identifier from provider assignment
             provider_identifier_type = row[3]  # identifier_type from provider assignment
 
-            assets.append(FAinfoResponse(
-                id=asset.id,
-                display_name=asset.display_name,
-                currency=asset.currency,
-                icon_url=asset.icon_url,
-                asset_type=asset.asset_type,
-                active=asset.active,
-                has_provider=provider_id is not None,
-                has_metadata=asset.classification_params is not None,
-                # Identifier columns from Asset
-                identifier_isin=asset.identifier_isin,
-                identifier_ticker=asset.identifier_ticker,
-                identifier_cusip=asset.identifier_cusip,
-                identifier_sedol=asset.identifier_sedol,
-                identifier_figi=asset.identifier_figi,
-                identifier_uuid=asset.identifier_uuid,
-                identifier_other=asset.identifier_other,
-                # Legacy fields from provider assignment
-                identifier=provider_identifier,
-                identifier_type=provider_identifier_type
-                ))
+            assets.append(
+                FAinfoResponse(
+                    id=asset.id,
+                    display_name=asset.display_name,
+                    currency=asset.currency,
+                    icon_url=asset.icon_url,
+                    asset_type=asset.asset_type,
+                    active=asset.active,
+                    has_provider=provider_id is not None,
+                    has_metadata=asset.classification_params is not None,
+                    # Identifier columns from Asset
+                    identifier_isin=asset.identifier_isin,
+                    identifier_ticker=asset.identifier_ticker,
+                    identifier_cusip=asset.identifier_cusip,
+                    identifier_sedol=asset.identifier_sedol,
+                    identifier_figi=asset.identifier_figi,
+                    identifier_uuid=asset.identifier_uuid,
+                    identifier_other=asset.identifier_other,
+                    # Legacy fields from provider assignment
+                    identifier=provider_identifier,
+                    identifier_type=provider_identifier_type,
+                )
+            )
 
         return assets
 
     @staticmethod
     async def delete_assets_bulk(
-        asset_ids: List[int],
-        session: AsyncSession
-        ) -> FABulkAssetDeleteResponse:
+        asset_ids: List[int], session: AsyncSession
+    ) -> FABulkAssetDeleteResponse:
         """
         Delete multiple assets (partial success allowed).
 
@@ -1664,23 +1784,27 @@ class AssetCRUDService:
                 asset = result.scalar_one_or_none()
 
                 if not asset:
-                    results.append(FAAssetDeleteResult(
-                        asset_id=asset_id,
-                        success=False,
-                        message=f"Asset with ID {asset_id} not found"
-                        ))
+                    results.append(
+                        FAAssetDeleteResult(
+                            asset_id=asset_id,
+                            success=False,
+                            message=f"Asset with ID {asset_id} not found",
+                        )
+                    )
                     continue
 
                 # Try to delete (will fail if transactions exist due to FK constraint)
                 await session.delete(asset)
                 await session.flush()  # Check FK constraints before commit
 
-                results.append(FAAssetDeleteResult(
-                    asset_id=asset_id,
-                    success=True,
-                    deleted_count=1,
-                    message="Asset deleted successfully"
-                    ))
+                results.append(
+                    FAAssetDeleteResult(
+                        asset_id=asset_id,
+                        success=True,
+                        deleted_count=1,
+                        message="Asset deleted successfully",
+                    )
+                )
 
                 logger.info(f"Asset deleted: id={asset_id}")
 
@@ -1689,17 +1813,19 @@ class AssetCRUDService:
                 error_msg = str(e)
 
                 # Check if error is due to FK constraint (transactions exist)
-                if "FOREIGN KEY constraint failed" in error_msg or "foreign key" in error_msg.lower():
+                if (
+                    "FOREIGN KEY constraint failed" in error_msg
+                    or "foreign key" in error_msg.lower()
+                ):
                     message = f"Cannot delete asset {asset_id}: has existing transactions"
                 else:
                     message = f"Error deleting asset {asset_id}: {error_msg}"
 
-                results.append(FAAssetDeleteResult(
-                    asset_id=asset_id,
-                    success=False,
-                    deleted_count=0,
-                    message=message
-                    ))
+                results.append(
+                    FAAssetDeleteResult(
+                        asset_id=asset_id, success=False, deleted_count=0, message=message
+                    )
+                )
                 logger.error(f"Error deleting asset {asset_id}: {e}")
 
         # Commit successful deletions
@@ -1713,14 +1839,13 @@ class AssetCRUDService:
         return FABulkAssetDeleteResponse(
             results=results,
             success_count=success_count,
-            errors=[]  # Operation-level errors (none for now)
-            )
+            errors=[],  # Operation-level errors (none for now)
+        )
 
     @staticmethod
     async def patch_assets_bulk(
-        patches: List[FAAssetPatchItem],
-        session: AsyncSession
-        ) -> FABulkAssetPatchResponse:
+        patches: List[FAAssetPatchItem], session: AsyncSession
+    ) -> FABulkAssetPatchResponse:
         """
         Patch multiple assets in bulk (partial success allowed).
 
@@ -1750,10 +1875,21 @@ class AssetCRUDService:
                 asset: Asset = result.scalar_one_or_none()
 
                 if not asset:
-                    results.append(FAAssetPatchResult(asset_id=patch.asset_id, success=False, message=f"Asset {patch.asset_id} not found", updated_fields=None))
+                    results.append(
+                        FAAssetPatchResult(
+                            asset_id=patch.asset_id,
+                            success=False,
+                            message=f"Asset {patch.asset_id} not found",
+                            updated_fields=None,
+                        )
+                    )
                     continue
-                asset_classification_params_before = json.loads(asset.classification_params) if asset.classification_params else {}
-                logger.debug(f"Asset found for patching: id={patch.asset_id}: {asset.model_dump_json()}")
+                asset_classification_params_before = (
+                    json.loads(asset.classification_params) if asset.classification_params else {}
+                )
+                logger.debug(
+                    f"Asset found for patching: id={patch.asset_id}: {asset.model_dump_json()}"
+                )
 
                 # Track updated fields
                 updated_fields: List[OldNew[str]] = []
@@ -1761,15 +1897,20 @@ class AssetCRUDService:
                 # Update fields if present in patch (use model_dump to detect presence)
                 # Use exclude_unset=True to only include fields that were explicitly set
                 # Use exclude_none=True to exclude None values (except classification_params which we handle specially)
-                patch_dict = patch.model_dump(mode='json', exclude={'asset_id'}, exclude_unset=True, exclude_none=True)
+                patch_dict = patch.model_dump(
+                    mode="json", exclude={"asset_id"}, exclude_unset=True, exclude_none=True
+                )
 
                 # Special handling for classification_params=None (clearing the field)
                 # Check if it was explicitly set to None in the original patch object
-                if 'classification_params' not in patch_dict and patch.classification_params is None:
+                if (
+                    "classification_params" not in patch_dict
+                    and patch.classification_params is None
+                ):
                     # Check if the field was explicitly set (not just default None)
                     # We can use __pydantic_fields_set__ to check
-                    if 'classification_params' in patch.model_fields_set:
-                        patch_dict['classification_params'] = None
+                    if "classification_params" in patch.model_fields_set:
+                        patch_dict["classification_params"] = None
 
                 for field, value in patch_dict.items():
                     logger.debug(f"Patching field '{field}': '{value}'")
@@ -1797,7 +1938,9 @@ class AssetCRUDService:
                                     merged.pop(key, None)
 
                             # Validate and serialize
-                            value = FAClassificationParams(**merged).model_dump(mode='json', exclude_none=True)
+                            value = FAClassificationParams(**merged).model_dump(
+                                mode="json", exclude_none=True
+                            )
                             if not value:  # If result is empty dict, set to None
                                 value = None
 
@@ -1814,34 +1957,34 @@ class AssetCRUDService:
 
                 await session.flush()
 
-                results.append(FAAssetPatchResult(
-                    asset_id=patch.asset_id,
-                    success=True,
-                    message=f"Asset patched successfully ({len(updated_fields)} fields)",
-                    updated_fields=updated_fields
-                    ))
+                results.append(
+                    FAAssetPatchResult(
+                        asset_id=patch.asset_id,
+                        success=True,
+                        message=f"Asset patched successfully ({len(updated_fields)} fields)",
+                        updated_fields=updated_fields,
+                    )
+                )
 
                 logger.info(f"Asset patched: id={patch.asset_id}, fields={updated_fields}")
 
             except Exception as e:
                 logger.error(f"Error patching asset {patch.asset_id}: {e}")
-                results.append(FAAssetPatchResult(
-                    asset_id=patch.asset_id,
-                    success=False,
-                    message=f"Error: {str(e)}",
-                    updated_fields=None
-                    ))
+                results.append(
+                    FAAssetPatchResult(
+                        asset_id=patch.asset_id,
+                        success=False,
+                        message=f"Error: {str(e)}",
+                        updated_fields=None,
+                    )
+                )
 
         # Commit all successful patches
         await session.commit()
 
         success_count = sum(1 for r in results if r.success)
 
-        return FABulkAssetPatchResponse(
-            results=results,
-            success_count=success_count,
-            errors=[]
-            )
+        return FABulkAssetPatchResponse(results=results, success_count=success_count, errors=[])
 
 
 # ============================================================================
@@ -1858,9 +2001,8 @@ class AssetMetadataService:
 
     @staticmethod
     def compute_metadata_diff(
-        old: Optional[FAClassificationParams],
-        new: Optional[FAClassificationParams]
-        ) -> list[FAMetadataChangeDetail]:
+        old: Optional[FAClassificationParams], new: Optional[FAClassificationParams]
+    ) -> list[FAMetadataChangeDetail]:
         """
         Compute diff between old and new metadata.
 
@@ -1901,19 +2043,18 @@ class AssetMetadataService:
                 old_display = json.dumps(old_value, default=str) if old_value is not None else None
                 new_display = json.dumps(new_value, default=str) if new_value is not None else None
 
-                changes.append(FAMetadataChangeDetail(
-                    field=field,
-                    old_value=old_display,
-                    new_value=new_display
-                    ))
+                changes.append(
+                    FAMetadataChangeDetail(
+                        field=field, old_value=old_display, new_value=new_display
+                    )
+                )
 
         return changes
 
     @staticmethod
     def apply_partial_update(
-        current: Optional[FAClassificationParams],
-        patch: FAClassificationParams
-        ) -> FAClassificationParams:
+        current: Optional[FAClassificationParams], patch: FAClassificationParams
+    ) -> FAClassificationParams:
         """
         Apply PATCH request to current metadata.
 
@@ -1941,11 +2082,15 @@ class AssetMetadataService:
             None
         """
         # Start with current values (or empty dict)
-        current_dict = current.model_dump(exclude_none=False) if current else {
-            'short_description': None,
-            'geographic_area': None,
-            'sector_area': None,
+        current_dict = (
+            current.model_dump(exclude_none=False)
+            if current
+            else {
+                "short_description": None,
+                "geographic_area": None,
+                "sector_area": None,
             }
+        )
 
         # Get patch fields that were explicitly set (exclude unset fields)
         # This distinguishes between "field not in request" vs "field=null in request"
@@ -1963,9 +2108,8 @@ class AssetMetadataService:
 
     @staticmethod
     def merge_provider_metadata(
-        current: Optional[FAClassificationParams],
-        provider_data: dict
-        ) -> FAClassificationParams:
+        current: Optional[FAClassificationParams], provider_data: dict
+    ) -> FAClassificationParams:
         """
         Merge provider-fetched metadata with current metadata.
 
@@ -1986,14 +2130,18 @@ class AssetMetadataService:
             when this is called (geo_normalization runs in field_validator)
         """
         # Start with current values
-        current_dict = current.model_dump(exclude_none=False) if current else {
-            'short_description': None,
-            'geographic_area': None,
-            'sector_area': None,
+        current_dict = (
+            current.model_dump(exclude_none=False)
+            if current
+            else {
+                "short_description": None,
+                "geographic_area": None,
+                "sector_area": None,
             }
+        )
 
         # Update with provider data (only non-None values)
-        for field in ['short_description', 'geographic_area', 'sector_area']:
+        for field in ["short_description", "geographic_area", "sector_area"]:
             if field in provider_data and provider_data[field] is not None:
                 current_dict[field] = provider_data[field]
 
@@ -2002,10 +2150,8 @@ class AssetMetadataService:
 
     @staticmethod
     async def update_asset_metadata(
-        asset_id: int,
-        patch: FAClassificationParams,
-        session: 'AsyncSession'
-        ) -> 'FAMetadataRefreshResult':
+        asset_id: int, patch: FAClassificationParams, session: "AsyncSession"
+    ) -> "FAMetadataRefreshResult":
         """
         Update asset metadata with PATCH semantics.
 
@@ -2044,22 +2190,25 @@ class AssetMetadataService:
         current_params = None
         if asset.classification_params:
             try:
-                current_params = FAClassificationParams.model_validate_json(asset.classification_params)
+                current_params = FAClassificationParams.model_validate_json(
+                    asset.classification_params
+                )
             except Exception as e:
                 logger.error(
                     "Failed to parse classification_params from database",
                     asset_id=asset_id,
                     error=str(e),
-                    classification_params=asset.classification_params[:200] if len(asset.classification_params) > 200 else asset.classification_params
-                    )
+                    classification_params=(
+                        asset.classification_params[:200]
+                        if len(asset.classification_params) > 200
+                        else asset.classification_params
+                    ),
+                )
                 pass  # Treat invalid JSON as None
 
         # Apply PATCH update
         try:
-            updated_params = AssetMetadataService.apply_partial_update(
-                current_params,
-                patch
-                )
+            updated_params = AssetMetadataService.apply_partial_update(current_params, patch)
         except ValueError as e:
             # Re-raise validation errors (will become 422 in API layer)
             raise ValueError(f"Validation failed: {e}")
@@ -2068,7 +2217,9 @@ class AssetMetadataService:
         changes = AssetMetadataService.compute_metadata_diff(current_params, updated_params)
 
         # Serialize back to JSON
-        asset.classification_params = updated_params.model_dump_json(exclude_none=True) if updated_params else None
+        asset.classification_params = (
+            updated_params.model_dump_json(exclude_none=True) if updated_params else None
+        )
 
         # Commit transaction
         await session.commit()
@@ -2081,8 +2232,8 @@ class AssetMetadataService:
             asset_id=asset.id,
             success=True,
             message="Metadata updated successfully",
-            changes=changes
-            )
+            changes=changes,
+        )
 
 
 # ============================================================================
@@ -2103,9 +2254,8 @@ class AssetSearchService:
 
     @staticmethod
     async def search(
-        query: str,
-        provider_codes: Optional[list[str]] = None
-        ) -> FAProviderSearchResponse:
+        query: str, provider_codes: Optional[list[str]] = None
+    ) -> FAProviderSearchResponse:
         """
         Search for assets across one or more providers in parallel.
 
@@ -2125,7 +2275,7 @@ class AssetSearchService:
         # Get provider codes to query
         if not provider_codes:
             all_providers = AssetProviderRegistry.list_providers()
-            provider_codes = [p['code'] for p in all_providers]
+            provider_codes = [p["code"] for p in all_providers]
 
         # Filter to valid providers only
         valid_providers: list[tuple[str, object]] = []
@@ -2142,8 +2292,8 @@ class AssetSearchService:
                 total_results=0,
                 results=[],
                 providers_queried=[],
-                providers_with_errors=[]
-                )
+                providers_with_errors=[],
+            )
 
         # Create search tasks for parallel execution
         async def search_single_provider(code: str, provider) -> tuple[str, list[dict], str | None]:
@@ -2165,10 +2315,7 @@ class AssetSearchService:
                     return (code, [], str(e))
 
         # Execute all searches in parallel
-        tasks = [
-            search_single_provider(code, provider)
-            for code, provider in valid_providers
-            ]
+        tasks = [search_single_provider(code, provider) for code, provider in valid_providers]
 
         search_results_raw = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -2192,19 +2339,21 @@ class AssetSearchService:
 
             # Convert provider results to response schema
             for item in items:
-                results.append(FAProviderSearchResultItem(
-                    identifier=item.get("identifier", ""),
-                    identifier_type=item.get("identifier_type"),
-                    display_name=item.get("display_name", item.get("name", "")),
-                    provider_code=code,
-                    currency=item.get("currency"),
-                    asset_type=item.get("type")
-                    ))
+                results.append(
+                    FAProviderSearchResultItem(
+                        identifier=item.get("identifier", ""),
+                        identifier_type=item.get("identifier_type"),
+                        display_name=item.get("display_name", item.get("name", "")),
+                        provider_code=code,
+                        currency=item.get("currency"),
+                        asset_type=item.get("type"),
+                    )
+                )
 
         return FAProviderSearchResponse(
             query=query,
             total_results=len(results),
             results=results,
             providers_queried=providers_queried,
-            providers_with_errors=providers_with_errors
-            )
+            providers_with_errors=providers_with_errors,
+        )

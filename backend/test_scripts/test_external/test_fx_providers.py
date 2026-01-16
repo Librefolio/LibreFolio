@@ -2,6 +2,7 @@
 Generic Provider Tests for FX Rate Providers
 Tests all registered FX providers (ECB, FED, BOE, etc.) with uniform test suite.
 """
+
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
@@ -19,7 +20,7 @@ from backend.test_scripts.test_utils import (
     print_section,
     print_success,
     print_warning,
-    )
+)
 from backend.app.services.fx import FXServiceError, normalize_rate_for_storage
 from backend.app.services.provider_registry import FXProviderRegistry
 
@@ -64,7 +65,7 @@ def get_all_fx_providers():
     # Extract provider codes
     provider_codes = []
     for p in providers:
-        code = p['code'] if isinstance(p, dict) else p
+        code = p["code"] if isinstance(p, dict) else p
         provider_codes.append(code)
 
     return provider_codes
@@ -78,6 +79,7 @@ pytestmark = pytest.mark.parametrize("provider_code", get_all_fx_providers())
 # ============================================================================
 # INDIVIDUAL TEST FUNCTIONS (run for each provider via parametrize)
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_provider_metadata(provider_code: str):
@@ -101,13 +103,16 @@ async def test_provider_metadata(provider_code: str):
         print_info(f"  Description: {provider.description}")
 
         # Validate base currency format
-        assert provider.base_currency and len(provider.base_currency) == 3, f"Invalid base currency: {provider.base_currency}"
+        assert (
+            provider.base_currency and len(provider.base_currency) == 3
+        ), f"Invalid base currency: {provider.base_currency}"
 
         print_success("Provider metadata valid")
 
     except Exception as e:
         print_error(f"Provider metadata test failed: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -127,7 +132,9 @@ async def test_supported_currencies(provider_code: str):
         print_success(f"Found {len(currencies)} supported currencies")
 
         # Verify base currency is included
-        assert provider.base_currency in currencies, f"Base currency {provider.base_currency} not in supported list"
+        assert (
+            provider.base_currency in currencies
+        ), f"Base currency {provider.base_currency} not in supported list"
 
         print_success(f"Base currency {provider.base_currency} is present")
 
@@ -160,6 +167,7 @@ async def test_supported_currencies(provider_code: str):
     except Exception as e:
         print_error(f"Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -181,12 +189,11 @@ async def test_fetch_rates(provider_code: str):
         if not test_currencies:
             print_info("No test currencies available (only base currency)")
 
-        print_info(f"Fetching rates for {', '.join(test_currencies)} from {start_date} to {end_date}...")
+        print_info(
+            f"Fetching rates for {', '.join(test_currencies)} from {start_date} to {end_date}..."
+        )
 
-        rates_data = await provider.fetch_rates(
-            (start_date, end_date),
-            test_currencies
-            )
+        rates_data = await provider.fetch_rates((start_date, end_date), test_currencies)
 
         assert rates_data, "No rate data returned"
 
@@ -199,7 +206,9 @@ async def test_fetch_rates(provider_code: str):
             if observations:
                 # Check first observation structure
                 first_obs = observations[0]
-                assert isinstance(first_obs, tuple) and len(first_obs) == 4, f"Invalid observation format for {currency}"
+                assert (
+                    isinstance(first_obs, tuple) and len(first_obs) == 4
+                ), f"Invalid observation format for {currency}"
 
                 obs_date, base, quote, obs_rate = first_obs
 
@@ -208,7 +217,9 @@ async def test_fetch_rates(provider_code: str):
                     print_error(f"Invalid date type for {currency}: {type(obs_date)}")
 
                 if not isinstance(base, str) or not isinstance(quote, str):
-                    print_error(f"Invalid currency types for {currency}: {type(base)}, {type(quote)}")
+                    print_error(
+                        f"Invalid currency types for {currency}: {type(base)}, {type(quote)}"
+                    )
 
                 if not isinstance(obs_rate, Decimal):
                     print_error(f"Invalid rate type for {currency}: {type(obs_rate)}")
@@ -226,6 +237,7 @@ async def test_fetch_rates(provider_code: str):
     except Exception as e:
         print_error(f"Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -248,14 +260,20 @@ async def test_normalize_for_storage(provider_code: str):
 
         if test_currency_higher:
             rate = Decimal("1.5")
-            base, quote, normalized_rate = normalize_rate_for_storage(provider.base_currency, test_currency_higher, rate)
+            base, quote, normalized_rate = normalize_rate_for_storage(
+                provider.base_currency, test_currency_higher, rate
+            )
             print_info(f"  Case 1: {provider.base_currency} < {test_currency_higher}")
             print_info(f"    Input rate: {rate}")
             print_info(f"    Stored as: {base}/{quote} = {normalized_rate}")
 
-            assert base == provider.base_currency and quote == test_currency_higher, f"Expected {provider.base_currency}/{test_currency_higher}, got {base}/{quote}"
+            assert (
+                base == provider.base_currency and quote == test_currency_higher
+            ), f"Expected {provider.base_currency}/{test_currency_higher}, got {base}/{quote}"
 
-            assert normalized_rate == rate, f"Rate should not be inverted: {rate} != {normalized_rate}"
+            assert (
+                normalized_rate == rate
+            ), f"Rate should not be inverted: {rate} != {normalized_rate}"
 
             print_success(f"  ✓ No inversion: {base}/{quote} = {normalized_rate}")
 
@@ -268,16 +286,22 @@ async def test_normalize_for_storage(provider_code: str):
 
         if test_currency_lower:
             rate = Decimal("1.5")
-            base, quote, normalized_rate = normalize_rate_for_storage(provider.base_currency, test_currency_lower, rate)
+            base, quote, normalized_rate = normalize_rate_for_storage(
+                provider.base_currency, test_currency_lower, rate
+            )
 
             print_info(f"  Case 2: {test_currency_lower} < {provider.base_currency}")
             print_info(f"    Input rate: {rate}")
             print_info(f"    Stored as: {base}/{quote} = {normalized_rate}")
 
-            assert base == test_currency_lower and quote == provider.base_currency, f"Expected {test_currency_lower}/{provider.base_currency}, got {base}/{quote}"
+            assert (
+                base == test_currency_lower and quote == provider.base_currency
+            ), f"Expected {test_currency_lower}/{provider.base_currency}, got {base}/{quote}"
 
             expected_inverted = Decimal("1") / rate
-            assert abs(normalized_rate - expected_inverted) <= Decimal("0.0001"), f"Rate should be inverted: expected {expected_inverted}, got {normalized_rate}"
+            assert abs(normalized_rate - expected_inverted) <= Decimal(
+                "0.0001"
+            ), f"Rate should be inverted: expected {expected_inverted}, got {normalized_rate}"
 
             print_success(f"  ✓ Inverted: {base}/{quote} = {normalized_rate}")
 
@@ -286,6 +310,7 @@ async def test_normalize_for_storage(provider_code: str):
     except Exception as e:
         print_error(f"Normalization test failed: {e}")
         import traceback
+
         traceback.print_exc()
         raise  # Re-raise for pytest
 
@@ -304,11 +329,11 @@ Providers without multi-unit support will skip these tests automatically.
 # Expected reasonable ranges for multi-unit currencies
 # Format: {currency: (min, max)} where values are per 1 USD
 REASONABLE_RANGES = {
-    'JPY': (Decimal("100"), Decimal("200")),  # 1 USD = 100-200 JPY (typical)
-    'SEK': (Decimal("8"), Decimal("15")),  # 1 USD = 8-15 SEK (typical)
-    'NOK': (Decimal("8"), Decimal("15")),  # 1 USD = 8-15 NOK (typical)
-    'DKK': (Decimal("6"), Decimal("10")),  # 1 USD = 6-10 DKK (typical)
-    }
+    "JPY": (Decimal("100"), Decimal("200")),  # 1 USD = 100-200 JPY (typical)
+    "SEK": (Decimal("8"), Decimal("15")),  # 1 USD = 8-15 SEK (typical)
+    "NOK": (Decimal("8"), Decimal("15")),  # 1 USD = 8-15 NOK (typical)
+    "DKK": (Decimal("6"), Decimal("10")),  # 1 USD = 6-10 DKK (typical)
+}
 
 
 def is_rate_reasonable(currency: str, rate: Decimal, base_currency: str) -> tuple[bool, str]:
@@ -340,9 +365,15 @@ def is_rate_reasonable(currency: str, rate: Decimal, base_currency: str) -> tupl
         max_val = max_val * 2
 
     if rate < min_val:
-        return False, f"Rate {rate} is too low (expected {min_val}-{max_val}). Possible over-inversion?"
+        return (
+            False,
+            f"Rate {rate} is too low (expected {min_val}-{max_val}). Possible over-inversion?",
+        )
     elif rate > max_val:
-        return False, f"Rate {rate} is too high (expected {min_val}-{max_val}). Possible missing 100x division?"
+        return (
+            False,
+            f"Rate {rate} is too high (expected {min_val}-{max_val}). Possible missing 100x division?",
+        )
     else:
         return True, f"Rate {rate} is within expected range ({min_val}-{max_val})"
 
@@ -380,6 +411,7 @@ async def test_multi_unit_identification(provider_code: str):
     except Exception as e:
         print_error(f"Multi-unit identification test failed: {e}")
         import traceback
+
         traceback.print_exc()
         raise
 
@@ -438,14 +470,16 @@ async def test_multi_unit_reasonableness(provider_code: str):
             # Format: (date, base, quote, rate)
             rate_date, obs_base, obs_quote, rate = observations[0]
 
-            is_reasonable, explanation = is_rate_reasonable(
-                currency, rate, provider.base_currency
-                )
+            is_reasonable, explanation = is_rate_reasonable(currency, rate, provider.base_currency)
 
             if is_reasonable:
-                print_success(f"  ✓ {currency}: {rate:.2f} per {provider.base_currency} - {explanation}")
+                print_success(
+                    f"  ✓ {currency}: {rate:.2f} per {provider.base_currency} - {explanation}"
+                )
             else:
-                print_error(f"  ✗ {currency}: {rate:.2f} per {provider.base_currency} - {explanation}")
+                print_error(
+                    f"  ✗ {currency}: {rate:.2f} per {provider.base_currency} - {explanation}"
+                )
                 all_reasonable = False
 
         assert all_reasonable, "Some multi-unit rates are outside reasonable ranges"
@@ -453,6 +487,7 @@ async def test_multi_unit_reasonableness(provider_code: str):
     except Exception as e:
         print_error(f"Multi-unit rate reasonableness test failed: {e}")
         import traceback
+
         traceback.print_exc()
         raise
 
@@ -479,7 +514,7 @@ async def test_multi_unit_consistency(provider_code: str):
         print_info("Testing normalization logic for multi-unit currencies...")
 
         # Test case: JPY (if in multi-unit set)
-        if 'JPY' in multi_unit_currencies:
+        if "JPY" in multi_unit_currencies:
             # Simulate a typical rate
             # Example: 100 JPY = 0.67 USD → 1 USD should = ~149 JPY
 
@@ -492,8 +527,9 @@ async def test_multi_unit_consistency(provider_code: str):
             print_info(f"  Expected: 1 {provider.base_currency} = {expected_rate:.2f} JPY")
 
             # Verify the math (allow 140-160 range)
-            assert Decimal("140") <= expected_rate <= Decimal("160"), \
-                f"Calculation produces unexpected result: {expected_rate}"
+            assert (
+                Decimal("140") <= expected_rate <= Decimal("160")
+            ), f"Calculation produces unexpected result: {expected_rate}"
 
             print_success(f"  ✓ Multi-unit inversion logic is mathematically correct")
         else:
@@ -502,6 +538,7 @@ async def test_multi_unit_consistency(provider_code: str):
     except Exception as e:
         print_error(f"Multi-unit consistency test failed: {e}")
         import traceback
+
         traceback.print_exc()
         raise
 

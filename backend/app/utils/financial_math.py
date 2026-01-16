@@ -16,6 +16,7 @@ Note:
     To convert from dict/JSON, use: FAInterestRatePeriod(**dict_data)
     To get dict/JSON from model: model.dict() or model.json()
 """
+
 import calendar
 import math
 from datetime import date as date_type, timedelta
@@ -27,14 +28,19 @@ from backend.app.schemas.assets import (
     FALateInterestConfig,
     DayCountConvention,
     CompoundFrequency,
-    )
+)
 
 
 # ============================================================================
 # DAY COUNT CONVENTIONS
 # ============================================================================
 
-def calculate_day_count_fraction(start_date: date_type, end_date: date_type, convention: DayCountConvention = DayCountConvention.ACT_365) -> Decimal:
+
+def calculate_day_count_fraction(
+    start_date: date_type,
+    end_date: date_type,
+    convention: DayCountConvention = DayCountConvention.ACT_365,
+) -> Decimal:
     """
     Calculate day fraction using specified day count convention.
 
@@ -164,6 +170,7 @@ def _calculate_30_360(start_date: date_type, end_date: date_type) -> Decimal:
 # COMPOUND INTEREST CALCULATIONS
 # ============================================================================
 
+
 def get_compounding_periods_per_year(frequency: CompoundFrequency) -> int:
     """
     Get the number of compounding periods per year for a given frequency.
@@ -194,11 +201,8 @@ def get_compounding_periods_per_year(frequency: CompoundFrequency) -> int:
 
 
 def calculate_compound_interest(
-    principal: Decimal,
-    annual_rate: Decimal,
-    time_fraction: Decimal,
-    frequency: CompoundFrequency
-    ) -> Decimal:
+    principal: Decimal, annual_rate: Decimal, time_fraction: Decimal, frequency: CompoundFrequency
+) -> Decimal:
     """
     Calculate compound interest for a given period.
 
@@ -251,10 +255,8 @@ def calculate_compound_interest(
 
 
 def calculate_simple_interest(
-    principal: Decimal,
-    annual_rate: Decimal,
-    time_fraction: Decimal
-    ) -> Decimal:
+    principal: Decimal, annual_rate: Decimal, time_fraction: Decimal
+) -> Decimal:
     """
     Calculate simple interest for a given period.
 
@@ -289,12 +291,13 @@ def calculate_simple_interest(
 # INTEREST SCHEDULE HELPERS
 # ============================================================================
 
+
 def find_active_period(
     schedule: List[FAInterestRatePeriod],
     target_date: date_type,
     maturity_date: date_type,
     late_interest: Optional[FALateInterestConfig] = None,
-    ) -> Optional[FAInterestRatePeriod]:
+) -> Optional[FAInterestRatePeriod]:
     """
     Find the active interest rate period for a given date.
 
@@ -344,8 +347,8 @@ def find_active_period(
                     annual_rate=late_interest.annual_rate,
                     compounding=late_interest.compounding,
                     compound_frequency=late_interest.compound_frequency,
-                    day_count=late_interest.day_count
-                    )
+                    day_count=late_interest.day_count,
+                )
 
     # Step 3: No applicable period found
     return None

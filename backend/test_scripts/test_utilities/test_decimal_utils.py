@@ -2,6 +2,7 @@
 Test decimal precision utilities.
 All test is independent of the others, so help use pytest features.
 """
+
 from decimal import Decimal
 
 import pytest
@@ -13,7 +14,7 @@ from backend.app.utils.decimal_utils import (
     truncate_priceHistory,
     truncate_fx_rate,
     parse_decimal_value,
-    )
+)
 
 
 def test_get_model_column_precision_price_history():
@@ -58,7 +59,7 @@ def test_truncate_to_db_precision_price():
     truncated = truncate_to_db_precision(value, PriceHistory, "close")
 
     assert truncated == Decimal("175.123456")
-    assert len(str(truncated).split('.')[1]) == 6  # Exactly 6 decimals
+    assert len(str(truncated).split(".")[1]) == 6  # Exactly 6 decimals
 
 
 def test_truncate_to_db_precision_fx_rate():
@@ -67,7 +68,7 @@ def test_truncate_to_db_precision_fx_rate():
     truncated = truncate_to_db_precision(value, FxRate, "rate")
 
     assert truncated == Decimal("1.0850123456")
-    assert len(str(truncated).split('.')[1]) == 10  # Exactly 10 decimals
+    assert len(str(truncated).split(".")[1]) == 10  # Exactly 10 decimals
 
 
 def test_truncate_price_to_db_precision_convenience():
@@ -89,6 +90,7 @@ def test_truncate_fx_rate_to_db_precision_convenience():
 # ============================================================================
 # TESTS: Edge cases
 # ============================================================================
+
 
 def test_truncate_preserves_small_values():
     """Test that small values are preserved correctly."""
@@ -140,6 +142,7 @@ def test_no_false_update_detection():
 # ============================================================================
 # TESTS: parse_decimal_value helper
 # ============================================================================
+
 
 def test_parse_decimal_value_from_decimal():
     """Test parsing already Decimal value."""

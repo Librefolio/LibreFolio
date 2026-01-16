@@ -25,6 +25,7 @@ This module provides:
     UPLOADED → parse → PARSED (success) or FAILED (error)
     After parsing, the user reviews and imports via POST /transactions.
 """
+
 from __future__ import annotations
 
 import json
@@ -43,16 +44,19 @@ from backend.app.db.models import Transaction
 from backend.app.schemas.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import BRIMAssetCandidate, BRIMMatchConfidence
 from backend.app.schemas.brim import (
-    BRIMDuplicateReport, BRIMDuplicateMatch, BRIMDuplicateLevel,
-    BRIMTXDuplicateCandidate, is_fake_asset_id
-    )
+    BRIMDuplicateReport,
+    BRIMDuplicateMatch,
+    BRIMDuplicateLevel,
+    BRIMTXDuplicateCandidate,
+    is_fake_asset_id,
+)
 from backend.app.schemas.brim import (
     BRIMFileInfo,
     BRIMFileStatus,
     BRIMPluginInfo,
     BRIMAssetMapping,
     BRIMExtractedAssetInfo,
-    )
+)
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.asset_source import AssetCRUDService
 from backend.app.services.provider_registry import BRIMProviderRegistry
@@ -64,6 +68,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 # EXCEPTIONS
 # =============================================================================
+
 
 class BRIMParseError(Exception):
     """Raised when a file cannot be parsed by a plugin."""
@@ -77,6 +82,7 @@ class BRIMParseError(Exception):
 # =============================================================================
 # ABSTRACT BASE CLASS
 # =============================================================================
+
 
 class BRIMProvider(ABC):
     """
@@ -152,7 +158,7 @@ class BRIMProvider(ABC):
 
         Examples: ['.csv'], ['.csv', '.xlsx'], ['.pdf']
         """
-        return ['.csv']
+        return [".csv"]
 
     @property
     def detection_priority(self) -> int:
@@ -189,24 +195,24 @@ class BRIMProvider(ABC):
         Returns:
             String containing the first N lines, empty string on error
         """
-        encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
+        encodings = ["utf-8-sig", "utf-8", "latin-1", "cp1252"]
 
         for encoding in encodings:
             try:
-                with open(file_path, 'r', encoding=encoding) as f:
+                with open(file_path, "r", encoding=encoding) as f:
                     lines = []
                     for _ in range(num_lines):
                         line = f.readline()
                         if not line:
                             break
                         lines.append(line)
-                    return ''.join(lines)
+                    return "".join(lines)
             except (UnicodeDecodeError, UnicodeError):
                 continue
             except Exception:
-                return ''
+                return ""
 
-        return ''
+        return ""
 
     @staticmethod
     def _detect_separator(content: str) -> str:
@@ -223,20 +229,20 @@ class BRIMProvider(ABC):
             Detected separator character (default: ',')
         """
         if not content:
-            return ','
+            return ","
 
-        first_line = content.split('\n')[0] if '\n' in content else content
+        first_line = content.split("\n")[0] if "\n" in content else content
 
         # Count occurrences of each separator
         separators = {
-            ';': first_line.count(';'),
-            ',': first_line.count(','),
-            '\t': first_line.count('\t'),
-            }
+            ";": first_line.count(";"),
+            ",": first_line.count(","),
+            "\t": first_line.count("\t"),
+        }
 
         # Return the one with most occurrences (minimum 1)
         best = max(separators, key=separators.get)
-        return best if separators[best] > 0 else ','
+        return best if separators[best] > 0 else ","
 
     @property
     def icon_url(self) -> Optional[str]:
@@ -298,10 +304,8 @@ class BRIMProvider(ABC):
 
     @abstractmethod
     def parse(
-        self,
-        file_path: Path,
-        broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, "BRIMExtractedAssetInfo"]]:
+        self, file_path: Path, broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, "BRIMExtractedAssetInfo"]]:
         """
         Parse file and return transactions, warnings, and extracted asset info.
 
@@ -353,8 +357,8 @@ class BRIMProvider(ABC):
             name=self.provider_name,
             description=self.description,
             supported_extensions=self.supported_extensions,
-            icon_url=self.icon_url
-            )
+            icon_url=self.icon_url,
+        )
 
 
 # =============================================================================
@@ -420,8 +424,8 @@ def save_uploaded_file(content: bytes, original_filename: str) -> BRIMFileInfo:
         "uploaded_at": now.isoformat(),
         "processed_at": None,
         "compatible_plugins": compatible_plugins,
-        "error_message": None
-        }
+        "error_message": None,
+    }
 
     # Write metadata JSON
     meta_path = uploaded_dir / f"{file_id}.json"
@@ -432,8 +436,8 @@ def save_uploaded_file(content: bytes, original_filename: str) -> BRIMFileInfo:
         file_id=file_id,
         original_filename=original_filename,
         size_bytes=len(content),
-        compatible_plugins=compatible_plugins
-        )
+        compatible_plugins=compatible_plugins,
+    )
 
     return BRIMFileInfo(
         file_id=file_id,
@@ -441,8 +445,8 @@ def save_uploaded_file(content: bytes, original_filename: str) -> BRIMFileInfo:
         size_bytes=len(content),
         status=BRIMFileStatus.UPLOADED,
         uploaded_at=now,
-        compatible_plugins=compatible_plugins
-        )
+        compatible_plugins=compatible_plugins,
+    )
 
 
 def list_files(status: Optional[BRIMFileStatus] = None) -> List[BRIMFileInfo]:
@@ -467,10 +471,7 @@ def list_files(status: Optional[BRIMFileStatus] = None) -> List[BRIMFileInfo]:
     if status:
         folders = [BROKER_REPORTS_DIR / status.value]
     else:
-        folders = [
-            BROKER_REPORTS_DIR / s.value
-            for s in BRIMFileStatus
-            ]
+        folders = [BROKER_REPORTS_DIR / s.value for s in BRIMFileStatus]
 
     files = []
     for folder in folders:
@@ -479,26 +480,26 @@ def list_files(status: Optional[BRIMFileStatus] = None) -> List[BRIMFileInfo]:
         for meta_path in folder.glob("*.json"):
             try:
                 metadata = json.loads(meta_path.read_text())
-                files.append(BRIMFileInfo(
-                    file_id=metadata["file_id"],
-                    filename=metadata["filename"],
-                    size_bytes=metadata["size_bytes"],
-                    status=BRIMFileStatus(metadata["status"]),
-                    uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
-                    processed_at=(
-                        datetime.fromisoformat(metadata["processed_at"])
-                        if metadata.get("processed_at")
-                        else None
-                    ),
-                    compatible_plugins=metadata.get("compatible_plugins", []),
-                    error_message=metadata.get("error_message")
-                    ))
+                files.append(
+                    BRIMFileInfo(
+                        file_id=metadata["file_id"],
+                        filename=metadata["filename"],
+                        size_bytes=metadata["size_bytes"],
+                        status=BRIMFileStatus(metadata["status"]),
+                        uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
+                        processed_at=(
+                            datetime.fromisoformat(metadata["processed_at"])
+                            if metadata.get("processed_at")
+                            else None
+                        ),
+                        compatible_plugins=metadata.get("compatible_plugins", []),
+                        error_message=metadata.get("error_message"),
+                    )
+                )
             except Exception as e:
                 logger.warning(
-                    "Error reading file metadata",
-                    meta_path=str(meta_path),
-                    error=str(e)
-                    )
+                    "Error reading file metadata", meta_path=str(meta_path), error=str(e)
+                )
 
     # Sort by uploaded_at, newest first
     files.sort(key=lambda f: f.uploaded_at, reverse=True)
@@ -538,14 +539,10 @@ def get_file_info(file_id: str) -> Optional[BRIMFileInfo]:
                         else None
                     ),
                     compatible_plugins=metadata.get("compatible_plugins", []),
-                    error_message=metadata.get("error_message")
-                    )
+                    error_message=metadata.get("error_message"),
+                )
             except Exception as e:
-                logger.warning(
-                    "Error reading file metadata",
-                    file_id=file_id,
-                    error=str(e)
-                    )
+                logger.warning("Error reading file metadata", file_id=file_id, error=str(e))
                 return None
     return None
 
@@ -661,10 +658,8 @@ def move_to_failed(file_id: str, error_message: str) -> bool:
 
 
 def _move_file(
-    file_id: str,
-    target_status: BRIMFileStatus,
-    error_message: Optional[str] = None
-    ) -> bool:
+    file_id: str, target_status: BRIMFileStatus, error_message: Optional[str] = None
+) -> bool:
     """
     Internal helper to move a file to a different status folder.
 
@@ -688,8 +683,8 @@ def _move_file(
         logger.warning(
             "Cannot move file: not in UPLOADED status",
             file_id=file_id,
-            current_status=file_info.status.value
-            )
+            current_status=file_info.status.value,
+        )
         return False
 
     # Get extension
@@ -723,8 +718,8 @@ def _move_file(
         "Moved file",
         file_id=file_id,
         from_status=BRIMFileStatus.UPLOADED.value,
-        to_status=target_status.value
-        )
+        to_status=target_status.value,
+    )
     return True
 
 
@@ -732,11 +727,10 @@ def _move_file(
 # SERVICE FUNCTIONS
 # =============================================================================
 
+
 def parse_file(
-    file_id: str,
-    plugin_code: str,
-    broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    file_id: str, plugin_code: str, broker_id: int
+) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
     """
     Parse a file using the specified plugin (preview only, no DB persistence).
 
@@ -785,17 +779,12 @@ def parse_file(
 
     # Verify plugin can parse this file
     if not plugin.can_parse(file_path):
-        raise ValueError(
-            f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'"
-            )
+        raise ValueError(f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'")
 
     # Parse file
     logger.info(
-        "Parsing file with plugin",
-        file_id=file_id,
-        plugin_code=plugin_code,
-        broker_id=broker_id
-        )
+        "Parsing file with plugin", file_id=file_id, plugin_code=plugin_code, broker_id=broker_id
+    )
 
     # Plugin returns (transactions, warnings, extracted_assets)
     transactions, warnings, extracted_assets = plugin.parse(file_path, broker_id)
@@ -806,8 +795,8 @@ def parse_file(
         plugin_code=plugin_code,
         transaction_count=len(transactions),
         warning_count=len(warnings),
-        extracted_asset_count=len(extracted_assets)
-        )
+        extracted_asset_count=len(extracted_assets),
+    )
 
     return transactions, warnings, extracted_assets
 
@@ -816,12 +805,13 @@ def parse_file(
 # ASSET CANDIDATE SEARCH
 # =============================================================================
 
+
 async def search_asset_candidates(
     session,
     extracted_symbol: Optional[str],
     extracted_isin: Optional[str],
-    extracted_name: Optional[str]
-    ) -> Tuple[List, Optional[int]]:
+    extracted_name: Optional[str],
+) -> Tuple[List, Optional[int]]:
     """
     Search for asset candidates in the database.
 
@@ -849,54 +839,56 @@ async def search_asset_candidates(
     # Priority 1: ISIN exact match (EXACT confidence)
     if extracted_isin:
         results = await AssetCRUDService.list_assets(
-            filters=FAAinfoFiltersRequest(isin=extracted_isin),
-            session=session
-            )
+            filters=FAAinfoFiltersRequest(isin=extracted_isin), session=session
+        )
         for asset in results:
-            candidates.append(BRIMAssetCandidate(
-                asset_id=asset.id,
-                symbol=asset.identifier_ticker,
-                isin=asset.identifier_isin,
-                name=asset.display_name,
-                match_confidence=BRIMMatchConfidence.EXACT
-                ))
+            candidates.append(
+                BRIMAssetCandidate(
+                    asset_id=asset.id,
+                    symbol=asset.identifier_ticker,
+                    isin=asset.identifier_isin,
+                    name=asset.display_name,
+                    match_confidence=BRIMMatchConfidence.EXACT,
+                )
+            )
 
     # Priority 2: Symbol exact match (MEDIUM confidence)
     if extracted_symbol and not candidates:
         results = await AssetCRUDService.list_assets(
-            filters=FAAinfoFiltersRequest(ticker=extracted_symbol),
-            session=session
-            )
+            filters=FAAinfoFiltersRequest(ticker=extracted_symbol), session=session
+        )
         for asset in results:
-            candidates.append(BRIMAssetCandidate(
-                asset_id=asset.id,
-                symbol=asset.identifier_ticker,
-                isin=asset.identifier_isin,
-                name=asset.display_name,
-                match_confidence=BRIMMatchConfidence.MEDIUM
-                ))
+            candidates.append(
+                BRIMAssetCandidate(
+                    asset_id=asset.id,
+                    symbol=asset.identifier_ticker,
+                    isin=asset.identifier_isin,
+                    name=asset.display_name,
+                    match_confidence=BRIMMatchConfidence.MEDIUM,
+                )
+            )
 
     # Priority 3: Name partial match (LOW confidence)
     if extracted_name and not candidates:
         # Try identifier partial match first
         results = await AssetCRUDService.list_assets(
-            filters=FAAinfoFiltersRequest(identifier_contains=extracted_name),
-            session=session
-            )
+            filters=FAAinfoFiltersRequest(identifier_contains=extracted_name), session=session
+        )
         if not results:
             # Fall back to display_name search
             results = await AssetCRUDService.list_assets(
-                filters=FAAinfoFiltersRequest(search=extracted_name),
-                session=session
-                )
+                filters=FAAinfoFiltersRequest(search=extracted_name), session=session
+            )
         for asset in results:
-            candidates.append(BRIMAssetCandidate(
-                asset_id=asset.id,
-                symbol=asset.identifier_ticker,
-                isin=asset.identifier_isin,
-                name=asset.display_name,
-                match_confidence=BRIMMatchConfidence.LOW
-                ))
+            candidates.append(
+                BRIMAssetCandidate(
+                    asset_id=asset.id,
+                    symbol=asset.identifier_ticker,
+                    isin=asset.identifier_isin,
+                    name=asset.display_name,
+                    match_confidence=BRIMMatchConfidence.LOW,
+                )
+            )
 
     # Auto-select if exactly 1 candidate found
     auto_selected = candidates[0].asset_id if len(candidates) == 1 else None
@@ -908,12 +900,13 @@ async def search_asset_candidates(
 # DUPLICATE DETECTION
 # =============================================================================
 
+
 async def detect_tx_duplicates(
     transactions: List[TXCreateItem],
     broker_id: int,
     session,
-    asset_mappings: Optional[List[BRIMAssetMapping]] = None
-    ) -> "BRIMDuplicateReport":
+    asset_mappings: Optional[List[BRIMAssetMapping]] = None,
+) -> "BRIMDuplicateReport":
     """
     Detect potential duplicate transactions in the database.
 
@@ -976,8 +969,8 @@ async def detect_tx_duplicates(
         conditions = [
             Transaction.broker_id == broker_id,
             Transaction.type == tx.type,
-            Transaction.date == tx.date
-            ]
+            Transaction.date == tx.date,
+        ]
 
         # If asset is resolved, filter by asset_id for more precise matching
         if asset_is_resolved and real_asset_id is not None:
@@ -1027,30 +1020,32 @@ async def detect_tx_duplicates(
                 else:
                     match_level = BRIMDuplicateLevel.POSSIBLE
 
-            matches.append(BRIMDuplicateMatch(
-                existing_tx_id=existing.id,
-                tx_date=existing.date,
-                tx_type=existing.type,
-                tx_quantity=existing.quantity,
-                tx_cash_amount=existing.amount,
-                tx_cash_currency=existing.currency,
-                tx_description=existing.description,
-                match_level=match_level
-                ))
+            matches.append(
+                BRIMDuplicateMatch(
+                    existing_tx_id=existing.id,
+                    tx_date=existing.date,
+                    tx_type=existing.type,
+                    tx_quantity=existing.quantity,
+                    tx_cash_amount=existing.amount,
+                    tx_cash_currency=existing.currency,
+                    tx_description=existing.description,
+                    match_level=match_level,
+                )
+            )
 
         if not matches:
             tx_unique_indices.append(idx)
         else:
             # Categorize by highest match level found
             # Priority: LIKELY_WITH_ASSET > LIKELY > POSSIBLE_WITH_ASSET > POSSIBLE
-            likely_with_asset = [m for m in matches if m.match_level == BRIMDuplicateLevel.LIKELY_WITH_ASSET]
+            likely_with_asset = [
+                m for m in matches if m.match_level == BRIMDuplicateLevel.LIKELY_WITH_ASSET
+            ]
             likely = [m for m in matches if m.match_level == BRIMDuplicateLevel.LIKELY]
 
             candidate = BRIMTXDuplicateCandidate(
-                tx_row_index=idx,
-                tx_parsed=tx,
-                tx_existing_matches=matches
-                )
+                tx_row_index=idx, tx_parsed=tx, tx_existing_matches=matches
+            )
 
             # If any LIKELY level match, put in likely_duplicates
             if likely_with_asset or likely:
@@ -1061,5 +1056,5 @@ async def detect_tx_duplicates(
     return BRIMDuplicateReport(
         tx_unique_indices=tx_unique_indices,
         tx_possible_duplicates=tx_possible_duplicates,
-        tx_likely_duplicates=tx_likely_duplicates
-        )
+        tx_likely_duplicates=tx_likely_duplicates,
+    )

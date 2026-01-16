@@ -15,14 +15,14 @@ from backend.app.schemas.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
     FAAssetMetadataResponse,
-    AssetType
-    )
+    AssetType,
+)
 from backend.app.schemas.provider import (
     FAProviderAssignmentItem,
     FABulkAssignResponse,
     FAProviderSearchResponse,
-    IdentifierType
-    )
+    IdentifierType,
+)
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
 
@@ -56,13 +56,11 @@ async def test_assign_provider(test_server):
         asset_item = FAAssetCreateItem(
             display_name=f"Provider Test {unique_id('PROV')}",
             currency="USD",
-            asset_type=AssetType.STOCK
-            )
+            asset_type=AssetType.STOCK,
+        )
         create_resp = await client.post(
-            f"{API_BASE}/assets",
-            json=[asset_item.model_dump(mode="json")],
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+        )
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -74,26 +72,26 @@ async def test_assign_provider(test_server):
             provider_code="yfinance",
             identifier="AAPL",
             identifier_type=IdentifierType.TICKER,
-            provider_params=None
-            )
+            provider_params=None,
+        )
 
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider",
             json=[assignment.model_dump(mode="json")],
-            timeout=TIMEOUT
-            )
+            timeout=TIMEOUT,
+        )
 
-        assert assign_resp.status_code == 200, f"Expected 200, got {assign_resp.status_code}: {assign_resp.text}"
+        assert (
+            assign_resp.status_code == 200
+        ), f"Expected 200, got {assign_resp.status_code}: {assign_resp.text}"
         assign_data = FABulkAssignResponse(**assign_resp.json())
         assert assign_data.success_count >= 1, "Should have at least 1 successful assignment"
         print_success(f"✓ Provider assigned: {assignment.provider_code}")
 
         # Step 3: Verify assignment via GET /assets (bulk read endpoint)
         query_resp = await client.get(
-            f"{API_BASE}/assets",
-            params={"asset_ids": [asset_id]},
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT
+        )
         assert query_resp.status_code == 200
         assets = [FAAssetMetadataResponse(**a) for a in query_resp.json()]
         assert len(assets) == 1
@@ -112,10 +110,11 @@ async def test_update_provider_params(test_server):
     async with httpx.AsyncClient() as client:
         # Create asset
         asset_item = FAAssetCreateItem(
-            display_name=f"Update Params {unique_id('UPD')}",
-            currency="USD"
-            )
-        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
+            display_name=f"Update Params {unique_id('UPD')}", currency="USD"
+        )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+        )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
 
@@ -125,9 +124,13 @@ async def test_update_provider_params(test_server):
             provider_code="mockprov",
             identifier="MOCK1",
             identifier_type=IdentifierType.UUID,
-            provider_params={"key": "value1"}
-            )
-        await client.post(f"{API_BASE}/assets/provider", json=[assignment1.model_dump(mode="json")], timeout=TIMEOUT)
+            provider_params={"key": "value1"},
+        )
+        await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment1.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
         print_info("  Initial provider assigned with params")
 
         # Update params
@@ -136,9 +139,13 @@ async def test_update_provider_params(test_server):
             provider_code="mockprov",
             identifier="MOCK1",
             identifier_type=IdentifierType.UUID,
-            provider_params={"key": "value2"}
-            )
-        update_resp = await client.post(f"{API_BASE}/assets/provider", json=[assignment2.model_dump(mode="json")], timeout=TIMEOUT)
+            provider_params={"key": "value2"},
+        )
+        update_resp = await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment2.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
         assert update_resp.status_code == 200
         print_success("✓ Provider params updated")
 
@@ -153,8 +160,12 @@ async def test_remove_provider(test_server):
 
     async with httpx.AsyncClient() as client:
         # Create asset with provider
-        asset_item = FAAssetCreateItem(display_name=f"Remove Prov {unique_id('REM')}", currency="USD")
-        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
+        asset_item = FAAssetCreateItem(
+            display_name=f"Remove Prov {unique_id('REM')}", currency="USD"
+        )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+        )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
 
@@ -164,22 +175,26 @@ async def test_remove_provider(test_server):
             provider_code="mockprov",
             identifier="MOCK",
             identifier_type=IdentifierType.UUID,
-            provider_params=None
-            )
-        await client.post(f"{API_BASE}/assets/provider", json=[assignment.model_dump(mode="json")], timeout=TIMEOUT)
+            provider_params=None,
+        )
+        await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
         print_info("  Provider assigned")
 
         # Remove provider
         delete_resp = await client.delete(
-            f"{API_BASE}/assets/provider",
-            params={"asset_ids": [asset_id]},
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets/provider", params={"asset_ids": [asset_id]}, timeout=TIMEOUT
+        )
         assert delete_resp.status_code == 200
         print_success("✓ Provider removed")
 
         # Verify removal
-        query_resp = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+        query_resp = await client.get(
+            f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT
+        )
         assets = [FAAssetMetadataResponse(**a) for a in query_resp.json()]
         assert assets[0].has_provider is False
         print_success("✓ Provider removal verified")
@@ -195,8 +210,12 @@ async def test_refresh_metadata(test_server):
 
     async with httpx.AsyncClient() as client:
         # Create asset with provider
-        asset_item = FAAssetCreateItem(display_name=f"Refresh Test {unique_id('REF')}", currency="USD")
-        create_resp = await client.post(f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT)
+        asset_item = FAAssetCreateItem(
+            display_name=f"Refresh Test {unique_id('REF')}", currency="USD"
+        )
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+        )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
 
@@ -206,20 +225,24 @@ async def test_refresh_metadata(test_server):
             provider_code="mockprov",
             identifier="MOCK_REFRESH",
             identifier_type=IdentifierType.UUID,
-            provider_params=None
-            )
-        await client.post(f"{API_BASE}/assets/provider", json=[assignment.model_dump(mode="json")], timeout=TIMEOUT)
+            provider_params=None,
+        )
+        await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[assignment.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
         print_info("  Provider assigned")
 
         # Refresh metadata
         refresh_resp = await client.post(
-            f"{API_BASE}/assets/provider/refresh",
-            params={"asset_ids": [asset_id]},
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets/provider/refresh", params={"asset_ids": [asset_id]}, timeout=TIMEOUT
+        )
 
         # Should succeed (mockprov provides metadata)
-        assert refresh_resp.status_code == 200, f"Expected 200, got {refresh_resp.status_code}: {refresh_resp.text}"
+        assert (
+            refresh_resp.status_code == 200
+        ), f"Expected 200, got {refresh_resp.status_code}: {refresh_resp.text}"
         print_success("✓ Metadata refresh successful")
 
 
@@ -236,8 +259,10 @@ async def test_bulk_assign_providers(test_server):
         assets = [
             FAAssetCreateItem(display_name=f"Bulk {i} {unique_id(f'BLK{i}')}", currency="USD")
             for i in range(3)
-            ]
-        create_resp = await client.post(f"{API_BASE}/assets", json=[a.model_dump(mode="json") for a in assets], timeout=TIMEOUT)
+        ]
+        create_resp = await client.post(
+            f"{API_BASE}/assets", json=[a.model_dump(mode="json") for a in assets], timeout=TIMEOUT
+        )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_ids = [r.asset_id for r in create_data.results if r.success]
         print_info(f"  Created {len(asset_ids)} assets")
@@ -249,16 +274,16 @@ async def test_bulk_assign_providers(test_server):
                 provider_code="mockprov",
                 identifier=f"MOCK{aid}",
                 identifier_type=IdentifierType.UUID,
-                provider_params=None
-                )
+                provider_params=None,
+            )
             for aid in asset_ids
-            ]
+        ]
 
         bulk_resp = await client.post(
             f"{API_BASE}/assets/provider",
             json=[a.model_dump(mode="json") for a in assignments],
-            timeout=TIMEOUT
-            )
+            timeout=TIMEOUT,
+        )
 
         assert bulk_resp.status_code == 200
         bulk_data = FABulkAssignResponse(**bulk_resp.json())
@@ -278,12 +303,12 @@ async def test_search_assets_basic(test_server):
         # Search using default (all providers)
         # Note: Uses longer timeout as external APIs (yfinance) can be slow
         search_resp = await client.get(
-            f"{API_BASE}/assets/provider/search",
-            params={"q": "Apple"},
-            timeout=SEARCH_TIMEOUT
-            )
+            f"{API_BASE}/assets/provider/search", params={"q": "Apple"}, timeout=SEARCH_TIMEOUT
+        )
 
-        assert search_resp.status_code == 200, f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
+        assert (
+            search_resp.status_code == 200
+        ), f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
         search_data = FAProviderSearchResponse(**search_resp.json())
 
         print_info(f"  Query: '{search_data.query}'")
@@ -312,7 +337,9 @@ async def test_search_assets_basic(test_server):
         for r in search_data.results[:3]:
             print_info(f"  Sample: [{r.provider_code}] {r.identifier}: {r.display_name[:40]}...")
 
-        print_success(f"✓ Found {search_data.total_results} results from {len(by_provider)} providers")
+        print_success(
+            f"✓ Found {search_data.total_results} results from {len(by_provider)} providers"
+        )
 
 
 # ============================================================
@@ -329,10 +356,12 @@ async def test_search_assets_semiconductor(test_server):
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search",
             params={"q": "Semiconductor"},
-            timeout=SEARCH_TIMEOUT
-            )
+            timeout=SEARCH_TIMEOUT,
+        )
 
-        assert search_resp.status_code == 200, f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
+        assert (
+            search_resp.status_code == 200
+        ), f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
         search_data = FAProviderSearchResponse(**search_resp.json())
 
         print_info(f"  Query: '{search_data.query}'")
@@ -350,13 +379,15 @@ async def test_search_assets_semiconductor(test_server):
         # Should find semiconductor ETFs on justetf AND stocks on yfinance
         assert search_data.total_results > 0, "Should find semiconductor results"
 
-        justetf_results = by_provider.get('justetf', 0)
-        yfinance_results = by_provider.get('yfinance', 0)
+        justetf_results = by_provider.get("justetf", 0)
+        yfinance_results = by_provider.get("yfinance", 0)
 
         assert justetf_results > 0, "JustETF should find semiconductor ETFs"
         assert yfinance_results > 0, "yfinance should find semiconductor stocks"
 
-        print_success(f"✓ Found {search_data.total_results} results ({justetf_results} ETFs + {yfinance_results} stocks)")
+        print_success(
+            f"✓ Found {search_data.total_results} results ({justetf_results} ETFs + {yfinance_results} stocks)"
+        )
 
 
 # ============================================================
@@ -372,10 +403,12 @@ async def test_search_assets_provider_filter(test_server):
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search",
             params={"q": "MSCI", "providers": "justetf"},
-            timeout=SEARCH_TIMEOUT
-            )
+            timeout=SEARCH_TIMEOUT,
+        )
 
-        assert search_resp.status_code == 200, f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
+        assert (
+            search_resp.status_code == 200
+        ), f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
         search_data = FAProviderSearchResponse(**search_resp.json())
 
         print_info(f"  Query: '{search_data.query}'")
@@ -388,15 +421,21 @@ async def test_search_assets_provider_filter(test_server):
 
         # All results should be from justetf
         for result in search_data.results:
-            assert result.provider_code == "justetf", f"Expected justetf, got {result.provider_code}"
+            assert (
+                result.provider_code == "justetf"
+            ), f"Expected justetf, got {result.provider_code}"
 
         # MSCI should find many ETFs
         assert search_data.total_results > 0, "MSCI should find ETFs on justetf"
 
         if search_data.results:
-            print_info(f"  Sample: {search_data.results[0].identifier} - {search_data.results[0].display_name[:50]}...")
+            print_info(
+                f"  Sample: {search_data.results[0].identifier} - {search_data.results[0].display_name[:50]}..."
+            )
 
-        print_success(f"✓ Provider filter works: {search_data.total_results} results from justetf only")
+        print_success(
+            f"✓ Provider filter works: {search_data.total_results} results from justetf only"
+        )
 
 
 # ============================================================
@@ -410,12 +449,12 @@ async def test_search_assets_ibm(test_server):
     async with httpx.AsyncClient() as client:
         # Search for "IBM" - well-known ticker/company
         search_resp = await client.get(
-            f"{API_BASE}/assets/provider/search",
-            params={"q": "IBM"},
-            timeout=SEARCH_TIMEOUT
-            )
+            f"{API_BASE}/assets/provider/search", params={"q": "IBM"}, timeout=SEARCH_TIMEOUT
+        )
 
-        assert search_resp.status_code == 200, f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
+        assert (
+            search_resp.status_code == 200
+        ), f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
         search_data = FAProviderSearchResponse(**search_resp.json())
 
         print_info(f"  Query: '{search_data.query}'")
@@ -432,14 +471,16 @@ async def test_search_assets_ibm(test_server):
         # Should find IBM from yfinance (main stock) and possibly justetf
         assert search_data.total_results > 0, "Should find results for 'IBM'"
 
-        yfinance_results = by_provider.get('yfinance', 0)
+        yfinance_results = by_provider.get("yfinance", 0)
         assert yfinance_results > 0, "yfinance should find IBM stock"
 
         # Show sample results
         for r in search_data.results[:3]:
             print_info(f"  Sample: [{r.provider_code}] {r.identifier}: {r.display_name[:40]}...")
 
-        print_success(f"✓ Found {search_data.total_results} results for 'IBM' ({yfinance_results} from yfinance)")
+        print_success(
+            f"✓ Found {search_data.total_results} results for 'IBM' ({yfinance_results} from yfinance)"
+        )
 
 
 # ============================================================
@@ -455,11 +496,13 @@ async def test_search_assets_invalid_provider(test_server):
         search_resp = await client.get(
             f"{API_BASE}/assets/provider/search",
             params={"q": "Apple", "providers": "nonexistent_provider"},
-            timeout=TIMEOUT
-            )
+            timeout=TIMEOUT,
+        )
 
         # Should succeed but return empty results
-        assert search_resp.status_code == 200, f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
+        assert (
+            search_resp.status_code == 200
+        ), f"Expected 200, got {search_resp.status_code}: {search_resp.text}"
         search_data = FAProviderSearchResponse(**search_resp.json())
 
         print_info(f"  Providers queried: {search_data.providers_queried}")
@@ -483,13 +526,13 @@ async def test_search_assets_empty_query(test_server):
     async with httpx.AsyncClient() as client:
         # Search with empty query
         search_resp = await client.get(
-            f"{API_BASE}/assets/provider/search",
-            params={"q": ""},
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets/provider/search", params={"q": ""}, timeout=TIMEOUT
+        )
 
         # Should fail validation (min_length=1)
-        assert search_resp.status_code == 422, f"Expected 422, got {search_resp.status_code}: {search_resp.text}"
+        assert (
+            search_resp.status_code == 422
+        ), f"Expected 422, got {search_resp.status_code}: {search_resp.text}"
         print_success("✓ Empty query correctly rejected with 422")
 
 
@@ -508,10 +551,8 @@ async def test_search_parallel_execution(test_server):
         start_time = time.time()
 
         search_resp = await client.get(
-            f"{API_BASE}/assets/provider/search",
-            params={"q": "Technology"},
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets/provider/search", params={"q": "Technology"}, timeout=TIMEOUT
+        )
 
         elapsed = time.time() - start_time
 
@@ -526,7 +567,9 @@ async def test_search_parallel_execution(test_server):
         # If parallel execution works, querying multiple providers should be fast
         # (much less than providers * individual_timeout)
         # A reasonable threshold: should complete in under 15 seconds for all providers
-        assert elapsed < 15.0, f"Search took too long ({elapsed:.2f}s), parallel execution may not be working"
+        assert (
+            elapsed < 15.0
+        ), f"Search took too long ({elapsed:.2f}s), parallel execution may not be working"
 
         print_success(f"✓ Parallel search completed in {elapsed:.2f}s")
 
@@ -543,18 +586,17 @@ async def test_search_to_asset_e2e(test_server):
         # Step 1: Search for assets
         print_info("Step 1: Searching for 'Microsoft'...")
         search_resp = await client.get(
-            f"{API_BASE}/assets/provider/search",
-            params={"q": "Microsoft"},
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets/provider/search", params={"q": "Microsoft"}, timeout=TIMEOUT
+        )
         assert search_resp.status_code == 200
         search_data = FAProviderSearchResponse(**search_resp.json())
 
         # We need results from providers that support current value (yfinance, justetf)
         usable_results = [
-            r for r in search_data.results
+            r
+            for r in search_data.results
             if r.provider_code in ("yfinance", "justetf") and r.identifier
-            ]
+        ]
 
         assert len(usable_results) > 0, "Should find usable results from yfinance or justetf"
         print_info(f"  Found {len(usable_results)} usable results")
@@ -567,19 +609,23 @@ async def test_search_to_asset_e2e(test_server):
         test_assets = []
 
         if yfinance_results:
-            test_assets.append({
-                "search_result": yfinance_results[0],
-                "asset_type": AssetType.STOCK,
-                "identifier_type": IdentifierType.TICKER
-                })
+            test_assets.append(
+                {
+                    "search_result": yfinance_results[0],
+                    "asset_type": AssetType.STOCK,
+                    "identifier_type": IdentifierType.TICKER,
+                }
+            )
             print_info(f"  Will test yfinance with: {yfinance_results[0].identifier}")
 
         if justetf_results:
-            test_assets.append({
-                "search_result": justetf_results[0],
-                "asset_type": AssetType.ETF,
-                "identifier_type": IdentifierType.ISIN
-                })
+            test_assets.append(
+                {
+                    "search_result": justetf_results[0],
+                    "asset_type": AssetType.ETF,
+                    "identifier_type": IdentifierType.ISIN,
+                }
+            )
             print_info(f"  Will test justetf with: {justetf_results[0].identifier}")
 
         assert len(test_assets) > 0, "Should have at least one test asset"
@@ -593,27 +639,31 @@ async def test_search_to_asset_e2e(test_server):
             asset_item = FAAssetCreateItem(
                 display_name=sr.display_name[:100] if sr.display_name else f"Test {sr.identifier}",
                 currency=sr.currency or "USD",
-                asset_type=test_item["asset_type"]
-                )
+                asset_type=test_item["asset_type"],
+            )
 
             create_resp = await client.post(
-                f"{API_BASE}/assets",
-                json=[asset_item.model_dump(mode="json")],
-                timeout=TIMEOUT
-                )
+                f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+            )
 
             if create_resp.status_code == 201:
                 create_data = FABulkAssetCreateResponse(**create_resp.json())
                 if create_data.results and create_data.results[0].success:
-                    created_assets.append({
-                        "asset_id": create_data.results[0].asset_id,
-                        "provider_code": sr.provider_code,
-                        "identifier": sr.identifier,
-                        "identifier_type": test_item["identifier_type"]
-                        })
-                    print_info(f"  Created asset ID {create_data.results[0].asset_id} for {sr.identifier}")
+                    created_assets.append(
+                        {
+                            "asset_id": create_data.results[0].asset_id,
+                            "provider_code": sr.provider_code,
+                            "identifier": sr.identifier,
+                            "identifier_type": test_item["identifier_type"],
+                        }
+                    )
+                    print_info(
+                        f"  Created asset ID {create_data.results[0].asset_id} for {sr.identifier}"
+                    )
             else:
-                print_info(f"  Warning: Failed to create asset for {sr.identifier}: {create_resp.text[:100]}")
+                print_info(
+                    f"  Warning: Failed to create asset for {sr.identifier}: {create_resp.text[:100]}"
+                )
 
         assert len(created_assets) > 0, "Should create at least one asset"
         print_success(f"✓ Created {len(created_assets)} assets")
@@ -627,15 +677,15 @@ async def test_search_to_asset_e2e(test_server):
                 provider_code=asset_info["provider_code"],
                 identifier=asset_info["identifier"],
                 identifier_type=asset_info["identifier_type"],
-                provider_params=None
-                )
+                provider_params=None,
+            )
             assignments.append(assignment)
 
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider",
             json=[a.model_dump(mode="json") for a in assignments],
-            timeout=TIMEOUT
-            )
+            timeout=TIMEOUT,
+        )
 
         assert assign_resp.status_code == 200, f"Provider assignment failed: {assign_resp.text}"
         assign_data = FABulkAssignResponse(**assign_resp.json())
@@ -647,10 +697,8 @@ async def test_search_to_asset_e2e(test_server):
         asset_ids = [a["asset_id"] for a in created_assets]
 
         refresh_resp = await client.post(
-            f"{API_BASE}/assets/provider/refresh",
-            params={"asset_ids": asset_ids},
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets/provider/refresh", params={"asset_ids": asset_ids}, timeout=TIMEOUT
+        )
 
         if refresh_resp.status_code == 200:
             print_success("✓ Metadata refresh completed")
@@ -663,8 +711,8 @@ async def test_search_to_asset_e2e(test_server):
             asset_resp = await client.get(
                 f"{API_BASE}/assets",
                 params={"asset_ids": [asset_info["asset_id"]]},
-                timeout=TIMEOUT
-                )
+                timeout=TIMEOUT,
+            )
 
             assert asset_resp.status_code == 200
             assets = [FAAssetMetadataResponse(**a) for a in asset_resp.json()]
@@ -692,14 +740,11 @@ async def test_search_to_asset_e2e(test_server):
                 json=[
                     {
                         "asset_id": asset_info["asset_id"],
-                        "date_range": {
-                            "start": yesterday.isoformat(),
-                            "end": today.isoformat()
-                            }
-                        }
-                    ],
-                timeout=TIMEOUT
-                )
+                        "date_range": {"start": yesterday.isoformat(), "end": today.isoformat()},
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
 
             if price_refresh_resp.status_code == 200:
                 refresh_data = price_refresh_resp.json()
@@ -709,7 +754,9 @@ async def test_search_to_asset_e2e(test_server):
                     fetched = result.get("fetched_count", 0)
                     inserted = result.get("inserted_count", 0)
                     errors = result.get("errors", [])
-                    print_info(f"  Asset {asset_info['asset_id']} ({asset_info['provider_code']}): fetched={fetched}, inserted={inserted}")
+                    print_info(
+                        f"  Asset {asset_info['asset_id']} ({asset_info['provider_code']}): fetched={fetched}, inserted={inserted}"
+                    )
                     if errors:
                         print_info(f"    Errors: {errors}")
                     else:
@@ -717,24 +764,25 @@ async def test_search_to_asset_e2e(test_server):
                         if fetched > 0:
                             print_success(f"  ✓ Price data fetched for {asset_info['identifier']}")
             else:
-                print_info(f"  Price refresh warning for {asset_info['asset_id']}: {price_refresh_resp.status_code}")
+                print_info(
+                    f"  Price refresh warning for {asset_info['asset_id']}: {price_refresh_resp.status_code}"
+                )
 
         # Step 7: Verify prices were stored
         print_info("\nStep 7: Verifying stored prices...")
         for asset_info in created_assets:
             prices_resp = await client.get(
                 f"{API_BASE}/assets/prices/{asset_info['asset_id']}",
-                params={
-                    "start_date": yesterday.isoformat(),
-                    "end_date": today.isoformat()
-                    },
-                timeout=TIMEOUT
-                )
+                params={"start_date": yesterday.isoformat(), "end_date": today.isoformat()},
+                timeout=TIMEOUT,
+            )
 
             if prices_resp.status_code == 200:
                 prices_data = prices_resp.json()
                 # Response is a list of FAPricePoint directly, not {"prices": [...]}
-                prices = prices_data if isinstance(prices_data, list) else prices_data.get("prices", [])
+                prices = (
+                    prices_data if isinstance(prices_data, list) else prices_data.get("prices", [])
+                )
                 print_info(f"  Asset {asset_info['asset_id']}: {len(prices)} price point(s)")
                 if prices:
                     # Check if we have today's price
@@ -742,15 +790,15 @@ async def test_search_to_asset_e2e(test_server):
                     if today_prices:
                         print_success(f"  ✓ Today's price found: {today_prices[0].get('close')}")
                     else:
-                        print_info(f"    Latest price: {prices[-1].get('date')} = {prices[-1].get('close')}")
+                        print_info(
+                            f"    Latest price: {prices[-1].get('date')} = {prices[-1].get('close')}"
+                        )
 
         # Step 8: Cleanup - delete created assets
         print_info("\nStep 8: Cleanup...")
         delete_resp = await client.delete(
-            f"{API_BASE}/assets",
-            params={"asset_ids": asset_ids},
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT
+        )
 
         if delete_resp.status_code == 200:
             print_success("✓ Cleanup completed")
@@ -775,13 +823,11 @@ async def test_price_refresh_uses_current_value(test_server):
         asset_item = FAAssetCreateItem(
             display_name=f"Current Price Test {unique_id('CPT')}",
             currency="USD",
-            asset_type=AssetType.STOCK
-            )
+            asset_type=AssetType.STOCK,
+        )
         create_resp = await client.post(
-            f"{API_BASE}/assets",
-            json=[asset_item.model_dump(mode="json")],
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+        )
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -793,13 +839,13 @@ async def test_price_refresh_uses_current_value(test_server):
             provider_code="yfinance",
             identifier="AAPL",
             identifier_type=IdentifierType.TICKER,
-            provider_params=None
-            )
+            provider_params=None,
+        )
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider",
             json=[assignment.model_dump(mode="json")],
-            timeout=TIMEOUT
-            )
+            timeout=TIMEOUT,
+        )
         assert assign_resp.status_code == 200
         print_info("  Provider assigned: yfinance (AAPL)")
 
@@ -812,14 +858,11 @@ async def test_price_refresh_uses_current_value(test_server):
             json=[
                 {
                     "asset_id": asset_id,
-                    "date_range": {
-                        "start": today.isoformat(),
-                        "end": today.isoformat()
-                        }
-                    }
-                ],
-            timeout=TIMEOUT
-            )
+                    "date_range": {"start": today.isoformat(), "end": today.isoformat()},
+                }
+            ],
+            timeout=TIMEOUT,
+        )
 
         assert refresh_resp.status_code == 200, f"Refresh failed: {refresh_resp.text}"
         refresh_data = refresh_resp.json()
@@ -840,12 +883,9 @@ async def test_price_refresh_uses_current_value(test_server):
         # Verify the price was stored
         prices_resp = await client.get(
             f"{API_BASE}/assets/prices/{asset_id}",
-            params={
-                "start_date": today.isoformat(),
-                "end_date": today.isoformat()
-                },
-            timeout=TIMEOUT
-            )
+            params={"start_date": today.isoformat(), "end_date": today.isoformat()},
+            timeout=TIMEOUT,
+        )
 
         assert prices_resp.status_code == 200
         prices_data = prices_resp.json()
@@ -856,7 +896,9 @@ async def test_price_refresh_uses_current_value(test_server):
 
         if prices:
             today_price = prices[0]
-            print_info(f"  Today's price: {today_price.get('close')} (date: {today_price.get('date')})")
+            print_info(
+                f"  Today's price: {today_price.get('close')} (date: {today_price.get('date')})"
+            )
             assert today_price.get("close") is not None, "Should have close price"
             print_success(f"✓ Current value fetched and stored: {today_price.get('close')}")
         else:
@@ -866,11 +908,7 @@ async def test_price_refresh_uses_current_value(test_server):
             print_success("✓ get_current_value was called (no errors)")
 
         # Cleanup
-        await client.delete(
-            f"{API_BASE}/assets",
-            params={"asset_ids": [asset_id]},
-            timeout=TIMEOUT
-            )
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
         print_info("  Cleanup completed")
 
 
@@ -887,15 +925,11 @@ async def test_css_scraper_current_price(test_server):
     async with httpx.AsyncClient() as client:
         # Create asset for Borsa Italiana BTP
         asset_item = FAAssetCreateItem(
-            display_name=f"BTP Test {unique_id('BTP')}",
-            currency="EUR",
-            asset_type=AssetType.BOND
-            )
+            display_name=f"BTP Test {unique_id('BTP')}", currency="EUR", asset_type=AssetType.BOND
+        )
         create_resp = await client.post(
-            f"{API_BASE}/assets",
-            json=[asset_item.model_dump(mode="json")],
-            timeout=TIMEOUT
-            )
+            f"{API_BASE}/assets", json=[asset_item.model_dump(mode="json")], timeout=TIMEOUT
+        )
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -910,14 +944,14 @@ async def test_css_scraper_current_price(test_server):
             provider_params={
                 "current_css_selector": ".summary-value strong",
                 "currency": "EUR",
-                "decimal_format": "us"
-                }
-            )
+                "decimal_format": "us",
+            },
+        )
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider",
             json=[assignment.model_dump(mode="json")],
-            timeout=TIMEOUT
-            )
+            timeout=TIMEOUT,
+        )
         assert assign_resp.status_code == 200
         print_info("  Provider assigned: cssscraper (Borsa Italiana BTP)")
 
@@ -931,14 +965,11 @@ async def test_css_scraper_current_price(test_server):
             json=[
                 {
                     "asset_id": asset_id,
-                    "date_range": {
-                        "start": today.isoformat(),
-                        "end": today.isoformat()
-                        }
-                    }
-                ],
-            timeout=TIMEOUT
-            )
+                    "date_range": {"start": today.isoformat(), "end": today.isoformat()},
+                }
+            ],
+            timeout=TIMEOUT,
+        )
 
         assert refresh_resp.status_code == 200, f"Refresh failed: {refresh_resp.text}"
         refresh_data = refresh_resp.json()
@@ -968,12 +999,9 @@ async def test_css_scraper_current_price(test_server):
         # Verify if price was stored
         prices_resp = await client.get(
             f"{API_BASE}/assets/prices/{asset_id}",
-            params={
-                "start_date": today.isoformat(),
-                "end_date": today.isoformat()
-                },
-            timeout=TIMEOUT
-            )
+            params={"start_date": today.isoformat(), "end_date": today.isoformat()},
+            timeout=TIMEOUT,
+        )
 
         if prices_resp.status_code == 200:
             prices_data = prices_resp.json()
@@ -988,9 +1016,5 @@ async def test_css_scraper_current_price(test_server):
                 print_info("  No prices stored (may be network/site issue)")
 
         # Cleanup
-        await client.delete(
-            f"{API_BASE}/assets",
-            params={"asset_ids": [asset_id]},
-            timeout=TIMEOUT
-            )
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
         print_info("  Cleanup completed")

@@ -126,6 +126,7 @@ vi.mock('$app/stores', () => ({
 
 ## Step 3: Configurazione Playwright
 
+[//]: # (TODO: prendere le configurazioni per il server di test da .env)
 ### frontend/playwright.config.ts
 
 ```typescript
@@ -366,6 +367,9 @@ test.describe('Brokers Management', () => {
 
 ### Aggiungere a test_runner.py
 
+[//]: # TODO: il frontend sarà una nuova categoria, e le varie pagine le action
+
+[//]: # TODO: oltre la categoria del frontend ci sarà anche quella del UX (user experience), che coinsterà in prove sull'interfaccia dei vari path di lavoro. 
 ```python
 # ============================================================================
 # FRONTEND TESTS

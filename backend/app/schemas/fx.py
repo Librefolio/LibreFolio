@@ -26,6 +26,7 @@ Covers provider info, currency conversion, rate upsert/delete, and pair sources.
 - FA: 3-level nesting (Item → Asset → Bulk) - grouping by asset first
 - Reason: FX rates are simpler (pair-date-rate), FA prices are complex (OHLC+volume per asset)
 """
+
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
@@ -35,7 +36,14 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, BaseDeleteResult, BaseBulkResponse, BaseBulkDeleteResponse, Currency
+from backend.app.schemas.common import (
+    BackwardFillInfo,
+    DateRangeModel,
+    BaseDeleteResult,
+    BaseBulkResponse,
+    BaseBulkDeleteResponse,
+    Currency,
+)
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 
@@ -43,8 +51,10 @@ from backend.app.utils.datetime_utils import parse_ISO_date
 # PROVIDER MODELS
 # ============================================================================
 
+
 class FXProviderInfo(BaseModel):
     """Information about a single FX rate provider."""
+
     model_config = ConfigDict(str_strip_whitespace=True)
 
     code: str = Field(..., description="Provider code (e.g., ECB, FED, BOE, SNB)")
@@ -62,22 +72,28 @@ class FXProviderInfo(BaseModel):
 # CONVERSION MODELS
 # ============================================================================
 
+
 class FXConversionRequest(BaseModel):
     """Single conversion request with date range.
 
     Breaking change: Now uses Currency object for from_amount instead of
     separate amount + from_currency fields.
     """
+
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-        )
+    )
 
     from_amount: Currency = Field(..., description="Amount to convert with source currency")
-    to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
-    date_range: DateRangeModel = Field(..., description="Date range for conversion (start required, end optional for single day)")
+    to_currency: str = Field(
+        ..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)"
+    )
+    date_range: DateRangeModel = Field(
+        ..., description="Date range for conversion (start required, end optional for single day)"
+    )
 
-    @field_validator('to_currency', mode='before')
+    @field_validator("to_currency", mode="before")
     @classmethod
     def validate_to_currency(cls, v):
         return Currency.validate_code(v)
@@ -89,17 +105,20 @@ class FXConversionResult(BaseModel):
     Breaking change: Now uses Currency objects for from_amount and to_amount
     instead of separate amount/currency fields.
     """
+
     model_config = ConfigDict()
 
     from_amount: Currency = Field(..., description="Original amount with source currency")
     to_amount: Currency = Field(..., description="Converted amount with target currency")
-    conversion_date: date_type = Field(..., description="Date requested for conversion (ISO format)")
+    conversion_date: date_type = Field(
+        ..., description="Date requested for conversion (ISO format)"
+    )
     rate: Optional[Decimal] = Field(None, description="Exchange rate used (if not identity)")
     backward_fill_info: Optional[BackwardFillInfo] = Field(
         None,
         description="Backward-fill info (only present if rate from a different date was used). "
-                    "If null, rate_date = conversion_date"
-        )
+        "If null, rate_date = conversion_date",
+    )
 
     @field_validator("conversion_date", mode="before")
     @classmethod
@@ -113,6 +132,7 @@ class FXConversionResult(BaseModel):
 
 class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
     """Response model for bulk currency conversion."""
+
     # Inherits: results, success_count, errors
     # Note: success_count should be populated by service layer
     pass
@@ -122,13 +142,14 @@ class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
 # RATE UPSERT MODELS
 # ============================================================================
 
+
 class FXUpsertItem(BaseModel):
     """Single rate to upsert."""
-    model_config = ConfigDict(
 
+    model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-        )
+    )
 
     rate_date: date_type = Field(..., description="Date of the rate (ISO format)", alias="date")
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
@@ -136,7 +157,7 @@ class FXUpsertItem(BaseModel):
     rate: Decimal = Field(..., gt=0, description="Exchange rate (must be positive)")
     source: str = Field(default="MANUAL", description="Source of the rate")
 
-    @field_validator('rate', mode='before')
+    @field_validator("rate", mode="before")
     @classmethod
     def coerce_rate(cls, v):
         """Coerce rate to Decimal."""
@@ -146,7 +167,7 @@ class FXUpsertItem(BaseModel):
             return Decimal(str(v))
         return v
 
-    @field_validator('base', 'quote', mode='before')
+    @field_validator("base", "quote", mode="before")
     @classmethod
     def uppercase_currency(cls, v):
         return Currency.validate_code(v)
@@ -154,6 +175,7 @@ class FXUpsertItem(BaseModel):
 
 class FXUpsertResult(BaseModel):
     """Single rate upsert result."""
+
     model_config = ConfigDict()
 
     success: bool = Field(..., description="Whether the operation was successful")
@@ -174,6 +196,7 @@ class FXUpsertResult(BaseModel):
 
 class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
     """Response model for bulk rate upsert."""
+
     pass
 
 
@@ -181,18 +204,26 @@ class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
 # RATE DELETE MODELS
 # ============================================================================
 
+
 class FXDeleteItem(BaseModel):
     """Single rate deletion request."""
+
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-        )
+    )
 
-    from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
-    to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
-    date_range: DateRangeModel = Field(..., description="Date range to delete (start required, end optional for single day)")
+    from_currency: str = Field(
+        ..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)"
+    )
+    to_currency: str = Field(
+        ..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)"
+    )
+    date_range: DateRangeModel = Field(
+        ..., description="Date range to delete (start required, end optional for single day)"
+    )
 
-    @field_validator('from_currency', 'to_currency', mode='before')
+    @field_validator("from_currency", "to_currency", mode="before")
     @classmethod
     def uppercase_currency(cls, v):
         return Currency.validate_code(v)
@@ -213,6 +244,7 @@ class FXDeleteResult(BaseDeleteResult):
 
 class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
     """Response model for bulk FX rate deletion."""
+
     # Inherits from BaseBulkDeleteResponse:
     # - results: List[FXDeleteResult]
     # - success_count: int
@@ -225,16 +257,20 @@ class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
 # PAIR SOURCE CONFIGURATION MODELS
 # ============================================================================
 
+
 class FXPairSourceItem(BaseModel):
     """Configuration for a currency pair source."""
-    model_config = ConfigDict(str_strip_whitespace=True, )
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+    )
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
     provider_code: str = Field(..., description="Provider code (e.g., ECB, FED)")
     priority: int = Field(..., ge=1, description="Priority (1 = primary, 2+ = fallback)")
 
-    @field_validator('base', 'quote', mode='before')
+    @field_validator("base", "quote", mode="before")
     @classmethod
     def uppercase_currency(cls, v):
         return Currency.validate_code(v)
@@ -242,12 +278,14 @@ class FXPairSourceItem(BaseModel):
 
 class FXPairSourcesResponse(BaseModel):
     """Response model for listing pair sources."""
+
     sources: list[FXPairSourceItem] = Field(..., description="Configured pair sources")
     count: int = Field(..., description="Number of configured sources")
 
 
 class FXPairSourceResult(BaseModel):
     """Result of a single pair source creation/update."""
+
     success: bool = Field(..., description="Whether the operation succeeded")
     base: str = Field(..., description="Base currency")
     quote: str = Field(..., description="Quote currency")
@@ -259,19 +297,25 @@ class FXPairSourceResult(BaseModel):
 
 class FXCreatePairSourcesResponse(BaseBulkResponse[FXPairSourceResult]):
     """Response model for bulk pair source creation."""
+
     # Operation-specific field
     error_count: int = Field(default=0, description="Number of failed operations")
 
 
 class FXDeletePairSourceItem(BaseModel):
     """Single pair source to delete."""
-    model_config = ConfigDict(str_strip_whitespace=True, )
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+    )
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
-    priority: Optional[int] = Field(None, ge=1, description="Priority level (optional, if not provided deletes all priorities)")
+    priority: Optional[int] = Field(
+        None, ge=1, description="Priority level (optional, if not provided deletes all priorities)"
+    )
 
-    @field_validator('base', 'quote', mode='before')
+    @field_validator("base", "quote", mode="before")
     @classmethod
     def uppercase_currency(cls, v):
         return Currency.validate_code(v)
@@ -291,6 +335,7 @@ class FXDeletePairSourceResult(BaseDeleteResult):
 
 class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResult]):
     """Response model for DELETE /pair-sources/bulk."""
+
     # Inherits from BaseBulkDeleteResponse:
     # - results: List[FXDeletePairSourceResult]
     # - success_count: int
@@ -303,7 +348,9 @@ class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResul
 # CURRENCY LIST MODELS
 # ============================================================================
 
+
 class FXCurrenciesResponse(BaseModel):
     """Response model for available currencies list."""
+
     currencies: list[str] = Field(..., description="List of available currency codes")
     count: int = Field(..., description="Number of available currencies")

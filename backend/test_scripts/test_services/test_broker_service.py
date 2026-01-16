@@ -6,6 +6,7 @@ See checklist: 01_test_broker_transaction_subsystem.md - Category 4
 
 Reference: backend/app/services/broker_service.py
 """
+
 import sys
 from datetime import date
 from decimal import Decimal
@@ -32,7 +33,7 @@ from backend.app.schemas.brokers import (
     BRCreateItem,
     BRUpdateItem,
     BRDeleteItem,
-    )
+)
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.broker_service import BrokerService
@@ -43,6 +44,7 @@ from backend.app.utils.datetime_utils import utcnow
 # ============================================================================
 # PYTEST FIXTURES
 # ============================================================================
+
 
 @pytest.fixture(scope="module")
 def engine():
@@ -84,7 +86,7 @@ async def test_asset(session) -> Asset:
         currency="EUR",
         created_at=utcnow(),
         updated_at=utcnow(),
-        )
+    )
     session.add(asset)
     await session.flush()
     return asset
@@ -93,6 +95,7 @@ async def test_asset(session) -> Asset:
 # ============================================================================
 # 4.1 CREATE_BULK - BASIC CREATION
 # ============================================================================
+
 
 class TestCreateBulkBasic:
     """Test basic broker creation."""
@@ -106,8 +109,8 @@ class TestCreateBulkBasic:
             BRCreateItem(
                 name=f"Test Broker {utcnow().timestamp()}",
                 description="Test broker for unit tests",
-                )
-            ]
+            )
+        ]
 
         response = await service.create_bulk(items, user_id=test_user.id)
 
@@ -154,6 +157,7 @@ class TestCreateBulkBasic:
 # 4.2 CREATE_BULK - INITIAL BALANCES
 # ============================================================================
 
+
 class TestCreateBulkInitialBalances:
     """Test initial balance handling during broker creation."""
 
@@ -166,8 +170,8 @@ class TestCreateBulkInitialBalances:
             BRCreateItem(
                 name=f"Balance Broker {utcnow().timestamp()}",
                 initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
-                )
-            ]
+            )
+        ]
 
         response = await service.create_bulk(items, user_id=test_user.id)
 
@@ -179,7 +183,7 @@ class TestCreateBulkInitialBalances:
         stmt = select(Transaction).where(
             Transaction.broker_id == broker_id,
             Transaction.type == TransactionType.DEPOSIT,
-            )
+        )
         result = await session.execute(stmt)
         tx = result.scalar_one_or_none()
 
@@ -198,9 +202,9 @@ class TestCreateBulkInitialBalances:
                 initial_balances=[
                     Currency(code="EUR", amount=Decimal("5000")),
                     Currency(code="USD", amount=Decimal("3000")),
-                    ],
-                )
-            ]
+                ],
+            )
+        ]
 
         response = await service.create_bulk(items, user_id=test_user.id)
 
@@ -218,9 +222,9 @@ class TestCreateBulkInitialBalances:
                     Currency(code="EUR", amount=Decimal("5000")),
                     Currency(code="USD", amount=Decimal("0")),  # Should be filtered
                     Currency(code="GBP", amount=Decimal("-100")),  # Should be filtered
-                    ],
-                )
-            ]
+                ],
+            )
+        ]
 
         response = await service.create_bulk(items, user_id=test_user.id)
 
@@ -231,6 +235,7 @@ class TestCreateBulkInitialBalances:
 # ============================================================================
 # 4.3 GET_ALL / GET_BY_ID
 # ============================================================================
+
 
 class TestGetOperations:
     """Test read operations."""
@@ -259,7 +264,7 @@ class TestGetOperations:
         items = [
             BRCreateItem(name=f"ZZZ Broker {ts}"),
             BRCreateItem(name=f"AAA Broker {ts}"),
-            ]
+        ]
         await service.create_bulk(items, user_id=test_user.id)
 
         result = await service.get_all(user_id=test_user.id)
@@ -296,6 +301,7 @@ class TestGetOperations:
 # 4.4 GET_SUMMARY
 # ============================================================================
 
+
 class TestGetSummary:
     """Test broker summary retrieval."""
 
@@ -322,8 +328,8 @@ class TestGetSummary:
             BRCreateItem(
                 name=f"Cash Summary Broker {utcnow().timestamp()}",
                 initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -344,8 +350,8 @@ class TestGetSummary:
             BRCreateItem(
                 name=f"Holdings Broker {utcnow().timestamp()}",
                 initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -358,8 +364,8 @@ class TestGetSummary:
                 date=date.today(),
                 quantity=Decimal("10"),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
-                )
-            ]
+            )
+        ]
         await tx_service.create_bulk(buy_items)
 
         summary = await service.get_summary(broker_id, user_id=test_user.id)
@@ -378,8 +384,8 @@ class TestGetSummary:
             BRCreateItem(
                 name=f"Cost Basis Broker {utcnow().timestamp()}",
                 initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -392,7 +398,7 @@ class TestGetSummary:
                 date=date.today(),
                 quantity=Decimal("10"),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
-                ),
+            ),
             TXCreateItem(
                 broker_id=broker_id,
                 asset_id=test_asset.id,
@@ -400,8 +406,8 @@ class TestGetSummary:
                 date=date.today(),
                 quantity=Decimal("20"),
                 cash=Currency(code="EUR", amount=Decimal("-1200")),
-                ),
-            ]
+            ),
+        ]
         await tx_service.create_bulk(buy_items)
 
         summary = await service.get_summary(broker_id, user_id=test_user.id)
@@ -425,6 +431,7 @@ class TestGetSummary:
 # ============================================================================
 # 4.5 UPDATE_BULK - BASIC
 # ============================================================================
+
 
 class TestUpdateBulkBasic:
     """Test basic update functionality."""
@@ -493,14 +500,16 @@ class TestUpdateBulkBasic:
         items = [
             BRCreateItem(name=f"Broker A {ts}"),
             BRCreateItem(name=f"Broker B {ts}"),
-            ]
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_a_id = response.results[0].broker_id
         broker_b_name = f"Broker B {ts}"
 
         # Try to rename A to B's name
         update_items = [BRUpdateItem(name=broker_b_name)]
-        update_response = await service.update_bulk(update_items, [broker_a_id], user_id=test_user.id)
+        update_response = await service.update_bulk(
+            update_items, [broker_a_id], user_id=test_user.id
+        )
 
         assert update_response.results[0].success is False
         assert "already exists" in update_response.results[0].error
@@ -521,6 +530,7 @@ class TestUpdateBulkBasic:
 # 4.6 UPDATE_BULK - FLAG VALIDATION
 # ============================================================================
 
+
 class TestUpdateBulkFlagValidation:
     """Test flag validation when disabling overdraft/shorting."""
 
@@ -535,8 +545,8 @@ class TestUpdateBulkFlagValidation:
                 name=f"Overdraft Broker {utcnow().timestamp()}",
                 allow_cash_overdraft=True,
                 initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -558,8 +568,8 @@ class TestUpdateBulkFlagValidation:
             BRCreateItem(
                 name=f"Negative Overdraft Broker {utcnow().timestamp()}",
                 allow_cash_overdraft=True,
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -570,8 +580,8 @@ class TestUpdateBulkFlagValidation:
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
-                )
-            ]
+            )
+        ]
         await tx_service.create_bulk(tx_items)
 
         # Try to disable overdraft - should fail
@@ -593,8 +603,8 @@ class TestUpdateBulkFlagValidation:
                 name=f"Shorting Broker {utcnow().timestamp()}",
                 allow_asset_shorting=True,
                 initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -607,8 +617,8 @@ class TestUpdateBulkFlagValidation:
                 date=date.today(),
                 quantity=Decimal("10"),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
-                )
-            ]
+            )
+        ]
         await tx_service.create_bulk(tx_items)
 
         # Disable shorting - should succeed
@@ -630,8 +640,8 @@ class TestUpdateBulkFlagValidation:
                 name=f"Shorted Broker {utcnow().timestamp()}",
                 allow_asset_shorting=True,
                 initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -644,8 +654,8 @@ class TestUpdateBulkFlagValidation:
                 date=date.today(),
                 quantity=Decimal("-10"),
                 cash=Currency(code="EUR", amount=Decimal("500")),
-                )
-            ]
+            )
+        ]
         await tx_service.create_bulk(tx_items)
 
         # Try to disable shorting - should fail
@@ -665,8 +675,8 @@ class TestUpdateBulkFlagValidation:
             BRCreateItem(
                 name=f"Enable Overdraft Broker {utcnow().timestamp()}",
                 allow_cash_overdraft=False,
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -681,6 +691,7 @@ class TestUpdateBulkFlagValidation:
 # ============================================================================
 # 4.7 DELETE_BULK - BASIC
 # ============================================================================
+
 
 class TestDeleteBulkBasic:
     """Test basic delete functionality."""
@@ -723,6 +734,7 @@ class TestDeleteBulkBasic:
 # 4.8 DELETE_BULK - FORCE BEHAVIOR
 # ============================================================================
 
+
 class TestDeleteBulkForceBehavior:
     """Test force delete behavior with transactions."""
 
@@ -736,8 +748,8 @@ class TestDeleteBulkForceBehavior:
             BRCreateItem(
                 name=f"Has TX Broker {utcnow().timestamp()}",
                 initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -758,8 +770,8 @@ class TestDeleteBulkForceBehavior:
             BRCreateItem(
                 name=f"Force Delete Broker {utcnow().timestamp()}",
                 initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
-                )
-            ]
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 
@@ -783,9 +795,9 @@ class TestDeleteBulkForceBehavior:
                 initial_balances=[
                     Currency(code="EUR", amount=Decimal("1000")),
                     Currency(code="USD", amount=Decimal("500")),
-                    ],
-                )
-            ]
+                ],
+            )
+        ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
 

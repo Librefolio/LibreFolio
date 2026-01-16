@@ -8,6 +8,7 @@ API Documentation: https://fred.stlouisfed.org/docs/api/fred/
 Data Source: H.10 Foreign Exchange Rates via FRED
 Note: No API key required for basic usage
 """
+
 from datetime import date
 from decimal import Decimal
 
@@ -43,27 +44,27 @@ class FEDProvider(FXRateProvider):
     # These rates are quoted as: USD per 1 foreign currency
     # Example: DEXUSEU = USD per 1 EUR
     CURRENCY_SERIES = {
-        'EUR': 'DEXUSEU',  # Euro (USD per EUR)
-        'GBP': 'DEXUSUK',  # British Pound (USD per GBP)
-        'JPY': 'DEXJPUS',  # Japanese Yen (USD per JPY)
-        'CAD': 'DEXCAUS',  # Canadian Dollar (USD per CAD)
-        'CHF': 'DEXSZUS',  # Swiss Franc (USD per CHF)
-        'AUD': 'DEXUSAL',  # Australian Dollar (USD per AUD)
-        'SEK': 'DEXSDUS',  # Swedish Krona (USD per SEK)
-        'DKK': 'DEXDNUS',  # Danish Krone (USD per DKK)
-        'NOK': 'DEXNOUS',  # Norwegian Krone (USD per NOK)
-        'CNY': 'DEXCHUS',  # Chinese Yuan (USD per CNY)
-        'INR': 'DEXINUS',  # Indian Rupee (USD per INR)
-        'BRL': 'DEXBZUS',  # Brazilian Real (USD per BRL)
-        'MXN': 'DEXMXUS',  # Mexican Peso (USD per MXN)
-        'ZAR': 'DEXSFUS',  # South African Rand (USD per ZAR)
-        'SGD': 'DEXSIUS',  # Singapore Dollar (USD per SGD)
-        'HKD': 'DEXHKUS',  # Hong Kong Dollar (USD per HKD)
-        'KRW': 'DEXKOUS',  # South Korean Won (USD per KRW)
-        'TWD': 'DEXTAUS',  # Taiwan Dollar (USD per TWD)
-        'NZD': 'DEXUSNZ',  # New Zealand Dollar (USD per NZD)
-        'THB': 'DEXTHUS',  # Thai Baht (USD per THB)
-        }
+        "EUR": "DEXUSEU",  # Euro (USD per EUR)
+        "GBP": "DEXUSUK",  # British Pound (USD per GBP)
+        "JPY": "DEXJPUS",  # Japanese Yen (USD per JPY)
+        "CAD": "DEXCAUS",  # Canadian Dollar (USD per CAD)
+        "CHF": "DEXSZUS",  # Swiss Franc (USD per CHF)
+        "AUD": "DEXUSAL",  # Australian Dollar (USD per AUD)
+        "SEK": "DEXSDUS",  # Swedish Krona (USD per SEK)
+        "DKK": "DEXDNUS",  # Danish Krone (USD per DKK)
+        "NOK": "DEXNOUS",  # Norwegian Krone (USD per NOK)
+        "CNY": "DEXCHUS",  # Chinese Yuan (USD per CNY)
+        "INR": "DEXINUS",  # Indian Rupee (USD per INR)
+        "BRL": "DEXBZUS",  # Brazilian Real (USD per BRL)
+        "MXN": "DEXMXUS",  # Mexican Peso (USD per MXN)
+        "ZAR": "DEXSFUS",  # South African Rand (USD per ZAR)
+        "SGD": "DEXSIUS",  # Singapore Dollar (USD per SGD)
+        "HKD": "DEXHKUS",  # Hong Kong Dollar (USD per HKD)
+        "KRW": "DEXKOUS",  # South Korean Won (USD per KRW)
+        "TWD": "DEXTAUS",  # Taiwan Dollar (USD per TWD)
+        "NZD": "DEXUSNZ",  # New Zealand Dollar (USD per NZD)
+        "THB": "DEXTHUS",  # Thai Baht (USD per THB)
+    }
 
     @property
     def code(self) -> str:
@@ -100,7 +101,7 @@ class FEDProvider(FXRateProvider):
             "CAD",  # Canadian Dollar
             "CHF",  # Swiss Franc
             "AUD",  # Australian Dollar
-            ]
+        ]
 
     @property
     def multi_unit_currencies(self) -> set[str]:
@@ -120,15 +121,12 @@ class FEDProvider(FXRateProvider):
             List of ISO 4217 currency codes supported by FED
         """
         # Include USD as base currency + all quote currencies
-        currencies = ['USD'] + list(self.CURRENCY_SERIES.keys())
+        currencies = ["USD"] + list(self.CURRENCY_SERIES.keys())
         return sorted(currencies)
 
     async def fetch_rates(
-        self,
-        date_range: tuple[date, date],
-        currencies: list[str],
-        base_currency: str | None = None
-        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
+    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from FRED API for given date range and currencies.
 
@@ -151,7 +149,7 @@ class FEDProvider(FXRateProvider):
         if base_currency is not None and base_currency != "USD":
             raise ValueError(
                 f"FED provider only supports USD as base currency, got {base_currency}"
-                )
+            )
 
         start_date, end_date = date_range
         results = {}
@@ -172,10 +170,10 @@ class FEDProvider(FXRateProvider):
             # Build FRED CSV download request (no API key needed)
             # Uses public fredgraph.csv endpoint
             params = {
-                'id': series_id,
-                'cosd': start_date.isoformat(),
-                'coed': end_date.isoformat(),
-                }
+                "id": series_id,
+                "cosd": start_date.isoformat(),
+                "coed": end_date.isoformat(),
+            }
 
             try:
                 async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -191,11 +189,15 @@ class FEDProvider(FXRateProvider):
                 raise FXServiceError(f"FED/FRED API error for {currency}: {e}") from e
             except Exception as e:
                 logger.error(f"Failed to parse FED/FRED response for {currency}: {e}")
-                raise FXServiceError(f"Unexpected FED/FRED response format for {currency}: {e}") from e
+                raise FXServiceError(
+                    f"Unexpected FED/FRED response format for {currency}: {e}"
+                ) from e
 
         return results
 
-    def _parse_csv(self, csv_text: str, currency: str, start_date: date, end_date: date) -> list[tuple[date, str, str, Decimal]]:
+    def _parse_csv(
+        self, csv_text: str, currency: str, start_date: date, end_date: date
+    ) -> list[tuple[date, str, str, Decimal]]:
         """
         Parse FRED CSV response.
 
@@ -216,7 +218,7 @@ class FEDProvider(FXRateProvider):
         """
         observations = []
 
-        lines = csv_text.strip().split('\n')
+        lines = csv_text.strip().split("\n")
 
         # Skip header
         if len(lines) < 2:
@@ -227,7 +229,7 @@ class FEDProvider(FXRateProvider):
             if not line.strip():
                 continue
 
-            parts = line.split(',')
+            parts = line.split(",")
             if len(parts) < 2:
                 continue
 
@@ -249,7 +251,7 @@ class FEDProvider(FXRateProvider):
                 # "" = Empty value (same as no data)
                 # "ND" = Not Determined (explicit no-data marker)
                 # These occur on weekends, holidays, or when markets are closed
-                if value_str in ['.', '', 'ND']:
+                if value_str in [".", "", "ND"]:
                     continue
 
                 # FRED gives: USD per 1 foreign currency (ALL currencies per 1 unit)
@@ -270,7 +272,6 @@ class FEDProvider(FXRateProvider):
                 # Return tuple: (date, base=foreign, quote=USD, rate)
                 # Example: 1 EUR = 1.08 USD → (date, 'EUR', 'USD', 1.08)
                 observations.append((rate_date, currency, self.base_currency, fred_rate))
-
 
             except (ValueError, IndexError, ZeroDivisionError) as e:
                 logger.debug(f"Skipping invalid line in FRED CSV: {line[:50]}... ({e})")

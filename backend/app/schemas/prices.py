@@ -23,6 +23,7 @@ Covers upsert, delete, and query operations for asset price history.
 - FA: 3 levels (Item → Asset → Bulk) - multiple items per asset, multiple assets per request
 - FX: 2 levels (Item → Bulk) - direct item-to-bulk without intermediate grouping
 """
+
 from __future__ import annotations
 
 from datetime import date as date_type
@@ -31,12 +32,20 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, BaseDeleteResult, BaseBulkResponse, BaseBulkDeleteResponse, Currency
+from backend.app.schemas.common import (
+    BackwardFillInfo,
+    DateRangeModel,
+    BaseDeleteResult,
+    BaseBulkResponse,
+    BaseBulkDeleteResponse,
+    Currency,
+)
 
 
 # ============================================================================
 # FA PRICE UPSERT
 # ============================================================================
+
 
 class FAPricePoint(BaseModel):
     """Single price point with OHLC data.
@@ -49,6 +58,7 @@ class FAPricePoint(BaseModel):
     for JSON compatibility. Use `close_cur` property for internal operations
     that need a Currency object.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     date: date_type = Field(..., description="Price date")
@@ -58,7 +68,9 @@ class FAPricePoint(BaseModel):
     close: Decimal = Field(..., description="Closing price (required)")
     volume: Optional[Decimal] = Field(None, description="Trading volume")
     currency: str = Field(..., description="Currency code (ISO 4217)")
-    backward_fill_info: Optional[BackwardFillInfo] = Field(None, description="Backward-fill info (only in query results)")
+    backward_fill_info: Optional[BackwardFillInfo] = Field(
+        None, description="Backward-fill info (only in query results)"
+    )
 
     @field_validator("currency")
     @classmethod
@@ -98,6 +110,7 @@ class FAUpsert(BaseModel):
 
     Groups multiple price points for one asset.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
@@ -106,6 +119,7 @@ class FAUpsert(BaseModel):
 
 class FAUpsertResult(BaseModel):
     """Result of price upsert for single asset."""
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
@@ -115,6 +129,7 @@ class FAUpsertResult(BaseModel):
 
 class FABulkUpsertResponse(BaseBulkResponse[FAUpsertResult]):
     """Response for bulk price upsert."""
+
     # Operation-specific fields
     inserted_count: int = Field(..., description="Number of prices inserted")
     updated_count: int = Field(..., description="Number of prices updated")
@@ -124,20 +139,25 @@ class FABulkUpsertResponse(BaseBulkResponse[FAUpsertResult]):
 # FA PRICE DELETE
 # ============================================================================
 
+
 class FAAssetDelete(BaseModel):
     """Price deletion request for a single asset (multiple ranges).
 
     Groups multiple date ranges for one asset.
     Uses DateRangeModel for consistency.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    date_ranges: List[DateRangeModel] = Field(..., min_length=1, description="List of date ranges to delete")
+    date_ranges: List[DateRangeModel] = Field(
+        ..., min_length=1, description="List of date ranges to delete"
+    )
 
 
 class FAPriceDeleteResult(BaseDeleteResult):
     """Result of price deletion for single asset."""
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
@@ -149,6 +169,7 @@ class FAPriceDeleteResult(BaseDeleteResult):
 
 class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
     """Response for bulk price deletion."""
+
     # Inherits from BaseBulkDeleteResponse:
     # - results: List[FAPriceDeleteResult]
     # - success_count: int
@@ -161,12 +182,14 @@ class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
 # FA PRICE QUERY
 # ============================================================================
 
+
 class FACurrentValue(BaseModel):
     """Current value of an asset.
 
     The API contract uses separate `value: Decimal` and `currency: str` fields
     for JSON compatibility. Use `value_cur` property for internal operations.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     value: Decimal
@@ -192,6 +215,7 @@ class FACurrentValue(BaseModel):
 
 class FAHistoricalData(BaseModel):
     """Historical price data for an asset (list of price points)."""
+
     model_config = ConfigDict(extra="forbid")
 
     prices: List[FAPricePoint]

@@ -25,6 +25,7 @@ Usage:
         validate_mime_type,
     )
 """
+
 import json
 import mimetypes
 import uuid
@@ -36,6 +37,7 @@ import structlog
 
 try:
     import magic
+
     MAGIC_AVAILABLE = True
 except ImportError:
     MAGIC_AVAILABLE = False
@@ -76,21 +78,44 @@ BLOCKED_MIME_TYPES = {
 
 # Blocked file extensions
 BLOCKED_EXTENSIONS = {
-    ".exe", ".dll", ".so", ".dylib",
-    ".bat", ".cmd", ".ps1", ".vbs", ".vbe",
-    ".sh", ".bash", ".csh", ".zsh",
-    ".py", ".pyc", ".pyo",
-    ".pl", ".pm",
+    ".exe",
+    ".dll",
+    ".so",
+    ".dylib",
+    ".bat",
+    ".cmd",
+    ".ps1",
+    ".vbs",
+    ".vbe",
+    ".sh",
+    ".bash",
+    ".csh",
+    ".zsh",
+    ".py",
+    ".pyc",
+    ".pyo",
+    ".pl",
+    ".pm",
     ".rb",
-    ".php", ".php3", ".php4", ".php5", ".phtml",
-    ".js", ".mjs", ".cjs",
-    ".jar", ".class",
-    ".com", ".scr", ".pif",
+    ".php",
+    ".php3",
+    ".php4",
+    ".php5",
+    ".phtml",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".jar",
+    ".class",
+    ".com",
+    ".scr",
+    ".pif",
 }
 
 
 class UploadSecurityError(Exception):
     """Raised when upload fails security validation."""
+
     pass
 
 
@@ -429,4 +454,3 @@ def get_upload_by_user(file_id: str, user_id: int) -> Optional[UploadFileInfo]:
     if info and info.uploaded_by_user_id == user_id:
         return info
     return None
-

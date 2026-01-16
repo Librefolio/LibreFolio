@@ -10,6 +10,7 @@ Tests for broker access management endpoints:
 Tests role hierarchy: OWNER > EDITOR > VIEWER
 Tests multi-user isolation and superuser capabilities.
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -41,9 +42,9 @@ def unique_username() -> str:
 # HELPER FUNCTIONS
 # ============================================================================
 
+
 async def create_user_and_login(
-    client: httpx.AsyncClient,
-    username: Optional[str] = None
+    client: httpx.AsyncClient, username: Optional[str] = None
 ) -> tuple[int, str, str, Optional[str]]:
     """
     Create a new user, login, and return (user_id, username, email, session).
@@ -57,7 +58,7 @@ async def create_user_and_login(
     resp = await client.post(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
-        timeout=TIMEOUT
+        timeout=TIMEOUT,
     )
 
     if resp.status_code != 201:
@@ -67,9 +68,7 @@ async def create_user_and_login(
 
     # Login
     login_resp = await client.post(
-        f"{API_BASE}/auth/login",
-        json={"username": username, "password": password},
-        timeout=TIMEOUT
+        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
     )
 
     session = login_resp.cookies.get("session")
@@ -98,6 +97,7 @@ async def get_user_info(client: httpx.AsyncClient) -> dict:
 # PYTEST FIXTURES
 # ============================================================================
 
+
 @pytest.fixture(scope="module")
 def test_server():
     """Start test server once for all tests in this module."""
@@ -110,6 +110,7 @@ def test_server():
 # ============================================================================
 # ACCESS LIST TESTS
 # ============================================================================
+
 
 class TestAccessList:
     """Tests for GET /brokers/{id}/access."""
@@ -160,6 +161,7 @@ class TestAccessList:
 # ============================================================================
 # ADD ACCESS TESTS
 # ============================================================================
+
 
 class TestAddAccess:
     """Tests for POST /brokers/{id}/access."""
@@ -240,7 +242,11 @@ class TestAddAccess:
         """ACCESS-013: EDITOR cannot add access."""
         print_section("ACCESS-013: Editor cannot add access")
 
-        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2, httpx.AsyncClient() as client3:
+        async with (
+            httpx.AsyncClient() as client1,
+            httpx.AsyncClient() as client2,
+            httpx.AsyncClient() as client3,
+        ):
             # User 1 creates broker
             await create_user_and_login(client1)
             broker_id = await create_broker(client1)
@@ -273,7 +279,11 @@ class TestAddAccess:
         """ACCESS-014: VIEWER cannot add access."""
         print_section("ACCESS-014: Viewer cannot add access")
 
-        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2, httpx.AsyncClient() as client3:
+        async with (
+            httpx.AsyncClient() as client1,
+            httpx.AsyncClient() as client2,
+            httpx.AsyncClient() as client3,
+        ):
             await create_user_and_login(client1)
             broker_id = await create_broker(client1)
 
@@ -350,6 +360,7 @@ class TestAddAccess:
 # ============================================================================
 # UPDATE ACCESS TESTS
 # ============================================================================
+
 
 class TestUpdateAccess:
     """Tests for PATCH /brokers/{id}/access/{user_id}."""
@@ -435,7 +446,11 @@ class TestUpdateAccess:
         """ACCESS-024: EDITOR cannot modify access."""
         print_section("ACCESS-024: Editor cannot modify access")
 
-        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2, httpx.AsyncClient() as client3:
+        async with (
+            httpx.AsyncClient() as client1,
+            httpx.AsyncClient() as client2,
+            httpx.AsyncClient() as client3,
+        ):
             await create_user_and_login(client1)
             broker_id = await create_broker(client1)
 
@@ -470,6 +485,7 @@ class TestUpdateAccess:
 # ============================================================================
 # REMOVE ACCESS TESTS
 # ============================================================================
+
 
 class TestRemoveAccess:
     """Tests for DELETE /brokers/{id}/access/{user_id}."""
@@ -627,7 +643,11 @@ class TestRemoveAccess:
         """ACCESS-036: EDITOR cannot remove others."""
         print_section("ACCESS-036: Editor cannot remove others")
 
-        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2, httpx.AsyncClient() as client3:
+        async with (
+            httpx.AsyncClient() as client1,
+            httpx.AsyncClient() as client2,
+            httpx.AsyncClient() as client3,
+        ):
             await create_user_and_login(client1)
             broker_id = await create_broker(client1)
 
@@ -660,6 +680,7 @@ class TestRemoveAccess:
 # ============================================================================
 # MULTI-USER ISOLATION TESTS
 # ============================================================================
+
 
 class TestMultiUserIsolation:
     """Tests for multi-user isolation."""
@@ -695,6 +716,7 @@ class TestMultiUserIsolation:
 # ============================================================================
 # SUPERUSER TESTS
 # ============================================================================
+
 
 class TestSuperuserAccess:
     """Tests for superuser bypass capabilities.
@@ -775,6 +797,7 @@ class TestSuperuserAccess:
 # SELF-MODIFICATION TESTS
 # ============================================================================
 
+
 class TestSelfModification:
     """Tests for modifying own role."""
 
@@ -827,4 +850,3 @@ class TestSelfModification:
             assert response.json()["access"]["role"] == "EDITOR"
 
             print_success("✓ Owner degraded self successfully")
-

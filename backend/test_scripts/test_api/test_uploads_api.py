@@ -9,6 +9,7 @@ Tests for static file upload endpoints:
 - DELETE /uploads/{id}: Delete file
 - GET /uploads/plugin/{type}/{path}: Serve plugin static asset
 """
+
 from datetime import datetime
 from io import BytesIO
 
@@ -34,6 +35,7 @@ def unique_username() -> str:
 # HELPERS
 # ============================================================================
 
+
 async def create_user_and_login(client: httpx.AsyncClient) -> tuple[int, str]:
     """Create user, login, return (user_id, username)."""
     username = unique_username()
@@ -43,14 +45,12 @@ async def create_user_and_login(client: httpx.AsyncClient) -> tuple[int, str]:
     resp = await client.post(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
-        timeout=TIMEOUT
+        timeout=TIMEOUT,
     )
     user_id = resp.json()["user"]["id"]
 
     login_resp = await client.post(
-        f"{API_BASE}/auth/login",
-        json={"username": username, "password": password},
-        timeout=TIMEOUT
+        f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
     )
     session = login_resp.cookies.get("session")
     if session:
@@ -68,6 +68,7 @@ def create_test_file(name: str = "test.txt", content: bytes = b"Hello World") ->
 # FIXTURES
 # ============================================================================
 
+
 @pytest.fixture(scope="module")
 def test_server():
     """Start test server."""
@@ -80,6 +81,7 @@ def test_server():
 # ============================================================================
 # UPLOAD TESTS
 # ============================================================================
+
 
 class TestUpload:
     """Tests for POST /uploads."""
@@ -95,13 +97,11 @@ class TestUpload:
             filename, content = create_test_file("test_upload.txt", b"Test content")
 
             files = {"file": (filename, BytesIO(content), "text/plain")}
-            response = await client.post(
-                f"{API_BASE}/uploads",
-                files=files,
-                timeout=TIMEOUT
-            )
+            response = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
 
-            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+            assert (
+                response.status_code == 200
+            ), f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
             assert data["success"] is True
             assert data["file"]["original_name"] == filename
@@ -119,11 +119,7 @@ class TestUpload:
             filename, content = create_test_file()
             files = {"file": (filename, BytesIO(content), "text/plain")}
 
-            response = await client.post(
-                f"{API_BASE}/uploads",
-                files=files,
-                timeout=TIMEOUT
-            )
+            response = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
 
             assert response.status_code == 401
 
@@ -133,6 +129,7 @@ class TestUpload:
 # ============================================================================
 # LIST TESTS
 # ============================================================================
+
 
 class TestListUploads:
     """Tests for GET /uploads."""
@@ -179,9 +176,7 @@ class TestListUploads:
 
             # User 2 lists only their files
             response = await client2.get(
-                f"{API_BASE}/uploads",
-                params={"my_files_only": True},
-                timeout=TIMEOUT
+                f"{API_BASE}/uploads", params={"my_files_only": True}, timeout=TIMEOUT
             )
 
             assert response.status_code == 200
@@ -195,6 +190,7 @@ class TestListUploads:
 # ============================================================================
 # FILE INFO TESTS
 # ============================================================================
+
 
 class TestFileInfo:
     """Tests for GET /uploads/{id}."""
@@ -228,6 +224,7 @@ class TestFileInfo:
 # DOWNLOAD TESTS
 # ============================================================================
 
+
 class TestDownload:
     """Tests for GET /uploads/file/{id}."""
 
@@ -257,6 +254,7 @@ class TestDownload:
 # ============================================================================
 # DELETE TESTS
 # ============================================================================
+
 
 class TestDelete:
     """Tests for DELETE /uploads/{id}."""
@@ -311,6 +309,7 @@ class TestDelete:
 # PLUGIN STATIC TESTS
 # ============================================================================
 
+
 class TestPluginStatic:
     """Tests for GET /uploads/plugin/{type}/{path}."""
 
@@ -321,8 +320,7 @@ class TestPluginStatic:
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{API_BASE}/uploads/plugin/brim/nonexistent/logo.png",
-                timeout=TIMEOUT
+                f"{API_BASE}/uploads/plugin/brim/nonexistent/logo.png", timeout=TIMEOUT
             )
 
             assert response.status_code == 404
@@ -333,6 +331,7 @@ class TestPluginStatic:
 # ============================================================================
 # FILE SIZE LIMIT TESTS
 # ============================================================================
+
 
 class TestFileSizeLimit:
     """Tests for max file upload size."""
@@ -358,13 +357,14 @@ class TestFileSizeLimit:
             files = {"file": ("large_file.bin", BytesIO(large_content), "application/octet-stream")}
 
             response = await client.post(
-                f"{API_BASE}/uploads",
-                files=files,
-                timeout=60  # Longer timeout for large file
+                f"{API_BASE}/uploads", files=files, timeout=60  # Longer timeout for large file
             )
 
             # Should be rejected with 413 or 400
-            assert response.status_code in [400, 413], f"Expected 400/413, got {response.status_code}"
+            assert response.status_code in [
+                400,
+                413,
+            ], f"Expected 400/413, got {response.status_code}"
 
             print_success("✓ Large file correctly rejected")
 
@@ -372,6 +372,7 @@ class TestFileSizeLimit:
 # ============================================================================
 # SUPERUSER DELETE TESTS
 # ============================================================================
+
 
 class TestSuperuserDelete:
     """Tests for superuser file deletion capabilities."""
@@ -393,14 +394,13 @@ class TestSuperuserDelete:
             # Regular user uploads file
             await create_user_and_login(user_client)
             files = {"file": ("user_file.txt", BytesIO(b"User content"), "text/plain")}
-            upload_resp = await user_client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            upload_resp = await user_client.post(
+                f"{API_BASE}/uploads", files=files, timeout=TIMEOUT
+            )
             file_id = upload_resp.json()["file"]["id"]
 
             # Superuser deletes it
-            response = await admin_client.delete(
-                f"{API_BASE}/uploads/{file_id}",
-                timeout=TIMEOUT
-            )
+            response = await admin_client.delete(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
 
             assert response.status_code == 200
             assert response.json()["success"] is True
@@ -411,6 +411,7 @@ class TestSuperuserDelete:
 # ============================================================================
 # SECURITY VALIDATION TESTS
 # ============================================================================
+
 
 class TestUploadSecurity:
     """Tests for upload security validation."""
@@ -425,11 +426,7 @@ class TestUploadSecurity:
 
             # Try to upload .exe file
             files = {"file": ("malware.exe", BytesIO(b"MZ\x90\x00"), "application/octet-stream")}
-            response = await client.post(
-                f"{API_BASE}/uploads",
-                files=files,
-                timeout=TIMEOUT
-            )
+            response = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
 
             assert response.status_code == 400
             assert "not allowed" in response.json()["detail"].lower()
@@ -446,11 +443,7 @@ class TestUploadSecurity:
 
             # Try to upload .sh script
             files = {"file": ("script.sh", BytesIO(b"#!/bin/bash\nrm -rf /"), "text/plain")}
-            response = await client.post(
-                f"{API_BASE}/uploads",
-                files=files,
-                timeout=TIMEOUT
-            )
+            response = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
 
             assert response.status_code == 400
             assert "not allowed" in response.json()["detail"].lower()
@@ -466,16 +459,11 @@ class TestUploadSecurity:
             await create_user_and_login(client)
 
             # PNG magic bytes
-            png_header = b'\x89PNG\r\n\x1a\n'
-            files = {"file": ("test.png", BytesIO(png_header + b'\x00' * 100), "image/png")}
-            response = await client.post(
-                f"{API_BASE}/uploads",
-                files=files,
-                timeout=TIMEOUT
-            )
+            png_header = b"\x89PNG\r\n\x1a\n"
+            files = {"file": ("test.png", BytesIO(png_header + b"\x00" * 100), "image/png")}
+            response = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
 
             assert response.status_code == 200
             assert response.json()["success"] is True
 
             print_success("✓ Image upload allowed")
-

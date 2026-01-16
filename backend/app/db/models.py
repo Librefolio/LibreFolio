@@ -8,6 +8,7 @@ All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
 - Foreign keys enforced with PRAGMA foreign_keys=ON
 - Currency fields validated against ISO 4217 + crypto via Currency.validate_code()
 """
+
 from datetime import date as date_type, datetime
 from decimal import Decimal
 from enum import Enum
@@ -24,7 +25,7 @@ from sqlalchemy import (
     CheckConstraint,
     Integer,
     ForeignKey,
-    )
+)
 from sqlmodel import Field, SQLModel, Relationship
 
 from backend.app.utils.datetime_utils import utcnow
@@ -33,6 +34,7 @@ from backend.app.utils.datetime_utils import utcnow
 # =============================================================================
 # CURRENCY VALIDATION HELPER
 # =============================================================================
+
 
 def _validate_currency_field(v: Any) -> Optional[str]:
     """
@@ -45,12 +47,14 @@ def _validate_currency_field(v: Any) -> Optional[str]:
         return v
     # Import here to avoid circular imports
     from backend.app.schemas.common import Currency
+
     return Currency.validate_code(v)
 
 
 # ============================================================================
 # ENUMS
 # ============================================================================
+
 
 class IdentifierType(str, Enum):
     """
@@ -100,6 +104,7 @@ class IdentifierType(str, Enum):
 
     Run: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_columns_match_enum -v
     """
+
     ISIN = "ISIN"
     TICKER = "TICKER"
     CUSIP = "CUSIP"
@@ -132,6 +137,7 @@ class AssetType(str, Enum):
     - Used for portfolio breakdown and allocation analysis
     - May influence available data plugins (e.g., crypto uses different sources)
     """
+
     STOCK = "STOCK"
     ETF = "ETF"
     BOND = "BOND"
@@ -205,6 +211,7 @@ class TransactionType(str, Enum):
     - Validation ensures sign rules are followed
     - All calculations based on settlement date
     """
+
     BUY = "BUY"
     SELL = "SELL"
     DIVIDEND = "DIVIDEND"
@@ -226,6 +233,7 @@ class UserRole(str, Enum):
     - EDITOR: Modify broker and transactions, can only remove self
     - VIEWER: Read-only access
     """
+
     OWNER = "OWNER"
     EDITOR = "EDITOR"
     VIEWER = "VIEWER"
@@ -242,6 +250,7 @@ class User(SQLModel, table=True):
 
     Each user can have multiple brokers with different access levels.
     """
+
     __tablename__ = "users"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -261,10 +270,9 @@ class UserSettings(SQLModel, table=True):
 
     One-to-one relationship with User.
     """
+
     __tablename__ = "user_settings"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_user_settings_user_id"),
-        )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_settings_user_id"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, unique=True)
@@ -276,7 +284,7 @@ class UserSettings(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
-    @field_validator('base_currency', mode='before')
+    @field_validator("base_currency", mode="before")
     @classmethod
     def validate_base_currency(cls, v: Any) -> str:
         """Validate base_currency against ISO 4217 + crypto."""
@@ -295,6 +303,7 @@ class GlobalSetting(SQLModel, table=True):
     - max_file_upload_mb: Max file upload size in MB (int, default: 10)
     - enable_registration: Allow new user registration (bool, default: true)
     """
+
     __tablename__ = "global_settings"
 
     key: str = Field(primary_key=True, max_length=100)
@@ -302,9 +311,7 @@ class GlobalSetting(SQLModel, table=True):
     value_type: str = Field(max_length=20)  # "string", "int", "bool", "json"
     description: Optional[str] = Field(default=None)
     updated_at: datetime = Field(default_factory=utcnow)
-    updated_by_user_id: Optional[int] = Field(
-        default=None, foreign_key="users.id", nullable=True
-        )
+    updated_by_user_id: Optional[int] = Field(default=None, foreign_key="users.id", nullable=True)
 
 
 # ============================================================================
@@ -323,6 +330,7 @@ class Broker(SQLModel, table=True):
     - allow_asset_shorting: If True, asset quantity can go negative (short selling)
     - is_active: If False, the account is closed in reality (but we keep historical data)
     """
+
     __tablename__ = "brokers"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -330,15 +338,25 @@ class Broker(SQLModel, table=True):
     description: Optional[str] = Field(default=None, sa_column=Column(Text))
     portal_url: Optional[str] = Field(default=None)
     icon_url: Optional[str] = Field(default=None, description="Custom icon URL for the broker")
-    default_import_plugin: Optional[str] = Field(default=None, description="Default BRIM plugin for importing transactions")
+    default_import_plugin: Optional[str] = Field(
+        default=None, description="Default BRIM plugin for importing transactions"
+    )
 
     # New flags for advanced trading scenarios
-    allow_cash_overdraft: bool = Field(default=False, description="Allow leveraged buying (negative cash balance)")
-    allow_asset_shorting: bool = Field(default=False, description="Allow short selling (negative asset quantities)")
+    allow_cash_overdraft: bool = Field(
+        default=False, description="Allow leveraged buying (negative cash balance)"
+    )
+    allow_asset_shorting: bool = Field(
+        default=False, description="Allow short selling (negative asset quantities)"
+    )
 
     # Account status
-    is_active: bool = Field(default=True, description="Whether the broker account is currently active")
-    opened_at: Optional[date_type] = Field(default=None, description="Date when the account was opened in reality")
+    is_active: bool = Field(
+        default=True, description="Whether the broker account is currently active"
+    )
+    opened_at: Optional[date_type] = Field(
+        default=None, description="Date when the account was opened in reality"
+    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -350,10 +368,9 @@ class BrokerUserAccess(SQLModel, table=True):
 
     Defines which users can access which brokers and with what permissions.
     """
+
     __tablename__ = "broker_user_access"
-    __table_args__ = (
-        UniqueConstraint("user_id", "broker_id", name="uq_broker_user_access"),
-        )
+    __table_args__ = (UniqueConstraint("user_id", "broker_id", name="uq_broker_user_access"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
@@ -394,12 +411,13 @@ class Asset(SQLModel, table=True):
     - display_name must be unique to avoid user confusion
     - Validation is done via ClassificationParamsModel Pydantic model when loaded
     """
+
     __tablename__ = "assets"
     __table_args__ = (
         UniqueConstraint("display_name", name="uq_assets_display_name"),
         Index("ix_assets_identifier_isin", "identifier_isin"),
         Index("ix_assets_identifier_ticker", "identifier_ticker"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     display_name: str = Field(nullable=False)
@@ -415,46 +433,61 @@ class Asset(SQLModel, table=True):
 
     # Identifier columns - one per IdentifierType enum value
     # Allows direct search without JOIN to asset_provider_assignments
-    identifier_isin: Optional[str] = Field(default=None, max_length=12, description="ISIN code (12 chars)")
-    identifier_ticker: Optional[str] = Field(default=None, max_length=20, description="Ticker symbol")
-    identifier_cusip: Optional[str] = Field(default=None, max_length=9, description="CUSIP code (9 chars)")
-    identifier_sedol: Optional[str] = Field(default=None, max_length=7, description="SEDOL code (7 chars)")
-    identifier_figi: Optional[str] = Field(default=None, max_length=12, description="FIGI code (12 chars)")
-    identifier_uuid: Optional[str] = Field(default=None, max_length=36, description="UUID for custom assets")
-    identifier_other: Optional[str] = Field(default=None, max_length=100, description="Other identifier")
+    identifier_isin: Optional[str] = Field(
+        default=None, max_length=12, description="ISIN code (12 chars)"
+    )
+    identifier_ticker: Optional[str] = Field(
+        default=None, max_length=20, description="Ticker symbol"
+    )
+    identifier_cusip: Optional[str] = Field(
+        default=None, max_length=9, description="CUSIP code (9 chars)"
+    )
+    identifier_sedol: Optional[str] = Field(
+        default=None, max_length=7, description="SEDOL code (7 chars)"
+    )
+    identifier_figi: Optional[str] = Field(
+        default=None, max_length=12, description="FIGI code (12 chars)"
+    )
+    identifier_uuid: Optional[str] = Field(
+        default=None, max_length=36, description="UUID for custom assets"
+    )
+    identifier_other: Optional[str] = Field(
+        default=None, max_length=100, description="Other identifier"
+    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
-    @field_validator('currency', mode='before')
+    @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Any) -> str:
         """Validate currency against ISO 4217 + crypto."""
         return _validate_currency_field(v)
 
-    @field_validator('identifier_isin', mode='before')
+    @field_validator("identifier_isin", mode="before")
     @classmethod
     def validate_identifier_isin(cls, v: Any) -> Optional[str]:
         """Validate and normalize ISIN."""
-        if v is None or v == '':
+        if v is None or v == "":
             return None
         v = str(v).strip().upper()
         if len(v) != 12:
             raise ValueError("ISIN must be 12 characters")
         return v
 
-    @field_validator('identifier_ticker', mode='before')
+    @field_validator("identifier_ticker", mode="before")
     @classmethod
     def validate_identifier_ticker(cls, v: Any) -> Optional[str]:
         """Normalize ticker to uppercase."""
-        if v is None or v == '':
+        if v is None or v == "":
             return None
         return str(v).strip().upper()
 
-    @field_validator('classification_params')
+    @field_validator("classification_params")
     def validate_classification_params(cls, v):
         # Lazy import to avoid circular dependency
         from backend.app.schemas.assets import FAClassificationParams
+
         if v is None:
             return v
         if isinstance(v, FAClassificationParams):
@@ -491,12 +524,13 @@ class Transaction(SQLModel, table=True):
     - FX_CONVERSION: quantity = 0, amount != 0, related_transaction_id REQUIRED
     - ADJUSTMENT: quantity != 0, amount = 0, related_transaction_id OPTIONAL
     """
+
     __tablename__ = "transactions"
     __table_args__ = (
         Index("idx_transactions_broker_date", "broker_id", "date", "id"),
         Index("idx_transactions_asset_date", "asset_id", "date"),
         Index("idx_transactions_related", "related_transaction_id"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -504,8 +538,8 @@ class Transaction(SQLModel, table=True):
     asset_id: Optional[int] = Field(
         default=None,
         sa_column=Column(Integer, ForeignKey("assets.id"), nullable=True, index=True),
-        description="Asset ID, NULL for pure cash transactions"
-        )
+        description="Asset ID, NULL for pure cash transactions",
+    )
 
     type: TransactionType = Field(nullable=False)
     date: date_type = Field(nullable=False, index=True, description="Settlement date")
@@ -514,18 +548,16 @@ class Transaction(SQLModel, table=True):
     quantity: Decimal = Field(
         default=Decimal("0"),
         sa_column=Column(Numeric(18, 6), nullable=False, default=0),
-        description="Asset quantity delta (+ in, - out)"
-        )
+        description="Asset quantity delta (+ in, - out)",
+    )
     amount: Decimal = Field(
         default=Decimal("0"),
         sa_column=Column(Numeric(18, 6), nullable=False, default=0),
-        description="Cash amount delta (+ in, - out)"
-        )
+        description="Cash amount delta (+ in, - out)",
+    )
     currency: Optional[str] = Field(
-        default=None,
-        max_length=3,
-        description="ISO 4217 currency code, required if amount != 0"
-        )
+        default=None, max_length=3, description="ISO 4217 currency code, required if amount != 0"
+    )
 
     # Link for paired transactions (TRANSFER, FX_CONVERSION)
     # BIDIRECTIONAL: Both transactions point to each other (A->B and B->A)
@@ -536,10 +568,10 @@ class Transaction(SQLModel, table=True):
         sa_column=Column(
             Integer,
             ForeignKey("transactions.id", deferrable=True, initially="DEFERRED"),
-            nullable=True
-            ),
-        description="Links to paired transaction (for TRANSFER, FX_CONVERSION). Bidirectional."
-        )
+            nullable=True,
+        ),
+        description="Links to paired transaction (for TRANSFER, FX_CONVERSION). Bidirectional.",
+    )
 
     # Relationship for ORM access (post_update=True for bidirectional self-reference)
     # This tells SQLAlchemy to INSERT first with NULL, then UPDATE to set the link
@@ -548,22 +580,22 @@ class Transaction(SQLModel, table=True):
             "foreign_keys": "[Transaction.related_transaction_id]",
             "remote_side": "[Transaction.id]",
             "post_update": True,
-            }
-        )
+        }
+    )
 
     # User-defined tags for filtering and grouping
     tags: Optional[str] = Field(
         default=None,
         sa_column=Column(Text),
-        description="Comma-separated tags (e.g., 'tag1,tag2,tag3')"
-        )
+        description="Comma-separated tags (e.g., 'tag1,tag2,tag3')",
+    )
 
     description: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
-    @field_validator('currency', mode='before')
+    @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Any) -> Optional[str]:
         """Validate currency against ISO 4217 + crypto. Allows None."""
@@ -586,11 +618,12 @@ class PriceHistory(SQLModel, table=True):
     - For today: multiple updates allowed
     - For past dates: insert if missing, avoid overwrites
     """
+
     __tablename__ = "price_history"
     __table_args__ = (
         UniqueConstraint("asset_id", "date", name="uq_price_history_asset_date"),
         Index("idx_price_history_asset_date", "asset_id", "date"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -608,7 +641,7 @@ class PriceHistory(SQLModel, table=True):
     source_plugin_key: str = Field(nullable=False)
     fetched_at: datetime = Field(default_factory=utcnow)
 
-    @field_validator('currency', mode='before')
+    @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Any) -> str:
         """Validate currency against ISO 4217 + crypto."""
@@ -633,12 +666,13 @@ class FxRate(SQLModel, table=True):
     we enforce base < quote alphabetically via CHECK constraint.
     Always store the pair in alphabetical order.
     """
+
     __tablename__ = "fx_rates"
     __table_args__ = (
         UniqueConstraint("date", "base", "quote", name="uq_fx_rates_date_base_quote"),
         CheckConstraint("base < quote", name="ck_fx_rates_base_less_than_quote"),
         Index("idx_fx_rates_base_quote_date", "base", "quote", "date"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -650,7 +684,7 @@ class FxRate(SQLModel, table=True):
     source: str = Field(default="ECB")
     fetched_at: datetime = Field(default_factory=utcnow)
 
-    @field_validator('base', 'quote', mode='before')
+    @field_validator("base", "quote", mode="before")
     @classmethod
     def validate_currencies(cls, v: Any) -> str:
         """Validate base/quote against ISO 4217 + crypto."""
@@ -683,11 +717,12 @@ class FxCurrencyPairSource(SQLModel, table=True):
     Note: Unlike fx_rates table, this table does NOT enforce alphabetical ordering.
     The pair direction matters for selecting the correct provider's base currency.
     """
+
     __tablename__ = "fx_currency_pair_sources"
     __table_args__ = (
         UniqueConstraint("base", "quote", "priority", name="uq_pair_source_base_quote_priority"),
         Index("idx_pair_source_base_quote", "base", "quote"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -696,18 +731,18 @@ class FxCurrencyPairSource(SQLModel, table=True):
 
     provider_code: str = Field(nullable=False, description="Provider code (ECB, FED, BOE, etc.)")
 
-    priority: int = Field(default=1, ge=1, description="Priority level (1=primary, 2=fallback, etc.)")
+    priority: int = Field(
+        default=1, ge=1, description="Priority level (1=primary, 2=fallback, etc.)"
+    )
 
     fetch_interval: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description="Fetch frequency in minutes (NULL = default 1440 = 24h)"
-        )
+        default=None, ge=1, description="Fetch frequency in minutes (NULL = default 1440 = 24h)"
+    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
-    @field_validator('base', 'quote', mode='before')
+    @field_validator("base", "quote", mode="before")
     @classmethod
     def validate_currencies(cls, v: Any) -> str:
         """Validate base/quote against ISO 4217 + crypto."""
@@ -753,11 +788,12 @@ class AssetProviderAssignment(SQLModel, table=True):
     - Each provider may support different identifier types
     - Relationship is 1-to-1 (one asset = one provider)
     """
+
     __tablename__ = "asset_provider_assignments"
     __table_args__ = (
         UniqueConstraint("asset_id", name="uq_asset_provider_asset_id"),
         Index("idx_asset_provider_asset_id", "asset_id"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -765,40 +801,37 @@ class AssetProviderAssignment(SQLModel, table=True):
         foreign_key="assets.id",
         nullable=False,
         unique=True,
-        description="Asset ID (1-to-1 relationship)"
-        )
+        description="Asset ID (1-to-1 relationship)",
+    )
 
     provider_code: str = Field(
         max_length=50,
         nullable=False,
-        description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)"
-        )
+        description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)",
+    )
 
     identifier: str = Field(
         nullable=False,
-        description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)"
-        )
+        description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)",
+    )
 
     identifier_type: IdentifierType = Field(
-        nullable=False,
-        description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
-        )
+        nullable=False, description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
+    )
 
     provider_params: Optional[str] = Field(
         default=None,
         sa_column=Column(Text),
-        description="JSON configuration for provider (validated by plugin)"
-        )
+        description="JSON configuration for provider (validated by plugin)",
+    )
 
     last_fetch_at: Optional[datetime] = Field(
-        default=None,
-        description="Last fetch attempt timestamp (NULL = never fetched)"
-        )
+        default=None, description="Last fetch attempt timestamp (NULL = never fetched)"
+    )
 
     fetch_interval: Optional[int] = Field(
-        default=None,
-        description="Refresh frequency in minutes (NULL = default 1440 = 24h)"
-        )
+        default=None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)"
+    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

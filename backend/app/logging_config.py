@@ -9,6 +9,7 @@ Uses structlog for structured logging with:
 
 Log rotation: Weekly with 52 weeks (1 year) retention, gzip compression.
 """
+
 import gzip
 import logging
 import logging.handlers
@@ -58,8 +59,8 @@ def _compress_rotated_file(source: str, dest: str) -> None:
         source: Source log file path
         dest: Destination compressed file path (with .gz extension)
     """
-    with open(source, 'rb') as f_in:
-        with gzip.open(dest, 'wb') as f_out:
+    with open(source, "rb") as f_in:
+        with gzip.open(dest, "wb") as f_out:
             shutil.copyfileobj(f_in, f_out)
 
     # Remove original uncompressed file
@@ -102,8 +103,8 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
             interval=1,  # Every 1 week
             backupCount=52,  # Keep 52 weeks (1 year)
             encoding="utf-8",
-            utc=True  # Use UTC for rotation timing
-            )
+            utc=True,  # Use UTC for rotation timing
+        )
         file_handler.setLevel(numeric_level)
 
         # Enable compression of rotated files
@@ -113,12 +114,7 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
         handlers.append(file_handler)
 
     # Configure standard logging
-    logging.basicConfig(
-        format="%(message)s",
-        handlers=handlers,
-        level=numeric_level,
-        force=True
-        )
+    logging.basicConfig(format="%(message)s", handlers=handlers, level=numeric_level, force=True)
 
     # Configure structlog processors
     processors = [
@@ -131,7 +127,7 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.JSONRenderer(),
-        ]
+    ]
 
     # Configure structlog
     structlog.configure(
@@ -140,7 +136,7 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
-        )
+    )
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
