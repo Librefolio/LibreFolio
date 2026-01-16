@@ -2,9 +2,9 @@
     import {page} from '$app/stores';
     import {browser} from '$app/environment';
     import {onMount} from 'svelte';
-    import {_} from '$lib/i18n';
+import {_} from '$lib/i18n';
     import {auth} from '$lib/stores/auth';
-    import {ArrowRightLeft, BarChart3, Briefcase, Coins, LayoutDashboard, LogOut, Settings, X} from 'lucide-svelte';
+    import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, X} from 'lucide-svelte';
 
     // Mobile sidebar state (exported so parent can control it)
     export let isOpen = false;
@@ -39,13 +39,14 @@
         {href: '/fx', icon: Coins, labelKey: 'nav.fx'}
     ];
 
-    // Group 3: Settings
-    const settingsItems = [
+    // Group 3: Files & Settings
+    const utilityItems = [
+        {href: '/files', icon: Files, labelKey: 'nav.files'},
         {href: '/settings', icon: Settings, labelKey: 'nav.settings'}
     ];
 
     // All items flat for active check
-    const allNavItems = [...portfolioItems, ...marketDataItems, ...settingsItems];
+    const allNavItems = [...portfolioItems, ...marketDataItems, ...utilityItems];
 
     // Reactive: compute active item based on current path
     $: activeHref = allNavItems.find(item =>
@@ -170,9 +171,9 @@
         <!-- Divider -->
         <div class="my-3 mx-4 border-t border-white/20"></div>
 
-        <!-- Settings Group -->
+        <!-- Files & Settings Group -->
         <ul>
-            {#each settingsItems as item (item.href)}
+            {#each utilityItems as item (item.href)}
                 <li>
                     <a
                             href={item.href}

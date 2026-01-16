@@ -3,6 +3,7 @@ System API endpoints.
 
 Provides system information, version data, and runtime details.
 """
+
 import json
 import platform
 import re
@@ -19,12 +20,14 @@ router = APIRouter(prefix="/system", tags=["System"])
 
 class DependencyInfo(BaseModel):
     """Information about a dependency."""
+
     name: str
     version: str
 
 
 class SystemInfoResponse(BaseModel):
     """System information response."""
+
     app_version: str
     python_version: str
     os_name: str
@@ -48,7 +51,7 @@ BACKEND_NAME_MAP = {
     "python-multipart": "python-multipart",
     "justetf-scraping": "JustETF Scraping",
     "email-validator": "email-validator",
-    }
+}
 
 FRONTEND_NAME_MAP = {
     "@sveltejs/kit": "SvelteKit",
@@ -61,7 +64,7 @@ FRONTEND_NAME_MAP = {
     "svelte-i18n": "svelte-i18n",
     "date-fns": "date-fns",
     "@zodios/core": "Zodios",
-    }
+}
 
 
 def get_display_name(pkg_name: str, name_map: dict) -> str:
@@ -90,7 +93,7 @@ def parse_pipfile() -> list[str]:
                     break
                 elif in_packages and line and not line.startswith("#"):
                     # Parse package name (before =)
-                    match = re.match(r'^([a-zA-Z0-9_-]+)\s*=', line)
+                    match = re.match(r"^([a-zA-Z0-9_-]+)\s*=", line)
                     if match:
                         pkg_name = match.group(1).lower()
                         packages.append(pkg_name)
@@ -164,7 +167,7 @@ async def get_system_info() -> SystemInfoResponse:
         platform=platform.platform(),
         backend_dependencies=get_backend_deps(),
         frontend_dependencies=get_frontend_deps(),
-        )
+    )
 
 
 @router.get("/health")
@@ -176,4 +179,3 @@ async def health_check():
         dict: Status message with "ok" status
     """
     return {"status": "ok"}
-

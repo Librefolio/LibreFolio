@@ -14,6 +14,7 @@ This module contains Pydantic models used by multiple services
 - Models designed for maximum reusability across FA/FX systems
 - Future: Consider adding validation (end >= start) via Pydantic validator
 """
+
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
@@ -53,12 +54,13 @@ CRYPTO_CURRENCIES = {
     "ALGO": "Algorand",
     "VET": "VeChain",
     "FIL": "Filecoin",
-    }
+}
 
 
 # =============================================================================
 # CACHED CURRENCY VALIDATION
 # =============================================================================
+
 
 @lru_cache(maxsize=256)
 def _validate_currency_code_cached(code: str) -> str:
@@ -90,14 +92,14 @@ def _validate_currency_code_cached(code: str) -> str:
 
     # Invalid currency
     raise ValueError(
-        f"Invalid currency code: '{code}'. "
-        f"Must be ISO 4217 currency or supported crypto."
-        )
+        f"Invalid currency code: '{code}'. " f"Must be ISO 4217 currency or supported crypto."
+    )
 
 
 # =============================================================================
 # CURRENCY CLASS
 # =============================================================================
+
 
 class Currency(BaseModel):
     """
@@ -126,6 +128,7 @@ class Currency(BaseModel):
     Raises:
         ValueError: If currency code is not valid ISO 4217 or supported crypto
     """
+
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="ISO 4217 currency code or crypto symbol")
@@ -168,13 +171,13 @@ class Currency(BaseModel):
         # Use cached validation
         return _validate_currency_code_cached(code)
 
-    @field_validator('code', mode='before')
+    @field_validator("code", mode="before")
     @classmethod
     def validate_currency_code(cls, v: Any) -> str:
         """Validate and normalize currency code."""
         return cls.validate_code(v)
 
-    @field_validator('amount', mode='before')
+    @field_validator("amount", mode="before")
     @classmethod
     def validate_amount(cls, v: Any) -> Decimal:
         """Convert amount to Decimal if needed."""
@@ -187,7 +190,7 @@ class Currency(BaseModel):
                 raise ValueError(f"Cannot convert '{v}' to Decimal")
         raise ValueError(f"Amount must be numeric, got {type(v)}")
 
-    def __add__(self, other: 'Currency') -> 'Currency':
+    def __add__(self, other: "Currency") -> "Currency":
         """Add two Currency objects (same currency only)."""
         if not isinstance(other, Currency):
             raise TypeError(f"Cannot add Currency and {type(other).__name__}")
@@ -195,7 +198,7 @@ class Currency(BaseModel):
             raise ValueError(f"Cannot add {self.code} and {other.code}")
         return Currency(code=self.code, amount=self.amount + other.amount)
 
-    def __sub__(self, other: 'Currency') -> 'Currency':
+    def __sub__(self, other: "Currency") -> "Currency":
         """Subtract two Currency objects (same currency only)."""
         if not isinstance(other, Currency):
             raise TypeError(f"Cannot subtract {type(other).__name__} from Currency")
@@ -203,11 +206,11 @@ class Currency(BaseModel):
             raise ValueError(f"Cannot subtract {other.code} from {self.code}")
         return Currency(code=self.code, amount=self.amount - other.amount)
 
-    def __neg__(self) -> 'Currency':
+    def __neg__(self) -> "Currency":
         """Negate currency amount."""
         return Currency(code=self.code, amount=-self.amount)
 
-    def __abs__(self) -> 'Currency':
+    def __abs__(self) -> "Currency":
         """Absolute value of currency amount."""
         return Currency(code=self.code, amount=abs(self.amount))
 
@@ -221,7 +224,7 @@ class Currency(BaseModel):
         """Check inequality."""
         return not self.__eq__(other)
 
-    def __lt__(self, other: 'Currency') -> bool:
+    def __lt__(self, other: "Currency") -> bool:
         """Less than comparison (same currency only)."""
         if not isinstance(other, Currency):
             raise TypeError(f"Cannot compare Currency and {type(other).__name__}")
@@ -229,11 +232,11 @@ class Currency(BaseModel):
             raise ValueError(f"Cannot compare {self.code} and {other.code}")
         return self.amount < other.amount
 
-    def __le__(self, other: 'Currency') -> bool:
+    def __le__(self, other: "Currency") -> bool:
         """Less than or equal comparison (same currency only)."""
         return self == other or self < other
 
-    def __gt__(self, other: 'Currency') -> bool:
+    def __gt__(self, other: "Currency") -> bool:
         """Greater than comparison (same currency only)."""
         if not isinstance(other, Currency):
             raise TypeError(f"Cannot compare Currency and {type(other).__name__}")
@@ -241,7 +244,7 @@ class Currency(BaseModel):
             raise ValueError(f"Cannot compare {self.code} and {other.code}")
         return self.amount > other.amount
 
-    def __ge__(self, other: 'Currency') -> bool:
+    def __ge__(self, other: "Currency") -> bool:
         """Greater than or equal comparison (same currency only)."""
         return self == other or self > other
 
@@ -259,13 +262,10 @@ class Currency(BaseModel):
 
     def to_dict(self) -> dict:
         """Serialize to dict for JSON responses."""
-        return {
-            "currency": self.code,
-            "amount": str(self.amount)  # Decimal → string for JSON
-            }
+        return {"currency": self.code, "amount": str(self.amount)}  # Decimal → string for JSON
 
     @classmethod
-    def zero(cls, code: str) -> 'Currency':
+    def zero(cls, code: str) -> "Currency":
         """Create a zero-valued Currency."""
         return cls(code=code, amount=Decimal("0"))
 
@@ -311,9 +311,12 @@ class BackwardFillInfo(BaseModel):
             }
         }
     """
+
     model_config = ConfigDict()
 
-    actual_rate_date: date_type = Field(..., description="ISO date of actual data used (YYYY-MM-DD)")
+    actual_rate_date: date_type = Field(
+        ..., description="ISO date of actual data used (YYYY-MM-DD)"
+    )
     days_back: int = Field(..., description="Number of days back from requested date")
 
     @field_validator("actual_rate_date", mode="before")
@@ -349,13 +352,16 @@ class DateRangeModel(BaseModel):
         # Range
         {"start": "2025-11-01", "end": "2025-11-30"}  # Entire November
     """
+
     model_config = ConfigDict(extra="forbid")
 
     start: date_type = Field(..., description="Start date (inclusive)")
-    end: Optional[date_type] = Field(None, description="End date (inclusive, optional = single day)")
+    end: Optional[date_type] = Field(
+        None, description="End date (inclusive, optional = single day)"
+    )
 
-    @model_validator(mode='after')
-    def validate_end_after_start(self) -> 'DateRangeModel':
+    @model_validator(mode="after")
+    def validate_end_after_start(self) -> "DateRangeModel":
         """Ensure end >= start when end is provided."""
         if self.end is not None and self.end < self.start:
             raise ValueError(f"end date ({self.end}) must be >= start date ({self.end})")
@@ -403,6 +409,7 @@ class BaseDeleteResult(BaseModel):
     - Single source of truth for deletion result structure
     - Easy to extend with operation-specific fields
     """
+
     model_config = ConfigDict(extra="forbid")
 
     success: bool = Field(..., description="Whether the deletion succeeded")
@@ -411,7 +418,7 @@ class BaseDeleteResult(BaseModel):
 
 
 # CustomType specified by subclass
-CType = TypeVar('CType')
+CType = TypeVar("CType")
 
 
 class OldNew(BaseModel, Generic[CType]):
@@ -428,6 +435,7 @@ class OldNew(BaseModel, Generic[CType]):
         >>> # With optional types
         >>> change: OldNew[str | None] = OldNew(info="sector", old="Tech", new=None)  # Cleared
     """
+
     model_config = ConfigDict(extra="forbid")
     info: Optional[str] = Field(None, description="Info message/Field name")
     old: CType = Field(..., description="Old value")
@@ -435,7 +443,7 @@ class OldNew(BaseModel, Generic[CType]):
 
 
 # Generic type for result items in bulk responses, must be child of BaseModel
-TResult = TypeVar('TResult', bound=BaseModel)
+TResult = TypeVar("TResult", bound=BaseModel)
 
 
 class BaseBulkResponse(BaseModel, Generic[TResult]):
@@ -471,11 +479,14 @@ class BaseBulkResponse(BaseModel, Generic[TResult]):
             updated_count: int
         ```
     """
+
     model_config = ConfigDict(extra="forbid")
 
     results: List[TResult] = Field(..., description="Per-item operation results")
     success_count: int = Field(..., ge=0, description="Number of successful operations")
-    errors: List[str] = Field(default_factory=list, description="Operation-level errors (not per-item)")
+    errors: List[str] = Field(
+        default_factory=list, description="Operation-level errors (not per-item)"
+    )
 
     @property
     def failed_count(self) -> int:
@@ -491,45 +502,48 @@ class BaseBulkResponse(BaseModel, Generic[TResult]):
 class BaseBulkDeleteResponse(BaseBulkResponse[TResult]):
     """
     Specialized base class for bulk delete/removal operations.
-    
+
     Combines BaseBulkResponse structure with delete-specific aggregate field.
     Inherits list of results and success tracking from BaseBulkResponse,
     adds total deletion count across all items.
-    
+
     Standard fields (from BaseBulkResponse):
     - results: List[TResult] - Per-item deletion results
     - success_count: int - Number of successful deletions
     - errors: List[str] - Operation-level errors
-    
+
     Delete-specific field:
     - total_deleted: int - Total number of records deleted across all items
-    
+
     Computed properties (from BaseBulkResponse):
     - failed_count: int - Number of failed deletions
     - total_count: int - Total number of items processed
-    
+
     Design Notes:
     - Extends BaseBulkResponse with delete-specific aggregate
     - total_deleted is the sum of all deleted_count from individual results
     - Generic class parameterized by TResult (the result item type)
     - Use when bulk operation deletes multiple records per item
-    
+
     Examples:
         ```python
         # For price deletion (deletes multiple price records per asset)
         class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
             pass
-        
+
         # For FX rate deletion (deletes multiple rates per pair)
         class FXBulkDeleteResponse(BaseBulkDeleteResponse[FXDeleteResult]):
             pass
         ```
-    
+
     Benefits:
     - Consistent pattern for bulk deletion operations
     - Clear separation: success_count (items) vs total_deleted (records)
     - Inherits all BaseBulkResponse benefits
     - Delete-specific semantics explicit in class name
     """
+
     # Delete-specific aggregate field
-    total_deleted: int = Field(..., ge=0, description="Total number of records deleted across all items")
+    total_deleted: int = Field(
+        ..., ge=0, description="Total number of records deleted across all items"
+    )

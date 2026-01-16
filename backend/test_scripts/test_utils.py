@@ -4,6 +4,7 @@ LibreFolio Test Utilities Library
 Common utilities for all test scripts to avoid code duplication.
 Provides standardized output formatting, test helpers, and common functions.
 """
+
 import sys
 import time
 
@@ -12,21 +13,24 @@ import time
 # ANSI COLOR CODES
 # ============================================================================
 
+
 class Colors:
     """ANSI color codes for terminal output."""
-    GREEN = '\033[0;32m'
-    YELLOW = '\033[1;33m'
-    RED = '\033[0;31m'
-    BLUE = '\033[0;34m'
-    CYAN = '\033[0;36m'
-    MAGENTA = '\033[0;35m'
-    BOLD = '\033[1m'
-    NC = '\033[0m'  # No Color
+
+    GREEN = "\033[0;32m"
+    YELLOW = "\033[1;33m"
+    RED = "\033[0;31m"
+    BLUE = "\033[0;34m"
+    CYAN = "\033[0;36m"
+    MAGENTA = "\033[0;35m"
+    BOLD = "\033[1m"
+    NC = "\033[0m"  # No Color
 
 
 # ============================================================================
 # OUTPUT FORMATTING FUNCTIONS
 # ============================================================================
+
 
 def print_header(text: str):
     """Print a formatted header (large, centered)."""
@@ -39,14 +43,14 @@ def print_section(title: str):
     """Print a formatted section header."""
     print(f"\n{'=' * 60}")
     print(f"  {title}")
-    print('=' * 60)
+    print("=" * 60)
 
 
 def print_subsection(title: str):
     """Print a formatted subsection header."""
     print(f"\n{'-' * 60}")
     print(f"  {title}")
-    print('-' * 60)
+    print("-" * 60)
 
 
 def print_success(message: str):
@@ -88,6 +92,7 @@ def print_bold(message: str):
 # TEST SUMMARY FUNCTIONS
 # ============================================================================
 
+
 def print_test_summary(results: dict[str, bool], suite_name: str = "Test Suite"):
     """
     Print a formatted test summary.
@@ -102,12 +107,14 @@ def print_test_summary(results: dict[str, bool], suite_name: str = "Test Suite")
     total = len(results)
 
     for test_name, result in results.items():
-        status = f"{Colors.GREEN}✅ PASS{Colors.NC}" if result else f"{Colors.RED}❌ FAIL{Colors.NC}"
+        status = (
+            f"{Colors.GREEN}✅ PASS{Colors.NC}" if result else f"{Colors.RED}❌ FAIL{Colors.NC}"
+        )
         print(f"{status}: {test_name}")
 
     print(f"\n{'=' * 60}")
     print(f"  Results: {passed}/{total} tests passed")
-    print('=' * 60)
+    print("=" * 60)
 
     if passed == total:
         print_success(f"All {suite_name.lower()} passed! 🎉")
@@ -120,6 +127,7 @@ def print_test_summary(results: dict[str, bool], suite_name: str = "Test Suite")
 # ============================================================================
 # TEST HEADER FUNCTION
 # ============================================================================
+
 
 def print_test_header(title: str, description: str = None, prerequisites: list[str] = None):
     """
@@ -147,6 +155,7 @@ def print_test_header(title: str, description: str = None, prerequisites: list[s
 # ============================================================================
 # EXIT HELPERS
 # ============================================================================
+
 
 def exit_success():
     """Exit with success code."""

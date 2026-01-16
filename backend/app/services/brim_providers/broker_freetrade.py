@@ -29,6 +29,7 @@ This plugin parses CSV exports from Freetrade (UK broker).
 - ISIN: Asset ISIN
 - Quantity: Number of shares
 """
+
 from __future__ import annotations
 
 import csv
@@ -70,13 +71,13 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "top_up": TransactionType.DEPOSIT,
     "withdrawal": TransactionType.WITHDRAWAL,
     "interest_from_cash": TransactionType.INTEREST,
-    }
+}
 
 # Types to skip
 SKIP_TYPES = [
     "monthly_statement",
     "property",  # Stock property changes
-    ]
+]
 
 
 def _parse_freetrade_datetime(value: str) -> Optional[date_type]:
@@ -89,7 +90,7 @@ def _parse_freetrade_datetime(value: str) -> Optional[date_type]:
         "%Y-%m-%dT%H:%M:%S.%f",
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%d",
-        ]
+    ]
 
     for fmt in formats:
         try:
@@ -115,6 +116,7 @@ def _parse_freetrade_number(value: str) -> Optional[Decimal]:
 # =============================================================================
 # PLUGIN IMPLEMENTATION
 # =============================================================================
+
 
 @register_provider(BRIMProviderRegistry)
 class FreetradeBrokerProvider(BRIMProvider):
@@ -154,20 +156,26 @@ class FreetradeBrokerProvider(BRIMProvider):
 
         try:
             content = self._read_file_head(file_path, num_lines=3)
-            first_line = content.split('\n')[0].lower() if content else ""
+            first_line = content.split("\n")[0].lower() if content else ""
 
             # Freetrade specific columns - must have ALL of these
-            required = ["title", "type", "timestamp", "account currency", "buy / sell", "isin", "stamp duty"]
+            required = [
+                "title",
+                "type",
+                "timestamp",
+                "account currency",
+                "buy / sell",
+                "isin",
+                "stamp duty",
+            ]
             return all(col in first_line for col in required)
 
         except Exception:
             return False
 
     def parse(
-        self,
-        file_path: Path,
-        broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        self, file_path: Path, broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Freetrade CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -202,7 +210,9 @@ class FreetradeBrokerProvider(BRIMProvider):
                         elif direction == "SELL":
                             tx_type = TransactionType.SELL
                         else:
-                            warnings.append(f"Row {row_num}: unknown order direction '{direction}', skipping")
+                            warnings.append(
+                                f"Row {row_num}: unknown order direction '{direction}', skipping"
+                            )
                             continue
 
                     if tx_type is None:
@@ -226,11 +236,13 @@ class FreetradeBrokerProvider(BRIMProvider):
                         TransactionType.BUY,
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
-                        ]
+                    ]
 
                     if asset_required:
                         if not isin and not ticker:
-                            warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
+                            warnings.append(
+                                f"Row {row_num}: {tx_type.value} requires asset, skipping"
+                            )
                             continue
 
                         asset_key = isin if isin else ticker
@@ -245,7 +257,7 @@ class FreetradeBrokerProvider(BRIMProvider):
                                 "extracted_symbol": ticker if ticker else None,
                                 "extracted_isin": isin if isin else None,
                                 "extracted_name": title if title else None,
-                                }
+                            }
 
                             next_fake_id -= 1
 
@@ -277,7 +289,7 @@ class FreetradeBrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=f"{tx_type_raw}: {title}" if title else tx_type_raw,
                             tags=["import", "freetrade"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -298,16 +310,16 @@ class FreetradeBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "Freetrade file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
-            asset_count=len(extracted_assets_typed)
-            )
+            asset_count=len(extracted_assets_typed),
+        )
 
         return transactions, warnings, extracted_assets_typed
 

@@ -2,6 +2,7 @@
 Application configuration module.
 Loads environment variables and provides application-wide settings.
 """
+
 import os
 from pathlib import Path
 
@@ -34,6 +35,7 @@ def _reset_engine_singletons():
     """Reset engine singletons to allow recreation with new settings."""
     # Import here to avoid circular imports
     from backend.app.db import session as session_module
+
     session_module.sync_engine = None
     session_module.async_engine = None
 
@@ -53,9 +55,12 @@ class Settings(BaseSettings):
     Application settings loaded from environment variables or .env file.
     (Note: Environment variables take precedence over .env file)
     """
+
     # Database
     DATABASE_URL: str = "sqlite:///./backend/data/sqlite/app.db"
-    TEST_DATABASE_URL: str = "sqlite:///./backend/data/sqlite/test_app.db"  # Test database (same dir as app.db)
+    TEST_DATABASE_URL: str = (
+        "sqlite:///./backend/data/sqlite/test_app.db"  # Test database (same dir as app.db)
+    )
 
     # API
     API_V1_PREFIX: str = "/api/v1"
@@ -76,10 +81,8 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     model_config = ConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        case_sensitive=True,
-        env_file_encoding='utf-8'
-        )
+        env_file=str(PROJECT_ROOT / ".env"), case_sensitive=True, env_file_encoding="utf-8"
+    )
 
 
 def get_settings() -> Settings:

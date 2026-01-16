@@ -14,6 +14,7 @@ These tests require:
 
 See checklist: 01_test_brim_plan.md - Category 7
 """
+
 import io
 import time
 import uuid
@@ -32,6 +33,7 @@ TIMEOUT = 30
 # ============================================================================
 # AUTH HELPERS
 # ============================================================================
+
 
 def unique_username() -> str:
     """Generate unique username for test isolation."""
@@ -65,6 +67,7 @@ async def create_test_user(client: httpx.AsyncClient) -> int:
 # PYTEST FIXTURES
 # ============================================================================
 
+
 @pytest.fixture(scope="module")
 def test_server():
     """Start test server once for all tests in this module."""
@@ -77,6 +80,7 @@ def test_server():
 # ============================================================================
 # E2E IMPORT TESTS
 # ============================================================================
+
 
 class TestBRIME2EImport:
     """End-to-end import flow tests."""
@@ -119,7 +123,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload_response.status_code == 200
             file_id = upload_response.json()["file_id"]
 
@@ -129,9 +133,9 @@ class TestBRIME2EImport:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
             assert parse_response.status_code == 200
             parse_data = parse_response.json()
 
@@ -146,7 +150,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/transactions",
                 json=transactions,
                 timeout=TIMEOUT,
-                )
+            )
 
             # Transactions endpoint returns 200 with success_count
             assert import_response.status_code == 200, f"Import failed: {import_response.text}"
@@ -181,7 +185,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload_response.status_code == 200
             file_id = upload_response.json()["file_id"]
 
@@ -191,9 +195,9 @@ class TestBRIME2EImport:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
             assert parse_response.status_code == 200, f"Parse failed: {parse_response.text}"
             parse_data = parse_response.json()
 
@@ -248,14 +252,14 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload",
                 files=files1,
                 timeout=TIMEOUT,
-                )
+            )
             file_id1 = upload1.json()["file_id"]
 
             parse1 = await client.post(
                 f"{API_BASE}/brokers/import/files/{file_id1}/parse",
                 json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
-                )
+            )
             tx1 = parse1.json()["transactions"]
 
             # Import both
@@ -268,28 +272,28 @@ class TestBRIME2EImport:
 2025-03-03,DEPOSIT,0,2000.00,EUR,Third deposit {unique_id}
 """.encode()
 
-            files2 = {"file": (f"filter_test2_{unique_id}.csv", io.BytesIO(csv_content2), "text/csv")}
+            files2 = {
+                "file": (f"filter_test2_{unique_id}.csv", io.BytesIO(csv_content2), "text/csv")
+            }
             upload2 = await client.post(
                 f"{API_BASE}/brokers/import/upload",
                 files=files2,
                 timeout=TIMEOUT,
-                )
+            )
             file_id2 = upload2.json()["file_id"]
 
             parse2 = await client.post(
                 f"{API_BASE}/brokers/import/files/{file_id2}/parse",
                 json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
-                )
+            )
             parse2_data = parse2.json()
 
             # Should have 1 unique (new deposit) and 1 duplicate
             unique_indices = parse2_data["duplicates"]["tx_unique_indices"]
 
             # User selects only unique transactions for import
-            transactions_to_import = [
-                parse2_data["transactions"][i] for i in unique_indices
-                ]
+            transactions_to_import = [parse2_data["transactions"][i] for i in unique_indices]
 
             # Import only unique
             if transactions_to_import:
@@ -297,7 +301,7 @@ class TestBRIME2EImport:
                     f"{API_BASE}/transactions",
                     json=transactions_to_import,
                     timeout=TIMEOUT,
-                    )
+                )
                 assert import2.status_code == 200
                 # Should import only the new one
                 assert import2.json()["success_count"] == len(unique_indices)
@@ -327,14 +331,14 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload",
                 files=files1,
                 timeout=TIMEOUT,
-                )
+            )
             file_id1 = upload1.json()["file_id"]
 
             parse1 = await client.post(
                 f"{API_BASE}/brokers/import/files/{file_id1}/parse",
                 json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
-                )
+            )
             tx1 = parse1.json()["transactions"]
 
             # Import first time
@@ -346,7 +350,7 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/upload",
                 files=files2,
                 timeout=TIMEOUT,
-                )
+            )
             file_id2 = upload2.json()["file_id"]
 
             # Parse again - should detect duplicate
@@ -354,14 +358,13 @@ class TestBRIME2EImport:
                 f"{API_BASE}/brokers/import/files/{file_id2}/parse",
                 json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
                 timeout=TIMEOUT,
-                )
+            )
 
             duplicates = parse2.json()["duplicates"]
 
             # Should have duplicates detected
-            total_duplicates = (
-                len(duplicates.get("tx_possible_duplicates", [])) +
-                len(duplicates.get("tx_likely_duplicates", []))
+            total_duplicates = len(duplicates.get("tx_possible_duplicates", [])) + len(
+                duplicates.get("tx_likely_duplicates", [])
             )
             assert total_duplicates >= 1, "Should detect duplicate transaction"
 

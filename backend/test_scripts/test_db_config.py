@@ -7,6 +7,7 @@ Tests should use a separate database to avoid corrupting production/development 
 The test database URL is configured in config.py (TEST_DATABASE_URL).
 Can be customized via environment variable.
 """
+
 import os
 from pathlib import Path
 
@@ -40,7 +41,7 @@ def setup_test_database():
     """
     Configure environment to use test database.
     Must be called BEFORE importing any app modules that use DATABASE_URL.
-    
+
     Returns:
         Path: Path to test database
     """

@@ -1,6 +1,7 @@
 """
 Pydantic schemas for utility endpoints.
 """
+
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -8,6 +9,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class CountryNormalizationResponse(BaseModel):
     """Response for country normalization endpoint."""
+
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(..., description="Original query string")
@@ -18,6 +20,7 @@ class CountryNormalizationResponse(BaseModel):
 
 class CountryListItem(BaseModel):
     """Single country in the country list."""
+
     model_config = ConfigDict(extra="forbid")
 
     iso3: str = Field(..., description="ISO-3166-A3 country code (e.g., USA, ITA)")
@@ -28,6 +31,7 @@ class CountryListItem(BaseModel):
 
 class CountryListResponse(BaseModel):
     """Response for countries list endpoint."""
+
     model_config = ConfigDict(extra="forbid")
 
     countries: List[CountryListItem] = Field(..., description="List of all countries")
@@ -37,6 +41,7 @@ class CountryListResponse(BaseModel):
 
 class CurrencyListItem(BaseModel):
     """Single currency in the currency list."""
+
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="ISO 4217 currency code (e.g., USD, EUR)")
@@ -46,6 +51,7 @@ class CurrencyListItem(BaseModel):
 
 class CurrencyListResponse(BaseModel):
     """Response for currencies list endpoint."""
+
     model_config = ConfigDict(extra="forbid")
 
     currencies: List[CurrencyListItem] = Field(..., description="List of all currencies")
@@ -55,16 +61,20 @@ class CurrencyListResponse(BaseModel):
 
 class CurrencyNormalizationResponse(BaseModel):
     """Response for currency normalization endpoint."""
+
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(..., description="Original query string")
     iso_codes: List[str] = Field(..., description="List of ISO 4217 currency codes")
-    match_type: str = Field(..., description="Match type: exact, symbol_ambiguous, multi-match, not_found")
+    match_type: str = Field(
+        ..., description="Match type: exact, symbol_ambiguous, multi-match, not_found"
+    )
     error: Optional[str] = Field(None, description="Error message if normalization failed")
 
 
 class SectorListResponse(BaseModel):
     """Response for sectors list endpoint."""
+
     model_config = ConfigDict(extra="forbid")
 
     sectors: List[str] = Field(..., description="List of standard financial sector names")

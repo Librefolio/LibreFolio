@@ -23,6 +23,7 @@ This is achieved by:
 2. Using gevent for asyncio event loop instrumentation
 3. No subprocess complexity or sitecustomize.py needed
 """
+
 import threading
 import time
 
@@ -55,11 +56,7 @@ def check_port_available(port: int = TEST_SERVER_PORT) -> tuple[bool, str | None
 
     try:
         # Use lsof to check port (works on macOS/Linux)
-        result = subprocess.run(
-            ["lsof", "-i", f":{port}"],
-            capture_output=True,
-            text=True
-            )
+        result = subprocess.run(["lsof", "-i", f":{port}"], capture_output=True, text=True)
 
         if result.returncode == 0 and result.stdout.strip():
             # Port is occupied
@@ -71,6 +68,7 @@ def check_port_available(port: int = TEST_SERVER_PORT) -> tuple[bool, str | None
     except FileNotFoundError:
         # lsof not available, try alternative method
         import socket
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 s.bind(("localhost", port))
@@ -130,10 +128,12 @@ class _TestingServerManager:
         """Run uvicorn server in background thread (called by start_server)."""
         # Set test mode using the proper function (updates both env var and global flag)
         from backend.app.config import set_test_mode
+
         set_test_mode(True)
 
         # Import app here (inside thread) to ensure coverage tracking
         from backend.app.main import app
+
         # Signal that we're starting
         self.server_started.set()
 
@@ -143,8 +143,8 @@ class _TestingServerManager:
             host=TEST_SERVER_HOST,
             port=TEST_SERVER_PORT,
             log_level="error",  # Reduce noise
-            access_log=False
-            )
+            access_log=False,
+        )
 
     def start_server(self) -> bool:
         """
@@ -163,8 +163,8 @@ class _TestingServerManager:
         self.server_thread = threading.Thread(
             target=self._run_server,
             daemon=True,  # Thread dies when main process exits
-            name="uvicorn-test-server"
-            )
+            name="uvicorn-test-server",
+        )
         self.server_thread.start()
 
         # Wait for thread to signal start

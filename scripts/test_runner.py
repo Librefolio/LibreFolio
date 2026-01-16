@@ -21,13 +21,21 @@ Author: LibreFolio Contributors
 """
 
 import argparse
-import os
 import subprocess
-import sys
 import traceback
+# Ensure project root is in path (file is in scripts/)
 from pathlib import Path
 
 import argcomplete
+
+PROJECT_ROOT = Path(__file__).parent.parent
+import sys
+import os
+
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# Change to project root so relative paths work
+os.chdir(PROJECT_ROOT)
 
 # Setup test database configuration and get test database path
 from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH, TEST_DATABASE_URL
@@ -47,7 +55,7 @@ def _run_test_suite(
     summary_title: str = None,
     success_msg: str = None,
     combine_coverage: bool = False,
-) -> bool:
+    ) -> bool:
     """
     Generic function to run a suite of tests with consistent output format.
 
@@ -120,7 +128,7 @@ def _run_test_suite(
                 capture_output=True,
                 text=True,
                 cwd=Path(__file__).parent
-            )
+                )
             if result.returncode == 0:
                 print_success("Coverage data combined successfully")
             else:
@@ -242,7 +250,7 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
         except Exception:
             env = None
         # Capture only if not verbose
-        result = subprocess.run(cmd, cwd=Path(__file__).parent, capture_output=not verbose, text=True, env=env)
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=not verbose, text=True, env=env)
 
         if result.returncode == 0:
             print_success(f"{description} - PASSED")
@@ -327,8 +335,8 @@ def external_all(verbose: bool = False) -> bool:
             "Testing external provider integrations",
             "⚠️  WARNING: Requires internet connection for FX/Asset providers",
             "⚠️  WARNING: May be slow",
-        ],
-    )
+            ],
+        )
 
 
 # ============================================================================
@@ -518,8 +526,10 @@ def db_all(verbose: bool = False) -> bool:
     7. brim - Needs populated data
     """
     # DB tests have critical ordering - define explicitly
-    db_order = ["create", "validate", "numeric-truncation", "populate",
-                "referential-integrity", "fx-rates", "brim"]
+    db_order = [
+        "create", "validate", "numeric-truncation", "populate",
+        "referential-integrity", "fx-rates", "brim"
+        ]
 
     tests = []
     for action in db_order:
@@ -541,9 +551,9 @@ def db_all(verbose: bool = False) -> bool:
             "Testing the database layer (SQLite file)",
             "Backend server is NOT required for these tests",
             f"Target: {TEST_DB_PATH}",
-        ],
+            ],
         summary_title="Database Test Summary",
-    )
+        )
 
 
 # ============================================================================
@@ -630,7 +640,6 @@ def services_synthetic_yield_integration(verbose: bool = False, test_names: list
     print_info("Scenarios: P2P loan (grace + late), bond compound quarterly, mixed SIMPLE/COMPOUND")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_synthetic_yield_integration.py", test_names)
     return run_command(cmd, "Synthetic yield integration E2E tests", verbose=verbose)
-
 
 
 def services_transaction(verbose: bool = False, test_names: list = None) -> bool:
@@ -749,7 +758,7 @@ def utils_all(verbose: bool = False) -> bool:
         tests=_get_category_tests_for_all("utils", verbose),
         verbose=verbose,
         info_msgs=["Testing utility modules and helper functions"],
-    )
+        )
 
 
 # ============================================================================
@@ -807,7 +816,7 @@ def schemas_all(verbose: bool = False) -> bool:
         info_msgs=["Testing Pydantic schema validation rules"],
         summary_title="Schema Tests Summary",
         success_msg="All schema tests passed! 🎉",
-    )
+        )
 
 
 def services_all(verbose: bool = False) -> bool:
@@ -831,7 +840,7 @@ def services_all(verbose: bool = False) -> bool:
         header_msg=None,  # Already printed above
         summary_title="Backend Services Test Summary",
         success_msg="All backend services tests passed! 🎉",
-    )
+        )
 
 
 # ============================================================================
@@ -1083,9 +1092,9 @@ def api_test(verbose: bool = False) -> bool:
         info_msgs=[
             "Testing REST API endpoints",
             "Note: Server will be automatically started/stopped by tests",
-        ],
+            ],
         combine_coverage=True,
-    )
+        )
 
 
 def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
@@ -1113,9 +1122,9 @@ def e2e_test(verbose: bool = False) -> bool:
         info_msgs=[
             "Testing E2E workflow using REST API endpoints",
             "Note: Server will be automatically started/stopped by tests",
-        ],
+            ],
         combine_coverage=True,
-    )
+        )
 
 
 # ============================================================================
@@ -1156,9 +1165,9 @@ def run_all_tests(verbose: bool = False) -> bool:
         info_msgs=[
             "Running all test categories in optimal order",
             "This will take a few minutes...\n",
-        ],
+            ],
         success_msg="\n🎉 ALL TESTS PASSED! 🎉\nYour LibreFolio instance is working correctly!",
-    )
+        )
 
 
 # ============================================================================
@@ -1193,7 +1202,7 @@ These tests verify external API integrations:
   • Tests network calls to external APIs
   • May be slow or fail if external services are down
 """,
-        },
+            },
         "fx-providers": {
             "func": external_fx_providers,
             "test_names": True,
@@ -1201,7 +1210,7 @@ These tests verify external API integrations:
             "desc": "Test FX rate providers (ECB, FED, BOE, SNB)",
             "prereq": "Internet connection",
             "tests": "ECB, FED, BOE, SNB API calls",
-        },
+            },
         "asset-providers": {
             "func": external_asset_providers,
             "test_names": True,
@@ -1209,7 +1218,7 @@ These tests verify external API integrations:
             "desc": "Test asset data providers (yfinance, JustETF)",
             "prereq": "Internet connection",
             "tests": "yfinance, JustETF scraping",
-        },
+            },
         "brim-providers": {
             "func": external_brim_providers,
             "test_names": True,
@@ -1217,14 +1226,14 @@ These tests verify external API integrations:
             "desc": "Test broker import plugins",
             "prereq": "Sample files in samples/",
             "tests": "CSV parsing, transaction mapping",
-        },
+            },
         "all": {
             "func": external_all,
             "test_names": False,
             "name": "All External Tests",
             "desc": "Run all external service tests",
+            },
         },
-    },
     "db": {
         "_meta": {
             "help": "Database layer tests (SQLite file, no backend)",
@@ -1236,7 +1245,7 @@ These tests verify SQLite database operations:
   • Tests schema, constraints, data integrity
   • Uses test_app.db (separate from production)
 """,
-        },
+            },
         "create": {
             "func": db_create,
             "test_names": False,
@@ -1244,7 +1253,7 @@ These tests verify SQLite database operations:
             "desc": "Create database via Alembic migrations",
             "prereq": "None",
             "tests": "Migration execution",
-        },
+            },
         "validate": {
             "func": db_validate,
             "test_names": True,
@@ -1252,7 +1261,7 @@ These tests verify SQLite database operations:
             "desc": "Validate database schema (tables, columns, indexes)",
             "prereq": "Database created (run: db create)",
             "tests": "Schema validation, constraints",
-        },
+            },
         "numeric-truncation": {
             "func": db_numeric_truncation,
             "test_names": True,
@@ -1260,7 +1269,7 @@ These tests verify SQLite database operations:
             "desc": "Test numeric precision handling",
             "prereq": "Database created",
             "tests": "Decimal precision, truncation",
-        },
+            },
         "fx-rates": {
             "func": db_fx_rates,
             "test_names": True,
@@ -1268,7 +1277,7 @@ These tests verify SQLite database operations:
             "desc": "Test FX rates persistence and queries",
             "prereq": "Database created",
             "tests": "FX rate CRUD, date queries",
-        },
+            },
         "brim": {
             "func": db_brim,
             "test_names": True,
@@ -1276,7 +1285,7 @@ These tests verify SQLite database operations:
             "desc": "Test BRIM file storage and metadata",
             "prereq": "Database created",
             "tests": "File upload, metadata persistence",
-        },
+            },
         "populate": {
             "func": db_populate,
             "test_names": False,
@@ -1285,7 +1294,7 @@ These tests verify SQLite database operations:
             "prereq": "Database created",
             "tests": "Test data insertion",
             "note": "Use --force to recreate from scratch",
-        },
+            },
         "referential-integrity": {
             "func": db_test_referential_integrity,
             "test_names": True,
@@ -1293,14 +1302,14 @@ These tests verify SQLite database operations:
             "desc": "Test foreign key constraints",
             "prereq": "Database created",
             "tests": "FK constraints, cascades",
-        },
+            },
         "all": {
             "func": db_all,
             "test_names": False,
             "name": "All Database Tests",
             "desc": "Run all database tests",
+            },
         },
-    },
     "services": {
         "_meta": {
             "help": "Backend service logic tests (no backend server)",
@@ -1312,7 +1321,7 @@ These tests verify business logic in service layer:
   • Tests calculations, conversions, algorithms
   • Uses in-memory or test database
 """,
-        },
+            },
         "fx-conversion": {
             "func": services_fx_conversion,
             "test_names": True,
@@ -1320,7 +1329,7 @@ These tests verify business logic in service layer:
             "desc": "Test currency conversion service",
             "prereq": "Database with FX rates",
             "tests": "Direct/triangulated conversion, date handling",
-        },
+            },
         "asset-source": {
             "func": services_asset_source,
             "test_names": True,
@@ -1328,7 +1337,7 @@ These tests verify business logic in service layer:
             "desc": "Test asset data source service",
             "prereq": "Database created",
             "tests": "Provider selection, data fetching",
-        },
+            },
         "asset-metadata": {
             "func": services_asset_metadata,
             "test_names": True,
@@ -1336,7 +1345,7 @@ These tests verify business logic in service layer:
             "desc": "Test asset metadata service",
             "prereq": "Database created",
             "tests": "Metadata refresh, caching",
-        },
+            },
         "asset-source-refresh": {
             "func": services_asset_source_refresh,
             "test_names": True,
@@ -1344,7 +1353,7 @@ These tests verify business logic in service layer:
             "desc": "Test asset price refresh service",
             "prereq": "Database with assets",
             "tests": "Price history updates",
-        },
+            },
         "provider-registry": {
             "func": services_provider_registry,
             "test_names": True,
@@ -1352,7 +1361,7 @@ These tests verify business logic in service layer:
             "desc": "Test provider auto-discovery",
             "prereq": "None",
             "tests": "Registry pattern, plugin loading",
-        },
+            },
         "synthetic-yield": {
             "func": services_synthetic_yield,
             "test_names": True,
@@ -1360,7 +1369,7 @@ These tests verify business logic in service layer:
             "desc": "Test scheduled investment calculations",
             "prereq": "None",
             "tests": "Interest calculations, schedules",
-        },
+            },
         "synthetic-yield-integration": {
             "func": services_synthetic_yield_integration,
             "test_names": True,
@@ -1368,7 +1377,7 @@ These tests verify business logic in service layer:
             "desc": "Test E2E synthetic yield scenarios",
             "prereq": "Database created",
             "tests": "P2P loan, bond, mixed schedules",
-        },
+            },
         "transaction": {
             "func": services_transaction,
             "test_names": True,
@@ -1376,7 +1385,7 @@ These tests verify business logic in service layer:
             "desc": "Test transaction service",
             "prereq": "Database created",
             "tests": "CRUD, validation, balances",
-        },
+            },
         "broker": {
             "func": services_broker,
             "test_names": True,
@@ -1384,7 +1393,7 @@ These tests verify business logic in service layer:
             "desc": "Test broker service",
             "prereq": "Database created",
             "tests": "CRUD, access control, summary",
-        },
+            },
         "edge-cases": {
             "func": services_edge_cases,
             "test_names": True,
@@ -1392,14 +1401,14 @@ These tests verify business logic in service layer:
             "desc": "Test edge cases and error handling",
             "prereq": "Database created",
             "tests": "Error paths, boundary conditions",
-        },
+            },
         "all": {
             "func": services_all,
             "test_names": False,
             "name": "All Service Tests",
             "desc": "Run all service tests",
+            },
         },
-    },
     "utils": {
         "_meta": {
             "help": "Utility module tests (helper functions)",
@@ -1411,7 +1420,7 @@ These tests verify utility modules and helper functions:
   • Tests pure functions and helpers
   • Foundational code used across the application
 """,
-        },
+            },
         "decimal-precision": {
             "func": utils_decimal_precision,
             "test_names": True,
@@ -1419,7 +1428,7 @@ These tests verify utility modules and helper functions:
             "desc": "Test decimal precision utilities",
             "prereq": "None",
             "tests": "get_model_column_precision(), truncate_to_db_precision()",
-        },
+            },
         "datetime": {
             "func": utils_datetime,
             "test_names": True,
@@ -1427,7 +1436,7 @@ These tests verify utility modules and helper functions:
             "desc": "Test datetime utilities",
             "prereq": "None",
             "tests": "utcnow() timezone-aware helper",
-        },
+            },
         "financial-math": {
             "func": utils_financial_math,
             "test_names": True,
@@ -1435,7 +1444,7 @@ These tests verify utility modules and helper functions:
             "desc": "Test financial math utilities",
             "prereq": "None",
             "tests": "Day count, interest calculations",
-        },
+            },
         "day-count": {
             "func": utils_day_count,
             "test_names": True,
@@ -1443,7 +1452,7 @@ These tests verify utility modules and helper functions:
             "desc": "Test day count conventions",
             "prereq": "None",
             "tests": "ACT/365, ACT/360, ACT/ACT, 30/360",
-        },
+            },
         "compound-interest": {
             "func": utils_compound_interest,
             "test_names": True,
@@ -1451,7 +1460,7 @@ These tests verify utility modules and helper functions:
             "desc": "Test compound interest calculations",
             "prereq": "None",
             "tests": "Simple, compound (annual, monthly, daily, continuous)",
-        },
+            },
         "geo-normalization": {
             "func": utils_geo_utils,
             "test_names": True,
@@ -1459,7 +1468,7 @@ These tests verify utility modules and helper functions:
             "desc": "Test geographic area normalization",
             "prereq": "pycountry installed",
             "tests": "ISO-3166-A3 conversion, weight validation",
-        },
+            },
         "sector-normalization": {
             "func": utils_sector_normalization,
             "test_names": True,
@@ -1467,14 +1476,14 @@ These tests verify utility modules and helper functions:
             "desc": "Test FinancialSector enum and normalization",
             "prereq": "None",
             "tests": "Sector enum values, aliases",
-        },
+            },
         "all": {
             "func": utils_all,
             "test_names": False,
             "name": "All Utility Tests",
             "desc": "Run all utility tests",
+            },
         },
-    },
     "schemas": {
         "_meta": {
             "help": "Pydantic schema validation tests",
@@ -1486,7 +1495,7 @@ These tests verify Pydantic schema validation rules:
   • Tests DTO validation, business rules, serialization
   • Pure unit tests (no database needed)
 """,
-        },
+            },
         "common": {
             "func": schemas_common,
             "test_names": True,
@@ -1494,7 +1503,7 @@ These tests verify Pydantic schema validation rules:
             "desc": "Test common schemas (Currency, DateRangeModel)",
             "prereq": "None",
             "tests": "Creation, validation, arithmetic, serialization",
-        },
+            },
         "assets": {
             "func": schemas_assets,
             "test_names": True,
@@ -1502,7 +1511,7 @@ These tests verify Pydantic schema validation rules:
             "desc": "Test asset-related schemas",
             "prereq": "None",
             "tests": "Distribution validation, interest periods",
-        },
+            },
         "transactions": {
             "func": schemas_transactions,
             "test_names": True,
@@ -1510,7 +1519,7 @@ These tests verify Pydantic schema validation rules:
             "desc": "Test transaction schemas",
             "prereq": "None",
             "tests": "Type rules, link_uuid, sign validation",
-        },
+            },
         "brokers": {
             "func": schemas_brokers,
             "test_names": True,
@@ -1518,14 +1527,14 @@ These tests verify Pydantic schema validation rules:
             "desc": "Test broker schemas",
             "prereq": "None",
             "tests": "Name validation, initial_balances",
-        },
+            },
         "all": {
             "func": schemas_all,
             "test_names": False,
             "name": "All Schema Tests",
             "desc": "Run all schema tests",
+            },
         },
-    },
     "api": {
         "_meta": {
             "help": "API endpoint tests (auto-starts server if needed)",
@@ -1537,7 +1546,7 @@ These tests verify REST API endpoints:
   • Backend server auto-started if not running
   • Tests HTTP requests/responses, validation, error handling
 """,
-        },
+            },
         "auth": {
             "func": api_auth,
             "test_names": True,
@@ -1546,7 +1555,7 @@ These tests verify REST API endpoints:
             "prereq": "Database created",
             "tests": "POST /auth/register, /login, /logout, GET /auth/me",
             "note": "Server auto-started",
-        },
+            },
         "settings": {
             "func": api_settings,
             "test_names": True,
@@ -1554,7 +1563,7 @@ These tests verify REST API endpoints:
             "desc": "Test Settings endpoints",
             "prereq": "Database created",
             "tests": "GET/PUT /settings/user, /settings/global",
-        },
+            },
         "uploads": {
             "func": api_uploads,
             "test_names": True,
@@ -1562,7 +1571,7 @@ These tests verify REST API endpoints:
             "desc": "Test file upload endpoints",
             "prereq": "Database created",
             "tests": "POST /uploads, GET /uploads, DELETE",
-        },
+            },
         "fx": {
             "func": api_fx,
             "test_names": True,
@@ -1570,7 +1579,7 @@ These tests verify REST API endpoints:
             "desc": "Test FX endpoints",
             "prereq": "FX rates populated",
             "tests": "GET /currencies, POST /sync, GET /convert",
-        },
+            },
         "fx-sync": {
             "func": api_fx_sync,
             "test_names": True,
@@ -1578,7 +1587,7 @@ These tests verify REST API endpoints:
             "desc": "Test FX sync endpoints",
             "prereq": "External FX API working",
             "tests": "GET /currencies/sync",
-        },
+            },
         "assets-metadata": {
             "func": api_assets_metadata,
             "test_names": True,
@@ -1586,7 +1595,7 @@ These tests verify REST API endpoints:
             "desc": "Test asset metadata endpoints",
             "prereq": "Database created",
             "tests": "PATCH metadata, bulk read, refresh",
-        },
+            },
         "assets-crud": {
             "func": api_assets_crud,
             "test_names": True,
@@ -1594,7 +1603,7 @@ These tests verify REST API endpoints:
             "desc": "Test asset CRUD endpoints",
             "prereq": "Database created",
             "tests": "POST /bulk, GET /list, DELETE /bulk",
-        },
+            },
         "assets-price": {
             "func": api_assets_price,
             "test_names": True,
@@ -1602,7 +1611,7 @@ These tests verify REST API endpoints:
             "desc": "Test asset price endpoints",
             "prereq": "Database with assets",
             "tests": "Price history queries",
-        },
+            },
         "assets-provider": {
             "func": api_assets_provider,
             "test_names": True,
@@ -1610,7 +1619,7 @@ These tests verify REST API endpoints:
             "desc": "Test asset provider assignment",
             "prereq": "Database created",
             "tests": "Provider assignment, validation",
-        },
+            },
         "utilities": {
             "func": api_utilities,
             "test_names": True,
@@ -1618,7 +1627,7 @@ These tests verify REST API endpoints:
             "desc": "Test utility endpoints",
             "prereq": "None",
             "tests": "GET /utilities/sectors, /countries/normalize",
-        },
+            },
         "transactions": {
             "func": api_transactions,
             "test_names": True,
@@ -1626,7 +1635,7 @@ These tests verify REST API endpoints:
             "desc": "Test transaction endpoints",
             "prereq": "Database created",
             "tests": "CRUD, validation, balance checks",
-        },
+            },
         "brokers": {
             "func": api_brokers,
             "test_names": True,
@@ -1634,7 +1643,7 @@ These tests verify REST API endpoints:
             "desc": "Test broker endpoints",
             "prereq": "Database created",
             "tests": "CRUD, summary, access control",
-        },
+            },
         "broker-access": {
             "func": api_broker_access,
             "test_names": True,
@@ -1642,7 +1651,7 @@ These tests verify REST API endpoints:
             "desc": "Test broker access management",
             "prereq": "Database created",
             "tests": "Access grants, role validation",
-        },
+            },
         "broker-multiuser": {
             "func": api_broker_multiuser,
             "test_names": True,
@@ -1650,7 +1659,7 @@ These tests verify REST API endpoints:
             "desc": "Test multi-user broker scenarios",
             "prereq": "Database created",
             "tests": "Sharing, permissions, isolation",
-        },
+            },
         "brim": {
             "func": api_brim,
             "test_names": True,
@@ -1658,14 +1667,14 @@ These tests verify REST API endpoints:
             "desc": "Test BRIM endpoints",
             "prereq": "Database created",
             "tests": "File upload, parse, import",
-        },
+            },
         "all": {
             "func": api_test,
             "test_names": False,
             "name": "All API Tests",
             "desc": "Run all API tests",
+            },
         },
-    },
     "e2e": {
         "_meta": {
             "help": "E2E Tests with API Interaction",
@@ -1677,7 +1686,7 @@ These tests verify complete end-to-end workflows via REST API:
   • Backend server auto-started if not running
   • Tests complete user journeys
 """,
-        },
+            },
         "search-to-prices": {
             "func": search2prices_test,
             "test_names": True,
@@ -1685,7 +1694,7 @@ These tests verify complete end-to-end workflows via REST API:
             "desc": "Test complete asset flow",
             "prereq": "Database created, providers configured",
             "tests": "Search → Create → Assign → Metadata → Prices",
-        },
+            },
         "brim": {
             "func": e2e_brim,
             "test_names": True,
@@ -1693,15 +1702,15 @@ These tests verify complete end-to-end workflows via REST API:
             "desc": "Test complete BRIM import flow",
             "prereq": "Database created",
             "tests": "Upload → Parse → Asset Mapping → Import",
-        },
+            },
         "all": {
             "func": e2e_test,
             "test_names": False,
             "name": "All E2E Tests",
             "desc": "Run all E2E tests",
+            },
         },
-    },
-}
+    }
 
 
 def get_category_choices(category: str) -> list[str]:
@@ -1807,19 +1816,19 @@ def create_subparser_from_registry(subparsers, category: str, extra_args: list =
         help=meta.get("help", f"{category} tests"),
         description=generate_epilog(category),
         formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+        )
 
     parser.add_argument(
         "action",
         choices=get_category_choices(category),
         help=f"{category.capitalize()} test to run"
-    )
+        )
 
     parser.add_argument(
         "test_names",
         nargs="*",
         help="Optional: specific test names to run"
-    )
+        )
 
     # Add any extra arguments
     if extra_args:
@@ -1863,7 +1872,7 @@ def create_parser() -> argparse.ArgumentParser:
         description="LibreFolio Test Runner - Organized test execution",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_generate_main_epilog()
-    )
+        )
 
     # Global flags
     parser.add_argument(
@@ -1871,46 +1880,48 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show full test output",
         default=False
-    )
+        )
 
     parser.add_argument(
         "--coverage",
         action="store_true",
         help="Run tests with code coverage tracking",
         default=False
-    )
+        )
 
     parser.add_argument(
         "--cov-clean",
         action="store_true",
         help="Clean coverage database before running tests",
         default=False
-    )
+        )
 
     parser.add_argument(
         "--db-reset",
         action="store_true",
         help="Reset test database before running db tests",
         default=False
-    )
+        )
 
     subparsers = parser.add_subparsers(
         dest="category",
         help="Test category to run",
         required=False
-    )
+        )
 
     # Auto-generate subparsers from TEST_REGISTRY
     for category in TEST_REGISTRY.keys():
         extra_args = None
         if category == "db":
             extra_args = [
-                ("--force", {
+                (
+                    "--force", {
                     "action": "store_true",
                     "help": "[populate only] Recreate from scratch",
                     "default": False,
-                }),
-            ]
+                    }
+                    ),
+                ]
         create_subparser_from_registry(subparsers, category, extra_args)
 
     # Special "all" category
@@ -1932,9 +1943,148 @@ Runs all test categories in optimal order:
 Expected time: 3-7 minutes
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+        )
 
     return parser
+
+
+def register_subparser(parent_subparsers):
+    """
+    Register test commands as a subparser of dev.py.
+
+    This allows dev.py to import and integrate test_runner's full parser,
+    so `./dev.py test api auth` has full autocompletion support.
+    """
+    # Create the "test" subparser under dev.py
+    test_parser = parent_subparsers.add_parser(
+        "test",
+        help="Run tests (api, db, external, schemas, services, utils, e2e, all)",
+        description="LibreFolio Test Runner"
+        )
+
+    # Add the same global options
+    test_parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Show full test output",
+        default=False
+        )
+
+    test_parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help="Run tests with code coverage tracking",
+        default=False
+        )
+
+    test_parser.add_argument(
+        "--cov-clean",
+        action="store_true",
+        help="Clean coverage database before running tests",
+        default=False
+        )
+
+    test_parser.add_argument(
+        "--db-reset",
+        action="store_true",
+        help="Reset test database before running db tests",
+        default=False
+        )
+
+    # Create subparsers for test categories
+    test_subparsers = test_parser.add_subparsers(
+        dest="category",
+        title="Test categories",
+        metavar=""
+        )
+
+    # Auto-generate from registry
+    for category in TEST_REGISTRY.keys():
+        extra_args = None
+        if category == "db":
+            extra_args = [
+                (
+                    "--force", {
+                    "action": "store_true",
+                    "help": "[populate only] Recreate from scratch",
+                    "default": False,
+                    }
+                    ),
+                ]
+        create_subparser_from_registry(test_subparsers, category, extra_args)
+
+    # "all" category
+    test_subparsers.add_parser(
+        "all",
+        help="Run ALL tests in optimal order"
+        )
+
+    # Set the dispatch function
+    test_parser.set_defaults(func=_dispatch_test_command)
+
+    return test_parser
+
+
+def _dispatch_test_command(args):
+    """Dispatch test command from dev.py."""
+    global _COVERAGE_MODE
+
+    if not args.category:
+        print("Error: test category required. Use: ./dev.py test --help")
+        return 1
+
+    verbose = getattr(args, 'verbose', False)
+    test_names = getattr(args, 'test_names', None)
+    coverage = getattr(args, 'coverage', False)
+    cov_clean = getattr(args, 'cov_clean', False)
+
+    _COVERAGE_MODE = coverage
+
+    if coverage:
+        print_header("LibreFolio Test Suite - Coverage Mode")
+        print(f"{Colors.YELLOW}📊 Running tests with code coverage tracking{Colors.NC}")
+        print()
+
+        if cov_clean:
+            import subprocess
+            result = subprocess.run(
+                ["pipenv", "run", "coverage", "erase"],
+                cwd=os.getcwd(),
+                capture_output=True,
+                text=True
+                )
+            if result.returncode == 0:
+                print(f"{Colors.GREEN}✅ Coverage database reset{Colors.NC}\n")
+
+    # Dispatch to appropriate handler
+    return dispatch_to_category(args.category, test_names, verbose, args)
+
+
+def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
+    """Dispatch to the appropriate test handler. Returns 0 on success, 1 on failure."""
+    success = False
+
+    if category == "all":
+        success = run_all_tests(verbose=verbose)
+    elif category in TEST_REGISTRY:
+        action = getattr(args, 'action', None)
+        if action:
+            force = getattr(args, 'force', False) if category == "db" else False
+            success = run_test_from_registry(
+                category=category,
+                action=action,
+                verbose=verbose,
+                test_names=test_names,
+                force=force
+                )
+        else:
+            print_error(f"No action specified for category '{category}'")
+            return 1
+    else:
+        print_error(f"Unknown category: {category}")
+        return 1
+
+    return 0 if success else 1
 
 
 def main():
@@ -1976,7 +2126,7 @@ def main():
                 cwd=os.getcwd(),
                 capture_output=True,
                 text=True
-            )
+                )
             if result.returncode == 0:
                 print(f"{Colors.GREEN}✅ Coverage database reset{Colors.NC}\n")
             else:
@@ -1989,31 +2139,9 @@ def main():
                 coverage_file.unlink()
                 print(f"{Colors.YELLOW}🗑️  Cleared previous coverage data{Colors.NC}\n")
 
-    # Route to appropriate test handler using TEST_REGISTRY
-    success = False
-
-    if args.category == "all":
-        # Run complete test suite
-        success = run_all_tests(verbose=verbose)
-    elif args.category in TEST_REGISTRY:
-        # Use registry for all other categories
-        action = getattr(args, 'action', None)
-        if action:
-            # Special handling for db populate (has force flag)
-            force = getattr(args, 'force', False) if args.category == "db" else False
-            success = run_test_from_registry(
-                category=args.category,
-                action=action,
-                verbose=verbose,
-                test_names=test_names,
-                force=force
-            )
-        else:
-            print_error(f"No action specified for category '{args.category}'")
-            return 1
-    else:
-        print_error(f"Unknown category: {args.category}")
-        return 1
+    # Run tests
+    result = dispatch_to_category(args.category, test_names, verbose, args)
+    success = result == 0
 
     # If coverage mode, show final summary
     if _COVERAGE_MODE:
@@ -2034,7 +2162,7 @@ def main():
             cwd=os.getcwd(),
             capture_output=False,  # Show output directly
             text=True
-        )
+            )
 
         print()
         print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")

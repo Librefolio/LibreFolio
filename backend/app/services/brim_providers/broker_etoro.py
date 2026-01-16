@@ -26,6 +26,7 @@ This plugin parses CSV exports from eToro (social trading platform).
 - Amount: Cash amount
 - Units: Quantity
 """
+
 from __future__ import annotations
 
 import csv
@@ -64,7 +65,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "interest payment": TransactionType.INTEREST,
     "withdraw request": TransactionType.WITHDRAWAL,
     "deposit": TransactionType.DEPOSIT,
-    }
+}
 
 # Types to skip
 SKIP_TYPES = [
@@ -73,7 +74,7 @@ SKIP_TYPES = [
     "withdraw fee",
     "conversion fee",
     "sdrt",  # UK stamp duty
-    ]
+]
 
 
 def _parse_etoro_date(value: str) -> Optional[date_type]:
@@ -85,7 +86,7 @@ def _parse_etoro_date(value: str) -> Optional[date_type]:
     formats = [
         "%d/%m/%Y %H:%M:%S",
         "%d/%m/%Y",
-        ]
+    ]
 
     for fmt in formats:
         try:
@@ -109,23 +110,23 @@ def _parse_etoro_number(value: str) -> Optional[Decimal]:
         value = value[1:-1]
 
     # Remove spaces and currency symbols
-    value = re.sub(r'[\s€$£]', '', value)
+    value = re.sub(r"[\s€$£]", "", value)
 
     # Handle European format (1.234,56) vs US format (1,234.56)
-    if '.' in value and ',' in value:
-        if value.rfind(',') > value.rfind('.'):
+    if "." in value and "," in value:
+        if value.rfind(",") > value.rfind("."):
             # European: 1.234,56
-            value = value.replace('.', '').replace(',', '.')
+            value = value.replace(".", "").replace(",", ".")
         else:
             # US: 1,234.56
-            value = value.replace(',', '')
-    elif ',' in value:
+            value = value.replace(",", "")
+    elif "," in value:
         # Could be decimal or thousands
-        parts = value.split(',')
+        parts = value.split(",")
         if len(parts) == 2 and len(parts[1]) <= 2:
-            value = value.replace(',', '.')
+            value = value.replace(",", ".")
         else:
-            value = value.replace(',', '')
+            value = value.replace(",", "")
 
     try:
         result = Decimal(value)
@@ -146,7 +147,7 @@ def _parse_ticker_from_details(details: str) -> Tuple[Optional[str], str]:
     if not details or details == "-":
         return None, "USD"
 
-    match = re.match(r'^([A-Z0-9]+)/([A-Z]{3})$', details.strip())
+    match = re.match(r"^([A-Z0-9]+)/([A-Z]{3})$", details.strip())
     if match:
         return match.group(1), match.group(2)
 
@@ -156,6 +157,7 @@ def _parse_ticker_from_details(details: str) -> Tuple[Optional[str], str]:
 # =============================================================================
 # PLUGIN IMPLEMENTATION
 # =============================================================================
+
 
 @register_provider(BRIMProviderRegistry)
 class EtoroBrokerProvider(BRIMProvider):
@@ -198,7 +200,7 @@ class EtoroBrokerProvider(BRIMProvider):
 
         try:
             content = self._read_file_head(file_path, num_lines=3)
-            first_line = content.split('\n')[0].lower() if content else ""
+            first_line = content.split("\n")[0].lower() if content else ""
 
             # eToro specific columns
             required = ["date", "type", "details", "amount", "units", "realized equity"]
@@ -208,10 +210,8 @@ class EtoroBrokerProvider(BRIMProvider):
             return False
 
     def parse(
-        self,
-        file_path: Path,
-        broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        self, file_path: Path, broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse eToro CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -262,11 +262,13 @@ class EtoroBrokerProvider(BRIMProvider):
                         TransactionType.BUY,
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
-                        ]
+                    ]
 
                     if asset_required:
                         if not ticker:
-                            warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
+                            warnings.append(
+                                f"Row {row_num}: {tx_type.value} requires asset, skipping"
+                            )
                             continue
 
                         if ticker in asset_to_fake_id:
@@ -279,7 +281,7 @@ class EtoroBrokerProvider(BRIMProvider):
                                 "extracted_symbol": ticker,
                                 "extracted_isin": None,
                                 "extracted_name": None,
-                                }
+                            }
 
                             next_fake_id -= 1
 
@@ -308,7 +310,7 @@ class EtoroBrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=f"{tx_type_raw}: {details}" if details else tx_type_raw,
                             tags=["import", "etoro"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -329,16 +331,16 @@ class EtoroBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets.items()
-            }
+        }
 
         logger.info(
             "eToro file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
-            asset_count=len(extracted_assets_typed)
-            )
+            asset_count=len(extracted_assets_typed),
+        )
 
         return transactions, warnings, extracted_assets_typed
 

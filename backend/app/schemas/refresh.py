@@ -25,6 +25,7 @@ and update price/rate data from external providers.
   - FX sync operates on date ranges + currency lists (no per-pair config)
   - FA refresh operates on asset-by-asset basis with provider-specific params
 """
+
 from __future__ import annotations
 
 from typing import List
@@ -38,11 +39,13 @@ from backend.app.schemas.common import DateRangeModel, BaseBulkResponse
 # FA REFRESH SECTION
 # ============================================================================
 
+
 class FARefreshItem(BaseModel):
     """Single asset refresh request.
 
     Specifies asset and date range for price data refresh from provider.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
@@ -51,6 +54,7 @@ class FARefreshItem(BaseModel):
 
 class FARefreshResult(BaseModel):
     """Result of refresh for single asset."""
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
@@ -62,6 +66,7 @@ class FARefreshResult(BaseModel):
 
 class FABulkRefreshResponse(BaseBulkResponse[FARefreshResult]):
     """Response for bulk asset price refresh."""
+
     pass
 
 
@@ -69,16 +74,18 @@ class FABulkRefreshResponse(BaseBulkResponse[FARefreshResult]):
 # FX SYNC SECTION
 # ============================================================================
 
+
 class FXSyncResponse(BaseModel):
     """Response for FX rate synchronization from central banks.
-    
+
     Provides summary of synced FX rates operation.
     Different structure from FA: summarizes overall sync with date range
     rather than per-asset results.
-    
+
     Migrated from fx.py (was SyncResponseModel) to consolidate refresh/sync
     operations in single module for operational coherence.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     synced: int = Field(..., description="Number of new rates inserted/updated")

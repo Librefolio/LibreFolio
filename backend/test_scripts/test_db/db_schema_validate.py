@@ -39,7 +39,7 @@ from backend.app.db.models import (
     AssetType,
     TransactionType,
     UserRole,
-    )
+)
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
 
 
@@ -57,14 +57,15 @@ def test_tables_exist():
     expected_tables = set(SQLModel.metadata.tables.keys())
 
     # Add alembic_version (created by Alembic, not in models)
-    expected_tables.add('alembic_version')
+    expected_tables.add("alembic_version")
 
     # Check for missing tables (ERROR)
     missing = expected_tables - actual_tables
-    assert not missing, \
-        f"Missing tables: {', '.join(sorted(missing))}\n" \
-        f"Expected (from models): {', '.join(sorted(expected_tables))}\n" \
+    assert not missing, (
+        f"Missing tables: {', '.join(sorted(missing))}\n"
+        f"Expected (from models): {', '.join(sorted(expected_tables))}\n"
         f"Found (in database): {', '.join(sorted(actual_tables))}"
+    )
 
     # Check for extra tables (WARNING - not an error, just informational)
     extra = actual_tables - expected_tables
@@ -127,8 +128,9 @@ def test_foreign_keys():
         fks = inspector.get_foreign_keys(table_name)
         actual_count = len(fks)
 
-        assert actual_count == expected_count, \
-            f"{table_name}: expected {expected_count} FK(s), found {actual_count}"
+        assert (
+            actual_count == expected_count
+        ), f"{table_name}: expected {expected_count} FK(s), found {actual_count}"
 
         print(f"  ✅ {table_name}: {actual_count} FK(s)")
 
@@ -150,13 +152,15 @@ def test_indexes():
         # Count indexes defined in the model
         index_count = len(table.indexes)
         if index_count > 0:
-            tables_with_indexes.append((table_name, index_count, [idx.name for idx in table.indexes]))
+            tables_with_indexes.append(
+                (table_name, index_count, [idx.name for idx in table.indexes])
+            )
 
     # Verify indexes exist in database
     missing_indexes = []
     for table_name, expected_count, expected_names in sorted(tables_with_indexes):
         db_indexes = inspector.get_indexes(table_name)
-        db_index_names = [idx['name'] for idx in db_indexes if idx.get('name')]
+        db_index_names = [idx["name"] for idx in db_indexes if idx.get("name")]
 
         print(f"  {table_name}: {len(db_indexes)} index(es)")
 
@@ -166,8 +170,7 @@ def test_indexes():
                 missing_indexes.append(f"{table_name}.{expected_name}")
                 print(f"    ⚠️  Missing: {expected_name}")
 
-    assert not missing_indexes, \
-        f"Missing indexes: {', '.join(missing_indexes)}"
+    assert not missing_indexes, f"Missing indexes: {', '.join(missing_indexes)}"
 
     print("✅ Indexes verified")
 
@@ -219,20 +222,18 @@ def test_daily_point_constraints():
     inspector = inspect(get_sync_engine())
 
     # Check price_history has (asset_id, date) unique constraint
-    price_uq = inspector.get_unique_constraints('price_history')
+    price_uq = inspector.get_unique_constraints("price_history")
     print(f"  price_history unique constraints: {len(price_uq)}")
 
     # We expect at least 1 unique constraint for daily-point policy
-    assert len(price_uq) >= 1, \
-        "price_history should have unique constraint for daily-point policy"
+    assert len(price_uq) >= 1, "price_history should have unique constraint for daily-point policy"
 
     # Check fx_rates has (date, base, quote) unique constraint
-    fx_uq = inspector.get_unique_constraints('fx_rates')
+    fx_uq = inspector.get_unique_constraints("fx_rates")
     print(f"  fx_rates unique constraints: {len(fx_uq)}")
 
     # We expect at least 1 unique constraint for daily-point policy
-    assert len(fx_uq) >= 1, \
-        "fx_rates should have unique constraint for daily-point policy"
+    assert len(fx_uq) >= 1, "fx_rates should have unique constraint for daily-point policy"
 
     print("✅ Daily-point policy constraints present")
 
@@ -264,12 +265,15 @@ def test_check_constraints():
         pytest.skip("No CHECK constraints defined in models")
 
     print("  Verifying constraints exist in database...")
-    all_present, missing = check_and_add_missing_constraints(auto_fix=False, log_level=LogLevel.VERBOSE)
+    all_present, missing = check_and_add_missing_constraints(
+        auto_fix=False, log_level=LogLevel.VERBOSE
+    )
 
-    assert all_present, \
-        f"Missing CHECK constraints: {', '.join(missing)}\n" \
-        f"SQLite/Alembic limitation: CHECK constraints must be added manually to migrations\n" \
+    assert all_present, (
+        f"Missing CHECK constraints: {', '.join(missing)}\n"
+        f"SQLite/Alembic limitation: CHECK constraints must be added manually to migrations\n"
         f"Run: python -m backend.alembic.check_constraints_hook"
+    )
 
     print(f"✅ All CHECK constraints present in database")
 
@@ -294,8 +298,8 @@ def test_identifier_columns_match_enum():
         FAAssetCreateItem,
         FAAssetPatchItem,
         FAinfoResponse,
-        FAAinfoFiltersRequest
-        )
+        FAAinfoFiltersRequest,
+    )
 
     print("\n  Checking IdentifierType → Schema field mappings:")
 
@@ -306,7 +310,7 @@ def test_identifier_columns_match_enum():
         (FAAssetCreateItem, "identifier_{}", "Create schema field"),
         (FAAssetPatchItem, "identifier_{}", "Patch schema field"),
         (FAinfoResponse, "identifier_{}", "Response schema field"),
-        ]
+    ]
 
     # FAAinfoFiltersRequest uses short names (isin, ticker, etc.)
     # We check that separately with a mapping
@@ -318,7 +322,7 @@ def test_identifier_columns_match_enum():
         "FIGI": "figi",
         "UUID": "uuid",
         "OTHER": "identifier_other",  # OTHER uses identifier_other (partial match)
-        }
+    }
 
     all_missing = []
 
@@ -330,7 +334,7 @@ def test_identifier_columns_match_enum():
         for schema_class, pattern, description in checks:
             field_name = pattern.format(field_suffix)
             # For Pydantic models, check model_fields; for SQLModel, use hasattr
-            if hasattr(schema_class, 'model_fields'):
+            if hasattr(schema_class, "model_fields"):
                 has_field = field_name in schema_class.model_fields
             else:
                 has_field = hasattr(schema_class, field_name)
@@ -357,9 +361,10 @@ def test_identifier_columns_match_enum():
         print(f"\n❌ Missing fields: {all_missing}")
         print("   See IdentifierType docstring in models.py for update checklist")
 
-    assert not all_missing, \
-        f"Missing fields for IdentifierType sync: {all_missing}\n" \
+    assert not all_missing, (
+        f"Missing fields for IdentifierType sync: {all_missing}\n"
         f"See IdentifierType docstring in models.py for full update checklist"
+    )
 
     total_checks = len(list(IdentifierType)) * len(checks) + len(filter_field_mapping)
     print(f"\n✅ All {total_checks} IdentifierType field mappings verified")

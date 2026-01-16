@@ -11,6 +11,7 @@ Test Categories:
 
 These tests do NOT require a database connection.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,6 +34,7 @@ SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / 
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
 
 def get_all_brim_providers() -> List[str]:
     """
@@ -74,12 +76,13 @@ def get_all_sample_files() -> List[Path]:
     """Get all sample files in the sample_reports directory."""
     if not SAMPLE_DIR.exists():
         return []
-    return [f for ext in ['csv', 'xlsx', 'xls', 'json'] for f in SAMPLE_DIR.glob(f"**/*.{ext}")]
+    return [f for ext in ["csv", "xlsx", "xls", "json"] for f in SAMPLE_DIR.glob(f"**/*.{ext}")]
 
 
 # =============================================================================
 # CATEGORY 1: PLUGIN DISCOVERY & REGISTRATION (run once, not parametrized)
 # =============================================================================
+
 
 class TestPluginDiscovery:
     """Tests for plugin auto-discovery and registration."""
@@ -156,6 +159,7 @@ class TestPluginDiscovery:
 # CATEGORY 2: PARAMETRIZED PLUGIN TESTS (run for each plugin)
 # =============================================================================
 
+
 @pytest.mark.parametrize("provider_code", get_all_brim_providers())
 class TestPluginInterface:
     """Parametrized tests that run for EACH registered plugin."""
@@ -177,8 +181,9 @@ class TestPluginInterface:
         assert plugin.provider_name, "Empty provider_name"
         assert plugin.description, "Empty description"
         assert plugin.supported_extensions, "No supported extensions"
-        assert all(ext.startswith('.') for ext in plugin.supported_extensions), \
-            "Extensions should start with '.'"
+        assert all(
+            ext.startswith(".") for ext in plugin.supported_extensions
+        ), "Extensions should start with '.'"
 
         print(f"✓ {provider_code}: Valid metadata")
 
@@ -216,8 +221,9 @@ class TestPluginInterface:
         assert isinstance(extracted_assets, dict), "Third return should be dict"
 
         if transactions:
-            assert isinstance(transactions[0], TXCreateItem), \
-                "Transactions should be TXCreateItem instances"
+            assert isinstance(
+                transactions[0], TXCreateItem
+            ), "Transactions should be TXCreateItem instances"
 
         print(f"✓ {provider_code}: parse() returns correct types")
 
@@ -233,8 +239,7 @@ class TestPluginInterface:
 
         transactions, warnings, _ = plugin.parse(sample_file, broker_id=1)
 
-        assert len(transactions) > 0, \
-            f"No transactions parsed from {sample_file.name}"
+        assert len(transactions) > 0, f"No transactions parsed from {sample_file.name}"
 
         print(f"✓ {provider_code}: Parsed {len(transactions)} transactions from {sample_file.name}")
 
@@ -276,19 +281,24 @@ class TestPluginInterface:
 
         # Each value should be BRIMExtractedAssetInfo
         from backend.app.schemas.brim import BRIMExtractedAssetInfo
+
         for fake_id, info in assets.items():
             assert isinstance(fake_id, int), "Fake ID should be int"
-            assert isinstance(info, BRIMExtractedAssetInfo), \
-                f"Asset info should be BRIMExtractedAssetInfo, got {type(info)}"
+            assert isinstance(
+                info, BRIMExtractedAssetInfo
+            ), f"Asset info should be BRIMExtractedAssetInfo, got {type(info)}"
 
         # Verify consistency: every asset_id in transactions should be in extracted_assets
         # (except None for non-asset transactions like deposits)
         tx_asset_ids = {tx.asset_id for tx in transactions if tx.asset_id is not None}
         missing_from_assets = tx_asset_ids - set(assets.keys())
-        assert not missing_from_assets, \
-            f"Transaction asset_ids not in extracted_assets: {missing_from_assets}"
+        assert (
+            not missing_from_assets
+        ), f"Transaction asset_ids not in extracted_assets: {missing_from_assets}"
 
-        print(f"✓ {provider_code}: parse() returns {len(assets)} extracted assets, all consistent with transactions")
+        print(
+            f"✓ {provider_code}: parse() returns {len(assets)} extracted assets, all consistent with transactions"
+        )
 
     def test_all_parseable_samples_succeed(self, provider_code: str):
         """Verify plugin can parse ALL its compatible sample files without error."""
@@ -322,6 +332,7 @@ class TestPluginInterface:
 # =============================================================================
 # CATEGORY 3: AUTO-DETECTION TESTS
 # =============================================================================
+
 
 class TestAutoDetection:
     """Tests for plugin auto-detection functionality."""
@@ -360,7 +371,9 @@ class TestAutoDetection:
 
         # At least directa, degiro, etc. should be detected specifically
         assert specific_detections > 0, "No broker-specific plugins detected"
-        print(f"✓ Specific plugins preferred: {specific_detections} specific, {generic_detections} generic")
+        print(
+            f"✓ Specific plugins preferred: {specific_detections} specific, {generic_detections} generic"
+        )
 
     def test_specific_broker_detection_via_plugin_pattern(self):
         """Verify plugins with test_file_pattern are correctly detected for matching files."""
@@ -385,14 +398,16 @@ class TestAutoDetection:
             # Verify the plugin is detected for its matching files
             for sample_file in matching:
                 detected = BRIMProviderRegistry.auto_detect_plugin(sample_file)
-                assert detected == plugin_info.code, \
-                    f"{sample_file.name} detected as {detected}, expected {plugin_info.code}"
+                assert (
+                    detected == plugin_info.code
+                ), f"{sample_file.name} detected as {detected}, expected {plugin_info.code}"
                 print(f"✓ {sample_file.name} → {detected}")
 
 
 # =============================================================================
 # CATEGORY 4: GENERIC CSV SPECIFIC TESTS
 # =============================================================================
+
 
 class TestGenericCSVPlugin:
     """Specific tests for the generic CSV fallback plugin."""
@@ -403,7 +418,7 @@ class TestGenericCSVPlugin:
         "generic_dates.csv",
         "generic_types.csv",
         "generic_with_assets.csv",
-        ]
+    ]
 
     def test_required_generic_files_exist(self):
         """Verify all required generic sample files exist."""
@@ -421,8 +436,9 @@ class TestGenericCSVPlugin:
         sample_files = get_all_sample_files()
 
         for sample_file in sample_files:
-            assert plugin.can_parse(sample_file), \
-                f"Generic plugin should be able to parse {sample_file.name}"
+            assert plugin.can_parse(
+                sample_file
+            ), f"Generic plugin should be able to parse {sample_file.name}"
 
         print(f"✓ Generic plugin can parse all {len(sample_files)} sample files")
 
@@ -449,15 +465,17 @@ class TestGenericCSVPlugin:
         """Generic plugin should have lower priority than specific plugins."""
         generic = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
 
-        assert generic.detection_priority < 100, \
-            f"Generic priority ({generic.detection_priority}) should be < 100"
+        assert (
+            generic.detection_priority < 100
+        ), f"Generic priority ({generic.detection_priority}) should be < 100"
 
         # Check that specific plugins have higher priority
         for info in BRIMProviderRegistry.list_plugin_info():
             if info.code != "broker_generic_csv":
                 other = BRIMProviderRegistry.get_provider_instance(info.code)
-                assert other.detection_priority >= generic.detection_priority, \
-                    f"{info.code} priority should be >= generic"
+                assert (
+                    other.detection_priority >= generic.detection_priority
+                ), f"{info.code} priority should be >= generic"
 
         print(f"✓ Generic plugin has lowest priority ({generic.detection_priority})")
 
@@ -465,8 +483,7 @@ class TestGenericCSVPlugin:
         """Generic plugin should return None for test_file_pattern."""
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
 
-        assert plugin.test_file_pattern is None, \
-            "Generic plugin should have no test_file_pattern"
+        assert plugin.test_file_pattern is None, "Generic plugin should have no test_file_pattern"
 
         print("✓ Generic plugin has no test_file_pattern")
 

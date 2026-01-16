@@ -53,7 +53,7 @@ from backend.app.db import (
     FxCurrencyPairSource,
     AssetType,
     TransactionType,
-    )
+)
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
 # This ensures we use the test database, not the production one
@@ -62,7 +62,7 @@ engine = create_engine(
     _settings.DATABASE_URL,
     echo=False,
     poolclass=NullPool,
-    )
+)
 
 
 def cleanup_all_tables(session: Session):
@@ -81,7 +81,7 @@ def cleanup_all_tables(session: Session):
             FxCurrencyPairSource,
             Asset,
             Broker,
-            ]
+        ]
 
         for model in tables_to_clean:
             # Count existing rows
@@ -115,22 +115,22 @@ def populate_brokers(session: Session):
             "portal_url": "https://www.interactivebrokers.com",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
-            },
+        },
         {
             "name": "Degiro",
             "description": "European low-cost broker",
             "portal_url": "https://www.degiro.com",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
-            },
+        },
         {
             "name": "Recrowd",
             "description": "Real estate crowdfunding platform",
             "portal_url": "https://www.recrowd.com",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
-            },
-        ]
+        },
+    ]
 
     for broker_data in brokers:
         broker = Broker(**broker_data)
@@ -151,75 +151,95 @@ def populate_assets(session: Session):
             "display_name": "Apple Inc.",
             "currency": "USD",
             "asset_type": AssetType.STOCK,
-            "classification_params": json.dumps({
-                "short_description": "Technology company",
-                "geographic_area": {"USA": 1.0},
-                "sector": "Technology"
-                }),
-            },
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Technology company",
+                    "geographic_area": {"USA": 1.0},
+                    "sector": "Technology",
+                }
+            ),
+        },
         {
             "display_name": "Microsoft Corporation",
             "currency": "USD",
             "asset_type": AssetType.STOCK,
-            "classification_params": json.dumps({
-                "short_description": "Software and cloud computing",
-                "geographic_area": {"USA": 1.0},
-                "sector": "Technology"
-                }),
-            },
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Software and cloud computing",
+                    "geographic_area": {"USA": 1.0},
+                    "sector": "Technology",
+                }
+            ),
+        },
         {
             "display_name": "Tesla, Inc.",
             "currency": "USD",
             "asset_type": AssetType.STOCK,
-            "classification_params": json.dumps({
-                "short_description": "Electric vehicles and clean energy",
-                "geographic_area": {"USA": 1.0},
-                "sector": "Consumer Discretionary"
-                }),
-            },
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Electric vehicles and clean energy",
+                    "geographic_area": {"USA": 1.0},
+                    "sector": "Consumer Discretionary",
+                }
+            ),
+        },
         # ETFs (EUR)
         {
             "display_name": "Vanguard FTSE All-World UCITS ETF",
             "currency": "EUR",
             "asset_type": AssetType.ETF,
-            "classification_params": json.dumps({
-                "short_description": "Global diversified equity ETF",
-                "geographic_area": {"USA": 0.60, "DEU": 0.10, "GBR": 0.10, "JPN": 0.10, "CHN": 0.10},
-                "sector": "Diversified"
-                }),
-            },
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Global diversified equity ETF",
+                    "geographic_area": {
+                        "USA": 0.60,
+                        "DEU": 0.10,
+                        "GBR": 0.10,
+                        "JPN": 0.10,
+                        "CHN": 0.10,
+                    },
+                    "sector": "Diversified",
+                }
+            ),
+        },
         {
             "display_name": "iShares Core S&P 500 UCITS ETF",
             "currency": "EUR",
             "asset_type": AssetType.ETF,
-            "classification_params": json.dumps({
-                "short_description": "S&P 500 index tracker",
-                "geographic_area": {"USA": 1.0},
-                "sector": "Diversified"
-                }),
-            },
+            "classification_params": json.dumps(
+                {
+                    "short_description": "S&P 500 index tracker",
+                    "geographic_area": {"USA": 1.0},
+                    "sector": "Diversified",
+                }
+            ),
+        },
         # Crowdfunding Loans (EUR)
         {
             "display_name": "Real Estate Loan - Milano Centro",
             "currency": "EUR",
             "asset_type": AssetType.CROWDFUND_LOAN,
-            "classification_params": json.dumps({
-                "short_description": "Real estate development loan in Milan",
-                "geographic_area": {"ITA": 1.0},
-                "sector": "Real Estate"
-                }),
-            },
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Real estate development loan in Milan",
+                    "geographic_area": {"ITA": 1.0},
+                    "sector": "Real Estate",
+                }
+            ),
+        },
         {
             "display_name": "Real Estate Loan - Roma Parioli",
             "currency": "EUR",
             "asset_type": AssetType.CROWDFUND_LOAN,
-            "classification_params": json.dumps({
-                "short_description": "Residential project in Rome",
-                "geographic_area": {"ITA": 1.0},
-                "sector": "Real Estate"
-                }),
-            },
-        ]
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Residential project in Rome",
+                    "geographic_area": {"ITA": 1.0},
+                    "sector": "Real Estate",
+                }
+            ),
+        },
+    ]
 
     for asset_data in assets:
         asset = Asset(**asset_data)
@@ -243,12 +263,10 @@ def populate_asset_provider_assignments(session: Session):
         ("Tesla, Inc.", "yfinance", "TSLA", IdentifierType.TICKER, None),
         ("Vanguard FTSE All-World UCITS ETF", "yfinance", "VWCE.DE", IdentifierType.TICKER, None),
         ("iShares Core S&P 500 UCITS ETF", "yfinance", "SXR8.DE", IdentifierType.TICKER, None),
-        ]
+    ]
 
     for display_name, provider_code, identifier, id_type, params in provider_configs:
-        asset = session.exec(
-            select(Asset).where(Asset.display_name == display_name)
-            ).first()
+        asset = session.exec(select(Asset).where(Asset.display_name == display_name)).first()
 
         if asset:
             assignment = AssetProviderAssignment(
@@ -257,8 +275,8 @@ def populate_asset_provider_assignments(session: Session):
                 identifier=identifier,
                 identifier_type=id_type,
                 provider_params=json.dumps(params) if params else None,
-                fetch_interval=1440  # 24 hours
-                )
+                fetch_interval=1440,  # 24 hours
+            )
             session.add(assignment)
             print(f"  ✅ {display_name} → {provider_code} ({identifier})")
 
@@ -277,10 +295,18 @@ def populate_transactions(session: Session):
 
     apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
     msft = session.exec(select(Asset).where(Asset.display_name == "Microsoft Corporation")).first()
-    vwce = session.exec(select(Asset).where(Asset.display_name == "Vanguard FTSE All-World UCITS ETF")).first()
-    cspx = session.exec(select(Asset).where(Asset.display_name == "iShares Core S&P 500 UCITS ETF")).first()
-    loan1 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Milano Centro")).first()
-    loan2 = session.exec(select(Asset).where(Asset.display_name == "Real Estate Loan - Roma Parioli")).first()
+    vwce = session.exec(
+        select(Asset).where(Asset.display_name == "Vanguard FTSE All-World UCITS ETF")
+    ).first()
+    cspx = session.exec(
+        select(Asset).where(Asset.display_name == "iShares Core S&P 500 UCITS ETF")
+    ).first()
+    loan1 = session.exec(
+        select(Asset).where(Asset.display_name == "Real Estate Loan - Milano Centro")
+    ).first()
+    loan2 = session.exec(
+        select(Asset).where(Asset.display_name == "Real Estate Loan - Roma Parioli")
+    ).first()
 
     today = date.today()
 
@@ -295,7 +321,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 30,
             "description": "Initial EUR funding from bank",
-            },
+        },
         {
             "broker": ib,
             "asset": None,
@@ -305,7 +331,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 30,
             "description": "Initial USD funding from bank",
-            },
+        },
         {
             "broker": degiro,
             "asset": None,
@@ -315,7 +341,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 30,
             "description": "Initial deposit",
-            },
+        },
         {
             "broker": recrowd,
             "asset": None,
@@ -325,8 +351,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 30,
             "description": "P2P lending capital",
-            },
-
+        },
         # Day -28: Buy AAPL on Interactive Brokers
         {
             "broker": ib,
@@ -337,8 +362,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 28,
             "description": "Initial AAPL purchase",
-            },
-
+        },
         # Day -25: Buy VWCE on Degiro
         {
             "broker": degiro,
@@ -349,8 +373,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 25,
             "description": "Start ETF accumulation plan",
-            },
-
+        },
         # Day -20: Invest in loan 1 on Recrowd
         {
             "broker": recrowd,
@@ -361,8 +384,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 20,
             "description": "P2P lending - Milano Centro",
-            },
-
+        },
         # Day -18: Buy MSFT on Interactive Brokers
         {
             "broker": ib,
@@ -373,8 +395,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 18,
             "description": "Diversification into MSFT",
-            },
-
+        },
         # Day -15: Invest in loan 2 on Recrowd
         {
             "broker": recrowd,
@@ -385,8 +406,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 15,
             "description": "P2P lending - Roma Parioli",
-            },
-
+        },
         # Day -10: Buy more VWCE on Degiro
         {
             "broker": degiro,
@@ -397,8 +417,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 10,
             "description": "Monthly ETF purchase",
-            },
-
+        },
         # Day -8: Receive dividend from AAPL (net of taxes)
         {
             "broker": ib,
@@ -409,8 +428,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 8,
             "description": "Q4 dividend payment (net of 30% tax)",
-            },
-
+        },
         # Day -5: Sell some AAPL (taking profit)
         {
             "broker": ib,
@@ -421,8 +439,7 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 5,
             "description": "Taking profits",
-            },
-
+        },
         # Day -3: Interest payment from loan 1
         {
             "broker": recrowd,
@@ -433,8 +450,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 3,
             "description": "Monthly interest payment (8.5% annual)",
-            },
-
+        },
         # Day -1: Buy CSPX on Degiro
         {
             "broker": degiro,
@@ -445,8 +461,7 @@ def populate_transactions(session: Session):
             "currency": "EUR",
             "days_ago": 1,
             "description": "S&P 500 exposure",
-            },
-
+        },
         # Day -1: Fee transaction
         {
             "broker": ib,
@@ -457,8 +472,8 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 1,
             "description": "Monthly platform fee",
-            },
-        ]
+        },
+    ]
 
     for tx_data in transactions:
         tx = Transaction(
@@ -470,7 +485,7 @@ def populate_transactions(session: Session):
             amount=tx_data["amount"],
             currency=tx_data["currency"],
             description=tx_data["description"],
-            )
+        )
         session.add(tx)
 
         tx_emoji = {
@@ -480,10 +495,12 @@ def populate_transactions(session: Session):
             TransactionType.DIVIDEND: "💵",
             TransactionType.INTEREST: "📈",
             TransactionType.FEE: "📋",
-            }.get(tx_data["type"], "📊")
+        }.get(tx_data["type"], "📊")
 
         asset_name = tx_data["asset"].display_name if tx_data["asset"] else "Cash"
-        print(f"  {tx_emoji} {tx_data['type'].value}: {asset_name} ({tx_data['amount']} {tx_data['currency']})")
+        print(
+            f"  {tx_emoji} {tx_data['type'].value}: {asset_name} ({tx_data['amount']} {tx_data['currency']})"
+        )
 
     session.commit()
 
@@ -496,8 +513,12 @@ def populate_price_history(session: Session):
     # Get assets
     apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
     msft = session.exec(select(Asset).where(Asset.display_name == "Microsoft Corporation")).first()
-    vwce = session.exec(select(Asset).where(Asset.display_name == "Vanguard FTSE All-World UCITS ETF")).first()
-    cspx = session.exec(select(Asset).where(Asset.display_name == "iShares Core S&P 500 UCITS ETF")).first()
+    vwce = session.exec(
+        select(Asset).where(Asset.display_name == "Vanguard FTSE All-World UCITS ETF")
+    ).first()
+    cspx = session.exec(
+        select(Asset).where(Asset.display_name == "iShares Core S&P 500 UCITS ETF")
+    ).first()
 
     today = date.today()
 
@@ -507,7 +528,7 @@ def populate_price_history(session: Session):
         (msft, "USD", Decimal("375.00"), Decimal("390.00"), "yfinance"),
         (vwce, "EUR", Decimal("94.00"), Decimal("98.00"), "yfinance"),
         (cspx, "EUR", Decimal("480.00"), Decimal("490.00"), "yfinance"),
-        ]
+    ]
 
     for asset, currency, start_price, end_price, source in price_configs:
         if not asset:
@@ -529,6 +550,7 @@ def populate_price_history(session: Session):
 
             # Add some daily variation
             import random
+
             random.seed(hash(f"{asset.id}-{price_date}"))
             variation = Decimal(str(random.uniform(-0.02, 0.02)))
             close_price = base_price * (1 + variation)
@@ -543,8 +565,8 @@ def populate_price_history(session: Session):
                 volume=Decimal(str(random.randint(1000000, 10000000))),
                 adjusted_close=close_price,
                 currency=currency,
-                source_plugin_key=source
-                )
+                source_plugin_key=source,
+            )
             session.add(price)
             count += 1
 
@@ -566,7 +588,7 @@ def populate_fx_rates(session: Session):
         ("EUR", "GBP", Decimal("0.85"), Decimal("0.88")),
         ("CHF", "EUR", Decimal("0.92"), Decimal("0.95")),
         ("EUR", "JPY", Decimal("158.00"), Decimal("165.00")),
-        ]
+    ]
 
     for base, quote, start_rate, end_rate in fx_configs:
         rate_range = end_rate - start_rate
@@ -590,17 +612,12 @@ def populate_fx_rates(session: Session):
 
             # Add some variation
             import random
+
             random.seed(hash(f"{base}-{quote}-{rate_date}"))
             variation = Decimal(str(random.uniform(-0.005, 0.005)))
             rate = base_rate * (1 + variation)
 
-            fx_rate = FxRate(
-                date=rate_date,
-                base=base,
-                quote=quote,
-                rate=rate,
-                source="ECB"
-                )
+            fx_rate = FxRate(date=rate_date, base=base, quote=quote, rate=rate, source="ECB")
             session.add(fx_rate)
             count += 1
 
@@ -622,15 +639,10 @@ def populate_fx_currency_pair_sources(session: Session):
         ("EUR", "JPY"),
         ("AUD", "EUR"),
         ("CAD", "EUR"),
-        ]
+    ]
 
     for base, quote in eur_pairs:
-        pair_source = FxCurrencyPairSource(
-            base=base,
-            quote=quote,
-            provider_code="ECB",
-            priority=1
-            )
+        pair_source = FxCurrencyPairSource(base=base, quote=quote, provider_code="ECB", priority=1)
         session.add(pair_source)
         print(f"  ✅ {base}/{quote} → ECB (priority=1)")
 
@@ -641,9 +653,10 @@ def populate_fx_currency_pair_sources(session: Session):
 def main():
     """Populate database with mock data for testing."""
     # Parse arguments
-    parser = argparse.ArgumentParser(description='Populate database with mock data')
-    parser.add_argument('--force', action='store_true',
-                        help='Delete existing database and create fresh one')
+    parser = argparse.ArgumentParser(description="Populate database with mock data")
+    parser.add_argument(
+        "--force", action="store_true", help="Delete existing database and create fresh one"
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -655,8 +668,8 @@ def main():
     settings = get_settings()
     db_url = settings.DATABASE_URL
 
-    if db_url.startswith('sqlite:///'):
-        db_path = Path(db_url.replace('sqlite:///', ''))
+    if db_url.startswith("sqlite:///"):
+        db_path = Path(db_url.replace("sqlite:///", ""))
         if not db_path.is_absolute():
             db_path = Path.cwd() / db_path
     else:
@@ -711,14 +724,14 @@ def main():
             # Verify data persistence
             print("\n🔍 Verifying data persistence...")
             counts = {
-                'brokers': len(session.exec(select(Broker)).all()),
-                'assets': len(session.exec(select(Asset)).all()),
-                'asset_providers': len(session.exec(select(AssetProviderAssignment)).all()),
-                'transactions': len(session.exec(select(Transaction)).all()),
-                'price_history': len(session.exec(select(PriceHistory)).all()),
-                'fx_rates': len(session.exec(select(FxRate)).all()),
-                'fx_pair_sources': len(session.exec(select(FxCurrencyPairSource)).all()),
-                }
+                "brokers": len(session.exec(select(Broker)).all()),
+                "assets": len(session.exec(select(Asset)).all()),
+                "asset_providers": len(session.exec(select(AssetProviderAssignment)).all()),
+                "transactions": len(session.exec(select(Transaction)).all()),
+                "price_history": len(session.exec(select(PriceHistory)).all()),
+                "fx_rates": len(session.exec(select(FxRate)).all()),
+                "fx_pair_sources": len(session.exec(select(FxCurrencyPairSource)).all()),
+            }
 
             print("\n📊 Summary:")
             for name, count in counts.items():
@@ -735,6 +748,7 @@ def main():
         except Exception as e:
             print(f"\n❌ Error: {e}")
             import traceback
+
             traceback.print_exc()
             session.rollback()
             return 1

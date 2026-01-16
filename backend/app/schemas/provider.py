@@ -23,6 +23,7 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 - Assignment Operations: Assign/remove providers to/from assets
 - Bulk Operations: Batch processing for efficiency
 """
+
 from __future__ import annotations
 
 from typing import List, Optional, Any
@@ -39,11 +40,13 @@ from backend.app.schemas.common import BaseDeleteResult, BaseBulkResponse, OldNe
 # FA PROVIDER INFO
 # ============================================================================
 
+
 class FAProviderInfo(BaseModel):
     """Information about a single Financial Asset pricing provider.
 
     Used for provider discovery and capability inspection.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="Provider code (e.g., yfinance, cssscraper)")
@@ -57,11 +60,13 @@ class FAProviderInfo(BaseModel):
 # FX PROVIDER INFO
 # ============================================================================
 
+
 class FXProviderInfo(BaseModel):
     """Information about a single FX rate provider.
 
     Used for FX provider discovery and capability inspection.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="Provider code (e.g., ECB, FED, BOE, SNB)")
@@ -74,6 +79,7 @@ class FXProviderInfo(BaseModel):
 # FA PROVIDER ASSIGNMENT
 # ============================================================================
 
+
 class FAProviderAssignmentItem(BaseModel):
     """Single FA provider assignment configuration.
 
@@ -84,16 +90,27 @@ class FAProviderAssignmentItem(BaseModel):
     - identifier_type: Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)
     - provider_params: Provider-specific configuration (e.g., FAScheduledInvestmentSchedule for scheduled_investment)
     """
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)")
-    identifier: str = Field(..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)")
-    identifier_type: IdentifierType = Field(..., description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)")
-    provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific configuration (JSON)")
-    fetch_interval: int = Field(1440, description="Refresh frequency in minutes (default: 1440 = 24h)")
+    provider_code: str = Field(
+        ..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)"
+    )
+    identifier: str = Field(
+        ..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)"
+    )
+    identifier_type: IdentifierType = Field(
+        ..., description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
+    )
+    provider_params: Optional[dict[str, Any]] = Field(
+        None, description="Provider-specific configuration (JSON)"
+    )
+    fetch_interval: int = Field(
+        1440, description="Refresh frequency in minutes (default: 1440 = 24h)"
+    )
 
-    @field_validator('fetch_interval', mode='before')
+    @field_validator("fetch_interval", mode="before")
     @classmethod
     def set_default_fetch_interval(cls, v):
         """Set default fetch_interval if None or empty."""
@@ -101,7 +118,7 @@ class FAProviderAssignmentItem(BaseModel):
             return 1440
         return v
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_provider_params_with_plugin(self):
         """Validate provider_params using the plugin's validate_params method."""
         # Lazy import to avoid circular dependency
@@ -129,6 +146,7 @@ class FAProviderAssignmentReadItem(BaseModel):
 
     Used for GET /assets/provider/assignments endpoint.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
@@ -156,25 +174,37 @@ class FAProviderRefreshFieldsDetail(BaseModel):
         ...     ignored_fields=[]
         ... )
     """
+
     model_config = ConfigDict(extra="forbid")
 
-    refreshed_fields: List[OldNew[str | None]] = Field(..., description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.")
-    missing_data_fields: List[str] = Field(..., description="Fields provider couldn't fetch (no data available)")
-    ignored_fields: List[str] = Field(..., description="Fields ignored (not requested when using field selection)")
+    refreshed_fields: List[OldNew[str | None]] = Field(
+        ...,
+        description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.",
+    )
+    missing_data_fields: List[str] = Field(
+        ..., description="Fields provider couldn't fetch (no data available)"
+    )
+    ignored_fields: List[str] = Field(
+        ..., description="Fields ignored (not requested when using field selection)"
+    )
 
 
 class FAProviderAssignmentResult(BaseModel):
     """Result of single FA provider assignment or refresh."""
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     success: bool
     message: str
-    fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(None, description="Field-level refresh details (for refresh operations)")
+    fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(
+        None, description="Field-level refresh details (for refresh operations)"
+    )
 
 
 class FABulkAssignResponse(BaseBulkResponse[FAProviderAssignmentResult]):
     """Response for bulk FA provider assignment."""
+
     pass
 
 
@@ -185,6 +215,7 @@ class FABulkAssignResponse(BaseBulkResponse[FAProviderAssignmentResult]):
 
 class FAProviderRemovalResult(BaseDeleteResult):
     """Result of single FA provider removal."""
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
@@ -196,6 +227,7 @@ class FAProviderRemovalResult(BaseDeleteResult):
 
 class FABulkRemoveResponse(BaseBulkResponse[FAProviderRemovalResult]):
     """Response for bulk FA provider removal."""
+
     pass
 
 
@@ -211,10 +243,13 @@ class FAProviderSearchResultItem(BaseModel):
     The identifier_type field is required so the result can be used directly
     for asset creation without needing to look up the identifier type.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     identifier: str = Field(..., description="Asset identifier (ISIN, ticker, URL, etc.)")
-    identifier_type: IdentifierType = Field(..., description="Type of identifier (ISIN, TICKER, URL, etc.)")
+    identifier_type: IdentifierType = Field(
+        ..., description="Type of identifier (ISIN, TICKER, URL, etc.)"
+    )
     display_name: str = Field(..., description="Human-readable asset name")
     provider_code: str = Field(..., description="Provider that returned this result")
     currency: Optional[str] = Field(None, description="Asset currency if known")
@@ -226,10 +261,13 @@ class FAProviderSearchResponse(BaseModel):
 
     Returns aggregated search results from one or more providers.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(..., description="Original search query")
     total_results: int = Field(..., description="Total number of results across all providers")
     results: List[FAProviderSearchResultItem] = Field(..., description="Search results")
     providers_queried: List[str] = Field(..., description="Provider codes that were queried")
-    providers_with_errors: List[str] = Field(default_factory=list, description="Providers that returned errors")
+    providers_with_errors: List[str] = Field(
+        default_factory=list, description="Providers that returned errors"
+    )

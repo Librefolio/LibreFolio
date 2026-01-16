@@ -31,6 +31,7 @@ This plugin parses CSV exports from Directa SIM (Italian broker).
 - Importo euro: Amount in EUR
 - Divisa: Currency (usually EUR)
 """
+
 from __future__ import annotations
 
 import csv
@@ -77,35 +78,28 @@ COL_CURRENCY = 10  # Divisa
 TYPE_MAPPINGS: Dict[str, TransactionType] = {
     # BUY
     "acquisto": TransactionType.BUY,
-
     # SELL
     "vendita": TransactionType.SELL,
-
     # DIVIDEND
     "provento": TransactionType.DIVIDEND,
     "dividendi": TransactionType.DIVIDEND,
     "dividendo": TransactionType.DIVIDEND,
     "coupon": TransactionType.DIVIDEND,
-
     # INTEREST (bond coupons)
     "cedola": TransactionType.INTEREST,
-
     # DEPOSIT
     "conferimento": TransactionType.DEPOSIT,
     "bonifico": TransactionType.DEPOSIT,
-
     # WITHDRAWAL
     "prelievo": TransactionType.WITHDRAWAL,
-
     # TAX
     "rit.": TransactionType.TAX,
     "ritenuta": TransactionType.TAX,
     "tobin": TransactionType.TAX,
-
     # FEE
     "commissioni": TransactionType.FEE,
     "commissione": TransactionType.FEE,
-    }
+}
 
 
 def _parse_directa_date(value: str) -> Optional[date_type]:
@@ -149,6 +143,7 @@ def _map_transaction_type(tipo: str) -> Optional[TransactionType]:
 # =============================================================================
 # PLUGIN IMPLEMENTATION
 # =============================================================================
+
 
 @register_provider(BRIMProviderRegistry)
 class DirectaBrokerProvider(BRIMProvider):
@@ -209,12 +204,7 @@ class DirectaBrokerProvider(BRIMProvider):
             content_lower = content.lower()
 
             # Check for Directa-specific patterns
-            required_patterns = [
-                "data operazione",
-                "tipo operazione",
-                "isin",
-                "importo euro"
-                ]
+            required_patterns = ["data operazione", "tipo operazione", "isin", "importo euro"]
 
             # Must have all required patterns
             if not all(p in content_lower for p in required_patterns):
@@ -230,10 +220,8 @@ class DirectaBrokerProvider(BRIMProvider):
             return False
 
     def parse(
-        self,
-        file_path: Path,
-        broker_id: int
-        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        self, file_path: Path, broker_id: int
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """
         Parse Directa CSV export file.
 
@@ -321,7 +309,7 @@ class DirectaBrokerProvider(BRIMProvider):
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
                         TransactionType.INTEREST,
-                        ]
+                    ]
 
                     if asset_required:
                         # Create a unique key for this asset
@@ -338,7 +326,7 @@ class DirectaBrokerProvider(BRIMProvider):
                                 "extracted_symbol": ticker if ticker else None,
                                 "extracted_isin": isin if isin else None,
                                 "extracted_name": description if description else None,
-                                }
+                            }
 
                             next_fake_id -= 1
 
@@ -357,7 +345,7 @@ class DirectaBrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=f"{tipo_raw}: {description}" if description else tipo_raw,
                             tags=["import", "directa"],
-                            )
+                        )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -378,16 +366,16 @@ class DirectaBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-                )
+            )
             for fake_id, info in extracted_assets_raw.items()
-            }
+        }
 
         logger.info(
             "Directa file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
-            asset_count=len(extracted_assets_typed)
-            )
+            asset_count=len(extracted_assets_typed),
+        )
 
         return transactions, warnings, extracted_assets_typed
 

@@ -6,6 +6,7 @@ BOE provides daily rates with GBP as base currency.
 
 API Documentation: https://www.bankofengland.co.uk/boeapps/database/
 """
+
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -37,22 +38,22 @@ class BOEProvider(FXRateProvider):
     # Format: XUD{L/H}XXX where L=low, H=high, XXX=currency code
     # We use spot rates (XUDL prefix for most currencies)
     CURRENCY_SERIES = {
-        'USD': 'XUDLUSS',  # US Dollar spot
-        'EUR': 'XUDLERD',  # Euro spot (vs Sterling)
-        'JPY': 'XUDLJYS',  # Japanese Yen spot
-        'CHF': 'XUDLSFS',  # Swiss Franc spot
-        'CAD': 'XUDLCDS',  # Canadian Dollar spot
-        'AUD': 'XUDLADS',  # Australian Dollar spot
-        'NZD': 'XUDLNDS',  # New Zealand Dollar spot
-        'SEK': 'XUDLSKS',  # Swedish Krona spot
-        'NOK': 'XUDLNKS',  # Norwegian Krone spot
-        'DKK': 'XUDLDKS',  # Danish Krone spot
-        'CNY': 'XUDLBK89',  # Chinese Yuan spot
-        'HKD': 'XUDLHDS',  # Hong Kong Dollar spot
-        'SGD': 'XUDLSGS',  # Singapore Dollar spot
-        'ZAR': 'XUDLZRS',  # South African Rand spot
-        'INR': 'XUDLBK97',  # Indian Rupee spot
-        }
+        "USD": "XUDLUSS",  # US Dollar spot
+        "EUR": "XUDLERD",  # Euro spot (vs Sterling)
+        "JPY": "XUDLJYS",  # Japanese Yen spot
+        "CHF": "XUDLSFS",  # Swiss Franc spot
+        "CAD": "XUDLCDS",  # Canadian Dollar spot
+        "AUD": "XUDLADS",  # Australian Dollar spot
+        "NZD": "XUDLNDS",  # New Zealand Dollar spot
+        "SEK": "XUDLSKS",  # Swedish Krona spot
+        "NOK": "XUDLNKS",  # Norwegian Krone spot
+        "DKK": "XUDLDKS",  # Danish Krone spot
+        "CNY": "XUDLBK89",  # Chinese Yuan spot
+        "HKD": "XUDLHDS",  # Hong Kong Dollar spot
+        "SGD": "XUDLSGS",  # Singapore Dollar spot
+        "ZAR": "XUDLZRS",  # South African Rand spot
+        "INR": "XUDLBK97",  # Indian Rupee spot
+    }
 
     @property
     def code(self) -> str:
@@ -88,7 +89,7 @@ class BOEProvider(FXRateProvider):
             "JPY",  # Japanese Yen
             "CHF",  # Swiss Franc
             "AUD",  # Australian Dollar
-            ]
+        ]
 
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -100,15 +101,12 @@ class BOEProvider(FXRateProvider):
             List of ISO 4217 currency codes supported by BOE
         """
         # Include GBP as base currency + all quote currencies
-        currencies = ['GBP'] + list(self.CURRENCY_SERIES.keys())
+        currencies = ["GBP"] + list(self.CURRENCY_SERIES.keys())
         return sorted(currencies)
 
     async def fetch_rates(
-        self,
-        date_range: tuple[date, date],
-        currencies: list[str],
-        base_currency: str | None = None
-        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
+    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from BOE API for given date range and currencies.
 
@@ -130,7 +128,7 @@ class BOEProvider(FXRateProvider):
         if base_currency is not None and base_currency != "GBP":
             raise ValueError(
                 f"BOE provider only supports GBP as base currency, got {base_currency}"
-                )
+            )
 
         start_date, end_date = date_range
         results = {}
@@ -151,22 +149,24 @@ class BOEProvider(FXRateProvider):
             # Build BOE API request
             # Format: XML-based API (returning CSV-like data)
             params = {
-                'Datefrom': start_date.strftime('%d/%b/%Y'),
-                'Dateto': end_date.strftime('%d/%b/%Y'),
-                'SeriesCodes': series_code,
-                'CSVF': 'TN',  # Time series, no metadata
-                'UsingCodes': 'Y',
-                'VPD': 'Y',
-                'VFD': 'N',
-                }
+                "Datefrom": start_date.strftime("%d/%b/%Y"),
+                "Dateto": end_date.strftime("%d/%b/%Y"),
+                "SeriesCodes": series_code,
+                "CSVF": "TN",  # Time series, no metadata
+                "UsingCodes": "Y",
+                "VPD": "Y",
+                "VFD": "N",
+            }
 
             try:
                 # BOE requires a proper User-Agent header
                 headers = {
-                    'User-Agent': 'Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)'
-                    }
+                    "User-Agent": "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)"
+                }
 
-                async with httpx.AsyncClient(timeout=30.0, headers=headers, follow_redirects=True) as client:
+                async with httpx.AsyncClient(
+                    timeout=30.0, headers=headers, follow_redirects=True
+                ) as client:
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 
@@ -201,7 +201,7 @@ class BOEProvider(FXRateProvider):
         """
         observations = []
 
-        lines = response_text.strip().split('\n')
+        lines = response_text.strip().split("\n")
 
         # Skip header line
         if len(lines) < 2:
@@ -212,7 +212,7 @@ class BOEProvider(FXRateProvider):
             if not line.strip():
                 continue
 
-            parts = line.split(',')
+            parts = line.split(",")
             if len(parts) < 2:
                 continue
 
@@ -226,7 +226,7 @@ class BOEProvider(FXRateProvider):
 
                 # Skip empty values (no data available for this date)
                 # BOE may not publish rates on weekends, holidays, or UK bank holidays
-                if not rate_str or rate_str == '':
+                if not rate_str or rate_str == "":
                     continue
 
                 # BOE gives: 1 GBP = X foreign currency
@@ -249,4 +249,4 @@ class BOEProvider(FXRateProvider):
 
         Format: "DD Mon YYYY" (e.g., "01 Jan 2025")
         """
-        return datetime.strptime(date_str, '%d %b %Y').date()
+        return datetime.strptime(date_str, "%d %b %Y").date()

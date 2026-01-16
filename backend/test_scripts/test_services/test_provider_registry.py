@@ -3,6 +3,7 @@ Provider Registry Tests
 
 Tests provider auto-discovery for Asset and FX providers.
 """
+
 import pytest
 
 from backend.app.services.provider_registry import AssetProviderRegistry, FXProviderRegistry
@@ -19,7 +20,7 @@ def test_asset_provider_discovery():
         provider_codes = list(providers)
 
     # Expect at least yfinance to be present in development workspace
-    assert 'yfinance' in provider_codes, f"Expected 'yfinance' in providers, got: {provider_codes}"
+    assert "yfinance" in provider_codes, f"Expected 'yfinance' in providers, got: {provider_codes}"
     assert len(provider_codes) > 0, "Should have at least one provider"
 
 
@@ -37,11 +38,12 @@ def test_fx_provider_discovery():
         provider_codes = list(providers)
 
     # After Phase 1.4 migration, assert all 4 providers are present
-    expected_providers = {'ECB', 'FED', 'BOE', 'SNB'}
+    expected_providers = {"ECB", "FED", "BOE", "SNB"}
     provider_set = set(provider_codes)
 
-    assert expected_providers.issubset(provider_set), \
-        f"Missing expected FX providers: {expected_providers - provider_set}. Found: {provider_codes}"
+    assert expected_providers.issubset(
+        provider_set
+    ), f"Missing expected FX providers: {expected_providers - provider_set}. Found: {provider_codes}"
     assert len(provider_codes) >= 4, f"Expected at least 4 providers, got {len(provider_codes)}"
 
 

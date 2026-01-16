@@ -16,6 +16,7 @@ Usage:
     max_mb = await get_max_upload_mb(session)
     can_register = await is_registration_enabled(session)
 """
+
 import json
 from typing import Any
 
@@ -26,11 +27,7 @@ from backend.app.db.models import GlobalSetting
 from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
 
 
-async def get_setting_value(
-    session: AsyncSession,
-    key: str,
-    default: Any = None
-) -> Any:
+async def get_setting_value(session: AsyncSession, key: str, default: Any = None) -> Any:
     """
     Get a global setting value by key, with automatic type conversion.
 
@@ -44,17 +41,14 @@ async def get_setting_value(
     Returns:
         Setting value converted to appropriate type, or default
     """
-    result = await session.execute(
-        select(GlobalSetting).where(GlobalSetting.key == key)
-    )
+    result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
     setting = result.scalar_one_or_none()
 
     if not setting:
         # Try to get default from GLOBAL_SETTINGS_DEFAULTS
         if key in GLOBAL_SETTINGS_DEFAULTS:
             return _convert_value(
-                GLOBAL_SETTINGS_DEFAULTS[key]["value"],
-                GLOBAL_SETTINGS_DEFAULTS[key]["type"]
+                GLOBAL_SETTINGS_DEFAULTS[key]["value"], GLOBAL_SETTINGS_DEFAULTS[key]["type"]
             )
         return default
 
@@ -133,6 +127,7 @@ async def get_default_currency(session: AsyncSession) -> str:
 # Synchronous fallback functions (use defaults, no DB access)
 # These are useful for initialization or when async is not available
 
+
 def get_session_ttl_hours_sync() -> int:
     """Get session TTL from defaults (no DB access)."""
     return int(GLOBAL_SETTINGS_DEFAULTS.get("session_ttl_hours", {}).get("value", 24))
@@ -147,4 +142,3 @@ def is_registration_enabled_sync() -> bool:
     """Check registration enabled from defaults (no DB access)."""
     value = GLOBAL_SETTINGS_DEFAULTS.get("enable_registration", {}).get("value", "true")
     return value.lower() in ("true", "1", "yes", "on")
-

@@ -12,6 +12,7 @@ Provides RESTful endpoints for transaction management:
 All endpoints require authentication. Users can only create/modify/delete
 transactions for brokers they have EDITOR or OWNER access to.
 """
+
 import traceback
 from typing import List, Optional
 
@@ -34,7 +35,7 @@ from backend.app.schemas.transactions import (
     TXBulkDeleteResponse,
     TXTypeMetadata,
     TX_TYPE_METADATA,
-    )
+)
 from backend.app.services.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
 
@@ -47,12 +48,13 @@ tx_router = APIRouter(prefix="/transactions", tags=["TX (Transactions)"])
 # CREATE
 # =============================================================================
 
+
 @tx_router.post("", response_model=TXBulkCreateResponse)
 async def create_transactions(
     items: List[TXCreateItem],
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
-    ) -> TXBulkCreateResponse:
+) -> TXBulkCreateResponse:
     """
     Create multiple transactions.
 
@@ -71,22 +73,33 @@ async def create_transactions(
         logger.debug("Starting transaction creation service call", user_id=current_user.id)
         service = TransactionService(session)
         response = await service.create_bulk(items, user_id=current_user.id)
-        logger.debug("Service call completed, success_count=%d, errors=%d",
-                    response.success_count, len(response.errors), user_id=current_user.id)
+        logger.debug(
+            "Service call completed, success_count=%d, errors=%d",
+            response.success_count,
+            len(response.errors),
+            user_id=current_user.id,
+        )
 
         # Commit if all succeeded
         if response.success_count > 0 and not response.errors:
             await session.commit()
-            logger.info("Created %d transactions successfully", response.success_count, user_id=current_user.id)
+            logger.info(
+                "Created %d transactions successfully",
+                response.success_count,
+                user_id=current_user.id,
+            )
         else:
             await session.rollback()
             if response.errors:
-                logger.warning("Transaction creation had errors: %s", response.errors, user_id=current_user.id)
+                logger.warning(
+                    "Transaction creation had errors: %s", response.errors, user_id=current_user.id
+                )
 
         return response
     except Exception as e:
         # Catch any unexpected error and return it as a response instead of 500
         import sys
+
         print(f"[CRITICAL] Transaction creation error: {e}", file=sys.stderr)
         print(f"[CRITICAL] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
         try:
@@ -94,15 +107,14 @@ async def create_transactions(
         except Exception as rollback_error:
             print(f"[CRITICAL] Rollback error: {rollback_error}", file=sys.stderr)
         return TXBulkCreateResponse(
-            results=[],
-            success_count=0,
-            errors=[f"Unexpected error: {str(e)}"]
+            results=[], success_count=0, errors=[f"Unexpected error: {str(e)}"]
         )
 
 
 # =============================================================================
 # READ
 # =============================================================================
+
 
 @tx_router.get("", response_model=List[TXReadItem])
 async def query_transactions(
@@ -116,7 +128,7 @@ async def query_transactions(
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> List[TXReadItem]:
+) -> List[TXReadItem]:
     """
     Query transactions with filters.
 
@@ -152,7 +164,7 @@ async def query_transactions(
         currency=currency,
         limit=limit,
         offset=offset,
-        )
+    )
 
     service = TransactionService(session)
     return await service.query(params)
@@ -176,7 +188,7 @@ async def get_transaction_types() -> List[TXTypeMetadata]:
 async def get_transaction(
     tx_id: int,
     session: AsyncSession = Depends(get_session_generator),
-    ) -> TXReadItem:
+) -> TXReadItem:
     """
     Get a single transaction by ID.
 
@@ -202,11 +214,12 @@ async def get_transaction(
 # UPDATE
 # =============================================================================
 
+
 @tx_router.patch("", response_model=TXBulkUpdateResponse)
 async def update_transactions(
     items: List[TXUpdateItem],
     session: AsyncSession = Depends(get_session_generator),
-    ) -> TXBulkUpdateResponse:
+) -> TXBulkUpdateResponse:
     """
     Update multiple transactions.
 
@@ -238,11 +251,12 @@ async def update_transactions(
 # DELETE
 # =============================================================================
 
+
 @tx_router.delete("", response_model=TXBulkDeleteResponse)
 async def delete_transactions(
     ids: List[int] = Query(..., description="Transaction IDs to delete"),
     session: AsyncSession = Depends(get_session_generator),
-    ) -> TXBulkDeleteResponse:
+) -> TXBulkDeleteResponse:
     """
     Delete multiple transactions.
 

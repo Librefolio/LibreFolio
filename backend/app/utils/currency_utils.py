@@ -44,10 +44,10 @@ SYMBOL_TO_ISO = {
     "lei": ["RON", "MDL"],
     "R": ["ZAR"],
     "R$": ["BRL"],
-    }
+}
 
 
-def normalize_currency(input_str: str, language: str = 'en') -> dict:
+def normalize_currency(input_str: str, language: str = "en") -> dict:
     """
     Normalize currency input to ISO 4217 code(s).
 
@@ -72,8 +72,8 @@ def normalize_currency(input_str: str, language: str = 'en') -> dict:
             "query": input_str,
             "iso_codes": [],
             "match_type": "not_found",
-            "error": "Empty input"
-            }
+            "error": "Empty input",
+        }
 
     input_clean = input_str.strip().upper()
     locale = get_babel_locale(language)
@@ -87,8 +87,8 @@ def normalize_currency(input_str: str, language: str = 'en') -> dict:
                 "query": input_str,
                 "iso_codes": [input_clean],
                 "match_type": "exact",
-                "error": None
-                }
+                "error": None,
+            }
     except Exception:
         pass
 
@@ -101,15 +101,15 @@ def normalize_currency(input_str: str, language: str = 'en') -> dict:
                 "query": input_str,
                 "iso_codes": candidates,
                 "match_type": "exact",
-                "error": None
-                }
+                "error": None,
+            }
         else:
             return {
                 "query": input_str,
                 "iso_codes": candidates,
                 "match_type": "symbol_ambiguous",
-                "error": f"Symbol '{input_str}' matches multiple currencies"
-                }
+                "error": f"Symbol '{input_str}' matches multiple currencies",
+            }
 
     # Try name match (search all currencies)
     try:
@@ -126,19 +126,14 @@ def normalize_currency(input_str: str, language: str = 'en') -> dict:
                 continue
 
         if len(matches) == 1:
-            return {
-                "query": input_str,
-                "iso_codes": matches,
-                "match_type": "exact",
-                "error": None
-                }
+            return {"query": input_str, "iso_codes": matches, "match_type": "exact", "error": None}
         elif len(matches) > 1:
             return {
                 "query": input_str,
                 "iso_codes": matches,
                 "match_type": "multi-match",
-                "error": f"Multiple currencies match '{input_str}'"
-                }
+                "error": f"Multiple currencies match '{input_str}'",
+            }
     except Exception as e:
         logger.debug(f"Name search failed for '{input_str}'", error=str(e))
 
@@ -146,11 +141,11 @@ def normalize_currency(input_str: str, language: str = 'en') -> dict:
         "query": input_str,
         "iso_codes": [],
         "match_type": "not_found",
-        "error": f"No currency found for '{input_str}'"
-        }
+        "error": f"No currency found for '{input_str}'",
+    }
 
 
-def list_currencies(language: str = 'en') -> List[dict]:
+def list_currencies(language: str = "en") -> List[dict]:
     """
     List all currencies with localized names and symbols.
 
@@ -172,11 +167,7 @@ def list_currencies(language: str = 'en') -> List[dict]:
                 symbol = get_currency_symbol(code, locale=locale)
 
                 if name and symbol:
-                    currencies.append({
-                        "code": code,
-                        "name": name,
-                        "symbol": symbol
-                        })
+                    currencies.append({"code": code, "name": name, "symbol": symbol})
             except Exception as e:
                 logger.debug(f"Could not get info for currency {code}", error=str(e))
                 continue

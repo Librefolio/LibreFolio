@@ -2,6 +2,7 @@
 LibreFolio FastAPI application.
 Main entry point for the backend API.
 """
+
 import subprocess
 import sys
 from contextlib import asynccontextmanager
@@ -62,26 +63,37 @@ def ensure_database_exists():
             logger.warning("Database file not found, running migrations", db_path=str(db_path))
             needs_migration = True
         elif db_path.stat().st_size == 0:
-            logger.warning("Database file is empty (0 bytes), running migrations", db_path=str(db_path))
+            logger.warning(
+                "Database file is empty (0 bytes), running migrations", db_path=str(db_path)
+            )
             needs_migration = True
         else:
             # Check if database has tables using SQLite directly
             # This is faster than importing SQLAlchemy
             import sqlite3
+
             try:
                 conn = sqlite3.connect(str(db_path))
                 cursor = conn.cursor()
-                cursor.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+                cursor.execute(
+                    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                )
                 table_count = cursor.fetchone()[0]
                 conn.close()
 
                 if table_count == 0:
-                    logger.warning("Database has no tables, running migrations", db_path=str(db_path))
+                    logger.warning(
+                        "Database has no tables, running migrations", db_path=str(db_path)
+                    )
                     needs_migration = True
                 else:
-                    logger.info(f"Database initialized with {table_count} tables", db_path=str(db_path))
+                    logger.info(
+                        f"Database initialized with {table_count} tables", db_path=str(db_path)
+                    )
             except sqlite3.DatabaseError as e:
-                logger.warning(f"Database appears corrupted, running migrations: {e}", db_path=str(db_path))
+                logger.warning(
+                    f"Database appears corrupted, running migrations: {e}", db_path=str(db_path)
+                )
                 needs_migration = True
 
         if needs_migration:
@@ -93,7 +105,12 @@ def ensure_database_exists():
                 alembic_ini = PROJECT_ROOT / "backend" / "alembic.ini"
 
                 logger.info("Running Alembic migrations...")
-                result = subprocess.run(["alembic", "-c", str(alembic_ini), "upgrade", "head"], cwd=PROJECT_ROOT, capture_output=True, text=True)
+                result = subprocess.run(
+                    ["alembic", "-c", str(alembic_ini), "upgrade", "head"],
+                    cwd=PROJECT_ROOT,
+                    capture_output=True,
+                    text=True,
+                )
 
                 if result.returncode == 0:
                     logger.info("Database created and migrated successfully")
@@ -118,7 +135,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         version=settings.VERSION,
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
         test_mode=is_test_mode(),
-        )
+    )
 
     # Ensure database exists and is migrated
     ensure_database_exists()
@@ -152,7 +169,7 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_PREFIX}/docs",
     redoc_url=f"{settings.API_V1_PREFIX}/redoc",
     lifespan=lifespan,
-    )
+)
 
 # Configure CORS
 app.add_middleware(
@@ -161,7 +178,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    )
+)
 
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
@@ -194,7 +211,7 @@ def render_docs_not_built() -> HTMLResponse:
         <pre><code>docker compose exec backend /bin/bash
 ./dev.sh info:mk build</code></pre>
         </body></html>"""
-        )
+    )
 
 
 @app.get("/mkdocs", response_class=HTMLResponse)
@@ -233,8 +250,8 @@ async def root():
         "name": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "docs": f"{settings.API_V1_PREFIX}/docs",
-        "frontend": "Not built. Run: ./dev.sh fe:build"
-        }
+        "frontend": "Not built. Run: ./dev.sh fe:build",
+    }
 
 
 # Serve frontend static assets (JS, CSS, images) if build exists
@@ -243,7 +260,6 @@ if frontend_available():
     # Mount _app directory for SvelteKit assets
     if (FRONTEND_BUILD_DIR / "_app").exists():
         app.mount("/_app", StaticFiles(directory=FRONTEND_BUILD_DIR / "_app"), name="frontend_app")
-
 
     # Catch-all for other frontend routes (SPA fallback)
     @app.get("/{path:path}")

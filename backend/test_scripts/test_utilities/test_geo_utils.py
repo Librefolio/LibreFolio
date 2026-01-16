@@ -4,6 +4,7 @@ Tests for geographic area normalization utilities.
 Tests country code normalization, weight parsing, and validation of
 geographic area distributions for asset classification metadata.
 """
+
 from decimal import Decimal
 
 import pytest
@@ -50,8 +51,8 @@ def test_FAGeographicArea():
     assert result.distribution == {
         "USA": Decimal("0.6000"),
         "GBR": Decimal("0.3000"),
-        "ITA": Decimal("0.1000")
-        }
+        "ITA": Decimal("0.1000"),
+    }
     assert sum(result.distribution.values()) == Decimal("1.0")
 
     # ISO-2 to ISO-3 conversion
@@ -113,12 +114,7 @@ def test_FAGeographicArea():
     assert result.distribution["ITA"] == Decimal("0.0000")
 
     # Many countries
-    data = {
-        "USA": 0.25,
-        "GBR": 0.25,
-        "ITA": 0.25,
-        "FRA": 0.25
-        }
+    data = {"USA": 0.25, "GBR": 0.25, "ITA": 0.25, "FRA": 0.25}
     result = FAGeographicArea(distribution=data)
     assert len(result.distribution) == 4
     assert sum(result.distribution.values()) == Decimal("1.0")

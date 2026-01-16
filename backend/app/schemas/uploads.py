@@ -3,6 +3,7 @@ Schemas for static file uploads.
 
 DTOs for file upload operations.
 """
+
 from datetime import datetime
 from typing import Optional, List
 
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class UploadFileInfo(BaseModel):
     """Information about an uploaded file."""
+
     model_config = ConfigDict(extra="forbid")
     id: str = Field(..., description="Unique file ID (UUID)")
     original_name: str = Field(..., description="Original filename")
@@ -28,6 +30,7 @@ class UploadFileInfo(BaseModel):
 
 class UploadResponse(BaseModel):
     """Response after successful upload."""
+
     success: bool = Field(default=True)
     file: UploadFileInfo = Field(..., description="Uploaded file info")
     message: str = Field(default="File uploaded successfully")
@@ -35,12 +38,14 @@ class UploadResponse(BaseModel):
 
 class UploadListResponse(BaseModel):
     """Response for listing uploads."""
+
     files: List[UploadFileInfo] = Field(default_factory=list)
     total: int = Field(..., description="Total number of files")
 
 
 class UploadDeleteResponse(BaseModel):
     """Response after file deletion."""
+
     success: bool
     message: str
     file_id: str

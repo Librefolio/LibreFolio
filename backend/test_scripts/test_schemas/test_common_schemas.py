@@ -29,6 +29,7 @@ from backend.app.schemas.common import Currency, CRYPTO_CURRENCIES, OldNew, Date
 # CURRENCY CREATION TESTS
 # ============================================================================
 
+
 class TestCurrencyCreation:
     """Test Currency object creation."""
 
@@ -84,6 +85,7 @@ class TestCurrencyCreation:
 # CRYPTO CURRENCY TESTS
 # ============================================================================
 
+
 class TestCryptoCurrencies:
     """Test cryptocurrency support."""
 
@@ -107,6 +109,7 @@ class TestCryptoCurrencies:
 # ============================================================================
 # INVALID CURRENCY TESTS
 # ============================================================================
+
 
 class TestInvalidCurrency:
     """Test invalid currency rejection."""
@@ -140,6 +143,7 @@ class TestInvalidCurrency:
 # ============================================================================
 # ARITHMETIC TESTS
 # ============================================================================
+
 
 class TestArithmetic:
     """Test arithmetic operations."""
@@ -197,6 +201,7 @@ class TestArithmetic:
 # ARITHMETIC ERRORS TESTS
 # ============================================================================
 
+
 class TestArithmeticErrors:
     """Test arithmetic error handling."""
 
@@ -230,6 +235,7 @@ class TestArithmeticErrors:
 # ============================================================================
 # COMPARISON TESTS
 # ============================================================================
+
 
 class TestComparison:
     """Test comparison operations."""
@@ -302,6 +308,7 @@ class TestComparison:
 # SERIALIZATION TESTS
 # ============================================================================
 
+
 class TestSerialization:
     """Test serialization methods."""
 
@@ -337,6 +344,7 @@ class TestSerialization:
 # ============================================================================
 # UTILITY METHODS TESTS
 # ============================================================================
+
 
 class TestUtilityMethods:
     """Test utility methods."""
@@ -377,6 +385,7 @@ class TestUtilityMethods:
 # OLDNEW TESTS
 # ============================================================================
 
+
 class TestOldNew:
     """Test OldNew generic class."""
 
@@ -404,6 +413,7 @@ class TestOldNew:
 # ============================================================================
 # DATERANGEMODEL TESTS
 # ============================================================================
+
 
 class TestDateRangeModel:
     """Test DateRangeModel validation."""

@@ -14,6 +14,7 @@ These schemas provide strict validation for API input/output.
 - Uses Currency from common.py for cash validation
 - Uses BaseBulkResponse/BaseDeleteResult from common.py for consistency
 """
+
 from __future__ import annotations
 
 from datetime import datetime, date as date_type
@@ -28,12 +29,13 @@ from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseBulkDeleteResponse,
     BaseDeleteResult,
-    )
+)
 
 
 # =============================================================================
 # BROKER CREATE
 # =============================================================================
+
 
 class BRCreateItem(BaseModel):
     """
@@ -45,24 +47,43 @@ class BRCreateItem(BaseModel):
     Creates automatic DEPOSIT transactions for each.
     Example: [Currency(code="EUR", amount=10000), Currency(code="USD", amount=5000)]
     """
+
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=100, description="Broker name (must be unique)")
-    description: Optional[str] = Field(default=None, max_length=500, description="Broker description")
-    portal_url: Optional[str] = Field(default=None, max_length=255, description="URL to broker's web portal")
-    icon_url: Optional[str] = Field(default=None, max_length=500, description="Custom icon URL for the broker")
-    default_import_plugin: Optional[str] = Field(default=None, max_length=100, description="Default BRIM plugin for importing transactions")
+    description: Optional[str] = Field(
+        default=None, max_length=500, description="Broker description"
+    )
+    portal_url: Optional[str] = Field(
+        default=None, max_length=255, description="URL to broker's web portal"
+    )
+    icon_url: Optional[str] = Field(
+        default=None, max_length=500, description="Custom icon URL for the broker"
+    )
+    default_import_plugin: Optional[str] = Field(
+        default=None, max_length=100, description="Default BRIM plugin for importing transactions"
+    )
 
-    allow_cash_overdraft: bool = Field(default=False, description="Allow leveraged buying (negative cash balance)")
-    allow_asset_shorting: bool = Field(default=False, description="Allow short selling (negative asset quantities)")
+    allow_cash_overdraft: bool = Field(
+        default=False, description="Allow leveraged buying (negative cash balance)"
+    )
+    allow_asset_shorting: bool = Field(
+        default=False, description="Allow short selling (negative asset quantities)"
+    )
 
-    is_active: bool = Field(default=True, description="Whether the broker account is currently active")
-    opened_at: Optional[date_type] = Field(default=None, description="Date when the account was opened in reality")
+    is_active: bool = Field(
+        default=True, description="Whether the broker account is currently active"
+    )
+    opened_at: Optional[date_type] = Field(
+        default=None, description="Date when the account was opened in reality"
+    )
 
     # Auto-creates DEPOSIT transactions - using Currency objects
-    initial_balances: Optional[List[Currency]] = Field(default=None, description="Initial cash balances. Creates DEPOSIT transactions.")
+    initial_balances: Optional[List[Currency]] = Field(
+        default=None, description="Initial cash balances. Creates DEPOSIT transactions."
+    )
 
-    @field_validator('name')
+    @field_validator("name")
     @classmethod
     def validate_name(cls, v):
         """Ensure name is not just whitespace."""
@@ -71,7 +92,7 @@ class BRCreateItem(BaseModel):
             raise ValueError("Broker name cannot be empty or whitespace")
         return v
 
-    @field_validator('initial_balances')
+    @field_validator("initial_balances")
     @classmethod
     def validate_initial_balances(cls, v):
         """Validate initial_balances - only keep positive amounts."""
@@ -87,6 +108,7 @@ class BRCreateItem(BaseModel):
 # BROKER READ
 # =============================================================================
 
+
 class BRReadItem(BaseModel):
     """
     DTO for reading broker basic data.
@@ -94,6 +116,7 @@ class BRReadItem(BaseModel):
     Response format for GET operations.
     Maps directly from Broker SQLModel.
     """
+
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     id: int
@@ -117,12 +140,14 @@ class BRReadItem(BaseModel):
 # BROKER WITH BALANCES AND HOLDINGS
 # =============================================================================
 
+
 class BRAssetHolding(BaseModel):
     """
     Single asset holding within a broker.
 
     Represents current position in an asset with cost basis and market value.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
@@ -154,13 +179,19 @@ class BRSummary(BRReadItem):
     """
 
     # Cash balances as list of Currency objects
-    cash_balances: List[Currency] = Field(default_factory=list, description="Current cash balance per currency")
+    cash_balances: List[Currency] = Field(
+        default_factory=list, description="Current cash balance per currency"
+    )
 
     # Asset holdings with full details
-    holdings: List[BRAssetHolding] = Field(default_factory=list, description="Current asset holdings with cost basis and market value")
+    holdings: List[BRAssetHolding] = Field(
+        default_factory=list, description="Current asset holdings with cost basis and market value"
+    )
 
     # Optional: Total portfolio value in user's base currency
-    total_value_base_currency: Optional[Currency] = Field(default=None, description="Total portfolio value in base currency (cash + holdings)")
+    total_value_base_currency: Optional[Currency] = Field(
+        default=None, description="Total portfolio value in base currency (cash + holdings)"
+    )
 
     @property
     def currencies(self) -> List[str]:
@@ -182,6 +213,7 @@ class BRSummary(BRReadItem):
 # BROKER UPDATE
 # =============================================================================
 
+
 class BRUpdateItem(BaseModel):
     """
     DTO for updating a broker.
@@ -191,21 +223,32 @@ class BRUpdateItem(BaseModel):
 
     Note: Changing flags from True to False triggers balance validation.
     """
+
     model_config = ConfigDict(extra="forbid")
 
-    name: Optional[str] = Field(default=None, min_length=1, max_length=100, description="New broker name")
+    name: Optional[str] = Field(
+        default=None, min_length=1, max_length=100, description="New broker name"
+    )
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
     portal_url: Optional[str] = Field(default=None, max_length=255, description="New portal URL")
-    icon_url: Optional[str] = Field(default=None, max_length=500, description="Custom icon URL for the broker")
-    default_import_plugin: Optional[str] = Field(default=None, max_length=100, description="Default BRIM plugin for importing transactions")
+    icon_url: Optional[str] = Field(
+        default=None, max_length=500, description="Custom icon URL for the broker"
+    )
+    default_import_plugin: Optional[str] = Field(
+        default=None, max_length=100, description="Default BRIM plugin for importing transactions"
+    )
 
-    allow_cash_overdraft: Optional[bool] = Field(default=None, description="Update leveraged buying permission")
-    allow_asset_shorting: Optional[bool] = Field(default=None, description="Update short selling permission")
+    allow_cash_overdraft: Optional[bool] = Field(
+        default=None, description="Update leveraged buying permission"
+    )
+    allow_asset_shorting: Optional[bool] = Field(
+        default=None, description="Update short selling permission"
+    )
 
     is_active: Optional[bool] = Field(default=None, description="Update account active status")
     opened_at: Optional[date_type] = Field(default=None, description="Update account opening date")
 
-    @field_validator('name')
+    @field_validator("name")
     @classmethod
     def validate_name(cls, v):
         """Ensure name is not just whitespace."""
@@ -221,6 +264,7 @@ class BRUpdateItem(BaseModel):
 # BROKER DELETE
 # =============================================================================
 
+
 class BRDeleteItem(BaseModel):
     """
     Single broker deletion request.
@@ -231,10 +275,14 @@ class BRDeleteItem(BaseModel):
     - force=True: Deletes broker AND all associated transactions.
       transactions_deleted in BRDeleteResult shows how many were removed.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., gt=0, description="Broker ID to delete")
-    force: bool = Field(default=False, description="If True, cascade delete all transactions. If False, fail if transactions exist.")
+    force: bool = Field(
+        default=False,
+        description="If True, cascade delete all transactions. If False, fail if transactions exist.",
+    )
 
 
 class BRDeleteResult(BaseDeleteResult):
@@ -244,12 +292,16 @@ class BRDeleteResult(BaseDeleteResult):
     Extends BaseDeleteResult with broker-specific fields.
     - transactions_deleted: Count of transactions removed (only >0 when force=True was used)
     """
+
     id: int = Field(..., description="Broker ID")
-    transactions_deleted: int = Field(default=0, ge=0, description="Number of transactions cascade-deleted (only when force=True)")
+    transactions_deleted: int = Field(
+        default=0, ge=0, description="Number of transactions cascade-deleted (only when force=True)"
+    )
 
 
 class BRBulkDeleteResponse(BaseBulkDeleteResponse[BRDeleteResult]):
     """Response for bulk broker deletion."""
+
     pass
 
 
@@ -257,19 +309,24 @@ class BRBulkDeleteResponse(BaseBulkDeleteResponse[BRDeleteResult]):
 # BULK CREATE RESPONSE
 # =============================================================================
 
+
 class BRCreateResult(BaseModel):
     """Result for a single broker creation attempt."""
+
     model_config = ConfigDict(extra="forbid")
 
     success: bool
     broker_id: Optional[int] = None
     name: str  # Echo back for client correlation
-    deposits_created: int = Field(default=0, ge=0, description="Number of DEPOSIT transactions created")
+    deposits_created: int = Field(
+        default=0, ge=0, description="Number of DEPOSIT transactions created"
+    )
     error: Optional[str] = None
 
 
 class BRBulkCreateResponse(BaseBulkResponse[BRCreateResult]):
     """Response for bulk broker creation."""
+
     pass
 
 
@@ -277,18 +334,23 @@ class BRBulkCreateResponse(BaseBulkResponse[BRCreateResult]):
 # BULK UPDATE RESPONSE
 # =============================================================================
 
+
 class BRUpdateResult(BaseModel):
     """Result for a single broker update attempt."""
+
     model_config = ConfigDict(extra="forbid")
 
     id: int
     success: bool
-    validation_triggered: bool = Field(default=False, description="Whether balance validation was triggered due to flag change")
+    validation_triggered: bool = Field(
+        default=False, description="Whether balance validation was triggered due to flag change"
+    )
     error: Optional[str] = None
 
 
 class BRBulkUpdateResponse(BaseBulkResponse[BRUpdateResult]):
     """Response for bulk broker update."""
+
     pass
 
 
@@ -296,11 +358,13 @@ class BRBulkUpdateResponse(BaseBulkResponse[BRUpdateResult]):
 # BROKER USER ACCESS
 # =============================================================================
 
+
 class BRAccessItem(BaseModel):
     """
     DTO for broker access with user details.
     Used in list responses to show who has access.
     """
+
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     user_id: int = Field(..., description="User ID")
@@ -312,6 +376,7 @@ class BRAccessItem(BaseModel):
 
 class BRAccessListResponse(BaseModel):
     """Response for listing broker accesses."""
+
     model_config = ConfigDict(extra="forbid")
 
     accesses: List[BRAccessItem] = Field(default_factory=list)
@@ -320,6 +385,7 @@ class BRAccessListResponse(BaseModel):
 
 class BRAccessCreateRequest(BaseModel):
     """Request to add user access to a broker."""
+
     model_config = ConfigDict(extra="forbid")
 
     user_id: int = Field(..., gt=0, description="User ID to grant access")
@@ -328,6 +394,7 @@ class BRAccessCreateRequest(BaseModel):
 
 class BRAccessUpdateRequest(BaseModel):
     """Request to update user access role."""
+
     model_config = ConfigDict(extra="forbid")
 
     role: UserRole = Field(..., description="New access role")
@@ -335,6 +402,7 @@ class BRAccessUpdateRequest(BaseModel):
 
 class BRAccessCreateResponse(BaseModel):
     """Response after creating access."""
+
     model_config = ConfigDict(extra="forbid")
 
     success: bool = True
@@ -344,8 +412,8 @@ class BRAccessCreateResponse(BaseModel):
 
 class BRAccessDeleteResponse(BaseModel):
     """Response after removing access."""
+
     model_config = ConfigDict(extra="forbid")
 
     success: bool = True
     message: str = "Access removed successfully"
-

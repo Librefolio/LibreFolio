@@ -13,6 +13,7 @@ See checklist: 01_test_brim_plan.md - Categories 5, 6
 Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
 Reference: backend/app/api/v1/brokers.py
 """
+
 import io
 import time
 import uuid
@@ -34,6 +35,7 @@ SAMPLE_DIR = PROJECT_ROOT / "app" / "services" / "brim_providers" / "sample_repo
 # ============================================================================
 # AUTH HELPERS
 # ============================================================================
+
 
 def unique_username() -> str:
     """Generate unique username for test isolation."""
@@ -69,6 +71,7 @@ async def create_test_user(client: httpx.AsyncClient) -> int:
 # PYTEST FIXTURES
 # ============================================================================
 
+
 @pytest.fixture(scope="module")
 def test_server():
     """Start test server once for all tests in this module."""
@@ -102,6 +105,7 @@ def sample_csv_with_assets() -> bytes:
 # CATEGORY 5: FILE STORAGE TESTS
 # ============================================================================
 
+
 class TestFileStorage:
     """Tests for file upload and storage functionality."""
 
@@ -115,7 +119,7 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200, f"Upload failed: {response.text}"
             data = response.json()
@@ -136,7 +140,7 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 400
             assert "empty" in response.json()["detail"].lower()
@@ -152,14 +156,14 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             assert upload_response.status_code == 200
 
             # List files
             list_response = await client.get(
                 f"{API_BASE}/brokers/import/files",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert list_response.status_code == 200
             data = list_response.json()
@@ -177,13 +181,13 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
 
             # Filter by 'uploaded' status
             response = await client.get(
                 f"{API_BASE}/brokers/import/files?status=uploaded",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -201,14 +205,14 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Get file info
             response = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -223,7 +227,7 @@ class TestFileStorage:
             response = await client.get(
                 f"{API_BASE}/brokers/import/files/nonexistent-uuid",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 404
 
@@ -238,14 +242,14 @@ class TestFileStorage:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Delete file
             delete_response = await client.delete(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert delete_response.status_code == 200
             assert delete_response.json()["success"] is True
@@ -254,13 +258,14 @@ class TestFileStorage:
             get_response = await client.get(
                 f"{API_BASE}/brokers/import/files/{file_id}",
                 timeout=TIMEOUT,
-                )
+            )
             assert get_response.status_code == 404
 
 
 # ============================================================================
 # CATEGORY 6: API ENDPOINTS TESTS
 # ============================================================================
+
 
 class TestParseEndpoint:
     """Tests for parse endpoint functionality."""
@@ -289,7 +294,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Parse file
@@ -298,9 +303,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             if parse_response.status_code != 200:
                 print(f"Parse error: {parse_response.text}")
@@ -326,7 +331,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Parse
@@ -335,9 +340,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert parse_response.status_code == 200
             data = parse_response.json()
@@ -362,7 +367,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Parse
@@ -371,9 +376,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert parse_response.status_code == 200
             data = parse_response.json()
@@ -395,9 +400,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "broker_generic_csv",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 404
 
@@ -413,7 +418,7 @@ class TestParseEndpoint:
                 f"{API_BASE}/brokers/import/upload",
                 files=files,
                 timeout=TIMEOUT,
-                )
+            )
             file_id = upload_response.json()["file_id"]
 
             # Parse with invalid plugin
@@ -422,9 +427,9 @@ class TestParseEndpoint:
                 json={
                     "plugin_code": "nonexistent_plugin",
                     "broker_id": broker_id,
-                    },
+                },
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 400
             assert "plugin" in response.json()["detail"].lower()
@@ -441,7 +446,7 @@ class TestPluginsEndpoint:
             response = await client.get(
                 f"{API_BASE}/brokers/import/plugins",
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()

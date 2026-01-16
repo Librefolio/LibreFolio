@@ -8,6 +8,7 @@ Security:
 - Files are validated for MIME type (prevents executable/script uploads)
 - File size is checked against global settings
 """
+
 from typing import Annotated, Optional
 
 import structlog
@@ -78,10 +79,7 @@ async def upload_file(
 
     content = await file.read()
     if len(content) > max_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size is {max_mb} MB"
-        )
+        raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {max_mb} MB")
 
     # Save file (includes security validation)
     try:
@@ -223,6 +221,7 @@ async def serve_file(file_id: str):
 # PLUGIN STATIC ASSETS
 # =============================================================================
 
+
 @router.get("/plugin/{provider_type}/{path:path}")
 async def serve_plugin_static(provider_type: str, path: str):
     """
@@ -252,7 +251,7 @@ async def serve_plugin_static(provider_type: str, path: str):
     if provider_type not in PLUGIN_STATIC_DIRS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid provider type. Must be one of: {list(PLUGIN_STATIC_DIRS.keys())}"
+            detail=f"Invalid provider type. Must be one of: {list(PLUGIN_STATIC_DIRS.keys())}",
         )
 
     # Build path and validate
@@ -273,6 +272,7 @@ async def serve_plugin_static(provider_type: str, path: str):
 
     # Guess MIME type
     import mimetypes
+
     mime_type, _ = mimetypes.guess_type(str(file_path))
     mime_type = mime_type or "application/octet-stream"
 
@@ -280,4 +280,3 @@ async def serve_plugin_static(provider_type: str, path: str):
         path=file_path,
         media_type=mime_type,
     )
-

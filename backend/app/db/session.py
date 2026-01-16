@@ -2,6 +2,7 @@
 Database session management.
 Handles SQLite connection and session lifecycle with async support.
 """
+
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -23,7 +24,7 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
     """
     Enable foreign key constraints for SQLite.
     This is required for proper referential integrity.
-    
+
     Note: This event listener applies to ALL sync engines (including the one backing async).
     """
     cursor = dbapi_conn.cursor()
@@ -37,7 +38,9 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
 # These are created ONCE at the first call, and reused throughout the app.
 # The singleton pattern ensures a single connection pool per engine.
 
-sync_engine: Engine | None = None  # For migrations, scripts populate, checks, populated in get_sync_engine()
+sync_engine: Engine | None = (
+    None  # For migrations, scripts populate, checks, populated in get_sync_engine()
+)
 async_engine: AsyncEngine | None = None  # For FastAPI app, populated in get_async_engine()
 
 
@@ -74,7 +77,7 @@ def get_sync_engine() -> Engine:
         db_url,
         echo=False,
         poolclass=NullPool,
-        )
+    )
     return sync_engine
 
 
@@ -113,13 +116,14 @@ def get_async_engine() -> AsyncEngine:
         async_db_url,
         echo=False,
         poolclass=NullPool,  # NullPool for SQLite - each connection is independent
-        )
+    )
     return async_engine
 
 
 # ============================================================================
 # SESSION FACTORY
 # ============================================================================
+
 
 async def get_session_generator() -> AsyncGenerator[AsyncSession, None]:
     """

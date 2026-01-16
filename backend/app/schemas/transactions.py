@@ -14,6 +14,7 @@ These schemas provide strict validation for API input/output.
 - Uses DateRangeModel from common.py for date filtering
 - link_uuid is used during bulk creation to link paired transactions (TRANSFER, FX_CONVERSION)
 """
+
 from __future__ import annotations
 
 from datetime import date as date_type, datetime
@@ -29,12 +30,13 @@ from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseBulkDeleteResponse,
     BaseDeleteResult,
-    )
+)
 
 
 # =============================================================================
 # SHARED VALIDATORS (DRY)
 # =============================================================================
+
 
 def validate_tags_list(v) -> Optional[List[str]]:
     """
@@ -50,7 +52,7 @@ def validate_tags_list(v) -> Optional[List[str]]:
     if v is None:
         return None
     if isinstance(v, str):
-        tags = [t.strip() for t in v.split(',') if t.strip()]
+        tags = [t.strip() for t in v.split(",") if t.strip()]
         return tags if tags else None
     if isinstance(v, list):
         tags = [str(t).strip() for t in v if str(t).strip()]
@@ -68,6 +70,7 @@ def tags_to_csv(tags: Optional[List[str]]) -> Optional[str]:
 # =============================================================================
 # TRANSACTION CREATE
 # =============================================================================
+
 
 class TXCreateItem(BaseModel):
     """
@@ -91,53 +94,47 @@ class TXCreateItem(BaseModel):
     - FX_CONVERSION: quantity = 0, cash.amount +/-, link_uuid REQUIRED
     - ADJUSTMENT: quantity +/-, cash = None
     """
+
     model_config = ConfigDict(extra="forbid")
 
     broker_id: int = Field(..., gt=0, description="Broker ID")
     asset_id: Optional[int] = Field(
-        default=None,
-        gt=0,
-        description="Asset ID. NULL for pure cash transactions"
-        )
+        default=None, gt=0, description="Asset ID. NULL for pure cash transactions"
+    )
 
     type: TransactionType = Field(..., description="Transaction type")
     date: date_type = Field(..., description="Settlement date")
 
     quantity: Decimal = Field(
-        default=Decimal("0"),
-        description="Asset quantity delta (+ in, - out)"
-        )
+        default=Decimal("0"), description="Asset quantity delta (+ in, - out)"
+    )
 
     # Cash movement using Currency class from common.py
     cash: Optional[Currency] = Field(
-        default=None,
-        description="Cash movement (code + amount). Required for cash operations."
-        )
+        default=None, description="Cash movement (code + amount). Required for cash operations."
+    )
 
     # Temporary linking for bulk create (not persisted)
     link_uuid: Optional[str] = Field(
         default=None,
         max_length=36,
-        description="Temporary UUID to link paired transactions (TRANSFER, FX_CONVERSION)"
-        )
+        description="Temporary UUID to link paired transactions (TRANSFER, FX_CONVERSION)",
+    )
 
     tags: Optional[List[str]] = Field(
-        default=None,
-        description="List of tags for filtering/grouping"
-        )
+        default=None, description="List of tags for filtering/grouping"
+    )
     description: Optional[str] = Field(
-        default=None,
-        max_length=500,
-        description="Transaction notes"
-        )
+        default=None, max_length=500, description="Transaction notes"
+    )
 
-    @field_validator('tags', mode='before')
+    @field_validator("tags", mode="before")
     @classmethod
     def _validate_tags(cls, v):
         return validate_tags_list(v)
 
-    @model_validator(mode='after')
-    def validate_transaction_rules(self) -> 'TXCreateItem':
+    @model_validator(mode="after")
+    def validate_transaction_rules(self) -> "TXCreateItem":
         """Validate transaction business rules based on 1.4 Constraint Analysis table."""
 
         # Rule 1: TRANSFER and FX_CONVERSION require link_uuid
@@ -175,7 +172,7 @@ class TXCreateItem(BaseModel):
             TransactionType.DIVIDEND,
             TransactionType.TRANSFER,
             TransactionType.ADJUSTMENT,
-            }
+        }
         if self.type in asset_required_types and not self.asset_id:
             raise ValueError(f"{self.type.value} requires asset_id")
 
@@ -195,7 +192,7 @@ class TXCreateItem(BaseModel):
             TransactionType.FEE,
             TransactionType.TAX,
             TransactionType.FX_CONVERSION,
-            }
+        }
         if self.type in cash_required_types:
             if self.cash is None:
                 raise ValueError(f"{self.type.value} requires cash (amount + currency)")
@@ -224,6 +221,7 @@ class TXCreateItem(BaseModel):
 # TRANSACTION READ
 # =============================================================================
 
+
 class TXReadItem(BaseModel):
     """
     DTO for reading a transaction from the API.
@@ -236,6 +234,7 @@ class TXReadItem(BaseModel):
     on BOTH transactions in a pair (A->B and B->A), so no separate
     linked_transaction_id field is needed.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     id: int
@@ -261,7 +260,7 @@ class TXReadItem(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_db_model(cls, tx: Transaction) -> 'TXReadItem':
+    def from_db_model(cls, tx: Transaction) -> "TXReadItem":
         """
         Create TXReadItem from database Transaction model.
 
@@ -282,7 +281,7 @@ class TXReadItem(BaseModel):
         # Convert CSV tags to list
         tags = None
         if tx.tags:
-            tags = [t.strip() for t in tx.tags.split(',') if t.strip()]
+            tags = [t.strip() for t in tx.tags.split(",") if t.strip()]
 
         return cls(
             id=tx.id,
@@ -297,12 +296,13 @@ class TXReadItem(BaseModel):
             description=tx.description,
             created_at=tx.created_at,
             updated_at=tx.updated_at,
-            )
+        )
 
 
 # =============================================================================
 # TRANSACTION UPDATE
 # =============================================================================
+
 
 class TXUpdateItem(BaseModel):
     """
@@ -320,6 +320,7 @@ class TXUpdateItem(BaseModel):
     2. Re-create them with new link_uuid
     Or send updates for BOTH transactions in the same bulk request.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., gt=0, description="Transaction ID to update")
@@ -333,7 +334,7 @@ class TXUpdateItem(BaseModel):
     tags: Optional[List[str]] = Field(default=None, description="New tags (replaces existing)")
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
 
-    @field_validator('tags', mode='before')
+    @field_validator("tags", mode="before")
     @classmethod
     def _validate_tags(cls, v):
         return validate_tags_list(v)
@@ -347,12 +348,14 @@ class TXUpdateItem(BaseModel):
 # TRANSACTION QUERY
 # =============================================================================
 
+
 class TXQueryParams(BaseModel):
     """
     Query parameters for filtering transactions.
 
     Used by GET /api/v1/transactions endpoint.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     broker_id: Optional[int] = Field(default=None, gt=0, description="Filter by broker")
@@ -368,12 +371,12 @@ class TXQueryParams(BaseModel):
     limit: int = Field(default=100, ge=1, le=1000, description="Max results")
     offset: int = Field(default=0, ge=0, description="Offset for pagination")
 
-    @field_validator('tags', mode='before')
+    @field_validator("tags", mode="before")
     @classmethod
     def _validate_tags(cls, v):
         return validate_tags_list(v)
 
-    @field_validator('currency', mode='before')
+    @field_validator("currency", mode="before")
     @classmethod
     def _validate_currency(cls, v):
         if v is None:
@@ -385,8 +388,10 @@ class TXQueryParams(BaseModel):
 # TRANSACTION DELETE
 # =============================================================================
 
+
 class TXDeleteItem(BaseModel):
     """Single transaction ID to delete."""
+
     model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., gt=0, description="Transaction ID to delete")
@@ -398,11 +403,13 @@ class TXDeleteResult(BaseDeleteResult):
 
     Extends BaseDeleteResult with transaction-specific identifier.
     """
+
     id: int = Field(..., description="Transaction ID")
 
 
 class TXBulkDeleteResponse(BaseBulkDeleteResponse[TXDeleteResult]):
     """Response for bulk transaction deletion."""
+
     pass
 
 
@@ -410,8 +417,10 @@ class TXBulkDeleteResponse(BaseBulkDeleteResponse[TXDeleteResult]):
 # BULK CREATE RESPONSE
 # =============================================================================
 
+
 class TXCreateResultItem(BaseModel):
     """Result for a single transaction creation attempt."""
+
     model_config = ConfigDict(extra="forbid")
 
     success: bool
@@ -422,6 +431,7 @@ class TXCreateResultItem(BaseModel):
 
 class TXBulkCreateResponse(BaseBulkResponse[TXCreateResultItem]):
     """Response for bulk transaction creation."""
+
     pass
 
 
@@ -429,8 +439,10 @@ class TXBulkCreateResponse(BaseBulkResponse[TXCreateResultItem]):
 # BULK UPDATE RESPONSE
 # =============================================================================
 
+
 class TXUpdateResultItem(BaseModel):
     """Result for a single transaction update attempt."""
+
     model_config = ConfigDict(extra="forbid")
 
     id: int
@@ -440,6 +452,7 @@ class TXUpdateResultItem(BaseModel):
 
 class TXBulkUpdateResponse(BaseBulkResponse[TXUpdateResultItem]):
     """Response for bulk transaction update."""
+
     pass
 
 
@@ -462,6 +475,7 @@ class TXTypeMetadata(BaseModel):
     Used by GET /api/v1/transactions/types endpoint.
     Frontend uses this to validate user input before submission.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="Enum code (e.g., 'BUY')")
@@ -470,7 +484,10 @@ class TXTypeMetadata(BaseModel):
     icon: str = Field(..., description="Icon identifier or emoji")
 
     # Validation rules for frontend
-    asset_mode: AssetMode = Field(..., description="REQUIRED: must have asset_id, OPTIONAL: can have, FORBIDDEN: must not have")
+    asset_mode: AssetMode = Field(
+        ...,
+        description="REQUIRED: must have asset_id, OPTIONAL: can have, FORBIDDEN: must not have",
+    )
     requires_link: bool = Field(..., description="Whether link_uuid is required")
     requires_cash: bool = Field(..., description="Whether cash is required")
 
@@ -483,58 +500,124 @@ class TXTypeMetadata(BaseModel):
 # Precomputed metadata for all transaction types
 TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
     TransactionType.BUY: TXTypeMetadata(
-        code="BUY", name="Buy", description="Purchase asset with cash", icon="🛒",
-        asset_mode="REQUIRED", requires_link=False, requires_cash=True,
-        allowed_quantity_sign="+", allowed_cash_sign="-",
-        ),
+        code="BUY",
+        name="Buy",
+        description="Purchase asset with cash",
+        icon="🛒",
+        asset_mode="REQUIRED",
+        requires_link=False,
+        requires_cash=True,
+        allowed_quantity_sign="+",
+        allowed_cash_sign="-",
+    ),
     TransactionType.SELL: TXTypeMetadata(
-        code="SELL", name="Sell", description="Sell asset for cash", icon="💸",
-        asset_mode="REQUIRED", requires_link=False, requires_cash=True,
-        allowed_quantity_sign="-", allowed_cash_sign="+",
-        ),
+        code="SELL",
+        name="Sell",
+        description="Sell asset for cash",
+        icon="💸",
+        asset_mode="REQUIRED",
+        requires_link=False,
+        requires_cash=True,
+        allowed_quantity_sign="-",
+        allowed_cash_sign="+",
+    ),
     TransactionType.DIVIDEND: TXTypeMetadata(
-        code="DIVIDEND", name="Dividend", description="Dividend payment received", icon="💵",
-        asset_mode="REQUIRED", requires_link=False, requires_cash=True,
-        allowed_quantity_sign="0", allowed_cash_sign="+",
-        ),
+        code="DIVIDEND",
+        name="Dividend",
+        description="Dividend payment received",
+        icon="💵",
+        asset_mode="REQUIRED",
+        requires_link=False,
+        requires_cash=True,
+        allowed_quantity_sign="0",
+        allowed_cash_sign="+",
+    ),
     TransactionType.INTEREST: TXTypeMetadata(
-        code="INTEREST", name="Interest", description="Interest payment (bond or deposit)", icon="📈",
-        asset_mode="OPTIONAL", requires_link=False, requires_cash=True,
-        allowed_quantity_sign="0", allowed_cash_sign="+",
-        ),
+        code="INTEREST",
+        name="Interest",
+        description="Interest payment (bond or deposit)",
+        icon="📈",
+        asset_mode="OPTIONAL",
+        requires_link=False,
+        requires_cash=True,
+        allowed_quantity_sign="0",
+        allowed_cash_sign="+",
+    ),
     TransactionType.DEPOSIT: TXTypeMetadata(
-        code="DEPOSIT", name="Deposit", description="Add cash to broker account", icon="💰",
-        asset_mode="FORBIDDEN", requires_link=False, requires_cash=True,
-        allowed_quantity_sign="0", allowed_cash_sign="+",
-        ),
+        code="DEPOSIT",
+        name="Deposit",
+        description="Add cash to broker account",
+        icon="💰",
+        asset_mode="FORBIDDEN",
+        requires_link=False,
+        requires_cash=True,
+        allowed_quantity_sign="0",
+        allowed_cash_sign="+",
+    ),
     TransactionType.WITHDRAWAL: TXTypeMetadata(
-        code="WITHDRAWAL", name="Withdrawal", description="Remove cash from broker account", icon="🏧",
-        asset_mode="FORBIDDEN", requires_link=False, requires_cash=True,
-        allowed_quantity_sign="0", allowed_cash_sign="-",
-        ),
+        code="WITHDRAWAL",
+        name="Withdrawal",
+        description="Remove cash from broker account",
+        icon="🏧",
+        asset_mode="FORBIDDEN",
+        requires_link=False,
+        requires_cash=True,
+        allowed_quantity_sign="0",
+        allowed_cash_sign="-",
+    ),
     TransactionType.FEE: TXTypeMetadata(
-        code="FEE", name="Fee", description="Fee or commission (trading or account)", icon="📋",
-        asset_mode="OPTIONAL", requires_link=False, requires_cash=True,
-        allowed_quantity_sign="0", allowed_cash_sign="-",
-        ),
+        code="FEE",
+        name="Fee",
+        description="Fee or commission (trading or account)",
+        icon="📋",
+        asset_mode="OPTIONAL",
+        requires_link=False,
+        requires_cash=True,
+        allowed_quantity_sign="0",
+        allowed_cash_sign="-",
+    ),
     TransactionType.TAX: TXTypeMetadata(
-        code="TAX", name="Tax", description="Tax payment (capital gain or stamp duty)", icon="🏛️",
-        asset_mode="OPTIONAL", requires_link=False, requires_cash=True,
-        allowed_quantity_sign="0", allowed_cash_sign="-",
-        ),
+        code="TAX",
+        name="Tax",
+        description="Tax payment (capital gain or stamp duty)",
+        icon="🏛️",
+        asset_mode="OPTIONAL",
+        requires_link=False,
+        requires_cash=True,
+        allowed_quantity_sign="0",
+        allowed_cash_sign="-",
+    ),
     TransactionType.TRANSFER: TXTypeMetadata(
-        code="TRANSFER", name="Transfer", description="Asset transfer between brokers", icon="🔄",
-        asset_mode="REQUIRED", requires_link=True, requires_cash=False,
-        allowed_quantity_sign="+/-", allowed_cash_sign="0",
-        ),
+        code="TRANSFER",
+        name="Transfer",
+        description="Asset transfer between brokers",
+        icon="🔄",
+        asset_mode="REQUIRED",
+        requires_link=True,
+        requires_cash=False,
+        allowed_quantity_sign="+/-",
+        allowed_cash_sign="0",
+    ),
     TransactionType.FX_CONVERSION: TXTypeMetadata(
-        code="FX_CONVERSION", name="FX Conversion", description="Currency exchange", icon="💱",
-        asset_mode="FORBIDDEN", requires_link=True, requires_cash=True,
-        allowed_quantity_sign="0", allowed_cash_sign="+/-",
-        ),
+        code="FX_CONVERSION",
+        name="FX Conversion",
+        description="Currency exchange",
+        icon="💱",
+        asset_mode="FORBIDDEN",
+        requires_link=True,
+        requires_cash=True,
+        allowed_quantity_sign="0",
+        allowed_cash_sign="+/-",
+    ),
     TransactionType.ADJUSTMENT: TXTypeMetadata(
-        code="ADJUSTMENT", name="Adjustment", description="Manual quantity correction (splits, gifts)", icon="⚙️",
-        asset_mode="REQUIRED", requires_link=False, requires_cash=False,
-        allowed_quantity_sign="+/-", allowed_cash_sign="0",
-        ),
-    }
+        code="ADJUSTMENT",
+        name="Adjustment",
+        description="Manual quantity correction (splits, gifts)",
+        icon="⚙️",
+        asset_mode="REQUIRED",
+        requires_link=False,
+        requires_cash=False,
+        allowed_quantity_sign="+/-",
+        allowed_cash_sign="0",
+    ),
+}

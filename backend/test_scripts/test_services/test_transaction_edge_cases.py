@@ -8,6 +8,7 @@ Reference:
 - backend/app/services/transaction_service.py
 - backend/app/schemas/transactions.py
 """
+
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
@@ -40,6 +41,7 @@ from backend.app.utils.datetime_utils import utcnow
 # PYTEST FIXTURES
 # ============================================================================
 
+
 @pytest.fixture(scope="module")
 def engine():
     """Get async engine."""
@@ -58,6 +60,7 @@ async def session(engine):
 async def test_broker(session) -> Broker:
     """Create a test broker with overdraft enabled for edge case testing."""
     import uuid
+
     broker = Broker(
         name=f"Edge Case Test Broker {uuid.uuid4().hex[:8]}",
         description="Broker for edge case tests",
@@ -65,7 +68,7 @@ async def test_broker(session) -> Broker:
         allow_asset_shorting=True,
         created_at=utcnow(),
         updated_at=utcnow(),
-        )
+    )
     session.add(broker)
     await session.flush()
     return broker
@@ -75,13 +78,14 @@ async def test_broker(session) -> Broker:
 async def test_asset(session) -> Asset:
     """Create a test asset for edge case testing."""
     import uuid
+
     asset = Asset(
         display_name=f"Edge Case Test Asset {uuid.uuid4().hex[:8]}",
         asset_type=AssetType.STOCK,
         currency="EUR",
         created_at=utcnow(),
         updated_at=utcnow(),
-        )
+    )
     session.add(asset)
     await session.flush()
     return asset
@@ -90,6 +94,7 @@ async def test_asset(session) -> Asset:
 # ============================================================================
 # 6.1 DECIMAL PRECISION
 # ============================================================================
+
 
 class TestDecimalPrecision:
     """Test decimal precision for amounts and quantities."""
@@ -105,8 +110,8 @@ class TestDecimalPrecision:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("0.000001")),
-                )
-            ]
+            )
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -131,8 +136,8 @@ class TestDecimalPrecision:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-                )
-            ]
+            )
+        ]
         await service.create_bulk(deposit)
         await session.commit()
 
@@ -145,8 +150,8 @@ class TestDecimalPrecision:
                 date=date.today(),
                 quantity=Decimal("0.000001"),
                 cash=Currency(code="EUR", amount=Decimal("-0.01")),
-                )
-            ]
+            )
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -180,8 +185,8 @@ class TestDecimalPrecision:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=large_amount),
-                )
-            ]
+            )
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -200,6 +205,7 @@ class TestDecimalPrecision:
 # 6.2 CURRENCY VALIDATION
 # ============================================================================
 
+
 class TestCurrencyValidation:
     """Test currency validation in transactions."""
 
@@ -214,14 +220,14 @@ class TestCurrencyValidation:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-                ),
+            ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="USD", amount=Decimal("100")),
-                ),
-            ]
+            ),
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -239,14 +245,14 @@ class TestCurrencyValidation:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="BTC", amount=Decimal("0.5")),
-                ),
+            ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="ETH", amount=Decimal("2.0")),
-                ),
-            ]
+            ),
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -262,12 +268,13 @@ class TestCurrencyValidation:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="ZZZ", amount=Decimal("100")),
-                )
+            )
 
 
 # ============================================================================
 # 6.3 DATE EDGE CASES
 # ============================================================================
+
 
 class TestDateEdgeCases:
     """Test date-related edge cases."""
@@ -286,30 +293,31 @@ class TestDateEdgeCases:
                 type=TransactionType.DEPOSIT,
                 date=target_date - timedelta(days=1),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-                ),
+            ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.DEPOSIT,
                 date=target_date,
                 cash=Currency(code="EUR", amount=Decimal("200")),
-                ),
+            ),
             TXCreateItem(
                 broker_id=test_broker.id,
                 type=TransactionType.DEPOSIT,
                 date=target_date + timedelta(days=1),
                 cash=Currency(code="EUR", amount=Decimal("300")),
-                ),
-            ]
+            ),
+        ]
 
         await service.create_bulk(items)
         await session.commit()
 
         # Query with same start and end date
         from backend.app.schemas.common import DateRangeModel
+
         params = TXQueryParams(
             broker_id=test_broker.id,
             date_range=DateRangeModel(start=target_date, end=target_date),
-            )
+        )
 
         results = await service.query(params)
 
@@ -330,7 +338,7 @@ class TestDateEdgeCases:
             allow_asset_shorting=False,
             created_at=utcnow(),
             updated_at=utcnow(),
-            )
+        )
         session.add(broker)
         await session.flush()
 
@@ -343,20 +351,20 @@ class TestDateEdgeCases:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("1000")),
-                ),
+            ),
             TXCreateItem(
                 broker_id=broker.id,
                 type=TransactionType.WITHDRAWAL,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-500")),
-                ),
+            ),
             TXCreateItem(
                 broker_id=broker.id,
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("200")),
-                ),
-            ]
+            ),
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -377,7 +385,7 @@ class TestDateEdgeCases:
             allow_asset_shorting=False,
             created_at=utcnow(),
             updated_at=utcnow(),
-            )
+        )
         session.add(broker)
         await session.flush()
 
@@ -392,20 +400,20 @@ class TestDateEdgeCases:
                 type=TransactionType.DEPOSIT,
                 date=base_date,  # Day 0
                 cash=Currency(code="EUR", amount=Decimal("1000")),
-                ),
+            ),
             TXCreateItem(
                 broker_id=broker.id,
                 type=TransactionType.WITHDRAWAL,
                 date=base_date + timedelta(days=5),  # Day 5
                 cash=Currency(code="EUR", amount=Decimal("-300")),
-                ),
+            ),
             TXCreateItem(
                 broker_id=broker.id,
                 type=TransactionType.WITHDRAWAL,
                 date=base_date + timedelta(days=10),  # Day 10
                 cash=Currency(code="EUR", amount=Decimal("-200")),
-                ),
-            ]
+            ),
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -418,6 +426,7 @@ class TestDateEdgeCases:
 # ============================================================================
 # 6.4 EMPTY/NULL HANDLING
 # ============================================================================
+
 
 class TestEmptyNullHandling:
     """Test empty and null value handling."""
@@ -434,8 +443,8 @@ class TestEmptyNullHandling:
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
                 tags=None,
-                )
-            ]
+            )
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -460,8 +469,8 @@ class TestEmptyNullHandling:
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
                 tags=[],
-                )
-            ]
+            )
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -486,8 +495,8 @@ class TestEmptyNullHandling:
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
                 description=None,
-                )
-            ]
+            )
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -512,20 +521,21 @@ class TestEmptyNullHandling:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("100")),
-                )
-            ]
+            )
+        ]
         await service.create_bulk(items)
         await session.commit()
 
         # Query with impossible date range (in the past before any transactions)
         from backend.app.schemas.common import DateRangeModel
+
         params = TXQueryParams(
             broker_id=test_broker.id,
             date_range=DateRangeModel(
                 start=date(1900, 1, 1),
                 end=date(1900, 1, 31),
-                ),
-            )
+            ),
+        )
 
         results = await service.query(params)
 
@@ -537,6 +547,7 @@ class TestEmptyNullHandling:
 # ============================================================================
 # 6.5 ADDITIONAL EDGE CASES
 # ============================================================================
+
 
 class TestAdditionalEdgeCases:
     """Additional edge cases for robustness."""
@@ -555,7 +566,7 @@ class TestAdditionalEdgeCases:
             type=TransactionType.ADJUSTMENT,
             date=date.today(),
             quantity=Decimal("0"),
-            )
+        )
         # If we reach here, it means zero quantity is accepted
         assert item.quantity == Decimal("0")
 
@@ -569,7 +580,7 @@ class TestAdditionalEdgeCases:
                 type=TransactionType.DEPOSIT,
                 date=date.today(),
                 cash=Currency(code="EUR", amount=Decimal("-100")),
-                )
+            )
             # If it passes schema, document it
             assert item.cash.amount == Decimal("-100")
         except ValidationError:
@@ -589,8 +600,8 @@ class TestAdditionalEdgeCases:
                 type=TransactionType.DEPOSIT,
                 date=future_date,
                 cash=Currency(code="EUR", amount=Decimal("100")),
-                )
-            ]
+            )
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()
@@ -611,8 +622,8 @@ class TestAdditionalEdgeCases:
                 type=TransactionType.DEPOSIT,
                 date=old_date,
                 cash=Currency(code="EUR", amount=Decimal("100")),
-                )
-            ]
+            )
+        ]
 
         result = await service.create_bulk(items)
         await session.commit()

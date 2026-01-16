@@ -63,6 +63,7 @@ Pipfile.lock
 
 # MkDocs
 mkdocs_src/site/
+mkdocs_src/docs/javascripts/vendor/
 
 # Coverage reports
 htmlcov/

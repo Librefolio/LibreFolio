@@ -25,6 +25,7 @@ async def test_bulk_refresh_prices_orchestration():
     AssetProviderRegistry.auto_discover()
 
     import time
+
     timestamp = int(time.time() * 1000)
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
@@ -34,27 +35,37 @@ async def test_bulk_refresh_prices_orchestration():
             currency="USD",
             asset_type=AssetType.STOCK,
             active=True,
-            )
+        )
         session.add(asset)
         await session.commit()
         await session.refresh(asset)
 
         # Assign a mock provider that returns deterministic prices
         from backend.app.db.models import IdentifierType
-        await AssetSourceManager.bulk_assign_providers([
-            FAProviderAssignmentItem(
-                asset_id=asset.id,
-                provider_code="mockprov",
-                identifier="REFRESH_TEST",
-                identifier_type=IdentifierType.UUID,
-                provider_params={},
-                fetch_interval=1440  # Optional but added for completeness
+
+        await AssetSourceManager.bulk_assign_providers(
+            [
+                FAProviderAssignmentItem(
+                    asset_id=asset.id,
+                    provider_code="mockprov",
+                    identifier="REFRESH_TEST",
+                    identifier_type=IdentifierType.UUID,
+                    provider_params={},
+                    fetch_interval=1440,  # Optional but added for completeness
                 )
-            ], session)
+            ],
+            session,
+        )
 
         # Execute refresh - expect prices to be inserted
         from backend.app.schemas.common import DateRangeModel
-        payload = [FARefreshItem(asset_id=asset.id, date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)))]
+
+        payload = [
+            FARefreshItem(
+                asset_id=asset.id,
+                date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
+            )
+        ]
         results = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         # Verify results
