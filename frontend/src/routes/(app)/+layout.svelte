@@ -45,11 +45,11 @@
 
 {#if $i18nLoading}
     <!-- Loading screen while translations load -->
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige">
-        <div class="text-libre-green text-xl">Loading...</div>
+    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">
+        <div class="text-libre-green dark:text-green-400 text-xl">Loading...</div>
     </div>
 {:else if $isAuthenticated}
-    <div class="min-h-screen bg-libre-beige">
+    <div class="min-h-screen bg-libre-beige dark:bg-slate-900">
         <!-- Sidebar -->
         <Sidebar bind:isOpen={sidebarOpen} bind:collapsed={sidebarCollapsed}/>
 
@@ -66,8 +66,8 @@
     </div>
 {:else}
     <!-- Loading while checking auth -->
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige">
-        <div class="text-libre-green text-xl">Checking authentication...</div>
+    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">
+        <div class="text-libre-green dark:text-green-400 text-xl">Checking authentication...</div>
     </div>
 {/if}
 

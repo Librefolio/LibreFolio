@@ -42,3 +42,199 @@ html {
     font-family: Inter, system-ui, sans-serif;
 }
 
+/* Utility: Hidden scrollbar but still scrollable */
+.scrollbar-hidden {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+/* ===== Theme System ===== */
+
+/* Light theme (default) */
+:root,
+html.light {
+    --theme-bg-primary: #ffffff;
+    --theme-bg-secondary: #f9fafb;
+    --theme-bg-tertiary: #f3f4f6;
+    --theme-bg-card: #ffffff;
+    --theme-bg-hover: #f3f4f6;
+
+    --theme-text-primary: #111827;
+    --theme-text-secondary: #4b5563;
+    --theme-text-tertiary: #9ca3af;
+    --theme-text-muted: #6b7280;
+
+    --theme-border-primary: #e5e7eb;
+    --theme-border-secondary: #f3f4f6;
+
+    --theme-accent: #1a4031;
+    --theme-accent-hover: #173a2c;
+    --theme-accent-bg: rgba(26, 64, 49, 0.1);
+
+    --theme-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    --theme-shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* Dark theme */
+html.dark {
+    --theme-bg-primary: #0f172a;
+    --theme-bg-secondary: #1e293b;
+    --theme-bg-tertiary: #334155;
+    --theme-bg-card: #1e293b;
+    --theme-bg-hover: #334155;
+
+    --theme-text-primary: #f8fafc;
+    --theme-text-secondary: #cbd5e1;
+    --theme-text-tertiary: #64748b;
+    --theme-text-muted: #94a3b8;
+
+    --theme-border-primary: #334155;
+    --theme-border-secondary: #1e293b;
+
+    --theme-accent: #22c55e;
+    --theme-accent-hover: #16a34a;
+    --theme-accent-bg: rgba(34, 197, 94, 0.15);
+
+    --theme-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --theme-shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.4);
+
+    color-scheme: dark;
+}
+
+/* Apply theme to common elements */
+html.dark body {
+    background-color: var(--theme-bg-primary);
+    color: var(--theme-text-primary);
+}
+
+html.dark .bg-white {
+    background-color: var(--theme-bg-card) !important;
+}
+
+html.dark .bg-gray-50 {
+    background-color: var(--theme-bg-secondary) !important;
+}
+
+html.dark .bg-gray-100 {
+    background-color: var(--theme-bg-tertiary) !important;
+}
+
+html.dark .text-gray-800,
+html.dark .text-gray-900 {
+    color: var(--theme-text-primary) !important;
+}
+
+html.dark .text-gray-600,
+html.dark .text-gray-700 {
+    color: var(--theme-text-secondary) !important;
+}
+
+html.dark .text-gray-400,
+html.dark .text-gray-500 {
+    color: var(--theme-text-muted) !important;
+}
+
+html.dark .border-gray-100,
+html.dark .border-gray-200 {
+    border-color: var(--theme-border-primary) !important;
+}
+
+html.dark .border-gray-300 {
+    border-color: var(--theme-border-secondary) !important;
+}
+
+html.dark .shadow-sm,
+html.dark .shadow {
+    --tw-shadow: var(--theme-shadow);
+}
+
+html.dark .hover\:bg-gray-100:hover {
+    background-color: var(--theme-bg-hover) !important;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+    background-color: var(--theme-bg-secondary);
+    border-color: var(--theme-border-primary);
+    color: var(--theme-text-primary);
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+    color: var(--theme-text-tertiary);
+}
+
+/* Dark mode: Main background and beige areas */
+html.dark .bg-libre-beige {
+    background-color: var(--theme-bg-primary) !important;
+}
+
+html.dark .bg-surface-100 {
+    background-color: var(--theme-bg-secondary) !important;
+}
+
+/* Dark mode: Text colors on brand elements */
+html.dark .text-libre-dark {
+    color: var(--theme-text-primary) !important;
+}
+
+html.dark .text-libre-green {
+    color: #4ade80 !important; /* Lighter green for dark mode */
+}
+
+/* Dark mode: Cards and modals */
+html.dark .bg-white\/90,
+html.dark .bg-white\/95 {
+    background-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+/* Dark mode: Rounded containers */
+html.dark .rounded-xl,
+html.dark .rounded-2xl {
+    border-color: var(--theme-border-primary);
+}
+
+/* Dark mode: Hover states */
+html.dark .hover\:bg-gray-50:hover {
+    background-color: var(--theme-bg-hover) !important;
+}
+
+/* Dark mode: Focus rings */
+html.dark .focus\:ring-libre-green:focus {
+    --tw-ring-color: #4ade80;
+}
+
+/* Dark mode: Dropdown/Select options */
+html.dark option {
+    background-color: var(--theme-bg-secondary);
+    color: var(--theme-text-primary);
+}
+
+/* Dark mode: Shadows more visible */
+html.dark .shadow-lg {
+    --tw-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+}
+
+html.dark .shadow-xl {
+    --tw-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode: Primary buttons */
+html.dark .bg-libre-green {
+    background-color: #166534 !important; /* Darker green for better contrast */
+}
+
+html.dark .bg-libre-green:hover {
+    background-color: #15803d !important;
+}
+
+/* Dark mode: AnimatedBackground (login page) */
+html.dark .animated-bg-gradient {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+}
+
+

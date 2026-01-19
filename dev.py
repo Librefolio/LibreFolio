@@ -285,27 +285,6 @@ def cmd_api_sync(args):
     return cmd_api_client(args)
 
 
-# =============================================================================
-# i18n Commands
-# =============================================================================
-
-def cmd_i18n_audit(args):
-    """Audit translations."""
-    fmt = args.format or "md"
-    print(Colors.success(f"Auditing translations (format: {fmt})..."))
-    return run_pipenv(["python", "frontend/scripts/i18n_audit.py", "--format", fmt])
-
-
-# =============================================================================
-# Cache Commands
-# =============================================================================
-
-def cmd_cache_js(args):
-    """Update JS library cache."""
-    print(Colors.success("Updating JS library cache..."))
-    extra_args = ["--force"] if args.force else []
-    return run_pipenv(["python", "scripts/update_js_cache.py"] + extra_args)
-
 
 # =============================================================================
 # Info Commands
@@ -657,22 +636,15 @@ Examples:
     api_p = api_sub.add_parser("sync", help="Export schema + generate client")
     api_p.set_defaults(func=cmd_api_sync)
 
-    # i18n
-    p = subparsers.add_parser("i18n", help="📦 Translation commands")
-    i18n_sub = p.add_subparsers(dest="i18n_cmd", metavar="action")
+    # i18n - Import from frontend/scripts/i18n-audit.py
+    sys.path.insert(0, str(PROJECT_ROOT / "frontend" / "scripts"))
+    from importlib import import_module
+    i18n_module = import_module("i18n-audit")
+    i18n_module.register_subparser(subparsers)
 
-    i18n_p = i18n_sub.add_parser("audit", help="Audit translations for missing keys")
-    i18n_p.add_argument("--format", "-f", choices=["md", "xlsx", "both"], default="md",
-                        help="Output format (default: md)")
-    i18n_p.set_defaults(func=cmd_i18n_audit)
-
-    # Cache
-    p = subparsers.add_parser("cache", help="📦 Cache management")
-    cache_sub = p.add_subparsers(dest="cache_cmd", metavar="action")
-
-    cache_p = cache_sub.add_parser("js", help="Update JS library cache")
-    cache_p.add_argument("--force", "-f", action="store_true", help="Force re-download")
-    cache_p.set_defaults(func=cmd_cache_js)
+    # Cache - Import from scripts/update_js_cache.py
+    from scripts.update_js_cache import register_subparser as register_cache_parser
+    register_cache_parser(subparsers)
 
     # Info
     p = subparsers.add_parser("info", help="📦 Information commands")

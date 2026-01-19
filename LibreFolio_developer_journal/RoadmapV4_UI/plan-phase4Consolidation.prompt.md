@@ -5,7 +5,7 @@ polish UX. Ordine: backend fix → backend nuovo → test API → frontend.
 
 ---
 
-## 📊 Stato Attuale (16 Gennaio 2026)
+## 📊 Stato Attuale (19 Gennaio 2026)
 
 | Step | Descrizione | Stato |
 |------|-------------|-------|
@@ -18,13 +18,13 @@ polish UX. Ordine: backend fix → backend nuovo → test API → frontend.
 | 7 | Cache JS | ✅ COMPLETATO |
 | 8 | Componenti UI | ✅ COMPLETATO |
 | 9 | Pagina Files | ✅ COMPLETATO |
-| 10 | Fix UX Brokers | 🔲 Da fare |
-| 11 | Temi Light/Dark | 🔲 Da fare |
-| 12 | User Preferences UI | 🔲 Da fare |
-| 13 | Aggiornamento docs | 🔲 Da fare |
+| 10 | Fix UX Brokers | ✅ COMPLETATO |
+| 11 | Temi Light/Dark | ✅ COMPLETATO |
+| 12 | User Preferences UI | ✅ COMPLETATO |
+| 13 | Aggiornamento docs | ✅ COMPLETATO |
 | 14 | Migrazione dev.sh → dev.py | ✅ COMPLETATO |
 
-**Progresso: 10/14 step completati (71%)**
+**Progresso: 14/14 step completati (100%) 🎉**
 
 ---
 

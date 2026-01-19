@@ -29,6 +29,8 @@ Provides RESTful endpoints for broker report file management and parsing:
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi.responses import FileResponse
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -580,6 +582,29 @@ async def delete_file(file_id: str) -> dict:
 
     logger.info("File deleted", file_id=file_id)
     return {"success": True, "file_id": file_id}
+
+
+@brim_router.get("/files/{file_id}/download")
+async def download_file(file_id: str):
+    """
+    Download a file by its ID.
+
+    Returns the file content with appropriate headers for download.
+    """
+
+    file_info = brim_provider.get_file_info(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_path = brim_provider.get_file_path(file_id)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail="File content not found")
+
+    return FileResponse(
+        path=file_path,
+        filename=file_info.filename,
+        media_type="application/octet-stream"
+    )
 
 
 # =============================================================================

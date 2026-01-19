@@ -21,7 +21,12 @@
     "noData": "No data available",
     "welcome": "Welcome",
     "comingSoon": "Coming Soon",
-    "copied": "Copied!"
+    "copied": "Copied!",
+    "undoAll": "Undo All",
+    "saveAll": "Save All",
+    "resetAll": "Reset All to Defaults",
+    "undo": "Undo",
+    "reset": "Reset to Default"
   },
   "error": {
     "pageNotFound": "Page Not Found",
@@ -296,7 +301,14 @@
       "price_sync_interval_hours": "hours",
       "max_file_upload_mb": "MB"
     },
-    "selectCurrency": "Select currency..."
+    "selectCurrency": "Select currency...",
+    "categoryAll": "All",
+    "categoryDisplay": "Display",
+    "categoryCurrency": "Currency",
+    "categoryAppearance": "Appearance",
+    "defaultCurrency": "Default Currency",
+    "defaultCurrencyHint": "Currency used by default for new transactions and calculations",
+    "themeHint": "Choose your preferred color scheme"
   },
   "uploads": {
     "dropOrClick": "Drop file here or click to browse",

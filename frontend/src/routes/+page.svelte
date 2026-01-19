@@ -7,6 +7,7 @@
     import RegisterModal from '$lib/components/auth/RegisterModal.svelte';
     import ForgotPasswordModal from '$lib/components/auth/ForgotPasswordModal.svelte';
     import LanguageSelector from '$lib/components/LanguageSelector.svelte';
+    import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
     import {auth} from '$lib/stores/auth';
     import {page} from '$app/stores';
 
@@ -70,9 +71,10 @@
     </div>
 {:else}
     <div class="min-h-screen flex items-center justify-center p-4">
-        <!-- Language Selector (top right) -->
-        <div class="fixed top-4 right-4 z-50">
+        <!-- Language & Theme Selector (top right) -->
+        <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
             <LanguageSelector variant="dropdown"/>
+            <ThemeToggle />
         </div>
 
         <!-- Modal Container - Cambio istantaneo senza transizione -->

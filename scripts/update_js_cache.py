@@ -238,22 +238,47 @@ def update_all_libraries(force: bool = False):
     return updated_count
 
 
-def main():
-    """CLI entry point."""
-    force = "--force" in sys.argv or "-f" in sys.argv
+def add_arguments(parser) -> None:
+    """Add arguments to a parser (reusable for both standalone and subparser)."""
+    parser.add_argument("--force", "-f", action="store_true",
+                        help="Force re-download even if cached")
 
-    if "--help" in sys.argv or "-h" in sys.argv:
-        print(__doc__)
-        sys.exit(0)
 
+def run_from_args(args) -> int:
+    """Execute the command from parsed args."""
     try:
-        update_all_libraries(force=force)
+        update_all_libraries(force=getattr(args, 'force', False))
+        return 0
     except KeyboardInterrupt:
         print("\n⚠️  Interrupted")
-        sys.exit(1)
+        return 1
     except Exception as e:
         print(f"❌ Error: {e}")
-        sys.exit(1)
+        return 1
+
+
+def main():
+    """CLI entry point."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="JS Library Cache Manager",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
+    )
+    add_arguments(parser)
+    args = parser.parse_args()
+    sys.exit(run_from_args(args))
+
+
+def register_subparser(subparsers) -> None:
+    """Register as subparser for dev.py integration."""
+    p = subparsers.add_parser("cache", help="📦 Cache management")
+    cache_sub = p.add_subparsers(dest="cache_cmd", metavar="action")
+
+    js_p = cache_sub.add_parser("js", help="Update JS library cache")
+    add_arguments(js_p)
+    js_p.set_defaults(func=run_from_args)
 
 
 if __name__ == "__main__":
