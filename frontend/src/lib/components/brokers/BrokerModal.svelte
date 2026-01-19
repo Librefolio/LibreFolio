@@ -130,22 +130,22 @@
     >
         <!-- Modal -->
         <div
-                class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+                class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
                 role="dialog"
                 tabindex="-1"
                 on:click|stopPropagation
                 on:keydown|stopPropagation
                 on:input={handleFormChange}
         >
-            <!-- Header -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-100">
-                <h2 class="text-xl font-semibold text-gray-800">
+            <!-- Header (sticky top) -->
+            <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
                     {mode === 'create' ? $_('brokers.addBroker') : $_('brokers.editBroker')}
                 </h2>
                 <button
                         on:click={handleClose}
                         disabled={loading}
-                        class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                        class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
                 >
                     <X size={20}/>
                 </button>
@@ -153,20 +153,22 @@
 
             <!-- Error message -->
             {#if error}
-                <div class="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <div class="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm shrink-0">
                     {error}
                 </div>
             {/if}
 
-            <!-- Form -->
-            <div class="p-4">
-                <BrokerForm
-                        {mode}
-                        {initialData}
-                        {loading}
-                        on:submit={handleSubmit}
-                        on:cancel={handleClose}
-                />
+            <!-- Form (scrollable area with sticky footer inside) -->
+            <div class="overflow-y-auto flex-1 min-h-0 scrollbar-hidden">
+                <div class="p-4 pb-0">
+                    <BrokerForm
+                            {mode}
+                            {initialData}
+                            {loading}
+                            on:submit={handleSubmit}
+                            on:cancel={handleClose}
+                    />
+                </div>
             </div>
         </div>
     </div>

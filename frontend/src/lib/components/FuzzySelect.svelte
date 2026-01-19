@@ -123,19 +123,19 @@
             on:click={openDropdown}
             on:keydown={handleKeydown}
             {disabled}
-            class="w-full flex items-center justify-between px-4 py-2.5 border rounded-lg bg-white
+            class="w-full flex items-center justify-between px-4 py-2.5 border rounded-lg bg-white dark:bg-slate-700
                    transition-all text-left
-                   {disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'border-gray-300 hover:border-gray-400'}
+                   {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}
                    {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
     >
         {#if selectedOption}
             <div class="flex items-center space-x-2 min-w-0">
                 {#if selectedOption.icon && selectedOption.icon !== selectedOption.code}
-                    <span class="text-lg shrink-0 w-8 h-8 flex items-center justify-center bg-libre-green/15 rounded-lg">{selectedOption.icon}</span>
+                    <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium">{selectedOption.icon}</span>
                 {/if}
                 <div class="min-w-0">
-                    <div class="font-medium text-gray-900">{selectedOption.code}</div>
-                    <div class="text-xs text-gray-500 truncate">{selectedOption.label}</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100">{selectedOption.code}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{selectedOption.label}</div>
                 </div>
             </div>
         {:else}
@@ -146,10 +146,10 @@
 
     <!-- Dropdown -->
     {#if isOpen}
-        <div class="absolute z-50 w-full min-w-80 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden
+        <div class="absolute z-50 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden
                     {dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}">
             <!-- Search Input -->
-            <div class="p-2 border-b border-gray-100">
+            <div class="p-2 border-b border-gray-100 dark:border-slate-700">
                 <div class="relative">
                     <Search size={16} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
                     <input
@@ -157,7 +157,7 @@
                             bind:value={searchQuery}
                             on:keydown={handleKeydown}
                             type="text"
-                            class="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-lg
+                            class="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg
                                    focus:outline-none focus:ring-2 focus:ring-libre-green focus:border-libre-green"
                             placeholder={$_('common.search')}
                     />
@@ -175,11 +175,11 @@
             <!-- Options List -->
             <div class="max-h-60 overflow-y-auto">
                 {#if loading}
-                    <div class="px-4 py-8 text-center text-gray-500">
+                    <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                         {$_('common.loading')}
                     </div>
                 {:else if filteredOptions.length === 0}
-                    <div class="px-4 py-8 text-center text-gray-500">
+                    <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                         {$_('common.noData')}
                     </div>
                 {:else}
@@ -189,15 +189,15 @@
                                 on:click={() => selectOption(option)}
                                 on:mouseenter={() => highlightedIndex = index}
                                 class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
-                                       {index === highlightedIndex ? 'bg-libre-green/10' : 'hover:bg-gray-50'}
-                                       {option.code === value ? 'bg-libre-green/5 font-medium' : ''}"
+                                       {index === highlightedIndex ? 'bg-libre-green/10 dark:bg-libre-green/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}
+                                       {option.code === value ? 'bg-libre-green/5 dark:bg-libre-green/10 font-medium' : ''}"
                         >
                             {#if option.icon && option.icon !== option.code}
-                                <span class="text-lg w-8 h-8 flex items-center justify-center bg-libre-green/15 rounded-lg shrink-0">{option.icon}</span>
+                                <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium">{option.icon}</span>
                             {/if}
                             <div class="min-w-0 flex-1">
-                                <div class="font-mono text-sm text-gray-700">{option.code}</div>
-                                <div class="text-xs text-gray-500 truncate">{option.label}</div>
+                                <div class="font-mono text-sm text-gray-700 dark:text-gray-200">{option.code}</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}</div>
                             </div>
                         </button>
                     {/each}

@@ -2,6 +2,7 @@
     import {createEventDispatcher} from 'svelte';
     import {Menu} from 'lucide-svelte';
     import LanguageSelector from '$lib/components/LanguageSelector.svelte';
+    import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
     import HelpMenu from '$lib/components/HelpMenu.svelte';
 
     const dispatch = createEventDispatcher();
@@ -11,24 +12,25 @@
     }
 </script>
 
-<header class="sticky top-0 z-30 bg-libre-beige border-b border-gray-200 px-4 py-3">
+<header class="sticky top-0 z-30 bg-libre-beige dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 px-4 py-3">
     <div class="flex items-center justify-between">
         <!-- Mobile menu button -->
         <button
                 aria-label="Toggle menu"
-                class="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                class="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                 on:click={toggleSidebar}
         >
-            <Menu class="text-libre-dark" size={24}/>
+            <Menu class="text-libre-dark dark:text-gray-200" size={24}/>
         </button>
 
         <!-- Spacer for desktop (sidebar visible) -->
         <div class="hidden lg:block"></div>
 
-        <!-- Right side - Help Menu & Language Selector -->
+        <!-- Right side - Language, Theme Toggle, Help Menu -->
         <div class="flex items-center space-x-2">
-            <HelpMenu/>
             <LanguageSelector variant="dropdown"/>
+            <ThemeToggle />
+            <HelpMenu/>
         </div>
     </div>
 </header>
