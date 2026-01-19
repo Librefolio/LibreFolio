@@ -25,15 +25,15 @@
     <div class="relative">
         <button
                 on:click={() => showMenu = !showMenu}
-                class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-white/80 hover:bg-white shadow-md transition-all"
+                class="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all"
         >
             <span class="text-xl">{$currentLanguageFlag}</span>
-            <ChevronDown size={16} class="text-gray-600"/>
+            <ChevronDown size={16} class="text-gray-600 dark:text-gray-300"/>
         </button>
 
         {#if showMenu}
             <div
-                    class="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-xl border border-gray-100 overflow-hidden z-50"
+                    class="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden z-50"
                     on:keydown={handleKeydown}
                     role="menu"
                     tabindex="-1"
@@ -41,12 +41,12 @@
                 {#each LANGUAGE_OPTIONS as lang}
                     <button
                             on:click={() => handleLanguageChange(lang.code)}
-                            class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-all text-left
-							{$currentLanguage === lang.code ? 'bg-libre-beige' : ''}"
+                            class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all text-left
+							{$currentLanguage === lang.code ? 'bg-libre-green/10 dark:bg-libre-green/20' : ''}"
                             role="menuitem"
                     >
                         <span class="text-xl">{lang.flag}</span>
-                        <span class="text-sm text-gray-700">{lang.name}</span>
+                        <span class="text-sm text-gray-700 dark:text-gray-200">{lang.name}</span>
                     </button>
                 {/each}
             </div>

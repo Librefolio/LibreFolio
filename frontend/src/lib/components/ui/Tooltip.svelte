@@ -12,7 +12,7 @@
 
     export let text: string;
     export let position: 'top' | 'bottom' | 'left' | 'right' = 'top';
-    export let maxWidth: string = '250px';
+    export let maxWidth: string = '400px';
 
     let visible = false;
     let tooltipElement: HTMLDivElement;
@@ -146,6 +146,8 @@
         white-space: normal;
         word-wrap: break-word;
         pointer-events: none;
+        min-width: 180px;
+        width: max-content;
     }
 
     .tooltip-arrow {

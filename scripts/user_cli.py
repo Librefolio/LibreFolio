@@ -41,8 +41,49 @@ from backend.app.services import user_service
 from backend.app.services.settings_service import initialize_global_settings
 
 
+def validate_password(password: str) -> tuple[bool, list[str]]:
+    """
+    Validate password against security requirements.
+    Returns (is_valid, list of errors).
+
+    Requirements:
+    - At least 8 characters
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one number
+    - At least one special character
+    """
+    errors = []
+
+    if len(password) < 8:
+        errors.append("Password must be at least 8 characters")
+
+    if not any(c.isupper() for c in password):
+        errors.append("Password must contain at least one uppercase letter")
+
+    if not any(c.islower() for c in password):
+        errors.append("Password must contain at least one lowercase letter")
+
+    if not any(c.isdigit() for c in password):
+        errors.append("Password must contain at least one number")
+
+    special_chars = set("!@#$%^&*()_+-=[]{}|;':\",./<>?`~")
+    if not any(c in special_chars for c in password):
+        errors.append("Password must contain at least one special character")
+
+    return len(errors) == 0, errors
+
+
 async def cmd_reset_password(username: str, new_password: str):
-    """Reset a user's password."""
+    """Reset a user's password with validation."""
+    # Validate password first
+    is_valid, errors = validate_password(new_password)
+    if not is_valid:
+        print("❌ Password does not meet security requirements:")
+        for error in errors:
+            print(f"   • {error}")
+        return False
+
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
@@ -57,7 +98,15 @@ async def cmd_reset_password(username: str, new_password: str):
 
 
 async def cmd_create_superuser(username: str, email: str, password: str):
-    """Create a new superuser."""
+    """Create a new superuser with password validation."""
+    # Validate password first
+    is_valid, errors = validate_password(password)
+    if not is_valid:
+        print("❌ Password does not meet security requirements:")
+        for error in errors:
+            print(f"   • {error}")
+        return False
+
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:

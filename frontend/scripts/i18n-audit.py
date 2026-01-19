@@ -169,7 +169,7 @@ def generate_summary(df: pd.DataFrame) -> str:
 
 def generate_missing_report(df: pd.DataFrame) -> str:
     """
-    Generate a report of missing translations.
+    Generate a report of missing translations using tabulate for nice formatting.
     """
     incomplete = df[df["Status"] != "✅"].copy()
 
@@ -185,17 +185,32 @@ def generate_missing_report(df: pd.DataFrame) -> str:
     for section in incomplete["Section"].unique():
         section_rows = incomplete[incomplete["Section"] == section]
         lines.append(f"\n### {section}\n")
-        lines.append("| Key | Status |")
-        lines.append("|-----|--------|")
+
+        # Build table data for tabulate
+        table_data = []
         for _, row in section_rows.iterrows():
-            lines.append(f"| `{row['Key']}` | {row['Status']} |")
+            table_data.append([f"`{row['Key']}`", row['Status']])
+
+        # Use tabulate for nice formatting
+        table_str = tabulate(
+            table_data,
+            headers=["Key", "Status"],
+            tablefmt="github"
+        )
+        lines.append(table_str)
+        lines.append("")
 
     return "\n".join(lines)
 
 
-def export_markdown(df: pd.DataFrame, output_path: Path | None) -> None:
+def export_markdown(df: pd.DataFrame, output_path: Path | None, include_full_table: bool = True) -> None:
     """
     Export the translation table to Markdown format using tabulate.
+
+    Args:
+        df: DataFrame with translations
+        output_path: Output file path, or None for stdout
+        include_full_table: If False, only show summary and missing translations
     """
     summary = generate_summary(df)
     missing_report = generate_missing_report(df)
@@ -215,16 +230,22 @@ def export_markdown(df: pd.DataFrame, output_path: Path | None) -> None:
         showindex=False
         )
 
-    # Full report
-    content = "\n".join([
+    # Build report parts
+    parts = [
         "# LibreFolio i18n Audit Report\n",
         f"*Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}*\n",
         summary,
         missing_report,
-        "\n## 📋 Complete Translation Table\n",
-        table_md,
-        ""
+    ]
+
+    if include_full_table:
+        parts.extend([
+            "\n## 📋 Complete Translation Table\n",
+            table_md,
         ])
+
+    parts.append("")
+    content = "\n".join(parts)
 
     # Write to file or stdout
     if output_path:
@@ -303,39 +324,11 @@ def export_excel(df: pd.DataFrame, output_path: Path) -> None:
     print(f"\n✅ Excel report saved to: {output_path}")
 
 
-def main():
-    """Main entry point."""
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Audit LibreFolio i18n translations",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python i18n-audit.py                    Show Markdown report in terminal
-  python i18n-audit.py --format xlsx      Generate Excel file in current dir
-  python i18n-audit.py --format both      Generate both formats in current dir
-  python i18n-audit.py -o ./reports/      Save to specific directory
-        """
-        )
-    parser.add_argument(
-        "--format", "-f",
-        choices=["md", "xlsx", "both"],
-        default="md",
-        help="Output format (default: md)"
-        )
-    parser.add_argument(
-        "--output", "-o",
-        type=str,
-        default=None,
-        help="Output directory or file path (default: current directory for file output)"
-        )
-
-    args = parser.parse_args()
-
+def run_audit(format_type: str = "none", output: str | None = None) -> int:
+    """Run the i18n audit with specified format and output."""
     # Determine output directory (PWD by default)
-    if args.output:
-        output_base = Path(args.output)
+    if output:
+        output_base = Path(output)
         if output_base.suffix in [".md", ".xlsx"]:
             # User specified a file, use its parent as base
             output_dir = output_base.parent
@@ -358,23 +351,26 @@ Examples:
     print("🔍 Analyzing translations...")
     df = build_dataframe(translations)
 
-    # Generate output
-    if args.format in ["md", "both"]:
-        if args.output and args.output.endswith(".md"):
-            md_path = Path(args.output)
-        elif args.format == "md" and args.output is None:
+    # Generate output based on format
+    if format_type == "none":
+        # Only show summary and warnings, no full table
+        export_markdown(df, None, include_full_table=False)
+    elif format_type in ["md", "both"]:
+        if output and output.endswith(".md"):
+            md_path = Path(output)
+        elif format_type == "md" and output is None:
             # Print to stdout if no output specified for md-only
-            export_markdown(df, None)
+            export_markdown(df, None, include_full_table=True)
             md_path = None
         else:
             md_path = output_dir / "i18n-audit.md"
 
         if md_path:
-            export_markdown(df, md_path)
+            export_markdown(df, md_path, include_full_table=True)
 
-    if args.format in ["xlsx", "both"]:
-        if args.output and args.output.endswith(".xlsx"):
-            xlsx_path = Path(args.output)
+    if format_type in ["xlsx", "both"]:
+        if output and output.endswith(".xlsx"):
+            xlsx_path = Path(output)
         else:
             xlsx_path = output_dir / "i18n-audit.xlsx"
         export_excel(df, xlsx_path)
@@ -389,6 +385,63 @@ Examples:
     print(f"  Complete:   {complete} ✅")
     print(f"  Incomplete: {incomplete} {'⚠️' if incomplete > 0 else ''}")
     print()
+
+    return 0
+
+
+def add_arguments(parser) -> None:
+    """Add arguments to a parser (reusable for both standalone and subparser)."""
+    parser.add_argument(
+        "--format", "-f",
+        choices=["none", "md", "xlsx", "both"],
+        default="none",
+        help="Output format: none=only warnings (default), md=full markdown, xlsx=excel, both=md+xlsx"
+    )
+    parser.add_argument(
+        "--output", "-o",
+        type=str,
+        default=None,
+        help="Output directory or file path (default: current directory for file output)"
+    )
+
+
+def run_from_args(args) -> int:
+    """Execute the command from parsed args."""
+    return run_audit(
+        format_type=getattr(args, 'format', 'none'),
+        output=getattr(args, 'output', None)
+    )
+
+
+def main():
+    """Main entry point."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Audit LibreFolio i18n translations",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python i18n-audit.py                    Show warnings only (no full table)
+  python i18n-audit.py --format md        Show full Markdown report in terminal
+  python i18n-audit.py --format xlsx      Generate Excel file in current dir
+  python i18n-audit.py --format both      Generate both formats in current dir
+  python i18n-audit.py -o ./reports/      Save to specific directory
+        """
+    )
+    add_arguments(parser)
+    args = parser.parse_args()
+    return run_from_args(args)
+
+
+def register_subparser(subparsers) -> None:
+    """Register as subparser for dev.py integration."""
+    p = subparsers.add_parser("i18n", help="📦 Translation commands")
+    i18n_sub = p.add_subparsers(dest="i18n_cmd", metavar="action")
+
+    audit_p = i18n_sub.add_parser("audit", help="Audit translations for missing keys")
+    add_arguments(audit_p)
+    audit_p.set_defaults(func=run_from_args)
 
 
 if __name__ == "__main__":

@@ -117,13 +117,21 @@ Generated: ${new Date().toISOString()}
         </a>
 
         <!-- License -->
-        <div class="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg md:col-span-2">
+        <a
+                class="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all group md:col-span-2"
+                href={githubUrl + '/blob/main/LICENSE'}
+                rel="noopener noreferrer"
+                target="_blank"
+        >
             <Scale class="text-gray-700" size={24}/>
-            <div>
-                <p class="font-medium text-gray-700">{$_('settings.license')}</p>
-                <p class="text-sm text-gray-500">MIT License</p>
+            <div class="flex-1">
+                <p class="font-medium text-gray-700 flex items-center">
+                    {$_('settings.license')}
+                    <ExternalLink size={14} class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                </p>
+                <p class="text-sm text-gray-500">GNU Affero General Public License v3.0 (AGPL-3.0)</p>
             </div>
-        </div>
+        </a>
     </div>
 
     <!-- System Info with Copy Button -->

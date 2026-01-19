@@ -41,7 +41,7 @@ It includes:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/ea-enel/LibreFolio.git
+git clone https://github.com/Alfystar/LibreFolio.git
 cd LibreFolio
 ```
 
@@ -99,4 +99,14 @@ Contributions are welcome! Please read the **[Developer Manual](https://alfystar
 
 ## 📄 License
 
-TBD
+LibreFolio is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0).
+
+This means:
+- ✅ You can use, modify, and distribute this software freely
+- ✅ You can use it for commercial purposes
+- ⚠️ If you modify and distribute (including over a network), you must release your source code under AGPL-3.0
+- ⚠️ You must include the original copyright and license notices
+
+See the [LICENSE](LICENSE) file for the full license text.
+
+**GitHub Repository**: [https://github.com/Alfystar/LibreFolio](https://github.com/Alfystar/LibreFolio)

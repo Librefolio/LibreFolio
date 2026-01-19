@@ -19,6 +19,7 @@
     import CashBalanceCard from '$lib/components/brokers/CashBalanceCard.svelte';
     import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
+    import LazyImage from '$lib/components/ui/LazyImage.svelte';
 
     // Page data
     export let data: { brokerId: number };
@@ -29,6 +30,7 @@
         name: string;
         description?: string | null;
         portal_url?: string | null;
+        icon_url?: string | null;
         allow_cash_overdraft: boolean;
         allow_asset_shorting: boolean;
         is_active: boolean;
@@ -165,6 +167,23 @@
                 return 'bg-gray-100 text-gray-800';
         }
     }
+
+    // Get broker icon (custom or favicon from portal)
+    function getBrokerIcon(): string | null {
+        if (!broker) return null;
+        if (broker.icon_url) return broker.icon_url;
+        if (broker.portal_url) {
+            try {
+                const url = new URL(broker.portal_url);
+                return `${url.origin}/favicon.ico`;
+            } catch {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    $: brokerIcon = broker ? getBrokerIcon() : null;
 </script>
 
 <div class="space-y-6">
@@ -179,10 +198,26 @@
         </button>
 
         {#if broker}
+            <!-- Broker Icon -->
+            <div class="w-12 h-12 rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden">
+                {#if brokerIcon}
+                    <LazyImage
+                        src={brokerIcon}
+                        alt={broker.name}
+                        placeholder="broker"
+                        width="100%"
+                        height="100%"
+                        circle
+                    />
+                {:else}
+                    <Briefcase size={24} class="text-libre-green" />
+                {/if}
+            </div>
+
             <div class="flex-1 min-w-0">
-                <h1 class="text-2xl font-bold text-gray-800 truncate">{broker.name}</h1>
+                <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate">{broker.name}</h1>
                 {#if broker.description}
-                    <p class="text-gray-500 text-sm truncate">{broker.description}</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm truncate">{broker.description}</p>
                 {/if}
             </div>
 

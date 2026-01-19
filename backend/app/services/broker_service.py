@@ -479,6 +479,18 @@ class BrokerService:
                 if item.portal_url is not None:
                     broker.portal_url = item.portal_url
 
+                if item.icon_url is not None:
+                    broker.icon_url = item.icon_url
+
+                if item.default_import_plugin is not None:
+                    broker.default_import_plugin = item.default_import_plugin
+
+                if item.is_active is not None:
+                    broker.is_active = item.is_active
+
+                if item.opened_at is not None:
+                    broker.opened_at = item.opened_at
+
                 if item.allow_cash_overdraft is not None:
                     broker.allow_cash_overdraft = item.allow_cash_overdraft
 

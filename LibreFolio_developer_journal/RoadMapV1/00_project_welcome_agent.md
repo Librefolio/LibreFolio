@@ -203,13 +203,6 @@ dev.py [-h]
 | **Reset password**                 | `./dev.py user reset username newpassword`        |
 | **Lista endpoint API**             | `./dev.py info api`                               |
 
-### Autocompletamento (opzionale)
-
-```bash
-# Aggiungi a ~/.zshrc o ~/.bashrc:
-autoload -U bashcompinit && bashcompinit  # solo per zsh
-eval "$(register-python-argcomplete dev.py)"
-```
 
 ## ⚠️ Note per lo Sviluppo
 

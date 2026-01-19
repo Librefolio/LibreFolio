@@ -7,8 +7,9 @@
     import {api} from '$lib/api';
     import {userSettings} from '$lib/stores/settings';
     import FuzzySelect from '$lib/components/FuzzySelect.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import type {SelectOption} from '$lib/components/FuzzySelect.svelte';
-    import {Plus, Trash2, Info} from 'lucide-svelte';
+    import {Plus, Trash2, Info, Briefcase} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
         submit: {
@@ -46,6 +47,19 @@
         return new Date().toISOString().split('T')[0];
     }
 
+    // Parse date from backend (may be ISO datetime) to YYYY-MM-DD
+    function parseDate(dateStr: string | null | undefined): string {
+        if (!dateStr) return '';
+        // Try to parse as date
+        try {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return '';
+            return d.toISOString().split('T')[0];
+        } catch {
+            return '';
+        }
+    }
+
     // Form state
     let name = initialData.name ?? '';
     let description = initialData.description ?? '';
@@ -55,7 +69,7 @@
     let allowOverdraft = initialData.allow_cash_overdraft ?? false;
     let allowShorting = initialData.allow_asset_shorting ?? false;
     let isActive = initialData.is_active ?? true;
-    let openedAt = initialData.opened_at ?? (mode === 'create' ? getTodayDate() : '');
+    let openedAt = parseDate(initialData.opened_at) || (mode === 'create' ? getTodayDate() : '');
 
     // Initial balances (only for create mode)
     let initialBalances: Array<{ code: string; amount: number }> = [];
@@ -94,16 +108,28 @@
 
         // Load import plugins
         try {
-            const response = await api.get<{
-                plugins: Array<{
-                    id: string;
-                    name: string;
-                    description: string;
-                    icon?: string;
-                }>;
-            }>('/brokers/import/plugins');
+            const response = await api.get<Array<{
+                code: string;
+                name: string;
+                description: string;
+                supported_extensions: string[];
+                icon_url?: string;
+            }>>('/brokers/import/plugins');
 
-            importPlugins = response.plugins || [];
+            // Backend returns array directly, not {plugins: [...]}
+            // Sort: GenericCSV first with "(default)" suffix, rest alphabetically
+            const plugins = (response || []).map(p => ({
+                id: p.code,
+                name: p.code === 'GenericCSV' ? `${p.name} (default)` : p.name,
+                description: p.description,
+                icon: p.icon_url
+            }));
+
+            importPlugins = plugins.sort((a, b) => {
+                if (a.id === 'GenericCSV') return -1;
+                if (b.id === 'GenericCSV') return 1;
+                return a.name.localeCompare(b.name);
+            });
         } catch (e) {
             console.error('Failed to load import plugins:', e);
         } finally {
@@ -128,6 +154,12 @@
         (portalUrl ? getFaviconUrl(portalUrl) : null) ||
         selectedPlugin?.icon ||
         null;
+
+    // Track if icon failed to load
+    let iconLoadError = false;
+
+    // Reset error when URL changes
+    $: if (effectiveIconUrl) iconLoadError = false;
 
     function getFaviconUrl(url: string): string | null {
         try {
@@ -220,21 +252,41 @@
 
     <!-- Default Import Plugin (moved up) -->
     <div>
-        <label for="broker-plugin" class="block text-sm font-medium text-gray-700 mb-1">
+        <label for="broker-plugin" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {$_('brokers.defaultImportPlugin')}
         </label>
-        <select
-                id="broker-plugin"
-                bind:value={defaultImportPlugin}
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
-                disabled={loadingPlugins}
-        >
-            <option value="">{$_('brokers.selectPlugin')}</option>
-            {#each importPlugins as plugin}
-                <option value={plugin.id}>{plugin.name}</option>
-            {/each}
-        </select>
-        <p class="text-xs text-gray-500 mt-1">{$_('brokers.defaultImportPluginHint')}</p>
+        <div class="flex items-center gap-2">
+            {#if selectedPlugin?.icon}
+                <img
+                    src={selectedPlugin.icon}
+                    alt=""
+                    class="w-6 h-6 rounded object-cover bg-gray-100 dark:bg-slate-600"
+                    on:error={(e) => {
+                        const target = e.currentTarget;
+                        if (target instanceof HTMLImageElement) target.style.display = 'none';
+                    }}
+                />
+            {/if}
+            <select
+                    id="broker-plugin"
+                    bind:value={defaultImportPlugin}
+                    class="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                    disabled={loadingPlugins}
+            >
+                <option value="">{loadingPlugins ? $_('common.loading') : $_('brokers.selectPlugin')}</option>
+                {#each importPlugins as plugin}
+                    <option value={plugin.id}>{plugin.name}</option>
+                {/each}
+            </select>
+            {#if selectedPlugin?.description}
+                <Tooltip text={selectedPlugin.description} position="left" maxWidth="350px">
+                    <span class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help">
+                        <Info size={16}/>
+                    </span>
+                </Tooltip>
+            {/if}
+        </div>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('brokers.defaultImportPluginHint')}</p>
     </div>
 
     <!-- Portal URL -->
@@ -253,7 +305,7 @@
 
     <!-- Icon URL -->
     <div>
-        <label for="broker-icon" class="block text-sm font-medium text-gray-700 mb-1">
+        <label for="broker-icon" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {$_('brokers.iconUrl')}
         </label>
         <div class="flex items-center gap-3">
@@ -262,18 +314,23 @@
                     type="url"
                     bind:value={iconUrl}
                     placeholder={$_('brokers.iconUrlPlaceholder')}
-                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                    class="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
             />
-            {#if effectiveIconUrl}
-                <img
-                    src={effectiveIconUrl}
-                    alt=""
-                    class="w-10 h-10 rounded-full object-cover bg-gray-100"
-                    on:error={(e) => e.currentTarget.style.display = 'none'}
-                />
-            {/if}
+            <!-- Icon preview - sempre visibile -->
+            <div class="w-10 h-10 rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden">
+                {#if effectiveIconUrl && !iconLoadError}
+                    <img
+                        src={effectiveIconUrl}
+                        alt=""
+                        class="w-full h-full object-cover"
+                        on:error={() => iconLoadError = true}
+                    />
+                {:else}
+                    <Briefcase size={20} class="text-libre-green" />
+                {/if}
+            </div>
         </div>
-        <p class="text-xs text-gray-500 mt-1">{$_('brokers.iconUrlHint')}</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('brokers.iconUrlHint')}</p>
     </div>
 
     <!-- Account Status: Opened At + Is Active Toggle (same row) -->
@@ -314,8 +371,8 @@
     </div>
 
     <!-- Trading Flags (vertical layout with instant tooltips) -->
-    <div class="space-y-3 border rounded-lg p-4 bg-gray-50">
-        <h4 class="text-sm font-medium text-gray-700 mb-2">{$_('brokers.tradingOptions')}</h4>
+    <div class="space-y-3 border rounded-lg p-4 bg-gray-50 dark:bg-slate-800 dark:border-slate-700">
+        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{$_('brokers.tradingOptions')}</h4>
 
         <!-- Allow Leveraged Buying -->
         <div class="flex items-start gap-3">
@@ -325,19 +382,18 @@
                         bind:checked={allowOverdraft}
                         class="w-4 h-4 text-libre-green border-gray-300 rounded focus:ring-libre-green"
                 />
-                <span class="text-sm text-gray-700">{$_('brokers.allowOverdraft')}</span>
+                <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowOverdraft')}</span>
             </label>
             {#if !allowOverdraft}
-                <span
-                        class="p-1 text-gray-400 hover:text-gray-600 cursor-help"
-                        title={$_('brokers.allowOverdraftHint')}
-                >
-                    <Info size={16}/>
-                </span>
+                <Tooltip text={$_('brokers.allowOverdraftHint')} position="left" maxWidth="320px">
+                    <span class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help">
+                        <Info size={16}/>
+                    </span>
+                </Tooltip>
             {/if}
         </div>
         {#if allowOverdraft}
-            <p class="text-xs text-gray-500 ml-6 -mt-1">{$_('brokers.allowOverdraftHint')}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 ml-6 -mt-1">{$_('brokers.allowOverdraftHint')}</p>
         {/if}
 
         <!-- Allow Short Selling -->
@@ -348,19 +404,18 @@
                         bind:checked={allowShorting}
                         class="w-4 h-4 text-libre-green border-gray-300 rounded focus:ring-libre-green"
                 />
-                <span class="text-sm text-gray-700">{$_('brokers.allowShorting')}</span>
+                <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowShorting')}</span>
             </label>
             {#if !allowShorting}
-                <span
-                        class="p-1 text-gray-400 hover:text-gray-600 cursor-help"
-                        title={$_('brokers.allowShortingHint')}
-                >
-                    <Info size={16}/>
-                </span>
+                <Tooltip text={$_('brokers.allowShortingHint')} position="left" maxWidth="320px">
+                    <span class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help">
+                        <Info size={16}/>
+                    </span>
+                </Tooltip>
             {/if}
         </div>
         {#if allowShorting}
-            <p class="text-xs text-gray-500 ml-6 -mt-1">{$_('brokers.allowShortingHint')}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 ml-6 -mt-1">{$_('brokers.allowShortingHint')}</p>
         {/if}
     </div>
 
@@ -387,8 +442,8 @@
                 <div class="space-y-3">
                     {#each initialBalances as balance, i (i)}
                         <div class="flex items-center gap-2">
-                            <!-- Amount first (70% width) -->
-                            <div class="flex-[7]">
+                            <!-- Amount first (60% width) -->
+                            <div class="flex-[6]">
                                 <input
                                         type="number"
                                         step="0.01"
@@ -399,8 +454,8 @@
                                 />
                             </div>
 
-                            <!-- Currency Select (30% width, dropdown opens upward) -->
-                            <div class="flex-[3] min-w-[120px]">
+                            <!-- Currency Select (40% width, dropdown opens upward) -->
+                            <div class="flex-[4] min-w-[120px]">
                                 <FuzzySelect
                                         bind:value={balance.code}
                                         options={currencyOptions}
@@ -428,30 +483,31 @@
             {/if}
         </div>
     {/if}
-
-    <!-- Actions (sempre visibili) -->
-    <div class="flex items-center justify-end space-x-3 pt-4 border-t">
-        <button
-                type="button"
-                on:click={handleCancel}
-                disabled={loading}
-                class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-            {$_('common.cancel')}
-        </button>
-        <button
-                type="submit"
-                disabled={!isValid || loading || hasDuplicateCurrencies}
-                class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-            {#if loading}
-                <span class="inline-flex items-center space-x-2">
-                    <span class="animate-spin">⏳</span>
-                    <span>{$_('common.loading')}</span>
-                </span>
-            {:else}
-                {mode === 'create' ? $_('common.create') : $_('common.save')}
-            {/if}
-        </button>
-    </div>
 </form>
+
+<!-- Actions (sempre visibili - fuori dal form scrollabile) -->
+<div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky bottom-0 pb-4 px-4 -mx-4 -mb-4">
+    <button
+            type="button"
+            on:click={handleCancel}
+            disabled={loading}
+            class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+    >
+        {$_('common.cancel')}
+    </button>
+    <button
+            type="button"
+            on:click={handleSubmit}
+            disabled={!isValid || loading || hasDuplicateCurrencies}
+            class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+        {#if loading}
+            <span class="inline-flex items-center space-x-2">
+                <span class="animate-spin">⏳</span>
+                <span>{$_('common.loading')}</span>
+            </span>
+        {:else}
+            {mode === 'create' ? $_('common.create') : $_('common.save')}
+        {/if}
+    </button>
+</div>
