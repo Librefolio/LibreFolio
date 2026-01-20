@@ -234,8 +234,13 @@ def cmd_fe_dev(args):
 
 def cmd_fe_build(args):
     """Build frontend for production."""
-    print(Colors.success("Building frontend for production..."))
-    result = run_command_live(["npm", "run", "build"], cwd=PROJECT_ROOT / "frontend")
+    if args.debug:
+        print(Colors.success("Building frontend in DEBUG mode (no minify, with sourcemaps)..."))
+        result = run_command_live(["npm", "run", "build:debug"], cwd=PROJECT_ROOT / "frontend")
+    else:
+        print(Colors.success("Building frontend for production..."))
+        result = run_command_live(["npm", "run", "build"], cwd=PROJECT_ROOT / "frontend")
+
     if result == 0:
         print_success("Frontend build complete!")
         print(Colors.warning("Output in: frontend/build/"))
@@ -578,6 +583,7 @@ Examples:
     fe_p.set_defaults(func=cmd_fe_dev)
 
     fe_p = fe_sub.add_parser("build", help="Build for production")
+    fe_p.add_argument("--debug", "-d", action="store_true", help="Build in debug mode (no minify, with sourcemaps)")
     fe_p.set_defaults(func=cmd_fe_build)
 
     fe_p = fe_sub.add_parser("check", help="Type check with svelte-check")

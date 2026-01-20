@@ -301,7 +301,9 @@
       "price_sync_interval_hours": "heures",
       "max_file_upload_mb": "Mo"
     },
-    "selectCurrency": "Sélectionner devise...",
+    "selectCurrency": "Sélectionner une devise...",
+    "userPreferences": "Préférences Utilisateur",
+    "all": "Tous les Paramètres",
     "categoryAll": "Tout",
     "categoryDisplay": "Affichage",
     "categoryCurrency": "Devise",
