@@ -315,6 +315,7 @@
     "maxSize": "Dimensione max: {size}MB",
     "imageSize": "Dimensione immagine",
     "upload": "Carica",
+    "newFile": "Nuovo File",
     "uploading": "Caricamento...",
     "uploadSuccess": "File caricato con successo",
     "uploadError": "Caricamento fallito",

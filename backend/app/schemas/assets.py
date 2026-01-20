@@ -368,9 +368,7 @@ class BaseDistribution(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    distribution: dict[str, Decimal] = Field(
-        ..., description="Distribution weights (must sum to 1.0)"
-    )
+    distribution: dict[str, Decimal] = Field(..., description="Distribution weights (must sum to 1.0)")
 
     @classmethod
     def _validate_and_normalize_weights(

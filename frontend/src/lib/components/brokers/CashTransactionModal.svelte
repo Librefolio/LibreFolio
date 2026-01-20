@@ -165,7 +165,7 @@
                             min="0.01"
                             bind:value={amount}
                             required
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green"
+                            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green"
                     />
                 </div>
 
@@ -192,7 +192,7 @@
                             type="date"
                             bind:value={date}
                             required
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green"
+                            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green"
                     />
                 </div>
 
@@ -205,7 +205,7 @@
                             id="cash-description"
                             bind:value={description}
                             rows="2"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green resize-none"
+                            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green resize-none"
                     ></textarea>
                 </div>
 

@@ -29,7 +29,7 @@ from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseBulkDeleteResponse,
     BaseDeleteResult,
-)
+    )
 
 
 # =============================================================================
@@ -53,35 +53,35 @@ class BRCreateItem(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Broker name (must be unique)")
     description: Optional[str] = Field(
         default=None, max_length=500, description="Broker description"
-    )
+        )
     portal_url: Optional[str] = Field(
         default=None, max_length=255, description="URL to broker's web portal"
-    )
+        )
     icon_url: Optional[str] = Field(
         default=None, max_length=500, description="Custom icon URL for the broker"
-    )
+        )
     default_import_plugin: Optional[str] = Field(
         default=None, max_length=100, description="Default BRIM plugin for importing transactions"
-    )
+        )
 
     allow_cash_overdraft: bool = Field(
         default=False, description="Allow leveraged buying (negative cash balance)"
-    )
+        )
     allow_asset_shorting: bool = Field(
         default=False, description="Allow short selling (negative asset quantities)"
-    )
+        )
 
     is_active: bool = Field(
         default=True, description="Whether the broker account is currently active"
-    )
+        )
     opened_at: Optional[date_type] = Field(
         default=None, description="Date when the account was opened in reality"
-    )
+        )
 
     # Auto-creates DEPOSIT transactions - using Currency objects
     initial_balances: Optional[List[Currency]] = Field(
         default=None, description="Initial cash balances. Creates DEPOSIT transactions."
-    )
+        )
 
     @field_validator("name")
     @classmethod
@@ -181,17 +181,17 @@ class BRSummary(BRReadItem):
     # Cash balances as list of Currency objects
     cash_balances: List[Currency] = Field(
         default_factory=list, description="Current cash balance per currency"
-    )
+        )
 
     # Asset holdings with full details
     holdings: List[BRAssetHolding] = Field(
         default_factory=list, description="Current asset holdings with cost basis and market value"
-    )
+        )
 
     # Optional: Total portfolio value in user's base currency
     total_value_base_currency: Optional[Currency] = Field(
         default=None, description="Total portfolio value in base currency (cash + holdings)"
-    )
+        )
 
     @property
     def currencies(self) -> List[str]:
@@ -226,24 +226,14 @@ class BRUpdateItem(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: Optional[str] = Field(
-        default=None, min_length=1, max_length=100, description="New broker name"
-    )
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100, description="New broker name")
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
     portal_url: Optional[str] = Field(default=None, max_length=255, description="New portal URL")
-    icon_url: Optional[str] = Field(
-        default=None, max_length=500, description="Custom icon URL for the broker"
-    )
-    default_import_plugin: Optional[str] = Field(
-        default=None, max_length=100, description="Default BRIM plugin for importing transactions"
-    )
+    icon_url: Optional[str] = Field(default=None, max_length=500, description="Custom icon URL for the broker")
+    default_import_plugin: Optional[str] = Field(default=None, max_length=100, description="Default BRIM plugin for importing transactions")
 
-    allow_cash_overdraft: Optional[bool] = Field(
-        default=None, description="Update leveraged buying permission"
-    )
-    allow_asset_shorting: Optional[bool] = Field(
-        default=None, description="Update short selling permission"
-    )
+    allow_cash_overdraft: Optional[bool] = Field(default=None, description="Update leveraged buying permission")
+    allow_asset_shorting: Optional[bool] = Field(default=None, description="Update short selling permission")
 
     is_active: Optional[bool] = Field(default=None, description="Update account active status")
     opened_at: Optional[date_type] = Field(default=None, description="Update account opening date")
@@ -257,6 +247,19 @@ class BRUpdateItem(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("Broker name cannot be empty or whitespace")
+        return v
+
+    @field_validator("portal_url", "icon_url")
+    @classmethod
+    def validate_urls(cls, v):
+        """Handle empty strings as explicit clear (convert to empty string, not None)."""
+        if v is None:
+            return None  # Don't update field
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return ""  # Explicit clear - empty string means "remove value"
+            return v
         return v
 
 
@@ -282,7 +285,7 @@ class BRDeleteItem(BaseModel):
     force: bool = Field(
         default=False,
         description="If True, cascade delete all transactions. If False, fail if transactions exist.",
-    )
+        )
 
 
 class BRDeleteResult(BaseDeleteResult):
@@ -296,7 +299,7 @@ class BRDeleteResult(BaseDeleteResult):
     id: int = Field(..., description="Broker ID")
     transactions_deleted: int = Field(
         default=0, ge=0, description="Number of transactions cascade-deleted (only when force=True)"
-    )
+        )
 
 
 class BRBulkDeleteResponse(BaseBulkDeleteResponse[BRDeleteResult]):
@@ -320,7 +323,7 @@ class BRCreateResult(BaseModel):
     name: str  # Echo back for client correlation
     deposits_created: int = Field(
         default=0, ge=0, description="Number of DEPOSIT transactions created"
-    )
+        )
     error: Optional[str] = None
 
 
@@ -344,7 +347,7 @@ class BRUpdateResult(BaseModel):
     success: bool
     validation_triggered: bool = Field(
         default=False, description="Whether balance validation was triggered due to flag change"
-    )
+        )
     error: Optional[str] = None
 
 

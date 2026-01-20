@@ -20,6 +20,7 @@
         description?: string | null;
         portal_url?: string | null;
         icon_url?: string | null;
+        default_import_plugin?: string | null;
         allow_cash_overdraft: boolean;
         allow_asset_shorting: boolean;
         is_active?: boolean;
@@ -37,8 +38,9 @@
         }).format(amount);
     }
 
-    // Get broker icon (custom or favicon from portal)
-    function getBrokerIcon(): string | null {
+    // Get broker icon (custom > favicon from portal > fallback to Briefcase)
+    // Needs explicit dependencies for reactivity
+    $: brokerIcon = (() => {
         if (broker.icon_url) return broker.icon_url;
         if (broker.portal_url) {
             try {
@@ -48,10 +50,9 @@
                 return null;
             }
         }
+        // No fallback to plugin icon - use Briefcase instead (more reliable)
         return null;
-    }
-
-    $: brokerIcon = getBrokerIcon();
+    })();
 
 
     function handleCardClick() {
@@ -99,7 +100,8 @@
                             circle
                         />
                     {:else}
-                        <Briefcase size={20} class="text-libre-green" />
+                        <!-- Fallback: Briefcase icon -->
+                        <Briefcase size={20} class="text-libre-green dark:text-green-400" />
                     {/if}
                 </div>
 

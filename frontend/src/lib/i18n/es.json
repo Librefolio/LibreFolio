@@ -315,6 +315,7 @@
     "maxSize": "Tamaño máx: {size}MB",
     "imageSize": "Tamaño de imagen",
     "upload": "Subir",
+    "newFile": "Nuevo Archivo",
     "uploading": "Subiendo...",
     "uploadSuccess": "Archivo subido con éxito",
     "uploadError": "Error al subir",

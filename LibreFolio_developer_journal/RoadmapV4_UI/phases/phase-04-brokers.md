@@ -111,6 +111,200 @@ export async function load() {
 
 ---
 
+## 📋 Consolidation & Improvements (20 Gennaio 2026)
+
+### Status Corrente
+
+Dopo il completamento delle features base di Phase 4, sono emerse diverse necessità di refinement e standardizzazione:
+
+#### ✅ Fix Completati (20-01-2026)
+
+1. **Dark Mode**: ✅ **VERIFICATO**
+   - Input/Select/Textarea: Solo border `#546175`, background trasparente
+   - Tooltip: background `#61666f` ✅
+   - **Login page AnimatedBackground**: ✅ **FIXED** - Aggiunto dark mode (`#1e293b` bg, `#1a4031` waves, `#4ade80` chart lines)
+
+2. **Broker Icons**: ✅ **COMPLETO**
+   - Reattività BrokerCard migliorata ✅
+   - LazyImage bordino bianco rimosso (background transparent) ✅
+   - **Portal URL empty string**: ✅ **FIXED**
+     - BrokerForm invia `""` in edit mode
+     - Schema + service: `""` → `None` in DB
+   - **Plugin icon bordino**: ✅ **FIXED** - Rimosso `bg-gray-100` da plugin icon in BrokerForm
+   - **Plugin icon fallback**: ❌ Rimosso (troppo inaffidabile, usa Briefcase)
+
+3. **Broker Form**: ✅ **VERIFICATO**
+   - GenericCSV ordering: ✅ **FIXED** (code `'broker_generic_csv'`)
+   - GenericCSV appare primo con "(default)" label ✅
+
+4. **Files Page**: ✅ **VERIFICATO**
+   - Download con nome originale (`?download=true`) ✅
+   - Button "Cancel" → "New File" (tradotto 4 lingue) ✅
+   - ImageUploader preview reset corretto ✅
+
+5. **Backend API - Preview Features**: ✅ **IMPLEMENTATO**
+   - **Text Preview**: `?offset=0&window=1000` ✅
+   - **Image Preview**: `?img_preview=400x400` ✅
+     - ⚡ Resize in processo separato con `ProcessPoolExecutor`
+     - ⚡ Non blocca server, frontend può fare richieste parallele
+   - Pillow dependency installata ✅
+   - Error handling per file incompatibili ✅
+
+6. **UI/UX Polish**: ✅ **NUOVO**
+   - **Burger menu hover rimosso**: ✅ No più illuminazione in dark mode (Header completamente)
+   - **Sidebar logo hover rimosso**: ✅ No più opacity change
+
+7. **Developer Tools**: ✅ **NUOVO**
+   - **GUIDA-DARK-MODE.md**: ✅ Creata guida per modificare velocemente variabili dark mode
+
+#### 🎯 Settings Unification Plan - INIZIATO (20-01-2026)
+
+**Fase 1 Completata**:
+- ✅ `SettingField.svelte` creato (single field con azioni inline)
+- ✅ `SettingsLayout.svelte` creato (2-column layout con sidebar)
+- ✅ Test: 0 errors, 1 warning
+- ⏳ **Prossimo**: SettingText.svelte, poi refactor PreferencesTab
+
+**Link**: [`../plan-settings-unification.md`](../plan-settings-unification.md)
+
+#### ⚠️ Issue Rimanenti (Non Bloccanti)
+
+1. **BrokerCard refresh**: Lista non si aggiorna automaticamente dopo edit (serve F5)
+   - Workaround: F5 manuale
+   - Fix futuro: Key reactive o invalidate dopo update
+
+2. **Delete confirmation**: Alert invece di banner centrato
+   - Da implementare in Table Improvements plan
+
+3. **Dark mode contrasto**: ⏳ **ATTESA FEEDBACK UTENTE**
+   - Guida creata per modifiche rapide (`GUIDA-DARK-MODE.md`)
+   - Utente deve testare e indicare valori CSS ottimali
+
+### 🎯 Piani di Miglioramento Attivi
+
+Sono stati creati diversi piani per affrontare problematiche di standardizzazione e usabilità:
+
+#### 1. Settings Unification Plan
+**File**: [`../plan-settings-unification.md`](../plan-settings-unification.md)
+
+**Obiettivo**: Unificare PreferencesTab, GlobalSettingsTab e creare Profile Page con componenti riutilizzabili.
+
+**Componenti da creare**:
+- `SettingField.svelte` - Campo singolo con azioni
+- `SettingsLayout.svelte` - Layout 2 colonne con sidebar
+- `SettingText.svelte` - Text/email con edit inline
+- `SettingImageUpload.svelte` - Upload con crop/resize
+
+**Key Decisions**:
+- ✅ Stato locale nei componenti (massima flessibilità)
+- ✅ Validazione a livello componente quando possibile
+- ✅ Profile page: Save globale ATTIVO (esclusi Password e Delete Account che hanno modali separate)
+
+**Stima**: 4-8 giorni
+
+#### 2. Table Improvements Plan ✅ **APPROVATO**
+**File**: [`../plan-table-improvements.md`](../plan-table-improvements.md)
+
+**Obiettivo**: Migliorare tabelle Files (Static + BRIM) con sorting, filtering, pagination, e **preview**.
+
+**Libreria scelta**: **TanStack Table** (motivazione: licenza MIT + features complete)
+
+**Features implementate**:
+- ✅ **Preview API Backend**: 
+  - Text: `GET /uploads/file/{id}?offset=0&window=1000`
+  - Images: `GET /uploads/file/{id}?img_preview=400x400`
+  - Error 400 per file incompatibili
+
+**Da implementare**:
+- [ ] Setup TanStack Table
+- [ ] Sorting multi-column
+- [ ] Pagination con selettore (10/50/100/All)
+- [ ] Filtering per nome/tipo/data
+- [ ] Preview modal (Eye icon)
+- [ ] Selezione multipla + bulk actions
+- [ ] Delete confirmation banner (no alert)
+- [ ] Rename file function
+
+**Stima**: 3-6 giorni
+
+#### 3. Image Crop Plan
+**File**: [`../plan-image-crop.md`](../plan-image-crop.md)
+
+**Obiettivo**: Implementare crop avanzato per avatar/icon/cover images.
+
+**Libreria scelta**: **svelte-easy-crop** (leggera ~15KB, nativa Svelte)
+
+**Features**:
+- Crop area selection con drag
+- Aspect ratio lock (1:1, 16:9, 4:3, free)
+- Zoom & pan
+- Rotate & flip (opzionali)
+- Preview real-time multipli (50x50, 200x200)
+
+**Use cases**:
+- Avatar upload (1:1)
+- Broker icon (1:1)
+- Future cover images (16:9)
+
+**Stima**: 2-4 giorni
+
+#### 4. Table Libraries Comparison
+**File**: [`../table-libraries-comparison.md`](../table-libraries-comparison.md)
+
+**Documento di analisi** con comparazione dettagliata:
+- TanStack Table (✅ raccomandato)
+- Svelte-Simple-Datatables
+- Native Custom
+- ag-Grid Community
+
+**Decisione**: TanStack Table approvato per scalabilità, features, e licenza MIT.
+
+---
+
+### 🗺️ Ordine di Implementazione Suggerito
+
+Basandosi su priorità, dipendenze, e impatto:
+
+1. **🥇 Table Improvements** (3-6 giorni)
+   - **Motivazione**: Impatto immediato su UX, fondazione per Assets/Transactions/FX
+   - **Blocca**: Nessun altro piano
+   - **Estensibilità**: DataTable component riutilizzabile ovunque
+   - **Status**: ✅ API backend pronta, frontend da implementare
+
+2. **🥈 Image Crop** (2-4 giorni)
+   - **Motivazione**: Necessario per Profile page e migliora UX upload
+   - **Blocca**: Settings Unification (Profile avatar)
+   - **Estensibilità**: Riutilizzabile per broker icons, asset logos, cover images
+   - **Status**: 📋 Piano pronto, libreria valutata
+
+3. **🥉 Settings Unification** (4-8 giorni)
+   - **Motivazione**: Standardizza UI settings, introduce Profile page
+   - **Dipende da**: Image Crop (per avatar upload)
+   - **Estensibilità**: Componenti Setting* riutilizzabili per future pagine config
+   - **Status**: 📋 Piano dettagliato, decisioni prese
+
+---
+
+### 📊 Timeline Totale Consolidation
+
+**Ottimistico**: 9 giorni  
+**Realistico**: 13 giorni  
+**Con imprevisti**: 18 giorni
+
+---
+
+### 🔗 Collegamenti ai Documenti
+
+| Documento | Descrizione | Status |
+|-----------|-------------|--------|
+| [plan-settings-unification.md](../plan-settings-unification.md) | Componenti condivisi Settings + Profile | 📋 Pronto |
+| [plan-table-improvements.md](../plan-table-improvements.md) | TanStack Table + Preview | ✅ API Done |
+| [plan-image-crop.md](../plan-image-crop.md) | Advanced crop component | 📋 Pronto |
+| [table-libraries-comparison.md](../table-libraries-comparison.md) | Analisi librerie tabelle | ✅ Completato |
+| [session-summary-20250120.md](../session-summary-20250120.md) | Riepilogo sessione fix | ✅ Completato |
+
+---
+
 ## 4.2 Add/Edit Broker Modal (1 giorno)
 
 ### Tasks
@@ -205,6 +399,7 @@ const BrokerSchema = z.object({
 |----------------------------------------------------|---------------------|
 | `src/lib/components/brokers/AddBrokerModal.svelte` | Modal wrapper       |
 | `src/lib/components/brokers/BrokerForm.svelte`     | Form riutilizzabile |
+
 
 ---
 

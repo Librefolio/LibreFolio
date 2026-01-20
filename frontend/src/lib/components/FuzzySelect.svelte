@@ -125,7 +125,7 @@
             {disabled}
             class="w-full flex items-center justify-between px-4 py-2.5 border rounded-lg bg-white dark:bg-slate-700
                    transition-all text-left
-                   {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed' : 'border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}
+                   {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed' : 'dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}
                    {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
     >
         {#if selectedOption}

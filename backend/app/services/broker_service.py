@@ -474,16 +474,17 @@ class BrokerService:
                     broker.name = item.name
 
                 if item.description is not None:
-                    broker.description = item.description
+                    broker.description = item.description if item.description != "" else None
 
+                # For URLs: empty string "" means clear field, None means don't update
                 if item.portal_url is not None:
-                    broker.portal_url = item.portal_url
+                    broker.portal_url = item.portal_url if item.portal_url != "" else None
 
                 if item.icon_url is not None:
-                    broker.icon_url = item.icon_url
+                    broker.icon_url = item.icon_url if item.icon_url != "" else None
 
                 if item.default_import_plugin is not None:
-                    broker.default_import_plugin = item.default_import_plugin
+                    broker.default_import_plugin = item.default_import_plugin if item.default_import_plugin != "" else None
 
                 if item.is_active is not None:
                     broker.is_active = item.is_active

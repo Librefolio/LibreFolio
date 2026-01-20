@@ -93,6 +93,9 @@
 
         if (selectedSize === 'original') {
             resizedFile = selectedFile;
+            // Reset preview to original
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = URL.createObjectURL(selectedFile);
             return;
         }
 
@@ -101,6 +104,7 @@
         try {
             resizedFile = await resizeImage(selectedFile, config.width, config.height);
             // Update preview
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
             previewUrl = URL.createObjectURL(resizedFile);
         } catch (err) {
             dispatch('error', { message: 'Failed to resize image' });

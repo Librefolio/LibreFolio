@@ -54,6 +54,11 @@
         overflow: hidden;
     }
 
+    /* Dark mode background */
+    :global(html.dark) .animated-bg {
+        background-color: #11151c;
+    }
+
     .wave {
         position: absolute;
         bottom: 0;
@@ -62,6 +67,11 @@
         height: 60%;
         background: linear-gradient(to top, #9caf9c, transparent);
         transform-origin: bottom center;
+    }
+
+    /* Dark mode waves */
+    :global(html.dark) .wave {
+        background: linear-gradient(to top, #00ff9a, transparent);
     }
 
     .wave-1 {
@@ -138,6 +148,11 @@
         opacity: 0;
         stroke-dasharray: 2000;
         stroke-dashoffset: 2000;
+    }
+
+    /* Dark mode chart lines */
+    :global(html.dark) .chart-line {
+        stroke: #4ade80;
     }
 
     .line-1 {
