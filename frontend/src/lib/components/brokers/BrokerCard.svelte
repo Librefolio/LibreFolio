@@ -5,8 +5,8 @@
     import {createEventDispatcher} from 'svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
-    import {Briefcase, ExternalLink, Pencil, Trash2, Wallet} from 'lucide-svelte';
-    import LazyImage from '$lib/components/ui/LazyImage.svelte';
+    import {ExternalLink, Pencil, Trash2, Wallet} from 'lucide-svelte';
+    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
 
     const dispatch = createEventDispatcher<{
         edit: { id: number };
@@ -37,22 +37,6 @@
             maximumFractionDigits: 2
         }).format(amount);
     }
-
-    // Get broker icon (custom > favicon from portal > fallback to Briefcase)
-    // Needs explicit dependencies for reactivity
-    $: brokerIcon = (() => {
-        if (broker.icon_url) return broker.icon_url;
-        if (broker.portal_url) {
-            try {
-                const url = new URL(broker.portal_url);
-                return `${url.origin}/favicon.ico`;
-            } catch {
-                return null;
-            }
-        }
-        // No fallback to plugin icon - use Briefcase instead (more reliable)
-        return null;
-    })();
 
 
     function handleCardClick() {
@@ -88,22 +72,14 @@
     <div class="p-4 border-b border-gray-100 dark:border-slate-700">
         <div class="flex items-start justify-between">
             <div class="flex items-center gap-3 flex-1 min-w-0">
-                <!-- Broker Icon with LazyImage -->
-                <div class="w-10 h-10 rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden">
-                    {#if brokerIcon}
-                        <LazyImage
-                            src={brokerIcon}
-                            alt={broker.name}
-                            placeholder="broker"
-                            width="100%"
-                            height="100%"
-                            circle
-                        />
-                    {:else}
-                        <!-- Fallback: Briefcase icon -->
-                        <Briefcase size={20} class="text-libre-green dark:text-green-400" />
-                    {/if}
-                </div>
+                <!-- Broker Icon -->
+                <BrokerIcon
+                    iconUrl={broker.icon_url}
+                    portalUrl={broker.portal_url}
+                    pluginCode={broker.default_import_plugin}
+                    altText={broker.name}
+                    size="md"
+                />
 
                 <div class="min-w-0">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 truncate">{broker.name}</h3>

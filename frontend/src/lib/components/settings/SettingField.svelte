@@ -30,9 +30,9 @@
             {#if icon}
                 <svelte:component this={icon} size={18} class="text-gray-500 dark:text-gray-400 flex-shrink-0" />
             {/if}
-            <label class="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-200">
                 {label}
-            </label>
+            </div>
         </div>
 
         <!-- Actions (only if modified and not readonly) -->

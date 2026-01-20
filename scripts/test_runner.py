@@ -672,6 +672,18 @@ def services_broker(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Broker service tests", verbose=verbose)
 
 
+def services_user_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Test user profile update service (username/email modification).
+    """
+    print_section("Services: User Profile")
+    print_info("Testing: backend/app/services/user_service.py (update_profile)")
+    print_info("Tests: Update username/email, uniqueness validation, error handling")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_user_profile.py", test_names)
+    return run_command(cmd, "User profile service tests", verbose=verbose)
+
+
 def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
     """
     Test edge cases and regression scenarios for transactions.
@@ -1015,6 +1027,22 @@ def api_auth(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_auth_api.py", test_names)
     return run_command(cmd, "Auth API tests", verbose=verbose)
+
+
+def api_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """
+    Run Profile Update API endpoint tests.
+
+    Tests: PUT /auth/profile (username/email update)
+    """
+    print_section("Profile Update API Tests")
+    print_info("Testing REST API endpoints for profile updates")
+    print_info("Tests: PUT /auth/profile")
+    print_info("Tests: Username update, email update, validation, uniqueness")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_profile_api.py", test_names)
+    return run_command(cmd, "Profile API tests", verbose=verbose)
 
 
 def api_settings(verbose: bool = False, test_names: list[str] | None = None) -> bool:
@@ -1394,6 +1422,14 @@ These tests verify business logic in service layer:
             "prereq": "Database created",
             "tests": "CRUD, access control, summary",
             },
+        "user-profile": {
+            "func": services_user_profile,
+            "test_names": True,
+            "name": "User Profile Service",
+            "desc": "Test user profile update service",
+            "prereq": "Database created",
+            "tests": "Username/email update, validation",
+            },
         "edge-cases": {
             "func": services_edge_cases,
             "test_names": True,
@@ -1554,6 +1590,15 @@ These tests verify REST API endpoints:
             "desc": "Test Authentication endpoints",
             "prereq": "Database created",
             "tests": "POST /auth/register, /login, /logout, GET /auth/me",
+            "note": "Server auto-started",
+            },
+        "profile": {
+            "func": api_profile,
+            "test_names": True,
+            "name": "Profile API",
+            "desc": "Test Profile update endpoints",
+            "prereq": "Database created",
+            "tests": "PUT /auth/profile",
             "note": "Server auto-started",
             },
         "settings": {

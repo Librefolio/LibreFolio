@@ -2,9 +2,11 @@
     /**
      * SettingsLayout.svelte
      * 2-column layout for settings pages (sidebar + content)
+     * Styled to match GlobalSettingsTab
      */
     import { createEventDispatcher } from 'svelte';
     import { _ } from '$lib/i18n';
+    import { ChevronRight, Save, Undo, RotateCcw, Lock, Unlock } from 'lucide-svelte';
     import type { ComponentType } from 'svelte';
 
     const dispatch = createEventDispatcher<{
@@ -28,256 +30,111 @@
     export let isLocked: boolean = false;
     export let showLock: boolean = false;
     export let title: string = '';
+    export let description: string = '';
 </script>
 
-<div class="settings-layout">
-    <!-- Header -->
-    <div class="settings-header">
-        <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-100">
-            {title}
-        </h2>
+<div class="flex gap-6 min-h-[400px]">
+    <!-- Left sidebar: Category navigation -->
+    <div class="w-48 flex-shrink-0">
+        <nav class="space-y-1">
+            <!-- All categories button -->
+            <button
+                type="button"
+                on:click={() => selectedCategory = ''}
+                class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
+                    {selectedCategory === ''
+                        ? 'bg-libre-green text-white'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
+            >
+                <span class="flex-1 text-left">{$_('settings.all')}</span>
+                {#if selectedCategory === ''}
+                    <ChevronRight size={16}/>
+                {/if}
+            </button>
 
-        <!-- Bulk Actions -->
-        <div class="flex items-center gap-2">
-            {#if hasChanges}
+            {#each categories as category (category.id)}
                 <button
                     type="button"
-                    on:click={() => dispatch('saveAll')}
-                    class="btn btn-primary"
+                    on:click={() => selectedCategory = category.id}
+                    class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
+                        {selectedCategory === category.id
+                            ? 'bg-libre-green text-white'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                 >
-                    {$_('common.saveAll')}
-                </button>
-                <button
-                    type="button"
-                    on:click={() => dispatch('undoAll')}
-                    class="btn btn-secondary"
-                >
-                    {$_('common.undoAll')}
-                </button>
-            {/if}
-            {#if hasNonDefaults}
-                <button
-                    type="button"
-                    on:click={() => dispatch('resetAll')}
-                    class="btn btn-danger"
-                >
-                    {$_('common.resetAll')}
-                </button>
-            {/if}
-            {#if showLock}
-                <button
-                    type="button"
-                    on:click={() => dispatch('toggleLock')}
-                    class="btn btn-icon"
-                    title={isLocked ? $_('settings.unlock') : $_('settings.lock')}
-                >
-                    {#if isLocked}
-                        <!-- Lock icon -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                        </svg>
-                    {:else}
-                        <!-- Unlock icon -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                            <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
-                        </svg>
+                    <svelte:component this={category.icon} size={16} class="mr-2"/>
+                    <span class="flex-1 text-left">{$_(category.labelKey)}</span>
+                    {#if selectedCategory === category.id}
+                        <ChevronRight size={16}/>
                     {/if}
                 </button>
-            {/if}
-        </div>
+            {/each}
+        </nav>
     </div>
 
-    <!-- Content: 2 columns -->
-    <div class="settings-content">
-        <!-- Left Sidebar: Categories -->
-        {#if categories.length > 0}
-            <aside class="settings-sidebar">
-                <nav class="space-y-1">
-                    <button
-                        type="button"
-                        on:click={() => selectedCategory = ''}
-                        class="category-btn"
-                        class:active={selectedCategory === ''}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"/>
-                            <rect x="14" y="3" width="7" height="7"/>
-                            <rect x="14" y="14" width="7" height="7"/>
-                            <rect x="3" y="14" width="7" height="7"/>
-                        </svg>
-                        <span>{$_('settings.all')}</span>
-                    </button>
-
-                    {#each categories as category (category.id)}
+    <!-- Right side: Settings content -->
+    <div class="flex-1 space-y-4">
+        <!-- Header with actions -->
+        <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-slate-700">
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+                {#if description}
+                    <p class="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+                {/if}
+            </div>
+            <div class="flex items-center space-x-1">
+                {#if !isLocked}
+                    <!-- Bulk action buttons when unlocked -->
+                    {#if hasChanges}
                         <button
                             type="button"
-                            on:click={() => selectedCategory = category.id}
-                            class="category-btn"
-                            class:active={selectedCategory === category.id}
+                            on:click={() => dispatch('saveAll')}
+                            class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90"
+                            title={$_('common.saveAll')}
                         >
-                            <svelte:component this={category.icon} size={18} />
-                            <span>{$_(category.labelKey)}</span>
+                            <Save size={18}/>
                         </button>
-                    {/each}
-                </nav>
-            </aside>
-        {/if}
+                        <button
+                            type="button"
+                            on:click={() => dispatch('undoAll')}
+                            class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
+                            title={$_('common.undoAll')}
+                        >
+                            <Undo size={18}/>
+                        </button>
+                    {/if}
+                    {#if hasNonDefaults}
+                        <button
+                            type="button"
+                            on:click={() => dispatch('resetAll')}
+                            class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50"
+                            title={$_('common.resetAll')}
+                        >
+                            <RotateCcw size={18}/>
+                        </button>
+                    {/if}
+                {/if}
+                {#if showLock}
+                    <button
+                        type="button"
+                        on:click={() => dispatch('toggleLock')}
+                        class="p-2 rounded-lg transition-all {isLocked
+                            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
+                            : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'}"
+                        title={isLocked ? $_('settings.unlock') : $_('settings.lock')}
+                    >
+                        {#if isLocked}
+                            <Lock size={18}/>
+                        {:else}
+                            <Unlock size={18}/>
+                        {/if}
+                    </button>
+                {/if}
+            </div>
+        </div>
 
-        <!-- Right: Settings Fields -->
-        <main class="settings-main">
+        <!-- Content slot -->
+        <div class="space-y-4">
             <slot />
-        </main>
+        </div>
     </div>
 </div>
-
-<style>
-    .settings-layout {
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 1.5rem;
-    }
-
-    .settings-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-
-    .settings-content {
-        display: grid;
-        grid-template-columns: 200px 1fr;
-        gap: 2rem;
-    }
-
-    @media (max-width: 768px) {
-        .settings-content {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    .settings-sidebar {
-        position: sticky;
-        top: 1rem;
-        align-self: start;
-    }
-
-    .category-btn {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        width: 100%;
-        padding: 0.75rem 1rem;
-        border-radius: 0.5rem;
-        background: transparent;
-        border: none;
-        color: #6b7280;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        text-align: left;
-    }
-
-    :global(.dark) .category-btn {
-        color: #9ca3af;
-    }
-
-    .category-btn:hover {
-        background: #f3f4f6;
-        color: #1a4031;
-    }
-
-    :global(.dark) .category-btn:hover {
-        background: #334155;
-        color: #22c55e;
-    }
-
-    .category-btn.active {
-        background: #1a4031;
-        color: white;
-    }
-
-    :global(.dark) .category-btn.active {
-        background: #22c55e;
-        color: #0f172a;
-    }
-
-    .settings-main {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    /* Buttons */
-    .btn {
-        padding: 0.5rem 1rem;
-        border-radius: 0.375rem;
-        font-size: 0.875rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        border: 1px solid transparent;
-    }
-
-    .btn-primary {
-        background: #1a4031;
-        color: white;
-    }
-
-    .btn-primary:hover {
-        background: #173a2c;
-    }
-
-    :global(.dark) .btn-primary {
-        background: #22c55e;
-        color: #0f172a;
-    }
-
-    :global(.dark) .btn-primary:hover {
-        background: #16a34a;
-    }
-
-    .btn-secondary {
-        background: #f59e0b;
-        color: white;
-    }
-
-    .btn-secondary:hover {
-        background: #d97706;
-    }
-
-    .btn-danger {
-        background: #ef4444;
-        color: white;
-    }
-
-    .btn-danger:hover {
-        background: #dc2626;
-    }
-
-    .btn-icon {
-        background: #f3f4f6;
-        padding: 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    :global(.dark) .btn-icon {
-        background: #334155;
-        color: #f3f4f6;
-    }
-
-    .btn-icon:hover {
-        background: #e5e7eb;
-    }
-
-    :global(.dark) .btn-icon:hover {
-        background: #475569;
-    }
-</style>

@@ -95,28 +95,53 @@ Layout:
 ## Piano di Implementazione
 
 ### Fase 1: Creare Componenti Base (1.5 giorni) ✅ COMPLETATA
-1. [x] Creare `SettingField.svelte` con tutte le prop necessarie
-2. [x] Creare `SettingsLayout.svelte` con sidebar e header
-3. [ ] Creare `SettingImageUpload.svelte` per avatar/icon con crop/resize (dipende da Image Crop plan)
-4. [ ] Creare `SettingText.svelte` per username/email con inline edit
-5. [x] Testare con un esempio isolato (0 errors, 1 warning)
+1. [x] Creare `SettingField.svelte` con tutte le prop necessarie (base wrapper)
+2. [x] Creare `SettingsLayout.svelte` con sidebar e header (layout 2 colonne)
+3. [x] Creare `SettingText.svelte` per username/email con inline edit ✅
+4. [x] **Creare `SettingSelect.svelte`** per dropdown con azioni inline ✅ NUOVO
+5. [x] **Creare `SettingCurrency.svelte`** per FuzzySelect con azioni inline ✅ NUOVO
+6. [x] **Creare `SettingTheme.svelte`** per radio buttons con azioni inline ✅ NUOVO
+7. [ ] **SettingImageUpload.svelte**: ⏳ RIMANDATO a Image Crop Plan (plan-image-crop.md)
+8. [x] Testare (0 errors, 0 warnings ✅)
 
-### Fase 2: Refactor GlobalSettingsTab (0.5 giorni)
-1. [ ] Usare `SettingsLayout` per struttura
-2. [ ] Usare `SettingField` per ogni impostazione
-3. [ ] Mantenere logica lock/unlock esistente
-4. [ ] Verificare funzionamento completo
+**Componenti creati in `frontend/src/lib/components/settings/`**:
+- `SettingsLayout.svelte` - Layout 2 colonne (sidebar + content)
+- `SettingField.svelte` - Base wrapper con slot
+- `SettingText.svelte` - Inline text edit
+- `SettingSelect.svelte` - Dropdown con azioni
+- `SettingCurrency.svelte` - FuzzySelect con azioni
+- `SettingTheme.svelte` - Radio buttons con azioni
 
-### Fase 3: Refactor PreferencesTab (0.5 giorni)
-1. [ ] Usare `SettingsLayout` per struttura (senza lock)
-2. [ ] Usare `SettingField` per ogni impostazione
-3. [ ] Gestire caso speciale tema (localStorage + API)
-4. [ ] Verificare funzionamento completo
+### Fase 2: Refactor PreferencesTab (1 giorno) ✅ COMPLETATA
+1. [x] Usare `SettingsLayout` per struttura
+2. [x] Usare `SettingSelect` per lingua
+3. [x] Usare `SettingCurrency` per valuta
+4. [x] Usare `SettingTheme` per tema
+5. [x] Gestire caso speciale tema (localStorage + API)
+6. [x] Verificare funzionamento completo (0 errors, 0 warnings)
+7. [x] **Stile allineato a GlobalSettingsTab** (azioni inline con icone)
 
-### Fase 4: Creare Profile Page (1.5 giorni)
-1. [ ] **Account Section**:
+**Risultato**: UI identica a GlobalSettingsTab, componenti riutilizzabili
+
+### Fase 3: Refactor GlobalSettingsTab (0.5 giorni) ⏭️ SALTATA
+**Decisione**: GlobalSettingsTab è già ben strutturato (688 righe) e lo abbiamo usato come riferimento per creare i componenti unificati. Refactorarlo non porterebbe benefici significativi dato che:
+- Ha settings dinamiche dal DB (tipi diversi: bool, int, str)
+- Gestisce lock/unlock complesso
+- Funziona correttamente
+
+**Azione**: Skip to Fase 4, eventuale refactor in futuro se necessario.
+
+### Fase 4: Creare Profile Page (1.5 giorni) 🔄 IN CORSO
+1. [x] **Fix API PreferencesTab**: PUT invece di PATCH, campi corretti (language, base_currency)
+2. [x] **PasswordChangeModal**: Modale per cambio password (dark mode supportato)
+3. [x] **ProfileTab dark mode**: Supporto tema scuro
+4. [x] **Backend API update_profile**: PUT /auth/profile per username/email
+   - Schema: `UpdateProfileRequest`, `UpdateProfileResponse`
+   - Service: `user_service.update_profile()` con validazione uniqueness
+   - Tests: `test_services/test_user_profile.py`, `test_api/test_profile_api.py`
+5. [ ] **Account Section Frontend**:
    - [ ] Username - `SettingText` con edit inline
-   - [ ] Email - `SettingText` con edit inline  
+   - [ ] Email - `SettingText` con edit inline
    - [ ] Avatar - `SettingImageUpload` con crop 1:1
    - [ ] Account created - readonly, formatted date
 2. [ ] **Security Section**:

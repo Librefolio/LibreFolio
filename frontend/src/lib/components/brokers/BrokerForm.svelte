@@ -8,6 +8,7 @@
     import {userSettings} from '$lib/stores/settings';
     import FuzzySelect from '$lib/components/FuzzySelect.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import type {SelectOption} from '$lib/components/FuzzySelect.svelte';
     import {Plus, Trash2, Info, Briefcase} from 'lucide-svelte';
 
@@ -146,20 +147,8 @@
     // Get user's default currency
     $: defaultCurrency = $userSettings?.default_currency ?? 'EUR';
 
-    // Get selected plugin info (for icon fallback)
+    // Get selected plugin info (for tooltip/description)
     $: selectedPlugin = importPlugins.find(p => p.id === defaultImportPlugin);
-
-    // Computed icon URL: custom > favicon from portal > plugin icon
-    $: effectiveIconUrl = iconUrl ||
-        (portalUrl ? getFaviconUrl(portalUrl) : null) ||
-        selectedPlugin?.icon ||
-        null;
-
-    // Track if icon failed to load
-    let iconLoadError = false;
-
-    // Reset error when URL changes
-    $: if (effectiveIconUrl) iconLoadError = false;
 
     function getFaviconUrl(url: string): string | null {
         try {
@@ -333,19 +322,14 @@
                     placeholder={$_('brokers.iconUrlPlaceholder')}
                     class="flex-1 px-3 py-2 border dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
             />
-            <!-- Icon preview - sempre visibile -->
-            <div class="w-10 h-10 rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden">
-                {#if effectiveIconUrl && !iconLoadError}
-                    <img
-                        src={effectiveIconUrl}
-                        alt=""
-                        class="w-full h-full object-cover"
-                        on:error={() => iconLoadError = true}
-                    />
-                {:else}
-                    <Briefcase size={20} class="text-libre-green" />
-                {/if}
-            </div>
+            <!-- Icon preview using BrokerIcon component -->
+            <BrokerIcon
+                iconUrl={iconUrl}
+                portalUrl={portalUrl}
+                pluginCode={defaultImportPlugin}
+                altText="Preview"
+                size="md"
+            />
         </div>
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('brokers.iconUrlHint')}</p>
     </div>

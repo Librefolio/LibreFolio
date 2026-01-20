@@ -302,6 +302,8 @@
       "max_file_upload_mb": "MB"
     },
     "selectCurrency": "Select currency...",
+    "userPreferences": "User Preferences",
+    "all": "All Settings",
     "categoryAll": "All",
     "categoryDisplay": "Display",
     "categoryCurrency": "Currency",

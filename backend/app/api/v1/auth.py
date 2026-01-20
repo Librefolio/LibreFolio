@@ -22,6 +22,8 @@ from backend.app.schemas.auth import (
     AuthRegisterResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
+    UpdateProfileRequest,
+    UpdateProfileResponse,
 )
 from backend.app.services import user_service
 from backend.app.services.auth_service import (
@@ -244,3 +246,47 @@ async def change_password(
     logger.info("Password changed", user_id=current_user.id, username=current_user.username)
 
     return ChangePasswordResponse(message="Password changed successfully")
+
+
+@router.put("/profile", response_model=UpdateProfileResponse)
+async def update_profile(
+    request: UpdateProfileRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+):
+    """
+    Update profile for the currently authenticated user.
+
+    Allows changing username and/or email.
+    Validates uniqueness constraints before committing.
+    """
+    # Nothing to update
+    if request.username is None and request.email is None:
+        return UpdateProfileResponse(
+            user=AuthUserResponse.model_validate(current_user),
+            message="No changes requested"
+        )
+
+    # Update profile
+    updated_user, error = await user_service.update_profile(
+        session=session,
+        user_id=current_user.id,
+        username=request.username,
+        email=request.email,
+    )
+
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    logger.info(
+        "Profile updated",
+        user_id=updated_user.id,
+        username=updated_user.username,
+        email=updated_user.email
+    )
+
+    return UpdateProfileResponse(
+        user=AuthUserResponse.model_validate(updated_user),
+        message="Profile updated successfully"
+    )
+
