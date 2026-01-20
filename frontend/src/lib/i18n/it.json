@@ -302,7 +302,9 @@
       "max_file_upload_mb": "MB"
     },
     "selectCurrency": "Seleziona valuta...",
-    "categoryAll": "Tutte",
+    "userPreferences": "Preferenze Utente",
+    "all": "Tutte le Impostazioni",
+    "categoryAll": "Tutto",
     "categoryDisplay": "Visualizzazione",
     "categoryCurrency": "Valuta",
     "categoryAppearance": "Aspetto",

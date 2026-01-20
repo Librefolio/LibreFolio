@@ -265,3 +265,63 @@ async def set_user_admin(
     status = "promoted to admin" if is_admin else "demoted from admin"
     logger.info(f"User {status}", user_id=user_id, username=username)
     return True, None
+
+
+async def update_profile(
+    session: AsyncSession,
+    user_id: int,
+    username: str | None = None,
+    email: str | None = None,
+) -> tuple[Optional[User], Optional[str]]:
+    """
+    Update user profile (username and/or email).
+
+    Validates uniqueness constraints before committing.
+
+    Args:
+        session: Database session
+        user_id: ID of user to update
+        username: New username (optional)
+        email: New email (optional)
+
+    Returns:
+        Tuple of (updated_user, None) on success or (None, error_message) on failure
+    """
+    # Get current user
+    user = await get_user_by_id(session, user_id)
+    if not user:
+        return None, "User not found"
+
+    # Nothing to update
+    if username is None and email is None:
+        return user, None
+
+    # Check username uniqueness (if changing)
+    if username is not None and username != user.username:
+        existing = await get_user_by_username(session, username)
+        if existing:
+            return None, "Username already taken"
+        user.username = username
+
+    # Check email uniqueness (if changing)
+    if email is not None and email != user.email:
+        existing = await get_user_by_email(session, email)
+        if existing:
+            return None, "Email already registered"
+        user.email = email
+
+    # Update timestamp
+    user.updated_at = utcnow()
+
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    logger.info(
+        "User profile updated",
+        user_id=user.id,
+        username=user.username,
+        email=user.email
+    )
+    return user, None
+

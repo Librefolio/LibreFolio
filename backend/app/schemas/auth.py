@@ -43,6 +43,13 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8, description="New password (min 8 chars)")
 
 
+class UpdateProfileRequest(BaseModel):
+    """Update user profile request. All fields optional."""
+
+    username: str | None = Field(None, min_length=3, max_length=50, description="New username")
+    email: EmailStr | None = Field(None, description="New email address")
+
+
 # =============================================================================
 # Response Schemas
 # =============================================================================
@@ -91,6 +98,13 @@ class ChangePasswordResponse(BaseModel):
     """Response after successful password change."""
 
     message: str = "Password changed successfully"
+
+
+class UpdateProfileResponse(BaseModel):
+    """Response after successful profile update."""
+
+    user: AuthUserResponse
+    message: str = "Profile updated successfully"
 
 
 class AuthErrorResponse(BaseModel):

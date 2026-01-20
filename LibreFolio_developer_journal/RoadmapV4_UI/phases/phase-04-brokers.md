@@ -130,8 +130,16 @@ Dopo il completamento delle features base di Phase 4, sono emerse diverse necess
    - **Portal URL empty string**: ✅ **FIXED**
      - BrokerForm invia `""` in edit mode
      - Schema + service: `""` → `None` in DB
-   - **Plugin icon bordino**: ✅ **FIXED** - Rimosso `bg-gray-100` da plugin icon in BrokerForm
-   - **Plugin icon fallback**: ❌ Rimosso (troppo inaffidabile, usa Briefcase)
+   - **Plugin icon bordino**: ✅ **FIXED** - Rimosso `bg-gray-100` da plugin icon
+   - **BrokerIcon component**: ✅ **COMPLETATO**
+     - Prova icon_url → portal_url favicon → plugin icon API → Briefcase
+     - Carica plugin list da API per ottenere icon_url reale
+     - Gestisce stringhe vuote come null (fix finale)
+     - Usato in BrokerCard e BrokerForm
+     - Reattivo e gestisce errori automaticamente
+   - **BrokerIcon sync fallback fix**: ✅ **FIXED** (20-01-2026)
+     - Aggiunto `imageKey` + `{#key}` per forzare re-render durante moveToNextFallback()
+     - Risolve problema icona plugin non mostrata quando icon_url cancellato
 
 3. **Broker Form**: ✅ **VERIFICATO**
    - GenericCSV ordering: ✅ **FIXED** (code `'broker_generic_csv'`)
@@ -157,13 +165,22 @@ Dopo il completamento delle features base di Phase 4, sono emerse diverse necess
 7. **Developer Tools**: ✅ **NUOVO**
    - **GUIDA-DARK-MODE.md**: ✅ Creata guida per modificare velocemente variabili dark mode
 
-#### 🎯 Settings Unification Plan - INIZIATO (20-01-2026)
+#### 🎯 Settings Unification Plan - Fase 1 & 2 COMPLETATE
 
-**Fase 1 Completata**:
-- ✅ `SettingField.svelte` creato (single field con azioni inline)
-- ✅ `SettingsLayout.svelte` creato (2-column layout con sidebar)
-- ✅ Test: 0 errors, 1 warning
-- ⏳ **Prossimo**: SettingText.svelte, poi refactor PreferencesTab
+**Fase 1 Completata** (20-01-2026):
+- ✅ `SettingField.svelte` creato
+- ✅ `SettingsLayout.svelte` creato  
+- ✅ `SettingText.svelte` creato
+- ⏳ SettingImageUpload rimandato a Image Crop Plan
+- ✅ Test: 0 errors, 0 warnings
+
+**Fase 2 Completata** (20-01-2026):
+- ✅ PreferencesTab refactorizzato con nuovi componenti
+- ✅ Ridotto da 451 → ~150 righe
+- ✅ UI consistente, tutte le funzionalità mantenute
+- ✅ Test: 0 errors, 0 warnings
+
+**Prossimo**: Fase 3 - Refactor GlobalSettingsTab
 
 **Link**: [`../plan-settings-unification.md`](../plan-settings-unification.md)
 

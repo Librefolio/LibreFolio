@@ -1,9 +1,12 @@
 import {sveltekit} from '@sveltejs/kit/vite';
 import {defineConfig} from 'vite';
 
-export default defineConfig({
+export default defineConfig(({mode}) => ({
     plugins: [sveltekit()],
     build: {
+        // Debug mode: sourcemaps + no minify for easy debugging
+        sourcemap: mode === 'development' ? true : false,
+        minify: mode === 'development' ? false : 'esbuild',
         rollupOptions: {
             output: {
                 manualChunks: (id) => {
@@ -36,4 +39,4 @@ export default defineConfig({
         // The library uses frequency lists for common passwords/words
         chunkSizeWarningLimit: 2000
     }
-});
+}));
