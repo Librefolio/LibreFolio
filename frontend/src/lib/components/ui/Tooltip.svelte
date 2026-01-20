@@ -150,12 +150,22 @@
         width: max-content;
     }
 
+    /* Dark mode tooltip */
+    :global(html.dark) .tooltip {
+        background-color: #61666f;
+    }
+
     .tooltip-arrow {
         position: absolute;
         width: 8px;
         height: 8px;
         background-color: #1f2937;
         transform: rotate(45deg);
+    }
+
+    /* Dark mode arrow */
+    :global(html.dark) .tooltip-arrow {
+        background-color: #61666f;
     }
 
     /* Position: Top */

@@ -74,6 +74,7 @@
                 }
             } else if (brokerId) {
                 // Update broker
+                // BrokerForm sends "" for cleared fields, value for set fields
                 await api.patch(`/brokers/${brokerId}`, {
                     name: event.detail.name,
                     description: event.detail.description,
@@ -83,7 +84,7 @@
                     allow_cash_overdraft: event.detail.allow_cash_overdraft,
                     allow_asset_shorting: event.detail.allow_asset_shorting,
                     is_active: event.detail.is_active,
-                    opened_at: event.detail.opened_at
+                    opened_at: event.detail.opened_at || null
                 });
 
                 formTouched = false;

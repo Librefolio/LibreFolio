@@ -544,6 +544,4 @@ class BaseBulkDeleteResponse(BaseBulkResponse[TResult]):
     """
 
     # Delete-specific aggregate field
-    total_deleted: int = Field(
-        ..., ge=0, description="Total number of records deleted across all items"
-    )
+    total_deleted: int = Field(..., ge=0, description="Total number of records deleted across all items")

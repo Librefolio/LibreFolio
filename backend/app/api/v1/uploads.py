@@ -25,7 +25,7 @@ from backend.app.schemas.uploads import (
     UploadFileInfo,
     UploadListResponse,
     UploadResponse,
-)
+    )
 from backend.app.services.global_settings_service import get_max_upload_mb
 from backend.app.services.static_uploads import (
     UploadSecurityError,
@@ -35,7 +35,7 @@ from backend.app.services.static_uploads import (
     get_upload_path,
     list_uploads,
     save_upload,
-)
+    )
 
 logger = structlog.get_logger(__name__)
 
@@ -46,7 +46,7 @@ PLUGIN_STATIC_DIRS = {
     "brim": PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "static",
     "fx": PROJECT_ROOT / "backend" / "app" / "services" / "fx_providers" / "static",
     "asset": PROJECT_ROOT / "backend" / "app" / "services" / "asset_source_providers" / "static",
-}
+    }
 
 
 @router.post("", response_model=UploadResponse)
@@ -55,7 +55,7 @@ async def upload_file(
     description: Optional[str] = Form(default=None),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     session: AsyncSession = Depends(get_session_generator),
-):
+    ):
     """
     Upload a file.
 
@@ -89,14 +89,14 @@ async def upload_file(
             user_id=current_user.id,
             description=description,
             mime_type=file.content_type,
-        )
+            )
 
         logger.info(
             "File uploaded via API",
             file_id=file_info.id,
             user_id=current_user.id,
             size_bytes=file_info.size_bytes,
-        )
+            )
 
         return UploadResponse(file=file_info)
 
@@ -106,7 +106,7 @@ async def upload_file(
             error=str(e),
             filename=file.filename,
             user_id=current_user.id,
-        )
+            )
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("Upload failed", error=str(e), user_id=current_user.id)
@@ -117,7 +117,7 @@ async def upload_file(
 async def list_files(
     current_user: Annotated[User, Depends(get_current_user)] = None,
     my_files_only: bool = False,
-):
+    ):
     """
     List all uploaded files.
 
@@ -137,7 +137,7 @@ async def list_files(
 async def get_file_info(
     file_id: str,
     current_user: Annotated[User, Depends(get_current_user)] = None,
-):
+    ):
     """
     Get metadata for a specific file.
 
@@ -157,7 +157,7 @@ async def get_file_info(
 async def delete_file(
     file_id: str,
     current_user: Annotated[User, Depends(get_current_user)] = None,
-):
+    ):
     """
     Delete an uploaded file.
 
@@ -187,22 +187,40 @@ async def delete_file(
         success=True,
         message="File deleted successfully",
         file_id=file_id,
-    )
+        )
 
 
 @router.get("/file/{file_id}")
-async def serve_file(file_id: str):
+async def serve_file(
+    file_id: str,
+    download: bool = False,
+    offset: Optional[int] = None,
+    window: Optional[int] = None,
+    img_preview: Optional[str] = None,
+    ):
     """
     Serve the actual file content.
 
     This endpoint does not require authentication to allow
     embedding in images/documents.
 
+    Preview modes:
+    - Text preview: ?offset=0&window=1000 (returns first 1000 chars)
+    - Image preview: ?img_preview=200x200 (returns resized image, max dimension)
+
     Args:
         file_id: File UUID
+        download: If True, force download with original filename
+        offset: Start byte for text preview (text files only)
+        window: Number of bytes to read for text preview (text files only)
+        img_preview: Image resize format "WIDTHxHEIGHT" (images only)
 
     Returns:
         File content with appropriate MIME type
+
+    Raises:
+        400: If preview params used on incompatible file type
+        404: If file not found
     """
     file_path = get_upload_path(file_id)
     if not file_path:
@@ -210,11 +228,105 @@ async def serve_file(file_id: str):
 
     mime_type = get_upload_mime_type(file_id) or "application/octet-stream"
 
+    # Text preview mode
+    if offset is not None or window is not None:
+        if not mime_type.startswith("text/"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Text preview not supported for {mime_type}. Only text/* files supported."
+                )
+
+        # Read text file window
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                if offset:
+                    f.seek(offset)
+                content = f.read(window) if window else f.read()
+
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse(content=content, media_type=mime_type)
+        except Exception as e:
+            logger.error("Failed to read text preview", error=str(e), file_id=file_id)
+            raise HTTPException(status_code=500, detail="Failed to read file preview")
+
+    # Image preview mode
+    if img_preview:
+        if not mime_type.startswith("image/"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Image preview not supported for {mime_type}. Only image/* files supported."
+                )
+
+        # Parse dimensions (format: "200x200")
+        try:
+            width_str, height_str = img_preview.lower().split("x")
+            max_width = int(width_str)
+            max_height = int(height_str)
+        except (ValueError, AttributeError):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid img_preview format. Expected: WIDTHxHEIGHT (e.g., 200x200)"
+                )
+
+        # Generate resized image in async executor (non-blocking)
+        try:
+            import asyncio
+            from concurrent.futures import ProcessPoolExecutor
+
+            def resize_image_sync(file_path_str: str, max_w: int, max_h: int) -> bytes:
+                """Synchronous image resize function to run in separate process"""
+                from PIL import Image
+                import io
+
+                # Open image
+                img = Image.open(file_path_str)
+
+                # Calculate resize dimensions (maintain aspect ratio, use most restrictive dimension)
+                width, height = img.size
+                ratio = min(max_w / width, max_h / height)
+
+                if ratio < 1:  # Only resize if image is larger
+                    new_width = int(width * ratio)
+                    new_height = int(height * ratio)
+                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+                # Save to bytes
+                output = io.BytesIO()
+                img_format = img.format or "PNG"
+                img.save(output, format=img_format, quality=85, optimize=True)
+                return output.getvalue()
+
+            # Run resize in process pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            with ProcessPoolExecutor() as executor:
+                image_bytes = await loop.run_in_executor(executor, resize_image_sync, str(file_path), max_width, max_height)
+
+            from fastapi.responses import StreamingResponse
+            import io
+
+            return StreamingResponse(
+                io.BytesIO(image_bytes),
+                media_type=mime_type,
+                headers={"Cache-Control": "public, max-age=3600"}
+                )
+
+        except Exception as e:
+            logger.error("Failed to generate image preview", error=str(e), file_id=file_id)
+            raise HTTPException(status_code=500, detail="Failed to generate image preview")
+
+    # Normal file serving (no preview)
+    # Get original filename for downloads
+    filename = None
+    if download:
+        info = get_upload_info(file_id)
+        if info:
+            filename = info.original_name
+
     return FileResponse(
         path=file_path,
         media_type=mime_type,
-        filename=file_path.name,
-    )
+        filename=filename or file_path.name,
+        )
 
 
 # =============================================================================
@@ -252,7 +364,7 @@ async def serve_plugin_static(provider_type: str, path: str):
         raise HTTPException(
             status_code=400,
             detail=f"Invalid provider type. Must be one of: {list(PLUGIN_STATIC_DIRS.keys())}",
-        )
+            )
 
     # Build path and validate
     base_dir = PLUGIN_STATIC_DIRS[provider_type]
@@ -279,4 +391,4 @@ async def serve_plugin_static(provider_type: str, path: str):
     return FileResponse(
         path=file_path,
         media_type=mime_type,
-    )
+        )

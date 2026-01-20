@@ -11,7 +11,7 @@
     import { api } from '$lib/api';
     import ImageUploader from '$lib/components/ui/ImageUploader.svelte';
     import LazyImage from '$lib/components/ui/LazyImage.svelte';
-    import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, Eye, List, LayoutGrid } from 'lucide-svelte';
+    import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid } from 'lucide-svelte';
 
     type Tab = 'static' | 'brim';
 
@@ -68,10 +68,9 @@
         try {
             const formData = new FormData();
             formData.append('file', file);
+            // Don't send description if not provided
 
-            await api.post('/uploads', formData, {
-                headers: {} // Let browser set Content-Type with boundary
-            });
+            await api.post('/uploads', formData);
 
             showUploader = false;
             await loadFiles();
@@ -177,7 +176,7 @@
                     class="btn btn-primary"
                     on:click={() => showUploader = !showUploader}
                 >
-                    {showUploader ? $t('common.cancel') : $t('uploads.upload')}
+                    {showUploader ? $t('uploads.newFile') : $t('uploads.upload')}
                 </button>
             {/if}
         </div>
@@ -261,7 +260,7 @@
 
                             <div class="file-actions">
                                 <a
-                                    href={file.url}
+                                    href={`${file.url}?download=true`}
                                     download={file.original_name}
                                     class="action-btn"
                                     title={$t('uploads.download')}
@@ -305,7 +304,7 @@
                                     <td class="actions-cell">
                                         <div class="action-buttons">
                                             <a
-                                                href={file.url}
+                                                href={`${file.url}?download=true`}
                                                 download={file.original_name}
                                                 class="action-btn"
                                                 title={$t('uploads.download')}

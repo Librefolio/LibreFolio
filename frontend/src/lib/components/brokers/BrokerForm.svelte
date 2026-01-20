@@ -117,17 +117,17 @@
             }>>('/brokers/import/plugins');
 
             // Backend returns array directly, not {plugins: [...]}
-            // Sort: GenericCSV first with "(default)" suffix, rest alphabetically
+            // Sort: broker_generic_csv first with "(default)" suffix, rest alphabetically
             const plugins = (response || []).map(p => ({
                 id: p.code,
-                name: p.code === 'GenericCSV' ? `${p.name} (default)` : p.name,
+                name: p.code === 'broker_generic_csv' ? `${p.name} (default)` : p.name,
                 description: p.description,
                 icon: p.icon_url
             }));
 
             importPlugins = plugins.sort((a, b) => {
-                if (a.id === 'GenericCSV') return -1;
-                if (b.id === 'GenericCSV') return 1;
+                if (a.id === 'broker_generic_csv') return -1;
+                if (b.id === 'broker_generic_csv') return 1;
                 return a.name.localeCompare(b.name);
             });
         } catch (e) {
@@ -197,12 +197,29 @@
         // Filter out zero/negative amounts
         const validBalances = initialBalances.filter(b => b.amount > 0);
 
+        // For edit mode: send empty string "" to clear fields, undefined to skip update
+        // For create mode: undefined means "don't include field"
+        const trimmedDescription = description.trim();
+        const trimmedPortalUrl = portalUrl.trim();
+        const trimmedIconUrl = iconUrl.trim();
+        const trimmedPlugin = defaultImportPlugin?.trim() || '';
+
         dispatch('submit', {
             name: name.trim(),
-            description: description.trim() || undefined,
-            portal_url: portalUrl.trim() || undefined,
-            icon_url: iconUrl.trim() || undefined,
-            default_import_plugin: defaultImportPlugin || undefined,
+            // In edit mode, empty string means "clear field"
+            // In create mode, undefined means "don't include"
+            description: mode === 'edit'
+                ? (trimmedDescription || "")
+                : (trimmedDescription || undefined),
+            portal_url: mode === 'edit'
+                ? (trimmedPortalUrl || "")
+                : (trimmedPortalUrl || undefined),
+            icon_url: mode === 'edit'
+                ? (trimmedIconUrl || "")
+                : (trimmedIconUrl || undefined),
+            default_import_plugin: mode === 'edit'
+                ? (trimmedPlugin || "")
+                : (trimmedPlugin || undefined),
             allow_cash_overdraft: allowOverdraft,
             allow_asset_shorting: allowShorting,
             is_active: isActive,
@@ -230,7 +247,7 @@
                 required
                 minlength="1"
                 maxlength="100"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
                 class:border-red-300={name.length > 0 && name.trim().length === 0}
         />
     </div>
@@ -246,7 +263,7 @@
                 placeholder={$_('brokers.descriptionPlaceholder')}
                 rows="3"
                 maxlength="500"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors resize-none"
+                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors resize-none"
         ></textarea>
     </div>
 
@@ -260,7 +277,7 @@
                 <img
                     src={selectedPlugin.icon}
                     alt=""
-                    class="w-6 h-6 rounded object-cover bg-gray-100 dark:bg-slate-600"
+                    class="w-6 h-6 rounded object-cover"
                     on:error={(e) => {
                         const target = e.currentTarget;
                         if (target instanceof HTMLImageElement) target.style.display = 'none';
@@ -270,7 +287,7 @@
             <select
                     id="broker-plugin"
                     bind:value={defaultImportPlugin}
-                    class="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                    class="flex-1 px-3 py-2 border dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
                     disabled={loadingPlugins}
             >
                 <option value="">{loadingPlugins ? $_('common.loading') : $_('brokers.selectPlugin')}</option>
@@ -299,7 +316,7 @@
                 type="url"
                 bind:value={portalUrl}
                 placeholder={$_('brokers.portalUrlPlaceholder')}
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
         />
     </div>
 
@@ -314,7 +331,7 @@
                     type="url"
                     bind:value={iconUrl}
                     placeholder={$_('brokers.iconUrlPlaceholder')}
-                    class="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                    class="flex-1 px-3 py-2 border dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
             />
             <!-- Icon preview - sempre visibile -->
             <div class="w-10 h-10 rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden">
@@ -344,7 +361,7 @@
                     id="broker-opened"
                     type="date"
                     bind:value={openedAt}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                    class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
             />
         </div>
 
@@ -380,7 +397,7 @@
                 <input
                         type="checkbox"
                         bind:checked={allowOverdraft}
-                        class="w-4 h-4 text-libre-green border-gray-300 rounded focus:ring-libre-green"
+                        class="w-4 h-4 text-libre-green rounded focus:ring-libre-green"
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowOverdraft')}</span>
             </label>
@@ -402,7 +419,7 @@
                 <input
                         type="checkbox"
                         bind:checked={allowShorting}
-                        class="w-4 h-4 text-libre-green border-gray-300 rounded focus:ring-libre-green"
+                        class="w-4 h-4 text-libre-green rounded focus:ring-libre-green"
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowShorting')}</span>
             </label>
@@ -450,7 +467,7 @@
                                         min="0"
                                         bind:value={balance.amount}
                                         placeholder={$_('brokers.amount')}
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green h-[42px]"
+                                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green h-[42px]"
                                 />
                             </div>
 

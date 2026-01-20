@@ -315,6 +315,7 @@
     "maxSize": "Taille max: {size}Mo",
     "imageSize": "Taille de l'image",
     "upload": "Téléverser",
+    "newFile": "Nouveau Fichier",
     "uploading": "Téléversement...",
     "uploadSuccess": "Fichier téléversé avec succès",
     "uploadError": "Échec du téléversement",

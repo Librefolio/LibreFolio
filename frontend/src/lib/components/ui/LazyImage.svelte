@@ -21,6 +21,14 @@
     let loaded = false;
     let error = false;
     let imgElement: HTMLImageElement;
+    let previousSrc = src;
+
+    // Reset state when src changes
+    $: if (src !== previousSrc) {
+        loaded = false;
+        error = false;
+        previousSrc = src;
+    }
 
     // Placeholder SVGs
     const placeholders = {
@@ -93,7 +101,8 @@
     .lazy-image-container {
         position: relative;
         display: inline-block;
-        background-color: #e5e7eb;
+        /* Transparent background to avoid border in dark mode */
+        background-color: transparent;
     }
 
     .placeholder-img {

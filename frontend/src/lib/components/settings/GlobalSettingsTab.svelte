@@ -514,7 +514,7 @@
                                                 class="w-20 px-3 py-2 border rounded-lg text-sm text-right
                                                 {isLocked
                                                     ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                    : 'bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
+                                                    : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
                                         />
                                         {#if getSettingUnit(setting.key)}
                                             <span class="text-sm text-gray-500">{getSettingUnit(setting.key)}</span>
@@ -564,7 +564,7 @@
                                             class="w-40 px-3 py-2 border rounded-lg text-sm
                                             {isLocked
                                                 ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                : 'bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
+                                                : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
                                     >
                                         {#each languageOptions as lang}
                                             <option value={lang.code}>
@@ -660,7 +660,7 @@
                                             class="w-32 px-3 py-2 border rounded-lg text-sm
                                             {isLocked
                                                 ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                : 'bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
+                                                : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
                                     />
                                 {/if}
                             </div>

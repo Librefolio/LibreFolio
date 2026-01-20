@@ -38,6 +38,7 @@ bcrypt = "*"
 email-validator = "*"
 python-magic = "*"
 argcomplete = "*"
+pillow = "*"
 
 [dev-packages]
 pytest = "*"

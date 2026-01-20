@@ -90,7 +90,7 @@ import {_} from '$lib/i18n';
     <!-- Logo Header -->
     <div class="p-4 flex items-center border-b border-white/10 {collapsed ? 'justify-center' : 'justify-between'}">
         <button
-                class="flex items-center space-x-3 cursor-pointer hover:opacity-80 transition-opacity"
+                class="flex items-center space-x-3 cursor-pointer"
                 on:click={toggleCollapsed}
                 title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >

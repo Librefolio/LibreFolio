@@ -142,10 +142,6 @@ html.dark .border-gray-200 {
     border-color: var(--theme-border-primary) !important;
 }
 
-html.dark .border-gray-300 {
-    border-color: var(--theme-border-secondary) !important;
-}
-
 html.dark .shadow-sm,
 html.dark .shadow {
     --tw-shadow: var(--theme-shadow);
@@ -158,9 +154,10 @@ html.dark .hover\:bg-gray-100:hover {
 html.dark input,
 html.dark select,
 html.dark textarea {
-    background-color: var(--theme-bg-secondary);
-    border-color: var(--theme-border-primary);
+    /* NO background override - let component styles work */
+    border-color: #546175;
     color: var(--theme-text-primary);
+
 }
 
 html.dark input::placeholder,
@@ -183,7 +180,7 @@ html.dark .text-libre-dark {
 }
 
 html.dark .text-libre-green {
-    color: #4ade80 !important; /* Lighter green for dark mode */
+    color: #39af50 !important; /* Lighter green for dark mode */
 }
 
 /* Dark mode: Cards and modals */
@@ -228,9 +225,6 @@ html.dark .bg-libre-green {
     background-color: #166534 !important; /* Darker green for better contrast */
 }
 
-html.dark .bg-libre-green:hover {
-    background-color: #15803d !important;
-}
 
 /* Dark mode: AnimatedBackground (login page) */
 html.dark .animated-bg-gradient {
