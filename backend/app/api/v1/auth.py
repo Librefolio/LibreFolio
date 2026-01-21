@@ -290,3 +290,49 @@ async def update_profile(
         message="Profile updated successfully"
     )
 
+@router.delete("/users/me", response_model=dict)
+async def delete_own_account(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+):
+    """
+    Delete the currently authenticated user's account.
+
+    This is a destructive action that:
+    - Deletes all user data (brokers, transactions, settings)
+    - Cannot be undone
+
+    Constraints:
+    - Cannot delete if you are the only superuser
+    - Session is invalidated after deletion
+    """
+    # Check if this is the only superuser
+    if current_user.is_superuser:
+        superuser_count = await user_service.count_superusers(session)
+        if superuser_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete account: you are the only administrator"
+            )
+
+    # Delete the user (cascades to related data)
+    await user_service.delete_user(session, current_user.id)
+
+    logger.warning(
+        "User account deleted",
+        user_id=current_user.id,
+        username=current_user.username
+    )
+
+    # Clear session cookie
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        httponly=SESSION_COOKIE_HTTPONLY,
+        samesite=SESSION_COOKIE_SAMESITE,
+        secure=SESSION_COOKIE_SECURE,
+    )
+
+    return {"message": "Account deleted successfully"}
+
+

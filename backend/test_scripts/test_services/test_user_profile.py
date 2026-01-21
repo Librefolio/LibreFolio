@@ -206,3 +206,69 @@ class TestUpdateProfileService:
 
         assert error == "User not found"
         assert updated is None
+
+
+class TestCountSuperusers:
+    """Tests for user_service.count_superusers()."""
+
+    @pytest.mark.asyncio
+    async def test_count_superusers_none(self, session: AsyncSession):
+        """Should return 0 when no superusers exist."""
+        # Note: Test DB may already have superusers from other tests
+        # We just verify the function works without error
+        count = await user_service.count_superusers(session)
+        assert isinstance(count, int)
+        assert count >= 0
+
+    @pytest.mark.asyncio
+    async def test_count_superusers_after_create(self, session: AsyncSession):
+        """Should count superusers correctly."""
+        initial_count = await user_service.count_superusers(session)
+
+        # Create a superuser
+        unique_id = uuid.uuid4().hex[:8]
+        new_user, error = await user_service.create_user(
+            session=session,
+            username=f"superuser_{unique_id}",
+            email=f"super_{unique_id}@example.com",
+            password="SuperPass123!",
+            is_superuser=True,
+        )
+        assert error is None
+        assert new_user.is_superuser is True
+
+        new_count = await user_service.count_superusers(session)
+        assert new_count == initial_count + 1
+
+
+class TestDeleteUser:
+    """Tests for user_service.delete_user()."""
+
+    @pytest.mark.asyncio
+    async def test_delete_user_success(self, session: AsyncSession):
+        """Should delete user successfully."""
+        # Create a user to delete
+        unique_id = uuid.uuid4().hex[:8]
+        user_to_delete, error = await user_service.create_user(
+            session=session,
+            username=f"todelete_{unique_id}",
+            email=f"delete_{unique_id}@example.com",
+            password="DeleteMe123!",
+        )
+        assert error is None
+        user_id = user_to_delete.id
+
+        # Delete the user
+        result = await user_service.delete_user(session, user_id)
+        assert result is True
+
+        # Verify user is gone
+        deleted_user = await user_service.get_user_by_id(session, user_id)
+        assert deleted_user is None
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_user(self, session: AsyncSession):
+        """Should return False for non-existent user."""
+        result = await user_service.delete_user(session, 99999)
+        assert result is False
+

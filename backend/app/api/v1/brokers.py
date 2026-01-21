@@ -389,6 +389,9 @@ async def add_broker_access(
     )
 
     if not success:
+        # Distinguish between authorization errors and other errors
+        if "Only OWNERs can" in message or "Access denied" in message:
+            raise HTTPException(status_code=403, detail=message)
         raise HTTPException(status_code=400, detail=message)
 
     await session.commit()
@@ -435,6 +438,9 @@ async def update_broker_access(
     )
 
     if not success:
+        # Distinguish between authorization errors and other errors
+        if "Only OWNERs can" in message or "Access denied" in message:
+            raise HTTPException(status_code=403, detail=message)
         raise HTTPException(status_code=400, detail=message)
 
     await session.commit()
@@ -480,6 +486,9 @@ async def remove_broker_access(
     )
 
     if not success:
+        # Distinguish between authorization errors and other errors
+        if "Only OWNERs can" in message or "Access denied" in message:
+            raise HTTPException(status_code=403, detail=message)
         raise HTTPException(status_code=400, detail=message)
 
     await session.commit()

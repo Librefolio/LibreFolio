@@ -12,10 +12,14 @@ const config = {
         adapter: adapter({
             pages: 'build',
             assets: 'build',
-            fallback: undefined,  // Disable fallback generation - FastAPI handles SPA routing
+            fallback: undefined,  // FastAPI handles SPA routing via catchall
             precompress: false,
             strict: false  // Allow pages that cannot be prerendered
-        })
+        }),
+        paths: {
+            // Empty base means use relative paths from current URL
+            base: ''
+        }
     }
 };
 

@@ -10,7 +10,7 @@
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import type {SelectOption} from '$lib/components/FuzzySelect.svelte';
-    import {Plus, Trash2, Info, Briefcase} from 'lucide-svelte';
+    import {Plus, Trash2, Info} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
         submit: {
@@ -43,6 +43,12 @@
     } = {};
     export let loading = false;
 
+    // Debug flag - set to false in production
+    const DEBUG = false;
+    function log(...args: any[]) {
+        if (DEBUG) console.log('[BrokerForm]', ...args);
+    }
+
     // Get today's date in YYYY-MM-DD format
     function getTodayDate(): string {
         return new Date().toISOString().split('T')[0];
@@ -61,16 +67,41 @@
         }
     }
 
-    // Form state
-    let name = initialData.name ?? '';
-    let description = initialData.description ?? '';
-    let portalUrl = initialData.portal_url ?? '';
-    let iconUrl = initialData.icon_url ?? '';
-    let defaultImportPlugin = initialData.default_import_plugin ?? '';
-    let allowOverdraft = initialData.allow_cash_overdraft ?? false;
-    let allowShorting = initialData.allow_asset_shorting ?? false;
-    let isActive = initialData.is_active ?? true;
-    let openedAt = parseDate(initialData.opened_at) || (mode === 'create' ? getTodayDate() : '');
+    // Form state - use reactive statements to sync with initialData
+    let name = '';
+    let description = '';
+    let portalUrl = '';
+    let iconUrl = '';
+    let defaultImportPlugin = '';
+    let allowOverdraft = false;
+    let allowShorting = false;
+    let isActive = true;
+    let openedAt = '';
+
+    // Track initialData key to detect when it changes
+    $: initialDataKey = JSON.stringify(initialData);
+    let prevInitialDataKey = '';
+
+    // Reset form when initialData changes
+    $: if (initialDataKey !== prevInitialDataKey) {
+        log('initialDataKey changed:', prevInitialDataKey.slice(0, 50), '->', initialDataKey.slice(0, 50));
+        prevInitialDataKey = initialDataKey;
+        resetForm();
+    }
+
+    function resetForm() {
+        log('resetForm called with initialData:', initialData);
+        name = initialData.name ?? '';
+        description = initialData.description ?? '';
+        portalUrl = initialData.portal_url ?? '';
+        iconUrl = initialData.icon_url ?? '';
+        defaultImportPlugin = initialData.default_import_plugin ?? '';
+        allowOverdraft = initialData.allow_cash_overdraft ?? false;
+        allowShorting = initialData.allow_asset_shorting ?? false;
+        isActive = initialData.is_active ?? true;
+        openedAt = parseDate(initialData.opened_at) || (mode === 'create' ? getTodayDate() : '');
+        log('Form fields set to:', { name, description, portalUrl, iconUrl, defaultImportPlugin, allowOverdraft, allowShorting, isActive, openedAt });
+    }
 
     // Initial balances (only for create mode)
     let initialBalances: Array<{ code: string; amount: number }> = [];
@@ -150,14 +181,6 @@
     // Get selected plugin info (for tooltip/description)
     $: selectedPlugin = importPlugins.find(p => p.id === defaultImportPlugin);
 
-    function getFaviconUrl(url: string): string | null {
-        try {
-            const parsed = new URL(url);
-            return `${parsed.origin}/favicon.ico`;
-        } catch {
-            return null;
-        }
-    }
 
     function addBalance() {
         // First balance uses user's default currency, subsequent ones find unused
@@ -487,7 +510,7 @@
 </form>
 
 <!-- Actions (sempre visibili - fuori dal form scrollabile) -->
-<div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky bottom-0 pb-4 px-4 -mx-4 -mb-4">
+<div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky bottom-0 pb-4 px-4 -mx-4 -mb-4 rounded-b-2xl">
     <button
             type="button"
             on:click={handleCancel}

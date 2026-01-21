@@ -29,6 +29,7 @@
         opened_at?: string | null;
     } = {};
 
+
     import {api} from '$lib/api';
 
     let loading = false;

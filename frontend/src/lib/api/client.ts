@@ -9,6 +9,7 @@
  */
 import {goto} from '$app/navigation';
 import {browser} from '$app/environment';
+import {debug} from '$lib/debug';
 
 // Get current language from localStorage or default to 'en'
 function getCurrentLanguage(): string {
@@ -58,6 +59,8 @@ export async function apiCall<T>(
 
     // Build URL
     const url = `${API_BASE}${endpoint}`;
+
+    debug.log('API', `${fetchOptions.method || 'GET'} ${endpoint}`);
 
     // Get current language for Accept-Language header
     const lang = getCurrentLanguage();

@@ -269,7 +269,7 @@ class TestAddAccess:
                 timeout=TIMEOUT,
             )
 
-            assert response.status_code == 400
+            assert response.status_code == 403
             assert "OWNER" in response.json()["detail"]
 
             print_success("✓ Editor correctly rejected")
@@ -302,7 +302,7 @@ class TestAddAccess:
                 timeout=TIMEOUT,
             )
 
-            assert response.status_code == 400
+            assert response.status_code == 403
 
             print_success("✓ Viewer correctly rejected")
 
@@ -476,7 +476,7 @@ class TestUpdateAccess:
                 timeout=TIMEOUT,
             )
 
-            assert response.status_code == 400
+            assert response.status_code == 403
             assert "OWNER" in response.json()["detail"]
 
             print_success("✓ Editor correctly rejected")

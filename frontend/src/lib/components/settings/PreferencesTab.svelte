@@ -3,6 +3,7 @@
     import {currentLanguage} from '$lib/stores/language';
     import {api, ApiError} from '$lib/api';
     import {onMount} from 'svelte';
+    import {debug} from '$lib/debug';
     import {Coins, Globe, Palette} from 'lucide-svelte';
     import type {SelectOption} from '$lib/components/FuzzySelect.svelte';
     import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
@@ -60,10 +61,12 @@
     }));
 
     onMount(async () => {
+        debug.log('PreferencesTab', 'onMount');
         await Promise.all([loadSettings(), loadCurrencies()]);
     });
 
     async function loadSettings() {
+        debug.log('PreferencesTab', 'loadSettings');
         isLoading = true;
         error = null;
         try {
@@ -73,6 +76,7 @@
                 theme: 'light' | 'dark' | 'auto';
             }>('/settings/user');
 
+            debug.log('PreferencesTab', 'loadSettings response', response);
             originalValues = {
                 language: response.language || $currentLanguage,
                 default_currency: response.base_currency || 'EUR',
@@ -80,13 +84,14 @@
             };
             editedValues = {...originalValues};
         } catch (e) {
-            console.error('Failed to load user settings', e);
+            debug.error('PreferencesTab', 'loadSettings failed', e);
         } finally {
             isLoading = false;
         }
     }
 
     async function loadCurrencies() {
+        debug.log('PreferencesTab', 'loadCurrencies');
         currenciesLoading = true;
         try {
             const response = await api.get<{ currencies: CurrencyInfo[] }>('/utilities/currencies');
@@ -96,7 +101,7 @@
                 icon: c.symbol !== c.code ? c.symbol : undefined
             }));
         } catch (e) {
-            console.error('Failed to load currencies', e);
+            debug.error('PreferencesTab', 'loadCurrencies failed', e);
         } finally {
             currenciesLoading = false;
         }

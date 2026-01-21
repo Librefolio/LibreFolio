@@ -83,6 +83,14 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
+    # Silence verbose third-party loggers
+    # aiosqlite logs every SQL operation at DEBUG level
+    logging.getLogger("aiosqlite").setLevel(logging.WARNING)
+    # sqlalchemy.pool logs connection pool operations
+    logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
+    # sqlalchemy.engine logs SQL statements
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+
     # Configure handlers
     handlers = []
 

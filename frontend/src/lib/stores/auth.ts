@@ -8,6 +8,7 @@ import {derived, get, writable} from 'svelte/store';
 import {browser} from '$app/environment';
 import {goto} from '$app/navigation';
 import {api, ApiError} from '$lib/api';
+import {debug} from '$lib/debug';
 
 /**
  * User information returned from the server
@@ -123,11 +124,13 @@ function createAuthStore() {
          * Check if user is authenticated (verify session with server)
          */
         checkAuth: async (): Promise<boolean> => {
+            debug.log('AuthStore', 'checkAuth started');
             update(state => ({...state, isLoading: true}));
 
             try {
                 const response = await api.get<{ user: AuthUser }>('/auth/me');
 
+                debug.log('AuthStore', 'checkAuth success', response.user?.username);
                 update(state => ({
                     ...state,
                     user: response.user,
@@ -138,6 +141,7 @@ function createAuthStore() {
 
                 return true;
             } catch (error) {
+                debug.log('AuthStore', 'checkAuth failed', error);
                 update(state => ({
                     ...state,
                     user: null,

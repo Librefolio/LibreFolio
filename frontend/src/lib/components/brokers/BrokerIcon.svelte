@@ -10,6 +10,7 @@
     import { onMount } from 'svelte';
     import { Briefcase } from 'lucide-svelte';
     import { api } from '$lib/api';
+    import { debug } from '$lib/debug';
 
     // Props
     export let iconUrl: string | null | undefined = null;
@@ -32,57 +33,18 @@
     let currentUrl: string | null = null;
     let pluginIconUrl: string | null = null;
     let pluginsLoaded = false;
-
-    // Load plugins once on mount
-    onMount(async () => {
-        try {
-            const plugins = await api.get('/brokers/import/plugins');
-            if (Array.isArray(plugins)) {
-                // Find the plugin icon_url if we have a pluginCode
-                if (pluginCode) {
-                    const plugin = plugins.find(p => p.code === pluginCode);
-                    if (plugin?.icon_url) {
-                        pluginIconUrl = plugin.icon_url;
-                    }
-                }
-            }
-        } catch (err) {
-            console.error('Failed to load plugins for icon:', err);
-        } finally {
-            pluginsLoaded = true;
-        }
-    });
-
-    // When props or plugins change, restart from beginning
-    // Use a reactive statement that compares actual string values
-    $: propsKey = `${iconUrl ?? ''}|${portalUrl ?? ''}|${pluginCode ?? ''}|${pluginsLoaded}`;
-
-    // Track previous key to detect changes
-    let prevPropsKey = '';
-
-    $: if (propsKey !== prevPropsKey) {
-        prevPropsKey = propsKey;
-        resetAttempt();
-    }
-
-    function resetAttempt() {
-        currentAttempt = 'icon';
-        imageLoaded = false;
-        currentUrl = computeUrl('icon');
-
-        // If first URL is null/empty, immediately try next fallbacks
-        if (!currentUrl) {
-            moveToNextFallback();
-        }
-    }
-
-    // Key to force img re-render when URL changes synchronously
     let imageKey = 0;
+
+    // Track previous props key
+    let prevMainPropsKey = '';
+
+    // ============================================================
+    // FUNCTIONS (defined BEFORE reactive statements that use them)
+    // ============================================================
 
     function computeUrl(attempt: typeof currentAttempt): string | null {
         switch (attempt) {
             case 'icon':
-                // Treat empty string as null
                 return (iconUrl && iconUrl.trim()) ? iconUrl : null;
             case 'portal':
                 if (portalUrl && portalUrl.trim()) {
@@ -95,7 +57,6 @@
                 }
                 return null;
             case 'plugin':
-                // Use the icon_url from plugin API response
                 return pluginIconUrl;
             case 'fallback':
                 return null;
@@ -120,21 +81,78 @@
         }
 
         currentUrl = computeUrl(currentAttempt);
-        imageKey++; // Force img element to re-mount with new src
+        imageKey++;
 
-        // If new URL is null, skip to next
+        // If new URL is null, skip to next (but wait for plugins if on plugin step)
         if (!currentUrl && currentAttempt !== 'fallback') {
+            if (currentAttempt === 'plugin' && !pluginsLoaded) {
+                return; // Will be handled when pluginsLoaded becomes true
+            }
+            moveToNextFallback();
+        }
+    }
+
+    function resetAttempt() {
+        debug.log('BrokerIcon', 'resetAttempt', { iconUrl, portalUrl, pluginCode });
+        currentAttempt = 'icon';
+        imageLoaded = false;
+        currentUrl = computeUrl('icon');
+
+        if (!currentUrl) {
             moveToNextFallback();
         }
     }
 
     function handleLoad() {
+        debug.log('BrokerIcon', 'handleLoad', currentUrl);
         imageLoaded = true;
     }
 
     function handleError() {
+        debug.log('BrokerIcon', 'handleError', currentUrl);
         imageLoaded = false;
         moveToNextFallback();
+    }
+
+    // ============================================================
+    // LIFECYCLE & REACTIVE STATEMENTS
+    // ============================================================
+
+    // Load plugins once on mount
+    onMount(async () => {
+        debug.log('BrokerIcon', 'onMount', { iconUrl, portalUrl, pluginCode });
+        try {
+            const plugins = await api.get('/brokers/import/plugins');
+            if (Array.isArray(plugins) && pluginCode) {
+                const plugin = plugins.find(p => p.code === pluginCode);
+                if (plugin?.icon_url) {
+                    pluginIconUrl = plugin.icon_url;
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load plugins for icon:', err);
+        } finally {
+            pluginsLoaded = true;
+        }
+    });
+
+    // Key for props
+    $: mainPropsKey = `${iconUrl ?? ''}|${portalUrl ?? ''}|${pluginCode ?? ''}`;
+
+    // Reset when props change
+    $: if (mainPropsKey !== prevMainPropsKey) {
+        prevMainPropsKey = mainPropsKey;
+        resetAttempt();
+    }
+
+    // When plugins load while on plugin attempt
+    $: if (pluginsLoaded && pluginCode && !imageLoaded && currentAttempt === 'plugin') {
+        currentUrl = computeUrl('plugin');
+        if (currentUrl) {
+            imageKey++;
+        } else {
+            moveToNextFallback();
+        }
     }
 </script>
 
@@ -154,7 +172,6 @@
     {/if}
 
     {#if !imageLoaded || currentAttempt === 'fallback'}
-        <!-- Fallback: Briefcase icon (shown while loading or as final fallback) -->
         <div class="absolute inset-0 flex items-center justify-center">
             <Briefcase size={sizes[size].icon} class="text-libre-green dark:text-green-400" />
         </div>

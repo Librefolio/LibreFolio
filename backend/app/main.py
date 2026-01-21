@@ -257,7 +257,7 @@ async def root():
 # Serve frontend static assets (JS, CSS, images) if build exists
 # This must be mounted AFTER all API routes to avoid conflicts
 if frontend_available():
-    # Mount _app directory for SvelteKit assets
+    # Mount _app directory for SvelteKit assets at root /_app
     if (FRONTEND_BUILD_DIR / "_app").exists():
         app.mount("/_app", StaticFiles(directory=FRONTEND_BUILD_DIR / "_app"), name="frontend_app")
 
@@ -268,6 +268,17 @@ if frontend_available():
         # Skip API and docs routes
         if path.startswith(("api/", "mkdocs")):
             return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+
+        # Handle nested _app requests (e.g., /brokers/_app/... -> /_app/...)
+        # This happens because SvelteKit uses relative paths in the HTML
+        if "/_app/" in f"/{path}":
+            # Extract the _app path part
+            app_index = path.find("_app/")
+            if app_index != -1:
+                app_path = path[app_index:]  # e.g., "_app/immutable/..."
+                target = FRONTEND_BUILD_DIR / app_path
+                if target.exists() and target.is_file():
+                    return FileResponse(target)
 
         # Try to serve the exact file first
         target = FRONTEND_BUILD_DIR / path
