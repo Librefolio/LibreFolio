@@ -131,7 +131,7 @@ Layout:
 
 **Azione**: Skip to Fase 4, eventuale refactor in futuro se necessario.
 
-### Fase 4: Creare Profile Page (1.5 giorni) 🔄 IN CORSO
+### Fase 4: Creare Profile Page (1.5 giorni) ✅ COMPLETATA
 1. [x] **Fix API PreferencesTab**: PUT invece di PATCH, campi corretti (language, base_currency)
 2. [x] **PasswordChangeModal**: Modale per cambio password (dark mode supportato)
 3. [x] **ProfileTab dark mode**: Supporto tema scuro
@@ -139,26 +139,21 @@ Layout:
    - Schema: `UpdateProfileRequest`, `UpdateProfileResponse`
    - Service: `user_service.update_profile()` con validazione uniqueness
    - Tests: `test_services/test_user_profile.py`, `test_api/test_profile_api.py`
-5. [ ] **Account Section Frontend**:
-   - [ ] Username - `SettingText` con edit inline
-   - [ ] Email - `SettingText` con edit inline
-   - [ ] Avatar - `SettingImageUpload` con crop 1:1
-   - [ ] Account created - readonly, formatted date
-2. [ ] **Security Section**:
-   - [ ] Change Password - Bottone che apre modale
-     - Modale con: current password, new password, confirm new password
-     - Password strength indicator (zxcvbn-ts)
-     - Cancel e Save buttons nella modale
-     - ⚠️ **IMPORTANTE**: Password change NON attiva Save/Undo globali
-   - [ ] Delete Account - Bottone danger sotto Security
-     - Modale conferma con input "Type username to confirm"
-     - Backend valida che esistano altri utenti (e altri superuser se utente è superuser)
-     - API DELETE `/users/me`
-     - ⚠️ **IMPORTANTE**: Delete Account NON attiva Save/Undo globali
-3. [ ] **Layout**: Save/Undo/Reset globali ATTIVI
-   - Username/Email/Avatar modifiche rimangono nel browser
-   - Save globale o specifico per campo per salvare
-   - Password e Delete Account sono ESCLUSI dal sistema Save globale (hanno modali separate)
+5. [x] **Account Section Frontend**:
+   - [x] Username - Input con Save/Undo icons a sinistra quando modificato
+   - [x] Email - Input con Save/Undo icons a sinistra quando modificato
+   - [ ] Avatar - `SettingImageUpload` con crop 1:1 (⏳ rimandato a plan-image-crop.md)
+   - [x] Account created - readonly, formatted date
+6. [x] **Security Section**:
+   - [x] Change Password - Bottone che apre modale
+   - [x] Delete Account - Bottone danger con conferma (digita username)
+     - Backend DELETE `/auth/users/me` + test API + test service
+     - Valida che non si può eliminare l'unico superuser
+7. [x] **Layout uniformato**: 
+   - Header con Save All / Undo All (stile GlobalSettingsTab)
+   - Campi evidenziati in amber quando modificati
+   - Save/Undo icons a sinistra del campo (non s/n a destra)
+   - Debug logging aggiunto
 
 ### Fase 5: Polish e Test (0.5 giorni)
 1. [ ] Verificare dark mode in tutti e tre

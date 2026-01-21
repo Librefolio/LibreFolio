@@ -2,6 +2,7 @@
     import {_, LANGUAGE_OPTIONS} from '$lib/i18n';
     import {api, ApiError} from '$lib/api';
     import {onMount} from 'svelte';
+    import {debug} from '$lib/debug';
     import {AlertCircle, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
     import FuzzySelect, {type SelectOption} from '$lib/components/FuzzySelect.svelte';
 
@@ -71,6 +72,7 @@
     }));
 
     onMount(async () => {
+        debug.log('GlobalSettingsTab', 'onMount');
         await Promise.all([
             loadSettings(),
             loadCurrencies()
@@ -78,6 +80,7 @@
     });
 
     async function loadCurrencies() {
+        debug.log('GlobalSettingsTab', 'loadCurrencies');
         currenciesLoading = true;
         try {
             const response = await api.get<{ currencies: CurrencyInfo[] }>('/utilities/currencies');
@@ -87,17 +90,19 @@
                 icon: c.symbol
             }));
         } catch (e) {
-            console.error('Failed to load currencies', e);
+            debug.error('GlobalSettingsTab', 'loadCurrencies failed', e);
         } finally {
             currenciesLoading = false;
         }
     }
 
     async function loadSettings() {
+        debug.log('GlobalSettingsTab', 'loadSettings');
         isLoading = true;
         error = null;
         try {
             const response = await api.get<{ settings: GlobalSetting[] }>('/settings/global');
+            debug.log('GlobalSettingsTab', 'loadSettings response', response.settings.length);
             settings = response.settings;
             // Initialize edited values
             editedValues = {};

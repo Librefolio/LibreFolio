@@ -140,12 +140,23 @@ Dopo il completamento delle features base di Phase 4, sono emerse diverse necess
    - **BrokerIcon sync fallback fix**: ✅ **FIXED** (20-01-2026)
      - Aggiunto `imageKey` + `{#key}` per forzare re-render durante moveToNextFallback()
      - Risolve problema icona plugin non mostrata quando icon_url cancellato
+   - **BrokerIcon plugin load timing fix**: ✅ **FIXED** (21-01-2026)
+     - Rimossa dipendenza `pluginsLoaded` da `propsKey` per evitare reset icona dopo 1 secondo
+     - Ora reset solo quando cambiano i props reali (iconUrl, portalUrl, pluginCode)
+     - Plugin icon caricato correttamente senza flashare il fallback
 
 3. **Broker Form**: ✅ **VERIFICATO**
    - GenericCSV ordering: ✅ **FIXED** (code `'broker_generic_csv'`)
    - GenericCSV appare primo con "(default)" label ✅
+   - **Form reactive to initialData**: ✅ **FIXED** (21-01-2026)
+     - Form fields ora si aggiornano quando `initialData` cambia
+     - Risolve problema modale modifica vuota dalla pagina dettaglio broker
 
-4. **Files Page**: ✅ **VERIFICATO**
+4. **Broker Detail Page `/brokers/[id]`**: ✅ **FIXED** (21-01-2026)
+   - Usa `BrokerIcon` invece di `LazyImage` per icona header
+   - Modal modifica passa tutti i campi in `initialData` (inclusi `icon_url`, `default_import_plugin`, `is_active`, `opened_at`)
+
+5. **Files Page**: ✅ **VERIFICATO**
    - Download con nome originale (`?download=true`) ✅
    - Button "Cancel" → "New File" (tradotto 4 lingue) ✅
    - ImageUploader preview reset corretto ✅
@@ -161,28 +172,52 @@ Dopo il completamento delle features base di Phase 4, sono emerse diverse necess
 6. **UI/UX Polish**: ✅ **NUOVO**
    - **Burger menu hover rimosso**: ✅ No più illuminazione in dark mode (Header completamente)
    - **Sidebar logo hover rimosso**: ✅ No più opacity change
+   - **Auth redirect fix**: ✅ **FIXED** (21-01-2026)
+     - Layout (app) ora usa `$isAuthInitialized` per redirect reattivo
+     - Utente non loggato viene rediretto immediatamente a `/` invece di schermo bianco
 
 7. **Developer Tools**: ✅ **NUOVO**
    - **GUIDA-DARK-MODE.md**: ✅ Creata guida per modificare velocemente variabili dark mode
 
-#### 🎯 Settings Unification Plan - Fase 1 & 2 COMPLETATE
+8. **Backend API Fixes**: ✅ **NUOVO** (21-01-2026)
+   - **Broker Access Authorization**: 403 invece di 400 per errori di autorizzazione
+     - `add_broker_access`, `update_broker_access`, `remove_broker_access`
+     - Distingue "Only OWNERs can..." (403) da altri errori (400)
+   - **Test deprecation warning fix**: 
+     - `test_profile_api.py`: cookies su client invece che per-request
+     - `test_broker_access_api.py`: aspetta 403 per errori auth
+   - **Logging cleanup**: Silenziati log verbose di aiosqlite/sqlalchemy
 
-**Fase 1 Completata** (20-01-2026):
-- ✅ `SettingField.svelte` creato
-- ✅ `SettingsLayout.svelte` creato  
-- ✅ `SettingText.svelte` creato
-- ⏳ SettingImageUpload rimandato a Image Crop Plan
-- ✅ Test: 0 errors, 0 warnings
+9. **BrokerIcon & BrokerModal Fixes**: ✅ **NUOVO** (21-01-2026)
+   - **BrokerIcon.svelte**: Riorganizzato codice (funzioni prima dei reactive statements)
+   - **BrokerForm.svelte**: Form reactive a initialData + bordi arrotondati footer
+   - **vite.config.ts**: Aggiunto `base: '/'` per path assoluti (fix MIME type errors)
+   - **svelte.config.js**: `fallback: 'index.html'` per SPA routing
 
-**Fase 2 Completata** (20-01-2026):
-- ✅ PreferencesTab refactorizzato con nuovi componenti
-- ✅ Ridotto da 451 → ~150 righe
-- ✅ UI consistente, tutte le funzionalità mantenute
-- ✅ Test: 0 errors, 0 warnings
+10. **dev.py Server Flags**: ✅ **NUOVO** (21-01-2026)
+    - `--rebuild, -r`: Forza rebuild frontend
+    - `--debug, -d`: Debug mode (LOG_LEVEL=DEBUG + frontend debug build)
+    - Supporto `LIBREFOLIO_LOG_LEVEL` env var nel backend
 
-**Prossimo**: Fase 3 - Refactor GlobalSettingsTab
+11. **Frontend Debug System**: ✅ **NUOVO** (21-01-2026)
+    - File: `frontend/src/lib/debug.ts`
+    - Tree-shaking: Codice debug eliminato in production
+    - Attivazione: `VITE_DEBUG=true` in build
+    - Debug logging aggiunto a: BrokerIcon, AppLayout, AuthStore, API client
 
-**Link**: [`../plan-settings-unification.md`](../plan-settings-unification.md)
+12. **ProfileTab Completion**: ✅ **NUOVO** (21-01-2026)
+    - Layout uniformato con Save/Undo a destra del campo
+    - Edit lock con icona Pencil/PencilOff per prevenire modifiche accidentali
+    - Delete Account con conferma (digita username)
+    - Backend: DELETE `/auth/users/me` endpoint
+    - Backend: `count_superusers()`, `delete_user()` in user_service
+    - Test API: `TestDeleteAccount` (3 test)
+    - Test Service: `TestCountSuperusers`, `TestDeleteUser` (4 test)
+    - i18n: Chiavi per delete account + enable/disable editing (4 lingue)
+    - Debug logging aggiunto a ProfileTab, PreferencesTab, GlobalSettingsTab
+
+#### 🎯 Settings Unification Plan - COMPLETATO ✅
+**File spostato in**: `phase-04-subplan/plan-settings-unification.md`
 
 #### ⚠️ Issue Rimanenti (Non Bloccanti)
 

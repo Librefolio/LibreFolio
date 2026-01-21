@@ -4,7 +4,8 @@
     import {goto} from '$app/navigation';
     import {i18nLoading, initI18n} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {auth, isAuthenticated} from '$lib/stores/auth';
+    import {auth, isAuthenticated, isAuthInitialized} from '$lib/stores/auth';
+    import {debug} from '$lib/debug';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';
     import Header from '$lib/components/layout/Header.svelte';
 
@@ -18,6 +19,8 @@
     initI18n();
 
     onMount(async () => {
+        debug.log('AppLayout', 'onMount started');
+
         // Sync language store with i18n after mount
         currentLanguage.init();
 
@@ -29,14 +32,40 @@
             }
         }
 
-        // Check authentication
+        // Check authentication with timeout
         if (browser) {
-            const isAuth = await auth.checkAuth();
-            if (!isAuth) {
+            debug.log('AppLayout', 'Starting auth check');
+
+            // Create a timeout promise
+            const timeoutPromise = new Promise<boolean>((_, reject) => {
+                setTimeout(() => reject(new Error('Auth check timeout')), 5000);
+            });
+
+            try {
+                // Race between auth check and timeout
+                const isAuth = await Promise.race([
+                    auth.checkAuth(),
+                    timeoutPromise
+                ]);
+
+                debug.log('AppLayout', 'Auth check result:', isAuth);
+
+                if (!isAuth) {
+                    debug.log('AppLayout', 'Not authenticated, redirecting to /');
+                    goto('/');
+                }
+            } catch (error) {
+                debug.error('AppLayout', 'Auth check failed:', error);
                 goto('/');
             }
         }
     });
+
+    // Reactive redirect when auth state changes after initialization
+    $: if (browser && $isAuthInitialized && !$isAuthenticated) {
+        debug.log('AppLayout', 'Reactive redirect triggered');
+        goto('/');
+    }
 
     function toggleSidebar() {
         sidebarOpen = !sidebarOpen;

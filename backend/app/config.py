@@ -90,6 +90,7 @@ def get_settings() -> Settings:
     Get settings instance.
 
     In test mode, DATABASE_URL is automatically overridden with TEST_DATABASE_URL.
+    LIBREFOLIO_LOG_LEVEL env var overrides LOG_LEVEL setting.
 
     Returns:
         Settings: Application settings
@@ -99,5 +100,10 @@ def get_settings() -> Settings:
     # Override DATABASE_URL if in test mode
     if is_test_mode():
         settings.DATABASE_URL = settings.TEST_DATABASE_URL
+
+    # Override LOG_LEVEL from LIBREFOLIO_LOG_LEVEL env var (for dev.py --debug)
+    log_level_override = os.environ.get("LIBREFOLIO_LOG_LEVEL")
+    if log_level_override:
+        settings.LOG_LEVEL = log_level_override.upper()
 
     return settings

@@ -58,6 +58,8 @@ from scripts.cli_tree_parser import TreeParser, format_help
 def cmd_server(args):
     """Start the development server."""
     test_mode = getattr(args, 'test', False)
+    rebuild = getattr(args, 'rebuild', False)
+    debug_mode = getattr(args, 'debug', False)
 
     if test_mode:
         port = get_test_server_port()
@@ -66,7 +68,23 @@ def cmd_server(args):
         port = get_server_port()
         db = get_database_path()
 
-    auto_build_frontend()
+    # Handle frontend rebuild
+    if rebuild:
+        print(Colors.info("📦 Forcing frontend rebuild..."))
+        # Create a mock args object with debug flag
+        class BuildArgs:
+            debug = debug_mode
+        result = cmd_fe_build(BuildArgs())
+        if result != 0:
+            print_error("Frontend build failed. Server not started.")
+            return result
+    else:
+        # Auto-build frontend if needed (respects debug mode)
+        result = auto_build_frontend(debug=debug_mode)
+        if result is not None and result != 0:
+            print_error("Frontend build failed. Server not started.")
+            return result
+
     auto_build_mkdocs()
     update_js_cache()
 
@@ -78,9 +96,12 @@ def cmd_server(args):
         print(f"{Colors.RED}{Colors.BOLD}⚠️  TEST MODE - Using test database!{Colors.NC}")
         print()
     else:
-        print(Colors.success("Starting LibreFolio API server..."))
+        mode_str = " (DEBUG MODE)" if debug_mode else ""
+        print(Colors.success(f"Starting LibreFolio API server{mode_str}..."))
         print(Colors.warning(f"Database: {db}"))
         print(Colors.warning(f"Port: {port}"))
+        if debug_mode:
+            print(Colors.warning("Log Level: DEBUG"))
         print()
         print(f"{Colors.BLUE}{Colors.BOLD}Available endpoints:{Colors.NC}")
         print(f" ├── 🏠 {Colors.YELLOW}Frontend:  http://localhost:{port}/{Colors.NC}")
@@ -98,6 +119,8 @@ def cmd_server(args):
     env = os.environ.copy()
     if test_mode:
         env["LIBREFOLIO_TEST_MODE"] = "1"
+    if debug_mode:
+        env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
 
     return run_command_live([
         "pipenv", "run", "uvicorn",
@@ -410,25 +433,36 @@ def cmd_install(args):
 # Helper Functions
 # =============================================================================
 
-def auto_build_frontend():
+def auto_build_frontend(debug=False):
     """Auto-build frontend if needed."""
     build_dir = PROJECT_ROOT / "frontend" / "build"
     src_dir = PROJECT_ROOT / "frontend" / "src"
 
+    needs_build = False
+
     if not build_dir.exists() or not (build_dir / "index.html").exists():
         print(Colors.info("📦 Frontend build missing, building..."))
-        cmd_fe_build(None)
-        return
+        needs_build = True
+    else:
+        try:
+            build_time = (build_dir / "index.html").stat().st_mtime
+            for src_file in src_dir.rglob("*"):
+                if src_file.is_file() and src_file.stat().st_mtime > build_time:
+                    print(Colors.info("📦 Frontend sources changed, rebuilding..."))
+                    needs_build = True
+                    break
+        except Exception:
+            pass
 
-    try:
-        build_time = (build_dir / "index.html").stat().st_mtime
-        for src_file in src_dir.rglob("*"):
-            if src_file.is_file() and src_file.stat().st_mtime > build_time:
-                print(Colors.info("📦 Frontend sources changed, rebuilding..."))
-                cmd_fe_build(None)
-                return
-    except Exception:
-        pass
+    if needs_build:
+        # Create args object for cmd_fe_build
+        class BuildArgs:
+            pass
+        args = BuildArgs()
+        args.debug = debug
+        return cmd_fe_build(args)
+
+    return None  # No build needed
 
 
 def auto_build_mkdocs():
@@ -523,6 +557,9 @@ Commands by Category:
 Examples:
   ./dev.py server              Start development server
   ./dev.py server --test       Start in test mode (test database)
+  ./dev.py server --debug      Start with DEBUG logging + debug frontend build
+  ./dev.py server --rebuild    Force rebuild frontend before starting
+  ./dev.py server -r -d        Rebuild frontend in debug mode + DEBUG logs
   ./dev.py test api auth       Run auth API tests
   ./dev.py db upgrade          Apply migrations
   ./dev.py db create-clean     Delete and recreate database
@@ -541,6 +578,8 @@ Examples:
     # Server (unified with --test flag)
     p = subparsers.add_parser("server", help="🖥️  Start development server")
     p.add_argument("--test", "-t", action="store_true", help="Use test database (port 8001)")
+    p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
+    p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
     p.set_defaults(func=cmd_server)
 
     # Database

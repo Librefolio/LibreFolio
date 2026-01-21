@@ -325,3 +325,55 @@ async def update_profile(
     )
     return user, None
 
+
+async def count_superusers(session: AsyncSession) -> int:
+    """
+    Count the number of superuser accounts.
+
+    Args:
+        session: Database session
+
+    Returns:
+        Number of superusers
+    """
+    stmt = select(func.count(User.id)).where(User.is_superuser == True)
+    result = await session.execute(stmt)
+    return result.scalar() or 0
+
+
+async def delete_user(session: AsyncSession, user_id: int) -> bool:
+    """
+    Delete a user and all associated data.
+
+    This is a destructive operation that cascades to:
+    - All brokers owned by the user
+    - All transactions
+    - All user settings
+    - All sessions
+
+    Args:
+        session: Database session
+        user_id: ID of user to delete
+
+    Returns:
+        True if deleted, False if user not found
+    """
+    user = await get_user_by_id(session, user_id)
+    if not user:
+        return False
+
+    # Delete all user sessions first
+    delete_user_sessions(user_id)
+
+    # Delete user (cascades to related data via DB constraints)
+    await session.delete(user)
+    await session.commit()
+
+    logger.warning(
+        "User deleted",
+        user_id=user_id,
+        username=user.username
+    )
+    return True
+
+
