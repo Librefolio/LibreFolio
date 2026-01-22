@@ -29,6 +29,16 @@
     "undo": "Deshacer",
     "reset": "Restablecer"
   },
+  "table": {
+    "rowsPerPage": "Filas por página",
+    "showing": "Mostrando",
+    "of": "de",
+    "firstPage": "Primera página",
+    "previousPage": "Página anterior",
+    "nextPage": "Página siguiente",
+    "lastPage": "Última página",
+    "noResults": "No se encontraron resultados"
+  },
   "error": {
     "pageNotFound": "Página No Encontrada",
     "pageNotFoundMessage": "La página que buscas no existe o ha sido movida.",
@@ -183,7 +193,11 @@
     "assets": "{count} activo(s)",
     "currencies": "{count} moneda(s)",
     "unsavedChanges": "Tienes cambios sin guardar. ¿Descartarlos?",
-    "loadFailed": "Error al cargar el bróker"
+    "discardChanges": "¿Descartar Cambios?",
+    "discardChangesWarning": "Tienes cambios sin guardar en este broker. ¿Quieres descartarlos?",
+    "continueEditing": "Continuar Editando",
+    "discardAndClose": "Descartar y Cerrar",
+    "loadFailed": "Error al cargar el broker"
   },
   "assets": {
     "title": "Activos",
@@ -213,6 +227,11 @@
     "profileDescription": "Gestiona los detalles de tu cuenta",
     "enableEditing": "Habilitar edición",
     "disableEditing": "Deshabilitar edición",
+    "discardChanges": "¿Descartar Cambios?",
+    "discardChangesWarning": "Tienes cambios sin guardar. ¿Quieres descartarlos?",
+    "continueEditing": "Continuar Editando",
+    "discardAndLock": "Descartar y Bloquear",
+    "savedSuccessfully": "Guardado con éxito",
     "accountCreated": "Cuenta Creada",
     "profileUpdated": "Perfil actualizado con éxito",
     "updateFailed": "Error al actualizar el perfil",

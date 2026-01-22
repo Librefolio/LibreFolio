@@ -29,6 +29,16 @@
     "undo": "Undo",
     "reset": "Reset to Default"
   },
+  "table": {
+    "rowsPerPage": "Rows per page",
+    "showing": "Showing",
+    "of": "of",
+    "firstPage": "First page",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "lastPage": "Last page",
+    "noResults": "No results found"
+  },
   "error": {
     "pageNotFound": "Page Not Found",
     "pageNotFoundMessage": "The page you're looking for doesn't exist or has been moved.",
@@ -183,6 +193,10 @@
     "assets": "{count} asset(s)",
     "currencies": "{count} currency(ies)",
     "unsavedChanges": "You have unsaved changes. Discard them?",
+    "discardChanges": "Discard Changes?",
+    "discardChangesWarning": "You have unsaved changes to this broker. Do you want to discard them?",
+    "continueEditing": "Continue Editing",
+    "discardAndClose": "Discard & Close",
     "loadFailed": "Failed to load broker"
   },
   "assets": {
@@ -213,6 +227,11 @@
     "profileDescription": "Manage your account details",
     "enableEditing": "Enable editing",
     "disableEditing": "Disable editing",
+    "discardChanges": "Discard Changes?",
+    "discardChangesWarning": "You have unsaved changes. Do you want to discard them?",
+    "continueEditing": "Continue Editing",
+    "discardAndLock": "Discard & Lock",
+    "savedSuccessfully": "Saved successfully",
     "accountCreated": "Account Created",
     "profileUpdated": "Profile updated successfully",
     "updateFailed": "Failed to update profile",
