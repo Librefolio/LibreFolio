@@ -285,6 +285,125 @@ if role is None and not current_user.is_superuser:
 
 ---
 
+## Parse Result Caching
+
+### Problema
+Attualmente, ogni volta che si vuole vedere il risultato di un parsing, bisogna ri-parsare il file. Questo è inefficiente e lento.
+
+### Soluzione
+Salvare il risultato del parsing nel metadata JSON del file.
+
+### Schema Esteso
+
+```python
+class BRIMFileInfo(BaseModel):
+    # ... campi esistenti ...
+    
+    # Nuovo campo per cache parse
+    last_parse_result: Optional[BRIMParseResultCache] = None
+
+class BRIMParseResultCache(BaseModel):
+    plugin_code: str
+    parsed_at: datetime
+    transactions: List[BRIMParsedTransaction]
+    assets: List[BRIMAssetCandidate]
+    summary: BRIMParseSummary
+```
+
+### Metadata JSON Esempio
+
+```json
+{
+    "file_id": "abc-123",
+    "filename": "export.csv",
+    "status": "parsed",
+    "uploaded_by_user_id": 1,
+    "target_broker_id": 2,
+    "last_parse_result": {
+        "plugin_code": "broker_directa",
+        "parsed_at": "2026-01-22T10:00:00Z",
+        "transactions": [
+            {"date": "2026-01-15", "type": "BUY", ...},
+            ...
+        ],
+        "assets": [...],
+        "summary": {
+            "total_transactions": 15,
+            "buy_count": 10,
+            "sell_count": 5,
+            ...
+        }
+    }
+}
+```
+
+### Nuovo Endpoint: Load Last Parse
+
+```python
+@brim_router.get("/files/{file_id}/last-parse")
+async def get_last_parse_result(
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Optional[BRIMParseResultCache]:
+    """
+    Ritorna il risultato dell'ultimo parsing, se disponibile.
+    Utile per ricaricare una preview senza ri-parsare il file.
+    
+    Returns:
+        - Parse result se disponibile
+        - None se file mai parsato o in status UPLOADED
+        - 404 se file non trovato
+        - 403 se utente non ha accesso al broker
+    """
+    file_info = brim_provider.get_file_info(file_id)
+    if not file_info:
+        raise HTTPException(404, "File not found")
+    
+    # Verifica permessi (VIEWER+ ok)
+    role = await broker_service.get_user_role(
+        file_info.target_broker_id, current_user.id, session
+    )
+    if not current_user.is_superuser and role is None:
+        raise HTTPException(403, "Access denied")
+    
+    return file_info.last_parse_result
+```
+
+### Comportamento Parse Endpoint
+
+Modifica a `POST /files/{file_id}/parse`:
+
+```python
+@brim_router.post("/files/{file_id}/parse")
+async def parse_file(...) -> BRIMParseResponse:
+    # ... parsing logic ...
+    
+    # Dopo successo, salva risultato nel metadata
+    if parse_success:
+        brim_provider.update_file_metadata(
+            file_id,
+            last_parse_result={
+                "plugin_code": plugin_code,
+                "parsed_at": utcnow().isoformat(),
+                "transactions": parsed_transactions,
+                "assets": asset_candidates,
+                "summary": summary,
+            }
+        )
+    
+    return response
+```
+
+### Vantaggi
+
+1. **Performance**: Non serve ri-parsare per vedere risultato precedente
+2. **UX**: L'utente può tornare sulla pagina e vedere subito i dati
+3. **Debug**: Facile ispezionare cosa è stato estratto
+4. **Audit**: Traccia di cosa è stato parsato e quando
+
+---
+
 ## Modifiche Frontend
 
 ### Pagina Files (`/files`)

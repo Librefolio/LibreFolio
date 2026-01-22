@@ -162,6 +162,7 @@ Sono state valutate diverse librerie:
     - [x] Modale invece di confirm browser
     - [x] Lista file foldabile per delete multiplo
     - [x] Traduzioni EN/IT/FR/ES
+    - [x] Modale centrata rispetto all'area di lavoro
 
 16. **Selezione persistente** ✅
     - [x] Selezione mantenuta tra pagine
@@ -171,251 +172,375 @@ Sono state valutate diverse librerie:
     - [x] Sticky bottom con spazio dal bordo
     - [x] Segue lo scroll della finestra
 
-**TODO Fase 3:**
-- [ ] Sorting colonne (click su header)
-- [ ] Filtri per colonna stile Excel
-- [ ] Column reorder drag & drop
-- [ ] Download multiplo come ZIP
-
 **Componente:** `FilesTableAdvanced.svelte` (v2)
 - Paginazione custom (non dipende da TanStack)
 - Storage keys separati per tipo (static vs brim)
 
 ---
 
-### 📋 Fase 4: BRIM Multi-User Support (RICHIEDE BACKEND)
+### 📋 Fase 3.5: Componentizzazione DataTable (TODO)
 
-**Analisi completa**: `analysis-brim-multiuser.md`
+**Obiettivo**: Creare un componente `DataTable.svelte` generico e riusabile
 
-**Situazione attuale:**
-- ❌ I file BRIM non tracciano chi li ha caricati (user_id)
-- ❌ I file BRIM non tracciano a quale broker sono stati parsati
-- ❌ L'endpoint `/import/files` non filtra per utente
+**Motivazione**: 
+- La tabella verrà riusata in `/brokers/{id}`, `/transactions`, `/assets`, ecc.
+- Il design attuale piace, non vogliamo reinventare la ruota
+- `FilesTableAdvanced` è troppo specifico per i file
 
-**Modifiche backend necessarie:**
-1. Estendere schema `BRIMFileInfo` con:
-   - `uploaded_by_user_id: int`
-   - `uploaded_by_username: Optional[str]`
-   - `target_broker_id: Optional[int]`
-   - `target_broker_name: Optional[str]`
+**Struttura proposta**:
 
-2. Modificare endpoint `/import/upload`:
-   - Salvare `user_id` e `username` nel metadata
+```
+src/lib/components/table/
+├── DataTable.svelte           # Componente principale generico
+├── DataTablePagination.svelte # Pagination balloon (sticky)
+├── DataTableToolbar.svelte    # Bulk actions + column toggle (NO search globale)
+├── DataTableColumnFilter.svelte # Filtro singola colonna (imbuto Excel)
+├── ConfirmModal.svelte        # Modale conferma generica
+└── types.ts                   # TypeScript interfaces
+```
 
-3. Modificare endpoint `/import/files`:
-   - Parametro opzionale `user_id` (solo superuser)
-   - Utenti normali vedono solo i propri file
-
-4. Nuovo endpoint `/import/files/users`:
-   - Lista utenti che hanno caricato file (solo superuser)
-
-**Modifiche frontend:**
-- Dropdown filtro utente (solo se superuser)
-- Colonna "Utente" (solo se superuser e mostrata)
-- Colonna "Broker" (per file parsed)
-
-**Stima**: ~1 giorno (5.5h backend + 2.5h frontend)
+> **NOTA**: Il search globale NON ci sarà. Il filtro per nome sarà il filtro Excel della colonna "nome".
 
 ---
 
-### 📋 Fase 5: Filtering e Search (PIANIFICATO)
+#### 3.5.1 Sistema Colonne Configurabili
 
-1. **Global Search**
-   - Input ricerca con debounce 300ms
-   - Cerca in tutte le colonne testuali
-   - Clear button
+Le colonne sono completamente controllate dall'utilizzatore, incluso:
+- Ordine delle colonne
+- Contenuto e tipo di rendering
+- Filtri disponibili per colonna
+- Sorting abilitato/disabilitato per colonna
 
-2. **Column Filters**
-   - Dropdown per tipo file (Image, Text, CSV, etc.)
-   - Date range picker per colonna data
+**ColumnDef Interface**:
+```typescript
+interface ColumnDef<T> {
+    id: string;
+    header: string | (() => string);  // Label o funzione per i18n
+    
+    // Rendering
+    cell: (row: T) => CellContent;    // Contenuto cella
+    
+    // Tipo di dato (determina filtro e sort)
+    type: 'text' | 'number' | 'date' | 'enum' | 'custom';
+    
+    // Per tipo 'enum': opzioni disponibili
+    enumOptions?: { value: string; label: string }[];
+    
+    // Comportamento
+    sortable?: boolean;               // Default: true
+    filterable?: boolean;             // Default: true
+    resizable?: boolean;              // Default: true
+    
+    // Larghezza
+    width?: number;                   // Larghezza iniziale in px
+    minWidth?: number;                // Larghezza minima
+    maxWidth?: number;                // Larghezza massima
+}
 
-### 📋 Fase 5: Azioni e Selezione (PIANIFICATO)
+// Contenuto cella flessibile
+type CellContent = 
+    | string 
+    | number 
+    | { type: 'icon-text'; icon: Component; text: string }
+    | { type: 'badge'; text: string; variant: string }
+    | { type: 'date'; value: Date; format?: string }
+    | { type: 'size'; bytes: number }
+    | { type: 'link'; text: string; href: string }
+    | { type: 'custom'; component: Component; props: Record<string, any> };
+```
 
-1. **Row Selection**
-   - Checkbox per selezione multipla
-   - Select all / Deselect all
-   - Contatore items selezionati
+**Esempio uso per Transactions**:
+```typescript
+const transactionColumns: ColumnDef<Transaction>[] = [
+    {
+        id: 'type',
+        header: () => $t('transactions.type'),
+        cell: (row) => ({ 
+            type: 'icon-text', 
+            icon: getTransactionIcon(row.type),  // BUY/SELL/DIV icon
+            text: row.type 
+        }),
+        type: 'enum',
+        enumOptions: [
+            { value: 'BUY', label: 'Buy' },
+            { value: 'SELL', label: 'Sell' },
+            { value: 'DIVIDEND', label: 'Dividend' },
+        ],
+        width: 120,
+    },
+    {
+        id: 'asset',
+        header: () => $t('transactions.asset'),
+        cell: (row) => ({
+            type: 'icon-text',
+            icon: getAssetIcon(row.asset),
+            text: row.asset.name
+        }),
+        type: 'text',
+        width: 200,
+    },
+    {
+        id: 'date',
+        header: () => $t('transactions.date'),
+        cell: (row) => ({ type: 'date', value: row.date }),
+        type: 'date',
+        width: 120,
+    },
+    // ... altre colonne
+];
+```
 
-2. **Bulk Actions**
-   - Download ZIP di files selezionati
-   - Delete selected con conferma
+---
 
-3. **Row Actions**
-   - Preview (👁) - modal o drawer
-     - **Testo**: Mostra contenuto con syntax highlighting opzionale
-     - **Immagini**: Lightbox con zoom/pan
-     - **Altri**: Messaggio "Preview not available"
-   - Download (⬇)
-   - Delete (🗑) con conferma elegante
+#### 3.5.2 Colonne Fisse (Select e Actions)
 
-### Fase 5: Delete Confirmation (0.5 giorni)
-
-Sostituire `alert()` con conferma elegante:
-
-1. **Inline Confirmation**
-   - Row si espande con messaggio "Are you sure?"
-   - Bottoni Cancel / Confirm Delete
-   - Auto-close dopo 5 secondi
-
-2. **Oppure Modal Confirmation**
-   - Modal centrato leggero
-   - Nome file evidenziato
-   - Icona warning
-
-### Fase 6: File Icons (0.5 giorni)
-
-Estendere funzione `getFileIcon()`:
+Le colonne di selezione e azioni sono **separate** dalle colonne dati e hanno larghezza **percentuale fissa**:
 
 ```typescript
-const FILE_ICONS: Record<string, ComponentType> = {
-  'csv': FileSpreadsheet,
-  'xlsx': FileSpreadsheet,
-  'png': Image,
-  'jpg': Image,
-  'jpeg': Image,
-  'gif': Image,
-  'webp': Image,
-  'txt': FileText,
-  'md': FileText,
-  'json': FileJson,
-  'pdf': FileType,
-  // default
-  'default': File
-};
+interface DataTableProps<T> {
+    // ... altre props ...
+    
+    // Colonne speciali
+    enableSelection?: boolean;        // Mostra colonna checkbox (default: true)
+    selectionColumnWidth?: string;    // Default: '5%'
+    
+    enableActions?: boolean;          // Mostra colonna azioni (default: true)
+    actionsColumnWidth?: string;      // Default: '10%'
+    
+    // Azioni - passate dall'utilizzatore
+    rowActions?: RowAction<T>[];      // Azioni su singola riga
+    bulkActions?: BulkAction<T>[];    // Azioni su selezione multipla
+}
+
+interface RowAction<T> {
+    id: string;
+    icon: Component;
+    label: string | (() => string);
+    onClick: (row: T) => void | Promise<void>;
+    variant?: 'default' | 'danger';
+    visible?: (row: T) => boolean;    // Condizionale
+}
+
+interface BulkAction<T> {
+    id: string;
+    icon: Component;
+    label: string | (() => string);
+    onClick: (rows: T[]) => void | Promise<void>;
+    variant?: 'default' | 'danger';
+    requireConfirm?: boolean;         // Mostra modale conferma
+    confirmMessage?: string | ((count: number) => string);
+}
 ```
+
+**Layout colonne**:
+```
+| Select (5%) | Col1 | Col2 | Col3 | ... | Actions (10%) |
+```
+
+Le colonne dati si ridistribuiscono nel restante 85%.
 
 ---
 
-## Layout Finale
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ [🔍 Search...                    ] [Type: All ▾] [⚙ Columns]   │
-├─────────────────────────────────────────────────────────────────┤
-│ ☐ │ 📄 Name ↕        │ Type   │ Size ↕  │ Date ↕     │ Actions │
-├───┼──────────────────┼────────┼─────────┼────────────┼─────────┤
-│ ☐ │ 📊 report.csv    │ CSV    │ 1.2 MB  │ 20/01/2026 │ 👁 ⬇ 🗑 │
-│ ☐ │ 🖼 logo.png      │ Image  │ 45 KB   │ 19/01/2026 │ 👁 ⬇ 🗑 │
-│ ☐ │ 📝 notes.txt     │ Text   │ 2 KB    │ 18/01/2026 │ 👁 ⬇ 🗑 │
-├───┴──────────────────┴────────┴─────────┴────────────┴─────────┤
-│ ☐ Selected: 2 items                    [📥 Download] [🗑 Delete]│
-├─────────────────────────────────────────────────────────────────┤
-│ Showing 1-10 of 42         [10 ▾]  [◀ 1 2 3 ... 5 ▶]          │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## File da Creare/Modificare
-
-### Nuovi
-| File | Descrizione |
-|------|-------------|
-| `frontend/src/lib/components/ui/DataTable.svelte` | Componente tabella generico |
-| `frontend/src/lib/components/ui/DataTablePagination.svelte` | Controlli paginazione |
-| `frontend/src/lib/components/ui/DataTableSearch.svelte` | Search + filters |
-| `frontend/src/lib/components/ui/DeleteConfirmation.svelte` | Conferma eliminazione |
-
-### Modificare
-| File | Modifica |
-|------|----------|
-| `frontend/src/routes/(app)/files/+page.svelte` | Usare DataTable |
-| `frontend/src/lib/utils/file-icons.ts` | Estendere icone |
-| `frontend/package.json` | Aggiungere @tanstack/svelte-table |
-
----
-
-## Stima Tempi
-
-| Fase | Durata | Cumulativo |
-|------|--------|------------|
-| 1. Setup e Base | 0.5 giorni | 0.5 |
-| 2. Core Features | 1 giorno | 1.5 |
-| 3. Filtering | 0.5 giorni | 2 |
-| 4. Azioni | 0.5 giorni | 2.5 |
-| 5. Delete Confirm | 0.5 giorni | 3 |
-| 6. File Icons | 0.5 giorni | 3.5 |
-
-**Totale: ~3.5 giorni**
-
----
-
-## Ordine di Esecuzione
-
-```
-1. npm install @tanstack/svelte-table
-   ↓
-2. Creare DataTable.svelte base
-   ↓
-3. Implementare sorting + pagination
-   ↓
-4. Integrare in /files page
-   ↓
-5. Aggiungere search + filters
-   ↓
-6. Implementare selezione + bulk actions
-   ↓
-7. Sostituire alert() con conferma elegante
-   ↓
-8. Estendere file icons
-   ↓
-9. Test e polish
-```
-
----
-
-## Note Tecniche
-
-### TanStack Table - Pattern Base
-
-```svelte
-<script lang="ts">
-  import { createSvelteTable, flexRender, getCoreRowModel, getSortedRowModel, getPaginationRowModel } from '@tanstack/svelte-table';
-  
-  const table = createSvelteTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-  });
-</script>
-
-<table>
-  <thead>
-    {#each $table.getHeaderGroups() as headerGroup}
-      <tr>
-        {#each headerGroup.headers as header}
-          <th on:click={header.column.getToggleSortingHandler()}>
-            {flexRender(header.column.columnDef.header, header.getContext())}
-          </th>
-        {/each}
-      </tr>
-    {/each}
-  </thead>
-  <tbody>
-    {#each $table.getRowModel().rows as row}
-      <tr>
-        {#each row.getVisibleCells() as cell}
-          <td>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
-        {/each}
-      </tr>
-    {/each}
-  </tbody>
-</table>
-```
-
-### Persistenza Preferenze
+#### 3.5.3 Props Complete DataTable
 
 ```typescript
-// Salvare in localStorage
-const savePrefs = (key: string, value: any) => {
-  localStorage.setItem(`datatable-${key}`, JSON.stringify(value));
-};
-
-// Ripristinare
-const loadPrefs = <T>(key: string, defaultValue: T): T => {
-  const saved = localStorage.getItem(`datatable-${key}`);
-  return saved ? JSON.parse(saved) : defaultValue;
-};
+interface DataTableProps<T> {
+    // Dati
+    data: T[];
+    columns: ColumnDef<T>[];
+    getRowId: (row: T) => string;
+    
+    // Storage
+    storageKey: string;               // Per persistenza preferenze
+    
+    // Selezione
+    enableSelection?: boolean;
+    selectionColumnWidth?: string;
+    onSelectionChange?: (selectedIds: string[]) => void;
+    
+    // Azioni
+    enableActions?: boolean;
+    actionsColumnWidth?: string;
+    rowActions?: RowAction<T>[];
+    bulkActions?: BulkAction<T>[];
+    
+    // Features
+    enableSorting?: boolean;          // Default: true
+    enableColumnFilters?: boolean;    // Default: true (filtri Excel)
+    enableColumnResize?: boolean;     // Default: true
+    enableColumnReorder?: boolean;    // Default: false (futuro)
+    enablePagination?: boolean;       // Default: true
+    
+    // Pagination
+    defaultPageSize?: number;         // Default: 10
+    pageSizeOptions?: number[];       // Default: [10, 25, 50, 100, 0]
+    
+    // Stile
+    emptyMessage?: string;
+    loadingMessage?: string;
+    isLoading?: boolean;
+}
 ```
+
+---
+
+#### 3.5.4 Migrazione
+
+1. Creare struttura `src/lib/components/table/`
+2. Implementare `DataTable.svelte` con tutte le features
+3. Creare `FilesTable.svelte` come wrapper che usa `DataTable`:
+   ```svelte
+   <DataTable
+       data={files}
+       columns={fileColumns}
+       getRowId={(f) => f.id || f.file_id}
+       storageKey="filesTable_{type}"
+       rowActions={[
+           { id: 'download', icon: Download, onClick: handleDownload },
+           { id: 'delete', icon: Trash2, onClick: handleDelete, variant: 'danger' },
+       ]}
+       bulkActions={[
+           { id: 'download', icon: Download, onClick: handleBulkDownload },
+           { id: 'delete', icon: Trash2, onClick: handleBulkDelete, variant: 'danger', requireConfirm: true },
+       ]}
+   />
+   ```
+4. Testare con i 2 tab esistenti (static/brim)
+5. Rimuovere `FilesTableAdvanced.svelte` dopo migrazione
+
+---
+
+### 📋 Fase 3.6: Estetica e Comportamento Tabella (TODO)
+
+> **NOTA**: Questa fase si fa INSIEME alla 3.5 durante la componentizzazione.
+
+#### 3.6.1 Estetica (durante componentizzazione)
+
+**Sorting Colonne**:
+- [ ] Click su header per sort ASC/DESC/none
+- [ ] Icona freccia su/giù nell'header
+- [ ] Multi-column sort (Shift+click) - opzionale
+
+**Filtri Colonna Stile Excel**:
+- [ ] Icona imbuto nell'header colonna (se filterable)
+- [ ] Click apre popover con filtro appropriato al tipo:
+  - **text**: input testo + toggle regex
+  - **enum**: checkbox multiple con opzioni
+  - **number**: range min-max con slider
+  - **date**: date range picker
+- [ ] Imbuto pieno = filtro attivo, click rimuove
+
+**Column Resize**:
+- [ ] Colonne select/actions: larghezza % fissa (non ridimensionabili)
+- [ ] Colonne dati: ridimensionabili con drag
+- [ ] Rispetto minWidth/maxWidth da ColumnDef
+
+**Column Reorder** (opzionale/futuro):
+- [ ] Drag & drop header per riordinare
+- [ ] Grip handle visibile su hover
+
+#### 3.6.2 Comportamento (passato dall'utilizzatore)
+
+Le azioni sono **completamente gestite dall'utilizzatore** tramite props:
+
+- `rowActions`: Array di azioni per singola riga
+- `bulkActions`: Array di azioni per selezione multipla
+- Ogni azione ha il proprio `onClick` handler
+- La tabella gestisce solo:
+  - Rendering bottoni/icone
+  - Modale conferma (se `requireConfirm: true`)
+  - Passaggio dati all'handler
+
+**Esempio azioni Files**:
+```typescript
+const fileRowActions: RowAction<FileData>[] = [
+    {
+        id: 'download',
+        icon: Download,
+        label: () => $t('uploads.download'),
+        onClick: async (file) => {
+            const link = document.createElement('a');
+            link.href = getDownloadUrl(file);
+            link.download = file.filename;
+            link.click();
+        },
+    },
+    {
+        id: 'delete',
+        icon: Trash2,
+        label: () => $t('common.delete'),
+        onClick: async (file) => {
+            await api.delete(`/uploads/${file.id}`);
+            await loadFiles();
+        },
+        variant: 'danger',
+    },
+];
+
+const fileBulkActions: BulkAction<FileData>[] = [
+    {
+        id: 'download',
+        icon: Download,
+        label: () => $t('uploads.download'),
+        onClick: async (files) => {
+            // Download sequenziale o ZIP
+            for (const file of files) {
+                await downloadFile(file);
+            }
+        },
+    },
+    {
+        id: 'delete',
+        icon: Trash2,
+        label: () => $t('common.delete'),
+        onClick: async (files) => {
+            for (const file of files) {
+                await api.delete(`/uploads/${file.id}`);
+            }
+            await loadFiles();
+        },
+        variant: 'danger',
+        requireConfirm: true,
+        confirmMessage: (count) => $t('uploads.deleteConfirmMultiple', { count }),
+    },
+];
+```
+
+---
+
+### 📋 Fase 3.7: Features Aggiuntive (POST-componentizzazione e responsabilità delle pagine utilizzatrici del componente)
+
+**1. Download Multiplo ZIP** (Priorità MEDIA)
+- [ ] Seleziona multipli file → download come ZIP
+- [ ] Richiede libreria JS (JSZip) o endpoint backend
+- [ ] Progress indicator durante creazione ZIP
+
+**2. Export Tabella** (Priorità BASSA)
+- [ ] Export CSV dei dati visualizzati
+- [ ] Export con filtri applicati
+
+**3. Preview File** (Priorità BASSA)
+- [ ] Preview testo con syntax highlighting
+- [ ] Preview immagini con lightbox
+- [ ] Preview PDF inline
+
+---
+
+### 📋 Fase 4: BRIM Multi-User Support
+
+**Piano dettagliato**: `plan-brim-multiuser-implementation.md`  
+**Analisi**: `analysis-brim-multiuser.md`
+
+**Riepilogo modifiche**:
+- Backend: broker_id obbligatorio all'upload, filtri per broker, caching parse result
+- Frontend: filtro multi-broker, colonna broker, upload con selezione broker
+
+**Stima**: ~8-13h totali
+
+---
+
+## Riferimenti
+
+- TanStack Table v8 Core: https://tanstack.com/table/v8
+- Adapter Svelte 5 custom in `$lib/tanstack-table/`
+- Issue tracking: vedere file in `LibreFolio_developer_journal/`

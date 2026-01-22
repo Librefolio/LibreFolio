@@ -266,18 +266,50 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
   - Text: `GET /uploads/file/{id}?offset=0&window=1000`
   - Images: `GET /uploads/file/{id}?img_preview=400x400`
   - Error 400 per file incompatibili
+- ✅ **FilesTableAdvanced**: Componente con pagination, search, selection, bulk actions
+- ✅ **Adapter TanStack Table v8**: Custom adapter per Svelte 5
 
-**Da implementare**:
-- [ ] Setup TanStack Table
-- [ ] Sorting multi-column
-- [ ] Pagination con selettore (10/50/100/All)
-- [ ] Filtering per nome/tipo/data
-- [ ] Preview modal (Eye icon)
-- [ ] Selezione multipla + bulk actions
-- [ ] Delete confirmation banner (no alert)
-- [ ] Rename file function
+**Da implementare** (Fase 3.5-3.6):
+- [ ] Componentizzazione `DataTable.svelte` generico e riusabile
+- [ ] Sorting colonne con click header
+- [ ] Filtri colonna stile Excel (imbuto)
+- [ ] Colonne fisse (select/actions) con larghezza percentuale
+- [ ] Sistema colonne configurabili dall'utilizzatore
 
 **Stima**: 3-6 giorni
+
+#### 2.5 BRIM Multi-User Support Plan 📋 **PIANIFICATO**
+**File Piano**: [`../plan-brim-multiuser-implementation.md`](../plan-brim-multiuser-implementation.md)  
+**File Analisi**: [`../analysis-brim-multiuser.md`](../analysis-brim-multiuser.md)
+
+**Obiettivo**: Rendere il sistema BRIM compatibile con multi-utente e multi-broker.
+
+**Modifiche Backend**:
+- `broker_id` obbligatorio all'upload (file associato al broker)
+- `uploaded_by_user_id` per tracciare chi ha caricato
+- Filtri per broker accessibili all'utente
+- Caching risultato parsing nel metadata JSON
+- Nuovo endpoint `GET /files/{id}/last-parse`
+
+**Modifiche Frontend**:
+- Filtro multi-broker nella pagina Files
+- Colonna "Broker" con link alla pagina broker
+- Upload con selezione broker (se non in pagina broker)
+- Tab/sezione files nella pagina del singolo broker
+
+**Storage Structure**:
+```
+broker_reports/
+├── uploaded/
+│   ├── broker_1/
+│   └── broker_2/
+├── parsed/
+│   └── broker_1/
+└── failed/
+    └── broker_1/
+```
+
+**Stima**: 8-13h totali (5-8h backend + 3-5h frontend)
 
 #### 3. Image Crop Plan
 **File**: [`../plan-image-crop.md`](../plan-image-crop.md)
