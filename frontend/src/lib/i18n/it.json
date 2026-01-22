@@ -29,6 +29,16 @@
     "undo": "Annulla",
     "reset": "Ripristina"
   },
+  "table": {
+    "rowsPerPage": "Righe per pagina",
+    "showing": "Visualizzando",
+    "of": "di",
+    "firstPage": "Prima pagina",
+    "previousPage": "Pagina precedente",
+    "nextPage": "Pagina successiva",
+    "lastPage": "Ultima pagina",
+    "noResults": "Nessun risultato trovato"
+  },
   "error": {
     "pageNotFound": "Pagina Non Trovata",
     "pageNotFoundMessage": "La pagina che stai cercando non esiste o è stata spostata.",
@@ -183,7 +193,11 @@
     "assets": "{count} asset",
     "currencies": "{count} valuta/e",
     "unsavedChanges": "Ci sono modifiche non salvate. Vuoi scartarle?",
-    "loadFailed": "Impossibile caricare il broker"
+    "discardChanges": "Annullare le Modifiche?",
+    "discardChangesWarning": "Hai modifiche non salvate a questo broker. Vuoi annullarle?",
+    "continueEditing": "Continua Modifica",
+    "discardAndClose": "Annulla e Chiudi",
+    "loadFailed": "Errore nel caricamento del broker"
   },
   "assets": {
     "title": "Asset",
@@ -213,6 +227,11 @@
     "profileDescription": "Gestisci i dettagli del tuo account",
     "enableEditing": "Abilita modifica",
     "disableEditing": "Disabilita modifica",
+    "discardChanges": "Annullare le Modifiche?",
+    "discardChangesWarning": "Hai modifiche non salvate. Vuoi annullarle?",
+    "continueEditing": "Continua Modifica",
+    "discardAndLock": "Annulla e Blocca",
+    "savedSuccessfully": "Salvato con successo",
     "accountCreated": "Account Creato",
     "profileUpdated": "Profilo aggiornato con successo",
     "updateFailed": "Errore nell'aggiornamento del profilo",

@@ -31,6 +31,7 @@
     "vite": "^7.2.2"
   },
   "dependencies": {
+    "@tanstack/table-core": "^8.21.3",
     "@zodios/core": "^10.9.6",
     "@zxcvbn-ts/core": "^3.0.4",
     "@zxcvbn-ts/language-common": "^3.0.4",

@@ -29,6 +29,16 @@
     "undo": "Annuler",
     "reset": "Réinitialiser"
   },
+  "table": {
+    "rowsPerPage": "Lignes par page",
+    "showing": "Affichage",
+    "of": "sur",
+    "firstPage": "Première page",
+    "previousPage": "Page précédente",
+    "nextPage": "Page suivante",
+    "lastPage": "Dernière page",
+    "noResults": "Aucun résultat trouvé"
+  },
   "error": {
     "pageNotFound": "Page Non Trouvée",
     "pageNotFoundMessage": "La page que vous recherchez n'existe pas ou a été déplacée.",
@@ -183,6 +193,10 @@
     "assets": "{count} actif(s)",
     "currencies": "{count} devise(s)",
     "unsavedChanges": "Vous avez des modifications non enregistrées. Les abandonner ?",
+    "discardChanges": "Annuler les Modifications ?",
+    "discardChangesWarning": "Vous avez des modifications non enregistrées pour ce courtier. Voulez-vous les annuler ?",
+    "continueEditing": "Continuer la Modification",
+    "discardAndClose": "Annuler et Fermer",
     "loadFailed": "Échec du chargement du courtier"
   },
   "assets": {
@@ -213,6 +227,11 @@
     "profileDescription": "Gérez les détails de votre compte",
     "enableEditing": "Activer la modification",
     "disableEditing": "Désactiver la modification",
+    "discardChanges": "Annuler les Modifications ?",
+    "discardChangesWarning": "Vous avez des modifications non enregistrées. Voulez-vous les annuler ?",
+    "continueEditing": "Continuer la Modification",
+    "discardAndLock": "Annuler et Verrouiller",
+    "savedSuccessfully": "Enregistré avec succès",
     "accountCreated": "Compte Créé",
     "profileUpdated": "Profil mis à jour avec succès",
     "updateFailed": "Échec de la mise à jour du profil",
