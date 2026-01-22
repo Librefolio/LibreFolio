@@ -27,7 +27,8 @@
     "saveAll": "Enregistrer Tout",
     "resetAll": "Réinitialiser Tout",
     "undo": "Annuler",
-    "reset": "Réinitialiser"
+    "reset": "Réinitialiser",
+    "confirmDelete": "Confirmer la Suppression"
   },
   "table": {
     "rowsPerPage": "Lignes par page",
@@ -37,7 +38,21 @@
     "previousPage": "Page précédente",
     "nextPage": "Page suivante",
     "lastPage": "Dernière page",
-    "noResults": "Aucun résultat trouvé"
+    "noResults": "Aucun résultat trouvé",
+    "page": "Page",
+    "all": "Tous",
+    "goToPage": "Aller à la page",
+    "columns": "Colonnes",
+    "showColumns": "Afficher/Masquer Colonnes",
+    "selected": "sélectionnés"
+  },
+  "fileStatus": {
+    "uploaded": "Téléchargé",
+    "parsed": "Analysé",
+    "imported": "Importé",
+    "failed": "Échoué",
+    "error": "Erreur",
+    "processing": "En cours"
   },
   "error": {
     "pageNotFound": "Page Non Trouvée",
@@ -366,6 +381,12 @@
     "uploadDate": "Téléversé",
     "actions": "Actions",
     "download": "Télécharger",
-    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce fichier?"
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce fichier?",
+    "deleteConfirmSingle": "Êtes-vous sûr de vouloir supprimer ce fichier?",
+    "deleteConfirmMultiple": "Êtes-vous sûr de vouloir supprimer ces fichiers?",
+    "files": "fichiers",
+    "filesToDelete": "Fichiers à supprimer",
+    "showFileList": "Afficher la liste",
+    "hideFileList": "Masquer la liste"
   }
 }

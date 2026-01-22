@@ -12,6 +12,7 @@
     import ImageUploader from '$lib/components/ui/ImageUploader.svelte';
     import LazyImage from '$lib/components/ui/LazyImage.svelte';
     import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid } from 'lucide-svelte';
+    import FilesTableAdvanced from '$lib/components/files/FilesTableAdvanced.svelte';
 
     type Tab = 'static' | 'brim';
 
@@ -33,6 +34,29 @@
         size_bytes?: number;
     }
 
+    // LocalStorage keys
+    const STORAGE_KEY_VIEW_MODE = 'filesPage_viewMode';
+
+    // Load view mode from localStorage (default: list/table)
+    function loadViewMode(): 'grid' | 'list' {
+        if (typeof window === 'undefined') return 'list';
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY_VIEW_MODE);
+            return stored === 'grid' ? 'grid' : 'list';
+        } catch {
+            return 'list';
+        }
+    }
+
+    function saveViewMode(mode: 'grid' | 'list'): void {
+        if (typeof window === 'undefined') return;
+        try {
+            localStorage.setItem(STORAGE_KEY_VIEW_MODE, mode);
+        } catch {
+            // Ignore storage errors
+        }
+    }
+
     let activeTab: Tab = 'static';
     let staticFiles: UploadedFile[] = [];
     let brimFiles: BrimFile[] = [];
@@ -40,7 +64,11 @@
     let error: string | null = null;
     let showUploader = false;
 
+    // View mode with localStorage persistence (default: list/table)
+    let viewMode: 'grid' | 'list' = 'list';
+
     onMount(async () => {
+        viewMode = loadViewMode();
         await loadFiles();
     });
 
@@ -68,7 +96,6 @@
         try {
             const formData = new FormData();
             formData.append('file', file);
-            // Don't send description if not provided
 
             await api.post('/uploads', formData);
 
@@ -80,7 +107,6 @@
     }
 
     async function deleteFile(fileId: string, isBrim: boolean = false) {
-        if (!confirm($t('uploads.deleteConfirm'))) return;
 
         try {
             const endpoint = isBrim
@@ -123,16 +149,10 @@
         return FileIcon;
     }
 
-    // Get appropriate icon for BRIM files based on extension
-    function getBrimFileIcon(filename: string) {
-        const ext = filename.split('.').pop()?.toLowerCase();
-        if (ext === 'csv') return FileSpreadsheet;
-        if (ext === 'json' || ext === 'txt') return FileText;
-        return FileIcon;
+    function setViewMode(mode: 'grid' | 'list') {
+        viewMode = mode;
+        saveViewMode(mode);
     }
-
-    // View mode: 'grid' or 'list'
-    let viewMode: 'grid' | 'list' = 'grid';
 
     function switchTab(tab: Tab) {
         activeTab = tab;
@@ -155,7 +175,7 @@
                     <button
                         class="view-btn"
                         class:active={viewMode === 'grid'}
-                        on:click={() => viewMode = 'grid'}
+                        on:click={() => setViewMode('grid')}
                         title="Grid view"
                     >
                         <LayoutGrid size={18} />
@@ -163,7 +183,7 @@
                     <button
                         class="view-btn"
                         class:active={viewMode === 'list'}
-                        on:click={() => viewMode = 'list'}
+                        on:click={() => setViewMode('list')}
                         title="List view"
                     >
                         <List size={18} />
@@ -279,52 +299,13 @@
                     {/each}
                 </div>
             {:else}
-                <!-- List View -->
-                <div class="file-table-wrapper">
-                    <table class="file-table">
-                        <thead>
-                            <tr>
-                                <th class="th-name">{$t('uploads.fileName')}</th>
-                                <th class="th-size">{$t('uploads.fileSize')}</th>
-                                <th class="th-date">{$t('uploads.uploadDate')}</th>
-                                <th class="th-actions">{$t('uploads.actions')}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each staticFiles as file}
-                                <tr>
-                                    <td>
-                                        <div class="filename-cell">
-                                            <svelte:component this={getFileIcon(file.content_type, file.original_name)} size={18} class="file-type-icon" />
-                                            <span class="filename-text" title={file.original_name}>{file.original_name}</span>
-                                        </div>
-                                    </td>
-                                    <td class="size-cell">{formatBytes(file.size_bytes)}</td>
-                                    <td class="date-cell">{formatDate(file.uploaded_at)}</td>
-                                    <td class="actions-cell">
-                                        <div class="action-buttons">
-                                            <a
-                                                href={`${file.url}?download=true`}
-                                                download={file.original_name}
-                                                class="action-btn"
-                                                title={$t('uploads.download')}
-                                            >
-                                                <Download size={16} />
-                                            </a>
-                                            <button
-                                                class="action-btn danger"
-                                                on:click={() => deleteFile(file.id)}
-                                                title={$t('common.delete')}
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
-                </div>
+                <!-- List View with TanStack Table -->
+                <FilesTableAdvanced
+                    files={staticFiles}
+                    type="static"
+                    onDelete={(id) => deleteFile(id, false)}
+                    storageKey="filesPage"
+                />
             {/if}
         {:else}
             <!-- BRIM Files -->
@@ -334,57 +315,13 @@
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else}
-                <div class="file-table-wrapper">
-                    <table class="file-table">
-                        <thead>
-                            <tr>
-                                <th class="th-name">{$t('uploads.fileName')}</th>
-                                <th class="th-status">Status</th>
-                                <th class="th-size">{$t('uploads.fileSize')}</th>
-                                <th class="th-date">{$t('uploads.uploadDate')}</th>
-                                <th class="th-actions">{$t('uploads.actions')}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each brimFiles as file}
-                                <tr>
-                                    <td>
-                                        <div class="filename-cell">
-                                            <svelte:component this={getBrimFileIcon(file.filename)} size={18} class="file-type-icon" />
-                                            <span class="filename-text" title={file.filename}>{file.filename}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="status-badge status-{file.status}">
-                                            {file.status}
-                                        </span>
-                                    </td>
-                                    <td class="size-cell">{file.size_bytes ? formatBytes(file.size_bytes) : '-'}</td>
-                                    <td class="date-cell">{formatDate(file.uploaded_at)}</td>
-                                    <td class="actions-cell">
-                                        <div class="action-buttons">
-                                            <a
-                                                href={`/api/v1/brokers/import/files/${file.file_id}/download`}
-                                                download={file.filename}
-                                                class="action-btn"
-                                                title={$t('uploads.download')}
-                                            >
-                                                <Download size={16} />
-                                            </a>
-                                            <button
-                                                class="action-btn danger"
-                                                on:click={() => deleteFile(file.file_id, true)}
-                                                title={$t('common.delete')}
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
-                </div>
+                <!-- BRIM Table with TanStack Table -->
+                <FilesTableAdvanced
+                    files={brimFiles}
+                    type="brim"
+                    onDelete={(id) => deleteFile(id, true)}
+                    storageKey="filesPage"
+                />
             {/if}
         {/if}
     </div>
@@ -701,156 +638,6 @@
         background: rgba(220, 38, 38, 0.2);
         color: #fca5a5;
         border-color: rgba(220, 38, 38, 0.4);
-    }
-
-    /* File Table */
-    .file-table-wrapper {
-        overflow-x: auto;
-        border: 1px solid #e5e7eb;
-        border-radius: 0.5rem;
-    }
-
-    :global(.dark) .file-table-wrapper {
-        border-color: #374151;
-    }
-
-    .file-table {
-        width: 100%;
-        border-collapse: collapse;
-        min-width: 600px;
-    }
-
-    .file-table th,
-    .file-table td {
-        padding: 0.75rem 1rem;
-        text-align: left;
-    }
-
-    .file-table th {
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        color: #6b7280;
-        background: #f9fafb;
-        border-bottom: 1px solid #e5e7eb;
-        white-space: nowrap;
-    }
-
-    :global(.dark) .file-table th {
-        background: #1f2937;
-        color: #9ca3af;
-        border-bottom-color: #374151;
-    }
-
-    .file-table td {
-        font-size: 0.875rem;
-        color: #1f2937;
-        border-bottom: 1px solid #e5e7eb;
-        vertical-align: middle;
-    }
-
-    :global(.dark) .file-table td {
-        color: #f3f4f6;
-        border-bottom-color: #374151;
-    }
-
-    .file-table tbody tr:last-child td {
-        border-bottom: none;
-    }
-
-    .file-table tbody tr:hover {
-        background: #f9fafb;
-    }
-
-    :global(.dark) .file-table tbody tr:hover {
-        background: #374151;
-    }
-
-    /* Column widths */
-    .th-name { width: 40%; min-width: 200px; }
-    .th-status { width: 100px; }
-    .th-size { width: 100px; }
-    .th-date { width: 150px; }
-    .th-actions { width: 100px; text-align: center; }
-
-    .filename-cell {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .filename-cell :global(.file-type-icon) {
-        flex-shrink: 0;
-        color: #6b7280;
-    }
-
-    :global(.dark) .filename-cell :global(.file-type-icon) {
-        color: #9ca3af;
-    }
-
-    .filename-text {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        min-width: 0;
-    }
-
-    .size-cell, .date-cell {
-        white-space: nowrap;
-        color: #6b7280;
-    }
-
-    :global(.dark) .size-cell, :global(.dark) .date-cell {
-        color: #9ca3af;
-    }
-
-    .actions-cell {
-        text-align: center;
-    }
-
-    .action-buttons {
-        display: flex;
-        justify-content: center;
-        gap: 0.5rem;
-    }
-
-    .status-badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        font-size: 0.75rem;
-        font-weight: 500;
-        border-radius: 9999px;
-        text-transform: capitalize;
-    }
-
-    .status-uploaded {
-        background: #dbeafe;
-        color: #1d4ed8;
-    }
-
-    :global(.dark) .status-uploaded {
-        background: rgba(59, 130, 246, 0.2);
-        color: #93c5fd;
-    }
-
-    .status-imported, .status-parsed {
-        background: #d1fae5;
-        color: #059669;
-    }
-
-    :global(.dark) .status-imported, :global(.dark) .status-parsed {
-        background: rgba(16, 185, 129, 0.2);
-        color: #6ee7b7;
-    }
-
-    .status-failed, .status-error {
-        background: #fef2f2;
-        color: #dc2626;
-    }
-
-    :global(.dark) .status-failed, :global(.dark) .status-error {
-        background: rgba(220, 38, 38, 0.2);
-        color: #fca5a5;
     }
 </style>
 
