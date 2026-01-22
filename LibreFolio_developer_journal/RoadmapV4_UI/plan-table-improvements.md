@@ -1,333 +1,298 @@
-# Piano: Migliorie Tabelle Files e BRIM
+# Piano: Migliorie Tabelle Files con TanStack Table
 
-**Data**: 20 Gennaio 2026  
-**Status**: 📋 DA REVIEW
+**Data**: 21 Gennaio 2026  
+**Aggiornamento**: 22 Gennaio 2026  
+**Status**: 🔄 IN CORSO  
+**Libreria**: TanStack Table v8 (`@tanstack/table-core`) + Adapter Custom Svelte 5
 
 ---
 
-## Problema Attuale
+## Contesto
 
-Le tabelle in `/files` (Static Resources e BRIM Reports) hanno diversi problemi:
+Le tabelle in `/files` (Static Resources e BRIM Reports) necessitano di miglioramenti significativi per UX e funzionalità.
+
+### Alternative Valutate
+
+Sono state valutate diverse librerie:
+- **Svelte-Simple-Datatables**: Leggera ma feature limitate
+- **ag-Grid Community**: Enterprise-grade ma overkill (~500KB)
+- **Native Custom**: Zero dipendenze ma richiede implementazione completa
+- **@tanstack/svelte-table v9 alpha**: Supporto Svelte 5 ma in alpha, non stabile
+
+**Scelta finale: TanStack Table v8 con adapter custom** per stabilità e compatibilità con Svelte 5.
+
+> **NOTA**: Quando TanStack Table v9 sarà stabile con supporto ufficiale Svelte 5, 
+> migrare all'adapter ufficiale. Vedi `TODO_FUTURI.md` nella root del progetto.
+
+---
+
+## ✅ Completato (22 Gennaio 2026)
+
+### Fase 1: Setup e Componente Base
+
+- [x] Installato `@tanstack/table-core@^8.21.3` (stabile, non alpha)
+- [x] Creato adapter custom in `frontend/src/lib/tanstack-table/`:
+  - `createSvelteTable.svelte.ts` - Factory reattivo per Svelte 5
+  - `FlexRender.svelte` - Helper per rendering celle
+  - `DataTable.svelte` - Componente UI con sorting e pagination
+  - `index.ts` - Re-export delle API core
+- [x] Build verificata senza errori
+- [x] Documentato in `TODO_FUTURI.md` la migrazione futura a v9
+
+---
+
+## Problemi Attuali
 
 ### Static Resources
-- ❌ Nessuna icona per tipi file (PNG, TXT)
+- ❌ Nessuna icona per tipi file (PNG, TXT, etc.)
 - ❌ Nessuna paginazione
 - ❌ Nessun controllo elementi per pagina
-- ❌ Download salva con UUID invece del nome originale (**FIXED**)
-- ❌ Delete senza conferma chiara (**DA MIGLIORARE**)
-- ❌ Nomenclatura "Cancel" invece di "New File" (**FIXED**)
-- ❌ Nessuna funzione rename/edit metadata
-
-### BRIM Reports
-- ✅ Icone corrette per CSV
-- ❌ Nessuna paginazione
-- ❌ Nessun controllo elementi per pagina
-- ✅ Download funziona correttamente
-
-### Entrambe
 - ❌ Nessun sorting
 - ❌ Nessun filtering
-- ❌ Nessuna selezione multipla
+- ❌ Delete senza conferma elegante (usa alert())
+
+### BRIM Reports  
+- ✅ Icone corrette per CSV
+- ❌ Nessuna paginazione
+- ❌ Nessun sorting/filtering
 
 ---
 
-## Soluzioni Proposte
+## Piano di Implementazione
 
-### A. Fix Immediati (già implementati o semplici)
+### ✅ Fase 1: Setup e Componente Base (COMPLETATA - 22/01/2026)
 
-1. ✅ **Download con nome originale** - Aggiunto parametro `download=true` all'API
-2. ✅ **Nomenclatura bottone** - Cambiato da "Cancel" a "New File"
-3. 🔧 **Delete confirmation banner** - Sostituire alert() con banner centrato
-4. 🔧 **Icone file types** - Estendere `getFileIcon()` per gestire PNG, TXT, etc.
+- [x] Installato `@tanstack/table-core@^8.21.3` (stabile)
+- [x] Creato adapter custom Svelte 5 in `$lib/tanstack-table/`
+- [x] Componente `DataTable.svelte` con:
+  - Props: `data`, `columns`, `pageSize`, `enableSorting`, `enablePagination`
+  - Headless UI con styling Tailwind
+  - Dark mode support
+  - Sorting base implementato
+  - Pagination base implementata
 
-### B. Funzionalità Tabella Avanzata
+### 🔄 Fase 2: Integrazione in Files Page (IN CORSO)
 
-#### Opzione 1: Tabella Nativa + Componente Custom
-- **Pro**: Controllo totale, bundle size ridotto
-- **Contro**: Più lavoro iniziale, dobbiamo implementare tutto
+1. **Sostituire tabella Static Resources**
+   - Usare `DataTable` component
+   - Definire colonne tipizzate
+   - Aggiungere icone per tipo file
 
-#### Opzione 2: TanStack Table (svelte-table)
-- **Pro**: Standard de-facto, feature complete, ottimizzata
-- **Contro**: Curva apprendimento, bundle size ~40KB
-- **Link**: https://tanstack.com/table/latest
+2. **Sostituire tabella BRIM Reports**
+   - Usare `DataTable` component
+   - Mantenere icone CSV esistenti
 
-#### Opzione 3: Svelte-Simple-Datatables
-- **Pro**: Leggera, fatta per Svelte
-- **Contro**: Meno features, meno attiva
-- **Link**: https://github.com/vincjo/simple-datatables
+### 📋 Fase 3: Features Avanzate (PIANIFICATO)
 
-#### Opzione 4: ag-Grid Community
-- **Pro**: Enterprise-grade, tutte le features
-- **Contro**: Bundle size enorme (~500KB), overkill
-- **Link**: https://www.ag-grid.com
+1. **Sorting Avanzato**
+   - Multi-column sorting (shift+click)
+
+2. **Pagination Avanzata**
+   - Selettore page size: 10, 25, 50, 100
+   - Indicatore: "Showing 1-10 of 42"
+
+3. **Column Configuration**
+   - Toggle visibilità colonne
+   - Persistenza preferenze in localStorage
+
+### 📋 Fase 4: Filtering e Search (PIANIFICATO)
+
+1. **Global Search**
+   - Input ricerca con debounce 300ms
+   - Cerca in tutte le colonne testuali
+   - Clear button
+
+2. **Column Filters**
+   - Dropdown per tipo file (Image, Text, CSV, etc.)
+   - Date range picker per colonna data
+
+### 📋 Fase 5: Azioni e Selezione (PIANIFICATO)
+
+1. **Row Selection**
+   - Checkbox per selezione multipla
+   - Select all / Deselect all
+   - Contatore items selezionati
+
+2. **Bulk Actions**
+   - Download ZIP di files selezionati
+   - Delete selected con conferma
+
+3. **Row Actions**
+   - Preview (👁) - modal o drawer
+     - **Testo**: Mostra contenuto con syntax highlighting opzionale
+     - **Immagini**: Lightbox con zoom/pan
+     - **Altri**: Messaggio "Preview not available"
+   - Download (⬇)
+   - Delete (🗑) con conferma elegante
+
+### Fase 5: Delete Confirmation (0.5 giorni)
+
+Sostituire `alert()` con conferma elegante:
+
+1. **Inline Confirmation**
+   - Row si espande con messaggio "Are you sure?"
+   - Bottoni Cancel / Confirm Delete
+   - Auto-close dopo 5 secondi
+
+2. **Oppure Modal Confirmation**
+   - Modal centrato leggero
+   - Nome file evidenziato
+   - Icona warning
+
+### Fase 6: File Icons (0.5 giorni)
+
+Estendere funzione `getFileIcon()`:
+
+```typescript
+const FILE_ICONS: Record<string, ComponentType> = {
+  'csv': FileSpreadsheet,
+  'xlsx': FileSpreadsheet,
+  'png': Image,
+  'jpg': Image,
+  'jpeg': Image,
+  'gif': Image,
+  'webp': Image,
+  'txt': FileText,
+  'md': FileText,
+  'json': FileJson,
+  'pdf': FileType,
+  // default
+  'default': File
+};
+```
 
 ---
 
-## Scelta Consigliata: TanStack Table ✅
-
-### Perché TanStack Table?
-1. **Headless UI**: Controllo totale sullo styling (compatibile con nostro design)
-2. **Feature complete**: sorting, filtering, pagination, selezione, column resizing
-3. **TypeScript-first**: Ottima DX
-4. **Ottimizzato**: Virtual scrolling per grandi dataset
-5. **Documentazione**: Eccellente con esempi Svelte
-6. **Comunità**: Molto attiva, usata da grandi progetti
-
-### Features da Implementare
-
-#### Fase 1: Core Features
-- [ ] **Sorting**: Click su header per sort ascendente/discendente
-- [ ] **Pagination**: 
-  - Selettore: 10, 50, 100, Tutti
-  - Navigazione: First, Prev, Next, Last
-  - Indicatore: "Showing 1-10 of 42"
-- [ ] **Column configuration**: Visibilità, width, order
-
-#### Fase 2: Advanced Features  
-- [ ] **Filtering**: 
-  - Text search per nome file
-  - Filter per tipo file (CSV, Image, Text, etc.)
-  - Filter per data range
-- [ ] **Selection**: 
-  - Checkbox per selezione multipla
-  - Azioni bulk: Download ZIP, Delete selected
-- [ ] **Column resizing**: Drag header per ridimensionare
-- [ ] **File Preview**: 
-  - Icona "Eye" per preview in modal
-  - Text files: Mostra prime 1000 caratteri (usando `?offset=0&window=1000`)
-  - Images: Thumbnail ridimensionata (usando `?img_preview=400x400`)
-  - Error handling per file binari non supportati
-
-#### Fase 3: Polish
-- [ ] **Empty state**: Messaggio quando nessun risultato
-- [ ] **Loading state**: Skeleton durante fetch
-- [ ] **Export**: CSV, JSON export dei dati filtrati
-- [ ] **Preview Modal**: Componente riutilizzabile per preview
-  - Text: Syntax highlighting (opzionale)
-  - Images: Lightbox con zoom
-  - Unsupported: Messaggio "Preview not available"
-
----
-
-## Layout Proposto
+## Layout Finale
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ [Search...] [Type: All ▾] [Date: Any ▾]         [⚙ Columns]    │
+│ [🔍 Search...                    ] [Type: All ▾] [⚙ Columns]   │
 ├─────────────────────────────────────────────────────────────────┤
-│ ☐ │ Name ↕        │ Type  │ Size ↕  │ Date ↕      │ Actions   │
-├───┼───────────────┼───────┼─────────┼─────────────┼───────────┤
-│ ☐ │ 📄 report.csv │ CSV   │ 1.2 MB  │ 2026-01-20  │ 👁 ⬇ 🗑  │
-│ ☐ │ 🖼 logo.png   │ Image │ 45 KB   │ 2026-01-19  │ 👁 ⬇ 🗑  │
-│ ☐ │ 📝 notes.txt  │ Text  │ 2 KB    │ 2026-01-18  │ 👁 ⬇ 🗑  │
-├───┴───────────────┴───────┴─────────┴─────────────┴───────────┤
-│ Showing 1-10 of 42          [10 ▾] [< 1 2 3 ... >] [Last]    │
+│ ☐ │ 📄 Name ↕        │ Type   │ Size ↕  │ Date ↕     │ Actions │
+├───┼──────────────────┼────────┼─────────┼────────────┼─────────┤
+│ ☐ │ 📊 report.csv    │ CSV    │ 1.2 MB  │ 20/01/2026 │ 👁 ⬇ 🗑 │
+│ ☐ │ 🖼 logo.png      │ Image  │ 45 KB   │ 19/01/2026 │ 👁 ⬇ 🗑 │
+│ ☐ │ 📝 notes.txt     │ Text   │ 2 KB    │ 18/01/2026 │ 👁 ⬇ 🗑 │
+├───┴──────────────────┴────────┴─────────┴────────────┴─────────┤
+│ ☐ Selected: 2 items                    [📥 Download] [🗑 Delete]│
+├─────────────────────────────────────────────────────────────────┤
+│ Showing 1-10 of 42         [10 ▾]  [◀ 1 2 3 ... 5 ▶]          │
 └─────────────────────────────────────────────────────────────────┘
-
-Selected: 2 items  [Download ZIP] [Delete Selected]
-
-Actions: 👁 Preview | ⬇ Download | 🗑 Delete
 ```
 
 ---
 
-## Alternative per Libreria Tabelle
+## File da Creare/Modificare
 
-| Libreria | Bundle | Features | Svelte Support | Raccomandazione |
-|----------|--------|----------|----------------|-----------------|
-| **TanStack Table** | ~40KB | ⭐⭐⭐⭐⭐ | Nativo | ✅ **CONSIGLIATO** |
-| Svelte-Simple-Datatables | ~15KB | ⭐⭐⭐ | Nativo | 🟡 OK per semplice |
-| Native Custom | 0KB | ⭐⭐ | - | 🟡 Solo se tempo abbonda |
-| ag-Grid Community | ~500KB | ⭐⭐⭐⭐⭐ | Wrapper | ❌ Overkill |
+### Nuovi
+| File | Descrizione |
+|------|-------------|
+| `frontend/src/lib/components/ui/DataTable.svelte` | Componente tabella generico |
+| `frontend/src/lib/components/ui/DataTablePagination.svelte` | Controlli paginazione |
+| `frontend/src/lib/components/ui/DataTableSearch.svelte` | Search + filters |
+| `frontend/src/lib/components/ui/DeleteConfirmation.svelte` | Conferma eliminazione |
 
-### Confronto Dettagliato
+### Modificare
+| File | Modifica |
+|------|----------|
+| `frontend/src/routes/(app)/files/+page.svelte` | Usare DataTable |
+| `frontend/src/lib/utils/file-icons.ts` | Estendere icone |
+| `frontend/package.json` | Aggiungere @tanstack/svelte-table |
 
-#### TanStack Table (Raccomandato)
-```bash
-npm install @tanstack/svelte-table
+---
+
+## Stima Tempi
+
+| Fase | Durata | Cumulativo |
+|------|--------|------------|
+| 1. Setup e Base | 0.5 giorni | 0.5 |
+| 2. Core Features | 1 giorno | 1.5 |
+| 3. Filtering | 0.5 giorni | 2 |
+| 4. Azioni | 0.5 giorni | 2.5 |
+| 5. Delete Confirm | 0.5 giorni | 3 |
+| 6. File Icons | 0.5 giorni | 3.5 |
+
+**Totale: ~3.5 giorni**
+
+---
+
+## Ordine di Esecuzione
+
 ```
-- ✅ Headless: Styling completamente custom
-- ✅ TypeScript-first
-- ✅ Virtual scrolling
-- ✅ Server-side pagination support
-- ✅ Ottima documentazione
-- ❌ Bundle size medio
+1. npm install @tanstack/svelte-table
+   ↓
+2. Creare DataTable.svelte base
+   ↓
+3. Implementare sorting + pagination
+   ↓
+4. Integrare in /files page
+   ↓
+5. Aggiungere search + filters
+   ↓
+6. Implementare selezione + bulk actions
+   ↓
+7. Sostituire alert() con conferma elegante
+   ↓
+8. Estendere file icons
+   ↓
+9. Test e polish
+```
 
-**Esempio Codice**:
+---
+
+## Note Tecniche
+
+### TanStack Table - Pattern Base
+
 ```svelte
-<script>
-  import { createSvelteTable, flexRender } from '@tanstack/svelte-table';
+<script lang="ts">
+  import { createSvelteTable, flexRender, getCoreRowModel, getSortedRowModel, getPaginationRowModel } from '@tanstack/svelte-table';
   
   const table = createSvelteTable({
-    data: files,
+    data,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
   });
 </script>
+
+<table>
+  <thead>
+    {#each $table.getHeaderGroups() as headerGroup}
+      <tr>
+        {#each headerGroup.headers as header}
+          <th on:click={header.column.getToggleSortingHandler()}>
+            {flexRender(header.column.columnDef.header, header.getContext())}
+          </th>
+        {/each}
+      </tr>
+    {/each}
+  </thead>
+  <tbody>
+    {#each $table.getRowModel().rows as row}
+      <tr>
+        {#each row.getVisibleCells() as cell}
+          <td>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+        {/each}
+      </tr>
+    {/each}
+  </tbody>
+</table>
 ```
 
-#### Svelte-Simple-Datatables
-```bash
-npm install @vincjo/datatables
+### Persistenza Preferenze
+
+```typescript
+// Salvare in localStorage
+const savePrefs = (key: string, value: any) => {
+  localStorage.setItem(`datatable-${key}`, JSON.stringify(value));
+};
+
+// Ripristinare
+const loadPrefs = <T>(key: string, defaultValue: T): T => {
+  const saved = localStorage.getItem(`datatable-${key}`);
+  return saved ? JSON.parse(saved) : defaultValue;
+};
 ```
-- ✅ Leggera
-- ✅ Facile da usare
-- ✅ Stile incluso (customizzabile)
-- ❌ Meno features avanzate
-- ❌ Community più piccola
-
-#### Native Custom
-- ✅ Zero dipendenze
-- ✅ Bundle size minimo
-- ❌ Dobbiamo implementare tutto
-- ❌ Maintenance overhead
-- ❌ No virtual scrolling
-
----
-
-## Piano di Implementazione
-
-### Fase 1: Setup e Core (1 giorno)
-1. [ ] Installare TanStack Table
-2. [ ] Creare componente `DataTable.svelte` generico
-3. [ ] Implementare sorting di base
-4. [ ] Implementare pagination con selettore elementi
-
-### Fase 2: Integrazione Files Page (0.5 giorni)
-1. [ ] Sostituire tabella Static Resources
-2. [ ] Sostituire tabella BRIM Reports
-3. [ ] Aggiungere icone per tutti i tipi file
-4. [ ] Testare dark mode
-
-### Fase 3: Features Avanzate (1.5 giorni)
-1. [ ] Filtering per nome e tipo
-2. [ ] Selezione multipla con azioni bulk
-3. [ ] Column resizing
-4. [ ] Empty/Loading states
-5. [ ] **Preview Modal con API integration**:
-   - [ ] Text files: `GET /uploads/file/{id}?offset=0&window=1000`
-   - [ ] Images: `GET /uploads/file/{id}?img_preview=400x400`
-   - [ ] Error handling per file non supportati
-
-### Fase 4: Rename e Delete Improvements (0.5 giorni)
-1. [ ] Implementare rename file (modal inline)
-2. [ ] Banner conferma delete centrato invece di alert()
-3. [ ] API per rename: `PATCH /uploads/{id}` con `{"original_name": "nuovo.txt"}`
-4. [ ] Warning che link esistenti diventeranno invalidi
-
-### Fase 5: Polish (0.5 giorni)
-1. [ ] Animazioni transizioni
-2. [ ] Responsive mobile (collapse su card view?)
-3. [ ] Accessibilità (keyboard navigation)
-4. [ ] Test con grandi dataset (100+ files)
-
----
-
-## File da Creare/Modificare
-
-| File | Descrizione |
-|------|-------------|
-| `src/lib/components/ui/DataTable.svelte` | Componente tabella riutilizzabile |
-| `src/lib/components/ui/TablePagination.svelte` | Controlli pagination |
-| `src/lib/components/ui/DeleteConfirmBanner.svelte` | Banner conferma centrato |
-| `src/lib/components/files/RenameFileModal.svelte` | Modale rename inline |
-| `src/lib/components/files/FilePreviewModal.svelte` | **NEW**: Preview text/images |
-| `src/routes/(app)/files/+page.svelte` | Aggiornare con nuova tabella |
-| `backend/app/api/v1/uploads.py` | ✅ **DONE**: Parametri preview aggiunti |
-
----
-
-## API Changes Necessarie
-
-### ✅ IMPLEMENTATO: File Preview Parameters
-```python
-@router.get("/file/{file_id}")
-async def serve_file(
-    file_id: str,
-    download: bool = False,
-    offset: Optional[int] = None,      # Text preview: start position
-    window: Optional[int] = None,      # Text preview: bytes to read
-    img_preview: Optional[str] = None, # Image resize: "WIDTHxHEIGHT"
-):
-    """
-    Preview modes:
-    - Text: ?offset=0&window=1000 (returns first 1000 chars)
-    - Image: ?img_preview=200x200 (returns resized, max dimension)
-    
-    Raises 400 if preview params used on incompatible file type.
-    """
-```
-
-**Dependencies Added**: 
-- `Pillow` per image resizing (async-safe, multi-process capable)
-
-### Nuovo Endpoint: Rename File
-```python
-@router.patch("/{file_id}", response_model=UploadFileInfo)
-async def rename_file(
-    file_id: str,
-    name: str,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Rename an uploaded file.
-    
-    Warning: Existing links will break if URL structure changes.
-    """
-    # Validate ownership
-    # Update metadata
-    # Return updated info
-```
-
----
-
-## Domande per Review
-
-1. **Libreria**: ✅ **APPROVATO** - TanStack Table (motivazione: licenza + features)
-2. **Rename**: Implementare in Fase 4 ok?
-3. **Bulk actions**: Priorità alta o media?
-4. **Virtual scrolling**: Necessario per il caso d'uso attuale?
-5. **Mobile**: Card view o tabella responsive?
-6. **Preview**: Implementare lightbox avanzato o modal semplice?
-
----
-
-## Stima Tempo Totale
-
-Con TanStack Table + Preview features:
-- **Ottimistico**: 3 giorni
-- **Realistico**: 4.5 giorni
-- **Con imprevisti**: 6 giorni
-
----
-
-**Status**: ✅ **APPROVATO** - TanStack Table + Preview API implementata
-**Next**: Iniziare Fase 1 (Setup TanStack Table)
-2. **Rename**: Implementare subito o dopo?
-3. **Bulk actions**: Priorità alta o media?
-4. **Virtual scrolling**: Necessario per il caso d'uso attuale?
-5. **Mobile**: Card view o tabella responsive?
-
----
-
-## Stima Tempo Totale
-
-Con TanStack Table:
-- **Ottimistico**: 2.5 giorni
-- **Realistico**: 3.5 giorni
-- **Con imprevisti**: 5 giorni
-
----
-
-**Note Finali**
-
-Questa implementazione renderà le tabelle:
-1. ✅ Consistenti tra Static e BRIM
-2. ✅ Scalabili (100+ files)
-3. ✅ User-friendly (sorting, pagination, search)
-4. ✅ Riutilizzabili (DataTable.svelte per future tabelle)
-5. ✅ Accessibili (keyboard, screen readers)
-
-**Attendo review e decisione su libreria da usare.**

@@ -21,6 +21,9 @@
     // Edit lock state
     let isLocked = true;
 
+    // Confirm discard dialog
+    let showDiscardConfirm = false;
+
     // Password change modal state
     let showPasswordModal = false;
 
@@ -32,7 +35,7 @@
     // Profile editing state
     let saving = false;
     let error: string | null = null;
-    let success: string | null = null;
+    let successItems: string[] = [];  // Array of saved field names for bullet list
 
     // Original values (from server)
     let originalUsername = $currentUser?.username ?? '';
@@ -62,11 +65,23 @@
 
     function toggleLock() {
         if (!isLocked && hasAnyChanges) {
-            // Ask to discard changes when locking
-            undoAll();
+            // Show confirmation dialog
+            showDiscardConfirm = true;
+            return;
         }
         isLocked = !isLocked;
         debug.log('ProfileTab', 'toggleLock', isLocked);
+    }
+
+    function confirmDiscard() {
+        undoAll();
+        isLocked = true;
+        showDiscardConfirm = false;
+        debug.log('ProfileTab', 'Changes discarded');
+    }
+
+    function cancelDiscard() {
+        showDiscardConfirm = false;
     }
 
     // Save individual field
@@ -74,7 +89,7 @@
         debug.log('ProfileTab', 'saveField', field);
         saving = true;
         error = null;
-        success = null;
+        successItems = [];
 
         try {
             const payload = field === 'username'
@@ -83,8 +98,10 @@
 
             await api.put<{ user: any; message: string }>('/auth/profile', payload);
             await auth.checkAuth();
-            success = $_('settings.profileUpdated');
-            setTimeout(() => success = null, 3000);
+
+            const fieldName = field === 'username' ? $_('auth.username') : $_('auth.email');
+            successItems = [fieldName];
+            setTimeout(() => successItems = [], 3000);
         } catch (e: any) {
             debug.error('ProfileTab', 'saveField failed', e);
             error = e?.data?.detail || e?.message || $_('settings.updateFailed');
@@ -108,18 +125,24 @@
         debug.log('ProfileTab', 'saveAll');
         saving = true;
         error = null;
-        success = null;
+        successItems = [];
+
+        const saved: string[] = [];
 
         try {
-            const payload: Record<string, string> = {};
-            if (usernameModified) payload.username = editedUsername;
-            if (emailModified) payload.email = editedEmail;
+            if (usernameModified) {
+                await api.put<{ user: any; message: string }>('/auth/profile', { username: editedUsername });
+                saved.push($_('auth.username'));
+            }
+            if (emailModified) {
+                await api.put<{ user: any; message: string }>('/auth/profile', { email: editedEmail });
+                saved.push($_('auth.email'));
+            }
 
-            if (Object.keys(payload).length > 0) {
-                await api.put<{ user: any; message: string }>('/auth/profile', payload);
+            if (saved.length > 0) {
                 await auth.checkAuth();
-                success = $_('settings.profileUpdated');
-                setTimeout(() => success = null, 3000);
+                successItems = saved;
+                setTimeout(() => successItems = [], 4000);
             }
         } catch (e: any) {
             debug.error('ProfileTab', 'saveAll failed', e);
@@ -214,95 +237,135 @@
         </div>
     {/if}
 
-    {#if success}
-        <div class="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">
-            <CheckCircle size={18} />
-            <span>{success}</span>
+    {#if successItems.length > 0}
+        <div class="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">
+            <div class="flex items-center gap-2 mb-2">
+                <CheckCircle size={18} />
+                <span class="font-medium">{$_('settings.savedSuccessfully')}:</span>
+            </div>
+            <ul class="list-disc list-inside ml-6 space-y-0.5">
+                {#each successItems as item}
+                    <li>{item}</li>
+                {/each}
+            </ul>
         </div>
     {/if}
 
     <!-- Account Fields -->
-    <div class="space-y-1">
+    <div class="space-y-0">
         <!-- Username -->
-        <div class="flex items-center justify-between py-3 px-4 rounded-lg transition-colors {usernameModified ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'}">
-            <div class="flex items-center gap-3">
-                <User size={18} class="text-gray-400" />
-                <div>
-                    <div class="text-sm font-medium text-gray-700 dark:text-gray-200">{$_('auth.username')}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">{$_('settings.usernameHint')}</div>
+        <div class="setting-row flex items-start justify-between py-4 border-b border-gray-100 dark:border-slate-700 {usernameModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
+            <!-- Left: Label and hint -->
+            <div class="flex-1 min-w-0 pr-4">
+                <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+                    <User size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
+                    {$_('auth.username')}
                 </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.usernameHint')}</p>
             </div>
-            <div class="flex items-center gap-2">
+
+            <!-- Right: Actions + Input -->
+            <div class="flex items-center space-x-3">
+                <!-- Action buttons -->
+                {#if !isLocked}
+                    <div class="flex items-center space-x-1">
+                        {#if usernameModified}
+                            <button
+                                type="button"
+                                on:click={() => saveField('username')}
+                                disabled={saving}
+                                class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                                title={$_('common.save')}
+                            >
+                                <Save size={14}/>
+                            </button>
+                            <button
+                                type="button"
+                                on:click={() => undoField('username')}
+                                class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                                title={$_('common.undo')}
+                            >
+                                <Undo size={14}/>
+                            </button>
+                        {/if}
+                    </div>
+                {/if}
+
+                <!-- Input -->
                 <input
                     type="text"
                     bind:value={editedUsername}
                     disabled={saving || isLocked}
-                    class="w-48 px-3 py-1.5 text-sm text-right border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-libre-green focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
+                           text-gray-900 dark:text-gray-100 text-sm min-w-[200px] text-right
+                           focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
+                           disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                {#if usernameModified && !isLocked}
-                    <button
-                        on:click={() => saveField('username')}
-                        disabled={saving}
-                        class="p-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
-                        title={$_('common.save')}
-                    >
-                        <Save size={14}/>
-                    </button>
-                    <button
-                        on:click={() => undoField('username')}
-                        class="p-1.5 rounded-lg bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-slate-500"
-                        title={$_('common.undo')}
-                    >
-                        <Undo size={14}/>
-                    </button>
-                {/if}
             </div>
         </div>
 
         <!-- Email -->
-        <div class="flex items-center justify-between py-3 px-4 rounded-lg transition-colors {emailModified ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'}">
-            <div class="flex items-center gap-3">
-                <Mail size={18} class="text-gray-400" />
-                <div>
-                    <div class="text-sm font-medium text-gray-700 dark:text-gray-200">{$_('auth.email')}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">{$_('settings.emailHint')}</div>
+        <div class="setting-row flex items-start justify-between py-4 border-b border-gray-100 dark:border-slate-700 {emailModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
+            <!-- Left: Label and hint -->
+            <div class="flex-1 min-w-0 pr-4">
+                <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+                    <Mail size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
+                    {$_('auth.email')}
                 </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.emailHint')}</p>
             </div>
-            <div class="flex items-center gap-2">
+
+            <!-- Right: Actions + Input -->
+            <div class="flex items-center space-x-3">
+                <!-- Action buttons -->
+                {#if !isLocked}
+                    <div class="flex items-center space-x-1">
+                        {#if emailModified}
+                            <button
+                                type="button"
+                                on:click={() => saveField('email')}
+                                disabled={saving}
+                                class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                                title={$_('common.save')}
+                            >
+                                <Save size={14}/>
+                            </button>
+                            <button
+                                type="button"
+                                on:click={() => undoField('email')}
+                                class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                                title={$_('common.undo')}
+                            >
+                                <Undo size={14}/>
+                            </button>
+                        {/if}
+                    </div>
+                {/if}
+
+                <!-- Input -->
                 <input
                     type="email"
                     bind:value={editedEmail}
                     disabled={saving || isLocked}
-                    class="w-48 px-3 py-1.5 text-sm text-right border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-libre-green focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
+                           text-gray-900 dark:text-gray-100 text-sm min-w-[200px] text-right
+                           focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
+                           disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                {#if emailModified && !isLocked}
-                    <button
-                        on:click={() => saveField('email')}
-                        disabled={saving}
-                        class="p-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
-                        title={$_('common.save')}
-                    >
-                        <Save size={14}/>
-                    </button>
-                    <button
-                        on:click={() => undoField('email')}
-                        class="p-1.5 rounded-lg bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-slate-500"
-                        title={$_('common.undo')}
-                    >
-                        <Undo size={14}/>
-                    </button>
-                {/if}
             </div>
         </div>
 
         <!-- Account Created (readonly) -->
-        <div class="flex items-center justify-between py-3 px-4">
-            <div class="flex items-center gap-3">
-                <Calendar size={18} class="text-gray-400" />
-                <div>
-                    <div class="text-sm font-medium text-gray-700 dark:text-gray-200">{$_('settings.accountCreated')}</div>
+        <div class="setting-row flex items-start justify-between py-4">
+            <!-- Left: Label -->
+            <div class="flex-1 min-w-0 pr-4">
+                <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+                    <Calendar size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
+                    {$_('settings.accountCreated')}
                 </div>
             </div>
+
+            <!-- Right: Value -->
             <div class="text-sm text-gray-600 dark:text-gray-300">
                 {formatDate($currentUser?.created_at)}
             </div>
@@ -316,12 +379,12 @@
             {$_('settings.security')}
         </h3>
 
-        <div class="space-y-1">
+        <div class="space-y-0">
             <!-- Change Password -->
-            <div class="flex items-center justify-between py-3 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div>
+            <div class="setting-row flex items-start justify-between py-4 border-b border-gray-100 dark:border-slate-700">
+                <div class="flex-1 min-w-0 pr-4">
                     <div class="text-sm font-medium text-gray-700 dark:text-gray-200">{$_('settings.changePassword')}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">{$_('settings.changePasswordDescription')}</div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.changePasswordDescription')}</p>
                 </div>
                 <button
                     on:click={() => showPasswordModal = true}
@@ -332,10 +395,10 @@
             </div>
 
             <!-- Delete Account -->
-            <div class="flex items-center justify-between py-3 px-4 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
-                <div>
+            <div class="setting-row flex items-start justify-between py-4">
+                <div class="flex-1 min-w-0 pr-4">
                     <div class="text-sm font-medium text-red-600 dark:text-red-400">{$_('settings.deleteAccount')}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">{$_('settings.deleteAccountDescription')}</div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.deleteAccountDescription')}</p>
                 </div>
                 <button
                     on:click={() => showDeleteModal = true}
@@ -353,6 +416,48 @@
     bind:isOpen={showPasswordModal}
     on:close={() => showPasswordModal = false}
 />
+
+<!-- Discard Changes Confirmation -->
+{#if showDiscardConfirm}
+    <!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
+    <div
+        class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        on:click={cancelDiscard}
+        on:keydown={(e) => e.key === 'Escape' && cancelDiscard()}
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+    >
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <div
+            class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6"
+            role="document"
+            on:click|stopPropagation
+            on:keydown|stopPropagation
+        >
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                {$_('settings.discardChanges')}
+            </h2>
+            <p class="text-gray-600 dark:text-gray-300 text-sm mb-4">
+                {$_('settings.discardChangesWarning')}
+            </p>
+            <div class="flex justify-end gap-3">
+                <button
+                    on:click={cancelDiscard}
+                    class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                    {$_('settings.continueEditing')}
+                </button>
+                <button
+                    on:click={confirmDiscard}
+                    class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                >
+                    {$_('settings.discardAndLock')}
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
 
 <!-- Delete Account Confirmation Modal -->
 {#if showDeleteModal}
