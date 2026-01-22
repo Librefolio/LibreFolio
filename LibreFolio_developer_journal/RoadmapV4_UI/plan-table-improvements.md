@@ -71,31 +71,154 @@ Sono state valutate diverse librerie:
   - Sorting base implementato
   - Pagination base implementata
 
-### 🔄 Fase 2: Integrazione in Files Page (IN CORSO)
+### ✅ Fase 2: Integrazione in Files Page (COMPLETATA - 22/01/2026)
 
-1. **Sostituire tabella Static Resources**
-   - Usare `DataTable` component
-   - Definire colonne tipizzate
-   - Aggiungere icone per tipo file
+- [x] Creato componente `FilesTable.svelte` in `$lib/components/files/`
+- [x] Integrato nella list view di Static Resources
+- [x] Integrato nella tabella BRIM Reports
+- [x] Sorting funzionante su tutte le colonne
+- [x] Pagination con selettore page size (10, 25, 50, 100)
+- [x] Icone file per tipo (Image, CSV, Text, Generic)
+- [x] Status badge per BRIM files
+- [x] Rimosso CSS duplicato dalla pagina principale
+- [x] Build verificata senza errori
 
-2. **Sostituire tabella BRIM Reports**
-   - Usare `DataTable` component
-   - Mantenere icone CSV esistenti
+### ✅ Fase 3: Features Avanzate (COMPLETATA - 22/01/2026)
 
-### 📋 Fase 3: Features Avanzate (PIANIFICATO)
+**Richieste utente 22/01/2026 - Round 1:**
 
-1. **Sorting Avanzato**
-   - Multi-column sorting (shift+click)
+1. **Status tradotto** ✅
+   - [x] Aggiunta traduzione per status BRIM (uploaded, parsed, failed, etc.)
+   - [x] Traduzioni in EN, IT, FR, ES
 
-2. **Pagination Avanzata**
-   - Selettore page size: 10, 25, 50, 100
-   - Indicatore: "Showing 1-10 of 42"
+2. **Pagination migliorata** ✅
+   - [x] Selettore pagina numerico (input diretto)
+   - [x] Page size: solo numeri nel dropdown
+   - [x] Aggiunta opzione "∞" (illimitato/tutti)
 
-3. **Column Configuration**
-   - Toggle visibilità colonne
-   - Persistenza preferenze in localStorage
+3. **Colonne ridimensionabili** ✅
+   - [x] Drag-to-resize delle colonne
+   - [x] Salvataggio larghezze in localStorage
 
-### 📋 Fase 4: Filtering e Search (PIANIFICATO)
+4. **Column visibility** ✅
+   - [x] Dropdown "Show/Hide Columns" in toolbar
+   - [x] Salvataggio preferenze in localStorage
+   - [x] Reset ai default
+
+5. **Pagination sticky/floating** ✅
+   - [x] Controlli pagination sempre visibili (fixed bottom)
+   - [x] Scroll permette di vedere oltre l'ultimo file
+
+6. **Row selection** ✅
+   - [x] Checkbox per selezione multipla
+   - [x] Select all / Deselect all in header
+   - [x] Contatore items selezionati
+   - [x] Azione bulk delete
+
+7. **View mode persistente** ✅
+   - [x] Salvataggio grid/list in localStorage
+   - [x] Default: list (tabella)
+
+**Richieste utente 22/01/2026 - Round 2:**
+
+8. **Selection visual feedback** ✅
+   - [x] Righe selezionate con background blu chiaro
+   - [x] Checkbox con icona Check invece di checkbox HTML
+   - [x] Select All seleziona solo pagina corrente (e resetta selezioni precedenti)
+
+9. **Bulk actions uniformate** ✅
+   - [x] Stesse icone delle azioni singole (Download, Trash)
+   - [x] Solo icone, testo come tooltip
+   - [x] Delete in rosso per tutti
+   - [x] Fix: bulk actions ora funzionano correttamente
+
+10. **Resize handle visibile** ✅
+    - [x] Handle visibile su hover della colonna
+    - [x] Colore blu durante resize
+
+11. **Colonne fisse** ✅
+    - [x] Selezione (sticky left) - sempre
+    - [x] Azioni (sticky right) - solo desktop (>768px)
+
+12. **Pagination floating** ✅
+    - [x] Pill centrata rispetto al container tabella
+    - [x] Page numbers cliccabili
+    - [x] Input editabile per pagina corrente
+    - [x] Ellipsis semplici (editare pagina corrente è più comodo)
+    - [x] Fix: page size e navigazione funzionano
+
+13. **Column dropdown migliorato** ✅
+    - [x] Icone Eye/EyeOff invece di checkbox
+    - [x] GripVertical per drag (preparato per reorder futuro)
+    - [x] Reset sotto con icona RotateCcw
+    - [x] Fix: dropdown rimane aperto quando si togglea colonna
+
+14. **Search** ✅
+    - [x] Search box nel toolbar (sempre visibile)
+    - [x] Filtra per nome file
+    - [x] Clear button (X)
+
+15. **Delete Confirmation Modal** ✅
+    - [x] Modale invece di confirm browser
+    - [x] Lista file foldabile per delete multiplo
+    - [x] Traduzioni EN/IT/FR/ES
+
+16. **Selezione persistente** ✅
+    - [x] Selezione mantenuta tra pagine
+    - [x] Selezione mantenuta cambiando page size
+
+17. **Pagination balloon** ✅
+    - [x] Sticky bottom con spazio dal bordo
+    - [x] Segue lo scroll della finestra
+
+**TODO Fase 3:**
+- [ ] Sorting colonne (click su header)
+- [ ] Filtri per colonna stile Excel
+- [ ] Column reorder drag & drop
+- [ ] Download multiplo come ZIP
+
+**Componente:** `FilesTableAdvanced.svelte` (v2)
+- Paginazione custom (non dipende da TanStack)
+- Storage keys separati per tipo (static vs brim)
+
+---
+
+### 📋 Fase 4: BRIM Multi-User Support (RICHIEDE BACKEND)
+
+**Analisi completa**: `analysis-brim-multiuser.md`
+
+**Situazione attuale:**
+- ❌ I file BRIM non tracciano chi li ha caricati (user_id)
+- ❌ I file BRIM non tracciano a quale broker sono stati parsati
+- ❌ L'endpoint `/import/files` non filtra per utente
+
+**Modifiche backend necessarie:**
+1. Estendere schema `BRIMFileInfo` con:
+   - `uploaded_by_user_id: int`
+   - `uploaded_by_username: Optional[str]`
+   - `target_broker_id: Optional[int]`
+   - `target_broker_name: Optional[str]`
+
+2. Modificare endpoint `/import/upload`:
+   - Salvare `user_id` e `username` nel metadata
+
+3. Modificare endpoint `/import/files`:
+   - Parametro opzionale `user_id` (solo superuser)
+   - Utenti normali vedono solo i propri file
+
+4. Nuovo endpoint `/import/files/users`:
+   - Lista utenti che hanno caricato file (solo superuser)
+
+**Modifiche frontend:**
+- Dropdown filtro utente (solo se superuser)
+- Colonna "Utente" (solo se superuser e mostrata)
+- Colonna "Broker" (per file parsed)
+
+**Stima**: ~1 giorno (5.5h backend + 2.5h frontend)
+
+---
+
+### 📋 Fase 5: Filtering e Search (PIANIFICATO)
 
 1. **Global Search**
    - Input ricerca con debounce 300ms

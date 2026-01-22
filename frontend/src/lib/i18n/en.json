@@ -27,7 +27,8 @@
     "saveAll": "Save All",
     "resetAll": "Reset All to Defaults",
     "undo": "Undo",
-    "reset": "Reset to Default"
+    "reset": "Reset to Default",
+    "confirmDelete": "Confirm Delete"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -37,7 +38,21 @@
     "previousPage": "Previous page",
     "nextPage": "Next page",
     "lastPage": "Last page",
-    "noResults": "No results found"
+    "noResults": "No results found",
+    "page": "Page",
+    "all": "All",
+    "goToPage": "Go to page",
+    "columns": "Columns",
+    "showColumns": "Show/Hide Columns",
+    "selected": "selected"
+  },
+  "fileStatus": {
+    "uploaded": "Uploaded",
+    "parsed": "Parsed",
+    "imported": "Imported",
+    "failed": "Failed",
+    "error": "Error",
+    "processing": "Processing"
   },
   "error": {
     "pageNotFound": "Page Not Found",
@@ -366,6 +381,12 @@
     "uploadDate": "Uploaded",
     "actions": "Actions",
     "download": "Download",
-    "deleteConfirm": "Are you sure you want to delete this file?"
+    "deleteConfirm": "Are you sure you want to delete this file?",
+    "deleteConfirmSingle": "Are you sure you want to delete this file?",
+    "deleteConfirmMultiple": "Are you sure you want to delete these files?",
+    "files": "files",
+    "filesToDelete": "Files to delete",
+    "showFileList": "Show file list",
+    "hideFileList": "Hide file list"
   }
 }
