@@ -169,7 +169,11 @@
 
 	// Update bytes from slider change
 	function updateSizeMinFromSlider() {
-		sizeMinBytes = Math.min(sliderPosToBytes(sliderMinPos), sizeMaxBytes);
+		// Ensure min doesn't exceed max
+		if (sliderMinPos > sliderMaxPos) {
+			sliderMinPos = sliderMaxPos;
+		}
+		sizeMinBytes = sliderPosToBytes(sliderMinPos);
 		const minResult = bytesToUnit(sizeMinBytes);
 		sizeMinInputValue = minResult.value;
 		sizeMinUnit = minResult.unit;
@@ -177,7 +181,11 @@
 	}
 
 	function updateSizeMaxFromSlider() {
-		sizeMaxBytes = Math.max(sliderPosToBytes(sliderMaxPos), sizeMinBytes);
+		// Ensure max doesn't go below min
+		if (sliderMaxPos < sliderMinPos) {
+			sliderMaxPos = sliderMinPos;
+		}
+		sizeMaxBytes = sliderPosToBytes(sliderMaxPos);
 		const maxResult = bytesToUnit(sizeMaxBytes);
 		sizeMaxInputValue = maxResult.value;
 		sizeMaxUnit = maxResult.unit;
@@ -366,6 +374,10 @@
 							class="size-slider-range"
 							style="left: {sliderMinPos}%; right: {100 - sliderMaxPos}%"
 						></div>
+						<!-- Tick marks at 25%, 50%, 75% -->
+						<div class="slider-tick" style="left: 25%"></div>
+						<div class="slider-tick" style="left: 50%"></div>
+						<div class="slider-tick" style="left: 75%"></div>
 					</div>
 					<input
 						type="range"
@@ -385,9 +397,12 @@
 					/>
 				</div>
 
-				<!-- Slider labels -->
+				<!-- Slider labels with intermediate values -->
 				<div class="size-slider-labels">
 					<span>{formatBytes(numberMin)}</span>
+					<span class="slider-label-mid">{formatBytes(sliderPosToBytes(25))}</span>
+					<span class="slider-label-mid">{formatBytes(sliderPosToBytes(50))}</span>
+					<span class="slider-label-mid">{formatBytes(sliderPosToBytes(75))}</span>
 					<span>{formatBytes(numberMax)}</span>
 				</div>
 			</div>
@@ -480,12 +495,15 @@
 	:global(.dark) .size-slider-track { background: #475569; }
 	.size-slider-range { position: absolute; top: 0; bottom: 0; background: #1a4031; border-radius: 2px; }
 	:global(.dark) .size-slider-range { background: #4ade80; }
+	.slider-tick { position: absolute; top: -2px; width: 1px; height: 8px; background: #cbd5e1; transform: translateX(-50%); }
+	:global(.dark) .slider-tick { background: #64748b; }
 	.size-slider { position: absolute; top: 0; left: 0; width: 100%; height: 100%; -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none; }
 	.size-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #1a4031; border: 2px solid white; border-radius: 50%; cursor: pointer; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 	:global(.dark) .size-slider::-webkit-slider-thumb { background: #4ade80; border-color: #0f172a; }
 	.size-slider::-moz-range-thumb { width: 16px; height: 16px; background: #1a4031; border: 2px solid white; border-radius: 50%; cursor: pointer; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 	:global(.dark) .size-slider::-moz-range-thumb { background: #4ade80; border-color: #0f172a; }
-	.size-slider-labels { display: flex; justify-content: space-between; font-size: 0.625rem; color: #94a3b8; margin-top: 0.25rem; }
+	.size-slider-labels { display: flex; justify-content: space-between; font-size: 0.5625rem; color: #94a3b8; margin-top: 0.25rem; }
+	.slider-label-mid { opacity: 0.7; }
 
 	/* Enum filter */
 	.enum-actions { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }

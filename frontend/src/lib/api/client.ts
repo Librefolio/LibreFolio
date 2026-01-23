@@ -70,16 +70,26 @@ export async function apiCall<T>(
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
+        // Determine if body is FormData (for file uploads)
+        const isFormData = body instanceof FormData;
+
+        // Build headers - don't set Content-Type for FormData (browser sets it with boundary)
+        const headers: Record<string, string> = {
+            'Accept-Language': lang,
+        };
+        if (!isFormData) {
+            headers['Content-Type'] = 'application/json';
+        }
+
         const response = await fetch(url, {
             ...fetchOptions,
             signal: controller.signal,
             credentials: 'include', // Include session cookie
             headers: {
-                'Content-Type': 'application/json',
-                'Accept-Language': lang,
+                ...headers,
                 ...fetchOptions.headers
             },
-            body: body ? JSON.stringify(body) : undefined
+            body: isFormData ? body : (body ? JSON.stringify(body) : undefined)
         });
 
         clearTimeout(timeoutId);
