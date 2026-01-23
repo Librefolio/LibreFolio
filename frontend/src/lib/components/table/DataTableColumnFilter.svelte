@@ -4,6 +4,7 @@
   Filter types based on column data type:
   - text: text input with match mode (contains, starts, ends, equals) - instant apply
   - number: min/max range
+  - size: file size with logarithmic slider + input with unit dropdown
   - date: from/to date pickers
   - enum: checkbox list of available options
 -->
@@ -15,6 +16,7 @@
 	import type { ColumnType, EnumOption, FilterValue } from './types';
 
 	type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
+	type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
 
 	interface Props {
 		type: ColumnType;
@@ -29,6 +31,14 @@
 	let { type, enumOptions = [], numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null }: Props = $props();
 
 	let popoverElement: HTMLDivElement;
+
+	// Size units conversion
+	const SIZE_UNITS: { unit: SizeUnit; bytes: number; label: string }[] = [
+		{ unit: 'B', bytes: 1, label: 'B' },
+		{ unit: 'KB', bytes: 1024, label: 'KB' },
+		{ unit: 'MB', bytes: 1024 * 1024, label: 'MB' },
+		{ unit: 'GB', bytes: 1024 * 1024 * 1024, label: 'GB' },
+	];
 
 	// Helper functions to get initial values
 	function getInitialTextValue(): string {
@@ -52,6 +62,12 @@
 	function getInitialEnums(): Set<string> {
 		return new Set(initialValue?.type === 'enum' ? initialValue.selected : enumOptions.map(o => o.value));
 	}
+	function getInitialSizeMin(): number {
+		return initialValue?.type === 'size' ? initialValue.minBytes ?? numberMin : numberMin;
+	}
+	function getInitialSizeMax(): number {
+		return initialValue?.type === 'size' ? initialValue.maxBytes ?? numberMax : numberMax;
+	}
 
 	// Text filter state
 	let textValue = $state(getInitialTextValue());
@@ -67,6 +83,106 @@
 
 	// Enum filter state
 	let selectedEnums = $state<Set<string>>(getInitialEnums());
+
+	// Size filter state (stored in bytes internally)
+	let sizeMinBytes = $state(getInitialSizeMin());
+	let sizeMaxBytes = $state(getInitialSizeMax());
+
+	// Size input values (displayed with units)
+	let sizeMinInputValue = $state(0);
+	let sizeMinUnit = $state<SizeUnit>('B');
+	let sizeMaxInputValue = $state(0);
+	let sizeMaxUnit = $state<SizeUnit>('B');
+
+	// Slider positions (0-100)
+	let sliderMinPos = $state(0);
+	let sliderMaxPos = $state(100);
+
+	// Initialize size input values from bytes
+	function initSizeInputs() {
+		const minResult = bytesToUnit(sizeMinBytes);
+		sizeMinInputValue = minResult.value;
+		sizeMinUnit = minResult.unit;
+
+		const maxResult = bytesToUnit(sizeMaxBytes);
+		sizeMaxInputValue = maxResult.value;
+		sizeMaxUnit = minResult.unit;
+
+		sliderMinPos = bytesToSliderPos(sizeMinBytes);
+		sliderMaxPos = bytesToSliderPos(sizeMaxBytes);
+	}
+
+	// Convert bytes to best unit
+	function bytesToUnit(bytes: number): { value: number; unit: SizeUnit } {
+		if (bytes >= 1024 * 1024 * 1024) return { value: Math.round(bytes / (1024 * 1024 * 1024) * 10) / 10, unit: 'GB' };
+		if (bytes >= 1024 * 1024) return { value: Math.round(bytes / (1024 * 1024) * 10) / 10, unit: 'MB' };
+		if (bytes >= 1024) return { value: Math.round(bytes / 1024 * 10) / 10, unit: 'KB' };
+		return { value: bytes, unit: 'B' };
+	}
+
+	// Convert value + unit to bytes
+	function unitToBytes(value: number, unit: SizeUnit): number {
+		const unitInfo = SIZE_UNITS.find(u => u.unit === unit);
+		return Math.round(value * (unitInfo?.bytes ?? 1));
+	}
+
+	// Logarithmic scale for slider (0-100 position to bytes)
+	function sliderPosToBytes(pos: number): number {
+		if (pos <= 0) return numberMin;
+		if (pos >= 100) return numberMax;
+		const logMin = Math.log10(Math.max(numberMin, 1));
+		const logMax = Math.log10(Math.max(numberMax, 1));
+		const logVal = logMin + (pos / 100) * (logMax - logMin);
+		return Math.round(Math.pow(10, logVal));
+	}
+
+	// Bytes to slider position (0-100)
+	function bytesToSliderPos(bytes: number): number {
+		if (bytes <= numberMin) return 0;
+		if (bytes >= numberMax) return 100;
+		const logMin = Math.log10(Math.max(numberMin, 1));
+		const logMax = Math.log10(Math.max(numberMax, 1));
+		const logVal = Math.log10(Math.max(bytes, 1));
+		return Math.round((logVal - logMin) / (logMax - logMin) * 100);
+	}
+
+	// Format bytes for display
+	function formatBytes(bytes: number): string {
+		if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+		if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+		if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${bytes} B`;
+	}
+
+	// Update bytes from input change
+	function updateSizeMinFromInput() {
+		sizeMinBytes = Math.max(numberMin, Math.min(sizeMaxBytes, unitToBytes(sizeMinInputValue, sizeMinUnit)));
+		sliderMinPos = bytesToSliderPos(sizeMinBytes);
+		applyFilter();
+	}
+
+	function updateSizeMaxFromInput() {
+		sizeMaxBytes = Math.max(sizeMinBytes, Math.min(numberMax, unitToBytes(sizeMaxInputValue, sizeMaxUnit)));
+		sliderMaxPos = bytesToSliderPos(sizeMaxBytes);
+		applyFilter();
+	}
+
+	// Update bytes from slider change
+	function updateSizeMinFromSlider() {
+		sizeMinBytes = Math.min(sliderPosToBytes(sliderMinPos), sizeMaxBytes);
+		const minResult = bytesToUnit(sizeMinBytes);
+		sizeMinInputValue = minResult.value;
+		sizeMinUnit = minResult.unit;
+		applyFilter();
+	}
+
+	function updateSizeMaxFromSlider() {
+		sizeMaxBytes = Math.max(sliderPosToBytes(sliderMaxPos), sizeMinBytes);
+		const maxResult = bytesToUnit(sizeMaxBytes);
+		sizeMaxInputValue = maxResult.value;
+		sizeMaxUnit = maxResult.unit;
+		applyFilter();
+	}
 
 	// Auto-apply for text filter with debounce
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -85,6 +201,8 @@
 			filter = { type: 'text', value: textValue.trim(), matchMode: textMatchMode };
 		} else if (type === 'number' && (numMin > numberMin || numMax < numberMax)) {
 			filter = { type: 'number', min: numMin > numberMin ? numMin : undefined, max: numMax < numberMax ? numMax : undefined };
+		} else if (type === 'size' && (sizeMinBytes > numberMin || sizeMaxBytes < numberMax)) {
+			filter = { type: 'size', minBytes: sizeMinBytes > numberMin ? sizeMinBytes : undefined, maxBytes: sizeMaxBytes < numberMax ? sizeMaxBytes : undefined };
 		} else if (type === 'date' && (dateFrom || dateTo)) {
 			filter = { type: 'date', from: dateFrom || undefined, to: dateTo || undefined };
 		} else if (type === 'enum' && selectedEnums.size < enumOptions.length && selectedEnums.size > 0) {
@@ -102,6 +220,9 @@
 		dateFrom = '';
 		dateTo = '';
 		selectedEnums = new Set(enumOptions.map(o => o.value));
+		sizeMinBytes = numberMin;
+		sizeMaxBytes = numberMax;
+		initSizeInputs();
 		onApply(null);
 	}
 
@@ -111,8 +232,8 @@
 		} else {
 			selectedEnums.add(value);
 		}
-		selectedEnums = new Set(selectedEnums); // Trigger reactivity
-		applyFilter(); // Instant apply for enum
+		selectedEnums = new Set(selectedEnums);
+		applyFilter();
 	}
 
 	function selectAllEnums() {
@@ -125,19 +246,20 @@
 		applyFilter();
 	}
 
-	// Click outside to close - but NOT when clicking on the filter button itself
+	// Click outside to close
 	function handleClickOutside(event: MouseEvent) {
 		const target = event.target as HTMLElement;
-		// Don't close if clicking on the filter button that opened this popover
 		if (target.closest('.filter-btn')) return;
-
 		if (popoverElement && !popoverElement.contains(target)) {
 			onClose();
 		}
 	}
 
 	onMount(() => {
-		// Use capture phase and add listener after a small delay to avoid immediate close
+		if (type === 'size') {
+			initSizeInputs();
+		}
+
 		const timer = setTimeout(() => {
 			document.addEventListener('click', handleClickOutside, true);
 		}, 100);
@@ -195,6 +317,80 @@
 					<input type="number" class="range-input" bind:value={numMax} min={numMin} max={numberMax} onchange={applyFilter} id="number-max-input" />
 				</div>
 			</div>
+		{:else if type === 'size'}
+			<div class="size-filter">
+				<!-- Min size input -->
+				<div class="size-row">
+					<label class="size-label" for="size-min-input">{$t('filter.min')}</label>
+					<div class="size-input-group">
+						<input
+							type="number"
+							class="size-input"
+							id="size-min-input"
+							bind:value={sizeMinInputValue}
+							min="0"
+							onchange={updateSizeMinFromInput}
+						/>
+						<select class="size-unit-select" bind:value={sizeMinUnit} onchange={updateSizeMinFromInput}>
+							{#each SIZE_UNITS as u}
+								<option value={u.unit}>{u.label}</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+
+				<!-- Max size input -->
+				<div class="size-row">
+					<label class="size-label" for="size-max-input">{$t('filter.max')}</label>
+					<div class="size-input-group">
+						<input
+							type="number"
+							class="size-input"
+							id="size-max-input"
+							bind:value={sizeMaxInputValue}
+							min="0"
+							onchange={updateSizeMaxFromInput}
+						/>
+						<select class="size-unit-select" bind:value={sizeMaxUnit} onchange={updateSizeMaxFromInput}>
+							{#each SIZE_UNITS as u}
+								<option value={u.unit}>{u.label}</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+
+				<!-- Dual range slider -->
+				<div class="size-slider-container">
+					<div class="size-slider-track">
+						<div
+							class="size-slider-range"
+							style="left: {sliderMinPos}%; right: {100 - sliderMaxPos}%"
+						></div>
+					</div>
+					<input
+						type="range"
+						class="size-slider size-slider-min"
+						min="0"
+						max="100"
+						bind:value={sliderMinPos}
+						oninput={updateSizeMinFromSlider}
+					/>
+					<input
+						type="range"
+						class="size-slider size-slider-max"
+						min="0"
+						max="100"
+						bind:value={sliderMaxPos}
+						oninput={updateSizeMaxFromSlider}
+					/>
+				</div>
+
+				<!-- Slider labels -->
+				<div class="size-slider-labels">
+					<span>{formatBytes(numberMin)}</span>
+					<span>{formatBytes(numberMax)}</span>
+				</div>
+			</div>
 		{:else if type === 'date'}
 			<div class="date-filter">
 				<div class="date-row">
@@ -230,7 +426,7 @@
 </div>
 
 <style>
-	.filter-popover { position: absolute; top: 100%; left: 0; margin-top: 0.25rem; min-width: 220px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); z-index: 60; }
+	.filter-popover { position: absolute; top: 100%; left: 0; margin-top: 0.25rem; min-width: 240px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); z-index: 60; }
 	:global(.dark) .filter-popover { background: #1e293b; border-color: #334155; }
 	.filter-header { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2e8f0; }
 	:global(.dark) .filter-header { border-bottom-color: #334155; }
@@ -240,6 +436,8 @@
 	.reset-btn:hover { background: #f1f5f9; color: #0f172a; }
 	:global(.dark) .reset-btn:hover { background: #334155; color: #f1f5f9; }
 	.filter-body { padding: 0.75rem; }
+
+	/* Text filter */
 	.search-input-wrapper { position: relative; display: flex; align-items: center; margin-bottom: 0.5rem; }
 	.search-input-wrapper :global(.search-icon) { position: absolute; left: 0.5rem; color: #94a3b8; pointer-events: none; }
 	.filter-input { width: 100%; padding: 0.375rem 1.75rem; font-size: 0.8125rem; border: 1px solid #e2e8f0; border-radius: 6px; background: white; color: #0f172a; }
@@ -252,6 +450,8 @@
 	:global(.dark) .clear-input-btn:hover { background: #64748b; color: #f1f5f9; }
 	.match-mode-select { width: 100%; padding: 0.375rem 0.5rem; font-size: 0.8125rem; border: 1px solid #e2e8f0; border-radius: 6px; background: white; color: #0f172a; cursor: pointer; }
 	:global(.dark) .match-mode-select { background: #0f172a; border-color: #334155; color: #f1f5f9; }
+
+	/* Number/Date filter */
 	.number-filter, .date-filter { display: flex; flex-direction: column; gap: 0.5rem; }
 	.range-row, .date-row { display: flex; align-items: center; gap: 0.5rem; }
 	.range-label, .date-label { min-width: 35px; font-size: 0.75rem; color: #64748b; }
@@ -260,6 +460,34 @@
 	:global(.dark) .range-input, :global(.dark) .date-input { background: #0f172a; border-color: #334155; color: #f1f5f9; }
 	.range-input:focus, .date-input:focus { outline: none; border-color: #1a4031; }
 	:global(.dark) .range-input:focus, :global(.dark) .date-input:focus { border-color: #4ade80; }
+
+	/* Size filter */
+	.size-filter { display: flex; flex-direction: column; gap: 0.625rem; }
+	.size-row { display: flex; align-items: center; gap: 0.5rem; }
+	.size-label { min-width: 30px; font-size: 0.75rem; color: #64748b; }
+	:global(.dark) .size-label { color: #94a3b8; }
+	.size-input-group { display: flex; flex: 1; gap: 0.25rem; }
+	.size-input { flex: 1; min-width: 60px; padding: 0.375rem 0.5rem; font-size: 0.8125rem; border: 1px solid #e2e8f0; border-radius: 6px 0 0 6px; background: white; color: #0f172a; }
+	:global(.dark) .size-input { background: #0f172a; border-color: #334155; color: #f1f5f9; }
+	.size-input:focus { outline: none; border-color: #1a4031; }
+	:global(.dark) .size-input:focus { border-color: #4ade80; }
+	.size-unit-select { width: 55px; padding: 0.375rem 0.25rem; font-size: 0.75rem; border: 1px solid #e2e8f0; border-left: none; border-radius: 0 6px 6px 0; background: #f8fafc; color: #0f172a; cursor: pointer; }
+	:global(.dark) .size-unit-select { background: #1e293b; border-color: #334155; color: #f1f5f9; }
+
+	/* Dual range slider */
+	.size-slider-container { position: relative; height: 24px; margin-top: 0.5rem; }
+	.size-slider-track { position: absolute; top: 50%; left: 0; right: 0; height: 4px; background: #e2e8f0; border-radius: 2px; transform: translateY(-50%); }
+	:global(.dark) .size-slider-track { background: #475569; }
+	.size-slider-range { position: absolute; top: 0; bottom: 0; background: #1a4031; border-radius: 2px; }
+	:global(.dark) .size-slider-range { background: #4ade80; }
+	.size-slider { position: absolute; top: 0; left: 0; width: 100%; height: 100%; -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none; }
+	.size-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #1a4031; border: 2px solid white; border-radius: 50%; cursor: pointer; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+	:global(.dark) .size-slider::-webkit-slider-thumb { background: #4ade80; border-color: #0f172a; }
+	.size-slider::-moz-range-thumb { width: 16px; height: 16px; background: #1a4031; border: 2px solid white; border-radius: 50%; cursor: pointer; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+	:global(.dark) .size-slider::-moz-range-thumb { background: #4ade80; border-color: #0f172a; }
+	.size-slider-labels { display: flex; justify-content: space-between; font-size: 0.625rem; color: #94a3b8; margin-top: 0.25rem; }
+
+	/* Enum filter */
 	.enum-actions { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
 	.enum-action-btn { flex: 1; padding: 0.25rem 0.5rem; font-size: 0.6875rem; border: 1px solid #e2e8f0; border-radius: 4px; background: #f8fafc; color: #64748b; cursor: pointer; transition: all 0.15s; }
 	.enum-action-btn:hover { background: #f1f5f9; color: #0f172a; }

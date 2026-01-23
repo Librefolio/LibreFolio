@@ -65,7 +65,13 @@
     "min": "Min",
     "max": "Max",
     "from": "De",
-    "to": "À"
+    "to": "À",
+    "sizeMin": "Taille Min",
+    "sizeMax": "Taille Max",
+    "bytes": "o",
+    "kilobytes": "Ko",
+    "megabytes": "Mo",
+    "gigabytes": "Go"
   },
   "fileStatus": {
     "uploaded": "Téléchargé",

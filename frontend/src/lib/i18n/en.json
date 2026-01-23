@@ -65,7 +65,13 @@
     "min": "Min",
     "max": "Max",
     "from": "From",
-    "to": "To"
+    "to": "To",
+    "sizeMin": "Min Size",
+    "sizeMax": "Max Size",
+    "bytes": "B",
+    "kilobytes": "KB",
+    "megabytes": "MB",
+    "gigabytes": "GB"
   },
   "fileStatus": {
     "uploaded": "Uploaded",

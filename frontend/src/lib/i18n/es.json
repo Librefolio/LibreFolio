@@ -65,7 +65,13 @@
     "min": "Mín",
     "max": "Máx",
     "from": "Desde",
-    "to": "Hasta"
+    "to": "Hasta",
+    "sizeMin": "Tam. Mín",
+    "sizeMax": "Tam. Máx",
+    "bytes": "B",
+    "kilobytes": "KB",
+    "megabytes": "MB",
+    "gigabytes": "GB"
   },
   "fileStatus": {
     "uploaded": "Subido",

@@ -65,7 +65,13 @@
     "min": "Min",
     "max": "Max",
     "from": "Da",
-    "to": "A"
+    "to": "A",
+    "sizeMin": "Dim. Min",
+    "sizeMax": "Dim. Max",
+    "bytes": "B",
+    "kilobytes": "KB",
+    "megabytes": "MB",
+    "gigabytes": "GB"
   },
   "fileStatus": {
     "uploaded": "Caricato",

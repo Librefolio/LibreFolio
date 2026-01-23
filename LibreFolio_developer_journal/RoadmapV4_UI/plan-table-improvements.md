@@ -2,7 +2,7 @@
 
 **Data**: 21 Gennaio 2026  
 **Aggiornamento**: 23 Gennaio 2026  
-**Status**: 🔄 IN PROGRESS - Fase 3.5/3.6 completate, refinement in corso  
+**Status**: ✅ COMPLETATO - Tutte le feature principali implementate  
 **Libreria**: TanStack Table v8 (`@tanstack/table-core`) + Adapter Custom Svelte 5
 
 ---
@@ -697,25 +697,17 @@ Il ridimensionamento delle colonne ha comportamenti inattesi:
 - Complessità implementativa maggiore
 - Support browser (ok per moderni)
 
-### ✅ Decisione: Opzione A, fallback a D se necessario
+### ✅ Decisione: Opzione A - COMPLETATA (23 Gennaio 2026)
 
-**Piano di implementazione Opzione A:**
+**Implementazione:**
+1. ✅ minWidth default ridotto a 50px
+2. ✅ maxWidth aumentato a 600px
+3. ✅ CSS `td` con `white-space: nowrap`, `max-width: 0`, `overflow: hidden`
+4. ✅ CSS `.td-data` con `word-break: break-word`
+5. ✅ Larghezze salvate in localStorage
 
-1. Impostiamo `min-width` espliciti molto bassi (es. 50px) su ogni colonna
-2. Usiamo `width` in px durante il resize (già fatto)
-3. Salviamo larghezze in localStorage (già fatto)
-4. Al mount, carichiamo le larghezze salvate o calcoliamo default (già fatto)
-5. **FIX NECESSARIO:** rimuovere qualsiasi `min-width` implicito dal CSS
-
-Se Opzione A fallisce, passare a Opzione D con:
-- CSS variables `--col-{id}-width`
-- ResizeObserver per aggiornare le variabili
-- Styling via `style="width: var(--col-{id}-width)"`
-
-### TODO:
-- [ ] Verificare CSS per min-width impliciti
-- [ ] Testare resize con valori molto piccoli (50px)
-- [ ] Se fallisce, implementare Opzione D
+**File modificati:**
+- `DataTable.svelte` - CSS e handleResize()
 
 ### Implementazione
 
@@ -791,12 +783,29 @@ function handleResize(columnId: string, deltaX: number) {
 **Pro:** Precisione massima
 **Contro:** Meno intuitivo per selezionare range visivamente
 
-### ✅ Decisione: Opzione C + A (Input + Slider sincronizzati)
+### ✅ Decisione: Opzione C + A - COMPLETATA (23 Gennaio 2026)
 
-Combiniamo entrambi gli approcci:
-- Input numerici con dropdown unità per precisione
-- Dual range slider logaritmico per selezione visiva
-- **Sincronizzazione bidirezionale**: modificare uno aggiorna l'altro
+**Implementazione:**
+- ✅ Input numerici con dropdown unità (B, KB, MB, GB)
+- ✅ Dual range slider logaritmico
+- ✅ Sincronizzazione bidirezionale (input ↔ slider)
+- ✅ Min/Max calcolati automaticamente dai dati della colonna
+- ✅ Nuovo tipo `ColumnType: 'size'`
+- ✅ Nuovo tipo `SizeFilter` con `minBytes`/`maxBytes`
+- ✅ Traduzioni aggiunte in EN/IT/FR/ES
+
+**File modificati:**
+- `types.ts` - aggiunto `'size'` a ColumnType, aggiunto `SizeFilter`
+- `DataTableColumnFilter.svelte` - UI completa per size filter
+- `DataTable.svelte` - gestione filtro size, calcolo min/max colonna
+- `FilesTable.svelte` - colonna size usa `type: 'size'`
+- `en.json`, `it.json`, `fr.json`, `es.json` - traduzioni
+
+**Funzionalità:**
+- Scala logaritmica per range file di dimensioni molto diverse
+- Auto-conversione unità in base al valore
+- Etichette min/max sotto lo slider
+- Barra verde che evidenzia il range selezionato
 
 ### Implementazione
 
@@ -867,8 +876,8 @@ Serve implementare:
 ## 📋 PRIORITÀ IMPLEMENTAZIONE
 
 1. ~~**Column Reordering**~~ ✅ COMPLETATO
-2. **Column Resize Fix** (già funziona parzialmente)
-3. **Size Filter con Slider** (più complesso, richiede nuovo componente)
+2. ~~**Column Resize Fix**~~ ✅ COMPLETATO (Opzione A)
+3. ~~**Size Filter con Slider**~~ ✅ COMPLETATO (Opzione C+A)
 
 ---
 
