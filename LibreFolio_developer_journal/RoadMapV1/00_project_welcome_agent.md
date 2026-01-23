@@ -212,6 +212,7 @@ dev.py [-h]
 - **UI multilingue**: Solo interfaccia grafica in EN/IT/FR/ES
 - **Obiettivo**: Codebase pulito e mantenibile per condivisione futura
 - **No migrazioni Alembic**: Modifica `001_initial.py` e ricrea DB
+- **Edit better rewrite**: Evita di riscrivere tutto un file se già esiste, preferisci modifiche puntuali per evitare perdite di funzionalità, la riscrittura è ammessa solo per file nuovi, quasi vuoti, obsoleti o quasi completamente sbagliati.
 
 Prima di proseguire:
 
