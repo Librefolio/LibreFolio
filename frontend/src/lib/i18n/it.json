@@ -33,7 +33,9 @@
     "clear": "Pulisci",
     "apply": "Applica",
     "selectAll": "Seleziona Tutti",
-    "clearAll": "Deseleziona Tutti"
+    "clearAll": "Deseleziona Tutti",
+    "multipleFiles": "File multipli permessi",
+    "remove": "Rimuovi"
   },
   "table": {
     "rowsPerPage": "Righe per pagina",
@@ -391,6 +393,7 @@
   "uploads": {
     "dropOrClick": "Trascina un file qui o clicca per sfogliare",
     "maxSize": "Dimensione max: {size}MB",
+    "maxSizeLabel": "Max",
     "imageSize": "Dimensione immagine",
     "upload": "Carica",
     "newFile": "Nuovo File",

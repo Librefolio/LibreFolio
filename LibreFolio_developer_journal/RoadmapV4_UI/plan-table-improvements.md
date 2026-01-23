@@ -178,7 +178,7 @@ Sono state valutate diverse librerie:
 
 ---
 
-### 📋 Fase 3.5: Componentizzazione DataTable (TODO)
+### ✅ Fase 3.5: Componentizzazione DataTable (COMPLETATA - 23/01/2026)
 
 **Obiettivo**: Creare un componente `DataTable.svelte` generico e riusabile
 
@@ -187,16 +187,16 @@ Sono state valutate diverse librerie:
 - Il design attuale piace, non vogliamo reinventare la ruota
 - `FilesTableAdvanced` è troppo specifico per i file
 
-**Struttura proposta**:
+**Struttura implementata**:
 
 ```
 src/lib/components/table/
-├── DataTable.svelte           # Componente principale generico
-├── DataTablePagination.svelte # Pagination balloon (sticky)
-├── DataTableToolbar.svelte    # Bulk actions + column toggle (NO search globale)
-├── DataTableColumnFilter.svelte # Filtro singola colonna (imbuto Excel)
-├── ConfirmModal.svelte        # Modale conferma generica
-└── types.ts                   # TypeScript interfaces
+├── DataTable.svelte           # ✅ Componente principale generico
+├── DataTablePagination.svelte # ✅ Pagination balloon (sticky)
+├── DataTableToolbar.svelte    # ✅ Bulk actions + column toggle + reorder
+├── DataTableColumnFilter.svelte # ✅ Filtro singola colonna (imbuto Excel)
+├── ConfirmModal.svelte        # ✅ Modale conferma generica
+└── types.ts                   # ✅ TypeScript interfaces
 ```
 
 > **NOTA**: Il search globale NON ci sarà. Il filtro per nome sarà il filtro Excel della colonna "nome".
@@ -410,34 +410,38 @@ interface DataTableProps<T> {
 
 ---
 
-### 📋 Fase 3.6: Estetica e Comportamento Tabella (TODO)
+### ✅ Fase 3.6: Estetica e Comportamento Tabella (COMPLETATA - 23/01/2026)
 
-> **NOTA**: Questa fase si fa INSIEME alla 3.5 durante la componentizzazione.
+> Completata insieme alla fase 3.5 durante la componentizzazione.
 
 #### 3.6.1 Estetica (durante componentizzazione)
 
 **Sorting Colonne**:
-- [ ] Click su header per sort ASC/DESC/none
-- [ ] Icona freccia su/giù nell'header
-- [ ] Multi-column sort (Shift+click) - opzionale
+- [x] Click su header per sort ASC/DESC/none
+- [x] Icona freccia su/giù nell'header
+- [ ] Multi-column sort (Shift+click) - opzionale/futuro
 
 **Filtri Colonna Stile Excel**:
-- [ ] Icona imbuto nell'header colonna (se filterable)
-- [ ] Click apre popover con filtro appropriato al tipo:
-  - **text**: input testo + toggle regex
-  - **enum**: checkbox multiple con opzioni
-  - **number**: range min-max con slider
+- [x] Icona imbuto nell'header colonna (se filterable)
+- [x] Click apre popover con filtro appropriato al tipo:
+  - **text**: input testo + modalità (contains/starts/ends/equals)
+  - **enum**: checkbox multiple con opzioni + select all/clear all
+  - **number**: range min-max
+  - **size**: range min-max con slider logaritmico e unità (B/KB/MB/GB)
   - **date**: date range picker
-- [ ] Imbuto pieno = filtro attivo, click rimuove
+- [x] Imbuto pieno = filtro attivo, icona reset per rimuovere
 
 **Column Resize**:
-- [ ] Colonne select/actions: larghezza % fissa (non ridimensionabili)
-- [ ] Colonne dati: ridimensionabili con drag
-- [ ] Rispetto minWidth/maxWidth da ColumnDef
+- [x] Colonne select/actions: larghezza fissa (non ridimensionabili)
+- [x] Colonne dati: ridimensionabili con drag
+- [x] Rispetto minWidth/maxWidth da ColumnDef
+- [x] Larghezze salvate in localStorage
 
-**Column Reorder** (opzionale/futuro):
-- [ ] Drag & drop header per riordinare
-- [ ] Grip handle visibile su hover
+**Column Reorder**:
+- [x] Drag & drop nel dropdown "Show Columns" per riordinare
+- [x] Grip handle visibile
+- [x] Bottoni su/giù su mobile
+- [x] Ordine salvato in localStorage
 
 #### 3.6.2 Comportamento (passato dall'utilizzatore)
 
@@ -881,5 +885,45 @@ Serve implementare:
 
 ---
 
-## Note Finali
-Verificare che FilesTableAdvanced sia completamente migrato a DataTable e quindi rimuoverlo.
+## 🔲 TODO FUTURI
+
+### Mobile Column Reorder
+Il riordinamento colonne su mobile attualmente usa bottoni su/giù invece del drag & drop.
+**TODO:** Verificare se funziona correttamente su dispositivi touch reali e, se necessario:
+- Implementare touch drag with `touchstart`, `touchmove`, `touchend`
+- Oppure usare una libreria come SortableJS con opzione `handle`
+- Testare su iOS Safari e Android Chrome
+
+### File Uploader Image Preview
+Il nuovo FileUploader supporta upload multiplo ma non ha anteprima immagini.
+Vedi `TODO_FUTURI.md` nella root del progetto per dettagli.
+
+---
+
+## ✅ Note Finali
+
+### Cleanup Completato (23/01/2026)
+
+- [x] `FilesTableAdvanced.svelte` rimosso (sostituito da `components/table/DataTable.svelte`)
+- [x] `tanstack-table/DataTable.svelte` rimosso (era un prototipo obsoleto)
+- [x] Mantenuto l'adapter core in `tanstack-table/` per futura migrazione a v9:
+  - `createSvelteTable.svelte.ts`
+  - `FlexRender.svelte`
+  - `index.ts`
+
+### Componenti Finali
+
+```
+src/lib/components/
+├── table/                      # Componenti DataTable generici
+│   ├── DataTable.svelte        # 941 righe - Componente principale
+│   ├── DataTablePagination.svelte
+│   ├── DataTableToolbar.svelte
+│   ├── DataTableColumnFilter.svelte
+│   ├── ConfirmModal.svelte
+│   └── types.ts
+├── files/
+│   └── FilesTable.svelte       # Wrapper specifico per /files
+└── ui/
+    └── FileUploader.svelte     # Upload multiplo generico
+```

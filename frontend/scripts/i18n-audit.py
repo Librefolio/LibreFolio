@@ -57,6 +57,82 @@ def flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict[str, Any
     return dict(items)
 
 
+def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
+    """
+    Scan all .svelte and .ts files in src/ to find translation keys being used.
+
+    Returns:
+        Tuple of (exact_keys, prefix_patterns)
+        - exact_keys: Keys that are definitely used (full path found)
+        - prefix_patterns: Prefixes that might be used dynamically (e.g., 'fileStatus')
+
+    Looks for patterns like:
+    - $t('key.path') / t('key.path')
+    - $_('key.path') / _('key.path')
+    - $t(`prefix.${var}`) - dynamic keys, extract prefix
+    - Interpolated strings with translation keys
+    """
+    import re
+
+    src_dir = I18N_DIR.parent.parent  # src/
+    exact_keys: set[str] = set()
+    prefix_patterns: set[str] = set()
+
+    # Patterns to match translation function calls
+    patterns_exact = [
+        # $t('key') or t('key') with single/double quotes
+        re.compile(r"(?:\$t|\$_|(?<![a-zA-Z])t|(?<![a-zA-Z])_)\s*\(\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
+    ]
+
+    # Patterns for dynamic keys (template literals)
+    patterns_dynamic = [
+        # $t(`prefix.${...}`) - extract the prefix
+        re.compile(r"(?:\$t|\$_|(?<![a-zA-Z])t)\s*\(\s*`([a-zA-Z0-9_.]+)\.\$\{"),
+        # String concatenation: 'prefix.' + var
+        re.compile(r"(?:\$t|\$_|(?<![a-zA-Z])t)\s*\(\s*['\"]([a-zA-Z0-9_.]+)\.['\"]"),
+    ]
+
+    # Scan all .svelte, .ts, and .js files
+    for ext in ["*.svelte", "*.ts", "*.js"]:
+        for file_path in src_dir.rglob(ext):
+            # Skip node_modules and build directories
+            if "node_modules" in str(file_path) or "/build/" in str(file_path):
+                continue
+            try:
+                content = file_path.read_text(encoding="utf-8")
+
+                # Find exact keys
+                for pattern in patterns_exact:
+                    matches = pattern.findall(content)
+                    exact_keys.update(matches)
+
+                # Find dynamic prefixes
+                for pattern in patterns_dynamic:
+                    matches = pattern.findall(content)
+                    prefix_patterns.update(matches)
+
+            except Exception:
+                pass  # Skip files that can't be read
+
+    return exact_keys, prefix_patterns
+
+
+def is_key_potentially_used(key: str, exact_keys: set[str], prefix_patterns: set[str]) -> bool:
+    """
+    Check if a key is potentially used, either exactly or via dynamic construction.
+    """
+    # Exact match
+    if key in exact_keys:
+        return True
+
+    # Check if any prefix pattern matches the start of this key
+    for prefix in prefix_patterns:
+        if key.startswith(prefix + "."):
+            return True
+
+    return False
+
+
 def load_translations() -> dict[str, dict[str, str]]:
     """
     Load all translation files and return flattened dictionaries.
@@ -203,7 +279,61 @@ def generate_missing_report(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-def export_markdown(df: pd.DataFrame, output_path: Path | None, include_full_table: bool = True) -> None:
+def generate_unused_keys_report(
+    all_keys: list[str],
+    exact_keys: set[str],
+    prefix_patterns: set[str]
+) -> tuple[str, list[str]]:
+    """
+    Generate a report of translation keys that exist but are not used in the codebase.
+
+    Returns:
+        Tuple of (report string, list of unused keys)
+    """
+    unused_keys = [
+        key for key in all_keys
+        if not is_key_potentially_used(key, exact_keys, prefix_patterns)
+    ]
+
+    if len(unused_keys) == 0:
+        return "\n## ✅ No Unused Translation Keys\n\nAll translation keys are used in the codebase.\n", []
+
+    lines = [
+        f"\n## ⚠️ Potentially Unused Translation Keys ({len(unused_keys)})\n",
+        "The following keys exist in translation files but were not found in source code.\n",
+        "\n**Note:** This analysis cannot detect:\n",
+        "- Keys constructed dynamically (e.g., `$t(\\`prefix.${var}\\`)`)\n",
+        "- Keys passed as variables\n",
+        "- Keys used in computed expressions\n\n",
+    ]
+
+    if prefix_patterns:
+        lines.append(f"**Dynamic prefixes detected:** `{', '.join(sorted(prefix_patterns))}`\n")
+        lines.append("Keys under these prefixes are marked as potentially used.\n\n")
+
+    # Group by section
+    sections: dict[str, list[str]] = {}
+    for key in unused_keys:
+        section = extract_section(key)
+        if section not in sections:
+            sections[section] = []
+        sections[section].append(key)
+
+    for section in sorted(sections.keys()):
+        lines.append(f"\n### {section}\n")
+        for key in sorted(sections[section]):
+            lines.append(f"- `{key}`")
+        lines.append("")
+
+    return "\n".join(lines), unused_keys
+
+
+def export_markdown(
+    df: pd.DataFrame,
+    output_path: Path | None,
+    include_full_table: bool = True,
+    unused_keys_report: str = ""
+) -> None:
     """
     Export the translation table to Markdown format using tabulate.
 
@@ -211,6 +341,7 @@ def export_markdown(df: pd.DataFrame, output_path: Path | None, include_full_tab
         df: DataFrame with translations
         output_path: Output file path, or None for stdout
         include_full_table: If False, only show summary and missing translations
+        unused_keys_report: Report of unused translation keys
     """
     summary = generate_summary(df)
     missing_report = generate_missing_report(df)
@@ -237,6 +368,9 @@ def export_markdown(df: pd.DataFrame, output_path: Path | None, include_full_tab
         summary,
         missing_report,
     ]
+
+    if unused_keys_report:
+        parts.append(unused_keys_report)
 
     if include_full_table:
         parts.extend([
@@ -351,22 +485,32 @@ def run_audit(format_type: str = "none", output: str | None = None) -> int:
     print("🔍 Analyzing translations...")
     df = build_dataframe(translations)
 
+    # Find unused keys
+    print("🔎 Scanning source files for used keys...")
+    all_keys = get_all_keys(translations)
+    exact_keys, prefix_patterns = find_used_keys_in_sources()
+    unused_report, unused_keys = generate_unused_keys_report(all_keys, exact_keys, prefix_patterns)
+    print(f"   Found {len(exact_keys)} exact keys in source code")
+    print(f"   Found {len(prefix_patterns)} dynamic prefixes: {', '.join(sorted(prefix_patterns)) or 'none'}")
+    print(f"   Found {len(unused_keys)} potentially unused keys")
+    print()
+
     # Generate output based on format
     if format_type == "none":
         # Only show summary and warnings, no full table
-        export_markdown(df, None, include_full_table=False)
+        export_markdown(df, None, include_full_table=False, unused_keys_report=unused_report)
     elif format_type in ["md", "both"]:
         if output and output.endswith(".md"):
             md_path = Path(output)
         elif format_type == "md" and output is None:
             # Print to stdout if no output specified for md-only
-            export_markdown(df, None, include_full_table=True)
+            export_markdown(df, None, include_full_table=True, unused_keys_report=unused_report)
             md_path = None
         else:
             md_path = output_dir / "i18n-audit.md"
 
         if md_path:
-            export_markdown(df, md_path, include_full_table=True)
+            export_markdown(df, md_path, include_full_table=True, unused_keys_report=unused_report)
 
     if format_type in ["xlsx", "both"]:
         if output and output.endswith(".xlsx"):
@@ -384,6 +528,7 @@ def run_audit(format_type: str = "none", output: str | None = None) -> int:
     incomplete = len(df) - complete
     print(f"  Complete:   {complete} ✅")
     print(f"  Incomplete: {incomplete} {'⚠️' if incomplete > 0 else ''}")
+    print(f"  Unused:     {len(unused_keys)} {'⚠️' if len(unused_keys) > 0 else ''}")
     print()
 
     return 0

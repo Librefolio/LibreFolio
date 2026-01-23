@@ -9,7 +9,7 @@
     import { onMount } from 'svelte';
     import { t } from '$lib/i18n';
     import { api } from '$lib/api';
-    import ImageUploader from '$lib/components/ui/ImageUploader.svelte';
+    import FileUploader from '$lib/components/ui/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/LazyImage.svelte';
     import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid } from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
@@ -112,14 +112,16 @@
         }
     }
 
-    async function handleUpload(event: CustomEvent<{ file: globalThis.File; size: string }>) {
-        const { file } = event.detail;
+    async function handleUpload(event: CustomEvent<{ files: globalThis.File[] }>) {
+        const { files } = event.detail;
 
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            await api.post('/uploads', formData);
+            // Upload files sequentially
+            for (const file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                await api.post('/uploads', formData);
+            }
 
             showUploader = false;
             await loadFiles();
@@ -246,9 +248,11 @@
     <!-- Upload area (static only) -->
     {#if showUploader && activeTab === 'static'}
         <div class="upload-area">
-            <ImageUploader
+            <FileUploader
                 on:upload={handleUpload}
-                on:error={(e) => error = e.detail.message}
+                on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
+                multiple={true}
+                maxSizeMB={10}
             />
         </div>
     {/if}
