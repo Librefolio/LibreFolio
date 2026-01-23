@@ -60,6 +60,49 @@ Quando TanStack Table v9 sarà **rilasciato come stabile** con supporto ufficial
 
 ---
 
+## 📱 Mobile Column Reorder (DataTable)
+
+**Data aggiunta**: 23 Gennaio 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Bassa
+
+### Contesto
+Il riordinamento colonne nella DataTable funziona con drag & drop su desktop, ma su mobile usiamo bottoni su/giù. Potrebbe essere migliorato con touch drag nativo.
+
+### Azione Futura
+1. Verificare comportamento su dispositivi touch reali (iOS Safari, Android Chrome)
+2. Se necessario, implementare touch drag con `touchstart`, `touchmove`, `touchend`
+3. Oppure integrare libreria come SortableJS con opzione `handle`
+
+### File coinvolti
+- `frontend/src/lib/components/table/DataTableToolbar.svelte`
+
+---
+
+## 🖼️ File Uploader Image Preview
+
+**Data aggiunta**: 23 Gennaio 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Media
+
+### Contesto
+Il nuovo FileUploader supporta upload multiplo di qualsiasi tipo di file. Per le immagini sarebbe utile:
+- Anteprima dell'immagine
+- Resize/crop prima dell'upload (riutilizzando ImageUploader)
+- Navigazione tra i file nella lista
+
+### Azione Futura
+1. Rilevare se il file è un'immagine (`file.type.startsWith('image/')`)
+2. Aggiungere pulsante "Preview" per aprire modale con anteprima
+3. Integrare funzionalità di resize da ImageUploader
+4. Permettere navigazione tra file con frecce
+
+### File coinvolti
+- `frontend/src/lib/components/ui/FileUploader.svelte`
+- `frontend/src/lib/components/ui/ImageUploader.svelte` (da riutilizzare)
+
+---
+
 ## 🖼️ Image Crop Component
 
 **Data aggiunta**: 22 Gennaio 2026  

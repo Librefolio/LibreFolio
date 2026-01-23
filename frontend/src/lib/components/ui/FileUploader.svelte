@@ -1,0 +1,441 @@
+<!--
+  FileUploader - Generic drag & drop file upload component
+
+  Features:
+  - Drag & drop + file browser
+  - Multiple file upload support
+  - Validates against blocked extensions (executables/scripts)
+  - Progress indicator
+-->
+<script lang="ts">
+	import { createEventDispatcher } from 'svelte';
+	import { t } from '$lib/i18n';
+	import { Upload, X, File as FileIcon, AlertTriangle } from 'lucide-svelte';
+
+	export let maxSizeMB: number = 10;
+	export let multiple: boolean = true;
+
+	// Blocked extensions (same as backend)
+	const BLOCKED_EXTENSIONS = new Set([
+		'.exe', '.dll', '.so', '.dylib',
+		'.bat', '.cmd', '.ps1', '.vbs', '.vbe',
+		'.sh', '.bash', '.csh', '.zsh',
+		'.py', '.pyc', '.pyo',
+		'.pl', '.pm', '.rb',
+		'.php', '.php3', '.php4', '.php5', '.phtml',
+		'.js', '.mjs', '.cjs',
+		'.jar', '.class', '.com', '.scr', '.pif'
+	]);
+
+	const dispatch = createEventDispatcher<{
+		upload: { files: File[] };
+		error: { message: string };
+	}>();
+
+	let isDragging = false;
+	let selectedFiles: File[] = [];
+	let fileInput: HTMLInputElement;
+	let errors: string[] = [];
+
+	function getFileExtension(filename: string): string {
+		const idx = filename.lastIndexOf('.');
+		return idx >= 0 ? filename.slice(idx).toLowerCase() : '';
+	}
+
+	function validateFile(file: File): string | null {
+		// Check extension
+		const ext = getFileExtension(file.name);
+		if (BLOCKED_EXTENSIONS.has(ext)) {
+			return `File type "${ext}" is not allowed (executable/script)`;
+		}
+
+		// Check size
+		if (file.size > maxSizeMB * 1024 * 1024) {
+			return `File "${file.name}" is too large. Max: ${maxSizeMB}MB`;
+		}
+
+		return null;
+	}
+
+	function handleDragOver(event: DragEvent) {
+		event.preventDefault();
+		isDragging = true;
+	}
+
+	function handleDragLeave() {
+		isDragging = false;
+	}
+
+	function handleDrop(event: DragEvent) {
+		event.preventDefault();
+		isDragging = false;
+
+		const files = event.dataTransfer?.files;
+		if (files && files.length > 0) {
+			handleFiles(Array.from(files));
+		}
+	}
+
+	function handleFileSelect(event: Event) {
+		const input = event.target as HTMLInputElement;
+		if (input.files && input.files.length > 0) {
+			handleFiles(Array.from(input.files));
+		}
+		// Reset input to allow re-selecting same file
+		input.value = '';
+	}
+
+	function handleFiles(files: File[]) {
+		errors = [];
+		const validFiles: File[] = [];
+
+		for (const file of files) {
+			const error = validateFile(file);
+			if (error) {
+				errors.push(error);
+			} else {
+				validFiles.push(file);
+			}
+		}
+
+		if (validFiles.length > 0) {
+			if (multiple) {
+				selectedFiles = [...selectedFiles, ...validFiles];
+			} else {
+				selectedFiles = [validFiles[0]];
+			}
+		}
+
+		if (errors.length > 0) {
+			dispatch('error', { message: errors.join('\n') });
+		}
+	}
+
+	function removeFile(index: number) {
+		selectedFiles = selectedFiles.filter((_, i) => i !== index);
+	}
+
+	function clearAll() {
+		selectedFiles = [];
+		errors = [];
+	}
+
+	function uploadFiles() {
+		if (selectedFiles.length > 0) {
+			dispatch('upload', { files: selectedFiles });
+			selectedFiles = [];
+		}
+	}
+
+	function formatFileSize(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	function openFileBrowser() {
+		fileInput?.click();
+	}
+</script>
+
+<div class="file-uploader">
+	<!-- Drop zone -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="drop-zone"
+		class:dragging={isDragging}
+		class:has-files={selectedFiles.length > 0}
+		on:dragover={handleDragOver}
+		on:dragleave={handleDragLeave}
+		on:drop={handleDrop}
+		on:click={openFileBrowser}
+		on:keydown={(e) => e.key === 'Enter' && openFileBrowser()}
+		role="button"
+		tabindex="0"
+	>
+		<input
+			type="file"
+			bind:this={fileInput}
+			on:change={handleFileSelect}
+			{multiple}
+			hidden
+		/>
+
+		{#if selectedFiles.length === 0}
+			<Upload size={32} class="upload-icon" />
+			<p class="drop-text">{$t('uploads.dropOrClick')}</p>
+			<p class="drop-hint">
+				{$t('uploads.maxSizeLabel') || 'Max'}: {maxSizeMB}MB
+				{#if multiple} • {$t('common.multipleFiles')}{/if}
+			</p>
+		{:else}
+			<div class="selected-files">
+				{#each selectedFiles as file, index}
+					<div class="file-item">
+						<FileIcon size={16} />
+						<span class="file-name">{file.name}</span>
+						<span class="file-size">{formatFileSize(file.size)}</span>
+						<button
+							type="button"
+							class="remove-btn"
+							on:click|stopPropagation={() => removeFile(index)}
+							title={$t('common.remove') || 'Remove'}
+						>
+							<X size={14} />
+						</button>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
+
+	<!-- Errors -->
+	{#if errors.length > 0}
+		<div class="errors">
+			<AlertTriangle size={16} />
+			<div class="error-list">
+				{#each errors as error}
+					<p>{error}</p>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
+	<!-- Actions -->
+	{#if selectedFiles.length > 0}
+		<div class="actions">
+			<button type="button" class="btn btn-secondary" on:click={clearAll}>
+				{$t('common.clear') || 'Clear'}
+			</button>
+			<button type="button" class="btn btn-primary" on:click={uploadFiles}>
+				<Upload size={16} />
+				{$t('uploads.upload')} ({selectedFiles.length})
+			</button>
+		</div>
+	{/if}
+</div>
+
+<style>
+	.file-uploader {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.drop-zone {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		min-height: 150px;
+		padding: 1.5rem;
+		border: 2px dashed #cbd5e1;
+		border-radius: 8px;
+		background: #f8fafc;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.drop-zone:hover,
+	.drop-zone.dragging {
+		border-color: #1a4031;
+		background: #f1f5f9;
+	}
+
+	.drop-zone.dragging {
+		background: rgba(26, 64, 49, 0.05);
+	}
+
+	.drop-zone.has-files {
+		align-items: stretch;
+		padding: 1rem;
+	}
+
+	:global(.dark) .drop-zone {
+		border-color: #475569;
+		background: #1e293b;
+	}
+
+	:global(.dark) .drop-zone:hover,
+	:global(.dark) .drop-zone.dragging {
+		border-color: #4ade80;
+		background: #0f172a;
+	}
+
+	:global(.upload-icon) {
+		color: #94a3b8;
+		margin-bottom: 0.5rem;
+	}
+
+	.drop-text {
+		font-size: 0.9375rem;
+		font-weight: 500;
+		color: #475569;
+		margin: 0;
+	}
+
+	:global(.dark) .drop-text {
+		color: #e2e8f0;
+	}
+
+	.drop-hint {
+		font-size: 0.75rem;
+		color: #94a3b8;
+		margin: 0.25rem 0 0;
+	}
+
+	.selected-files {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		width: 100%;
+	}
+
+	.file-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		background: white;
+		border: 1px solid #e2e8f0;
+		border-radius: 6px;
+	}
+
+	:global(.dark) .file-item {
+		background: #0f172a;
+		border-color: #334155;
+	}
+
+	.file-item :global(svg) {
+		color: #64748b;
+		flex-shrink: 0;
+	}
+
+	.file-name {
+		flex: 1;
+		font-size: 0.8125rem;
+		color: #0f172a;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	:global(.dark) .file-name {
+		color: #f1f5f9;
+	}
+
+	.file-size {
+		font-size: 0.75rem;
+		color: #94a3b8;
+		flex-shrink: 0;
+	}
+
+	.remove-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border: none;
+		border-radius: 4px;
+		background: transparent;
+		color: #94a3b8;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.remove-btn:hover {
+		background: #fee2e2;
+		color: #dc2626;
+	}
+
+	:global(.dark) .remove-btn:hover {
+		background: #7f1d1d;
+		color: #fecaca;
+	}
+
+	.errors {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		background: #fef2f2;
+		border: 1px solid #fecaca;
+		border-radius: 6px;
+		color: #b91c1c;
+	}
+
+	:global(.dark) .errors {
+		background: #450a0a;
+		border-color: #7f1d1d;
+		color: #fecaca;
+	}
+
+	.error-list {
+		flex: 1;
+	}
+
+	.error-list p {
+		margin: 0;
+		font-size: 0.8125rem;
+	}
+
+	.error-list p + p {
+		margin-top: 0.25rem;
+	}
+
+	.actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+	}
+
+	.btn {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.btn-secondary {
+		background: #f1f5f9;
+		color: #475569;
+	}
+
+	.btn-secondary:hover {
+		background: #e2e8f0;
+		color: #0f172a;
+	}
+
+	:global(.dark) .btn-secondary {
+		background: #334155;
+		color: #e2e8f0;
+	}
+
+	:global(.dark) .btn-secondary:hover {
+		background: #475569;
+	}
+
+	.btn-primary {
+		background: #1a4031;
+		color: white;
+	}
+
+	.btn-primary:hover {
+		background: #143426;
+	}
+
+	:global(.dark) .btn-primary {
+		background: #4ade80;
+		color: #0f172a;
+	}
+
+	:global(.dark) .btn-primary:hover {
+		background: #22c55e;
+	}
+</style>

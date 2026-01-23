@@ -834,7 +834,7 @@
 
 <style>
 	.datatable-container { width: 100%; position: relative; }
-	.table-wrapper { overflow-x: auto; overflow-y: visible; border: 1px solid #e2e8f0; border-radius: 8px; min-height: 200px; background: white; }
+	.table-wrapper { overflow-x: auto; overflow-y: visible; border: 1px solid #e2e8f0; border-radius: 8px; min-height: 280px; background: white; }
 	:global(.dark) .table-wrapper { border-color: #334155; background: #0f172a; }
 
 	.datatable { width: 100%; border-collapse: collapse; table-layout: fixed; background: white; }
@@ -890,7 +890,7 @@
 	.td-select { left: 0; text-align: center; max-width: none; }
 	.td-actions { right: 0; max-width: none; white-space: normal; }
 
-	.td-empty, .td-loading { text-align: center; padding: 3rem 2rem; color: #94a3b8; background: white; height: 150px; vertical-align: middle; }
+	.td-empty, .td-loading { text-align: center; padding: 3rem 2rem; color: #94a3b8; background: white; height: 230px; vertical-align: middle; }
 	:global(.dark) .td-empty, :global(.dark) .td-loading { background: #0f172a; }
 	.loading-spinner { display: inline-block; width: 1.5rem; height: 1.5rem; border: 2px solid #e2e8f0; border-top-color: #1a4031; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 0.5rem; }
 	@keyframes spin { to { transform: rotate(360deg); } }

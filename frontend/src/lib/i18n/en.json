@@ -33,7 +33,9 @@
     "clear": "Clear",
     "apply": "Apply",
     "selectAll": "Select All",
-    "clearAll": "Clear All"
+    "clearAll": "Clear All",
+    "multipleFiles": "Multiple files allowed",
+    "remove": "Remove"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -391,6 +393,7 @@
   "uploads": {
     "dropOrClick": "Drop file here or click to browse",
     "maxSize": "Max size: {size}MB",
+    "maxSizeLabel": "Max",
     "imageSize": "Image size",
     "upload": "Upload",
     "newFile": "New File",
