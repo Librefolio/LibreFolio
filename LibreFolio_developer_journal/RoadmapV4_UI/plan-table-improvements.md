@@ -1,8 +1,8 @@
 # Piano: Migliorie Tabelle Files con TanStack Table
 
 **Data**: 21 Gennaio 2026  
-**Aggiornamento**: 22 Gennaio 2026  
-**Status**: 🔄 IN CORSO  
+**Aggiornamento**: 23 Gennaio 2026  
+**Status**: 🔄 IN PROGRESS - Fase 3.5/3.6 completate, refinement in corso  
 **Libreria**: TanStack Table v8 (`@tanstack/table-core`) + Adapter Custom Svelte 5
 
 ---
@@ -544,3 +544,333 @@ const fileBulkActions: BulkAction<FileData>[] = [
 - TanStack Table v8 Core: https://tanstack.com/table/v8
 - Adapter Svelte 5 custom in `$lib/tanstack-table/`
 - Issue tracking: vedere file in `LibreFolio_developer_journal/`
+
+---
+
+## ✅ Fix Completati (23 Gennaio 2026 - Pomeriggio)
+
+### Problemi risolti:
+
+1. **Traduzione "Status" mancante** ✅
+   - Aggiunta chiave `uploads.status` in EN/IT/FR/ES
+
+2. **Colonna "Actions" in maiuscolo** ✅
+   - Aggiunto `text-transform: none !important` su `.th-actions`
+
+3. **Pagination scompare quando pageSize > righe** ✅
+   - Modificata condizione: ora mostra sempre se `filteredData.length > 0`
+
+4. **Delete singolo senza conferma** ✅
+   - Aggiunto `requireConfirm` e `confirmMessage` a `RowAction<T>`
+   - Implementata modale conferma per azioni singole in DataTable
+   - FilesTable ora richiede conferma per delete singolo
+
+5. **Filtri si chiudono durante digitazione** ✅
+   - Rimosso `openFilterColumnId = null` da `applyColumnFilter()`
+   - Il filtro ora resta aperto fino a click outside
+
+6. **Settings Preferences non carica default globali** ✅
+   - Corretto parsing risposta API `/settings/global`
+   - L'API restituisce array `{ settings: [{ key, value }...] }`
+   - Convertito in oggetto per accesso diretto
+
+---
+
+## 📋 TESTLIST UI v2 - 23 Gennaio 2026
+
+### 1. Visualizzazione Base
+- [x] Tabella renderizzata con dati
+- [x] Colonne hanno nomi tradotti (incluso "Status")
+- [x] Colonna "Actions" con solo iniziale maiuscola
+- [x] Header sottile
+
+### 2. Sorting
+- [x] Click header → ASC → DESC → nessuno
+- [x] Freccia visibile nell'header
+
+### 3. Pagination
+- [x] Balloon sempre visibile (anche con pochi dati)
+- [x] Page size funziona (10, 25, 50, 100, ∞)
+- [x] Numeri pagina cliccabili
+- [x] Input pagina editabile
+- [x] Traduzioni visibili
+
+### 4. Selezione Righe
+- [x] Checkbox su ogni riga
+- [x] Select all seleziona pagina corrente
+- [x] Contatore "N selezionati"
+- [x] Righe selezionate con sfondo blu
+
+### 5. Pulsanti Action (singola riga)
+- [x] Icone Download e Delete visibili
+- [x] Pulsanti con sfondo/bordo
+- [x] Delete rosso
+- [x] **DELETE SINGOLO mostra conferma**
+- [x] **Modale delete singolo mostra nome file direttamente (no toggle)**
+
+### 6. Bulk Actions
+- [x] Appaiono con selezioni
+- [x] Posizionate a destra
+- [x] Delete multiplo mostra conferma
+- [x] Modale mostra nomi file reali
+
+### 7. Filtri Colonna
+- [x] Icona imbuto visibile
+- [x] Click apre popover
+- [x] **Popover NON troncato dalla tabella** (min-height: 200px)
+- [x] **Click fuori chiude il popover**
+- [x] **Digitare NON chiude il popover**
+- [x] Filtro testo si applica con debounce
+- [x] Filtro enum: click singoli funziona
+- [x] Reset pulisce il filtro
+- [x] Imbuto colorato quando attivo
+
+### 8. Show/Hide Columns
+- [x] Icona occhio funziona
+- [x] Toggle visibilità
+- [x] Reset ripristina
+
+### 9. Column Resize
+- [x] Handle visibile su hover
+- [x] Drag ridimensiona
+- [x] Larghezza salvata
+- [ ] **TODO:** Verificare comportamento con valori molto piccoli
+
+### 10. Dark Mode
+- [x] Tabella colori corretti
+- [x] Filtri colori corretti
+- [x] Modale colori corretti
+
+### 11. Persistenza
+- [x] Page size mantenuto
+- [x] Colonne visibili mantenute
+- [x] Larghezze mantenute
+- [x] **Tab attivo memorizzato (static/brim)**
+
+### 12. Settings Preferences
+- [x] Cambia valuta in Global Settings (admin)
+- [x] In User Preferences, Reset valuta
+- [x] **Prende il valore da Global Settings**
+
+---
+
+## ✅ Fix Aggiuntivi (23 Gennaio 2026 - Sera)
+
+1. **Altezza minima tabella** ✅
+   - Aggiunto `min-height: 200px` su `.table-wrapper`
+   - I filtri non vengono più troncati
+
+2. **ConfirmModal lista singolo item** ✅
+   - Se `items.length === 1`, la lista è sempre visibile
+   - Il toggle appare solo se `items.length > 1`
+
+---
+
+## 🔧 PLAN: Column Resize Fix (23 Gennaio 2026)
+
+### Problema Attuale
+Il ridimensionamento delle colonne ha comportamenti inattesi:
+- Le colonne hanno una larghezza minima implicita che impedisce di ridurle
+- Il resize non è fluido
+- Salvare e ripristinare le larghezze non funziona correttamente
+
+### Alternative Analizzate
+
+#### Opzione A: CSS table-layout fixed + width in px ⭐ PRIMA SCELTA
+**Pro:**
+- Controllo preciso delle larghezze
+- Funziona con `table-layout: fixed`
+- Larghezze salvabili in localStorage
+- Minima riscrittura del codice esistente
+
+**Contro:**
+- Richiede gestire manualmente il resize di tutte le colonne
+- La tabella non si adatta automaticamente al contenuto
+
+#### Opzione D: ResizeObserver + CSS variables ⭐ FALLBACK
+**Pro:**
+- Moderno e performante
+- Larghezze dinamiche via CSS vars
+- Compatibile con table-layout fixed
+
+**Contro:**
+- Complessità implementativa maggiore
+- Support browser (ok per moderni)
+
+### ✅ Decisione: Opzione A, fallback a D se necessario
+
+**Piano di implementazione Opzione A:**
+
+1. Impostiamo `min-width` espliciti molto bassi (es. 50px) su ogni colonna
+2. Usiamo `width` in px durante il resize (già fatto)
+3. Salviamo larghezze in localStorage (già fatto)
+4. Al mount, carichiamo le larghezze salvate o calcoliamo default (già fatto)
+5. **FIX NECESSARIO:** rimuovere qualsiasi `min-width` implicito dal CSS
+
+Se Opzione A fallisce, passare a Opzione D con:
+- CSS variables `--col-{id}-width`
+- ResizeObserver per aggiornare le variabili
+- Styling via `style="width: var(--col-{id}-width)"`
+
+### TODO:
+- [ ] Verificare CSS per min-width impliciti
+- [ ] Testare resize con valori molto piccoli (50px)
+- [ ] Se fallisce, implementare Opzione D
+
+### Implementazione
+
+```typescript
+// Struttura state
+let columnWidths: Record<string, number> = {};
+
+// Default widths calculation
+function calculateDefaultWidths() {
+    const totalWidth = tableElement.offsetWidth;
+    const fixedWidth = selectionWidth + actionsWidth;
+    const availableWidth = totalWidth - fixedWidth;
+    const perColumn = availableWidth / dataColumns.length;
+    return Object.fromEntries(columns.map(c => [c.id, Math.max(perColumn, c.minWidth || 80)]));
+}
+
+// Resize handler
+function handleResize(columnId: string, deltaX: number) {
+    columnWidths[columnId] = Math.max(
+        columns.find(c => c.id === columnId)?.minWidth || 50,
+        columnWidths[columnId] + deltaX
+    );
+}
+```
+
+---
+
+## 🔧 PLAN: Size Filter con Slider Logaritmico (23 Gennaio 2026)
+
+### Requisiti
+- Slider con scala logaritmica (base 10)
+- Range: min file → max file della colonna
+- Unità di misura dinamica (B, KB, MB, GB)
+- Due handle (min e max)
+
+### Layout ASCII Art - Soluzione Finale (C + A)
+
+```
+┌─────────────────────────────────────────────┐
+│ FILTER                              [reset] │
+├─────────────────────────────────────────────┤
+│                                             │
+│  Min: [___12___] [KB ▼]     (input + unità) │
+│  Max: [___1.2__] [MB ▼]                     │
+│                                             │
+│  ├──●────────────────●──┤   (dual slider)   │
+│  1B   10KB  100KB  1MB  10MB                │
+│       └─── scala logaritmica ───┘           │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+**Comportamento:**
+- Modificare input → aggiorna slider
+- Modificare slider → aggiorna input
+- Dropdown unità: B, KB, MB, GB (auto-select in base al valore)
+
+### Alternative UI
+
+#### Opzione A: Dual Range Slider (solo slider)
+```
+  Min ──●─────────────────●── Max
+       12KB              1.2MB
+```
+**Pro:** Compatto, intuitivo
+**Contro:** Meno preciso per valori esatti
+
+#### Opzione C: Input + Dropdown unità (solo input)
+```
+  Min: [___12___] [KB ▼]
+  Max: [___1.2__] [MB ▼]
+```
+**Pro:** Precisione massima
+**Contro:** Meno intuitivo per selezionare range visivamente
+
+### ✅ Decisione: Opzione C + A (Input + Slider sincronizzati)
+
+Combiniamo entrambi gli approcci:
+- Input numerici con dropdown unità per precisione
+- Dual range slider logaritmico per selezione visiva
+- **Sincronizzazione bidirezionale**: modificare uno aggiorna l'altro
+
+### Implementazione
+
+```typescript
+// Conversione logaritmica
+function toLogScale(bytes: number, minBytes: number, maxBytes: number): number {
+    if (bytes <= 0) return 0;
+    const logMin = Math.log10(Math.max(minBytes, 1));
+    const logMax = Math.log10(Math.max(maxBytes, 1));
+    const logVal = Math.log10(bytes);
+    return (logVal - logMin) / (logMax - logMin) * 100;
+}
+
+function fromLogScale(percent: number, minBytes: number, maxBytes: number): number {
+    const logMin = Math.log10(Math.max(minBytes, 1));
+    const logMax = Math.log10(Math.max(maxBytes, 1));
+    const logVal = logMin + (percent / 100) * (logMax - logMin);
+    return Math.round(Math.pow(10, logVal));
+}
+
+// Format display
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+```
+
+---
+
+## 🔧 PLAN: Column Reordering (23 Gennaio 2026)
+
+### Requisiti
+- Drag & drop colonne nel dropdown "Show/Hide Columns"
+- Ordine salvato in localStorage
+- Reset ripristina ordine originale
+
+### Implementazione
+Il dropdown già mostra un'icona `GripVertical` per il drag.
+Serve implementare:
+
+1. **Drag & Drop nel dropdown:**
+   - `draggable="true"` sulle opzioni
+   - `ondragstart`, `ondragover`, `ondrop` handlers
+   - Visual feedback durante drag (bordo sopra/sotto durante hover)
+
+2. **Persistenza:**
+   - `columnOrder: string[]` in localStorage
+   - Al mount: ordina colonne secondo ordine salvato
+
+3. **Reset:**
+   - Ripristina ordine da `columns` prop originale
+
+### ✅ COMPLETATO (23 Gennaio 2026)
+- [x] Aggiungere `draggable="true"` alle opzioni nel dropdown
+- [x] Implementare drag handlers (`ondragstart`, `ondragover`, `ondrop`)
+- [x] Aggiungere visual feedback durante drag (bordo sinistro verde)
+- [x] Verificare che l'ordine sia rispettato nella tabella
+- [x] Testare persistenza in localStorage
+
+### File modificati:
+- `DataTableToolbar.svelte` - dropdown con drag & drop
+- `DataTable.svelte` - aggiunta funzione `reorderColumns` e `orderedColumns`
+
+---
+
+## 📋 PRIORITÀ IMPLEMENTAZIONE
+
+1. ~~**Column Reordering**~~ ✅ COMPLETATO
+2. **Column Resize Fix** (già funziona parzialmente)
+3. **Size Filter con Slider** (più complesso, richiede nuovo componente)
+
+---
+
+## Note Finali
+Verificare che FilesTableAdvanced sia completamente migrato a DataTable e quindi rimuoverlo.

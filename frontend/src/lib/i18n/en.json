@@ -28,7 +28,12 @@
     "resetAll": "Reset All to Defaults",
     "undo": "Undo",
     "reset": "Reset to Default",
-    "confirmDelete": "Confirm Delete"
+    "confirmDelete": "Confirm Delete",
+    "confirm": "Confirm",
+    "clear": "Clear",
+    "apply": "Apply",
+    "selectAll": "Select All",
+    "clearAll": "Clear All"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -39,12 +44,28 @@
     "nextPage": "Next page",
     "lastPage": "Last page",
     "noResults": "No results found",
+    "noData": "No data available",
     "page": "Page",
     "all": "All",
     "goToPage": "Go to page",
     "columns": "Columns",
     "showColumns": "Show/Hide Columns",
-    "selected": "selected"
+    "selected": "selected",
+    "perPage": "per page",
+    "items": "items",
+    "actions": "Actions",
+    "filter": "Filter",
+    "confirmBulkAction": "Are you sure you want to perform this action on"
+  },
+  "filter": {
+    "contains": "Contains",
+    "startsWith": "Starts with",
+    "endsWith": "Ends with",
+    "equals": "Equals",
+    "min": "Min",
+    "max": "Max",
+    "from": "From",
+    "to": "To"
   },
   "fileStatus": {
     "uploaded": "Uploaded",
@@ -379,6 +400,7 @@
     "fileName": "File Name",
     "fileSize": "Size",
     "uploadDate": "Uploaded",
+    "status": "Status",
     "actions": "Actions",
     "download": "Download",
     "deleteConfirm": "Are you sure you want to delete this file?",

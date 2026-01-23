@@ -12,7 +12,7 @@
     import ImageUploader from '$lib/components/ui/ImageUploader.svelte';
     import LazyImage from '$lib/components/ui/LazyImage.svelte';
     import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid } from 'lucide-svelte';
-    import FilesTableAdvanced from '$lib/components/files/FilesTableAdvanced.svelte';
+    import FilesTable from '$lib/components/files/FilesTable.svelte';
 
     type Tab = 'static' | 'brim';
 
@@ -36,6 +36,7 @@
 
     // LocalStorage keys
     const STORAGE_KEY_VIEW_MODE = 'filesPage_viewMode';
+    const STORAGE_KEY_ACTIVE_TAB = 'filesPage_activeTab';
 
     // Load view mode from localStorage (default: list/table)
     function loadViewMode(): 'grid' | 'list' {
@@ -57,6 +58,26 @@
         }
     }
 
+    // Load active tab from localStorage (default: static)
+    function loadActiveTab(): Tab {
+        if (typeof window === 'undefined') return 'static';
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY_ACTIVE_TAB);
+            return stored === 'brim' ? 'brim' : 'static';
+        } catch {
+            return 'static';
+        }
+    }
+
+    function saveActiveTab(tab: Tab): void {
+        if (typeof window === 'undefined') return;
+        try {
+            localStorage.setItem(STORAGE_KEY_ACTIVE_TAB, tab);
+        } catch {
+            // Ignore storage errors
+        }
+    }
+
     let activeTab: Tab = 'static';
     let staticFiles: UploadedFile[] = [];
     let brimFiles: BrimFile[] = [];
@@ -69,6 +90,7 @@
 
     onMount(async () => {
         viewMode = loadViewMode();
+        activeTab = loadActiveTab();
         await loadFiles();
     });
 
@@ -156,6 +178,7 @@
 
     function switchTab(tab: Tab) {
         activeTab = tab;
+        saveActiveTab(tab);
         loadFiles();
     }
 </script>
@@ -299,12 +322,11 @@
                     {/each}
                 </div>
             {:else}
-                <!-- List View with TanStack Table -->
-                <FilesTableAdvanced
+                <!-- List View with New DataTable -->
+                <FilesTable
                     files={staticFiles}
                     type="static"
                     onDelete={(id) => deleteFile(id, false)}
-                    storageKey="filesPage"
                 />
             {/if}
         {:else}
@@ -315,12 +337,11 @@
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else}
-                <!-- BRIM Table with TanStack Table -->
-                <FilesTableAdvanced
+                <!-- BRIM Table with New DataTable -->
+                <FilesTable
                     files={brimFiles}
                     type="brim"
                     onDelete={(id) => deleteFile(id, true)}
-                    storageKey="filesPage"
                 />
             {/if}
         {/if}

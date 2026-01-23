@@ -30,18 +30,21 @@
         {id: 'appearance', icon: Palette, labelKey: 'settings.categoryAppearance'},
     ];
 
-    // Default values
-    const DEFAULTS = {
+    // Hardcoded fallback defaults (used only if global settings fail to load)
+    const FALLBACK_DEFAULTS = {
         language: 'en',
         default_currency: 'EUR',
         theme: 'auto' as 'light' | 'dark' | 'auto'
     };
 
-    // Original values (from API)
-    let originalValues = {...DEFAULTS};
+    // Global defaults (loaded from server's global settings)
+    let globalDefaults = {...FALLBACK_DEFAULTS};
+
+    // Original values (from API - user's current settings)
+    let originalValues = {...FALLBACK_DEFAULTS};
 
     // Edited values
-    let editedValues = {...DEFAULTS};
+    let editedValues = {...FALLBACK_DEFAULTS};
 
     let isLoading = true;
     let isSaving = false;
@@ -62,8 +65,36 @@
 
     onMount(async () => {
         debug.log('PreferencesTab', 'onMount');
-        await Promise.all([loadSettings(), loadCurrencies()]);
+        await Promise.all([loadGlobalDefaults(), loadSettings(), loadCurrencies()]);
     });
+
+    async function loadGlobalDefaults() {
+        debug.log('PreferencesTab', 'loadGlobalDefaults');
+        try {
+            // API returns { settings: [{ key: "default_language", value: "en" }, ...] }
+            const response = await api.get<{
+                settings: Array<{ key: string; value: string }>;
+            }>('/settings/global');
+
+            debug.log('PreferencesTab', 'loadGlobalDefaults response', response);
+
+            // Convert array to object for easy access
+            const settingsMap: Record<string, string> = {};
+            for (const setting of response.settings) {
+                settingsMap[setting.key] = setting.value;
+            }
+
+            globalDefaults = {
+                language: settingsMap['default_language'] || FALLBACK_DEFAULTS.language,
+                default_currency: settingsMap['default_currency'] || FALLBACK_DEFAULTS.default_currency,
+                theme: (settingsMap['default_theme'] as 'light' | 'dark' | 'auto') || FALLBACK_DEFAULTS.theme
+            };
+            debug.log('PreferencesTab', 'globalDefaults set to', globalDefaults);
+        } catch (e) {
+            debug.error('PreferencesTab', 'loadGlobalDefaults failed, using fallback', e);
+            // Keep FALLBACK_DEFAULTS if global settings can't be loaded
+        }
+    }
 
     async function loadSettings() {
         debug.log('PreferencesTab', 'loadSettings');
@@ -119,10 +150,10 @@
     $: currencyModified = editedValues.default_currency !== originalValues.default_currency;
     $: themeModified = editedValues.theme !== originalValues.theme;
 
-    // Check if a field is non-default (reactive computed)
-    $: languageNonDefault = originalValues.language !== DEFAULTS.language;
-    $: currencyNonDefault = originalValues.default_currency !== DEFAULTS.default_currency;
-    $: themeNonDefault = originalValues.theme !== DEFAULTS.theme;
+    // Check if a field is non-default (compared to global defaults)
+    $: languageNonDefault = originalValues.language !== globalDefaults.language;
+    $: currencyNonDefault = originalValues.default_currency !== globalDefaults.default_currency;
+    $: themeNonDefault = originalValues.theme !== globalDefaults.theme;
 
     // Check if any field is modified
     $: hasChanges = languageModified || currencyModified || themeModified;
@@ -182,7 +213,7 @@
     }
 
     function resetField(field: keyof typeof editedValues) {
-        editedValues = {...editedValues, [field]: DEFAULTS[field]};
+        editedValues = {...editedValues, [field]: globalDefaults[field]};
     }
 
     // Bulk actions
@@ -238,7 +269,7 @@
     }
 
     function resetAll() {
-        editedValues = {...DEFAULTS};
+        editedValues = {...globalDefaults};
     }
 </script>
 

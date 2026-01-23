@@ -86,8 +86,12 @@
 			return columns;
 		},
 		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: enableSorting ? getSortedRowModel() : undefined,
-		getPaginationRowModel: enablePagination ? getPaginationRowModel() : undefined,
+		get getSortedRowModel() {
+			return enableSorting ? getSortedRowModel() : undefined;
+		},
+		get getPaginationRowModel() {
+			return enablePagination ? getPaginationRowModel() : undefined;
+		},
 		onSortingChange: (updater) => {
 			sorting = typeof updater === 'function' ? updater(sorting) : updater;
 		},

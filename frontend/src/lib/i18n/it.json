@@ -28,7 +28,12 @@
     "resetAll": "Ripristina Tutto",
     "undo": "Annulla",
     "reset": "Ripristina",
-    "confirmDelete": "Conferma Eliminazione"
+    "confirmDelete": "Conferma Eliminazione",
+    "confirm": "Conferma",
+    "clear": "Pulisci",
+    "apply": "Applica",
+    "selectAll": "Seleziona Tutti",
+    "clearAll": "Deseleziona Tutti"
   },
   "table": {
     "rowsPerPage": "Righe per pagina",
@@ -39,12 +44,28 @@
     "nextPage": "Pagina successiva",
     "lastPage": "Ultima pagina",
     "noResults": "Nessun risultato trovato",
+    "noData": "Nessun dato disponibile",
     "page": "Pagina",
     "all": "Tutti",
     "goToPage": "Vai alla pagina",
     "columns": "Colonne",
     "showColumns": "Mostra/Nascondi Colonne",
-    "selected": "selezionati"
+    "selected": "selezionati",
+    "perPage": "per pagina",
+    "items": "elementi",
+    "actions": "Azioni",
+    "filter": "Filtra",
+    "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su"
+  },
+  "filter": {
+    "contains": "Contiene",
+    "startsWith": "Inizia con",
+    "endsWith": "Finisce con",
+    "equals": "Uguale a",
+    "min": "Min",
+    "max": "Max",
+    "from": "Da",
+    "to": "A"
   },
   "fileStatus": {
     "uploaded": "Caricato",
@@ -379,6 +400,7 @@
     "fileName": "Nome File",
     "fileSize": "Dimensione",
     "uploadDate": "Caricato",
+    "status": "Stato",
     "actions": "Azioni",
     "download": "Scarica",
     "deleteConfirm": "Sei sicuro di voler eliminare questo file?",
