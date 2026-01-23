@@ -202,6 +202,14 @@
 					if (filterValue.min !== undefined && num < filterValue.min) return false;
 					if (filterValue.max !== undefined && num > filterValue.max) return false;
 					return true;
+				} else if (filterValue.type === 'size') {
+					// Size filter - rawValue should be bytes (from SizeCell)
+					const bytes = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as { type: string }).type === 'size'
+						? (rawValue as unknown as { bytes: number }).bytes
+						: Number(rawValue);
+					if (filterValue.minBytes !== undefined && bytes < filterValue.minBytes) return false;
+					if (filterValue.maxBytes !== undefined && bytes > filterValue.maxBytes) return false;
+					return true;
 				} else if (filterValue.type === 'date') {
 					const dateStr = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as { type: string }).type === 'date'
 						? String((rawValue as unknown as { value: Date | string }).value)
@@ -291,6 +299,43 @@
 			case 'link': return cell.text;
 			default: return String(cell);
 		}
+	}
+
+	// Calculate min/max values for a column (used for number/size filters)
+	function getColumnMinMax(column: ColumnDef<T>): { min: number; max: number } {
+		let min = Infinity;
+		let max = -Infinity;
+
+		for (const row of data) {
+			const getValue = column.getValue ?? column.cell;
+			const cellValue = getValue(row);
+			let numValue: number;
+
+			if (typeof cellValue === 'object' && cellValue !== null && 'type' in cellValue) {
+				const typed = cellValue as unknown as { type: string; bytes?: number };
+				if (typed.type === 'size' && typeof typed.bytes === 'number') {
+					numValue = typed.bytes;
+				} else {
+					numValue = Number(extractRawValue(cellValue as CellContent));
+				}
+			} else {
+				numValue = Number(cellValue);
+			}
+
+			if (!isNaN(numValue) && isFinite(numValue)) {
+				min = Math.min(min, numValue);
+				max = Math.max(max, numValue);
+			}
+		}
+
+		// If no valid values, use sensible defaults
+		if (min === Infinity) min = 0;
+		if (max === -Infinity) max = 100;
+
+		// Ensure min < max
+		if (min >= max) max = min + 1;
+
+		return { min, max };
 	}
 
 	function formatBytes(bytes: number): string {
@@ -475,8 +520,8 @@
 	function handleResize(event: MouseEvent) {
 		if (!resizing) return;
 		const col = columns.find(c => c.id === resizing!.columnId);
-		const minWidth = col?.minWidth ?? 60;
-		const maxWidth = col?.maxWidth ?? 500;
+		const minWidth = col?.minWidth ?? 50;
+		const maxWidth = col?.maxWidth ?? 600;
 		const diff = event.clientX - resizing.startX;
 		const newWidth = Math.min(maxWidth, Math.max(minWidth, resizing.startWidth + diff));
 		columnWidths = { ...columnWidths, [resizing.columnId]: newWidth };
@@ -612,9 +657,12 @@
 
 								<!-- Filter popover -->
 								{#if openFilterColumnId === column.id}
+									{@const minMax = (column.type === 'number' || column.type === 'size') ? getColumnMinMax(column) : { min: 0, max: 100 }}
 									<DataTableColumnFilter
 										type={column.type}
 										enumOptions={column.enumOptions}
+										numberMin={minMax.min}
+										numberMax={minMax.max}
 										initialValue={columnFilters[column.id]}
 										onApply={(filter) => applyColumnFilter(column.id, filter)}
 										onClose={() => openFilterColumnId = null}
@@ -833,12 +881,14 @@
 	tbody tr.selected { background: #eff6ff; }
 	:global(.dark) tbody tr.selected { background: #1e3a5f; }
 
-	td { padding: 0.625rem 0.5rem; font-size: 0.875rem; color: #475569; border-bottom: 1px solid #f1f5f9; overflow: hidden; text-overflow: ellipsis; }
+	td { padding: 0.625rem 0.5rem; font-size: 0.875rem; color: #475569; border-bottom: 1px solid #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; }
 	:global(.dark) td { color: #e2e8f0; border-bottom-color: #1e293b; }
 
+	.td-data { word-break: break-word; }
+
 	.td-fixed { position: sticky; z-index: 5; background: inherit; }
-	.td-select { left: 0; text-align: center; }
-	.td-actions { right: 0; }
+	.td-select { left: 0; text-align: center; max-width: none; }
+	.td-actions { right: 0; max-width: none; white-space: normal; }
 
 	.td-empty, .td-loading { text-align: center; padding: 3rem 2rem; color: #94a3b8; background: white; height: 150px; vertical-align: middle; }
 	:global(.dark) .td-empty, :global(.dark) .td-loading { background: #0f172a; }

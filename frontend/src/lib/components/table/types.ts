@@ -85,8 +85,9 @@ export type CellContent =
 
 /**
  * Column data type - determines filter UI and sorting behavior
+ * - 'size' is special for byte sizes with logarithmic slider
  */
-export type ColumnType = 'text' | 'number' | 'date' | 'enum' | 'custom';
+export type ColumnType = 'text' | 'number' | 'date' | 'enum' | 'size' | 'custom';
 
 /**
  * Enum option for enum-type columns
@@ -214,7 +215,7 @@ export interface BulkAction<T> {
 /**
  * Filter value union type
  */
-export type FilterValue = TextFilter | NumberFilter | DateFilter | EnumFilter;
+export type FilterValue = TextFilter | NumberFilter | DateFilter | EnumFilter | SizeFilter;
 
 /**
  * Active filter state for a column
@@ -246,6 +247,12 @@ export interface DateFilter {
 export interface EnumFilter {
 	type: 'enum';
 	selected: string[];
+}
+
+export interface SizeFilter {
+	type: 'size';
+	minBytes?: number;
+	maxBytes?: number;
 }
 
 // ============ DataTable Props ============

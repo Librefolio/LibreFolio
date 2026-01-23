@@ -136,7 +136,7 @@
 					type: 'size',
 					bytes: getFileSize(row),
 				}),
-				type: 'number',
+				type: 'size',
 				width: 100,
 				getValue: (row) => getFileSize(row),
 			},
