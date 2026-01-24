@@ -285,24 +285,27 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 
 **Stima originale**: 3-6 giorni | **Effettivo**: ~4 giorni
 
-#### 2.5 BRIM Multi-User Support Plan 🔄 **IN PROGRESS (23-01-2026)**
+#### 2.5 BRIM Multi-User Support Plan ✅ **BACKEND DONE (24-01-2026)**
 **File Piano**: [`../plan-brim-multiuser-implementation.md`](../plan-brim-multiuser-implementation.md)  
 **File Analisi**: [`../analysis-brim-multiuser.md`](../analysis-brim-multiuser.md)
 
 **Obiettivo**: Rendere il sistema BRIM compatibile con multi-utente e multi-broker.
 
-**Modifiche Backend**:
-- `broker_id` obbligatorio all'upload (file associato al broker)
-- `uploaded_by_user_id` per tracciare chi ha caricato
-- Filtri per broker accessibili all'utente
-- Caching risultato parsing nel metadata JSON
-- Nuovo endpoint `GET /files/{id}/last-parse`
+**Backend ✅ Completato**:
+- [x] `broker_id` obbligatorio all'upload (file associato al broker)
+- [x] `uploaded_by_user_id` per tracciare chi ha caricato
+- [x] Filtri per broker accessibili all'utente
+- [x] Caching risultato parsing nel metadata JSON
+- [x] Nuovo endpoint `GET /files/{id}/last-parse`
+- [x] Verifica permessi EDITOR+ per upload/parse/delete
+- [x] Sottocartelle broker per organizzazione file
+- [x] 22 test API BRIM passati
 
-**Modifiche Frontend**:
-- Filtro multi-broker nella pagina Files
-- Colonna "Broker" con link alla pagina broker
-- Upload con selezione broker (se non in pagina broker)
-- Tab/sezione files nella pagina del singolo broker
+**Frontend** (TODO - Fase 4+):
+- [ ] Filtro multi-broker nella pagina Files
+- [ ] Colonna "Broker" con link alla pagina broker
+- [ ] Upload con selezione broker (se non in pagina broker)
+- [ ] Tab/sezione files nella pagina del singolo broker
 
 **Storage Structure**:
 ```
@@ -316,7 +319,7 @@ broker_reports/
     └── broker_1/
 ```
 
-**Stima**: 8-13h totali (5-8h backend + 3-5h frontend)
+**Stima backend**: 5-8h | **Effettivo backend**: ~6h
 
 #### 3. Image Crop Plan
 **File**: [`../plan-image-crop.md`](../plan-image-crop.md)
