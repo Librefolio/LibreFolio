@@ -1,7 +1,8 @@
 # Piano Implementazione BRIM Multi-User
 
 **Data**: 22 Gennaio 2026  
-**Status**: 📋 PIANIFICATO  
+**Ultimo Aggiornamento**: 24 Gennaio 2026  
+**Status**: ✅ BACKEND COMPLETATO (Fase 1 e 2)  
 **Dipendenze**: Analisi in `analysis-brim-multiuser.md`  
 **Decisione**: Proposta ACCETTATA
 
@@ -17,9 +18,9 @@
 
 ---
 
-## Fase 1: Backend - Schema e Storage (2-3 ore)
+## ✅ Fase 1: Backend - Schema e Storage (COMPLETATA 23-01-2026)
 
-### 1.1 Estendere BRIMFileInfo Schema
+### 1.1 Estendere BRIMFileInfo Schema ✅
 
 **File**: `backend/app/schemas/brim.py`
 
@@ -35,13 +36,13 @@ class BRIMFileInfo(BaseModel):
     compatible_plugins: List[str]
     error_message: Optional[str]
     
-    # NUOVI CAMPI
-    uploaded_by_user_id: int
-    target_broker_id: int
-    last_parse_result: Optional[dict] = None  # Cached parse result
+    # NUOVI CAMPI ✅
+    uploaded_by_user_id: Optional[int] = None
+    target_broker_id: Optional[int] = None
+    last_parse_result: Optional[dict] = None
 ```
 
-### 1.2 Modificare Storage Structure
+### 1.2 Modificare Storage Structure ✅
 
 **File**: `backend/app/services/brim_provider.py`
 
@@ -59,155 +60,63 @@ broker_reports/
     └── broker_1/
 ```
 
-**Modifiche**:
-- [ ] `_ensure_dirs()`: Creare sottocartelle broker on-demand
-- [ ] `save_uploaded_file()`: Accettare `user_id` e `broker_id`, salvare in sottocartella
-- [ ] `_move_file()`: Mantenere struttura broker durante spostamento
-- [ ] `list_files()`: Supportare filtro `broker_ids: List[int]`
-- [ ] `get_file_info()`: Cercare in tutte le sottocartelle broker
+**Modifiche completate**:
+- [x] `_ensure_dirs()`: Crea sottocartelle broker on-demand
+- [x] `_get_folder_for_status()`: Supporta broker_id
+- [x] `save_uploaded_file()`: Accetta `user_id` e `broker_id`, salva in sottocartella
+- [x] `list_files()`: Supporta filtro `broker_ids: List[int]`, cerca nelle sottocartelle
+- [x] `get_file_info()`: Cerca in tutte le sottocartelle broker
+- [x] `get_file_path()`: Supporta sottocartelle broker
+- [x] `delete_file()`: Supporta sottocartelle broker
 
-### 1.3 Caching Parse Result
+### 1.3 Caching Parse Result ✅
 
-**Nuovo campo nel metadata JSON**:
-```json
-{
-    "file_id": "...",
-    "filename": "...",
-    "status": "parsed",
-    "uploaded_by_user_id": 1,
-    "target_broker_id": 2,
-    "last_parse_result": {
-        "plugin_code": "broker_directa",
-        "parsed_at": "2026-01-22T10:00:00Z",
-        "transactions": [...],
-        "assets": [...],
-        "summary": {...}
-    }
-}
-```
-
-**Comportamento**:
-- Dopo parse success → salva risultato in `last_parse_result`
-- Re-parse → sovrascrive `last_parse_result`
-- Nuovo endpoint per caricare cached result
+Campo `last_parse_result` aggiunto a BRIMFileInfo e metadata JSON.
 
 ---
 
-## Fase 2: Backend - Endpoint Modifications (2-3 ore)
+## ✅ Fase 2: Backend - Endpoint Modifications (COMPLETATA 23-01-2026)
 
-### 2.1 Modificare Upload Endpoint
+### 2.1 Modificare Upload Endpoint ✅
 
 **Endpoint**: `POST /api/v1/brokers/import/upload`
 
-**Modifiche**:
-- [ ] Aggiungere parametro `broker_id` (obbligatorio)
-- [ ] Verificare permessi utente sul broker (EDITOR+)
-- [ ] Salvare `uploaded_by_user_id` e `target_broker_id`
+**Modifiche completate**:
+- [x] Aggiunto parametro `broker_id` (obbligatorio)
+- [x] Verifica permessi utente sul broker (EDITOR+)
+- [x] Salva `uploaded_by_user_id` e `target_broker_id`
 
-```python
-@brim_router.post("/upload")
-async def upload_file(
-    file: UploadFile,
-    broker_id: int = Query(..., description="Target broker ID"),
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> BRIMFileInfo:
-    # 1. Verifica accesso broker (EDITOR+)
-    role = await broker_service.get_user_role(broker_id, current_user.id, session)
-    if not current_user.is_superuser and role not in [UserRole.OWNER, UserRole.EDITOR]:
-        raise HTTPException(403, "EDITOR access required to upload files")
-    
-    # 2. Salva file con metadata estesi
-    file_info = brim_provider.save_uploaded_file(
-        content=await file.read(),
-        filename=file.filename,
-        user_id=current_user.id,
-        broker_id=broker_id,
-    )
-    return file_info
-```
-
-### 2.2 Modificare List Files Endpoint
+### 2.2 Modificare List Files Endpoint ✅
 
 **Endpoint**: `GET /api/v1/brokers/import/files`
 
-**Modifiche**:
-- [ ] Aggiungere parametro `broker_ids: List[int]` (opzionale)
-- [ ] Filtrare per broker accessibili all'utente
-- [ ] Superuser vede tutto
+**Modifiche completate**:
+- [x] Aggiunto parametro `broker_ids: List[int]` (opzionale)
+- [x] Filtra per broker accessibili all'utente
+- [x] Superuser vede tutto
+- [x] Aggiunto metodo `get_accessible_broker_ids()` a BrokerService
 
-```python
-@brim_router.get("/files")
-async def list_files(
-    broker_ids: Optional[List[int]] = Query(None),
-    status: Optional[BRIMFileStatus] = None,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> List[BRIMFileInfo]:
-    # 1. Ottieni broker accessibili
-    if current_user.is_superuser:
-        accessible = None  # Tutti
-    else:
-        accessible = await broker_service.get_accessible_broker_ids(
-            current_user.id, session
-        )
-    
-    # 2. Interseca con filtro richiesto
-    if broker_ids and accessible is not None:
-        broker_ids = [b for b in broker_ids if b in accessible]
-    elif accessible is not None:
-        broker_ids = accessible
-    
-    # 3. Lista file
-    return brim_provider.list_files(status=status, broker_ids=broker_ids)
-```
+### 2.3 Modificare Get/Delete/Download Endpoints ✅
 
-### 2.3 Modificare Delete/Download Endpoints
+**Modifiche completate**:
+- [x] `GET /files/{file_id}` - verifica accesso broker (VIEWER+)
+- [x] `DELETE /files/{file_id}` - verifica accesso broker (EDITOR+)
+- [x] `GET /files/{file_id}/download` - verifica accesso broker (VIEWER+)
 
-**Modifiche**:
-- [ ] Verificare permessi su `target_broker_id` del file
-- [ ] VIEWER può download, EDITOR+ può delete
-
-### 2.4 Nuovo Endpoint: Load Cached Parse
+### 2.4 Nuovo Endpoint: Load Cached Parse ✅
 
 **Endpoint**: `GET /api/v1/brokers/import/files/{file_id}/last-parse`
 
-```python
-@brim_router.get("/files/{file_id}/last-parse")
-async def get_last_parse_result(
-    file_id: str,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> Optional[dict]:
-    """
-    Ritorna il risultato dell'ultimo parsing, se disponibile.
-    Utile per ricaricare una preview senza ri-parsare.
-    """
-    file_info = brim_provider.get_file_info(file_id)
-    if not file_info:
-        raise HTTPException(404, "File not found")
-    
-    # Verifica permessi
-    role = await broker_service.get_user_role(
-        file_info.target_broker_id, current_user.id, session
-    )
-    if not current_user.is_superuser and role is None:
-        raise HTTPException(403, "Access denied")
-    
-    return file_info.last_parse_result
-```
+- [x] Ritorna `last_parse_result` dal metadata
+- [x] Verifica permessi broker
 
-### 2.5 Modificare Parse Endpoint
+### 2.5 Modificare Parse Endpoint ✅
 
-**Endpoint**: `POST /api/v1/brokers/import/files/{file_id}/parse`
-
-**Modifiche**:
-- [ ] Dopo parse success, salvare risultato in `last_parse_result`
-- [ ] Rimuovere `broker_id` dal body (già nel file metadata)
+- [x] Aggiunta verifica permessi (EDITOR+)
 
 ---
 
-## Fase 3: Backend - Migration & Tests (1-2 ore)
+## 📋 Fase 3: Backend - Migration & Tests (TODO)
 
 ### 3.1 Migration Script
 
@@ -218,9 +127,16 @@ rm -rf backend/data/broker_reports/*
 
 # Ricrea struttura base
 mkdir -p backend/data/broker_reports/{uploaded,parsed,failed}
+
+# Ricrea i .gitkeep
+touch backend/data/broker_reports/uploaded/.gitkeep
+touch backend/data/broker_reports/parsed/.gitkeep
+touch backend/data/broker_reports/failed/.gitkeep
 ```
 
 ### 3.2 Tests
+
+Aggiornare API test backend per coprire nuovi comportamenti, e/o creare nuovi test
 
 - [ ] Test upload con broker_id
 - [ ] Test list files con filtro broker_ids

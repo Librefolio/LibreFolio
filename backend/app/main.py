@@ -3,6 +3,7 @@ LibreFolio FastAPI application.
 Main entry point for the backend API.
 """
 
+import os
 import subprocess
 import sys
 from contextlib import asynccontextmanager
@@ -18,12 +19,13 @@ from backend.app.api.v1.router import router as api_v1_router
 from backend.app.config import get_settings, set_test_mode, is_test_mode, PROJECT_ROOT
 from backend.app.logging_config import configure_logging, get_logger
 
-# Check for --test flag in command line arguments
-# This must be done before any imports that might use settings
-if "--test" in sys.argv:
+# Check for test mode via environment variable ONLY
+# NOTE: Do NOT check sys.argv here - it causes issues when this module is imported
+# by other scripts (like test_runner). The --test flag is handled by dev.py which
+# sets LIBREFOLIO_TEST_MODE env var before starting uvicorn.
+if os.environ.get("LIBREFOLIO_TEST_MODE", "").lower() in ("1", "true", "yes"):
     set_test_mode(True)
-    print("[LibreFolio] 🧪 Test mode enabled (--test flag detected)")
-    sys.argv.remove("--test")  # Remove flag so uvicorn doesn't complain
+    print("[LibreFolio] 🧪 Test mode enabled (LIBREFOLIO_TEST_MODE env var)")
 
 # Get settings after test mode is set
 settings = get_settings()

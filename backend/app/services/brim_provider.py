@@ -49,14 +49,14 @@ from backend.app.schemas.brim import (
     BRIMDuplicateLevel,
     BRIMTXDuplicateCandidate,
     is_fake_asset_id,
-)
+    )
 from backend.app.schemas.brim import (
     BRIMFileInfo,
     BRIMFileStatus,
     BRIMPluginInfo,
     BRIMAssetMapping,
     BRIMExtractedAssetInfo,
-)
+    )
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.asset_source import AssetCRUDService
 from backend.app.services.provider_registry import BRIMProviderRegistry
@@ -238,7 +238,7 @@ class BRIMProvider(ABC):
             ";": first_line.count(";"),
             ",": first_line.count(","),
             "\t": first_line.count("\t"),
-        }
+            }
 
         # Return the one with most occurrences (minimum 1)
         best = max(separators, key=separators.get)
@@ -305,7 +305,7 @@ class BRIMProvider(ABC):
     @abstractmethod
     def parse(
         self, file_path: Path, broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, "BRIMExtractedAssetInfo"]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, "BRIMExtractedAssetInfo"]]:
         """
         Parse file and return transactions, warnings, and extracted asset info.
 
@@ -358,7 +358,7 @@ class BRIMProvider(ABC):
             description=self.description,
             supported_extensions=self.supported_extensions,
             icon_url=self.icon_url,
-        )
+            )
 
 
 # =============================================================================
@@ -369,44 +369,71 @@ class BRIMProvider(ABC):
 BROKER_REPORTS_DIR = PROJECT_ROOT / "backend" / "data" / "broker_reports"
 
 
-def _ensure_dirs() -> None:
-    """Create storage directories if they don't exist."""
+def _ensure_dirs(broker_id: Optional[int] = None) -> None:
+    """
+    Create storage directories if they don't exist.
+
+    Args:
+        broker_id: If provided, also create broker-specific subdirectories
+    """
     for status in BRIMFileStatus:
-        (BROKER_REPORTS_DIR / status.value).mkdir(parents=True, exist_ok=True)
+        base_dir = BROKER_REPORTS_DIR / status.value
+        base_dir.mkdir(parents=True, exist_ok=True)
+        if broker_id is not None:
+            (base_dir / f"broker_{broker_id}").mkdir(parents=True, exist_ok=True)
 
 
-def _get_folder_for_status(status: BRIMFileStatus) -> Path:
-    """Get the folder path for a given status."""
-    return BROKER_REPORTS_DIR / status.value
+def _get_folder_for_status(status: BRIMFileStatus, broker_id: Optional[int] = None) -> Path:
+    """
+    Get the folder path for a given status.
+
+    Args:
+        status: File status (uploaded, parsed, failed)
+        broker_id: If provided, return broker-specific subdirectory
+
+    Returns:
+        Path to the appropriate folder
+    """
+    base = BROKER_REPORTS_DIR / status.value
+    if broker_id is not None:
+        return base / f"broker_{broker_id}"
+    return base
 
 
-def save_uploaded_file(content: bytes, original_filename: str) -> BRIMFileInfo:
+def save_uploaded_file(
+    content: bytes,
+    original_filename: str,
+    user_id: Optional[int] = None,
+    broker_id: Optional[int] = None,
+    ) -> BRIMFileInfo:
     """
     Save an uploaded file to the 'uploaded' folder.
 
     Process:
     1. Generate a UUID for the file (security: never expose original filename in path)
     2. Determine file extension from original filename
-    3. Write file content to: uploaded/{uuid}.{ext}
+    3. Write file content to: uploaded/broker_{id}/{uuid}.{ext} (or uploaded/{uuid}.{ext} if no broker)
     4. Query BRIMProviderRegistry.get_compatible_plugins() to detect which plugins can parse
-    5. Create metadata JSON sidecar: uploaded/{uuid}.json
+    5. Create metadata JSON sidecar: uploaded/broker_{id}/{uuid}.json
     6. Return BRIMFileInfo with all metadata
 
     Args:
         content: Raw file bytes from upload
         original_filename: Original filename (e.g., "report_2025.csv")
+        user_id: ID of user uploading the file (optional, for tracking)
+        broker_id: ID of target broker (optional, creates broker-specific folder)
 
     Returns:
         BRIMFileInfo with file_id, compatible plugins, etc.
     """
-    _ensure_dirs()
+    _ensure_dirs(broker_id)
 
     # Generate UUID and determine extension
     file_id = str(uuid.uuid4())
     ext = Path(original_filename).suffix.lower() or ".dat"
 
-    # Write file to uploaded folder
-    uploaded_dir = BROKER_REPORTS_DIR / "uploaded"
+    # Write file to uploaded folder (broker-specific if broker_id provided)
+    uploaded_dir = _get_folder_for_status(BRIMFileStatus.UPLOADED, broker_id)
     file_path = uploaded_dir / f"{file_id}{ext}"
     file_path.write_bytes(content)
 
@@ -425,7 +452,11 @@ def save_uploaded_file(content: bytes, original_filename: str) -> BRIMFileInfo:
         "processed_at": None,
         "compatible_plugins": compatible_plugins,
         "error_message": None,
-    }
+        # Multi-user fields
+        "uploaded_by_user_id": user_id,
+        "target_broker_id": broker_id,
+        "last_parse_result": None,
+        }
 
     # Write metadata JSON
     meta_path = uploaded_dir / f"{file_id}.json"
@@ -437,7 +468,9 @@ def save_uploaded_file(content: bytes, original_filename: str) -> BRIMFileInfo:
         original_filename=original_filename,
         size_bytes=len(content),
         compatible_plugins=compatible_plugins,
-    )
+        user_id=user_id,
+        broker_id=broker_id,
+        )
 
     return BRIMFileInfo(
         file_id=file_id,
@@ -446,60 +479,85 @@ def save_uploaded_file(content: bytes, original_filename: str) -> BRIMFileInfo:
         status=BRIMFileStatus.UPLOADED,
         uploaded_at=now,
         compatible_plugins=compatible_plugins,
-    )
+        uploaded_by_user_id=user_id,
+        target_broker_id=broker_id,
+        )
 
 
-def list_files(status: Optional[BRIMFileStatus] = None) -> List[BRIMFileInfo]:
+def list_files(
+    status: Optional[BRIMFileStatus] = None,
+    broker_ids: Optional[List[int]] = None,
+    ) -> List[BRIMFileInfo]:
     """
-    List all files, optionally filtered by status.
+    List all files, optionally filtered by status and/or broker_ids.
 
     Process:
     1. Determine which folders to scan (one folder per status, or all if status=None)
-    2. For each folder, glob all *.json metadata files
-    3. Parse each JSON into BRIMFileInfo
-    4. Return sorted list (most recent first by uploaded_at)
+    2. For each folder, also scan broker-specific subdirectories
+    3. For each *.json metadata file found, parse into BRIMFileInfo
+    4. Filter by broker_ids if specified
+    5. Return sorted list (most recent first by uploaded_at)
 
     Args:
         status: Optional filter (UPLOADED, IMPORTED, FAILED)
+        broker_ids: Optional list of broker IDs to filter by
 
     Returns:
         List of BRIMFileInfo objects, sorted by uploaded_at (newest first)
     """
     _ensure_dirs()
 
-    # Determine folders to scan
+    # Determine status folders to scan
     if status:
-        folders = [BROKER_REPORTS_DIR / status.value]
+        status_folders = [BROKER_REPORTS_DIR / status.value]
     else:
-        folders = [BROKER_REPORTS_DIR / s.value for s in BRIMFileStatus]
+        status_folders = [BROKER_REPORTS_DIR / s.value for s in BRIMFileStatus]
 
     files = []
-    for folder in folders:
+
+    def _parse_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
+        """Parse a metadata JSON file into BRIMFileInfo."""
+        try:
+            metadata = json.loads(meta_path.read_text())
+            return BRIMFileInfo(
+                file_id=metadata["file_id"],
+                filename=metadata["filename"],
+                size_bytes=metadata["size_bytes"],
+                status=BRIMFileStatus(metadata["status"]),
+                uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
+                processed_at=(datetime.fromisoformat(metadata["processed_at"]) if metadata.get("processed_at") else None),
+                compatible_plugins=metadata.get("compatible_plugins", []),
+                error_message=metadata.get("error_message"),
+                uploaded_by_user_id=metadata.get("uploaded_by_user_id"),
+                target_broker_id=metadata.get("target_broker_id"),
+                last_parse_result=metadata.get("last_parse_result"),
+                )
+        except Exception as e:
+            logger.warning("Error reading file metadata", meta_path=str(meta_path), error=str(e))
+            return None
+
+    for folder in status_folders:
         if not folder.exists():
             continue
+
+        # Scan root folder (files without broker_id, backward compatibility)
         for meta_path in folder.glob("*.json"):
-            try:
-                metadata = json.loads(meta_path.read_text())
-                files.append(
-                    BRIMFileInfo(
-                        file_id=metadata["file_id"],
-                        filename=metadata["filename"],
-                        size_bytes=metadata["size_bytes"],
-                        status=BRIMFileStatus(metadata["status"]),
-                        uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
-                        processed_at=(
-                            datetime.fromisoformat(metadata["processed_at"])
-                            if metadata.get("processed_at")
-                            else None
-                        ),
-                        compatible_plugins=metadata.get("compatible_plugins", []),
-                        error_message=metadata.get("error_message"),
-                    )
-                )
-            except Exception as e:
-                logger.warning(
-                    "Error reading file metadata", meta_path=str(meta_path), error=str(e)
-                )
+            file_info = _parse_metadata(meta_path)
+            if file_info:
+                files.append(file_info)
+
+        # Scan broker subdirectories
+        for broker_dir in folder.glob("broker_*"):
+            if broker_dir.is_dir():
+                for meta_path in broker_dir.glob("*.json"):
+                    file_info = _parse_metadata(meta_path)
+                    if file_info:
+                        files.append(file_info)
+
+    # Filter by broker_ids if specified
+    if broker_ids is not None:
+        # Include files with matching broker_id OR files without broker_id (legacy)
+        files = [f for f in files if f.target_broker_id in broker_ids or f.target_broker_id is None]
 
     # Sort by uploaded_at, newest first
     files.sort(key=lambda f: f.uploaded_at, reverse=True)
@@ -511,7 +569,7 @@ def get_file_info(file_id: str) -> Optional[BRIMFileInfo]:
     Get metadata for a specific file by its UUID.
 
     Process:
-    1. Search for {file_id}.json in all three folders (uploaded, imported, failed)
+    1. Search for {file_id}.json in all status folders and their broker subdirectories
     2. Return first match, or None if not found
 
     Args:
@@ -522,28 +580,46 @@ def get_file_info(file_id: str) -> Optional[BRIMFileInfo]:
     """
     _ensure_dirs()
 
-    for status in BRIMFileStatus:
-        meta_path = BROKER_REPORTS_DIR / status.value / f"{file_id}.json"
-        if meta_path.exists():
-            try:
-                metadata = json.loads(meta_path.read_text())
-                return BRIMFileInfo(
-                    file_id=metadata["file_id"],
-                    filename=metadata["filename"],
-                    size_bytes=metadata["size_bytes"],
-                    status=BRIMFileStatus(metadata["status"]),
-                    uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
-                    processed_at=(
-                        datetime.fromisoformat(metadata["processed_at"])
-                        if metadata.get("processed_at")
-                        else None
-                    ),
-                    compatible_plugins=metadata.get("compatible_plugins", []),
-                    error_message=metadata.get("error_message"),
+    def _try_parse_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
+        """Try to parse a metadata file."""
+        if not meta_path.exists():
+            return None
+        try:
+            metadata = json.loads(meta_path.read_text())
+            return BRIMFileInfo(
+                file_id=metadata["file_id"],
+                filename=metadata["filename"],
+                size_bytes=metadata["size_bytes"],
+                status=BRIMFileStatus(metadata["status"]),
+                uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
+                processed_at=(datetime.fromisoformat(metadata["processed_at"]) if metadata.get("processed_at") else None),
+                compatible_plugins=metadata.get("compatible_plugins", []),
+                error_message=metadata.get("error_message"),
+                uploaded_by_user_id=metadata.get("uploaded_by_user_id"),
+                target_broker_id=metadata.get("target_broker_id"),
+                last_parse_result=metadata.get("last_parse_result"),
                 )
-            except Exception as e:
-                logger.warning("Error reading file metadata", file_id=file_id, error=str(e))
-                return None
+        except Exception as e:
+            logger.warning("Error reading file metadata", file_id=file_id, error=str(e))
+            return None
+
+    for status in BRIMFileStatus:
+        status_folder = BROKER_REPORTS_DIR / status.value
+
+        # Try root folder first (backward compatibility)
+        meta_path = status_folder / f"{file_id}.json"
+        result = _try_parse_metadata(meta_path)
+        if result:
+            return result
+
+        # Try broker subdirectories
+        for broker_dir in status_folder.glob("broker_*"):
+            if broker_dir.is_dir():
+                meta_path = broker_dir / f"{file_id}.json"
+                result = _try_parse_metadata(meta_path)
+                if result:
+                    return result
+
     return None
 
 
@@ -554,7 +630,7 @@ def get_file_path(file_id: str) -> Optional[Path]:
     Process:
     1. Call get_file_info() to find the file and its current status
     2. Extract original extension from the stored metadata
-    3. Construct path: {status_folder}/{file_id}.{ext}
+    3. Construct path: {status_folder}/[broker_{id}/]{file_id}.{ext}
     4. Verify file exists, return Path or None
 
     Args:
@@ -570,12 +646,20 @@ def get_file_path(file_id: str) -> Optional[Path]:
     # Get extension from filename
     ext = Path(file_info.filename).suffix.lower() or ".dat"
 
-    # Construct path
-    folder = BROKER_REPORTS_DIR / file_info.status.value
+    # Construct path (broker-specific if target_broker_id is set)
+    folder = _get_folder_for_status(file_info.status, file_info.target_broker_id)
     file_path = folder / f"{file_id}{ext}"
 
     if file_path.exists():
         return file_path
+
+    # Fallback: try root folder (backward compatibility)
+    if file_info.target_broker_id is not None:
+        root_folder = _get_folder_for_status(file_info.status, None)
+        fallback_path = root_folder / f"{file_id}{ext}"
+        if fallback_path.exists():
+            return fallback_path
+
     return None
 
 
@@ -598,9 +682,9 @@ def delete_file(file_id: str) -> bool:
     if not file_info:
         return False
 
-    # Get extension and folder
+    # Get extension and folder (broker-specific if set)
     ext = Path(file_info.filename).suffix.lower() or ".dat"
-    folder = BROKER_REPORTS_DIR / file_info.status.value
+    folder = _get_folder_for_status(file_info.status, file_info.target_broker_id)
 
     # Delete data file
     file_path = folder / f"{file_id}{ext}"
@@ -659,7 +743,7 @@ def move_to_failed(file_id: str, error_message: str) -> bool:
 
 def _move_file(
     file_id: str, target_status: BRIMFileStatus, error_message: Optional[str] = None
-) -> bool:
+    ) -> bool:
     """
     Internal helper to move a file to a different status folder.
 
@@ -684,7 +768,7 @@ def _move_file(
             "Cannot move file: not in UPLOADED status",
             file_id=file_id,
             current_status=file_info.status.value,
-        )
+            )
         return False
 
     # Get extension
@@ -719,7 +803,7 @@ def _move_file(
         file_id=file_id,
         from_status=BRIMFileStatus.UPLOADED.value,
         to_status=target_status.value,
-    )
+        )
     return True
 
 
@@ -730,7 +814,7 @@ def _move_file(
 
 def parse_file(
     file_id: str, plugin_code: str, broker_id: int
-) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
     """
     Parse a file using the specified plugin (preview only, no DB persistence).
 
@@ -784,7 +868,7 @@ def parse_file(
     # Parse file
     logger.info(
         "Parsing file with plugin", file_id=file_id, plugin_code=plugin_code, broker_id=broker_id
-    )
+        )
 
     # Plugin returns (transactions, warnings, extracted_assets)
     transactions, warnings, extracted_assets = plugin.parse(file_path, broker_id)
@@ -796,7 +880,7 @@ def parse_file(
         transaction_count=len(transactions),
         warning_count=len(warnings),
         extracted_asset_count=len(extracted_assets),
-    )
+        )
 
     return transactions, warnings, extracted_assets
 
@@ -811,7 +895,7 @@ async def search_asset_candidates(
     extracted_symbol: Optional[str],
     extracted_isin: Optional[str],
     extracted_name: Optional[str],
-) -> Tuple[List, Optional[int]]:
+    ) -> Tuple[List, Optional[int]]:
     """
     Search for asset candidates in the database.
 
@@ -838,9 +922,7 @@ async def search_asset_candidates(
 
     # Priority 1: ISIN exact match (EXACT confidence)
     if extracted_isin:
-        results = await AssetCRUDService.list_assets(
-            filters=FAAinfoFiltersRequest(isin=extracted_isin), session=session
-        )
+        results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(isin=extracted_isin), session=session)
         for asset in results:
             candidates.append(
                 BRIMAssetCandidate(
@@ -849,14 +931,12 @@ async def search_asset_candidates(
                     isin=asset.identifier_isin,
                     name=asset.display_name,
                     match_confidence=BRIMMatchConfidence.EXACT,
+                    )
                 )
-            )
 
     # Priority 2: Symbol exact match (MEDIUM confidence)
     if extracted_symbol and not candidates:
-        results = await AssetCRUDService.list_assets(
-            filters=FAAinfoFiltersRequest(ticker=extracted_symbol), session=session
-        )
+        results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(ticker=extracted_symbol), session=session)
         for asset in results:
             candidates.append(
                 BRIMAssetCandidate(
@@ -865,20 +945,16 @@ async def search_asset_candidates(
                     isin=asset.identifier_isin,
                     name=asset.display_name,
                     match_confidence=BRIMMatchConfidence.MEDIUM,
+                    )
                 )
-            )
 
     # Priority 3: Name partial match (LOW confidence)
     if extracted_name and not candidates:
         # Try identifier partial match first
-        results = await AssetCRUDService.list_assets(
-            filters=FAAinfoFiltersRequest(identifier_contains=extracted_name), session=session
-        )
+        results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(identifier_contains=extracted_name), session=session)
         if not results:
             # Fall back to display_name search
-            results = await AssetCRUDService.list_assets(
-                filters=FAAinfoFiltersRequest(search=extracted_name), session=session
-            )
+            results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(search=extracted_name), session=session)
         for asset in results:
             candidates.append(
                 BRIMAssetCandidate(
@@ -887,8 +963,8 @@ async def search_asset_candidates(
                     isin=asset.identifier_isin,
                     name=asset.display_name,
                     match_confidence=BRIMMatchConfidence.LOW,
+                    )
                 )
-            )
 
     # Auto-select if exactly 1 candidate found
     auto_selected = candidates[0].asset_id if len(candidates) == 1 else None
@@ -906,7 +982,7 @@ async def detect_tx_duplicates(
     broker_id: int,
     session,
     asset_mappings: Optional[List[BRIMAssetMapping]] = None,
-) -> "BRIMDuplicateReport":
+    ) -> "BRIMDuplicateReport":
     """
     Detect potential duplicate transactions in the database.
 
@@ -970,7 +1046,7 @@ async def detect_tx_duplicates(
             Transaction.broker_id == broker_id,
             Transaction.type == tx.type,
             Transaction.date == tx.date,
-        ]
+            ]
 
         # If asset is resolved, filter by asset_id for more precise matching
         if asset_is_resolved and real_asset_id is not None:
@@ -1030,22 +1106,18 @@ async def detect_tx_duplicates(
                     tx_cash_currency=existing.currency,
                     tx_description=existing.description,
                     match_level=match_level,
+                    )
                 )
-            )
 
         if not matches:
             tx_unique_indices.append(idx)
         else:
             # Categorize by highest match level found
             # Priority: LIKELY_WITH_ASSET > LIKELY > POSSIBLE_WITH_ASSET > POSSIBLE
-            likely_with_asset = [
-                m for m in matches if m.match_level == BRIMDuplicateLevel.LIKELY_WITH_ASSET
-            ]
+            likely_with_asset = [m for m in matches if m.match_level == BRIMDuplicateLevel.LIKELY_WITH_ASSET]
             likely = [m for m in matches if m.match_level == BRIMDuplicateLevel.LIKELY]
 
-            candidate = BRIMTXDuplicateCandidate(
-                tx_row_index=idx, tx_parsed=tx, tx_existing_matches=matches
-            )
+            candidate = BRIMTXDuplicateCandidate(tx_row_index=idx, tx_parsed=tx, tx_existing_matches=matches)
 
             # If any LIKELY level match, put in likely_duplicates
             if likely_with_asset or likely:
@@ -1057,4 +1129,4 @@ async def detect_tx_duplicates(
         tx_unique_indices=tx_unique_indices,
         tx_possible_duplicates=tx_possible_duplicates,
         tx_likely_duplicates=tx_likely_duplicates,
-    )
+        )

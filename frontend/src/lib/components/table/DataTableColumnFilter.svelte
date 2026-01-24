@@ -156,14 +156,30 @@
 
 	// Update bytes from input change
 	function updateSizeMinFromInput() {
-		sizeMinBytes = Math.max(numberMin, Math.min(sizeMaxBytes, unitToBytes(sizeMinInputValue, sizeMinUnit)));
+		const newMinBytes = unitToBytes(sizeMinInputValue, sizeMinUnit);
+		// Clamp to valid range: [numberMin, sizeMaxBytes]
+		sizeMinBytes = Math.max(numberMin, Math.min(sizeMaxBytes, newMinBytes));
 		sliderMinPos = bytesToSliderPos(sizeMinBytes);
+		// Update displayed value if clamped
+		if (sizeMinBytes !== newMinBytes) {
+			const result = bytesToUnit(sizeMinBytes);
+			sizeMinInputValue = result.value;
+			sizeMinUnit = result.unit;
+		}
 		applyFilter();
 	}
 
 	function updateSizeMaxFromInput() {
-		sizeMaxBytes = Math.max(sizeMinBytes, Math.min(numberMax, unitToBytes(sizeMaxInputValue, sizeMaxUnit)));
+		const newMaxBytes = unitToBytes(sizeMaxInputValue, sizeMaxUnit);
+		// Clamp to valid range: [sizeMinBytes, numberMax]
+		sizeMaxBytes = Math.max(sizeMinBytes, Math.min(numberMax, newMaxBytes));
 		sliderMaxPos = bytesToSliderPos(sizeMaxBytes);
+		// Update displayed value if clamped
+		if (sizeMaxBytes !== newMaxBytes) {
+			const result = bytesToUnit(sizeMaxBytes);
+			sizeMaxInputValue = result.value;
+			sizeMaxUnit = result.unit;
+		}
 		applyFilter();
 	}
 
@@ -491,11 +507,11 @@
 
 	/* Dual range slider */
 	.size-slider-container { position: relative; height: 24px; margin-top: 0.5rem; }
-	.size-slider-track { position: absolute; top: 50%; left: 0; right: 0; height: 4px; background: #e2e8f0; border-radius: 2px; transform: translateY(-50%); }
+	.size-slider-track { position: absolute; top: 50%; left: 0; right: 0; height: 4px; background: #e2e8f0; border-radius: 2px; transform: translateY(-50%); overflow: visible; }
 	:global(.dark) .size-slider-track { background: #475569; }
 	.size-slider-range { position: absolute; top: 0; bottom: 0; background: #1a4031; border-radius: 2px; }
 	:global(.dark) .size-slider-range { background: #4ade80; }
-	.slider-tick { position: absolute; top: -2px; width: 1px; height: 8px; background: #cbd5e1; transform: translateX(-50%); }
+	.slider-tick { position: absolute; top: -4px; width: 2px; height: 12px; background: #94a3b8; transform: translateX(-50%); z-index: 1; border-radius: 1px; }
 	:global(.dark) .slider-tick { background: #64748b; }
 	.size-slider { position: absolute; top: 0; left: 0; width: 100%; height: 100%; -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none; }
 	.size-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #1a4031; border: 2px solid white; border-radius: 50%; cursor: pointer; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }

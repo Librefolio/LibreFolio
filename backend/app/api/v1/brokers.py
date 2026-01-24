@@ -30,7 +30,6 @@ from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import FileResponse
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -44,7 +43,7 @@ from backend.app.schemas.brim import (
     BRIMPluginInfo,
     BRIMParseRequest,
     BRIMParseResponse,
-)
+    )
 from backend.app.schemas.brokers import (
     BRCreateItem,
     BRReadItem,
@@ -60,7 +59,7 @@ from backend.app.schemas.brokers import (
     BRAccessUpdateRequest,
     BRAccessCreateResponse,
     BRAccessDeleteResponse,
-)
+    )
 from backend.app.services import brim_provider
 from backend.app.services.brim_provider import BRIMParseError
 from backend.app.services.brim_provider import search_asset_candidates, detect_tx_duplicates
@@ -84,7 +83,7 @@ async def create_brokers(
     items: List[BRCreateItem],
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-) -> BRBulkCreateResponse:
+    ) -> BRBulkCreateResponse:
     """
     Create multiple brokers.
 
@@ -127,7 +126,7 @@ async def list_brokers(
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-) -> List[BRReadItem]:
+    ) -> List[BRReadItem]:
     """
     List brokers accessible by the current user.
 
@@ -153,7 +152,7 @@ async def get_broker(
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-) -> BRReadItem:
+    ) -> BRReadItem:
     """
     Get a single broker by ID.
 
@@ -190,7 +189,7 @@ async def get_broker_summary(
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-) -> BRSummary:
+    ) -> BRSummary:
     """
     Get broker with full summary.
 
@@ -235,7 +234,7 @@ async def update_broker(
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-) -> BRBulkUpdateResponse:
+    ) -> BRBulkUpdateResponse:
     """
     Update a broker.
 
@@ -266,7 +265,7 @@ async def update_broker(
     service = BrokerService(session)
     response = await service.update_bulk(
         [item], [broker_id], user_id=user_id, as_user_id=as_user_id
-    )
+        )
 
     if not response.errors and response.success_count > 0:
         await session.commit()
@@ -291,7 +290,7 @@ async def delete_brokers(
     force: bool = Query(False, description="Force delete with transactions"),
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
     session: AsyncSession = Depends(get_session_generator),
-) -> BRBulkDeleteResponse:
+    ) -> BRBulkDeleteResponse:
     """
     Delete multiple brokers.
 
@@ -342,7 +341,7 @@ async def list_broker_access(
     broker_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-) -> BRAccessListResponse:
+    ) -> BRAccessListResponse:
     """
     List all users with access to a broker.
 
@@ -354,17 +353,17 @@ async def list_broker_access(
         broker_id=broker_id,
         user_id=current_user.id,
         is_superuser=current_user.is_superuser,
-    )
+        )
 
     if not accesses and not current_user.is_superuser:
         raise HTTPException(
             status_code=404, detail=f"Broker {broker_id} not found or access denied"
-        )
+            )
 
     return BRAccessListResponse(
         accesses=[BRAccessItem(**a) for a in accesses],
         total=len(accesses),
-    )
+        )
 
 
 @broker_router.post("/{broker_id}/access", response_model=BRAccessCreateResponse)
@@ -373,7 +372,7 @@ async def add_broker_access(
     request: BRAccessCreateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-) -> BRAccessCreateResponse:
+    ) -> BRAccessCreateResponse:
     """
     Add user access to a broker.
 
@@ -386,7 +385,7 @@ async def add_broker_access(
         role=request.role,
         current_user_id=current_user.id,
         is_superuser=current_user.is_superuser,
-    )
+        )
 
     if not success:
         # Distinguish between authorization errors and other errors
@@ -405,13 +404,13 @@ async def add_broker_access(
 
     logger.info(
         f"Added access for user {request.user_id} to broker {broker_id}", user_id=current_user.id
-    )
+        )
 
     return BRAccessCreateResponse(
         success=True,
         message=message,
         access=BRAccessItem(**new_access),
-    )
+        )
 
 
 @broker_router.patch("/{broker_id}/access/{target_user_id}", response_model=BRAccessCreateResponse)
@@ -421,7 +420,7 @@ async def update_broker_access(
     request: BRAccessUpdateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-) -> BRAccessCreateResponse:
+    ) -> BRAccessCreateResponse:
     """
     Update user access role.
 
@@ -435,7 +434,7 @@ async def update_broker_access(
         new_role=request.role,
         current_user_id=current_user.id,
         is_superuser=current_user.is_superuser,
-    )
+        )
 
     if not success:
         # Distinguish between authorization errors and other errors
@@ -454,13 +453,13 @@ async def update_broker_access(
 
     logger.info(
         f"Updated access for user {target_user_id} on broker {broker_id}", user_id=current_user.id
-    )
+        )
 
     return BRAccessCreateResponse(
         success=True,
         message=message,
         access=BRAccessItem(**updated_access),
-    )
+        )
 
 
 @broker_router.delete("/{broker_id}/access/{target_user_id}", response_model=BRAccessDeleteResponse)
@@ -469,7 +468,7 @@ async def remove_broker_access(
     target_user_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-) -> BRAccessDeleteResponse:
+    ) -> BRAccessDeleteResponse:
     """
     Remove user access from a broker.
 
@@ -483,7 +482,7 @@ async def remove_broker_access(
         target_user_id=target_user_id,
         current_user_id=current_user.id,
         is_superuser=current_user.is_superuser,
-    )
+        )
 
     if not success:
         # Distinguish between authorization errors and other errors
@@ -495,7 +494,7 @@ async def remove_broker_access(
 
     logger.info(
         f"Removed access for user {target_user_id} from broker {broker_id}", user_id=current_user.id
-    )
+        )
 
     return BRAccessDeleteResponse(success=True, message=message)
 
@@ -517,15 +516,30 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 @brim_router.post("/upload", response_model=BRIMFileInfo)
 async def upload_file(
     file: UploadFile = File(..., description="Broker report file to upload"),
-) -> BRIMFileInfo:
+    broker_id: int = Query(..., description="Target broker ID for this report"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+    ) -> BRIMFileInfo:
     """
     Upload a broker report file for future processing.
 
     The file is saved with a UUID-based name. Compatible plugins are
     auto-detected based on file extension and content.
 
+    Requires EDITOR or OWNER access on the target broker.
+
     Returns file metadata including compatible plugins.
     """
+    # Verify user has EDITOR+ access to the broker
+    broker_service = BrokerService(session)
+    role = await broker_service.get_user_role(broker_id, current_user.id)
+
+    if not current_user.is_superuser and role not in ["OWNER", "EDITOR"]:
+        raise HTTPException(
+            status_code=403,
+            detail="EDITOR or OWNER access required to upload files to this broker"
+            )
+
     # Read file content
     content = await file.read()
 
@@ -536,13 +550,18 @@ async def upload_file(
         raise HTTPException(
             status_code=413,
             detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)} MB",
-        )
+            )
 
     # Get original filename
     filename = file.filename or "unknown"
 
-    # Save file
-    file_info = brim_provider.save_uploaded_file(content, filename)
+    # Save file with user_id and broker_id
+    file_info = brim_provider.save_uploaded_file(
+        content,
+        filename,
+        user_id=current_user.id,
+        broker_id=broker_id,
+        )
 
     logger.info(
         "File uploaded",
@@ -550,7 +569,9 @@ async def upload_file(
         filename=filename,
         size_bytes=len(content),
         compatible_plugins=file_info.compatible_plugins,
-    )
+        user_id=current_user.id,
+        broker_id=broker_id,
+        )
 
     return file_info
 
@@ -559,51 +580,117 @@ async def upload_file(
 async def list_files(
     status: Optional[BRIMFileStatus] = Query(
         default=None, description="Filter by status: uploaded, imported, failed"
-    ),
-) -> List[BRIMFileInfo]:
+        ),
+    broker_ids: Optional[List[int]] = Query(
+        default=None, description="Filter by broker IDs (comma-separated)"
+        ),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+    ) -> List[BRIMFileInfo]:
     """
     List all uploaded broker report files.
 
-    Optionally filter by status. Results are sorted by upload time (newest first).
+    Optionally filter by status and/or broker IDs.
+    Non-superusers can only see files for brokers they have access to.
+    Results are sorted by upload time (newest first).
     """
-    return brim_provider.list_files(status)
+    # Determine accessible broker IDs
+    if current_user.is_superuser:
+        # Superuser can see all - use provided filter or all
+        accessible_broker_ids = broker_ids
+    else:
+        # Get brokers user has access to
+        broker_service = BrokerService(session)
+        user_broker_ids = await broker_service.get_accessible_broker_ids(current_user.id)
+
+        if broker_ids:
+            # Intersect requested with accessible
+            accessible_broker_ids = [b for b in broker_ids if b in user_broker_ids]
+        else:
+            # Use all accessible
+            accessible_broker_ids = user_broker_ids
+
+    return brim_provider.list_files(status=status, broker_ids=accessible_broker_ids)
 
 
 @brim_router.get("/files/{file_id}", response_model=BRIMFileInfo)
-async def get_file(file_id: str) -> BRIMFileInfo:
+async def get_file(
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+    ) -> BRIMFileInfo:
     """
     Get details for a specific file.
+
+    User must have access to the file's broker.
     """
     file_info = brim_provider.get_file_info(file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
+
+    # Check access if file has a broker
+    if file_info.target_broker_id and not current_user.is_superuser:
+        broker_service = BrokerService(session)
+        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
+        if role is None:
+            raise HTTPException(status_code=403, detail="Access denied")
+
     return file_info
 
 
 @brim_router.delete("/files/{file_id}")
-async def delete_file(file_id: str) -> dict:
+async def delete_file(
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+    ) -> dict:
     """
     Delete a file and its metadata.
+
+    Requires EDITOR or OWNER access on the file's broker.
     """
+    file_info = brim_provider.get_file_info(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Check access if file has a broker
+    if file_info.target_broker_id and not current_user.is_superuser:
+        broker_service = BrokerService(session)
+        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
+        if role not in ["OWNER", "EDITOR"]:
+            raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to delete files")
+
     deleted = brim_provider.delete_file(file_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="File not found")
 
-    logger.info("File deleted", file_id=file_id)
+    logger.info("File deleted", file_id=file_id, user_id=current_user.id)
     return {"success": True, "file_id": file_id}
 
 
 @brim_router.get("/files/{file_id}/download")
-async def download_file(file_id: str):
+async def download_file(
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+    ):
     """
     Download a file by its ID.
 
     Returns the file content with appropriate headers for download.
+    Any user with access to the broker can download files (VIEWER+).
     """
 
     file_info = brim_provider.get_file_info(file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
+
+    # Check access if file has a broker
+    if file_info.target_broker_id and not current_user.is_superuser:
+        broker_service = BrokerService(session)
+        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
+        if role is None:
+            raise HTTPException(status_code=403, detail="Access denied")
 
     file_path = brim_provider.get_file_path(file_id)
     if not file_path or not file_path.exists():
@@ -613,7 +700,33 @@ async def download_file(file_id: str):
         path=file_path,
         filename=file_info.filename,
         media_type="application/octet-stream"
-    )
+        )
+
+
+@brim_router.get("/files/{file_id}/last-parse")
+async def get_last_parse_result(
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+    ) -> Optional[dict]:
+    """
+    Get the cached result from the last successful parse.
+
+    Useful for reloading a preview without re-parsing the file.
+    Returns None if no parse result is cached.
+    """
+    file_info = brim_provider.get_file_info(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Check access if file has a broker
+    if file_info.target_broker_id and not current_user.is_superuser:
+        broker_service = BrokerService(session)
+        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
+        if role is None:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    return file_info.last_parse_result
 
 
 # =============================================================================
@@ -625,14 +738,17 @@ async def download_file(file_id: str):
 async def parse_file(
     file_id: str,
     request: BRIMParseRequest,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-) -> BRIMParseResponse:
+    ) -> BRIMParseResponse:
     """
     Parse a file and return transactions for preview.
 
     This is a preview operation - no data is persisted to the database.
     The user can review and modify the parsed transactions before
     sending them to POST /transactions endpoint.
+
+    Requires EDITOR or OWNER access on the file's broker.
 
     If plugin_code is 'auto' (default), the system will automatically
     detect the best plugin based on file content analysis.
@@ -646,6 +762,18 @@ async def parse_file(
     Note: Asset mapping and duplicate detection are done in CORE,
     not in the plugin. Plugins only parse the file format.
     """
+    # Get file info and check permissions
+    file_info = brim_provider.get_file_info(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Check access if file has a broker
+    if file_info.target_broker_id and not current_user.is_superuser:
+        broker_service = BrokerService(session)
+        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
+        if role not in ["OWNER", "EDITOR"]:
+            raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to parse files")
+
     # Determine plugin to use
     plugin_code = request.plugin_code
     if plugin_code == "auto":
@@ -659,7 +787,7 @@ async def parse_file(
             plugin_code = detected_plugin
             logger.info(
                 "Auto-detected plugin for file", file_id=file_id, detected_plugin=plugin_code
-            )
+                )
         else:
             # Fallback to generic CSV
             plugin_code = "broker_generic_csv"
@@ -669,7 +797,7 @@ async def parse_file(
         # 1. Parse file using plugin (plugin only reads file format)
         transactions, warnings, extracted_assets = brim_provider.parse_file(
             file_id=file_id, plugin_code=plugin_code, broker_id=request.broker_id
-        )
+            )
 
         # 2. Build asset mappings (CORE responsibility)
         # Search DB for candidates for each extracted asset
@@ -680,7 +808,7 @@ async def parse_file(
                 extracted_symbol=info.extracted_symbol,
                 extracted_isin=info.extracted_isin,
                 extracted_name=info.extracted_name,
-            )
+                )
             asset_mappings.append(
                 BRIMAssetMapping(
                     fake_asset_id=fake_id,
@@ -689,8 +817,8 @@ async def parse_file(
                     extracted_name=info.extracted_name,
                     candidates=candidates,
                     selected_asset_id=auto_selected,
+                    )
                 )
-            )
 
         # 3. Detect duplicates (CORE responsibility)
         # Query DB for existing transactions that match
@@ -700,7 +828,7 @@ async def parse_file(
             broker_id=request.broker_id,
             session=session,
             asset_mappings=asset_mappings,
-        )
+            )
 
         # Move file to parsed folder on success
         brim_provider.move_to_parsed(file_id)
@@ -714,7 +842,7 @@ async def parse_file(
             unique_tx_count=len(duplicates.tx_unique_indices),
             possible_duplicates=len(duplicates.tx_possible_duplicates),
             likely_duplicates=len(duplicates.tx_likely_duplicates),
-        )
+            )
 
         return BRIMParseResponse(
             file_id=file_id,
@@ -724,7 +852,7 @@ async def parse_file(
             asset_mappings=asset_mappings,
             duplicates=duplicates,
             warnings=warnings,
-        )
+            )
 
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")

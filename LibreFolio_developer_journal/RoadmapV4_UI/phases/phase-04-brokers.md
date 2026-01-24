@@ -254,31 +254,38 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 
 **Stima**: 4-8 giorni
 
-#### 2. Table Improvements Plan ✅ **APPROVATO**
+#### 2. Table Improvements Plan ✅ **COMPLETATO (23-01-2026)**
 **File**: [`../plan-table-improvements.md`](../plan-table-improvements.md)
 
 **Obiettivo**: Migliorare tabelle Files (Static + BRIM) con sorting, filtering, pagination, e **preview**.
 
-**Libreria scelta**: **TanStack Table** (motivazione: licenza MIT + features complete)
+**Libreria scelta**: **TanStack Table v8** (motivazione: licenza MIT + features complete)
 
 **Features implementate**:
 - ✅ **Preview API Backend**: 
   - Text: `GET /uploads/file/{id}?offset=0&window=1000`
   - Images: `GET /uploads/file/{id}?img_preview=400x400`
   - Error 400 per file incompatibili
-- ✅ **FilesTableAdvanced**: Componente con pagination, search, selection, bulk actions
-- ✅ **Adapter TanStack Table v8**: Custom adapter per Svelte 5
+- ✅ **DataTable Component Suite**: 
+  - `DataTable.svelte` - Componente principale generico (941 righe)
+  - `DataTablePagination.svelte` - Pagination sticky balloon
+  - `DataTableToolbar.svelte` - Bulk actions + column toggle + reorder
+  - `DataTableColumnFilter.svelte` - Filtri Excel-style per tipo colonna
+  - `ConfirmModal.svelte` - Modale conferma generica
+  - `types.ts` - Interfacce TypeScript
+- ✅ **Sorting**: Click header per ASC/DESC/none, icone freccia
+- ✅ **Filtri colonna**: Text, Enum, Number, Size (logaritmico), Date
+- ✅ **Column resize**: Drag con localStorage persistence
+- ✅ **Column visibility**: Toggle con Eye/EyeOff
+- ✅ **Column reorder**: Drag desktop, bottoni up/down mobile
+- ✅ **Row selection**: Checkbox, select all, bulk operations
+- ✅ **Pagination**: Sticky bottom, page sizes, infinite mode
+- ✅ **FileUploader**: Upload multiplo con validazione client-side
+- ✅ **Cleanup**: Rimossi FilesTableAdvanced e tanstack-table/DataTable obsoleti
 
-**Da implementare** (Fase 3.5-3.6):
-- [ ] Componentizzazione `DataTable.svelte` generico e riusabile
-- [ ] Sorting colonne con click header
-- [ ] Filtri colonna stile Excel (imbuto)
-- [ ] Colonne fisse (select/actions) con larghezza percentuale
-- [ ] Sistema colonne configurabili dall'utilizzatore
+**Stima originale**: 3-6 giorni | **Effettivo**: ~4 giorni
 
-**Stima**: 3-6 giorni
-
-#### 2.5 BRIM Multi-User Support Plan 📋 **PIANIFICATO**
+#### 2.5 BRIM Multi-User Support Plan 🔄 **IN PROGRESS (23-01-2026)**
 **File Piano**: [`../plan-brim-multiuser-implementation.md`](../plan-brim-multiuser-implementation.md)  
 **File Analisi**: [`../analysis-brim-multiuser.md`](../analysis-brim-multiuser.md)
 
@@ -349,19 +356,23 @@ broker_reports/
 
 Basandosi su priorità, dipendenze, e impatto:
 
-1. **🥇 Table Improvements** (3-6 giorni)
-   - **Motivazione**: Impatto immediato su UX, fondazione per Assets/Transactions/FX
-   - **Blocca**: Nessun altro piano
-   - **Estensibilità**: DataTable component riutilizzabile ovunque
-   - **Status**: ✅ API backend pronta, frontend da implementare
+1. ~~**🥇 Table Improvements**~~ ✅ **COMPLETATO** (23-01-2026)
+   - DataTable component suite implementata
+   - Filtri Excel-style, sorting, pagination, column management
+   - FileUploader con upload multiplo
 
-2. **🥈 Image Crop** (2-4 giorni)
+2. **🥇 BRIM Multi-User** 🔄 **IN PROGRESS** (23-01-2026)
+   - **Motivazione**: Necessario per corretta gestione files per broker
+   - **Blocca**: Niente, ma migliora enormemente UX multi-broker
+   - **Stima**: 8-13h (5-8h backend + 3-5h frontend)
+
+3. **🥈 Image Crop** (2-4 giorni)
    - **Motivazione**: Necessario per Profile page e migliora UX upload
    - **Blocca**: Settings Unification (Profile avatar)
    - **Estensibilità**: Riutilizzabile per broker icons, asset logos, cover images
    - **Status**: 📋 Piano pronto, libreria valutata
 
-3. **🥉 Settings Unification** (4-8 giorni)
+4. **🥉 Settings Unification** (4-8 giorni)
    - **Motivazione**: Standardizza UI settings, introduce Profile page
    - **Dipende da**: Image Crop (per avatar upload)
    - **Estensibilità**: Componenti Setting* riutilizzabili per future pagine config

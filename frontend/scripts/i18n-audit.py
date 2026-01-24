@@ -67,10 +67,9 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
         - prefix_patterns: Prefixes that might be used dynamically (e.g., 'fileStatus')
 
     Looks for patterns like:
-    - $t('key.path') / t('key.path')
-    - $_('key.path') / _('key.path')
-    - $t(`prefix.${var}`) - dynamic keys, extract prefix
-    - Interpolated strings with translation keys
+    - $t('key.path') / t('key.path') / $_('key.path')
+    - labelKey: 'nav.dashboard' (keys passed as props)
+    - `prefix.${var}` (template literal interpolation)
     """
     import re
 
@@ -78,18 +77,29 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
     exact_keys: set[str] = set()
     prefix_patterns: set[str] = set()
 
-    # Patterns to match translation function calls
+    # Patterns to match DIRECT translation function calls
     patterns_exact = [
-        # $t('key') or t('key') with single/double quotes
+        # $t('key') or $_('key') or t('key') with single/double quotes
         re.compile(r"(?:\$t|\$_|(?<![a-zA-Z])t|(?<![a-zA-Z])_)\s*\(\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
     ]
 
-    # Patterns for dynamic keys (template literals)
+    # Patterns for INDIRECT keys (passed as props/variables)
+    # These are keys stored in objects/arrays and later passed to $t/$_
+    patterns_indirect = [
+        # labelKey: 'nav.dashboard', titleKey: 'settings.title', etc.
+        re.compile(r"(?:label|title|text|message|hint|description|placeholder)Key['\"]?\s*[:=]\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
+        # key: 'common.save' in objects
+        re.compile(r"['\"]?key['\"]?\s*:\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
+        # i18n key strings in arrays: ['common.yes', 'common.no']
+        re.compile(r"\[\s*['\"]([a-zA-Z0-9_.]+)['\"](?:\s*,\s*['\"]([a-zA-Z0-9_.]+)['\"])*\s*\]"),
+    ]
+
+    # Patterns for DYNAMIC keys (template literals / concatenation)
     patterns_dynamic = [
-        # $t(`prefix.${...}`) - extract the prefix
-        re.compile(r"(?:\$t|\$_|(?<![a-zA-Z])t)\s*\(\s*`([a-zA-Z0-9_.]+)\.\$\{"),
-        # String concatenation: 'prefix.' + var
-        re.compile(r"(?:\$t|\$_|(?<![a-zA-Z])t)\s*\(\s*['\"]([a-zA-Z0-9_.]+)\.['\"]"),
+        # `prefix.${...}` - extract the prefix
+        re.compile(r"`([a-zA-Z0-9_.]+)\.\$\{"),
+        # 'prefix.' + var or "prefix." + var
+        re.compile(r"['\"]([a-zA-Z0-9_.]+)\.['\"]?\s*\+"),
     ]
 
     # Scan all .svelte, .ts, and .js files
@@ -101,10 +111,20 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
             try:
                 content = file_path.read_text(encoding="utf-8")
 
-                # Find exact keys
+                # Find exact keys (direct calls)
                 for pattern in patterns_exact:
                     matches = pattern.findall(content)
                     exact_keys.update(matches)
+
+                # Find indirect keys (passed as props)
+                for pattern in patterns_indirect:
+                    matches = pattern.findall(content)
+                    # Flatten tuples from regex groups
+                    for match in matches:
+                        if isinstance(match, tuple):
+                            exact_keys.update(m for m in match if m)
+                        else:
+                            exact_keys.add(match)
 
                 # Find dynamic prefixes
                 for pattern in patterns_dynamic:
