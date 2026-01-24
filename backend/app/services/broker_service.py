@@ -30,7 +30,7 @@ from backend.app.db.models import (
     Asset,
     BrokerUserAccess,
     UserRole,
-)
+    )
 from backend.app.db.models import PriceHistory
 from backend.app.schemas.brokers import (
     BRCreateItem,
@@ -45,13 +45,13 @@ from backend.app.schemas.brokers import (
     BRBulkUpdateResponse,
     BRDeleteResult,
     BRBulkDeleteResponse,
-)
+    )
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.transaction_service import (
     TransactionService,
     BalanceValidationError,
-)
+    )
 from backend.app.utils.datetime_utils import utcnow, today_date
 
 
@@ -102,8 +102,8 @@ class BrokerService:
                             success=False,
                             name=item.name,
                             error=f"Broker with name '{item.name}' already exists",
+                            )
                         )
-                    )
                     continue
 
                 # Create broker
@@ -119,7 +119,7 @@ class BrokerService:
                     opened_at=item.opened_at,
                     created_at=utcnow(),
                     updated_at=utcnow(),
-                )
+                    )
                 self.session.add(broker)
                 await self.session.flush()  # Get ID
 
@@ -130,7 +130,7 @@ class BrokerService:
                     role=UserRole.OWNER,
                     created_at=utcnow(),
                     updated_at=utcnow(),
-                )
+                    )
                 self.session.add(access)
 
                 # Create initial deposits
@@ -145,8 +145,8 @@ class BrokerService:
                                     type=TransactionType.DEPOSIT,
                                     date=today_date(),
                                     cash=currency_obj,
+                                    )
                                 )
-                            )
 
                     if deposit_items:
                         deposit_response = await self.tx_service.create_bulk(deposit_items)
@@ -156,7 +156,7 @@ class BrokerService:
                         if deposit_response.errors:
                             errors.extend(
                                 [f"Broker '{item.name}': {err}" for err in deposit_response.errors]
-                            )
+                                )
 
                 results.append(
                     BRCreateResult(
@@ -164,8 +164,8 @@ class BrokerService:
                         broker_id=broker.id,
                         name=item.name,
                         deposits_created=deposits_created,
+                        )
                     )
-                )
                 success_count += 1
 
             except Exception as e:
@@ -179,7 +179,7 @@ class BrokerService:
 
     async def _check_user_access(
         self, broker_id: int, user_id: int, min_role: UserRole = UserRole.VIEWER
-    ) -> Optional[UserRole]:
+        ) -> Optional[UserRole]:
         """
         Check if user has access to a broker and return their role.
 
@@ -193,7 +193,7 @@ class BrokerService:
         """
         stmt = select(BrokerUserAccess).where(
             and_(BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.user_id == user_id)
-        )
+            )
         result = await self.session.execute(stmt)
         access = result.scalar_one_or_none()
 
@@ -206,9 +206,41 @@ class BrokerService:
             return access.role
         return None
 
+    async def get_accessible_broker_ids(
+        self, user_id: int, min_role: UserRole = UserRole.VIEWER
+        ) -> List[int]:
+        """
+        Get list of broker IDs the user has access to.
+
+        Args:
+            user_id: User ID
+            min_role: Minimum role required (default: VIEWER = any access)
+
+        Returns:
+            List of broker IDs the user can access
+        """
+        role_order = {UserRole.OWNER: 3, UserRole.EDITOR: 2, UserRole.VIEWER: 1}
+        min_role_value = role_order.get(min_role, 1)
+
+        stmt = select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id)
+        result = await self.session.execute(stmt)
+
+        # Filter by role in Python (simpler than complex SQL)
+        broker_ids = []
+        for row in result.fetchall():
+            # Re-query to get role - or we can do a more complex query
+            broker_ids.append(row[0])
+
+        # Actually, let's do this properly with the role
+        stmt = select(BrokerUserAccess).where(BrokerUserAccess.user_id == user_id)
+        result = await self.session.execute(stmt)
+        accesses = result.scalars().all()
+
+        return [acc.broker_id for acc in accesses if role_order.get(acc.role, 0) >= min_role_value]
+
     async def get_all(
         self, user_id: int, as_user_id: Union[int, Literal["all"], None] = None
-    ) -> List[BRReadItem]:
+        ) -> List[BRReadItem]:
         """
         Get brokers filtered by user access.
 
@@ -243,7 +275,7 @@ class BrokerService:
 
     async def get_by_id(
         self, broker_id: int, user_id: int, as_user_id: Union[int, Literal["all"], None] = None
-    ) -> Optional[BRReadItem]:
+        ) -> Optional[BRReadItem]:
         """
         Get a broker by ID, checking user access.
 
@@ -271,7 +303,7 @@ class BrokerService:
 
     async def get_summary(
         self, broker_id: int, user_id: int, as_user_id: Union[int, Literal["all"], None] = None
-    ) -> Optional[BRSummary]:
+        ) -> Optional[BRSummary]:
         """
         Get broker with full summary including balances and holdings.
 
@@ -304,7 +336,7 @@ class BrokerService:
             Currency(code=code, amount=amount)
             for code, amount in cash_dict.items()
             if amount != Decimal("0")
-        ]
+            ]
 
         # Get asset holdings
         holdings_dict = await self.tx_service.get_asset_holdings(broker_id)
@@ -354,8 +386,8 @@ class BrokerService:
                     current_value=current_value,
                     unrealized_pnl=unrealized_pnl,
                     unrealized_pnl_percent=unrealized_pnl_percent,
+                    )
                 )
-            )
 
         return BRSummary(
             id=broker.id,
@@ -372,7 +404,7 @@ class BrokerService:
             updated_at=broker.updated_at,
             cash_balances=cash_balances,
             holdings=holdings,
-        )
+            )
 
     async def _get_latest_price(self, asset_id: int) -> Optional[Decimal]:
         """Get the latest price for an asset from price_history."""
@@ -396,7 +428,7 @@ class BrokerService:
         broker_ids: List[int],
         user_id: int,
         as_user_id: Union[int, Literal["all"], None] = None,
-    ) -> BRBulkUpdateResponse:
+        ) -> BRBulkUpdateResponse:
         """
         Update multiple brokers.
 
@@ -425,8 +457,8 @@ class BrokerService:
                     results.append(
                         BRUpdateResult(
                             id=broker_id, success=False, error=f"Broker {broker_id} not found"
+                            )
                         )
-                    )
                     continue
 
                 # Determine access check
@@ -441,11 +473,11 @@ class BrokerService:
                     # EDITOR or OWNER can update broker
                     role = await self._check_user_access(
                         broker_id, check_user_id, min_role=UserRole.EDITOR
-                    )
+                        )
                     if not role:
                         results.append(
                             BRUpdateResult(id=broker_id, success=False, error="Access denied")
-                        )
+                            )
                         continue
 
                 validation_triggered = False
@@ -468,8 +500,8 @@ class BrokerService:
                                 id=broker_id,
                                 success=False,
                                 error=f"Broker with name '{item.name}' already exists",
+                                )
                             )
-                        )
                         continue
                     broker.name = item.name
 
@@ -506,20 +538,20 @@ class BrokerService:
                         # Validate from the beginning of time
                         await self.tx_service._validate_broker_balances(
                             broker_id, None
-                        )  # None = from beginning
+                            )  # None = from beginning
                     except BalanceValidationError as e:
                         results.append(
                             BRUpdateResult(
                                 id=broker_id, success=False, validation_triggered=True, error=str(e)
+                                )
                             )
-                        )
                         continue
 
                 results.append(
                     BRUpdateResult(
                         id=broker_id, success=True, validation_triggered=validation_triggered
+                        )
                     )
-                )
                 success_count += 1
 
             except Exception as e:
@@ -536,7 +568,7 @@ class BrokerService:
         items: List[BRDeleteItem],
         user_id: int,
         as_user_id: Union[int, Literal["all"], None] = None,
-    ) -> BRBulkDeleteResponse:
+        ) -> BRBulkDeleteResponse:
         """
         Delete multiple brokers.
 
@@ -568,8 +600,8 @@ class BrokerService:
                             success=False,
                             deleted_count=0,
                             message=f"Broker {item.id} not found",
+                            )
                         )
-                    )
                     continue
 
                 # Determine access check
@@ -584,13 +616,13 @@ class BrokerService:
                     # Only OWNER can delete broker
                     role = await self._check_user_access(
                         item.id, check_user_id, min_role=UserRole.OWNER
-                    )
+                        )
                     if not role:
                         results.append(
                             BRDeleteResult(
                                 id=item.id, success=False, deleted_count=0, message="Access denied"
+                                )
                             )
-                        )
                         continue
 
                 # Count transactions
@@ -606,8 +638,8 @@ class BrokerService:
                                 f"Broker has {tx_count} transactions. "
                                 f"Use force=True to delete all."
                             ),
+                            )
                         )
-                    )
                     continue
 
                 # Delete transactions if force
@@ -626,22 +658,22 @@ class BrokerService:
                         deleted_count=1,
                         transactions_deleted=transactions_deleted,
                         message=None,
+                        )
                     )
-                )
                 success_count += 1
                 total_deleted += 1
 
             except Exception as e:
                 results.append(
                     BRDeleteResult(id=item.id, success=False, deleted_count=0, message=str(e))
-                )
+                    )
 
         return BRBulkDeleteResponse(
             results=results,
             success_count=success_count,
             total_deleted=total_deleted,
             errors=errors,
-        )
+            )
 
     async def _count_transactions(self, broker_id: int) -> int:
         """Count transactions for a broker."""
@@ -657,7 +689,7 @@ class BrokerService:
 
     async def list_accesses(
         self, broker_id: int, user_id: int, is_superuser: bool = False
-    ) -> List[dict]:
+        ) -> List[dict]:
         """
         List all users with access to a broker.
 
@@ -694,9 +726,9 @@ class BrokerService:
                 "email": user.email,
                 "role": access.role,
                 "created_at": access.created_at,
-            }
+                }
             for access, user in rows
-        ]
+            ]
 
     async def _count_owners(self, broker_id: int) -> int:
         """Count number of OWNERs for a broker."""
@@ -706,8 +738,8 @@ class BrokerService:
             .where(
                 and_(
                     BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.role == UserRole.OWNER
+                    )
                 )
-            )
         )
         result = await self.session.execute(stmt)
         return result.scalar_one()
@@ -719,7 +751,7 @@ class BrokerService:
         role: UserRole,
         current_user_id: int,
         is_superuser: bool = False,
-    ) -> tuple[bool, str]:
+        ) -> tuple[bool, str]:
         """
         Add user access to a broker.
 
@@ -737,7 +769,7 @@ class BrokerService:
         if not is_superuser:
             current_role = await self._check_user_access(
                 broker_id, current_user_id, min_role=UserRole.OWNER
-            )
+                )
             if not current_role:
                 return False, "Only OWNERs can add access"
 
@@ -765,7 +797,7 @@ class BrokerService:
             role=role,
             created_at=utcnow(),
             updated_at=utcnow(),
-        )
+            )
         self.session.add(access)
 
         return True, "Access granted"
@@ -777,7 +809,7 @@ class BrokerService:
         new_role: UserRole,
         current_user_id: int,
         is_superuser: bool = False,
-    ) -> tuple[bool, str]:
+        ) -> tuple[bool, str]:
         """
         Update user access role.
 
@@ -807,8 +839,8 @@ class BrokerService:
         stmt = select(BrokerUserAccess).where(
             and_(
                 BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.user_id == target_user_id
+                )
             )
-        )
         result = await self.session.execute(stmt)
         access = result.scalar_one_or_none()
 
@@ -829,7 +861,7 @@ class BrokerService:
 
     async def remove_access(
         self, broker_id: int, target_user_id: int, current_user_id: int, is_superuser: bool = False
-    ) -> tuple[bool, str]:
+        ) -> tuple[bool, str]:
         """
         Remove user access from a broker.
 
@@ -863,8 +895,8 @@ class BrokerService:
         stmt = select(BrokerUserAccess).where(
             and_(
                 BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.user_id == target_user_id
+                )
             )
-        )
         result = await self.session.execute(stmt)
         access = result.scalar_one_or_none()
 

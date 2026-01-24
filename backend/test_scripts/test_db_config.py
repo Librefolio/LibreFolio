@@ -12,7 +12,9 @@ import os
 from pathlib import Path
 
 from backend.app.config import get_settings
-from backend.app.main import ensure_database_exists
+
+# NOTE: Do NOT import main.py at module level - it has side effects!
+# Import ensure_database_exists lazily when needed.
 
 # Avoid importing app config at module import time to prevent early evaluation
 # of settings (which can pick up production DATABASE_URL). Instead read TEST
@@ -133,6 +135,7 @@ def initialize_test_database(print_func=None):
     # Print confirmation
     print_func(f"✅ Using test database: {db_url}")
 
-    # Ensure database exists and is migrated
+    # Ensure database exists and is migrated (lazy import to avoid side effects)
+    from backend.app.main import ensure_database_exists
     ensure_database_exists()
     return True

@@ -32,6 +32,9 @@
         status: string;
         uploaded_at: string;
         size_bytes?: number;
+        // Multi-user fields
+        uploaded_by_user_id?: number;
+        target_broker_id?: number;
     }
 
     // LocalStorage keys

@@ -2,6 +2,11 @@
 
 LibreFolio provides a comprehensive RESTful API built with **FastAPI**.
 
+## Quick Links
+
+- [API Overview](overview.md) - Architecture and design patterns
+- [cURL Testing Guide](curl-testing.md) - How to test APIs from terminal
+
 ## Interactive Documentation
 
 When the LibreFolio server is running, you can access the auto-generated interactive documentation. These pages allow you to explore the API endpoints, see the expected request/response schemas, and even execute requests directly from your browser.

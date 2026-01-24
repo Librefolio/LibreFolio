@@ -101,6 +101,7 @@ nav:
     - API & Communication:
       - Overview: developer/api/overview.md
       - Reference: developer/api/index.md
+      - cURL Testing: developer/api/curl-testing.md
     - Backend Development:
       - BRIM (Import):
         - Architecture: developer/backend/brim/architecture.md
@@ -115,6 +116,14 @@ nav:
         - Providers List: developer/backend/fx/providers_list.md
     - Frontend Development:
       - Overview: developer/frontend/index.md
+      - Components:
+        - Overview: developer/frontend/components/index.md
+        - DataTable: developer/frontend/components/data-table.md
+        - Authentication: developer/frontend/components/auth.md
+        - Settings: developer/frontend/components/settings.md
+        - File Upload: developer/frontend/components/file-upload.md
+      - Pages: developer/frontend/pages/index.md
+      - State Management: developer/frontend/state/index.md
     - Test Walkthrough:
       - Overview: developer/test-walkthrough/index.md
       - External: developer/test-walkthrough/external.md
