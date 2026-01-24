@@ -116,7 +116,7 @@ Campo `last_parse_result` aggiunto a BRIMFileInfo e metadata JSON.
 
 ---
 
-## 📋 Fase 3: Backend - Migration & Tests (TODO)
+## 📋 Fase 3: Backend - Migration & Tests ✅ COMPLETED (24-01-2026)
 
 ### 3.1 Migration Script
 
@@ -134,15 +134,20 @@ touch backend/data/broker_reports/parsed/.gitkeep
 touch backend/data/broker_reports/failed/.gitkeep
 ```
 
-### 3.2 Tests
+### 3.2 Tests ✅
 
-Aggiornare API test backend per coprire nuovi comportamenti, e/o creare nuovi test
+Test API aggiornati per coprire tutti i nuovi comportamenti multi-user:
 
-- [ ] Test upload con broker_id
-- [ ] Test list files con filtro broker_ids
-- [ ] Test permessi (VIEWER vs EDITOR)
-- [ ] Test parse con caching result
-- [ ] Test load-last-parse endpoint
+- [x] Test upload con broker_id (MU-001, MU-002)
+- [x] Test list files con filtro broker_ids (MU-003)
+- [x] Test permessi accesso broker (MU-004) - upload negato senza accesso
+- [x] Test parse con caching result (MU-006)
+- [x] Test load-last-parse endpoint (MU-007)
+- [x] Test download file endpoint (MU-009)
+- [x] Fix `_move_file` per gestire sottocartelle broker
+- [x] Fix `save_parse_result` per cercare in sottocartelle broker
+
+**Risultato**: 22/22 test BRIM passati
 
 ---
 

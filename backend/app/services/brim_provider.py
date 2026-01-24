@@ -741,6 +741,56 @@ def move_to_failed(file_id: str, error_message: str) -> bool:
     return _move_file(file_id, BRIMFileStatus.FAILED, error_message)
 
 
+def save_parse_result(file_id: str, parse_result: dict) -> bool:
+    """
+    Save the parse result to the file's metadata for caching.
+
+    This allows the frontend to reload a previous parse result without
+    re-parsing the file.
+
+    Args:
+        file_id: UUID of the file
+        parse_result: Dictionary containing transactions, warnings, etc.
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
+    _ensure_dirs()
+
+    # Search for the metadata file in all status folders and broker subfolders
+    meta_path = None
+    for status in BRIMFileStatus:
+        status_folder = BROKER_REPORTS_DIR / status.value
+
+        # Try root folder first
+        candidate = status_folder / f"{file_id}.json"
+        if candidate.exists():
+            meta_path = candidate
+            break
+
+        # Try broker subdirectories
+        for broker_dir in status_folder.glob("broker_*"):
+            if broker_dir.is_dir():
+                candidate = broker_dir / f"{file_id}.json"
+                if candidate.exists():
+                    meta_path = candidate
+                    break
+        if meta_path:
+            break
+
+    if not meta_path:
+        logger.warning("Metadata file not found for caching parse result", file_id=file_id)
+        return False
+
+    # Load, update, and save metadata
+    metadata = json.loads(meta_path.read_text())
+    metadata["last_parse_result"] = parse_result
+    meta_path.write_text(json.dumps(metadata, indent=2))
+
+    logger.info("Saved parse result to metadata", file_id=file_id)
+    return True
+
+
 def _move_file(
     file_id: str, target_status: BRIMFileStatus, error_message: Optional[str] = None
     ) -> bool:
@@ -771,18 +821,34 @@ def _move_file(
             )
         return False
 
-    # Get extension
+    # Get extension and broker_id
     ext = Path(file_info.filename).suffix.lower() or ".dat"
+    broker_id = file_info.target_broker_id
 
-    # Source paths
-    src_folder = BROKER_REPORTS_DIR / BRIMFileStatus.UPLOADED.value
-    src_file = src_folder / f"{file_id}{ext}"
-    src_meta = src_folder / f"{file_id}.json"
+    # Source paths - check broker subfolder first, then root
+    src_status_folder = BROKER_REPORTS_DIR / BRIMFileStatus.UPLOADED.value
+    if broker_id:
+        broker_subfolder = src_status_folder / f"broker_{broker_id}"
+        src_file = broker_subfolder / f"{file_id}{ext}"
+        src_meta = broker_subfolder / f"{file_id}.json"
+        # Fallback to root if not in broker subfolder
+        if not src_meta.exists():
+            src_file = src_status_folder / f"{file_id}{ext}"
+            src_meta = src_status_folder / f"{file_id}.json"
+    else:
+        src_file = src_status_folder / f"{file_id}{ext}"
+        src_meta = src_status_folder / f"{file_id}.json"
 
-    # Target paths
-    dst_folder = BROKER_REPORTS_DIR / target_status.value
-    dst_file = dst_folder / f"{file_id}{ext}"
-    dst_meta = dst_folder / f"{file_id}.json"
+    # Target paths - keep in broker subfolder if source was there
+    dst_status_folder = BROKER_REPORTS_DIR / target_status.value
+    if broker_id:
+        dst_broker_folder = dst_status_folder / f"broker_{broker_id}"
+        dst_broker_folder.mkdir(parents=True, exist_ok=True)
+        dst_file = dst_broker_folder / f"{file_id}{ext}"
+        dst_meta = dst_broker_folder / f"{file_id}.json"
+    else:
+        dst_file = dst_status_folder / f"{file_id}{ext}"
+        dst_meta = dst_status_folder / f"{file_id}.json"
 
     # Move data file
     if src_file.exists():
