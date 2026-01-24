@@ -33,7 +33,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import User
+from backend.app.db.models import User, UserRole
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.brim import BRIMAssetMapping
@@ -532,9 +532,9 @@ async def upload_file(
     """
     # Verify user has EDITOR+ access to the broker
     broker_service = BrokerService(session)
-    role = await broker_service.get_user_role(broker_id, current_user.id)
+    role = await broker_service._check_user_access(broker_id, current_user.id, min_role=UserRole.EDITOR)
 
-    if not current_user.is_superuser and role not in ["OWNER", "EDITOR"]:
+    if not current_user.is_superuser and role is None:
         raise HTTPException(
             status_code=403,
             detail="EDITOR or OWNER access required to upload files to this broker"
@@ -631,7 +631,7 @@ async def get_file(
     # Check access if file has a broker
     if file_info.target_broker_id and not current_user.is_superuser:
         broker_service = BrokerService(session)
-        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
+        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id)
         if role is None:
             raise HTTPException(status_code=403, detail="Access denied")
 
@@ -656,8 +656,8 @@ async def delete_file(
     # Check access if file has a broker
     if file_info.target_broker_id and not current_user.is_superuser:
         broker_service = BrokerService(session)
-        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
-        if role not in ["OWNER", "EDITOR"]:
+        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id, min_role=UserRole.EDITOR)
+        if role is None:
             raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to delete files")
 
     deleted = brim_provider.delete_file(file_id)
@@ -688,7 +688,7 @@ async def download_file(
     # Check access if file has a broker
     if file_info.target_broker_id and not current_user.is_superuser:
         broker_service = BrokerService(session)
-        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
+        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id)
         if role is None:
             raise HTTPException(status_code=403, detail="Access denied")
 
@@ -722,7 +722,7 @@ async def get_last_parse_result(
     # Check access if file has a broker
     if file_info.target_broker_id and not current_user.is_superuser:
         broker_service = BrokerService(session)
-        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
+        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id)
         if role is None:
             raise HTTPException(status_code=403, detail="Access denied")
 
@@ -770,8 +770,8 @@ async def parse_file(
     # Check access if file has a broker
     if file_info.target_broker_id and not current_user.is_superuser:
         broker_service = BrokerService(session)
-        role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
-        if role not in ["OWNER", "EDITOR"]:
+        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id, min_role=UserRole.EDITOR)
+        if role is None:
             raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to parse files")
 
     # Determine plugin to use
@@ -833,6 +833,20 @@ async def parse_file(
         # Move file to parsed folder on success
         brim_provider.move_to_parsed(file_id)
 
+        # Build response
+        response = BRIMParseResponse(
+            file_id=file_id,
+            plugin_code=plugin_code,  # Return actual plugin used (after auto-detection)
+            broker_id=request.broker_id,
+            transactions=transactions,
+            asset_mappings=asset_mappings,
+            duplicates=duplicates,
+            warnings=warnings,
+            )
+
+        # Cache the parse result in file metadata for later retrieval
+        brim_provider.save_parse_result(file_id, response.model_dump(mode="json"))
+
         logger.info(
             "File parsed with asset mapping and duplicate detection",
             file_id=file_id,
@@ -844,15 +858,7 @@ async def parse_file(
             likely_duplicates=len(duplicates.tx_likely_duplicates),
             )
 
-        return BRIMParseResponse(
-            file_id=file_id,
-            plugin_code=plugin_code,  # Return actual plugin used (after auto-detection)
-            broker_id=request.broker_id,
-            transactions=transactions,
-            asset_mappings=asset_mappings,
-            duplicates=duplicates,
-            warnings=warnings,
-            )
+        return response
 
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
