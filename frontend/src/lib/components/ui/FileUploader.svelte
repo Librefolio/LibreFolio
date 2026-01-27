@@ -14,6 +14,7 @@
 
 	export let maxSizeMB: number = 10;
 	export let multiple: boolean = true;
+	export let accept: string = '';  // e.g. ".csv,.xlsx,.xls" or "image/*"
 
 	// Blocked extensions (same as backend)
 	const BLOCKED_EXTENSIONS = new Set([
@@ -158,6 +159,7 @@
 			bind:this={fileInput}
 			on:change={handleFileSelect}
 			{multiple}
+			accept={accept || undefined}
 			hidden
 		/>
 

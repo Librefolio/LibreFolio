@@ -1,8 +1,8 @@
 # Piano Implementazione BRIM Multi-User
 
 **Data**: 22 Gennaio 2026  
-**Ultimo Aggiornamento**: 24 Gennaio 2026  
-**Status**: ✅ BACKEND COMPLETATO (Fase 1 e 2)  
+**Ultimo Aggiornamento**: 26 Gennaio 2026  
+**Status**: ✅ COMPLETATO (Backend + Frontend Fase 4)  
 **Dipendenze**: Analisi in `analysis-brim-multiuser.md`  
 **Decisione**: Proposta ACCETTATA
 
@@ -151,25 +151,41 @@ Test API aggiornati per coprire tutti i nuovi comportamenti multi-user:
 
 ---
 
-## Fase 4: Frontend - Files Page (2-3 ore)
+## ✅ Fase 4: Frontend - Files Page (COMPLETATA 27-01-2026)
 
-### 4.1 Filtro Multi-Broker
+### 4.1 Filtro Multi-Broker ✅
 
-- [ ] Dropdown con checkbox per selezionare broker
-- [ ] Mostra solo broker accessibili
-- [ ] Superuser vede tutti i broker
-- [ ] Salvataggio preferenza in localStorage
+- [x] Filtro broker ora integrato come filtro colonna enum
+- [x] Mostra solo broker accessibili
+- [x] Superuser vede tutti i broker
 
-### 4.2 Colonna Broker
+### 4.2 Colonna Broker ✅
 
-- [ ] Nuova colonna "Broker" nella tabella
-- [ ] Link cliccabile alla pagina del broker
-- [ ] Nascondi se filtrato per singolo broker
+- [x] Nuova colonna "Broker" nella tabella Report Broker
+- [x] Mostra nome broker dal mapping interno
+- [x] Badge colorato per broker (colori generati algoritmicamente da hue rotation)
+- [x] Supporto multi-lingua per traduzioni
 
-### 4.3 Upload con Broker Selection
+### 4.3 Upload con Broker Selection ✅
 
-- [ ] Se non in pagina broker, mostrare selector prima di upload
-- [ ] Disabilitare upload se nessun broker con permessi EDITOR+
+- [x] Upload richiede broker_id (passato da pagina)
+- [x] FileUploader: aggiunto parametro `accept` per filtro tipi file
+- [x] Supporto `.csv,.xlsx,.xls` per report broker
+- [x] Modale conferma chiusura uploader con file in sospeso
+- [x] Pulsante cambia da "Carica" a "Chiudi" quando uploader aperto
+
+### 4.4 Icone File Migliorate ✅
+
+- [x] Icone specifiche per: immagini, video, audio, spreadsheet, JSON, code, archivi, PDF, testi
+- [x] Icona non si riduce troppo su schermi stretti (flex-shrink: 0)
+
+### 4.5 Fix e Miglioramenti ✅
+
+- [x] Pagination: layout 2 righe mobile corretto
+- [x] Page size selector funziona correttamente su mobile
+- [x] Rimosso warning CSS `.dropdown-icon` unused
+- [x] `broker_ids` parameter inviato come lista di int (non stringa)
+- [x] Traduzioni complete per uploads (selectBroker, selected, chooseBroker, etc.)
 
 ---
 

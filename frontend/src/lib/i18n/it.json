@@ -410,6 +410,8 @@
     "fileSize": "Dimensione",
     "uploadDate": "Caricato",
     "status": "Stato",
+    "broker": "Broker",
+    "filterByBroker": "Filtra per Broker",
     "actions": "Azioni",
     "download": "Scarica",
     "deleteConfirm": "Sei sicuro di voler eliminare questo file?",
@@ -418,6 +420,12 @@
     "files": "file",
     "filesToDelete": "File da eliminare",
     "showFileList": "Mostra elenco file",
-    "hideFileList": "Nascondi elenco file"
+    "hideFileList": "Nascondi elenco file",
+    "selectBroker": "Seleziona Broker",
+    "selected": "selezionati",
+    "chooseBroker": "-- Seleziona broker --",
+    "assignAll": "Assegna Tutti",
+    "filesSelected": "{count} file selezionati",
+    "confirmCloseWithPendingFiles": "Hai file selezionati per il caricamento. Sei sicuro di voler annullare?"
   }
 }

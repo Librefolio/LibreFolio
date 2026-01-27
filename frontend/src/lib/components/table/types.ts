@@ -31,6 +31,8 @@ export interface BadgeCell {
 	type: 'badge';
 	text: string;
 	variant: 'default' | 'success' | 'warning' | 'error' | 'info';
+	/** Custom style for CSS variables (e.g., for broker colors) */
+	customStyle?: string;
 }
 
 /**
@@ -85,7 +87,7 @@ export type CellContent =
 
 /**
  * Column data type - determines filter UI and sorting behavior
- * - 'size' is special for byte sizes with logarithmic slider
+e * - 'size' is special for byte sizes with logarithmic slider
  */
 export type ColumnType = 'text' | 'number' | 'date' | 'enum' | 'size' | 'custom';
 

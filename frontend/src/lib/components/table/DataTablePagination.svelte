@@ -3,7 +3,7 @@
 -->
 <script lang="ts">
 	import { t } from '$lib/i18n';
-	import { ChevronLeft, ChevronRight } from 'lucide-svelte';
+	import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-svelte';
 
 	interface Props {
 		pageIndex: number;
@@ -22,7 +22,24 @@
 	let canNextPage = $derived(pageIndex < totalPages - 1);
 	let pageInputValue = $state('');
 
+	// Custom dropdown state
+	let showDropdown = $state(false);
+	let dropdownRef = $state<HTMLDivElement | null>(null);
+
 	$effect(() => { pageInputValue = String(currentPage); });
+
+	// Close dropdown on click outside
+	$effect(() => {
+		if (showDropdown) {
+			const handleClickOutside = (e: MouseEvent) => {
+				if (dropdownRef && !dropdownRef.contains(e.target as Node)) {
+					showDropdown = false;
+				}
+			};
+			document.addEventListener('click', handleClickOutside);
+			return () => document.removeEventListener('click', handleClickOutside);
+		}
+	});
 
 	function getPageNumbers(): (number | 'ellipsis')[] {
 		if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -57,28 +74,55 @@
 		else pageInputValue = String(currentPage);
 	}
 
-	function handlePageSizeChange(e: Event) {
-		const newSize = parseInt((e.target as HTMLSelectElement).value, 10);
-		onPageSizeChange(newSize === 0 ? 999999 : newSize);
+	function selectPageSize(size: number) {
+		onPageSizeChange(size === 0 ? 999999 : size);
+		showDropdown = false;
 	}
 
 	function getDisplayPageSize(): number {
 		return pageSize >= 999999 ? 0 : pageSize;
 	}
+
+	function formatPageSize(size: number): string {
+		return size === 0 ? '∞' : String(size);
+	}
 </script>
 
 <div class="pagination-container">
 	<div class="pagination-balloon">
-		<div class="page-size-selector">
-			<select class="page-size-select" value={getDisplayPageSize()} onchange={handlePageSizeChange}>
-				{#each pageSizeOptions as size}
-					<option value={size}>{size === 0 ? '∞' : size}</option>
-				{/each}
-			</select>
-			<span class="page-size-label">{$t('table.perPage') || 'per page'}</span>
+		<!-- Row 1: Page size + label + total (groups together on mobile) -->
+		<div class="pagination-row-top">
+			<div class="page-size-selector" bind:this={dropdownRef}>
+				<button
+					type="button"
+					class="page-size-btn"
+					onclick={() => showDropdown = !showDropdown}
+				>
+					<span>{formatPageSize(getDisplayPageSize())}</span>
+					<ChevronDown size={14} />
+				</button>
+				{#if showDropdown}
+					<div class="page-size-dropdown">
+						{#each pageSizeOptions as size}
+							<button
+								type="button"
+								class="dropdown-option"
+								class:selected={getDisplayPageSize() === size}
+								onclick={() => selectPageSize(size)}
+							>
+								{formatPageSize(size)}
+							</button>
+						{/each}
+					</div>
+				{/if}
+				<span class="page-size-label">{$t('table.perPage') || 'per page'}</span>
+			</div>
+			<div class="divider desktop-only"></div>
+			<div class="total-info"><span class="total-text">{totalItems} {$t('table.items') || 'items'}</span></div>
 		</div>
-		<div class="divider"></div>
-		<div class="page-nav">
+
+		<!-- Row 2: Page navigation -->
+		<div class="pagination-row-bottom">
 			<button type="button" class="nav-btn" disabled={!canPrevPage} onclick={() => goToPage(currentPage - 1)}>
 				<ChevronLeft size={16} />
 			</button>
@@ -97,24 +141,39 @@
 				<ChevronRight size={16} />
 			</button>
 		</div>
-		<div class="divider"></div>
-		<div class="total-info"><span class="total-text">{totalItems} {$t('table.items') || 'items'}</span></div>
 	</div>
 </div>
 
 <style>
 	.pagination-container { position: sticky; bottom: 1rem; display: flex; justify-content: center; padding: 0.5rem 0; pointer-events: none; z-index: 20; }
-	.pagination-balloon { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1rem; background: white; border: 1px solid #e2e8f0; border-radius: 9999px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); pointer-events: auto; }
+	.pagination-balloon { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border: 1px solid #e2e8f0; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); pointer-events: auto; max-width: calc(100vw - 2rem); }
 	:global(.dark) .pagination-balloon { background: #1e293b; border-color: #334155; }
-	.page-size-selector { display: flex; align-items: center; gap: 0.5rem; }
-	.page-size-select { padding: 0.25rem 1.5rem 0.25rem 0.5rem; font-size: 0.8125rem; border: 1px solid #e2e8f0; border-radius: 6px; background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.25rem center; color: #475569; cursor: pointer; appearance: none; }
-	:global(.dark) .page-size-select { background-color: #0f172a; border-color: #334155; color: #e2e8f0; }
-	.page-size-select:focus { outline: none; border-color: #1a4031; }
-	:global(.dark) .page-size-select:focus { border-color: #4ade80; }
-	.page-size-label { font-size: 0.75rem; color: #94a3b8; }
+
+	/* Row layout */
+	.pagination-row-top { display: flex; align-items: center; gap: 0.75rem; }
+	.pagination-row-bottom { display: flex; align-items: center; gap: 0.25rem; }
+
+	/* Custom page size dropdown */
+	.page-size-selector { position: relative; display: flex; align-items: center; gap: 0.5rem; }
+	.page-size-btn { display: flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.8125rem; border: 1px solid #e2e8f0; border-radius: 6px; background: white; color: #475569; cursor: pointer; transition: all 0.15s; }
+	.page-size-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
+	:global(.dark) .page-size-btn { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+	:global(.dark) .page-size-btn:hover { border-color: #475569; background: #1e293b; }
+
+	.page-size-dropdown { position: absolute; bottom: 100%; left: 0; margin-bottom: 0.25rem; min-width: 60px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden; z-index: 50; }
+	:global(.dark) .page-size-dropdown { background: #1e293b; border-color: #334155; }
+
+	.dropdown-option { display: block; width: 100%; padding: 0.5rem 0.75rem; font-size: 0.8125rem; text-align: left; border: none; background: transparent; color: #475569; cursor: pointer; transition: all 0.1s; }
+	.dropdown-option:hover { background: #f1f5f9; }
+	.dropdown-option.selected { background: #f0fdf4; color: #1a4031; font-weight: 500; }
+	:global(.dark) .dropdown-option { color: #e2e8f0; }
+	:global(.dark) .dropdown-option:hover { background: #334155; }
+	:global(.dark) .dropdown-option.selected { background: #1a4031; color: #4ade80; }
+
+	.page-size-label { font-size: 0.75rem; color: #94a3b8; white-space: nowrap; }
 	.divider { width: 1px; height: 1.5rem; background: #e2e8f0; }
 	:global(.dark) .divider { background: #334155; }
-	.page-nav { display: flex; align-items: center; gap: 0.25rem; }
+
 	.nav-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: none; border-radius: 6px; background: transparent; color: #64748b; cursor: pointer; transition: all 0.15s; }
 	.nav-btn:hover:not(:disabled) { background: #f1f5f9; color: #0f172a; }
 	.nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -132,5 +191,18 @@
 	.ellipsis { display: flex; align-items: center; justify-content: center; width: 20px; height: 28px; color: #94a3b8; font-size: 0.75rem; }
 	.total-info { display: flex; align-items: center; }
 	.total-text { font-size: 0.75rem; color: #94a3b8; white-space: nowrap; }
-	@media (max-width: 480px) { .page-size-selector, .total-info, .divider { display: none; } }
+
+	/* Desktop: single row */
+	@media (min-width: 481px) {
+		.pagination-balloon { flex-direction: row; border-radius: 9999px; gap: 0.75rem; }
+		.pagination-row-top { gap: 0.75rem; }
+	}
+
+	/* Mobile */
+	@media (max-width: 480px) {
+		.pagination-container { bottom: 0.5rem; padding: 0.5rem; }
+		.pagination-balloon { padding: 0.75rem 1rem; }
+		.page-size-btn { padding: 0.375rem 0.625rem; font-size: 0.875rem; min-height: 36px; }
+		.desktop-only { display: none; }
+	}
 </style>
