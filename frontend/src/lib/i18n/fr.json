@@ -20,6 +20,7 @@
     "none": "Aucun",
     "select": "Sélectionner",
     "noData": "Aucune donnée disponible",
+    "noResults": "Aucun résultat trouvé",
     "welcome": "Bienvenue",
     "comingSoon": "Bientôt disponible",
     "copied": "Copié !",
@@ -78,10 +79,8 @@
   "fileStatus": {
     "uploaded": "Téléchargé",
     "parsed": "Analysé",
-    "imported": "Importé",
     "failed": "Échoué",
-    "error": "Erreur",
-    "processing": "En cours"
+    "error": "Erreur"
   },
   "error": {
     "pageNotFound": "Page Non Trouvée",
@@ -424,7 +423,9 @@
     "selectBroker": "Sélectionner le Courtier",
     "selected": "sélectionnés",
     "chooseBroker": "-- Choisir le courtier --",
-    "assignAll": "Assigner Tous",
+    "assignAll": "Assigner tous à",
+    "assignBrokers": "Assigner les Courtiers",
+    "file": "fichier",
     "filesSelected": "{count} fichier(s) sélectionné(s)",
     "confirmCloseWithPendingFiles": "Vous avez des fichiers sélectionnés pour le téléversement. Êtes-vous sûr de vouloir annuler?"
   }

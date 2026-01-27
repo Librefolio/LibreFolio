@@ -20,6 +20,7 @@
     "none": "None",
     "select": "Select",
     "noData": "No data available",
+    "noResults": "No results found",
     "welcome": "Welcome",
     "comingSoon": "Coming Soon",
     "copied": "Copied!",
@@ -78,10 +79,8 @@
   "fileStatus": {
     "uploaded": "Uploaded",
     "parsed": "Parsed",
-    "imported": "Imported",
     "failed": "Failed",
-    "error": "Error",
-    "processing": "Processing"
+    "error": "Error"
   },
   "error": {
     "pageNotFound": "Page Not Found",
@@ -424,7 +423,9 @@
     "selectBroker": "Select Broker",
     "selected": "selected",
     "chooseBroker": "-- Choose broker --",
-    "assignAll": "Assign All",
+    "assignAll": "Assign all to",
+    "assignBrokers": "Assign Brokers",
+    "file": "file",
     "filesSelected": "{count} file(s) selected",
     "confirmCloseWithPendingFiles": "You have files selected for upload. Are you sure you want to cancel?"
   }

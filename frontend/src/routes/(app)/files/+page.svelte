@@ -11,6 +11,7 @@
     import { api } from '$lib/api';
     import FileUploader from '$lib/components/ui/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/LazyImage.svelte';
+    import BrokerSelect from '$lib/components/brokers/BrokerSelect.svelte';
     import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid, X } from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
 
@@ -116,6 +117,7 @@
     let loading = true;
     let error: string | null = null;
     let showUploader = false;
+    let pendingStaticFiles: globalThis.File[] = [];  // Track files in static uploader
 
     // View mode with localStorage persistence (default: list/table)
     let viewMode: 'grid' | 'list' = 'list';
@@ -127,8 +129,10 @@
 
     // BRIM upload with broker selection
     let showBrimUploader = false;
-    let selectedUploadBrokerId: number | null = null;
+    let showBrimUploadModal = false;  // New modal for broker assignment
     let pendingBrimFiles: globalThis.File[] = [];
+    // Map of file index -> broker_id for per-file assignment
+    let fileBrokerAssignments: Map<number, number | null> = new Map();
 
     // Confirm modal for closing uploader with pending files
     let showCloseUploaderConfirm = false;
@@ -215,6 +219,7 @@
             }
 
             showUploader = false;
+            pendingStaticFiles = [];  // Reset pending files
             await loadFiles();
         } catch (e) {
             error = e instanceof Error ? e.message : 'Upload failed';
@@ -226,53 +231,117 @@
         const { files } = event.detail;
         pendingBrimFiles = files;
 
-        // If only one broker, select it automatically
-        if (brokers.length === 1) {
-            selectedUploadBrokerId = brokers[0].id;
-        } else if (brokers.length > 1) {
-            // Show broker selection modal
-            selectedUploadBrokerId = null;
+        // If no files, close the modal
+        if (files.length === 0) {
+            showBrimUploadModal = false;
+            return;
         }
+
+        // Initialize broker assignments - null means not assigned yet
+        fileBrokerAssignments = new Map();
+        files.forEach((_, index) => {
+            // If only one broker, auto-assign
+            if (brokers.length === 1) {
+                fileBrokerAssignments.set(index, brokers[0].id);
+            } else {
+                fileBrokerAssignments.set(index, null);
+            }
+        });
+        fileBrokerAssignments = new Map(fileBrokerAssignments); // Trigger reactivity
+
+        // Show the upload modal
+        showBrimUploadModal = true;
+    }
+
+    function assignAllBroker(brokerId: number | null) {
+        pendingBrimFiles.forEach((_, index) => {
+            fileBrokerAssignments.set(index, brokerId);
+        });
+        fileBrokerAssignments = new Map(fileBrokerAssignments); // Trigger reactivity
+    }
+
+    function assignFileBroker(fileIndex: number, brokerId: number | null) {
+        fileBrokerAssignments.set(fileIndex, brokerId);
+        fileBrokerAssignments = new Map(fileBrokerAssignments); // Trigger reactivity
+    }
+
+    function canConfirmBrimUpload(): boolean {
+        // All files must have a broker assigned
+        for (const [_, brokerId] of fileBrokerAssignments) {
+            if (brokerId === null) return false;
+        }
+        return pendingBrimFiles.length > 0;
     }
 
     async function confirmBrimUpload() {
-        if (!selectedUploadBrokerId || pendingBrimFiles.length === 0) return;
+        if (!canConfirmBrimUpload()) return;
 
         try {
-            for (const file of pendingBrimFiles) {
+            // Collect broker IDs used in upload
+            const usedBrokerIds = new Set<number>();
+
+            for (let i = 0; i < pendingBrimFiles.length; i++) {
+                const file = pendingBrimFiles[i];
+                const brokerId = fileBrokerAssignments.get(i);
+                if (!brokerId) continue;
+
+                usedBrokerIds.add(brokerId);
                 const formData = new FormData();
                 formData.append('file', file);
-                await api.post(`/brokers/import/upload?broker_id=${selectedUploadBrokerId}`, formData);
+                await api.post(`/brokers/import/upload?broker_id=${brokerId}`, formData);
             }
 
+            // Add used broker IDs to selected filter so uploaded files are visible
+            usedBrokerIds.forEach(id => selectedBrokerIds.add(id));
+            selectedBrokerIds = new Set(selectedBrokerIds); // Trigger reactivity
+            saveBrokerFilter(selectedBrokerIds);
+
             // Reset state
-            showBrimUploader = false;
-            pendingBrimFiles = [];
-            selectedUploadBrokerId = null;
+            closeBrimUploadModal();
             await loadFiles();
         } catch (e) {
             error = e instanceof Error ? e.message : 'Upload failed';
         }
     }
 
-    function cancelBrimUpload() {
+    function closeBrimUploadModal() {
+        showBrimUploadModal = false;
         showBrimUploader = false;
         pendingBrimFiles = [];
-        selectedUploadBrokerId = null;
+        fileBrokerAssignments = new Map();
+    }
+
+    function cancelBrimUpload() {
+        closeBrimUploadModal();
+    }
+
+    // Handle static file selection change
+    function handleStaticFileChange(event: CustomEvent<{ files: globalThis.File[] }>) {
+        pendingStaticFiles = event.detail.files;
     }
 
     // Toggle uploader visibility with confirmation if files are pending
     function toggleStaticUploader() {
         if (showUploader) {
-            // Closing - just close, no pending files state for static
-            showUploader = false;
+            // Closing - check if there are pending files
+            if (pendingStaticFiles.length > 0) {
+                showCloseUploaderConfirm = true;
+                closeUploaderCallback = () => {
+                    showUploader = false;
+                    pendingStaticFiles = [];
+                    showCloseUploaderConfirm = false;
+                    closeUploaderCallback = null;
+                };
+            } else {
+                showUploader = false;
+            }
         } else {
             showUploader = true;
         }
     }
 
     function toggleBrimUploader() {
-        if (showBrimUploader) {
+        if (showBrimUploader || showBrimUploadModal) {
             // Closing - check if there are pending files
             if (pendingBrimFiles.length > 0) {
                 // Show confirmation
@@ -284,6 +353,7 @@
                 };
             } else {
                 showBrimUploader = false;
+                showBrimUploadModal = false;
             }
         } else {
             showBrimUploader = true;
@@ -429,6 +499,7 @@
         <div class="upload-area">
             <FileUploader
                 on:upload={handleUpload}
+                on:change={handleStaticFileChange}
                 on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
                 multiple={true}
                 maxSizeMB={10}
@@ -436,49 +507,16 @@
         </div>
     {/if}
 
-    <!-- Upload area (BRIM) -->
-    {#if showBrimUploader && activeTab === 'brim'}
+    <!-- Upload area (BRIM) - just the file selector -->
+    {#if showBrimUploader && activeTab === 'brim' && !showBrimUploadModal}
         <div class="upload-area brim-upload-area">
-            {#if pendingBrimFiles.length === 0}
-                <!-- Step 1: Select files -->
-                <FileUploader
-                    on:upload={handleBrimFileSelect}
-                    on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
-                    multiple={true}
-                    maxSizeMB={10}
-                    accept=".csv,.xlsx,.xls"
-                />
-            {:else}
-                <!-- Step 2: Select broker and confirm -->
-                <div class="brim-upload-confirm">
-                    <h3>{$t('uploads.selectBroker') || 'Select Broker'}</h3>
-                    <p class="upload-info">
-                        {pendingBrimFiles.length} {pendingBrimFiles.length === 1 ? 'file' : 'files'} {$t('uploads.selected') || 'selected'}
-                    </p>
-
-                    <div class="broker-select">
-                        <select bind:value={selectedUploadBrokerId}>
-                            <option value={null}>{$t('uploads.chooseBroker') || '-- Choose broker --'}</option>
-                            {#each brokers as broker}
-                                <option value={broker.id}>{broker.name}</option>
-                            {/each}
-                        </select>
-                    </div>
-
-                    <div class="upload-actions">
-                        <button class="btn btn-secondary" on:click={cancelBrimUpload}>
-                            {$t('common.cancel') || 'Cancel'}
-                        </button>
-                        <button
-                            class="btn btn-primary"
-                            on:click={confirmBrimUpload}
-                            disabled={!selectedUploadBrokerId}
-                        >
-                            {$t('uploads.upload') || 'Upload'}
-                        </button>
-                    </div>
-                </div>
-            {/if}
+            <FileUploader
+                on:change={handleBrimFileSelect}
+                on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
+                multiple={true}
+                maxSizeMB={10}
+                accept=".csv,.xlsx,.xls"
+            />
         </div>
     {/if}
 
@@ -578,6 +616,100 @@
     </div>
 </div>
 
+<!-- BRIM Upload Modal with per-file broker assignment -->
+{#if showBrimUploadModal}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="modal-backdrop" on:click={() => {
+        if (pendingBrimFiles.length > 0) {
+            showCloseUploaderConfirm = true;
+            closeUploaderCallback = () => {
+                cancelBrimUpload();
+                showCloseUploaderConfirm = false;
+                closeUploaderCallback = null;
+            };
+        } else {
+            closeBrimUploadModal();
+        }
+    }}>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="modal-content upload-modal" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+            <div class="modal-header">
+                <h3>{$t('uploads.assignBrokers') || 'Assign Brokers'}</h3>
+                <button class="modal-close" on:click={() => {
+                    if (pendingBrimFiles.length > 0) {
+                        showCloseUploaderConfirm = true;
+                        closeUploaderCallback = () => {
+                            cancelBrimUpload();
+                            showCloseUploaderConfirm = false;
+                            closeUploaderCallback = null;
+                        };
+                    } else {
+                        closeBrimUploadModal();
+                    }
+                }}>
+                    <X size={20} />
+                </button>
+            </div>
+
+            <div class="modal-body upload-modal-body">
+                <!-- Assign All section -->
+                <div class="assign-all-section">
+                    <span class="assign-all-label">{$t('uploads.assignAll') || 'Assign all to'}:</span>
+                    <BrokerSelect
+                        brokers={brokers}
+                        value={null}
+                        placeholder={$t('uploads.chooseBroker') || '-- Choose broker --'}
+                        dropdownDirection="down"
+                        onchange={(brokerId) => {
+                            if (brokerId != null) {
+                                assignAllBroker(brokerId);
+                            }
+                        }}
+                    />
+                </div>
+
+                <!-- File list with individual broker selection -->
+                <div class="files-list">
+                    <p class="files-count">
+                        {pendingBrimFiles.length} {pendingBrimFiles.length === 1 ? $t('uploads.file') || 'file' : $t('uploads.files') || 'files'} {$t('uploads.selected') || 'selected'}
+                    </p>
+
+                    {#each pendingBrimFiles as file, index}
+                        <div class="file-row">
+                            <div class="file-info">
+                                <FileSpreadsheet size={18} class="file-icon" />
+                                <span class="file-name" title={file.name}>{file.name}</span>
+                                <span class="file-size">({formatBytes(file.size)})</span>
+                            </div>
+                            <BrokerSelect
+                                brokers={brokers}
+                                value={fileBrokerAssignments.get(index) ?? null}
+                                placeholder={$t('uploads.selectBroker') || '-- Select --'}
+                                onchange={(brokerId) => assignFileBroker(index, brokerId)}
+                            />
+                        </div>
+                    {/each}
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" on:click={cancelBrimUpload}>
+                    {$t('common.cancel')}
+                </button>
+                <button
+                    class="btn btn-primary"
+                    class:btn-disabled={!canConfirmBrimUpload()}
+                    on:click={confirmBrimUpload}
+                    disabled={!canConfirmBrimUpload()}
+                >
+                    {$t('uploads.upload')} ({pendingBrimFiles.length})
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
+
 <!-- Confirm close uploader modal -->
 {#if showCloseUploaderConfirm}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -593,7 +725,7 @@
             </div>
             <div class="modal-body">
                 <p>{$t('uploads.confirmCloseWithPendingFiles') || 'You have files selected for upload. Are you sure you want to cancel?'}</p>
-                <p class="pending-count">{pendingBrimFiles.length} {$t('uploads.files')}</p>
+                <p class="pending-count">{pendingBrimFiles.length + pendingStaticFiles.length} {$t('uploads.files')}</p>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" on:click={cancelCloseUploader}>
@@ -1051,6 +1183,146 @@
 
     .btn-danger:hover {
         background: #b91c1c;
+    }
+
+    .btn-disabled {
+        background: #9ca3af !important;
+        border-color: #9ca3af !important;
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+
+    .btn-disabled:hover {
+        background: #9ca3af !important;
+    }
+
+    /* BRIM Upload Modal Styles */
+    .upload-modal {
+        max-width: 600px;
+        width: 95%;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .upload-modal-body {
+        overflow-y: auto;
+        max-height: 60vh;
+    }
+
+    .assign-all-section {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        background: #f8fafc;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    :global(.dark) .assign-all-section {
+        background: #1e293b;
+    }
+
+    .assign-all-label {
+        font-weight: 500;
+        color: #374151;
+        white-space: nowrap;
+        flex: 1;
+    }
+
+    :global(.dark) .assign-all-label {
+        color: #e5e7eb;
+    }
+
+    /* BrokerSelect in assign-all-section should match file-row width */
+    .assign-all-section :global(.broker-select) {
+        min-width: 180px;
+        flex-shrink: 0;
+    }
+
+
+    .files-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .files-count {
+        font-size: 0.875rem;
+        color: #6b7280;
+        margin: 0 0 0.5rem 0;
+    }
+
+    :global(.dark) .files-count {
+        color: #9ca3af;
+    }
+
+    .file-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.625rem 0.75rem;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        position: relative;
+    }
+
+    :global(.dark) .file-row {
+        background: #1f2937;
+        border-color: #374151;
+    }
+
+    .file-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .file-info :global(svg) {
+        flex-shrink: 0;
+        color: #6b7280;
+    }
+
+    :global(.dark) .file-info :global(svg) {
+        color: #9ca3af;
+    }
+
+    .file-row .file-name {
+        font-size: 0.875rem;
+        color: #374151;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0;
+    }
+
+    :global(.dark) .file-row .file-name {
+        color: #e5e7eb;
+    }
+
+    .file-size {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        flex-shrink: 0;
+    }
+
+    @media (max-width: 480px) {
+        .file-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.5rem;
+        }
+
+        .assign-all-section {
+            flex-direction: column;
+            align-items: stretch;
+        }
     }
 
 </style>

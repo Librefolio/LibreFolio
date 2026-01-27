@@ -31,6 +31,7 @@
 	const dispatch = createEventDispatcher<{
 		upload: { files: File[] };
 		error: { message: string };
+		change: { files: File[] };  // Emitted when files are selected/changed
 	}>();
 
 	let isDragging = false;
@@ -105,6 +106,8 @@
 			} else {
 				selectedFiles = [validFiles[0]];
 			}
+			// Notify that files have changed
+			dispatch('change', { files: selectedFiles });
 		}
 
 		if (errors.length > 0) {
@@ -114,11 +117,13 @@
 
 	function removeFile(index: number) {
 		selectedFiles = selectedFiles.filter((_, i) => i !== index);
+		dispatch('change', { files: selectedFiles });
 	}
 
 	function clearAll() {
 		selectedFiles = [];
 		errors = [];
+		dispatch('change', { files: selectedFiles });
 	}
 
 	function uploadFiles() {
