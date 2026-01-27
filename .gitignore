@@ -22,7 +22,6 @@ backend/data/broker_reports/parsed/*
 backend/data/broker_reports/uploaded/*
 backend/data/custom-uploads/*
 
-
 # Logs
 logs/
 *.log
@@ -33,6 +32,9 @@ logs/
 *.swp
 *.swo
 *~
+
+# MCP
+.playwright-mcp/
 
 # Testing
 .pytest_cache/

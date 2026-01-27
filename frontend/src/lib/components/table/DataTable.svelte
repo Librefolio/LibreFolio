@@ -735,7 +735,11 @@
 												<span>{cellContent.text}</span>
 											</div>
 										{:else if cellContent.type === 'badge'}
-											<span class="cell-badge {cellContent.variant}">{cellContent.text}</span>
+											<span
+												class="cell-badge {cellContent.variant}"
+												class:custom-style={cellContent.customStyle}
+												style={cellContent.customStyle || undefined}
+											>{cellContent.text}</span>
 										{:else if cellContent.type === 'date'}
 											{formatDate(cellContent.value, cellContent.format)}
 										{:else if cellContent.type === 'size'}
@@ -905,7 +909,9 @@
 	:global(.dark) :global(.check-icon.checked) { color: #4ade80; }
 
 	/* Cell content types */
-	.cell-icon-text { display: flex; align-items: center; gap: 0.5rem; }
+	.cell-icon-text { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+	.cell-icon-text :global(svg) { flex-shrink: 0; min-width: 16px; }
+	.cell-icon-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 	.cell-badge { display: inline-block; padding: 0.125rem 0.5rem; font-size: 0.75rem; font-weight: 500; border-radius: 9999px; }
 	.cell-badge.default { background: #f1f5f9; color: #475569; }
 	.cell-badge.success { background: #dcfce7; color: #166534; }
@@ -917,6 +923,9 @@
 	:global(.dark) .cell-badge.warning { background: #78350f; color: #fde68a; }
 	:global(.dark) .cell-badge.error { background: #7f1d1d; color: #fecaca; }
 	:global(.dark) .cell-badge.info { background: #1e3a8a; color: #bfdbfe; }
+	/* Custom styled badge (e.g., broker colors) */
+	.cell-badge.custom-style { background: var(--broker-bg, #f1f5f9); color: var(--broker-text, #475569); }
+	:global(.dark) .cell-badge.custom-style { background: var(--broker-dark-bg, #334155); color: var(--broker-dark-text, #e2e8f0); }
 
 	.cell-link { display: inline-flex; align-items: center; gap: 0.25rem; color: #1a4031; text-decoration: none; }
 	.cell-link:hover { text-decoration: underline; }

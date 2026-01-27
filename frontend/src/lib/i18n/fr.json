@@ -410,6 +410,8 @@
     "fileSize": "Taille",
     "uploadDate": "Téléversé",
     "status": "Statut",
+    "broker": "Courtier",
+    "filterByBroker": "Filtrer par Courtier",
     "actions": "Actions",
     "download": "Télécharger",
     "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce fichier?",
@@ -418,6 +420,12 @@
     "files": "fichiers",
     "filesToDelete": "Fichiers à supprimer",
     "showFileList": "Afficher la liste",
-    "hideFileList": "Masquer la liste"
+    "hideFileList": "Masquer la liste",
+    "selectBroker": "Sélectionner le Courtier",
+    "selected": "sélectionnés",
+    "chooseBroker": "-- Choisir le courtier --",
+    "assignAll": "Assigner Tous",
+    "filesSelected": "{count} fichier(s) sélectionné(s)",
+    "confirmCloseWithPendingFiles": "Vous avez des fichiers sélectionnés pour le téléversement. Êtes-vous sûr de vouloir annuler?"
   }
 }

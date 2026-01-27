@@ -285,13 +285,13 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 
 **Stima originale**: 3-6 giorni | **Effettivo**: ~4 giorni
 
-#### 2.5 BRIM Multi-User Support Plan ✅ **BACKEND DONE (24-01-2026)**
+#### 2.5 BRIM Multi-User Support Plan ✅ **COMPLETED (26-01-2026)**
 **File Piano**: [`../plan-brim-multiuser-implementation.md`](../plan-brim-multiuser-implementation.md)  
 **File Analisi**: [`../analysis-brim-multiuser.md`](../analysis-brim-multiuser.md)
 
 **Obiettivo**: Rendere il sistema BRIM compatibile con multi-utente e multi-broker.
 
-**Backend ✅ Completato**:
+**Backend ✅ Completato (24-01-2026)**:
 - [x] `broker_id` obbligatorio all'upload (file associato al broker)
 - [x] `uploaded_by_user_id` per tracciare chi ha caricato
 - [x] Filtri per broker accessibili all'utente
@@ -301,11 +301,12 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 - [x] Sottocartelle broker per organizzazione file
 - [x] 22 test API BRIM passati
 
-**Frontend** (TODO - Fase 4+):
-- [ ] Filtro multi-broker nella pagina Files
-- [ ] Colonna "Broker" con link alla pagina broker
-- [ ] Upload con selezione broker (se non in pagina broker)
-- [ ] Tab/sezione files nella pagina del singolo broker
+**Frontend ✅ Completato (26-01-2026)**:
+- [x] Colonna "Broker" con nome broker nella tabella Report Broker
+- [x] Filtro broker ora usa filtro colonna (rimosso dropdown separato)
+- [x] Supporto parametro `broker_ids` come lista di int
+- [x] Upload con broker_id obbligatorio
+- [x] FileUploader: aggiunto parametro `accept` per tipi file
 
 **Storage Structure**:
 ```
@@ -320,6 +321,7 @@ broker_reports/
 ```
 
 **Stima backend**: 5-8h | **Effettivo backend**: ~6h
+**Stima frontend**: 3-5h | **Effettivo frontend**: ~4h
 
 #### 3. Image Crop Plan
 **File**: [`../plan-image-crop.md`](../plan-image-crop.md)
@@ -342,16 +344,28 @@ broker_reports/
 
 **Stima**: 2-4 giorni
 
-#### 4. Table Libraries Comparison
-**File**: [`../table-libraries-comparison.md`](../table-libraries-comparison.md)
+#### 4. Bulk Download Plan
+**File**: [`../plan-bulk-download-v2.md`](../plan-bulk-download-v2.md)
 
-**Documento di analisi** con comparazione dettagliata:
-- TanStack Table (✅ raccomandato)
-- Svelte-Simple-Datatables
-- Native Custom
-- ag-Grid Community
+**Obiettivo**: Download multiplo di file come archivio o singolarmente.
 
-**Decisione**: TanStack Table approvato per scalabilità, features, e licenza MIT.
+**Features**:
+- Download singoli file separati
+- Download come archivio (tar, zip, 7z)
+- Modal di selezione formato con preview dimensione stimata
+- Service comune per creazione archivi (backend)
+- Supporto per uploads statici e BRIM files
+
+**Backend**:
+- `archive_service.py` - service comune per creazione archivi
+- Endpoint POST `/uploads/bulk-download`
+- Endpoint POST `/brokers/import/bulk-download`
+
+**Frontend**:
+- `BulkDownloadModal.svelte` - modal selezione formato
+- Integrazione in FilesTable per selezione multipla
+
+**Stima**: 6-8h
 
 ---
 
@@ -364,10 +378,10 @@ Basandosi su priorità, dipendenze, e impatto:
    - Filtri Excel-style, sorting, pagination, column management
    - FileUploader con upload multiplo
 
-2. **🥇 BRIM Multi-User** 🔄 **IN PROGRESS** (23-01-2026)
-   - **Motivazione**: Necessario per corretta gestione files per broker
-   - **Blocca**: Niente, ma migliora enormemente UX multi-broker
-   - **Stima**: 8-13h (5-8h backend + 3-5h frontend)
+2. ~~**🥇 BRIM Multi-User**~~ ✅ **COMPLETATO** (26-01-2026)
+   - Backend: broker_id obbligatorio, permessi, caching parse
+   - Frontend: colonna broker, filtri, upload con broker_id
+   - 22 test API passati
 
 3. **🥈 Image Crop** (2-4 giorni)
    - **Motivazione**: Necessario per Profile page e migliora UX upload
@@ -375,7 +389,12 @@ Basandosi su priorità, dipendenze, e impatto:
    - **Estensibilità**: Riutilizzabile per broker icons, asset logos, cover images
    - **Status**: 📋 Piano pronto, libreria valutata
 
-4. **🥉 Settings Unification** (4-8 giorni)
+4. **🥈 Bulk Download** (6-8h)
+   - **Motivazione**: Migliora UX download multiplo
+   - **Dipende da**: Niente
+   - **Status**: 📋 Piano pronto (plan-bulk-download-v2.md)
+
+5. **🥉 Settings Unification** (4-8 giorni)
    - **Motivazione**: Standardizza UI settings, introduce Profile page
    - **Dipende da**: Image Crop (per avatar upload)
    - **Estensibilità**: Componenti Setting* riutilizzabili per future pagine config
@@ -385,9 +404,9 @@ Basandosi su priorità, dipendenze, e impatto:
 
 ### 📊 Timeline Totale Consolidation
 
-**Ottimistico**: 9 giorni  
-**Realistico**: 13 giorni  
-**Con imprevisti**: 18 giorni
+**Ottimistico**: 10 giorni  
+**Realistico**: 15 giorni  
+**Con imprevisti**: 20 giorni
 
 ---
 
@@ -396,10 +415,11 @@ Basandosi su priorità, dipendenze, e impatto:
 | Documento | Descrizione | Status |
 |-----------|-------------|--------|
 | [plan-settings-unification.md](../plan-settings-unification.md) | Componenti condivisi Settings + Profile | 📋 Pronto |
-| [plan-table-improvements.md](../plan-table-improvements.md) | TanStack Table + Preview | ✅ API Done |
+| [plan-table-improvements.md](../plan-table-improvements.md) | TanStack Table + Preview | ✅ Completato |
 | [plan-image-crop.md](../plan-image-crop.md) | Advanced crop component | 📋 Pronto |
-| [table-libraries-comparison.md](../table-libraries-comparison.md) | Analisi librerie tabelle | ✅ Completato |
-| [session-summary-20250120.md](../session-summary-20250120.md) | Riepilogo sessione fix | ✅ Completato |
+| [plan-bulk-download-v2.md](../plan-bulk-download-v2.md) | Bulk download as archive (zip/tar/7z) | 📋 Pronto |
+| [plan-brim-multiuser-implementation.md](../plan-brim-multiuser-implementation.md) | BRIM Multi-User | ✅ Completato |
+| [plan-data-separation.md](../plan-data-separation.md) | Data directory prod/test separation | 📋 Pronto |
 
 ---
 

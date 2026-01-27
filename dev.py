@@ -55,6 +55,54 @@ from scripts.cli_tree_parser import TreeParser, format_help
 # Backend Commands: Server
 # =============================================================================
 
+def check_port_in_use(port: int) -> list:
+    """Check if port is in use and return list of (PID, process_name) tuples."""
+    import subprocess
+    import platform
+
+    processes = []
+    try:
+        if platform.system() == "Darwin":  # macOS
+            # Get PIDs first
+            result = subprocess.run(
+                ["lsof", "-i", f":{port}", "-t"],
+                capture_output=True, text=True
+            )
+            if result.stdout.strip():
+                pids = [int(p) for p in result.stdout.strip().split('\n') if p]
+                # Get process name for each PID
+                for pid in pids:
+                    try:
+                        ps_result = subprocess.run(
+                            ["ps", "-p", str(pid), "-o", "comm="],
+                            capture_output=True, text=True
+                        )
+                        proc_name = ps_result.stdout.strip() or "unknown"
+                        processes.append((pid, proc_name))
+                    except Exception:
+                        processes.append((pid, "unknown"))
+        elif platform.system() == "Linux":
+            result = subprocess.run(
+                ["fuser", f"{port}/tcp"],
+                capture_output=True, text=True, stderr=subprocess.DEVNULL
+            )
+            if result.stdout.strip():
+                pids = [int(p) for p in result.stdout.strip().split() if p]
+                for pid in pids:
+                    try:
+                        ps_result = subprocess.run(
+                            ["ps", "-p", str(pid), "-o", "comm="],
+                            capture_output=True, text=True
+                        )
+                        proc_name = ps_result.stdout.strip() or "unknown"
+                        processes.append((pid, proc_name))
+                    except Exception:
+                        processes.append((pid, "unknown"))
+    except Exception:
+        pass
+    return processes
+
+
 def cmd_server(args):
     """Start the development server."""
     test_mode = getattr(args, 'test', False)
@@ -67,6 +115,26 @@ def cmd_server(args):
     else:
         port = get_server_port()
         db = get_database_path()
+
+    # Check if port is already in use
+    processes_using_port = check_port_in_use(port)
+    if processes_using_port:
+        print_error(f"Port {port} is already in use!")
+        print()
+        print(f"{Colors.YELLOW}Processes using port {port}:{Colors.NC}")
+        pids = []
+        for pid, proc_name in processes_using_port:
+            pids.append(str(pid))
+            print(f"  • PID {pid} ({proc_name})")
+        print()
+        print(f"{Colors.BLUE}To view details:{Colors.NC}")
+        print(f"  lsof -i :{port}")
+        print()
+        print(f"{Colors.BLUE}To kill these processes:{Colors.NC}")
+        print(f"  kill -9 {' '.join(pids)}")
+        print()
+        print(f"{Colors.YELLOW}Tip:{Colors.NC} This often happens when a previous server didn't shut down cleanly.")
+        return 1
 
     # Handle frontend rebuild
     if rebuild:
