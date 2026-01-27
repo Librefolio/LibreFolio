@@ -582,7 +582,7 @@ async def list_files(
         default=None, description="Filter by status: uploaded, imported, failed"
         ),
     broker_ids: Optional[List[int]] = Query(
-        default=None, description="Filter by broker IDs (comma-separated)"
+        default=None, description="Filter by broker IDs (repeated query params, e.g., ?broker_ids=1&broker_ids=2)"
         ),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
