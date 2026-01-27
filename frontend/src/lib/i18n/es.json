@@ -20,6 +20,7 @@
     "none": "Ninguno",
     "select": "Seleccionar",
     "noData": "No hay datos disponibles",
+    "noResults": "No se encontraron resultados",
     "welcome": "Bienvenido",
     "comingSoon": "Próximamente",
     "copied": "¡Copiado!",
@@ -78,10 +79,8 @@
   "fileStatus": {
     "uploaded": "Subido",
     "parsed": "Procesado",
-    "imported": "Importado",
     "failed": "Fallido",
-    "error": "Error",
-    "processing": "Procesando"
+    "error": "Error"
   },
   "error": {
     "pageNotFound": "Página No Encontrada",
@@ -424,7 +423,9 @@
     "selectBroker": "Seleccionar Broker",
     "selected": "seleccionados",
     "chooseBroker": "-- Elegir broker --",
-    "assignAll": "Asignar Todos",
+    "assignAll": "Asignar todos a",
+    "assignBrokers": "Asignar Brokers",
+    "file": "archivo",
     "filesSelected": "{count} archivo(s) seleccionado(s)",
     "confirmCloseWithPendingFiles": "Tienes archivos seleccionados para subir. ¿Estás seguro de que quieres cancelar?"
   }
