@@ -163,7 +163,6 @@
 		switch (status) {
 			case 'parsed': return 'success';
 			case 'uploaded': return 'info';
-			case 'processing': return 'warning';
 			case 'failed': return 'error';
 			default: return 'default';
 		}
@@ -260,7 +259,6 @@
 				type: 'enum',
 				enumOptions: [
 					{ value: 'uploaded', label: translateStatus('uploaded') },
-					{ value: 'processing', label: translateStatus('processing') },
 					{ value: 'parsed', label: translateStatus('parsed') },
 					{ value: 'failed', label: translateStatus('failed') },
 				],

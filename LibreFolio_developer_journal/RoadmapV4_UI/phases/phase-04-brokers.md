@@ -285,7 +285,7 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 
 **Stima originale**: 3-6 giorni | **Effettivo**: ~4 giorni
 
-#### 2.5 BRIM Multi-User Support Plan ✅ **COMPLETED (26-01-2026)**
+#### 2.5 BRIM Multi-User Support Plan ✅ **COMPLETED (27-01-2026)**
 **File Piano**: [`../plan-brim-multiuser-implementation.md`](../plan-brim-multiuser-implementation.md)  
 **File Analisi**: [`../analysis-brim-multiuser.md`](../analysis-brim-multiuser.md)
 
@@ -301,12 +301,22 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 - [x] Sottocartelle broker per organizzazione file
 - [x] 22 test API BRIM passati
 
-**Frontend ✅ Completato (26-01-2026)**:
+**Frontend ✅ Completato (27-01-2026)**:
 - [x] Colonna "Broker" con nome broker nella tabella Report Broker
+- [x] Badge colorato per broker (colori generati algoritmicamente)
 - [x] Filtro broker ora usa filtro colonna (rimosso dropdown separato)
 - [x] Supporto parametro `broker_ids` come lista di int
 - [x] Upload con broker_id obbligatorio
 - [x] FileUploader: aggiunto parametro `accept` per tipi file
+- [x] **Modale assegnazione broker per-file**:
+  - Appare appena si selezionano file (via evento `on:change`)
+  - Sezione "Assegna tutti a" per assegnazione batch
+  - Lista file con dropdown broker individuale
+  - Pulsante "Carica" grigio se non tutti i broker assegnati
+  - Dopo upload, broker usati aggiunti automaticamente ai filtri
+- [x] Conferma chiusura uploader con file in sospeso (sia static che brim)
+- [x] Rimosso stato "processing" non esistente (refuso)
+- [x] Traduzioni complete per modale (assignBrokers, assignAll, file, etc.)
 
 **Storage Structure**:
 ```
@@ -321,7 +331,7 @@ broker_reports/
 ```
 
 **Stima backend**: 5-8h | **Effettivo backend**: ~6h
-**Stima frontend**: 3-5h | **Effettivo frontend**: ~4h
+**Stima frontend**: 3-5h | **Effettivo frontend**: ~6h
 
 #### 3. Image Crop Plan
 **File**: [`../plan-image-crop.md`](../plan-image-crop.md)
