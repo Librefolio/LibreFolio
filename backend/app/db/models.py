@@ -60,7 +60,7 @@ class IdentifierType(str, Enum):
     """
     Asset identifier type.
 
-    Usage: Specify which type of identifier is stored in the `identifier` field.
+    Usage: Specify which type of identifier is stored in the 'identifier' field.
 
     - ISIN: International Securities Identification Number (e.g., US0378331005 for Apple)
     - TICKER: Stock ticker symbol (e.g., AAPL, MSFT)
