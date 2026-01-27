@@ -5,6 +5,803 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login",
+        "description": "Authenticate user and create session.\n\nAccepts username or email in the `username` field.\nReturns user info and sets session cookie.",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Logout",
+        "description": "Logout current user and destroy session.",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLogoutResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get Me",
+        "description": "Get current authenticated user info.",
+        "operationId": "get_me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthMeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register",
+        "description": "Register a new user.\n\nNote: The first user registered becomes admin (is_superuser=True).\nIn production, you may want to add email verification.",
+        "operationId": "register_api_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthRegisterResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Change Password",
+        "description": "Change password for the currently authenticated user.\n\nRequires the current password for verification.",
+        "operationId": "change_password_api_v1_auth_change_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePasswordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/profile": {
+      "put": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Update Profile",
+        "description": "Update profile for the currently authenticated user.\n\nAllows changing username and/or email.\nValidates uniqueness constraints before committing.",
+        "operationId": "update_profile_api_v1_auth_profile_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateProfileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/users/me": {
+      "delete": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Delete Own Account",
+        "description": "Delete the currently authenticated user's account.\n\nThis is a destructive action that:\n- Deletes all user data (brokers, transactions, settings)\n- Cannot be undone\n\nConstraints:\n- Cannot delete if you are the only superuser\n- Session is invalidated after deletion",
+        "operationId": "delete_own_account_api_v1_auth_users_me_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Delete Own Account Api V1 Auth Users Me Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/user": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get User Settings Endpoint",
+        "description": "Get current user's settings.\n\nCreates default settings if they don't exist.",
+        "operationId": "get_user_settings_endpoint_api_v1_settings_user_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettingsRead"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update User Settings Endpoint",
+        "description": "Update current user's settings.\n\nAll fields are optional. Only provided fields will be updated.",
+        "operationId": "update_user_settings_endpoint_api_v1_settings_user_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettingsRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/global": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "List Global Settings",
+        "description": "List all global settings.\n\nPublic read access - anyone can view global settings.",
+        "operationId": "list_global_settings_api_v1_settings_global_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/global/{key}": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get Global Setting Endpoint",
+        "description": "Get a specific global setting by key.\n\nPublic read access.",
+        "operationId": "get_global_setting_endpoint_api_v1_settings_global__key__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update Global Setting Endpoint",
+        "description": "Update a global setting.\n\nAdmin only - requires is_superuser=True.",
+        "operationId": "update_global_setting_endpoint_api_v1_settings_global__key__put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlobalSettingUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/global/initialize": {
+      "post": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Initialize Global Settings Endpoint",
+        "description": "Initialize global settings with default values.\n\nAdmin only. Creates only missing settings.",
+        "operationId": "initialize_global_settings_endpoint_api_v1_settings_global_initialize_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Initialize Global Settings Endpoint Api V1 Settings Global Initialize Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/info": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get System Info",
+        "description": "Get system information including versions and dependencies.\n\nReturns app version, Python version, OS details, and dependency versions.",
+        "operationId": "get_system_info_api_v1_system_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemInfoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "description": "Health check endpoint for monitoring and load balancers.\n\nReturns:\n    dict: Status message with \"ok\" status",
+        "operationId": "health_check_api_v1_system_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads": {
+      "post": {
+        "tags": [
+          "Uploads"
+        ],
+        "summary": "Upload File",
+        "description": "Upload a file.\n\nFiles are stored with UUID-based names for security.\nExecutable files and scripts are blocked.\n\nArgs:\n    file: File to upload\n    description: Optional description\n\nReturns:\n    UploadResponse with file info\n\nRaises:\n    400: If file type is not allowed (executable/script)\n    413: If file is too large",
+        "operationId": "upload_file_api_v1_uploads_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_api_v1_uploads_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Uploads"
+        ],
+        "summary": "List Files",
+        "description": "List all uploaded files.\n\nArgs:\n    my_files_only: If True, only show files uploaded by current user\n\nReturns:\n    List of files with metadata",
+        "operationId": "list_files_api_v1_uploads_get",
+        "parameters": [
+          {
+            "name": "my_files_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "My Files Only"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{file_id}": {
+      "get": {
+        "tags": [
+          "Uploads"
+        ],
+        "summary": "Get File Info",
+        "description": "Get metadata for a specific file.\n\nArgs:\n    file_id: File UUID\n\nReturns:\n    File metadata",
+        "operationId": "get_file_info_api_v1_uploads__file_id__get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Uploads"
+        ],
+        "summary": "Delete File",
+        "description": "Delete an uploaded file.\n\nUsers can only delete their own files unless they are superuser.\n\nArgs:\n    file_id: File UUID\n\nReturns:\n    Deletion confirmation",
+        "operationId": "delete_file_api_v1_uploads__file_id__delete",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/file/{file_id}": {
+      "get": {
+        "tags": [
+          "Uploads"
+        ],
+        "summary": "Serve File",
+        "description": "Serve the actual file content.\n\nThis endpoint does not require authentication to allow\nembedding in images/documents.\n\nPreview modes:\n- Text preview: ?offset=0&window=1000 (returns first 1000 chars)\n- Image preview: ?img_preview=200x200 (returns resized image, max dimension)\n\nArgs:\n    file_id: File UUID\n    download: If True, force download with original filename\n    offset: Start byte for text preview (text files only)\n    window: Number of bytes to read for text preview (text files only)\n    img_preview: Image resize format \"WIDTHxHEIGHT\" (images only)\n\nReturns:\n    File content with appropriate MIME type\n\nRaises:\n    400: If preview params used on incompatible file type\n    404: If file not found",
+        "operationId": "serve_file_api_v1_uploads_file__file_id__get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Download"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "window",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Window"
+            }
+          },
+          {
+            "name": "img_preview",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Img Preview"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/plugin/{provider_type}/{path}": {
+      "get": {
+        "tags": [
+          "Uploads"
+        ],
+        "summary": "Serve Plugin Static",
+        "description": "Serve static assets from plugin directories.\n\nPlugin developers can place static files (icons, images, etc.)\nin their plugin's static/ folder.\n\nStructure:\n    brim_providers/static/{path}\n    fx_providers/static/{path}\n    asset_source_providers/static/{path}\n\nExample URLs:\n    /api/v1/uploads/plugin/brim/directa/logo.png\n    /api/v1/uploads/plugin/fx/ecb/icon.svg\n    /api/v1/uploads/plugin/asset/yfinance/logo.png\n\nArgs:\n    provider_type: One of 'brim', 'fx', 'asset'\n    path: Path to file within static folder\n\nReturns:\n    File content",
+        "operationId": "serve_plugin_static_api_v1_uploads_plugin__provider_type___path__get",
+        "parameters": [
+          {
+            "name": "provider_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Type"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/fx/providers": {
       "get": {
         "tags": [
@@ -1416,7 +2213,7 @@
           "TX (Transactions)"
         ],
         "summary": "Create Transactions",
-        "description": "Create multiple transactions.\n\nFor linked transactions (TRANSFER, FX_CONVERSION), use the same\nlink_uuid for both transactions in the request.\n\nArgs:\n    items: List of transactions to create\n\nReturns:\n    TXBulkCreateResponse with results for each item",
+        "description": "Create multiple transactions.\n\nRequires EDITOR or OWNER role on each broker. For linked transactions\n(TRANSFER, FX_CONVERSION), use the same link_uuid for both transactions.\n\nArgs:\n    items: List of transactions to create\n\nReturns:\n    TXBulkCreateResponse with results for each item",
         "operationId": "create_transactions_api_v1_transactions_post",
         "requestBody": {
           "required": true,
@@ -1819,7 +2616,7 @@
           "BR (Broker)"
         ],
         "summary": "Create Brokers",
-        "description": "Create multiple brokers.\n\nIf initial_balances is provided, automatically creates DEPOSIT\ntransactions for each currency.\n\nArgs:\n    items: List of brokers to create\n\nReturns:\n    BRBulkCreateResponse with results for each item",
+        "description": "Create multiple brokers.\n\nIf initial_balances is provided, automatically creates DEPOSIT\ntransactions for each currency.\n\nThe current user becomes the OWNER of all created brokers.\n\nArgs:\n    items: List of brokers to create\n\nReturns:\n    BRBulkCreateResponse with results for each item",
         "operationId": "create_brokers_api_v1_brokers_post",
         "requestBody": {
           "required": true,
@@ -1863,8 +2660,28 @@
           "BR (Broker)"
         ],
         "summary": "List Brokers",
-        "description": "List all brokers.\n\nReturns basic broker information without balances.\nUse GET /brokers/{id}/summary for full details.\n\nReturns:\n    List of brokers ordered by name",
+        "description": "List brokers accessible by the current user.\n\nSuperusers can use as_user_id to impersonate another user or see all brokers.\n\nReturns basic broker information without balances.\nUse GET /brokers/{id}/summary for full details.\n\nReturns:\n    List of brokers ordered by name",
         "operationId": "list_brokers_api_v1_brokers_get",
+        "parameters": [
+          {
+            "name": "as_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Superuser: impersonate user ID or 'all'",
+              "title": "As User Id"
+            },
+            "description": "Superuser: impersonate user ID or 'all'"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1879,6 +2696,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       },
@@ -1887,7 +2714,7 @@
           "BR (Broker)"
         ],
         "summary": "Delete Brokers",
-        "description": "Delete multiple brokers.\n\nIf force=False (default), fails if broker has any transactions.\nIf force=True, cascade deletes all transactions.\n\nArgs:\n    ids: List of broker IDs to delete\n    force: If True, delete broker even if it has transactions\n\nReturns:\n    BRBulkDeleteResponse with results",
+        "description": "Delete multiple brokers.\n\nRequires OWNER access to each broker.\nSuperusers can use as_user_id to impersonate another user.\n\nIf force=False (default), fails if broker has any transactions.\nIf force=True, cascade deletes all transactions.\n\nArgs:\n    ids: List of broker IDs to delete\n    force: If True, delete broker even if it has transactions\n\nReturns:\n    BRBulkDeleteResponse with results",
         "operationId": "delete_brokers_api_v1_brokers_delete",
         "parameters": [
           {
@@ -1915,6 +2742,24 @@
               "title": "Force"
             },
             "description": "Force delete with transactions"
+          },
+          {
+            "name": "as_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Superuser: impersonate user ID or 'all'",
+              "title": "As User Id"
+            },
+            "description": "Superuser: impersonate user ID or 'all'"
           }
         ],
         "responses": {
@@ -1947,7 +2792,7 @@
           "BR (Broker)"
         ],
         "summary": "Get Broker",
-        "description": "Get a single broker by ID.\n\nReturns basic broker information without balances.\nUse GET /brokers/{id}/summary for full details.\n\nArgs:\n    broker_id: Broker ID\n\nReturns:\n    Broker details\n\nRaises:\n    HTTPException 404: If broker not found",
+        "description": "Get a single broker by ID.\n\nSuperusers can use as_user_id to impersonate another user.\n\nReturns basic broker information without balances.\nUse GET /brokers/{id}/summary for full details.\n\nArgs:\n    broker_id: Broker ID\n\nReturns:\n    Broker details\n\nRaises:\n    HTTPException 404: If broker not found or not accessible",
         "operationId": "get_broker_api_v1_brokers__broker_id__get",
         "parameters": [
           {
@@ -1958,6 +2803,24 @@
               "type": "integer",
               "title": "Broker Id"
             }
+          },
+          {
+            "name": "as_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Superuser: impersonate user ID or 'all'",
+              "title": "As User Id"
+            },
+            "description": "Superuser: impersonate user ID or 'all'"
           }
         ],
         "responses": {
@@ -1988,7 +2851,7 @@
           "BR (Broker)"
         ],
         "summary": "Update Broker",
-        "description": "Update a broker.\n\nOnly provided fields will be updated.\n\nIf disabling overdraft/shorting flags, validates that current\nbalances don't violate the new constraints.\n\nArgs:\n    broker_id: Broker ID to update\n    item: Update data\n\nReturns:\n    BRBulkUpdateResponse with result",
+        "description": "Update a broker.\n\nOnly provided fields will be updated.\nRequires at least EDITOR access (OWNER or EDITOR can modify).\n\nSuperusers can use as_user_id to impersonate another user.\n\nIf disabling overdraft/shorting flags, validates that current\nbalances don't violate the new constraints.\n\nArgs:\n    broker_id: Broker ID to update\n    item: Update data\n\nReturns:\n    BRBulkUpdateResponse with result",
         "operationId": "update_broker_api_v1_brokers__broker_id__patch",
         "parameters": [
           {
@@ -1999,6 +2862,24 @@
               "type": "integer",
               "title": "Broker Id"
             }
+          },
+          {
+            "name": "as_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Superuser: impersonate user ID or 'all'",
+              "title": "As User Id"
+            },
+            "description": "Superuser: impersonate user ID or 'all'"
           }
         ],
         "requestBody": {
@@ -2041,7 +2922,7 @@
           "BR (Broker)"
         ],
         "summary": "Get Broker Summary",
-        "description": "Get broker with full summary.\n\nIncludes:\n- Basic broker info\n- Cash balances per currency\n- Asset holdings with cost basis and market value\n\nArgs:\n    broker_id: Broker ID\n\nReturns:\n    BRSummary with full details\n\nRaises:\n    HTTPException 404: If broker not found",
+        "description": "Get broker with full summary.\n\nSuperusers can use as_user_id to impersonate another user.\n\nIncludes:\n- Basic broker info\n- Cash balances per currency\n- Asset holdings with cost basis and market value\n\nArgs:\n    broker_id: Broker ID\n\nReturns:\n    BRSummary with full details\n\nRaises:\n    HTTPException 404: If broker not found or not accessible",
         "operationId": "get_broker_summary_api_v1_brokers__broker_id__summary_get",
         "parameters": [
           {
@@ -2052,6 +2933,24 @@
               "type": "integer",
               "title": "Broker Id"
             }
+          },
+          {
+            "name": "as_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Superuser: impersonate user ID or 'all'",
+              "title": "As User Id"
+            },
+            "description": "Superuser: impersonate user ID or 'all'"
           }
         ],
         "responses": {
@@ -2078,6 +2977,212 @@
         }
       }
     },
+    "/api/v1/brokers/{broker_id}/access": {
+      "get": {
+        "tags": [
+          "BR (Broker)"
+        ],
+        "summary": "List Broker Access",
+        "description": "List all users with access to a broker.\n\nAny user with access to the broker can view the access list.\nSuperusers can view any broker's access list.",
+        "operationId": "list_broker_access_api_v1_brokers__broker_id__access_get",
+        "parameters": [
+          {
+            "name": "broker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Broker Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BRAccessListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "BR (Broker)"
+        ],
+        "summary": "Add Broker Access",
+        "description": "Add user access to a broker.\n\nOnly OWNERs can add access. Superusers can always add access.",
+        "operationId": "add_broker_access_api_v1_brokers__broker_id__access_post",
+        "parameters": [
+          {
+            "name": "broker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Broker Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BRAccessCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BRAccessCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/brokers/{broker_id}/access/{target_user_id}": {
+      "patch": {
+        "tags": [
+          "BR (Broker)"
+        ],
+        "summary": "Update Broker Access",
+        "description": "Update user access role.\n\nOnly OWNERs can modify access. Superusers can always modify.\nCannot degrade the last OWNER.",
+        "operationId": "update_broker_access_api_v1_brokers__broker_id__access__target_user_id__patch",
+        "parameters": [
+          {
+            "name": "broker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Broker Id"
+            }
+          },
+          {
+            "name": "target_user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Target User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BRAccessUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BRAccessCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "BR (Broker)"
+        ],
+        "summary": "Remove Broker Access",
+        "description": "Remove user access from a broker.\n\n- OWNERs can remove others\n- Anyone can remove themselves (except last OWNER)\n- Superusers can remove anyone (except last OWNER)",
+        "operationId": "remove_broker_access_api_v1_brokers__broker_id__access__target_user_id__delete",
+        "parameters": [
+          {
+            "name": "broker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Broker Id"
+            }
+          },
+          {
+            "name": "target_user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Target User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BRAccessDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/brokers/import/upload": {
       "post": {
         "tags": [
@@ -2085,17 +3190,30 @@
           "BR Import"
         ],
         "summary": "Upload File",
-        "description": "Upload a broker report file for future processing.\n\nThe file is saved with a UUID-based name. Compatible plugins are\nauto-detected based on file extension and content.\n\nReturns file metadata including compatible plugins.",
+        "description": "Upload a broker report file for future processing.\n\nThe file is saved with a UUID-based name. Compatible plugins are\nauto-detected based on file extension and content.\n\nRequires EDITOR or OWNER access on the target broker.\n\nReturns file metadata including compatible plugins.",
         "operationId": "upload_file_api_v1_brokers_import_upload_post",
+        "parameters": [
+          {
+            "name": "broker_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Target broker ID for this report",
+              "title": "Broker Id"
+            },
+            "description": "Target broker ID for this report"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_upload_file_api_v1_brokers_import_upload_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2128,7 +3246,7 @@
           "BR Import"
         ],
         "summary": "List Files",
-        "description": "List all uploaded broker report files.\n\nOptionally filter by status. Results are sorted by upload time (newest first).",
+        "description": "List all uploaded broker report files.\n\nOptionally filter by status and/or broker IDs.\nNon-superusers can only see files for brokers they have access to.\nResults are sorted by upload time (newest first).",
         "operationId": "list_files_api_v1_brokers_import_files_get",
         "parameters": [
           {
@@ -2148,6 +3266,27 @@
               "title": "Status"
             },
             "description": "Filter by status: uploaded, imported, failed"
+          },
+          {
+            "name": "broker_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by broker IDs (repeated query params, e.g., ?broker_ids=1&broker_ids=2)",
+              "title": "Broker Ids"
+            },
+            "description": "Filter by broker IDs (repeated query params, e.g., ?broker_ids=1&broker_ids=2)"
           }
         ],
         "responses": {
@@ -2185,7 +3324,7 @@
           "BR Import"
         ],
         "summary": "Get File",
-        "description": "Get details for a specific file.",
+        "description": "Get details for a specific file.\n\nUser must have access to the file's broker.",
         "operationId": "get_file_api_v1_brokers_import_files__file_id__get",
         "parameters": [
           {
@@ -2227,7 +3366,7 @@
           "BR Import"
         ],
         "summary": "Delete File",
-        "description": "Delete a file and its metadata.",
+        "description": "Delete a file and its metadata.\n\nRequires EDITOR or OWNER access on the file's broker.",
         "operationId": "delete_file_api_v1_brokers_import_files__file_id__delete",
         "parameters": [
           {
@@ -2266,6 +3405,101 @@
         }
       }
     },
+    "/api/v1/brokers/import/files/{file_id}/download": {
+      "get": {
+        "tags": [
+          "BR (Broker)",
+          "BR Import"
+        ],
+        "summary": "Download File",
+        "description": "Download a file by its ID.\n\nReturns the file content with appropriate headers for download.\nAny user with access to the broker can download files (VIEWER+).",
+        "operationId": "download_file_api_v1_brokers_import_files__file_id__download_get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/brokers/import/files/{file_id}/last-parse": {
+      "get": {
+        "tags": [
+          "BR (Broker)",
+          "BR Import"
+        ],
+        "summary": "Get Last Parse Result",
+        "description": "Get the cached result from the last successful parse.\n\nUseful for reloading a preview without re-parsing the file.\nReturns None if no parse result is cached.",
+        "operationId": "get_last_parse_result_api_v1_brokers_import_files__file_id__last_parse_get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Last Parse Result Api V1 Brokers Import Files  File Id  Last Parse Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/brokers/import/files/{file_id}/parse": {
       "post": {
         "tags": [
@@ -2273,7 +3507,7 @@
           "BR Import"
         ],
         "summary": "Parse File",
-        "description": "Parse a file and return transactions for preview.\n\nThis is a preview operation - no data is persisted to the database.\nThe user can review and modify the parsed transactions before\nsending them to POST /transactions endpoint.\n\nIf plugin_code is 'auto' (default), the system will automatically\ndetect the best plugin based on file content analysis.\n\nReturns:\n- transactions: Parsed transactions (may have fake asset IDs)\n- asset_mappings: Mapping from fake IDs to candidate real assets\n- duplicates: Report of potential duplicate transactions\n- warnings: Parser warnings (skipped rows, etc.)\n\nNote: Asset mapping and duplicate detection are done in CORE,\nnot in the plugin. Plugins only parse the file format.",
+        "description": "Parse a file and return transactions for preview.\n\nThis is a preview operation - no data is persisted to the database.\nThe user can review and modify the parsed transactions before\nsending them to POST /transactions endpoint.\n\nRequires EDITOR or OWNER access on the file's broker.\n\nIf plugin_code is 'auto' (default), the system will automatically\ndetect the best plugin based on file content analysis.\n\nReturns:\n- transactions: Parsed transactions (may have fake asset IDs)\n- asset_mappings: Mapping from fake IDs to candidate real assets\n- duplicates: Report of potential duplicate transactions\n- warnings: Parser warnings (skipped rows, etc.)\n\nNote: Asset mapping and duplicate detection are done in CORE,\nnot in the plugin. Plugins only parse the file format.",
         "operationId": "parse_file_api_v1_brokers_import_files__file_id__parse_post",
         "parameters": [
           {
@@ -2713,23 +3947,6 @@
         }
       }
     },
-    "/api/v1/health": {
-      "get": {
-        "summary": "Health Check",
-        "description": "Health check endpoint.\nReturns service status.\n\nReturns:\n    dict: Status message",
-        "operationId": "health_check_api_v1_health_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
     "/mkdocs": {
       "get": {
         "summary": "Mkdocs Root",
@@ -2857,6 +4074,303 @@
         ],
         "title": "AssetType",
         "description": "Asset type classification.\n\nUsage: Categorize assets by their nature for reporting and analysis.\n\n- STOCK: Individual company shares (e.g., Apple, Microsoft)\n- ETF: Exchange Traded Fund (e.g., VWCE, SPY)\n- BOND: Fixed income securities (government or corporate bonds)\n- CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)\n- FUND: Mutual funds or investment funds\n- HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)\n- CROWDFUND_LOAN: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)\n- OTHER: Any other asset type not listed above\n\nImpact:\n- Affects default valuation_model:\n  - CROWDFUND_LOAN -> SCHEDULED_YIELD\n  - HOLD -> MANUAL\n  - Others -> MARKET_PRICE\n- Used for portfolio breakdown and allocation analysis\n- May influence available data plugins (e.g., crypto uses different sources)"
+      },
+      "AuthLoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Username",
+            "description": "Username or email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Password",
+            "description": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "AuthLoginRequest",
+        "description": "Login request with username/email and password."
+      },
+      "AuthLoginResponse": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/AuthUserResponse"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Login successful"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "title": "AuthLoginResponse",
+        "description": "Response after successful login."
+      },
+      "AuthLogoutResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Logged out successfully"
+          }
+        },
+        "type": "object",
+        "title": "AuthLogoutResponse",
+        "description": "Response after logout."
+      },
+      "AuthMeResponse": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/AuthUserResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "title": "AuthMeResponse",
+        "description": "Response from /me endpoint."
+      },
+      "AuthRegisterRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 3,
+            "title": "Username",
+            "description": "Username"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "Email address"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password",
+            "description": "Password (min 8 chars)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "email",
+          "password"
+        ],
+        "title": "AuthRegisterRequest",
+        "description": "Registration request."
+      },
+      "AuthRegisterResponse": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/AuthUserResponse"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Registration successful"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "title": "AuthRegisterResponse",
+        "description": "Response after successful registration."
+      },
+      "AuthUserResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "is_superuser": {
+            "type": "boolean",
+            "title": "Is Superuser"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "email",
+          "is_active",
+          "is_superuser",
+          "created_at"
+        ],
+        "title": "AuthUserResponse",
+        "description": "User info returned after login or from /me endpoint."
+      },
+      "BRAccessCreateRequest": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "User Id",
+            "description": "User ID to grant access"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole",
+            "description": "Access role",
+            "default": "VIEWER"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "BRAccessCreateRequest",
+        "description": "Request to add user access to a broker."
+      },
+      "BRAccessCreateResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Access granted successfully"
+          },
+          "access": {
+            "$ref": "#/components/schemas/BRAccessItem"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "access"
+        ],
+        "title": "BRAccessCreateResponse",
+        "description": "Response after creating access."
+      },
+      "BRAccessDeleteResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Access removed successfully"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BRAccessDeleteResponse",
+        "description": "Response after removing access."
+      },
+      "BRAccessItem": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id",
+            "description": "User ID"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Username"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "User email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole",
+            "description": "Access role"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When access was granted"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_id",
+          "username",
+          "email",
+          "role",
+          "created_at"
+        ],
+        "title": "BRAccessItem",
+        "description": "DTO for broker access with user details.\nUsed in list responses to show who has access."
+      },
+      "BRAccessListResponse": {
+        "properties": {
+          "accesses": {
+            "items": {
+              "$ref": "#/components/schemas/BRAccessItem"
+            },
+            "type": "array",
+            "title": "Accesses"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of users with access"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "BRAccessListResponse",
+        "description": "Response for listing broker accesses."
+      },
+      "BRAccessUpdateRequest": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/UserRole",
+            "description": "New access role"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "BRAccessUpdateRequest",
+        "description": "Request to update user access role."
       },
       "BRAssetHolding": {
         "properties": {
@@ -3091,17 +4605,62 @@
             "title": "Portal Url",
             "description": "URL to broker's web portal"
           },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url",
+            "description": "Custom icon URL for the broker"
+          },
+          "default_import_plugin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Import Plugin",
+            "description": "Default BRIM plugin for importing transactions"
+          },
           "allow_cash_overdraft": {
             "type": "boolean",
             "title": "Allow Cash Overdraft",
-            "description": "Allow negative cash balance (margin trading)",
+            "description": "Allow leveraged buying (negative cash balance)",
             "default": false
           },
           "allow_asset_shorting": {
             "type": "boolean",
             "title": "Allow Asset Shorting",
-            "description": "Allow negative asset quantities (short selling)",
+            "description": "Allow short selling (negative asset quantities)",
             "default": false
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "Whether the broker account is currently active",
+            "default": true
+          },
+          "opened_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened At",
+            "description": "Date when the account was opened in reality"
           },
           "initial_balances": {
             "anyOf": [
@@ -3523,6 +5082,43 @@
             ],
             "title": "Error Message",
             "description": "Error description if processing failed"
+          },
+          "uploaded_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded By User Id",
+            "description": "ID of user who uploaded the file"
+          },
+          "target_broker_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Broker Id",
+            "description": "ID of broker this file belongs to"
+          },
+          "last_parse_result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Parse Result",
+            "description": "Cached result from last successful parse"
           }
         },
         "type": "object",
@@ -3534,7 +5130,7 @@
           "uploaded_at"
         ],
         "title": "BRIMFileInfo",
-        "description": "Information about an uploaded broker report file.\n\nAttributes:\n    file_id: UUID identifier (NOT filesystem path)\n    filename: Original filename from upload\n    size_bytes: File size in bytes\n    status: Current processing status\n    uploaded_at: UTC timestamp when file was uploaded\n    processed_at: UTC timestamp when file was processed (if applicable)\n    compatible_plugins: List of plugin codes that can parse this file\n    error_message: Error description if status is FAILED"
+        "description": "Information about an uploaded broker report file.\n\nAttributes:\n    file_id: UUID identifier (NOT filesystem path)\n    filename: Original filename from upload\n    size_bytes: File size in bytes\n    status: Current processing status\n    uploaded_at: UTC timestamp when file was uploaded\n    processed_at: UTC timestamp when file was processed (if applicable)\n    compatible_plugins: List of plugin codes that can parse this file\n    error_message: Error description if status is FAILED\n    uploaded_by_user_id: ID of user who uploaded the file\n    target_broker_id: ID of broker this file belongs to\n    last_parse_result: Cached result from last successful parse"
       },
       "BRIMFileStatus": {
         "type": "string",
@@ -3749,6 +5345,28 @@
             ],
             "title": "Portal Url"
           },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
+          },
+          "default_import_plugin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Import Plugin"
+          },
           "allow_cash_overdraft": {
             "type": "boolean",
             "title": "Allow Cash Overdraft"
@@ -3756,6 +5374,22 @@
           "allow_asset_shorting": {
             "type": "boolean",
             "title": "Allow Asset Shorting"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "opened_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened At"
           },
           "created_at": {
             "type": "string",
@@ -3775,6 +5409,7 @@
           "name",
           "allow_cash_overdraft",
           "allow_asset_shorting",
+          "is_active",
           "created_at",
           "updated_at"
         ],
@@ -3813,6 +5448,28 @@
             ],
             "title": "Portal Url"
           },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
+          },
+          "default_import_plugin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Import Plugin"
+          },
           "allow_cash_overdraft": {
             "type": "boolean",
             "title": "Allow Cash Overdraft"
@@ -3820,6 +5477,22 @@
           "allow_asset_shorting": {
             "type": "boolean",
             "title": "Allow Asset Shorting"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "opened_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened At"
           },
           "created_at": {
             "type": "string",
@@ -3866,6 +5539,7 @@
           "name",
           "allow_cash_overdraft",
           "allow_asset_shorting",
+          "is_active",
           "created_at",
           "updated_at"
         ],
@@ -3914,6 +5588,32 @@
             "title": "Portal Url",
             "description": "New portal URL"
           },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url",
+            "description": "Custom icon URL for the broker"
+          },
+          "default_import_plugin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Import Plugin",
+            "description": "Default BRIM plugin for importing transactions"
+          },
           "allow_cash_overdraft": {
             "anyOf": [
               {
@@ -3924,7 +5624,7 @@
               }
             ],
             "title": "Allow Cash Overdraft",
-            "description": "Update overdraft permission"
+            "description": "Update leveraged buying permission"
           },
           "allow_asset_shorting": {
             "anyOf": [
@@ -3936,7 +5636,32 @@
               }
             ],
             "title": "Allow Asset Shorting",
-            "description": "Update shorting permission"
+            "description": "Update short selling permission"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active",
+            "description": "Update account active status"
+          },
+          "opened_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened At",
+            "description": "Update account opening date"
           }
         },
         "additionalProperties": false,
@@ -4017,6 +5742,66 @@
           "file"
         ],
         "title": "Body_upload_file_api_v1_brokers_import_upload_post"
+      },
+      "Body_upload_file_api_v1_uploads_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_api_v1_uploads_post"
+      },
+      "ChangePasswordRequest": {
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Current Password",
+            "description": "Current password"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "New Password",
+            "description": "New password (min 8 chars)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "ChangePasswordRequest",
+        "description": "Change password request (for authenticated users)."
+      },
+      "ChangePasswordResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Password changed successfully"
+          }
+        },
+        "type": "object",
+        "title": "ChangePasswordResponse",
+        "description": "Response after successful password change."
       },
       "CountryListItem": {
         "properties": {
@@ -4310,6 +6095,25 @@
         ],
         "title": "DateRangeModel",
         "description": "Reusable date range model for FA and FX operations.\n\nUsed across multiple operations: price deletion, FX rate queries, etc.\nRepresents an inclusive date range [start, end].\n\nAttributes:\n    start: Start date (inclusive, required)\n    end: End date (inclusive, optional - defaults to start for single day)\n\nDesign Notes:\n    - If end is None, represents a single day (start only)\n    - If end is provided, represents a range [start, end] inclusive\n    - Validator ensures end >= start when provided\n\nExamples:\n    # Single day\n    {\"start\": \"2025-11-05\", \"end\": null}  # Just 2025-11-05\n\n    # Range\n    {\"start\": \"2025-11-01\", \"end\": \"2025-11-30\"}  # Entire November"
+      },
+      "DependencyInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "version"
+        ],
+        "title": "DependencyInfo",
+        "description": "Information about a dependency."
       },
       "ExportFormat": {
         "type": "string",
@@ -7190,6 +8994,102 @@
         "title": "FXUpsertResult",
         "description": "Single rate upsert result."
       },
+      "GlobalSettingRead": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Setting key"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "Setting value (as string)"
+          },
+          "value_type": {
+            "type": "string",
+            "title": "Value Type",
+            "description": "Value type: string, int, bool, json"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Human-readable description"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Last update timestamp"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By",
+            "description": "User ID who last updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "value",
+          "value_type"
+        ],
+        "title": "GlobalSettingRead",
+        "description": "Global setting response schema."
+      },
+      "GlobalSettingUpdate": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "New value (as string)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "GlobalSettingUpdate",
+        "description": "Global setting update request."
+      },
+      "GlobalSettingsListResponse": {
+        "properties": {
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/GlobalSettingRead"
+            },
+            "type": "array",
+            "title": "Settings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "title": "GlobalSettingsListResponse",
+        "description": "Response for listing all global settings."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -7215,7 +9115,7 @@
           "OTHER"
         ],
         "title": "IdentifierType",
-        "description": "Asset identifier type.\n\nUsage: Specify which type of identifier is stored in the `identifier` field.\n\n- ISIN: International Securities Identification Number (e.g., US0378331005 for Apple)\n- TICKER: Stock ticker symbol (e.g., AAPL, MSFT)\n- CUSIP: Committee on Uniform Securities Identification Procedures (US/Canada)\n- SEDOL: Stock Exchange Daily Official List (UK)\n- FIGI: Financial Instrument Global Identifier (Bloomberg standard)\n- UUID: Universal Unique Identifier (for custom/synthetic assets)\n- OTHER: Any other identifier type not listed above\n\nImpact: Used for data validation and plugin selection. Some plugins may only\nwork with specific identifier types (e.g., Yahoo Finance prefers TICKER).\n\n\u26a0\ufe0f  DEPENDENT SCHEMAS - If you add/remove values, update these files:\n\n1. DATABASE SCHEMA:\n   - backend/alembic/versions/001_initial.py\n     \u2192 Add column: identifier_{value.lower()} in assets table\n     \u2192 Add index if frequently searched (ISIN, TICKER have indexes)\n\n2. SQLMODEL (this file):\n   - Asset class below\n     \u2192 Add field: identifier_{value.lower()}: Optional[str]\n     \u2192 Add validator if needed (e.g., ISIN requires 12 chars)\n\n3. PYDANTIC SCHEMAS (backend/app/schemas/assets.py):\n   - FAAssetCreateItem: Add identifier_{value.lower()} field\n   - FAAssetPatchItem: Add identifier_{value.lower()} field\n   - FAinfoResponse: Add identifier_{value.lower()} field\n   - FAAinfoFiltersRequest: Add filter field (exact or partial match)\n\n4. SERVICE LAYER (backend/app/services/asset_source.py):\n   - list_assets(): Add condition for new filter\n   - create_assets_bulk(): Pass new field to Asset()\n\n5. BRIM PROVIDER (backend/app/services/brim_provider.py):\n   - search_asset_candidates(): Add search priority if relevant\n\n6. TESTS:\n   - test_identifier_columns_match_enum() will FAIL automatically\n     if Asset.identifier_{value.lower()} is missing\n\nRun: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_columns_match_enum -v"
+        "description": "Asset identifier type.\n\nUsage: Specify which type of identifier is stored in the 'identifier' field.\n\n- ISIN: International Securities Identification Number (e.g., US0378331005 for Apple)\n- TICKER: Stock ticker symbol (e.g., AAPL, MSFT)\n- CUSIP: Committee on Uniform Securities Identification Procedures (US/Canada)\n- SEDOL: Stock Exchange Daily Official List (UK)\n- FIGI: Financial Instrument Global Identifier (Bloomberg standard)\n- UUID: Universal Unique Identifier (for custom/synthetic assets)\n- OTHER: Any other identifier type not listed above\n\nImpact: Used for data validation and plugin selection. Some plugins may only\nwork with specific identifier types (e.g., Yahoo Finance prefers TICKER).\n\n\u26a0\ufe0f  DEPENDENT SCHEMAS - If you add/remove values, update these files:\n\n1. DATABASE SCHEMA:\n   - backend/alembic/versions/001_initial.py\n     \u2192 Add column: identifier_{value.lower()} in assets table\n     \u2192 Add index if frequently searched (ISIN, TICKER have indexes)\n\n2. SQLMODEL (this file):\n   - Asset class below\n     \u2192 Add field: identifier_{value.lower()}: Optional[str]\n     \u2192 Add validator if needed (e.g., ISIN requires 12 chars)\n\n3. PYDANTIC SCHEMAS (backend/app/schemas/assets.py):\n   - FAAssetCreateItem: Add identifier_{value.lower()} field\n   - FAAssetPatchItem: Add identifier_{value.lower()} field\n   - FAinfoResponse: Add identifier_{value.lower()} field\n   - FAAinfoFiltersRequest: Add filter field (exact or partial match)\n\n4. SERVICE LAYER (backend/app/services/asset_source.py):\n   - list_assets(): Add condition for new filter\n   - create_assets_bulk(): Pass new field to Asset()\n\n5. BRIM PROVIDER (backend/app/services/brim_provider.py):\n   - search_asset_candidates(): Add search priority if relevant\n\n6. TESTS:\n   - test_identifier_columns_match_enum() will FAIL automatically\n     if Asset.identifier_{value.lower()} is missing\n\nRun: pytest backend/test_scripts/test_db/db_schema_validate.py::test_identifier_columns_match_enum -v"
       },
       "OldNew_Union_str__NoneType__": {
         "properties": {
@@ -7335,6 +9235,56 @@
         ],
         "title": "SectorListResponse",
         "description": "Response for sectors list endpoint."
+      },
+      "SystemInfoResponse": {
+        "properties": {
+          "app_version": {
+            "type": "string",
+            "title": "App Version"
+          },
+          "python_version": {
+            "type": "string",
+            "title": "Python Version"
+          },
+          "os_name": {
+            "type": "string",
+            "title": "Os Name"
+          },
+          "os_version": {
+            "type": "string",
+            "title": "Os Version"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "backend_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/DependencyInfo"
+            },
+            "type": "array",
+            "title": "Backend Dependencies"
+          },
+          "frontend_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/DependencyInfo"
+            },
+            "type": "array",
+            "title": "Frontend Dependencies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "app_version",
+          "python_version",
+          "os_name",
+          "os_version",
+          "platform",
+          "backend_dependencies",
+          "frontend_dependencies"
+        ],
+        "title": "SystemInfoResponse",
+        "description": "System information response."
       },
       "TXBulkCreateResponse": {
         "properties": {
@@ -8062,6 +10012,284 @@
         ],
         "title": "TransactionType",
         "description": "Unified transaction types for all asset and cash operations.\n\nThis enum represents all possible transaction types in the unified\ntransaction table. Each type has specific rules for quantity and amount signs.\n\n== Asset transactions (quantity != 0) ==\n\n- BUY: Purchase asset with cash\n  Signs: quantity > 0, amount < 0\n  Example: Buy 10 shares of AAPL for \u20ac1500\n\n- SELL: Sell asset for cash\n  Signs: quantity < 0, amount > 0\n  Example: Sell 5 shares of MSFT for \u20ac1500\n\n- TRANSFER: Asset transfer between brokers\n  Signs: quantity +/-, amount = 0\n  Requires: related_transaction_id (links to paired transfer)\n  Example: Transfer 100 shares from Broker A to Broker B\n\n- ADJUSTMENT: Manual asset quantity correction (splits, gifts, etc.)\n  Signs: quantity +/-, amount = 0\n  Optional: related_transaction_id\n  Example: Stock split 2:1 adds 100 shares\n\n== Cash-only transactions (quantity = 0) ==\n\n- DIVIDEND: Dividend payment received\n  Signs: quantity = 0, amount > 0\n  Example: Receive \u20ac50 dividend from AAPL\n\n- INTEREST: Interest payment received\n  Signs: quantity = 0, amount > 0\n  Example: Monthly interest from crowdfunding loan\n\n- DEPOSIT: Add cash to broker account\n  Signs: quantity = 0, amount > 0\n  Example: Transfer \u20ac1000 to broker\n\n- WITHDRAWAL: Remove cash from broker account\n  Signs: quantity = 0, amount < 0\n  Example: Withdraw \u20ac500 from broker\n\n- FEE: Fee or commission payment\n  Signs: quantity = 0, amount < 0\n  Example: \u20ac5 custody fee\n\n- TAX: Tax payment\n  Signs: quantity = 0, amount < 0\n  Example: \u20ac100 capital gains tax\n\n- FX_CONVERSION: Currency exchange\n  Signs: quantity = 0, amount +/-\n  Requires: related_transaction_id (links to paired conversion)\n  Example: Convert \u20ac1000 to $1090\n\nImpact:\n- TRANSFER and FX_CONVERSION require related_transaction_id\n- Validation ensures sign rules are followed\n- All calculations based on settlement date"
+      },
+      "UpdateProfileRequest": {
+        "properties": {
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username",
+            "description": "New username"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "New email address"
+          }
+        },
+        "type": "object",
+        "title": "UpdateProfileRequest",
+        "description": "Update user profile request. All fields optional."
+      },
+      "UpdateProfileResponse": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/AuthUserResponse"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Profile updated successfully"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "title": "UpdateProfileResponse",
+        "description": "Response after successful profile update."
+      },
+      "UploadDeleteResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "file_id": {
+            "type": "string",
+            "title": "File Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "file_id"
+        ],
+        "title": "UploadDeleteResponse",
+        "description": "Response after file deletion."
+      },
+      "UploadFileInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Unique file ID (UUID)"
+          },
+          "original_name": {
+            "type": "string",
+            "title": "Original Name",
+            "description": "Original filename"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type",
+            "description": "MIME type of the file"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes",
+            "description": "File size in bytes"
+          },
+          "uploaded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Uploaded At",
+            "description": "Upload timestamp (UTC)"
+          },
+          "uploaded_by_user_id": {
+            "type": "integer",
+            "title": "Uploaded By User Id",
+            "description": "ID of user who uploaded the file"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "User-provided description"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "URL to access the file"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "original_name",
+          "mime_type",
+          "size_bytes",
+          "uploaded_at",
+          "uploaded_by_user_id",
+          "url"
+        ],
+        "title": "UploadFileInfo",
+        "description": "Information about an uploaded file."
+      },
+      "UploadListResponse": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/UploadFileInfo"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "UploadListResponse",
+        "description": "Response for listing uploads."
+      },
+      "UploadResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "file": {
+            "$ref": "#/components/schemas/UploadFileInfo",
+            "description": "Uploaded file info"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "File uploaded successfully"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "UploadResponse",
+        "description": "Response after successful upload."
+      },
+      "UserRole": {
+        "type": "string",
+        "enum": [
+          "OWNER",
+          "EDITOR",
+          "VIEWER"
+        ],
+        "title": "UserRole",
+        "description": "User role for broker access control.\n\n- OWNER: Full access (CRUD broker, manage access, delete broker)\n- EDITOR: Modify broker and transactions, can only remove self\n- VIEWER: Read-only access"
+      },
+      "UserSettingsRead": {
+        "properties": {
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "description": "Preferred language (en, it, fr, es)"
+          },
+          "base_currency": {
+            "type": "string",
+            "title": "Base Currency",
+            "description": "Base currency for display (ISO 4217)"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark",
+              "auto"
+            ],
+            "title": "Theme",
+            "description": "UI theme"
+          }
+        },
+        "type": "object",
+        "required": [
+          "language",
+          "base_currency",
+          "theme"
+        ],
+        "title": "UserSettingsRead",
+        "description": "User settings response schema."
+      },
+      "UserSettingsUpdate": {
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "base_currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 3,
+                "minLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Currency"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "light",
+                  "dark",
+                  "auto"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          }
+        },
+        "type": "object",
+        "title": "UserSettingsUpdate",
+        "description": "User settings update request. All fields optional."
       },
       "ValidationError": {
         "properties": {
