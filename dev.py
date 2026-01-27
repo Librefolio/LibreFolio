@@ -325,6 +325,13 @@ def cmd_fe_dev(args):
 
 def cmd_fe_build(args):
     """Build frontend for production."""
+    # First, sync API types to ensure frontend types are aligned with backend
+    print(Colors.success("Syncing API types before build..."))
+    sync_result = cmd_api_sync(args)
+    if sync_result != 0:
+        print_error("API sync failed - aborting build")
+        return sync_result
+
     if args.debug:
         print(Colors.success("Building frontend in DEBUG mode (no minify, with sourcemaps)..."))
         result = run_command_live(["npm", "run", "build:debug"], cwd=PROJECT_ROOT / "frontend")
@@ -361,7 +368,7 @@ def cmd_fe_preview(args):
 def cmd_api_schema(args):
     """Export OpenAPI schema."""
     print(Colors.success("Exporting OpenAPI schema..."))
-    return run_pipenv(["python", "backend/test_scripts/export_openapi.py"])
+    return run_pipenv(["python", "scripts/list_api_endpoints.py", "--openapi-file", "frontend/src/lib/api/openapi.json"])
 
 
 def cmd_api_client(args):
