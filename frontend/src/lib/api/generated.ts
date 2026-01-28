@@ -2870,7 +2870,7 @@ const AuthUserResponse: z.ZodType<AuthUserResponse> = z
     email: z.string(),
     is_active: z.boolean(),
     is_superuser: z.boolean(),
-    created_at: z.string().datetime({ offset: true }),
+    created_at: z.string(),
   })
   .passthrough();
 const AuthLoginResponse: z.ZodType<AuthLoginResponse> = z

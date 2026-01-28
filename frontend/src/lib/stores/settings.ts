@@ -3,10 +3,12 @@
  *
  * Manages user preferences like default currency, language, etc.
  * Loads settings from backend and caches them locally.
+ *
+ * Now uses Zodios client for type-safe API calls with Zod validation.
  */
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
-import { api } from '$lib/api';
+import { zodiosApi } from '$lib/api';
 import type { UserSettings } from '$lib/types';
 
 // Re-export type for backward compatibility
@@ -44,8 +46,8 @@ function createUserSettingsStore() {
          */
         async load(): Promise<void> {
             try {
-                const response = await api.get<{ settings: UserSettings }>('/settings/user');
-                const settings = response.settings || defaultSettings;
+                // Zodios returns UserSettingsRead directly
+                const settings = await zodiosApi.get_user_settings_endpoint_api_v1_settings_user_get();
                 set(settings);
 
                 // Cache in localStorage
@@ -64,7 +66,7 @@ function createUserSettingsStore() {
          */
         async updateSetting(key: keyof UserSettings, value: string): Promise<boolean> {
             try {
-                await api.patch('/settings/user', { [key]: value });
+                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({ [key]: value });
 
                 update(current => {
                     const updated = { ...current, [key]: value } as UserSettings;

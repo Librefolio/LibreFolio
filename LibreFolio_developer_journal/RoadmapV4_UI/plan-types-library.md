@@ -1,7 +1,7 @@
 # Plan: TypeScript Types Library
 
-**Status**: ✅ COMPLETED  
-**Durata effettiva**: ~2 ore  
+**Status**: ✅ TYPES COMPLETED / 🔄 ZODIOS MIGRATION IN PROGRESS  
+**Durata effettiva**: ~3 ore  
 **Priorità**: P0 (Infrastruttura)  
 **Dipendenze**: Nessuna
 
@@ -202,6 +202,62 @@ Se il backend modifica uno schema:
 1. Esegui `./dev.py api sync` o `./dev.py front build`
 2. TypeScript mostrerà errori dove i campi sono cambiati
 3. Aggiorna il codice frontend di conseguenza
+
+---
+
+## 🔄 Migrazione a Zodios (Fase 2)
+
+### Obiettivo
+
+Sostituire il client `api` manuale (fetch-based) con `zodiosApi` (Axios-based) per:
+- Type-safety completa con autocomplete
+- Validazione runtime delle risposte via Zod
+- Gestione errori più robusta
+
+### Stato Attuale
+
+| Componente | Stato |
+|------------|-------|
+| `zodios-client.ts` | ✅ Creato con Axios + interceptors |
+| `auth.ts` store | ✅ Migrato |
+| `settings.ts` store | ✅ Migrato |
+| Componenti settings | ⏳ Da migrare (5 file) |
+| Componenti brokers | ⏳ Da migrare (5 file) |
+| Route pages | ⏳ Da migrare (3 file) |
+| Altri componenti | ⏳ Da migrare (2 file) |
+| `client.ts` legacy | ⏳ Da rimuovere dopo migrazione |
+
+### Come migrare un componente
+
+```typescript
+// PRIMA (legacy fetch client)
+import { api, ApiError } from '$lib/api';
+
+const response = await api.get<Broker[]>('/brokers');
+
+// DOPO (Zodios client)
+import { zodiosApi } from '$lib/api';
+import { isAxiosError } from 'axios';
+
+const response = await zodiosApi.list_brokers_api_v1_brokers_get();
+// ^ Type-safe! Autocomplete mostra tutti gli endpoint
+```
+
+### Gestione Errori
+
+```typescript
+// PRIMA
+if (error instanceof ApiError) {
+    if (error.status === 401) { ... }
+}
+
+// DOPO
+import { isAxiosError } from 'axios';
+
+if (isAxiosError(error)) {
+    if (error.response?.status === 401) { ... }
+}
+```
 
 ---
 
