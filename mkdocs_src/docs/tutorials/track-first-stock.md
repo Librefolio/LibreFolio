@@ -1,6 +1,6 @@
-# Tutorial: Tracking Your First Stock
+# Tutorial: Tracking Your First Stock (WIP)
 
-*(Coming Soon)*
+> 🚧 **Work In Progress**: This tutorial is currently being written.
 
 This tutorial will guide you through:
 1.  Creating a new Asset (e.g., Apple Inc.).

@@ -55,6 +55,17 @@ graph TD
 
 4.  **Provider Plugins**: A system of pluggable modules that abstract the interaction with external data sources. This makes it easy to add support for new brokers, pricing APIs, or FX rate providers without modifying the core application logic.
 
+## Key Subsystems
+
+For detailed architectural documentation of specific subsystems, see:
+
+-   **[Database Schema](database.md)**: Data models and relationships.
+-   **[Users & Brokers](users_and_brokers.md)**: Authentication and multi-user access control.
+-   **[BRIM Architecture](../backend/brim/architecture.md)**: Broker Report Import Manager.
+-   **[Asset Pricing](../backend/assets/architecture.md)**: Asset data fetching and metadata.
+-   **[FX Architecture](../backend/fx/architecture.md)**: Foreign Exchange system.
+    -   See also: **[FX Configuration & Routing](../backend/fx/configuration.md)** for multi-provider setup.
+
 ## Request Flow Example: Displaying Portfolio
 
 1.  User logs in and navigates to the dashboard.

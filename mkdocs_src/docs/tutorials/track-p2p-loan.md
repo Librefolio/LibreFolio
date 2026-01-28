@@ -1,6 +1,6 @@
-# Tutorial: Tracking a P2P Loan
+# Tutorial: Tracking a P2P Loan (WIP)
 
-*(Coming Soon)*
+> 🚧 **Work In Progress**: This tutorial is currently being written.
 
 This tutorial will guide you through:
 1.  Creating a new Asset for a P2P loan.

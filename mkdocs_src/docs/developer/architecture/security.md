@@ -1,41 +1,66 @@
-# Security
+# Security Architecture
 
-This document outlines the security model, boundaries, and reporting procedures for LibreFolio.
+This document outlines the security model, boundaries, and deployment recommendations for LibreFolio.
 
 ## Threat Model and Scope
 
 LibreFolio is a **self-hosted** application. The primary security assumption is that the **host system is secure**.
 
 ### In Scope
-
-The following are considered within the scope of LibreFolio's security concerns:
-
--   **API Exploitation**: Any attempt to gain unauthorized access, escalate privileges, or perform unauthorized actions by exploiting vulnerabilities in the FastAPI backend.
--   **Data Segregation**: Ensuring that one user cannot access another user's data.
--   **Authentication Bypass**: Any method that allows access to protected endpoints without a valid JWT.
--   **Cross-Site Scripting (XSS)**: Vulnerabilities in the frontend that could allow an attacker to execute malicious scripts in a user's browser.
+-   **Session Security**: Preventing session hijacking via secure cookie attributes.
+-   **Data Segregation**: Ensuring strict isolation between users (RBAC).
+-   **Input Validation**: Preventing injection attacks via strict Pydantic schemas.
+-   **CSRF Protection**: Using `SameSite` cookie attributes to prevent Cross-Site Request Forgery.
 
 ### Out of Scope
+-   **Host System Compromise**: If an attacker gains shell access to the server, the database file is accessible. Encryption at rest is currently not implemented.
+-   **SSL/TLS Termination**: The application server (Uvicorn) speaks HTTP. HTTPS is the responsibility of the deployment environment (Reverse Proxy).
 
-The following are considered out of scope:
+## Authentication & Session Management
 
--   **Host System Compromise**: If an attacker gains shell access to the server where LibreFolio is running, it is assumed that all data is compromised. The application does not and cannot protect against an attacker with direct access to the filesystem or database file.
--   **Physical Security**: The physical security of the server is the user's responsibility.
--   **Network Security (Internal)**: It is assumed that the local network is trusted. LibreFolio should be exposed to the internet only via a secure reverse proxy with HTTPS.
+LibreFolio uses **Stateful Session Authentication** instead of stateless tokens (JWT).
 
-## Security Boundary
+-   **Mechanism**: Randomly generated 64-character Session ID stored in an `HttpOnly` cookie.
+-   **Storage**: Sessions are currently stored in-memory on the backend.
+-   **Cookie Attributes**:
+    -   `HttpOnly`: Prevents XSS attacks from reading the session ID.
+    -   `SameSite=Lax`: Mitigates CSRF attacks.
+    -   `Secure`: Enforced in production to ensure cookies are only sent over HTTPS.
 
-The security boundary of the application is the **HTTPS connection** to the server. All communication between the client and the server must be encrypted.
+## HTTPS & Deployment Architecture
 
--   **Frontend <-> Backend**: All API calls are made over HTTPS.
--   **Backend <-> Database**: The connection to the SQLite database is a local file operation and is considered within the secure boundary of the host system.
+**LibreFolio does not handle HTTPS directly.**
 
-## Key Security Measures
+In a modern containerized environment, SSL/TLS termination is the responsibility of a **Reverse Proxy** or a **Tunneling Service**.
 
--   **Authentication**: Uses JWT with a strong, secret key (`SECRET_KEY` in `.env`). Passwords are never stored in plaintext; they are hashed using `passlib`.
--   **Dependencies**: The project uses `pipenv` and `npm` to manage dependencies, with lockfiles (`Pipfile.lock`, `package-lock.json`) to ensure reproducible and verifiable builds.
--   **Data Validation**: Pydantic is used for strict data validation at the API boundary, preventing many common injection-style attacks.
--   **CORS**: Cross-Origin Resource Sharing (CORS) is configured to only allow requests from the frontend's domain.
+### The "Termination Proxy" Pattern
+
+```mermaid
+graph LR
+    Client[User Browser] -- "HTTPS (Encrypted)" --> Proxy[Reverse Proxy / Tunnel]
+    
+    subgraph "Internal Network / Docker Network"
+        Proxy -- "HTTP (Plain)" --> Backend[LibreFolio Backend :8000]
+    end
+```
+
+1.  **The Client** connects securely to the Proxy (e.g., Nginx, Caddy, Traefik, Tailscale).
+2.  **The Proxy** handles the certificate handshake (Let's Encrypt) and decryption.
+3.  **The Proxy** forwards the request to LibreFolio over a private, internal network (Docker bridge).
+4.  **LibreFolio** processes the request and assumes the connection is secure.
+
+### Why this approach?
+-   **Certificate Management**: Proxies like Caddy or Traefik handle automatic certificate renewal.
+-   **Performance**: Offloads encryption overhead from the application.
+-   **Simplicity**: Python code doesn't need to know about certificates or keys.
+
+### Configuration
+
+To ensure the application behaves correctly behind a proxy (e.g., generating correct redirect URLs), you must ensure the proxy sets the standard headers:
+-   `X-Forwarded-For`
+-   `X-Forwarded-Proto` (should be `https`)
+
+In `production` mode, ensure the environment variable `SESSION_COOKIE_SECURE=True` is set in your `.env` file. This tells the backend to instruct the browser to *never* send the cookie over plain HTTP.
 
 ## Reporting a Vulnerability
 
@@ -45,5 +70,3 @@ Please provide a detailed description of the vulnerability, including:
 -   The steps to reproduce it.
 -   The potential impact.
 -   Any suggested mitigation.
-
-We take security seriously and will prioritize addressing any valid vulnerability reports.

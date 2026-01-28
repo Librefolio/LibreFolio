@@ -1,81 +1,83 @@
 # Settings Components
 
-*Status: Draft - Components implemented, documentation in progress*
+This section documents the components used for the Settings pages (User Preferences, Global Settings, Profile).
 
-## Overview
+## Architecture
 
-Settings components for user preferences and global application settings.
-
-## Components
+The settings system uses a modular architecture based on a common layout and reusable field components.
 
 ### SettingsLayout
 
-Two-column layout for settings pages:
+The `SettingsLayout` component provides the structural shell for all settings tabs.
 
-- Left sidebar with category navigation
-- Right content area
-- Responsive (stacks on mobile)
+**Features:**
+-   **Two-Column Layout**: Sidebar navigation on the left, content on the right.
+-   **Global Actions**: "Save All", "Undo All", "Reset All" buttons in the header.
+-   **Lock Toggle**: Optional lock button for admin settings (prevents accidental edits).
+-   **Responsive**: Stacks vertically on mobile.
+
+**Props:**
+-   `categories`: Array of `{ id, icon, labelKey }` for the sidebar.
+-   `selectedCategory`: ID of the currently active category filter.
+-   `hasChanges`: Boolean to show Save/Undo buttons.
+-   `hasNonDefaults`: Boolean to show Reset button.
+-   `isLocked`: Boolean state of the edit lock.
 
 ### PreferencesTab
 
-User-specific preferences:
+Manages user-specific settings (Language, Currency, Theme).
 
-- Language selection
-- Currency preference
-- Theme (light/dark/system)
-- Date format
-- Number format
-- Reset to defaults button
+**Logic:**
+1.  **Load**: Fetches Global Defaults (`/settings/global`) and User Settings (`/settings/user`) in parallel.
+2.  **State Tracking**:
+    -   `originalValues`: The values currently saved in the DB.
+    -   `editedValues`: The values currently in the form inputs.
+    -   `globalDefaults`: The system-wide default values.
+3.  **Computed States**:
+    -   `isModified`: `editedValues !== originalValues` (Shows Save/Undo).
+    -   `isNonDefault`: `originalValues !== globalDefaults` (Shows Reset).
+4.  **Persistence**: Saves to `/settings/user` via `PUT`.
 
-### GlobalSettingsTab
+### Field Components
 
-Admin-only global settings:
+Each setting type has a specialized component that handles its own UI and events.
 
-- Default language for new users
-- Default currency
-- Registration enabled/disabled
-- Maintenance mode
-- Grouped by category
+-   **`SettingSelect`**: Generic dropdown.
+-   **`SettingCurrency`**: Searchable currency selector (uses `FuzzySelect`).
+-   **`SettingTheme`**: Radio buttons for Light/Dark/Auto theme with visual preview.
 
-### ProfileTab
+**Common Props for Field Components:**
+-   `value`: Two-way bound value.
+-   `label`: Field label.
+-   `hint`: Helper text.
+-   `isModified`: Highlights the field if changed.
+-   `isNonDefault`: Shows a "Reset to Default" indicator.
+-   `isLocked`: Disables input.
 
-User profile management:
+## Usage Example
 
-- Username (with edit lock)
-- Email (with edit lock)
-- Password change (via modal)
-- Delete account (with confirmation)
+```svelte
+<script>
+  import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
+  import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
+  
+  let value = 'option1';
+  let original = 'option1';
+  
+  $: hasChanges = value !== original;
+</script>
 
-## Files
-
+<SettingsLayout
+  title="My Settings"
+  {hasChanges}
+  on:saveAll={save}
+>
+  <SettingSelect
+    bind:value
+    label="Choose Option"
+    options={[{code: 'option1', label: 'One'}]}
+    isModified={value !== original}
+    on:save={() => saveSingle(value)}
+  />
+</SettingsLayout>
 ```
-frontend/src/lib/components/settings/
-├── SettingsLayout.svelte
-├── PreferencesTab.svelte
-├── GlobalSettingsTab.svelte
-└── ProfileTab.svelte
-```
-
-## Settings Page Structure
-
-```
-/settings
-├── Profile (ProfileTab)
-├── Preferences (PreferencesTab)
-└── Global Settings (GlobalSettingsTab) - Admin only
-```
-
-## Key Features
-
-- **Edit Lock**: Prevents accidental changes to sensitive fields
-- **Inline Save**: Each field saves independently
-- **Undo**: Revert unsaved changes
-- **Reset**: Restore defaults from global settings
-- **Validation**: Client-side validation before save
-
-## API Integration
-
-*(To be documented)*
-
-- `PATCH /api/v1/auth/users/me/preferences`
-- `PATCH /api/v1/system/settings/{key}`

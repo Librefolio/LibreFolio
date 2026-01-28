@@ -1,135 +1,152 @@
 # 🗄️ Database Schema
 
-The LibreFolio database is designed using SQLAlchemy with SQLModel, providing a clear and maintainable structure. The schema is stored in a single SQLite file.
+The LibreFolio database is designed using SQLAlchemy with SQLModel. The schema is stored in a single SQLite file (`app.db`).
 
-## Entity-Relationship (ER) Diagram
+> 💡 **Tip**: To explore the live database schema interactively (including all constraints and indexes), we recommend using a tool like **DBeaver** or **DB Browser for SQLite** connected to your local `backend/data/sqlite/app.db` file.
+
+## Logical Data Flow
+
+This diagram illustrates how data flows from the User down to the financial records.
+
+```mermaid
+graph TD
+    User[User] -->|Owns| Broker[Broker Account]
+    User -->|Has| Settings[User Settings]
+    
+    Broker -->|Contains| Tx[Transactions]
+    
+    Tx -->|References| Asset[Global Asset]
+    Asset -->|Has| Prices[Price History]
+    
+    subgraph "Global Data"
+        Asset
+        Prices
+        FX[FX Rates]
+    end
+    
+    subgraph "User Data"
+        User
+        Settings
+        Broker
+        Tx
+    end
+```
+
+## Subsystems
+
+### 1. User & Access Control
+
+Manages authentication and the sharing of brokers between users.
 
 ```mermaid
 erDiagram
-    %% User & Auth Subsystem
-    USER ||--o{ BROKER : "has"
-    USER ||--o{ USER_SETTINGS : "has"
-    
-    %% Broker & Transactions
-    BROKER ||--o{ TRANSACTION : "has"
-    
-    %% Asset Management
-    ASSET ||--o{ TRANSACTION : "contains"
-    ASSET ||--o{ PRICE_HISTORY : "has"
-    ASSET ||--o{ ASSET_PROVIDER_ASSIGNMENT : "assigned to"
-    
-    %% FX Subsystem
-    FX_RATE
-
-    %% Settings
-    GLOBAL_SETTINGS
+    USER ||--|| USER_SETTINGS : "has preferences"
+    USER ||--o{ BROKER_USER_ACCESS : "has access"
+    BROKER ||--o{ BROKER_USER_ACCESS : "granted to"
 
     USER {
         int id PK
         string username
-        string email
         string hashed_password
-        bool is_active
-        bool is_superuser
     }
+
+    BROKER_USER_ACCESS {
+        int user_id FK
+        int broker_id FK
+        enum role "OWNER, EDITOR, VIEWER"
+    }
+```
+
+-   **`BROKER_USER_ACCESS`**: The pivot table for the Many-to-Many relationship. It stores the `role` defining permissions.
+
+### 2. Broker & Transactions
+
+The core financial data structure.
+
+```mermaid
+erDiagram
+    BROKER ||--o{ TRANSACTION : "contains"
+    TRANSACTION |o--o| TRANSACTION : "related to"
 
     BROKER {
         int id PK
-        int user_id FK
         string name
+        bool allow_cash_overdraft
     }
 
     TRANSACTION {
         int id PK
         int broker_id FK
-        int asset_id FK
-        string type
-        date date
+        int asset_id FK "Nullable"
+        int related_transaction_id FK "Nullable"
+        enum type "BUY, SELL..."
         decimal quantity
         decimal amount
-        string currency
-        string link_uuid
-        string description
     }
+```
+
+-   **`TRANSACTION`**: The single source of truth.
+    -   **`related_transaction_id`**: Self-reference for paired operations (Transfers, FX Conversions).
+
+### 3. Asset Management
+
+Global financial instruments and their pricing sources.
+
+```mermaid
+erDiagram
+    ASSET ||--o{ TRANSACTION : "referenced in"
+    ASSET ||--o{ PRICE_HISTORY : "has history"
+    ASSET ||--|| ASSET_PROVIDER_ASSIGNMENT : "priced by"
 
     ASSET {
         int id PK
         string display_name
-        string currency
-        string asset_type
-        string icon_url
-        string classification_params
-    }
-
-    PRICE_HISTORY {
-        int id PK
-        int asset_id FK
-        date date
-        decimal close
-        string currency
-    }
-
-    FX_RATE {
-        int id PK
-        date date
-        string base
-        string quote
-        decimal rate
-        string source
-    }
-
-    USER_SETTINGS {
-        int id PK
-        int user_id FK
-        string key
-        string value
-    }
-    
-    GLOBAL_SETTINGS {
-        int id PK
-        string key
-        string value
+        string identifier_isin
+        string identifier_ticker
+        json classification_params
     }
 
     ASSET_PROVIDER_ASSIGNMENT {
-        int id PK
         int asset_id FK
         string provider_code
         string identifier
     }
 ```
 
-## Key Tables and Relationships
+-   **`ASSET`**: Global definition. `classification_params` (JSON) stores metadata like Sector and Geography.
+-   **`ASSET_PROVIDER_ASSIGNMENT`**: Decouples the asset from its data source (e.g., "Use Yahoo Finance for AAPL").
 
-### User & Auth Subsystem
--   **`USER`**: Stores user credentials and roles.
-    -   A `USER` can have multiple `BROKER` accounts.
--   **`USER_SETTINGS`**: Stores user-specific preferences.
+### 4. FX Subsystem
 
-### Broker & Transactions
--   **`BROKER`**: Represents a brokerage account (e.g., "My Degiro Account").
-    -   Each `BROKER` belongs to one `USER`.
-    -   Each `BROKER` can have many `TRANSACTION`s.
--   **`TRANSACTION`**: The core table, representing a single financial event (buy, sell, dividend, etc.).
-    -   Each `TRANSACTION` belongs to one `BROKER` and involves one `ASSET`.
+Currency exchange rates and routing configuration.
 
-### Asset Management
--   **`ASSET`**: Represents a financial instrument (e.g., Apple Inc. stock).
-    -   Assets are global and not tied to a specific user.
-    -   An `ASSET` can be part of many `TRANSACTION`s.
--   **`PRICE_HISTORY`**: Stores historical price data for assets.
-    -   Used for charting and performance calculation.
--   **`ASSET_PROVIDER_ASSIGNMENT`**: Links an `ASSET` to a specific pricing provider (e.g., linking "AAPL" in the `ASSET` table to the "yfinance" provider).
+```mermaid
+erDiagram
+    FX_RATE
+    FX_CURRENCY_PAIR_SOURCE
 
-### FX Subsystem
--   **`FX_RATE`**: Stores historical foreign exchange rates.
-    -   Used for currency conversion.
+    FX_RATE {
+        date date
+        string base
+        string quote
+        decimal rate
+    }
+    
+    FX_CURRENCY_PAIR_SOURCE {
+        string base
+        string quote
+        string provider_code
+        int priority
+    }
+```
 
-### System Configuration
--   **`GLOBAL_SETTINGS`**: Stores system-wide settings, managed by administrators.
+-   **`FX_RATE`**: Stores daily rates. Enforces `base < quote` (alphabetical) to prevent duplicates.
+-   **`FX_CURRENCY_PAIR_SOURCE`**: Configures which provider (ECB, FED) to use for which pair.
 
 ## Design Philosophy
 
--   **Normalization**: The schema is normalized to reduce data redundancy. For example, asset information is stored once in the `ASSET` table and referenced by many transactions.
--   **Data Integrity**: `CHECK` constraints and foreign keys are used to ensure data integrity (e.g., ensuring quantities and amounts have valid values).
--   **Flexibility**: The use of JSON fields (e.g., `classification_params` in `ASSET`) allows for storing semi-structured data without altering the schema.
+1.  **Normalization**: Assets are global; Transactions are broker-specific.
+2.  **Strict Constraints**:
+    -   `CHECK` constraints ensure logical consistency.
+    -   Foreign Keys are enforced (`PRAGMA foreign_keys=ON`).
+3.  **JSON for Flexibility**: Used for `classification_params` and `provider_params` to allow schema-less extension.

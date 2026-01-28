@@ -1,91 +1,128 @@
 # DataTable Component
 
-*Status: Draft - Component implemented, documentation in progress*
+The `DataTable` is a powerful, generic table component built with Svelte 5 Runes. It provides a rich set of features similar to Excel or advanced data grids.
 
-## Overview
+## Features
 
-`DataTable` is a powerful, generic table component with Excel-like features:
+-   **Sorting**: Click column headers to sort ASC/DESC.
+-   **Filtering**: Excel-style column filters (Text, Number, Date, Enum, Size).
+-   **Pagination**: Client-side pagination with configurable page sizes.
+-   **Selection**: Row selection with checkboxes and "Select All" on page.
+-   **Column Management**: Show/hide columns, reorder via drag-and-drop (in toolbar), and resize columns.
+-   **Persistence**: User preferences (column order, visibility, widths, page size) are automatically saved to `localStorage`.
+-   **Actions**: Support for per-row actions and bulk actions on selected rows.
+-   **Sticky Columns**: Selection and Action columns are sticky.
 
-- **Sorting** - Click column headers to sort ASC/DESC
-- **Filtering** - Per-column filters (text, enum, number, size, date)
-- **Pagination** - Sticky bottom balloon with page size selection
-- **Selection** - Row selection with bulk actions
-- **Column Management** - Show/hide and reorder columns
-- **Column Resize** - Drag to resize columns
-- **Persistence** - Settings saved to localStorage
-
-## Files
-
-```
-frontend/src/lib/components/table/
-├── index.ts              # Exports
-├── types.ts              # TypeScript interfaces
-├── DataTable.svelte      # Main component (~940 lines)
-├── DataTablePagination.svelte
-├── DataTableToolbar.svelte
-├── DataTableColumnFilter.svelte
-└── ConfirmModal.svelte
-```
-
-## Basic Usage
+## Usage
 
 ```svelte
 <script lang="ts">
-  import { DataTable, type ColumnDef } from '$lib/components/table';
-  
-  const columns: ColumnDef<MyData>[] = [
+  import { DataTable } from '$lib/components/table';
+  import type { ColumnDef, RowAction } from '$lib/components/table/types';
+  import { Pencil, Trash2 } from 'lucide-svelte';
+
+  // Define your data type
+  type User = { id: string; name: string; role: string; };
+
+  // Define columns
+  const columns: ColumnDef<User>[] = [
     {
       id: 'name',
-      header: () => 'Name',
-      cell: (row) => ({ type: 'text', text: row.name }),
-      type: 'text',
+      header: 'Name',
+      // Simple text cell
+      cell: (row) => row.name,
+      sortable: true,
+      filterable: true,
+      type: 'text'
     },
-    // ...more columns
+    {
+      id: 'role',
+      header: 'Role',
+      // Badge cell
+      cell: (row) => ({
+        type: 'badge',
+        text: row.role,
+        variant: row.role === 'admin' ? 'success' : 'default'
+      }),
+      type: 'enum',
+      enumOptions: ['admin', 'user']
+    }
   ];
-  
-  const rowActions = [
-    { id: 'edit', icon: Pencil, label: 'Edit', onClick: (row) => editRow(row) },
-    { id: 'delete', icon: Trash2, label: 'Delete', onClick: (row) => deleteRow(row), danger: true },
+
+  // Define row actions
+  const rowActions: RowAction<User>[] = [
+    {
+      id: 'edit',
+      icon: Pencil,
+      label: 'Edit',
+      onClick: (row) => console.log('Edit', row)
+    },
+    {
+      id: 'delete',
+      icon: Trash2,
+      label: 'Delete',
+      variant: 'danger',
+      requireConfirm: true,
+      onClick: (row) => console.log('Delete', row)
+    }
   ];
 </script>
 
 <DataTable
-  data={myData}
+  data={users}
   columns={columns}
   rowActions={rowActions}
   getRowId={(row) => row.id}
+  storageKey="users-table"
 />
 ```
 
-## Column Types
+## Props
 
-| Type | Filter UI | Description |
-|------|-----------|-------------|
-| `text` | Text input with match mode | For strings |
-| `enum` | Checkbox list | For status/category fields |
-| `number` | Min/Max inputs | For numeric values |
-| `size` | Logarithmic slider | For file sizes (bytes) |
-| `date` | Date range picker | For timestamps |
+| Prop | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `data` | `T[]` | **Required** | Array of data objects. |
+| `columns` | `ColumnDef<T>[]` | **Required** | Column definitions. |
+| `getRowId` | `(row: T) => string` | **Required** | Function to get unique ID for a row. |
+| `storageKey` | `string` | **Required** | Unique key for localStorage persistence. |
+| `enableSelection` | `boolean` | `true` | Enable row selection checkboxes. |
+| `enableActions` | `boolean` | `true` | Enable row actions column. |
+| `enableSorting` | `boolean` | `true` | Enable column sorting. |
+| `enableColumnFilters` | `boolean` | `true` | Enable column filters. |
+| `enablePagination` | `boolean` | `true` | Enable pagination. |
+| `defaultPageSize` | `number` | `10` | Initial page size. |
+| `rowActions` | `RowAction<T>[]` | `[]` | Actions available for each row. |
+| `bulkActions` | `BulkAction<T>[]` | `[]` | Actions available for selected rows. |
 
-## Cell Renderers
+## Column Definition (`ColumnDef<T>`)
 
-*(To be documented)*
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `string` | Unique identifier for the column. |
+| `header` | `string \| () => string` | Column header text. |
+| `cell` | `(row: T) => CellContent` | Function returning cell content. |
+| `type` | `'text' \| 'number' \| 'date' \| 'enum' \| 'size'` | Data type for filtering. |
+| `sortable` | `boolean` | Enable sorting for this column (default: true). |
+| `filterable` | `boolean` | Enable filtering for this column (default: true). |
+| `width` | `number` | Initial width in pixels. |
+| `enumOptions` | `string[]` | Options for 'enum' filter type. |
 
-- `text` - Plain text
-- `icon-text` - Icon + text
-- `badge` - Status badge with color variants
-- `size` - Formatted file size
-- `date` - Formatted date/datetime
-- `custom` - Custom Svelte component
+## Cell Content Types
 
-## Props Reference
+The `cell` function can return a simple string/number or a structured object:
 
-*(To be documented)*
+-   **Text**: `string` or `number`
+-   **Icon + Text**: `{ type: 'icon-text', icon: Component, text: string }`
+-   **Badge**: `{ type: 'badge', text: string, variant: 'success'|'warning'|'error'|'info'|'default' }`
+-   **Date**: `{ type: 'date', value: Date, format: 'date'|'datetime'|'relative' }`
+-   **Size**: `{ type: 'size', bytes: number }` (Auto-formats to KB/MB/GB)
+-   **Link**: `{ type: 'link', text: string, href: string, external: boolean }`
+-   **Custom**: `{ type: 'custom', component: Component, props: object }`
 
-## Events
+## State Management (Internal)
 
-*(To be documented)*
+The component uses Svelte 5 Runes for internal state:
 
-## Styling
-
-*(To be documented)*
+-   `$state` for sorting, pagination, filters, and selection.
+-   `$derived` for calculating filtered/sorted/paginated data efficiently.
+-   `$effect` for syncing state with `localStorage`.
