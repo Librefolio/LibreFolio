@@ -8,21 +8,14 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {api} from '$lib/api';
+    import type {BrimPlugin} from '$lib/types';
 
     // Props
     export let value: string = '';
     export let disabled: boolean = false;
     export let placeholder: string = '';
 
-    // Plugin data
-    interface ImportPlugin {
-        id: string;
-        name: string;
-        description: string;
-        icon?: string;
-    }
-
-    let plugins: ImportPlugin[] = [];
+    let plugins: BrimPlugin[] = [];
     let loading = true;
     let error: string | null = null;
 
@@ -37,7 +30,7 @@
 
         try {
             const response = await api.get<{
-                plugins: ImportPlugin[];
+                plugins: BrimPlugin[];
             }>('/brokers/import/plugins');
 
             plugins = response.plugins || [];

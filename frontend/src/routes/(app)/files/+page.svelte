@@ -14,34 +14,10 @@
     import BrokerSelect from '$lib/components/brokers/BrokerSelect.svelte';
     import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid, X } from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
+    import type { UploadedFile, BrimFile, BrokerInfo, Broker } from '$lib/types';
 
     type Tab = 'static' | 'brim';
 
-    interface UploadedFile {
-        id: string;
-        original_name: string;
-        stored_name: string;
-        content_type: string;
-        size_bytes: number;
-        uploaded_at: string;
-        url: string;
-    }
-
-    interface BrimFile {
-        file_id: string;
-        filename: string;
-        status: string;
-        uploaded_at: string;
-        size_bytes?: number;
-        // Multi-user fields
-        uploaded_by_user_id?: number;
-        target_broker_id?: number;
-    }
-
-    interface Broker {
-        id: number;
-        name: string;
-    }
 
     // LocalStorage keys
     const STORAGE_KEY_VIEW_MODE = 'filesPage_viewMode';
@@ -124,7 +100,7 @@
 
     // Broker state for BRIM multi-user
     let brokers: Broker[] = [];
-    let brokerMap: Map<number, { id: number; name: string }> = new Map();
+    let brokerMap: Map<number, BrokerInfo> = new Map();
     let selectedBrokerIds: Set<number> = new Set();
 
     // BRIM upload with broker selection
@@ -544,7 +520,7 @@
                     {#each staticFiles as file}
                         <div class="file-card">
                             <div class="file-preview">
-                                {#if isImage(file.content_type)}
+                                {#if isImage(file.mime_type)}
                                     <LazyImage
                                         src={file.url}
                                         alt={file.original_name}
@@ -554,7 +530,7 @@
                                     />
                                 {:else}
                                     <div class="file-icon">
-                                        <svelte:component this={getFileIcon(file.content_type, file.original_name)} size={32} />
+                                        <svelte:component this={getFileIcon(file.mime_type, file.original_name)} size={32} />
                                     </div>
                                 {/if}
                             </div>

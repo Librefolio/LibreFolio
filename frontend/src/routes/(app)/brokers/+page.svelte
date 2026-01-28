@@ -6,27 +6,7 @@
     import BrokerCard from '$lib/components/brokers/BrokerCard.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import DeleteBrokerDialog from '$lib/components/brokers/DeleteBrokerDialog.svelte';
-
-    // Types
-    interface Broker {
-        id: number;
-        name: string;
-        description?: string | null;
-        portal_url?: string | null;
-        icon_url?: string | null;
-        default_import_plugin?: string | null;
-        allow_cash_overdraft: boolean;
-        allow_asset_shorting: boolean;
-        is_active: boolean;
-        opened_at?: string | null;
-        cash_balances?: Array<{ code: string; amount: number; symbol?: string }>;
-        holdings?: Array<{ asset_id: number }>;
-    }
-
-    interface BrokerSummary extends Broker {
-        cash_balances: Array<{ code: string; amount: number; symbol?: string }>;
-        holdings: Array<{ asset_id: number; asset_name: string; quantity: number }>;
-    }
+    import type {Broker, BrokerSummary} from '$lib/types';
 
     // State
     let brokers: Broker[] = [];

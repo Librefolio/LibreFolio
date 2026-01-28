@@ -21,35 +21,8 @@
 		FileAudio,
 		FileType
 	} from 'lucide-svelte';
-
-	// Types
-	interface UploadedFile {
-		id: string;
-		original_name: string;
-		stored_name: string;
-		content_type: string;
-		size_bytes: number;
-		uploaded_at: string;
-		url: string;
-	}
-
-	interface BrimFile {
-		file_id: string;
-		filename: string;
-		status: string;
-		uploaded_at: string;
-		size_bytes?: number;
-		// Multi-user fields
-		uploaded_by_user_id?: number;
-		target_broker_id?: number;
-	}
-
-	interface BrokerInfo {
-		id: number;
-		name: string;
-	}
-
-	type FileData = UploadedFile | BrimFile;
+	import type { UploadedFile, BrimFile, BrokerInfo, FileData } from '$lib/types';
+	import { safeNumber } from '$lib/types';
 
 	interface Props {
 		files: FileData[];
@@ -90,34 +63,34 @@
 
 		if (type === 'static') {
 			const f = file as UploadedFile;
-			const contentType = f.content_type || '';
+			const mimeType = f.mime_type || '';
 
 			// Images (png, jpg, jpeg, gif, webp, svg, bmp, ico)
-			if (contentType.startsWith('image/') ||
+			if (mimeType.startsWith('image/') ||
 				['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff'].includes(ext)) {
 				return Image;
 			}
 
 			// Videos
-			if (contentType.startsWith('video/') ||
+			if (mimeType.startsWith('video/') ||
 				['mp4', 'avi', 'mov', 'mkv', 'webm', 'flv', 'wmv'].includes(ext)) {
 				return FileVideo;
 			}
 
 			// Audio
-			if (contentType.startsWith('audio/') ||
+			if (mimeType.startsWith('audio/') ||
 				['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'].includes(ext)) {
 				return FileAudio;
 			}
 
 			// Spreadsheets (csv, xlsx, xls, ods)
-			if (contentType.includes('spreadsheet') || contentType.includes('csv') ||
+			if (mimeType.includes('spreadsheet') || mimeType.includes('csv') ||
 				['csv', 'xlsx', 'xls', 'ods', 'numbers'].includes(ext)) {
 				return FileSpreadsheet;
 			}
 
 			// JSON
-			if (contentType.includes('json') || ext === 'json') {
+			if (mimeType.includes('json') || ext === 'json') {
 				return FileJson;
 			}
 
@@ -128,18 +101,18 @@
 			}
 
 			// Archives
-			if (contentType.includes('zip') || contentType.includes('tar') || contentType.includes('archive') ||
+			if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('archive') ||
 				['zip', 'tar', 'gz', 'rar', '7z', 'bz2', 'xz', 'tgz'].includes(ext)) {
 				return FileArchive;
 			}
 
 			// PDF
-			if (contentType.includes('pdf') || ext === 'pdf') {
+			if (mimeType.includes('pdf') || ext === 'pdf') {
 				return FileType;  // FileType looks like a document with lines
 			}
 
 			// Text/Documents
-			if (contentType.includes('text') ||
+			if (mimeType.includes('text') ||
 				['txt', 'md', 'rtf', 'doc', 'docx', 'odt', 'pages'].includes(ext)) {
 				return FileText;
 			}
@@ -171,9 +144,10 @@
 	function getBrokerName(file: FileData): string {
 		if (type !== 'brim') return '';
 		const brimFile = file as BrimFile;
-		if (!brimFile.target_broker_id || !brokers) return '-';
-		const broker = brokers.get(brimFile.target_broker_id);
-		return broker?.name || `Broker #${brimFile.target_broker_id}`;
+		const brokerId = safeNumber(brimFile.target_broker_id);
+		if (!brokerId || !brokers) return '-';
+		const broker = brokers.get(brokerId);
+		return broker?.name || `Broker #${brokerId}`;
 	}
 
 	// Generate a consistent color based on broker id for visual distinction
@@ -199,8 +173,9 @@
 	function getBrokerBadgeStyle(file: FileData): string | undefined {
 		if (type !== 'brim') return undefined;
 		const brimFile = file as BrimFile;
-		if (!brimFile.target_broker_id) return undefined;
-		const colors = getBrokerColor(brimFile.target_broker_id);
+		const brokerId = safeNumber(brimFile.target_broker_id);
+		if (!brokerId) return undefined;
+		const colors = getBrokerColor(brokerId);
 		return `--broker-bg: ${colors.bg}; --broker-text: ${colors.text}; --broker-dark-bg: ${colors.darkBg}; --broker-dark-text: ${colors.darkText};`;
 	}
 

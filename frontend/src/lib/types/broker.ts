@@ -54,10 +54,15 @@ export type BrokerAccessListResponse = z.infer<typeof schemas.BRAccessListRespon
 
 /**
  * Simplified broker info for dropdowns and references.
+ * Compatible with BrokerSelect component.
  */
 export interface BrokerInfo {
 	id: number;
 	name: string;
+	/** Optional icon URL for display in dropdowns */
+	icon_url?: string | null;
+	/** Optional portal URL for favicon fallback */
+	portal_url?: string | null;
 }
 
 /**
