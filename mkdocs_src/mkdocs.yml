@@ -79,6 +79,7 @@ nav:
     - Overview: admin/index.md
     - CLI Tools: admin/cli_tools.md
     - Advanced Docker: admin/docker_advanced.md
+    - Exposing with Tailscale: admin/tailscale_exposure.md
   - Financial Math:
     - Overview: financial-calculations/index.md
     - Day Count Conventions: financial-calculations/day-count.md
@@ -95,6 +96,7 @@ nav:
       - System Overview: developer/architecture/overview.md
       - Database Schema: developer/architecture/database.md
       - Users & Brokers: developer/architecture/users_and_brokers.md
+      - Access Control (RBAC): developer/architecture/access_control.md
       - Settings System: developer/architecture/settings.md
       - Registry Pattern: developer/architecture/registry_pattern.md
       - Security: developer/architecture/security.md
@@ -113,6 +115,7 @@ nav:
         - Providers List: developer/backend/assets/providers_list.md
       - FX (Currency):
         - Architecture: developer/backend/fx/architecture.md
+        - Configuration & Routing: developer/backend/fx/configuration.md
         - Providers List: developer/backend/fx/providers_list.md
     - Frontend Development:
       - Overview: developer/frontend/index.md

@@ -11,10 +11,8 @@ LibreFolio provides a comprehensive RESTful API built with **FastAPI**.
 
 When the LibreFolio server is running, you can access the auto-generated interactive documentation. These pages allow you to explore the API endpoints, see the expected request/response schemas, and even execute requests directly from your browser.
 
--   🚀 **Swagger UI**: `http://localhost:8000/api/v1/docs`
-    -   Best for exploring and testing endpoints.
--   💻 **ReDoc**: `http://localhost:8000/api/v1/redoc`
-    -   Best for reading the documentation in a structured format.
+-   🚀 [**Swagger UI**](/api/v1/docs) : Best for exploring and testing endpoints.
+-   💻 [**ReDoc**](/api/v1/redocs): Best for reading the documentation in a structured format.
 
 ## Dynamic Route Generation
 
