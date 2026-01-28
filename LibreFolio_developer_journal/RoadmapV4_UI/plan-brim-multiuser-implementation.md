@@ -230,8 +230,8 @@ Test API aggiornati per coprire tutti i nuovi comportamenti multi-user:
 
 ### 4.8 Migrazione a Zodios + Libreria Tipi TypeScript
 
-**Data**: 27 Gennaio 2026  
-**Status**: 🔄 IN PROGRESS  
+**Data**: 27-28 Gennaio 2026  
+**Status**: 🔄 IN PROGRESS (Step 1-4 completati, Step 5 in corso)  
 **Stima**: 4-6 ore
 
 ---
@@ -340,7 +340,7 @@ export interface BrokerWithUIState extends Broker {
 
 #### Piano di Implementazione
 
-##### Step 1: Infrastruttura Base (P0)
+##### Step 1: Infrastruttura Base (P0) ✅ COMPLETATO
 
 - [x] **1.1** Aggiornare `./dev.py api sync` per rigenerare `generated.ts` ✅
 - [x] **1.2** Verificare che `schemas` sia esportato in `generated.ts` ✅ (riga 5359)
@@ -349,16 +349,19 @@ export interface BrokerWithUIState extends Broker {
     - Garantisce che i tipi siano sempre allineati col backend
 - [x] **1.4** Creare `/lib/types/index.ts` (barrel export) ✅
 - [x] **1.5** Creare `/lib/types/*.ts` (tutti i file di tipi) ✅
-    - `common.ts`: Currency, UserRole, TransactionType, AssetType, IdentifierType
+    - `common.ts`: Currency, UserRole, TransactionType, AssetType, IdentifierType + helper `safeString`, `safeNumber`, `safeCurrency`
     - `user.ts`: AuthUser, AuthLoginResponse, AuthMeResponse, AuthState
     - `settings.ts`: UserSettings, GlobalSetting, Theme, SupportedLocale
     - `broker.ts`: Broker, BrokerSummary, BrokerAccessItem, BrokerInfo
     - `transaction.ts`: Transaction, TransactionCreateItem, TransactionTypeMetadata
-    - `files.ts`: UploadedFile, BrimFile, BrimPlugin, BrimParseResponse
+    - `files.ts`: UploadedFile, BrimFile, BrimPlugin, BrimParseResponse, FileData
     - `asset.ts`: AssetMetadata, AssetInfo, AssetProviderInfo, PricePoint
 - [x] **1.6** Aggiornare `/lib/api/index.ts` per esportare `schemas` ✅
 - [x] **1.7** Fix backend docstring backticks in `IdentifierType` ✅
     - I backtick nel docstring rompevano il file generated.ts
+- [x] **1.8** Creato helper per tipi union buggy del generatore ✅
+    - `safeString()`, `safeNumber()`, `safeCurrency()` in common.ts
+    - Workaround per bug openapi-zod-client che genera `T | Array<T>`
 
 **Dettaglio contenuti file:**
 
@@ -448,47 +451,75 @@ Il wrapper garantisce che:
 
 **Nota su `language.ts`**: È puramente frontend (gestisce localStorage + svelte-i18n), non fa chiamate API, quindi **non va migrato**.
 
-##### Step 2: Tipi Auth & Settings (P1)
+##### Step 2: Tipi Auth & Settings (P1) ✅ COMPLETATO
 
-- [ ] **2.1** Creare `/lib/types/user.ts`:
+- [x] **2.1** Creare `/lib/types/user.ts` ✅
     - `AuthUser` da `schemas.AuthUserResponse`
     - `AuthLoginResponse`, `AuthMeResponse`, `AuthRegisterResponse`
-- [ ] **2.2** Creare `/lib/types/settings.ts`:
+    - `AuthState` (frontend-only per lo store)
+- [x] **2.2** Creare `/lib/types/settings.ts` ✅
     - `UserSettings` da `schemas.UserSettingsRead`
     - `GlobalSetting` da `schemas.GlobalSettingRead`
-- [ ] **2.3** Migrare `lib/stores/auth.ts` al nuovo client + tipi
-- [ ] **2.4** Migrare `lib/stores/settings.ts`
-- [ ] **2.5** Migrare componenti auth (`RegisterModal.svelte`)
-- [ ] **2.6** Migrare componenti settings (`ProfileTab`, `PreferencesTab`, `GlobalSettingsTab`, etc.)
+- [x] **2.3** Migrare `lib/stores/auth.ts` ai nuovi tipi ✅
+    - Rimosso `interface AuthUser` inline
+    - Import da `$lib/types`
+- [x] **2.4** Migrare `lib/stores/settings.ts` ✅
+    - Rimosso `interface UserSettings` inline
+    - Fix: `base_currency` invece di `default_currency`
+- [x] **2.5** Verificato componenti auth - già funzionanti ✅
+- [x] **2.6** Migrare componenti settings ✅
+    - `GlobalSettingsTab.svelte`: usa `GlobalSetting` da `$lib/types`
 
-##### Step 3: Tipi Broker (P2)
+##### Step 3: Tipi Broker (P2) ✅ COMPLETATO
 
-- [ ] **3.1** Creare `/lib/types/broker.ts`:
+- [x] **3.1** Creare `/lib/types/broker.ts` ✅
     - `Broker` da `schemas.BRReadItem`
     - `BrokerSummary` da `schemas.BRSummary`
     - `BrokerCreateItem` da `schemas.BRCreateItem`
-- [ ] **3.2** Creare `/lib/types/transaction.ts`:
+    - `BrokerInfo` (frontend-only per dropdown)
+- [x] **3.2** Creare `/lib/types/transaction.ts` ✅
     - `Transaction` da `schemas.TXReadItem`
-- [ ] **3.3** Migrare componenti broker al nuovo client
-- [ ] **3.4** Rimuovere tipi inline da componenti broker
+- [x] **3.3** Migrare componenti broker ✅
+    - `BrokerSelect.svelte`: creato `BrokerSelectItem` locale (subset)
+    - `BrokerForm.svelte`: fix `base_currency`
+- [x] **3.4** Rimuovere tipi inline da route broker ✅
+    - `brokers/+page.svelte`: usa tipi da `$lib/types`
+    - `brokers/[id]/+page.svelte`: usa tipi + helper `safeCurrency`
 
-##### Step 4: Tipi File (P3)
+##### Step 4: Tipi File (P3) ✅ COMPLETATO
 
-- [ ] **4.1** Creare `/lib/types/files.ts`:
+- [x] **4.1** Creare `/lib/types/files.ts` ✅
     - `UploadedFile` da `schemas.UploadFileInfo`
     - `BrimFile` da `schemas.BRIMFileInfo`
     - `BrimPlugin` da `schemas.BRIMPluginInfo`
-- [ ] **4.2** Migrare `/routes/(app)/files/+page.svelte`
-- [ ] **4.3** Migrare `FilesTable.svelte`
-- [ ] **4.4** Rimuovere tipi inline da componenti file
+    - `FileData` union type
+- [x] **4.2** Migrare `/routes/(app)/files/+page.svelte` ✅
+    - Fix: `mime_type` invece di `content_type`
+- [x] **4.3** Migrare `FilesTable.svelte` ✅
+    - Usa `safeNumber` per `target_broker_id`
+- [x] **4.4** Migrare `ImportPluginSelect.svelte` ✅
+    - Usa `BrimPlugin` da `$lib/types`
 
-##### Step 5: Cleanup (P4)
+##### Step 5: Cleanup & Migrazione Zodios (P4) 🔄 IN CORSO
 
-- [ ] **5.1** Rimuovere `client.ts` vecchio
-- [ ] **5.2** Aggiornare tutti gli import
-- [ ] **5.3** Verificare build senza errori
-- [ ] **5.4** Test manuale delle funzionalità
-- [ ] **5.5** Aggiornare `00_project_welcome_agent.md` documentando l'uso che stiamo facendo di zod nel frontend e le linee guida da seguire per lo sviluppo dei prossimi componenti.
+- [x] **5.1** Creato `zodios-client.ts` con Axios configurato ✅
+    - `withCredentials: true` per cookies
+    - Interceptor per `Accept-Language` header
+    - Interceptor per redirect 401 → login
+    - Timeout handling
+- [x] **5.2** Migrato `auth.ts` store a Zodios ✅
+- [x] **5.3** Migrato `settings.ts` store a Zodios ✅
+- [ ] **5.4** Migrare restanti 14 componenti (componenti settings, brokers, files)
+- [ ] **5.5** Rimuovere `client.ts` vecchio (dopo migrazione completa)
+- [ ] **5.6** Test manuale completo
+- [ ] **5.7** Aggiornare documentazione
+
+**File ancora da migrare** (usano `api` legacy):
+- `ProfileTab.svelte`, `PasswordChangeModal.svelte`, `AboutTab.svelte`
+- `GlobalSettingsTab.svelte`, `PreferencesTab.svelte`
+- `CashTransactionModal.svelte`, `BrokerModal.svelte`, `BrokerIcon.svelte`, `BrokerForm.svelte`
+- `RegisterModal.svelte`, `ImportPluginSelect.svelte`
+- `brokers/+page.svelte`, `brokers/[id]/+page.svelte`, `files/+page.svelte`
 
 ---
 

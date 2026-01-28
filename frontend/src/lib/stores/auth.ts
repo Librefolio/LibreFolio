@@ -3,13 +3,16 @@
  *
  * Manages user authentication state and provides login/logout functions.
  * Uses session cookies for authentication (HttpOnly, managed by backend).
+ *
+ * Now uses Zodios client for type-safe API calls with Zod validation.
  */
 import {derived, get, writable} from 'svelte/store';
 import {browser} from '$app/environment';
 import {goto} from '$app/navigation';
-import {api, ApiError} from '$lib/api';
+import {zodiosApi} from '$lib/api';
 import {debug} from '$lib/debug';
 import type {AuthUser, AuthState} from '$lib/types';
+import {isAxiosError} from 'axios';
 
 // Re-export types for backward compatibility
 export type {AuthUser, AuthState} from '$lib/types';
@@ -37,10 +40,12 @@ function createAuthStore() {
             update(state => ({...state, isLoading: true, error: null}));
 
             try {
-                const response = await api.post<{ user: AuthUser; message: string }>(
-                    '/auth/login',
-                    {username, password}
-                );
+                debug.log('AuthStore', 'Attempting login for:', username);
+                const response = await zodiosApi.login_api_v1_auth_login_post({
+                    username,
+                    password
+                });
+                debug.log('AuthStore', 'Login response:', response);
 
                 update(state => ({
                     ...state,
@@ -52,12 +57,15 @@ function createAuthStore() {
 
                 return true;
             } catch (error) {
+                debug.log('AuthStore', 'Login error:', error);
                 let errorMessage = 'Login failed';
 
-                if (error instanceof ApiError) {
-                    if (error.status === 401) {
+                if (isAxiosError(error)) {
+                    debug.log('AuthStore', 'Axios error status:', error.response?.status);
+                    debug.log('AuthStore', 'Axios error data:', error.response?.data);
+                    if (error.response?.status === 401) {
                         errorMessage = 'Invalid username or password';
-                    } else if (error.status === 422) {
+                    } else if (error.response?.status === 422) {
                         errorMessage = 'Invalid input';
                     } else {
                         errorMessage = error.message;
@@ -83,7 +91,7 @@ function createAuthStore() {
             update(state => ({...state, isLoading: true}));
 
             try {
-                await api.post('/auth/logout');
+                await zodiosApi.logout_api_v1_auth_logout_post(undefined);
             } catch (error) {
                 // Ignore errors on logout - we'll clear state anyway
                 console.warn('Logout error:', error);
@@ -110,7 +118,7 @@ function createAuthStore() {
             update(state => ({...state, isLoading: true}));
 
             try {
-                const response = await api.get<{ user: AuthUser }>('/auth/me');
+                const response = await zodiosApi.get_me_api_v1_auth_me_get();
 
                 debug.log('AuthStore', 'checkAuth success', response.user?.username);
                 update(state => ({
