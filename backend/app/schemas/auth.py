@@ -4,9 +4,9 @@ Authentication Schemas
 Pydantic models for auth API requests/responses.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_serializer
 
 
 # =============================================================================
@@ -66,6 +66,14 @@ class AuthUserResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_serializer("created_at")
+    def serialize_datetime(self, value: datetime) -> str:
+        """Serialize datetime with UTC timezone for Zod validation."""
+        if value.tzinfo is None:
+            # Assume naive datetime is UTC
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat()
 
 
 class AuthLoginResponse(BaseModel):
