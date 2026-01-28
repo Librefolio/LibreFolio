@@ -5,18 +5,11 @@
     import {debug} from '$lib/debug';
     import {AlertCircle, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
     import FuzzySelect, {type SelectOption} from '$lib/components/FuzzySelect.svelte';
+    import type {GlobalSetting} from '$lib/types';
 
     // Props
     export let canEdit: boolean = false;
 
-    interface GlobalSetting {
-        key: string;
-        value: string;
-        value_type: 'str' | 'int' | 'bool' | 'float';
-        description: string;
-        updated_at: string | null;
-        updated_by: number | null;
-    }
 
     interface CurrencyInfo {
         code: string;
@@ -670,7 +663,7 @@
                                 {/if}
                             </div>
                         </div>
-                        {#if setting.updated_at}
+                        {#if setting.updated_at && typeof setting.updated_at === 'string'}
                             <p class="text-xs text-gray-400 mt-2">
                                 Last updated: {new Date(setting.updated_at).toLocaleString()}
                             </p>

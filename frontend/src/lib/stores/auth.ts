@@ -9,28 +9,10 @@ import {browser} from '$app/environment';
 import {goto} from '$app/navigation';
 import {api, ApiError} from '$lib/api';
 import {debug} from '$lib/debug';
+import type {AuthUser, AuthState} from '$lib/types';
 
-/**
- * User information returned from the server
- */
-export interface AuthUser {
-    id: number;
-    username: string;
-    email: string;
-    is_active: boolean;
-    is_superuser: boolean;
-    created_at?: string;
-}
-
-/**
- * Authentication state
- */
-interface AuthState {
-    user: AuthUser | null;
-    isLoading: boolean;
-    error: string | null;
-    isInitialized: boolean;
-}
+// Re-export types for backward compatibility
+export type {AuthUser, AuthState} from '$lib/types';
 
 const initialState: AuthState = {
     user: null,
