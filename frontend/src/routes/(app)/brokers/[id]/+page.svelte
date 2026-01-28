@@ -20,44 +20,11 @@
     import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import type {BrokerSummary, Transaction} from '$lib/types';
+    import {safeString, safeCurrency, parseCurrencyAmount} from '$lib/types';
 
     // Page data
     export let data: { brokerId: number };
-
-    // Types
-    interface BrokerSummary {
-        id: number;
-        name: string;
-        description?: string | null;
-        portal_url?: string | null;
-        icon_url?: string | null;
-        default_import_plugin?: string | null;
-        allow_cash_overdraft: boolean;
-        allow_asset_shorting: boolean;
-        is_active: boolean;
-        opened_at?: string | null;
-        created_at: string;
-        updated_at: string;
-        cash_balances: Array<{ code: string; amount: number; symbol?: string }>;
-        holdings: Array<{
-            asset_id: number;
-            asset_name: string;
-            quantity: number;
-            total_cost: { code: string; amount: number };
-            current_value?: { code: string; amount: number };
-            unrealized_pnl?: { code: string; amount: number };
-        }>;
-        total_value_base_currency?: { code: string; amount: number };
-    }
-
-    interface Transaction {
-        id: number;
-        type: string;
-        date: string;
-        currency: string;
-        total_amount: number;
-        asset_name?: string;
-    }
 
     // State
     let broker: BrokerSummary | null = null;
@@ -83,7 +50,6 @@
             broker = await api.get<BrokerSummary>(`/brokers/${data.brokerId}/summary`);
 
             // Load recent transactions
-            // Note: This API might need adjustment based on actual backend implementation
             try {
                 const txResponse = await api.get<Transaction[]>(`/transactions?broker_id=${data.brokerId}&limit=10`);
                 transactions = txResponse;
@@ -120,7 +86,7 @@
 
     function handleNewDeposit() {
         cashModalType = 'DEPOSIT';
-        cashModalCurrency = broker?.cash_balances[0]?.code ?? 'EUR';
+        cashModalCurrency = broker?.cash_balances?.[0]?.code ?? 'EUR';
         cashModalOpen = true;
     }
 
@@ -132,19 +98,22 @@
         await loadBroker();
     }
 
-    // Format currency
-    function formatCurrency(amount: number, code: string): string {
+    // Format currency - accepts string amount (from API) or number
+    function formatCurrency(amount: string | number, code: string): string {
+        const numAmount = typeof amount === 'string' ? parseFloat(amount) || 0 : amount;
         return new Intl.NumberFormat(undefined, {
             style: 'currency',
             currency: code,
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
-        }).format(amount);
+        }).format(numAmount);
     }
 
-    // Format date
-    function formatDate(dateStr: string): string {
-        return new Date(dateStr).toLocaleDateString(undefined, {
+    // Format date - handles string or array union type from generated types
+    function formatDate(dateStr: unknown): string {
+        const str = safeString(dateStr);
+        if (!str) return '-';
+        return new Date(str).toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'short',
             day: 'numeric'
@@ -185,9 +154,9 @@
         {#if broker}
             <!-- Broker Icon -->
             <BrokerIcon
-                iconUrl={broker.icon_url}
-                portalUrl={broker.portal_url}
-                pluginCode={broker.default_import_plugin}
+                iconUrl={safeString(broker.icon_url)}
+                portalUrl={safeString(broker.portal_url)}
+                pluginCode={safeString(broker.default_import_plugin)}
                 altText={broker.name}
                 size="lg"
             />
@@ -200,9 +169,9 @@
             </div>
 
             <div class="flex items-center space-x-2">
-                {#if broker.portal_url}
+                {#if safeString(broker.portal_url)}
                     <a
-                            href={broker.portal_url}
+                            href={safeString(broker.portal_url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors"
@@ -276,13 +245,12 @@
                         </button>
                     </div>
 
-                    {#if broker.cash_balances.length > 0}
+                    {#if broker.cash_balances && broker.cash_balances.length > 0}
                         <div class="space-y-3">
                             {#each broker.cash_balances as balance}
                                 <CashBalanceCard
                                         code={balance.code}
-                                        amount={balance.amount}
-                                        symbol={balance.symbol}
+                                        amount={parseCurrencyAmount(balance.amount)}
                                         on:deposit={handleDeposit}
                                         on:withdraw={handleWithdraw}
                                 />
@@ -300,7 +268,7 @@
                         <h2 class="font-semibold">{$_('brokers.holdings')}</h2>
                     </div>
 
-                    {#if broker.holdings.length > 0}
+                    {#if broker.holdings && broker.holdings.length > 0}
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead>
@@ -314,23 +282,31 @@
                                 </thead>
                                 <tbody>
                                 {#each broker.holdings as holding}
+                                    {@const totalCost = safeCurrency(holding.total_cost)}
+                                    {@const currentValue = safeCurrency(holding.current_value)}
+                                    {@const pnl = safeCurrency(holding.unrealized_pnl)}
                                     <tr class="border-b border-gray-50 hover:bg-gray-50">
                                         <td class="py-2 font-medium text-gray-800">{holding.asset_name}</td>
                                         <td class="py-2 text-right text-gray-600">{holding.quantity.toLocaleString()}</td>
                                         <td class="py-2 text-right text-gray-600">
-                                            {formatCurrency(holding.total_cost.amount, holding.total_cost.code)}
+                                            {#if totalCost}
+                                                {formatCurrency(totalCost.amount, totalCost.code)}
+                                            {:else}
+                                                <span class="text-gray-400">-</span>
+                                            {/if}
                                         </td>
                                         <td class="py-2 text-right text-gray-600">
-                                            {#if holding.current_value}
-                                                {formatCurrency(holding.current_value.amount, holding.current_value.code)}
+                                            {#if currentValue}
+                                                {formatCurrency(currentValue.amount, currentValue.code)}
                                             {:else}
                                                 <span class="text-gray-400">-</span>
                                             {/if}
                                         </td>
                                         <td class="py-2 text-right">
-                                            {#if holding.unrealized_pnl}
-                                                <span class="{holding.unrealized_pnl.amount >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                                    {holding.unrealized_pnl.amount >= 0 ? '+' : ''}{formatCurrency(holding.unrealized_pnl.amount, holding.unrealized_pnl.code)}
+                                            {#if pnl}
+                                                {@const pnlNum = parseCurrencyAmount(pnl.amount)}
+                                                <span class="{pnlNum >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                                    {pnlNum >= 0 ? '+' : ''}{formatCurrency(pnl.amount, pnl.code)}
                                                 </span>
                                             {:else}
                                                 <span class="text-gray-400">-</span>
@@ -359,7 +335,7 @@
                                 {broker.is_active ? '✓ Active' : '✗ Closed'}
                             </span>
                         </div>
-                        {#if broker.opened_at}
+                        {#if safeString(broker.opened_at)}
                             <div class="flex justify-between">
                                 <span class="text-gray-500">{$_('brokers.openedAt')}</span>
                                 <span class="text-gray-700">{formatDate(broker.opened_at)}</span>
@@ -384,12 +360,15 @@
                     </div>
 
                     {#if broker.total_value_base_currency}
-                        <div class="mt-4 pt-4 border-t border-gray-100">
-                            <div class="text-sm text-gray-500">{$_('brokers.totalValue')}</div>
-                            <div class="text-2xl font-bold text-libre-green">
-                                {formatCurrency(broker.total_value_base_currency.amount, broker.total_value_base_currency.code)}
+                        {@const totalValue = safeCurrency(broker.total_value_base_currency)}
+                        {#if totalValue}
+                            <div class="mt-4 pt-4 border-t border-gray-100">
+                                <div class="text-sm text-gray-500">{$_('brokers.totalValue')}</div>
+                                <div class="text-2xl font-bold text-libre-green">
+                                    {formatCurrency(totalValue.amount, totalValue.code)}
+                                </div>
                             </div>
-                        </div>
+                        {/if}
                     {/if}
                 </div>
 
@@ -403,6 +382,7 @@
                     {#if transactions.length > 0}
                         <div class="space-y-2">
                             {#each transactions as tx}
+                                {@const cashValue = safeCurrency(tx.cash)}
                                 <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                                     <div>
                                         <span class="inline-block px-2 py-0.5 text-xs rounded {getTypeBadgeClass(tx.type)}">
@@ -410,9 +390,13 @@
                                         </span>
                                         <span class="text-xs text-gray-500 ml-2">{formatDate(tx.date)}</span>
                                     </div>
-                                    <span class="font-medium text-gray-800">
-                                        {formatCurrency(tx.total_amount, tx.currency)}
-                                    </span>
+                                    {#if cashValue}
+                                        <span class="font-medium text-gray-800">
+                                            {formatCurrency(cashValue.amount, cashValue.code)}
+                                        </span>
+                                    {:else}
+                                        <span class="text-gray-400">-</span>
+                                    {/if}
                                 </div>
                             {/each}
                         </div>
@@ -439,14 +423,14 @@
             brokerId={broker.id}
             initialData={{
                 name: broker.name,
-                description: broker.description,
-                portal_url: broker.portal_url,
-                icon_url: broker.icon_url,
-                default_import_plugin: broker.default_import_plugin,
+                description: safeString(broker.description),
+                portal_url: safeString(broker.portal_url),
+                icon_url: safeString(broker.icon_url),
+                default_import_plugin: safeString(broker.default_import_plugin),
                 allow_cash_overdraft: broker.allow_cash_overdraft,
                 allow_asset_shorting: broker.allow_asset_shorting,
                 is_active: broker.is_active,
-                opened_at: broker.opened_at
+                opened_at: safeString(broker.opened_at)
             }}
             on:close={() => editModalOpen = false}
             on:updated={handleUpdated}
@@ -462,4 +446,3 @@
             on:success={handleCashSuccess}
     />
 {/if}
-

@@ -9,21 +9,20 @@
 	import { t } from '$lib/i18n';
 	import BrokerIcon from './BrokerIcon.svelte';
 
-	// Broker type definition (matches backend schema)
-	interface Broker {
+	/**
+	 * Minimum broker info needed for the select component.
+	 * This allows accepting both full Broker objects and simplified BrokerInfo.
+	 */
+	interface BrokerSelectItem {
 		id: number;
 		name: string;
-		description?: string | null;
-		portal_url?: string | null;
 		icon_url?: string | null;
+		portal_url?: string | null;
 		default_import_plugin?: string | null;
-		allow_cash_overdraft?: boolean;
-		allow_asset_shorting?: boolean;
-		is_active?: boolean;
 	}
 
 	interface Props {
-		brokers: Broker[];
+		brokers: BrokerSelectItem[];
 		value: number | null;
 		placeholder?: string;
 		disabled?: boolean;

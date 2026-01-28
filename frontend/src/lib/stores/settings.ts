@@ -7,19 +7,14 @@
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { api } from '$lib/api';
+import type { UserSettings } from '$lib/types';
 
-/**
- * User settings structure
- */
-export interface UserSettings {
-    default_currency: string;
-    default_language: string;
-    theme?: 'light' | 'dark' | 'auto';
-}
+// Re-export type for backward compatibility
+export type { UserSettings } from '$lib/types';
 
 const defaultSettings: UserSettings = {
-    default_currency: 'EUR',
-    default_language: 'en',
+    language: 'en',
+    base_currency: 'EUR',
     theme: 'auto'
 };
 

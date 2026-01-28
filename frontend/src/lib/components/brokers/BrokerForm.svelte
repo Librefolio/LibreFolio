@@ -176,7 +176,7 @@
     $: hasDuplicateCurrencies = new Set(initialBalances.map(b => b.code)).size !== initialBalances.length;
 
     // Get user's default currency
-    $: defaultCurrency = $userSettings?.default_currency ?? 'EUR';
+    $: defaultCurrency = $userSettings?.base_currency ?? 'EUR';
 
     // Get selected plugin info (for tooltip/description)
     $: selectedPlugin = importPlugins.find(p => p.id === defaultImportPlugin);
