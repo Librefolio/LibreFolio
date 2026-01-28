@@ -134,3 +134,62 @@ To support **English, Italian, Spanish, and French**, the documentation structur
 ## 6. Tutorials
 
 -   Placeholders for user-facing tutorials (`track-first-stock.md`, `track-p2p-loan.md`).
+
+---
+
+## 📅 Pianificazione Riallineamento (Post-Audit Gennaio 2026)
+
+Questa sezione definisce le azioni correttive necessarie per allineare la documentazione allo stato attuale del codice (visto nell'audit `backend_documentation_audit.md`).
+
+### 1. Correzioni Critiche (Backend Core)
+
+Queste modifiche sono prioritarie perché la documentazione attuale è **errata** o **fuorviante**.
+
+-   **Autenticazione (`developer/architecture/users_and_brokers.md`)**
+    -   [x] **Correggere**: Rimuovere ogni riferimento a JWT/OAuth2 Bearer Token.
+    -   [x] **Scrivere**: Documentare il sistema basato su `HttpOnly Session Cookies`.
+    -   [x] **Spiegare**: Il flusso di login/logout e la gestione della sessione lato server (`backend/app/services/auth_service.py`).
+
+-   **Database Schema (`developer/architecture/database.md`)**
+    -   [x] **Aggiornare**: Rigenerare il diagramma Mermaid ER.
+    -   [x] **Aggiungere**: Tabella `BrokerUserAccess` (cruciale per il multi-user).
+    -   [x] **Aggiungere**: Tabella `FxCurrencyPairSource` (cruciale per FX routing).
+    -   [x] **Aggiornare**: Tabella `Asset` con i nuovi campi `identifier_*` e `classification_params`.
+    -   [x] **Aggiornare**: Tabella `Transaction` con `related_transaction_id` (per Transfer/FX).
+
+### 2. Nuove Funzionalità Backend (Mancanti)
+
+Funzionalità implementate e funzionanti ma completamente assenti dalla documentazione.
+
+-   **Access Control (`developer/architecture/access_control.md` - NUOVO)**
+    -   [x] **Creare**: Documentare il sistema RBAC per i Broker.
+    -   [x] **Dettagliare**: Ruoli `OWNER`, `EDITOR`, `VIEWER`.
+    -   [x] **Spiegare**: Come funziona la condivisione di un broker tra utenti.
+
+-   **FX Configuration (`developer/backend/fx/configuration.md` - NUOVO)**
+    -   [x] **Creare**: Documentare la logica di routing delle coppie valutarie.
+    -   [x] **Spiegare**: Come il sistema sceglie tra ECB, FED, etc. in base alla priorità.
+    -   [x] **API**: Documentare gli endpoint per configurare le sorgenti (`/api/v1/fx/providers/pair-sources`).
+
+### 3. Espansione Frontend (SvelteKit)
+
+Il piano originale sottostimava la complessità del frontend. Ora abbiamo componenti ricchi che necessitano di docs.
+
+-   **Architettura Frontend (`developer/frontend/architecture.md`)**
+    -   [x] **Aggiornare**: Struttura directory aggiornata (`lib/components/`, `routes/(app)/`).
+    -   [x] **Spiegare**: Gestione dello stato con Svelte 5 Runes (`$state`, `$derived`).
+
+-   **Componenti Chiave**
+    -   [x] **`developer/frontend/components/data-table.md`**: Documentare il componente `DataTable` (filtri, sort, paginazione server-side).
+    -   [x] **`developer/frontend/components/auth.md`**: Documentare i modali di Login/Register e il `PasswordStrengthMeter`.
+    -   [x] **`developer/frontend/components/settings.md`**: Documentare il sistema di settings a tab e la gestione "edit-lock".
+
+### 4. Cleanup & Manutenzione
+
+-   [x] **API Reference**: Verificare che i link a Swagger/ReDoc siano corretti e funzionanti.
+-   [x] **Tutorials**: Rimuovere o marcare come "WIP" i tutorial utente se le feature UI non sono ancora complete (es. grafici dashboard).
+
+### 5. Future Enhancements
+
+-   [ ] **Automated Screenshots**: Implementare uno script (basato su Playwright) per generare screenshot aggiornati del frontend e includerli automaticamente nella documentazione.
+-   [ ] **Tailscale Guide**: Scrivere la guida completa per l'esposizione sicura tramite Tailscale (placeholder creato).

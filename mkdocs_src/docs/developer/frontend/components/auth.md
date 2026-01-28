@@ -1,85 +1,104 @@
 # Authentication Components
 
-*Status: Draft - Components implemented, documentation in progress*
+This section documents the authentication UI components used for login, registration, and password management.
 
-## Overview
+## LoginModal
 
-Authentication UI components for login, registration, and password management.
+The `LoginModal` handles user authentication via username/email and password.
 
-## Components
+### Features
+-   **Input**: Username or Email field (autofocus).
+-   **Password**: Password field with visibility toggle (via `PasswordInput`).
+-   **State**: Uses `$lib/stores/auth` to manage loading state and errors.
+-   **Navigation**: Emits events to switch to Register or Forgot Password views.
 
-### LoginModal
+### Usage
 
-Modal dialog for user authentication with:
+```svelte
+<script>
+  import LoginModal from '$lib/components/auth/LoginModal.svelte';
+</script>
 
-- Username/email and password fields
-- "Remember me" option
-- Link to registration
-- Link to forgot password
-- Animated background
-
-### RegisterModal
-
-User registration modal with:
-
-- Username, email, password fields
-- Password confirmation
-- Password strength meter (zxcvbn)
-- Terms acceptance checkbox
-- Email validation
-
-### ForgotPasswordModal
-
-Password recovery flow:
-
-- Email input
-- Sends reset instructions
-- Success/error feedback
-
-### PasswordStrengthMeter
-
-Visual password strength indicator:
-
-- Uses `zxcvbn-ts` for strength calculation
-- Color-coded bar (red → yellow → green)
-- Strength label (Weak, Fair, Good, Strong, Very Strong)
-- Optional requirement hints
-
-### AnimatedBackground
-
-Decorative background for login page:
-
-- Animated wave patterns
-- Chart line animations
-- Dark mode support
-- Responsive
-
-## Files
-
-```
-frontend/src/lib/components/auth/
-├── LoginModal.svelte
-├── RegisterModal.svelte
-├── ForgotPasswordModal.svelte
-└── PasswordStrengthMeter.svelte
+<LoginModal
+  redirectTo="/dashboard"
+  on:gotoRegister={() => showRegister = true}
+  on:gotoForgot={() => showForgot = true}
+/>
 ```
 
-## Usage Example
+## RegisterModal
 
-*(To be documented)*
+The `RegisterModal` handles new user registration with client-side validation.
 
-## Styling
+### Features
+-   **Validation**: Real-time validation for:
+    -   Username (min length)
+    -   Email (format)
+    -   Password (strength rules)
+    -   Confirm Password (match)
+-   **Strength Meter**: Integrated `PasswordStrength` component.
+-   **Error Handling**: Maps backend errors (e.g., "username taken") to user-friendly messages.
 
-The auth components use LibreFolio's brand colors:
+### Usage
 
-- Primary green: `#1a4031`
-- Accent beige: `#f5f4ef`
-- Dark mode variants
+```svelte
+<script>
+  import RegisterModal from '$lib/components/auth/RegisterModal.svelte';
+</script>
 
-## State Management
+<RegisterModal
+  on:gotoLogin={(e) => {
+     showLogin = true;
+     successMessage = e.detail.message;
+  }}
+/>
+```
 
-Auth state is managed in `$lib/stores/auth.ts`:
+## PasswordStrength
 
-- `isAuthenticated` - Login status
-- `currentUser` - User object
-- `isAuthInitialized` - Loading state
+A visual indicator of password strength using `zxcvbn-ts`.
+
+### Features
+-   **Score**: Calculates a score from 0 (Very Weak) to 4 (Very Strong).
+-   **Visual Bar**: Color-coded progress bar (Red -> Orange -> Yellow -> Lime -> Green).
+-   **Rules Checklist**: Shows specific requirements:
+    -   Min 8 characters
+    -   Uppercase & Lowercase
+    -   Number
+    -   Special character
+
+### Usage
+
+```svelte
+<script>
+  import PasswordStrength from '$lib/components/ui/PasswordStrength.svelte';
+  let password = '';
+</script>
+
+<input type="password" bind:value={password} />
+<PasswordStrength {password} showRules={true} />
+```
+
+## PasswordInput
+
+A reusable input component for passwords.
+
+### Features
+-   **Toggle Visibility**: Eye icon to show/hide password.
+-   **Styling**: Consistent styling with error state support.
+-   **Events**: Forwards `input`, `blur`, `focus` events.
+
+### Usage
+
+```svelte
+<script>
+  import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
+  let password = '';
+</script>
+
+<PasswordInput
+  bind:value={password}
+  placeholder="Enter password"
+  hasError={false}
+/>
+```
