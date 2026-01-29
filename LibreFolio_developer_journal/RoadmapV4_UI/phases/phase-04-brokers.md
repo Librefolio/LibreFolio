@@ -823,7 +823,55 @@ Questa funzionalità richiede una rielaborazione profonda del sistema di permess
 10. ~~**BUG-007** - FR Bytes filtro~~ ✅ DONE  
 11. **BUG-008** - Broker altri utenti ⏸️ PAUSA (GDPR rethink needed)
 
-**Completati**: 9/11
+### Bug Fix Round 3 (29-01-2026)
+
+#### BUG-009: 404 su refresh broker detail
+
+**File**: `backend/app/main.py`
+**Problema**: Route dinamiche come `/brokers/10` davano 404 su refresh
+**Causa**: `frontend_catchall` era registrato condizionalmente (`if frontend_available()`) 
+  e valutato all'import, non a runtime
+**Fix**: 
+- `frontend_catchall` ora sempre registrato
+- Check `frontend_available()` eseguito a runtime
+- Ritorna 503 con messaggio chiaro se frontend non buildato
+
+**Status**: ✅ COMPLETATO (29-01-2026)
+
+#### BUG-010: Filtro size min/max non allineati all'inizializzazione
+
+**File**: `frontend/src/lib/components/table/DataTableColumnFilter.svelte`
+**Problema**: Valori testuali min/max non corrispondevano alla barra al caricamento
+**Fix**: Inizializzazione immediata di `sizeMinInputValue`, `sizeMaxInputValue`, 
+  `sliderMinPos`, `sliderMaxPos` usando `bytesToUnit()` e `calcInitialSliderPos()`
+  invece di aspettare `onMount`
+
+**Status**: ✅ COMPLETATO (29-01-2026)
+
+#### BUG-011: Selettore unità mancante in Global Settings (max_file_upload_mb)
+
+**File**: `frontend/src/lib/components/settings/GlobalSettingsTab.svelte`
+**Problema**: Campo numerico senza possibilità di cambiare unità (MB/GB)
+**Fix**:
+- Aggiunto dropdown unità (MB/GB) accanto all'input numerico
+- Conversione automatica a MB per storage backend
+- Display iniziale: se valore >= 1024 MB, mostra in GB
+- Unità tradotte (Mo/Go in francese)
+
+**Status**: ✅ COMPLETATO (29-01-2026)
+
+#### BUG-012: Copy Link copiava URL assoluto + toast in basso
+
+**File**: `frontend/src/lib/components/files/FilesTable.svelte`
+**Fix**: 
+- Copia path relativo (es: `/api/v1/uploads/file/...`) invece di URL assoluto
+- Toast spostato in alto allo schermo invece che in basso
+
+**Status**: ✅ COMPLETATO (29-01-2026)
+
+---
+
+**Completati**: 12/14
 **In pausa**: 1 (BUG-008 - GDPR)
-**Stima rimanente**: ~30 min (BUG-005 mkdocs dark mode)
+**TODO bassa priorità**: 1 (BUG-005 mkdocs dark mode)
 

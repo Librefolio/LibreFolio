@@ -7,14 +7,15 @@
  */
 import type {Handle} from '@sveltejs/kit';
 import {redirect} from '@sveltejs/kit';
+import {building} from '$app/environment';
 
 /**
  * Routes that don't require authentication
  * Note: '/' is the main auth page (login/register/forgot modals)
  */
 const PUBLIC_ROUTES = [
-    '/',           // Root page handles login/register/forgot modals
-    '/api'         // API routes handle their own auth
+    '/',               // Root page handles login/register/forgot modals
+    '/api'             // API routes handle their own auth
 ];
 
 /**
@@ -28,6 +29,12 @@ function isPublicRoute(path: string): boolean {
  * Main request handler
  */
 export const handle: Handle = async ({event, resolve}) => {
+    // Skip ALL auth checks during build/prerender
+    // This allows adapter-static to generate the fallback page
+    if (building) {
+        return resolve(event);
+    }
+
     const {url, cookies} = event;
     const path = url.pathname;
 

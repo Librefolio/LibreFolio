@@ -12,7 +12,7 @@ const config = {
         adapter: adapter({
             pages: 'build',
             assets: 'build',
-            fallback: undefined,  // FastAPI handles SPA routing via catchall
+            fallback: '200.html',  // SPA fallback for dynamic routes
             precompress: false,
             strict: false  // Allow pages that cannot be prerendered
         }),
