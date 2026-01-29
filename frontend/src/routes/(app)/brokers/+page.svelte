@@ -1,7 +1,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {api} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
     import {Briefcase, Plus, RefreshCw} from 'lucide-svelte';
     import BrokerCard from '$lib/components/brokers/BrokerCard.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
@@ -35,11 +35,11 @@
         error = null;
         try {
             // Load all brokers with their summaries
-            const basicBrokers = await api.get<Broker[]>('/brokers');
+            const basicBrokers = await zodiosApi.list_brokers_api_v1_brokers_get();
 
             // For each broker, get the summary to get cash_balances and holdings
             const summaries = await Promise.all(
-                basicBrokers.map(b => api.get<BrokerSummary>(`/brokers/${b.id}/summary`).catch(() => null))
+                basicBrokers.map(b => zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: b.id}}).catch(() => null))
             );
 
             brokers = basicBrokers.map((b, i) => {
@@ -48,7 +48,7 @@
                     ...b,
                     cash_balances: summary?.cash_balances ?? [],
                     holdings: summary?.holdings ?? []
-                };
+                } as Broker;
             });
         } catch (e) {
             console.error('Failed to load brokers:', e);
@@ -96,7 +96,7 @@
 
         deleteLoading = true;
         try {
-            await api.delete('/brokers', [{id: deletingBroker.id, force: event.detail.force}]);
+            await zodiosApi.delete_brokers_api_v1_brokers_delete(undefined, {queries: {ids: [deletingBroker.id], force: event.detail.force}});
             deleteDialogOpen = false;
             deletingBroker = null;
             await loadBrokers();

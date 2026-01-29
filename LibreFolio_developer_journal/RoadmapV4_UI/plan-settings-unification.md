@@ -1,13 +1,15 @@
 # Piano: Unificazione PreferencesTab e GlobalSettingsTab
 
 **Data**: 20 Gennaio 2026  
-**Status**: 📋 DA REVIEW
+**Ultimo aggiornamento**: 29 Gennaio 2026  
+**Status**: ✅ QUASI COMPLETATO (manca solo Fase 5 Polish)
 
 ---
 
 ## Problema Attuale
 
 I due componenti `PreferencesTab.svelte` e `GlobalSettingsTab.svelte` hanno:
+
 - Logica simile ma duplicata
 - Stili leggermente diversi (ora uniformati a bg-gray-50)
 - Gestione azioni (Save/Undo/Reset) implementata due volte
@@ -79,22 +81,23 @@ Layout:
 
 ## Differenze Chiave tra i Tre Componenti
 
-| Aspetto | PreferencesTab | GlobalSettingsTab | Profile (NEW) |
-|---------|---------------|-------------------|---------------|
-| Sorgente dati | API `/settings/user` | API `/settings/global` | API `/users/me` |
-| Struttura dati | Oggetto fisso (3 campi) | Array dinamico da DB | User object |
-| Lock/Unlock | No | Sì (admin only) | No |
-| Tipi campo | select, currency, radio | toggle, number, select, currency | text, email, password modal, avatar upload |
-| Chi può modificare | Utente corrente | Solo admin | Utente corrente |
-| Persistenza DB | Sì (API write) | Sì (API write) | Sì (API write) |
-| Persistenza client | Sì (tema in localStorage) | No | No |
-| Campi speciali | Tema (client+server) | Lock toggle | Password (modal), Avatar (upload), Delete Account |
+| Aspetto            | PreferencesTab            | GlobalSettingsTab                | Profile (NEW)                                     |
+|--------------------|---------------------------|----------------------------------|---------------------------------------------------|
+| Sorgente dati      | API `/settings/user`      | API `/settings/global`           | API `/users/me`                                   |
+| Struttura dati     | Oggetto fisso (3 campi)   | Array dinamico da DB             | User object                                       |
+| Lock/Unlock        | No                        | Sì (admin only)                  | No                                                |
+| Tipi campo         | select, currency, radio   | toggle, number, select, currency | text, email, password modal, avatar upload        |
+| Chi può modificare | Utente corrente           | Solo admin                       | Utente corrente                                   |
+| Persistenza DB     | Sì (API write)            | Sì (API write)                   | Sì (API write)                                    |
+| Persistenza client | Sì (tema in localStorage) | No                               | No                                                |
+| Campi speciali     | Tema (client+server)      | Lock toggle                      | Password (modal), Avatar (upload), Delete Account |
 
 ---
 
 ## Piano di Implementazione
 
 ### Fase 1: Creare Componenti Base (1.5 giorni) ✅ COMPLETATA
+
 1. [x] Creare `SettingField.svelte` con tutte le prop necessarie (base wrapper)
 2. [x] Creare `SettingsLayout.svelte` con sidebar e header (layout 2 colonne)
 3. [x] Creare `SettingText.svelte` per username/email con inline edit ✅
@@ -105,6 +108,7 @@ Layout:
 8. [x] Testare (0 errors, 0 warnings ✅)
 
 **Componenti creati in `frontend/src/lib/components/settings/`**:
+
 - `SettingsLayout.svelte` - Layout 2 colonne (sidebar + content)
 - `SettingField.svelte` - Base wrapper con slot
 - `SettingText.svelte` - Inline text edit
@@ -113,6 +117,7 @@ Layout:
 - `SettingTheme.svelte` - Radio buttons con azioni
 
 ### Fase 2: Refactor PreferencesTab (1 giorno) ✅ COMPLETATA
+
 1. [x] Usare `SettingsLayout` per struttura
 2. [x] Usare `SettingSelect` per lingua
 3. [x] Usare `SettingCurrency` per valuta
@@ -124,7 +129,10 @@ Layout:
 **Risultato**: UI identica a GlobalSettingsTab, componenti riutilizzabili
 
 ### Fase 3: Refactor GlobalSettingsTab (0.5 giorni) ⏭️ SALTATA
-**Decisione**: GlobalSettingsTab è già ben strutturato (688 righe) e lo abbiamo usato come riferimento per creare i componenti unificati. Refactorarlo non porterebbe benefici significativi dato che:
+
+**Decisione**: GlobalSettingsTab è già ben strutturato (688 righe) e lo abbiamo usato come riferimento per creare i componenti unificati. Refactorarlo non porterebbe benefici
+significativi dato che:
+
 - Ha settings dinamiche dal DB (tipi diversi: bool, int, str)
 - Gestisce lock/unlock complesso
 - Funziona correttamente
@@ -132,48 +140,56 @@ Layout:
 **Azione**: Skip to Fase 4, eventuale refactor in futuro se necessario.
 
 ### Fase 4: Creare Profile Page (1.5 giorni) ✅ COMPLETATA
+
 1. [x] **Fix API PreferencesTab**: PUT invece di PATCH, campi corretti (language, base_currency)
 2. [x] **PasswordChangeModal**: Modale per cambio password (dark mode supportato)
 3. [x] **ProfileTab dark mode**: Supporto tema scuro
 4. [x] **Backend API update_profile**: PUT /auth/profile per username/email
-   - Schema: `UpdateProfileRequest`, `UpdateProfileResponse`
-   - Service: `user_service.update_profile()` con validazione uniqueness
-   - Tests: `test_services/test_user_profile.py`, `test_api/test_profile_api.py`
+    - Schema: `UpdateProfileRequest`, `UpdateProfileResponse`
+    - Service: `user_service.update_profile()` con validazione uniqueness
+    - Tests: `test_services/test_user_profile.py`, `test_api/test_profile_api.py`
 5. [x] **Account Section Frontend**:
-   - [x] Username - Input con Save/Undo icons a sinistra quando modificato
-   - [x] Email - Input con Save/Undo icons a sinistra quando modificato
-   - [ ] Avatar - `SettingImageUpload` con crop 1:1 (⏳ rimandato a plan-image-crop.md)
-   - [x] Account created - readonly, formatted date
+    - [x] Username - Input con Save/Undo icons a sinistra quando modificato
+    - [x] Email - Input con Save/Undo icons a sinistra quando modificato
+    - [ ] Avatar - `SettingImageUpload` con crop 1:1 (⏳ rimandato a plan-image-crop.md)
+    - [x] Account created - readonly, formatted date
 6. [x] **Security Section**:
-   - [x] Change Password - Bottone che apre modale
-   - [x] Delete Account - Bottone danger con conferma (digita username)
-     - Backend DELETE `/auth/users/me` + test API + test service
-     - Valida che non si può eliminare l'unico superuser
-7. [x] **Layout uniformato**: 
-   - Header con Save All / Undo All (stile GlobalSettingsTab)
-   - Campi evidenziati in amber quando modificati
-   - Save/Undo icons a sinistra del campo (non s/n a destra)
-   - Debug logging aggiunto
+    - [x] Change Password - Bottone che apre modale
+    - [x] Delete Account - Bottone danger con conferma (digita username)
+        - Backend DELETE `/auth/users/me` + test API + test service
+        - Valida che non si può eliminare l'unico superuser
+7. [x] **Layout uniformato**:
+    - Header con Save All / Undo All (stile GlobalSettingsTab)
+    - Campi evidenziati in amber quando modificati
+    - Save/Undo icons a sinistra del campo (non s/n a destra)
+    - Debug logging aggiunto
 
-### Fase 5: Polish e Test (0.5 giorni)
-1. [ ] Verificare dark mode in tutti e tre
-2. [ ] Verificare responsive
-3. [ ] Verificare accessibilità
-4. [ ] Cleanup codice duplicato
+### Fase 5: Polish e Test (0.5 giorni) 📋 DA FARE
+
+1. [ ] Verificare dark mode in tutti e tre (Settings, GlobalSettings, Profile)
+2. [ ] Verificare responsive su mobile
+3. [ ] Verificare accessibilità (tab navigation, aria labels)
+4. [ ] Cleanup codice duplicato residuo
+5. [ ] **Dark mode mkdocs**: Allineare colori documentazione con frontend (vedi bug list)
+
+**Nota**: La Fase 5 è rimasta in sospeso, ma le funzionalità core sono complete.
 
 ---
 
 ## Alternative Considerate
 
 ### A) Mantenere Separati (Status Quo)
+
 - Pro: Nessun refactoring necessario
 - Contro: Codice duplicato, difficile mantenere consistenza
 
 ### B) Un Solo Componente Parametrizzato
+
 - Pro: Massima riusabilità
 - Contro: Troppo complesso, troppe condizioni
 
 ### C) Componenti Condivisi (Proposta) ✅
+
 - Pro: Bilanciato tra riuso e semplicità
 - Pro: Flessibile per future estensioni
 - Contro: Richiede lavoro iniziale
@@ -182,17 +198,17 @@ Layout:
 
 ## File da Creare/Modificare
 
-| File | Descrizione |
-|------|-------------|
-| `src/lib/components/settings/SettingField.svelte` | Campo singolo con azioni |
-| `src/lib/components/settings/SettingsLayout.svelte` | Layout 2 colonne |
-| `src/lib/components/settings/SettingToggle.svelte` | Toggle boolean |
-| `src/lib/components/settings/SettingNumber.svelte` | Input numerico |
-| `src/lib/components/settings/SettingText.svelte` | Text/email con edit inline |
-| `src/lib/components/settings/SettingImageUpload.svelte` | Upload con crop/resize |
-| `src/routes/(app)/profile/+page.svelte` | Nuova pagina profilo |
-| `src/lib/components/profile/PasswordChangeModal.svelte` | Modale cambio password |
-| `src/lib/components/profile/DeleteAccountModal.svelte` | Modale cancellazione account |
+| File                                                    | Descrizione                  |
+|---------------------------------------------------------|------------------------------|
+| `src/lib/components/settings/SettingField.svelte`       | Campo singolo con azioni     |
+| `src/lib/components/settings/SettingsLayout.svelte`     | Layout 2 colonne             |
+| `src/lib/components/settings/SettingToggle.svelte`      | Toggle boolean               |
+| `src/lib/components/settings/SettingNumber.svelte`      | Input numerico               |
+| `src/lib/components/settings/SettingText.svelte`        | Text/email con edit inline   |
+| `src/lib/components/settings/SettingImageUpload.svelte` | Upload con crop/resize       |
+| `src/routes/(app)/profile/+page.svelte`                 | Nuova pagina profilo         |
+| `src/lib/components/profile/PasswordChangeModal.svelte` | Modale cambio password       |
+| `src/lib/components/profile/DeleteAccountModal.svelte`  | Modale cancellazione account |
 
 ---
 
@@ -215,7 +231,7 @@ Layout:
 ## Stima Tempo Totale
 
 - **Ottimistico**: 4 giorni (componenti base + refactor + profile + crop)
-- **Realistico**: 6 giorni  
+- **Realistico**: 6 giorni
 - **Con imprevisti**: 8 giorni
 
 ---

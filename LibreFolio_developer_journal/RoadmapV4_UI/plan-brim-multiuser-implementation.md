@@ -1,8 +1,8 @@
 # Piano Implementazione BRIM Multi-User
 
 **Data**: 22 Gennaio 2026  
-**Ultimo Aggiornamento**: 26 Gennaio 2026  
-**Status**: ✅ COMPLETATO (Backend + Frontend Fase 4)  
+**Ultimo Aggiornamento**: 29 Gennaio 2026  
+**Status**: ✅ QUASI COMPLETATO (Fase 1-4 ✅, Fase 5 📋 DA FARE)  
 **Dipendenze**: Analisi in `analysis-brim-multiuser.md`  
 **Decisione**: Proposta ACCETTATA
 
@@ -228,11 +228,26 @@ Test API aggiornati per coprire tutti i nuovi comportamenti multi-user:
 - [x] Funzionamento corretto su mobile
 - [x] Build senza warning CSS
 
-### 4.8 Migrazione a Zodios + Libreria Tipi TypeScript
+### 4.8 Migrazione a Zodios + Libreria Tipi TypeScript ✅
 
-**Data**: 27-28 Gennaio 2026  
-**Status**: 🔄 IN PROGRESS (Step 1-4 completati, Step 5 in corso)  
-**Stima**: 4-6 ore
+**Data**: 27-29 Gennaio 2026  
+**Status**: ✅ COMPLETATO  
+**Durata effettiva**: ~5 ore
+
+**Riferimento**: Vedi [plan-types-library.md](./plan-types-library.md) per dettagli completi.
+
+**Sintesi lavoro svolto**:
+
+1. ✅ Creata infrastruttura `$lib/types/` con tipi derivati da Zod schemas
+2. ✅ Creato `zodios-client.ts` con Axios interceptors per cookie auth e language header
+3. ✅ Migrati tutti i 16 file che usavano il client API manuale a Zodios
+4. ✅ Fix datetime serialization: creato `UTCDateTime` type con `Z` suffix per Zod validation
+5. ✅ Mantenuto `client.ts` legacy per eventuali casi edge
+
+**Fix Backend** (per datetime validation):
+
+- Creato `UTCDateTime` in `backend/app/utils/datetime_utils.py`
+- Migrati tutti i campi `created_at`/`updated_at` negli schemas Pydantic
 
 ---
 
@@ -515,6 +530,7 @@ Il wrapper garantisce che:
 - [ ] **5.7** Aggiornare documentazione
 
 **File ancora da migrare** (usano `api` legacy):
+
 - `ProfileTab.svelte`, `PasswordChangeModal.svelte`, `AboutTab.svelte`
 - `GlobalSettingsTab.svelte`, `PreferencesTab.svelte`
 - `CashTransactionModal.svelte`, `BrokerModal.svelte`, `BrokerIcon.svelte`, `BrokerForm.svelte`
@@ -538,18 +554,27 @@ derivarli.
 
 ---
 
-## Fase 5: Frontend - Broker Page Integration (1-2 ore)
+## 📋 Fase 5: Frontend - Broker Page Integration (1-2 ore) - DA FARE
+
+**Obiettivo**: Integrare la gestione file BRIM direttamente nella pagina dettaglio broker.
 
 ### 5.1 Tab/Sezione Files
 
-- [ ] Riusare `FilesTableAdvanced` (o futuro `DataTable`)
-- [ ] `broker_id` implicito dalla pagina
-- [ ] Filtro broker nascosto (singolo broker)
+- [ ] Aggiungere sezione/tab "Import Files" nella pagina `/brokers/[id]`
+- [ ] Riusare `FilesTableAdvanced` con `broker_id` implicito dalla pagina
+- [ ] Filtro broker nascosto (singolo broker già selezionato)
+- [ ] Mostrare solo file associati a quel broker
 
 ### 5.2 Upload Diretto
 
-- [ ] Button "Upload" nella sezione files
-- [ ] `broker_id` automatico
+- [ ] Button "Upload Report" nella sezione files
+- [ ] `broker_id` passato automaticamente (no modale selezione broker)
+- [ ] Riusare `FileUploader` con accept=".csv,.xlsx,.xls"
+
+### 5.3 Quick Actions
+
+- [ ] Link "Vai a Files" per gestione avanzata (filtri multipli, etc.)
+- [ ] Contatore file totali per broker nella card broker list
 
 ---
 
@@ -568,13 +593,23 @@ derivarli.
 
 ## Checklist Pre-Implementazione
 
-- [ ] Backup database esistente
-- [ ] Documentare struttura file attuale
-- [ ] Creare branch `feature/brim-multiuser`
+- [x] Backup database esistente
+- [x] Documentare struttura file attuale
+- [x] Creare branch `feature/brim-multiuser`
 
 ## Checklist Post-Implementazione
 
-- [ ] Tutti i test passano
-- [ ] Documentazione API aggiornata
+- [x] Tutti i test passano (22/22 BRIM tests)
+- [x] Documentazione API aggiornata (via OpenAPI export)
 - [ ] File README aggiornato se necessario
-- [ ] Merge in `dev`
+- [x] Merge in `dev`
+
+---
+
+## Remaining Work
+
+### Fase 5 - Frontend Broker Page Integration (DA FARE)
+
+Vedi sezione "📋 Fase 5" sopra per dettagli.
+
+**Stima**: 1-2 ore

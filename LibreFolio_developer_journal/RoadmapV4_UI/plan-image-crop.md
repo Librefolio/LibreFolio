@@ -8,6 +8,7 @@
 ## 🎯 Obiettivo
 
 Creare un componente avanzato per crop/resize immagini, riutilizzabile in:
+
 - Avatar upload (1:1 square)
 - Icon upload (1:1 square, dimensioni diverse)
 - Future cover images (16:9, custom ratios)
@@ -18,6 +19,7 @@ Creare un componente avanzato per crop/resize immagini, riutilizzabile in:
 ## 🔍 Problema Attuale
 
 `ImageUploader.svelte` attuale:
+
 - ✅ Resize semplice (mantiene aspect ratio)
 - ✅ 3 preset: original, avatar (200x200), icon (50x50)
 - ❌ NO crop/selection area (utente non può scegliere quale parte dell'immagine usare)
@@ -25,6 +27,7 @@ Creare un componente avanzato per crop/resize immagini, riutilizzabile in:
 - ❌ NO preview in tempo reale del crop
 
 **Scenario problema**:
+
 ```
 Utente carica foto 1920x1080 (16:9)
 → Vuole avatar 200x200 (1:1)
@@ -37,30 +40,33 @@ Utente carica foto 1920x1080 (16:9)
 ## 📚 Librerie Valutate
 
 ### Opzione 1: cropperjs (+ svelte-cropperjs) ⭐ RACCOMANDATO
-- **Pro**: 
-  - Feature-complete (crop, rotate, zoom, flip)
-  - Ottimizzata, usata da milioni
-  - Aspect ratio forzato
-  - Touch-friendly (mobile)
-  - Preview multipli
-- **Contro**: 
-  - Bundle size ~50KB minified
-  - Non nativa Svelte (serve wrapper)
+
+- **Pro**:
+    - Feature-complete (crop, rotate, zoom, flip)
+    - Ottimizzata, usata da milioni
+    - Aspect ratio forzato
+    - Touch-friendly (mobile)
+    - Preview multipli
+- **Contro**:
+    - Bundle size ~50KB minified
+    - Non nativa Svelte (serve wrapper)
 - **Link**: https://github.com/fengyuanchen/cropperjs
 - **Svelte wrapper**: https://github.com/ValentinH/svelte-easy-crop
 
 ### Opzione 2: svelte-easy-crop ⭐ ALTERNATIVA
+
 - **Pro**:
-  - Leggera (~15KB)
-  - Nativa Svelte
-  - API semplice
-  - Good DX
+    - Leggera (~15KB)
+    - Nativa Svelte
+    - API semplice
+    - Good DX
 - **Contro**:
-  - Meno features di cropperjs
-  - Community più piccola
+    - Meno features di cropperjs
+    - Community più piccola
 - **Link**: https://github.com/ValentinH/svelte-easy-crop
 
 ### Opzione 3: Custom Canvas Implementation
+
 - **Pro**: Zero dipendenze
 - **Contro**: 3-5 giorni sviluppo, complesso per touch, no rotate/flip
 - **Verdict**: ❌ Non giustificato
@@ -102,32 +108,33 @@ Utente carica foto 1920x1080 (16:9)
 ### Features
 
 1. **Crop Area Selection**
-   - Draggable rectangle con handles
-   - Aspect ratio lock (1:1, 16:9, 4:3, free)
-   - Visual feedback (dimmed area outside)
+    - Draggable rectangle con handles
+    - Aspect ratio lock (1:1, 16:9, 4:3, free)
+    - Visual feedback (dimmed area outside)
 
 2. **Zoom & Pan**
-   - Slider per zoom (0.5x - 3x)
-   - Drag per pan image sotto crop area
+    - Slider per zoom (0.5x - 3x)
+    - Drag per pan image sotto crop area
 
 3. **Rotate & Flip** (opzionali)
-   - Rotate slider (-180° to +180°)
-   - Flip horizontal/vertical buttons
+    - Rotate slider (-180° to +180°)
+    - Flip horizontal/vertical buttons
 
 4. **Preview**
-   - Multiple preview sizes (50x50, 200x200)
-   - Update in real-time durante crop/zoom
+    - Multiple preview sizes (50x50, 200x200)
+    - Update in real-time durante crop/zoom
 
 5. **Export**
-   - Output finale nel formato richiesto
-   - Quality control (85% default)
-   - Format selection (PNG, JPEG, WebP)
+    - Output finale nel formato richiesto
+    - Quality control (85% default)
+    - Format selection (PNG, JPEG, WebP)
 
 ---
 
 ## 🏗️ Architettura Componenti
 
 ### 1. `ImageCropper.svelte` - Main Component
+
 ```typescript
 interface ImageCropperProps {
   // Input
@@ -156,6 +163,7 @@ type AspectRatio = '1:1' | '16:9' | '4:3' | '3:2' | 'free';
 ```
 
 ### 2. `AspectRatioSelector.svelte` - Ratio Buttons
+
 ```svelte
 <script>
   export let ratios: AspectRatio[];
@@ -172,6 +180,7 @@ type AspectRatio = '1:1' | '16:9' | '4:3' | '3:2' | 'free';
 ```
 
 ### 3. `CropPreview.svelte` - Preview Box
+
 ```svelte
 <script>
   export let size: number;      // 50, 200, etc.
@@ -300,24 +309,28 @@ npm install svelte-easy-crop
 ## 📋 Piano Implementazione
 
 ### Fase 1: Setup Base (0.5 giorni)
+
 1. [ ] Installare `svelte-easy-crop`
 2. [ ] Creare `ImageCropper.svelte` con features base
 3. [ ] Testare con immagini diverse (portrait, landscape, square)
 4. [ ] Implementare aspect ratio selector
 
 ### Fase 2: Features Avanzate (1 giorno)
+
 1. [ ] Aggiungere zoom slider
 2. [ ] Aggiungere rotate slider (opzionale)
 3. [ ] Implementare preview boxes real-time
 4. [ ] Gestire orientamento EXIF per foto da mobile
 
 ### Fase 3: Integrazione (0.5 giorni)
+
 1. [ ] Sostituire `ImageUploader` in Settings → Profile (avatar)
 2. [ ] Integrare in BrokerForm (icon)
 3. [ ] Integrare in Files page (upload con crop)
 4. [ ] Aggiungere traduzioni i18n
 
 ### Fase 4: Polish (0.5 giorni)
+
 1. [ ] Dark mode styling
 2. [ ] Mobile/touch optimization
 3. [ ] Loading states durante crop
@@ -329,6 +342,7 @@ npm install svelte-easy-crop
 ## 🎨 Styling Guidelines
 
 ### Colors (LibreFolio Design)
+
 ```css
 --crop-overlay: rgba(0, 0, 0, 0.5);
 --crop-border: #1a4031;
@@ -337,6 +351,7 @@ npm install svelte-easy-crop
 ```
 
 ### Dark Mode
+
 ```css
 html.dark {
   --crop-overlay: rgba(0, 0, 0, 0.7);
@@ -349,36 +364,36 @@ html.dark {
 
 ## 📂 File da Creare
 
-| File | Descrizione |
-|------|-------------|
-| `src/lib/components/ui/ImageCropper.svelte` | Main component con crop logic |
-| `src/lib/components/ui/AspectRatioSelector.svelte` | Ratio buttons |
-| `src/lib/components/ui/CropPreview.svelte` | Preview boxes |
-| `src/lib/utils/imageCrop.ts` | Utility functions (getCroppedImg, etc.) |
+| File                                               | Descrizione                             |
+|----------------------------------------------------|-----------------------------------------|
+| `src/lib/components/ui/ImageCropper.svelte`        | Main component con crop logic           |
+| `src/lib/components/ui/AspectRatioSelector.svelte` | Ratio buttons                           |
+| `src/lib/components/ui/CropPreview.svelte`         | Preview boxes                           |
+| `src/lib/utils/imageCrop.ts`                       | Utility functions (getCroppedImg, etc.) |
 
 ---
 
 ## 🧪 Test Cases
 
 1. **Aspect Ratios**:
-   - ✅ 1:1 produce immagine perfettamente quadrata
-   - ✅ 16:9 produce corretto ratio
-   - ✅ Free permette qualsiasi shape
+    - ✅ 1:1 produce immagine perfettamente quadrata
+    - ✅ 16:9 produce corretto ratio
+    - ✅ Free permette qualsiasi shape
 
 2. **Zoom & Pan**:
-   - ✅ Zoom mantiene crop area centrata
-   - ✅ Pan funziona anche con zoom >1
-   - ✅ Non si può pan fuori dai bounds
+    - ✅ Zoom mantiene crop area centrata
+    - ✅ Pan funziona anche con zoom >1
+    - ✅ Non si può pan fuori dai bounds
 
 3. **Quality**:
-   - ✅ Output a 200px è nitido
-   - ✅ Output a 50px è riconoscibile
-   - ✅ File size ragionevole (<50KB per avatar)
+    - ✅ Output a 200px è nitido
+    - ✅ Output a 50px è riconoscibile
+    - ✅ File size ragionevole (<50KB per avatar)
 
 4. **Edge Cases**:
-   - ✅ Immagine molto piccola (es. 100x100)
-   - ✅ Immagine enorme (es. 5000x5000)
-   - ✅ Immagine con orientamento EXIF rotato
+    - ✅ Immagine molto piccola (es. 100x100)
+    - ✅ Immagine enorme (es. 5000x5000)
+    - ✅ Immagine con orientamento EXIF rotato
 
 ---
 
@@ -411,7 +426,7 @@ html.dark {
 ✅ Output file è corretto (dimensioni, ratio, quality)  
 ✅ Component è riutilizzabile (avatar, icon, cover, etc.)  
 ✅ Dark mode funziona  
-✅ Mobile-friendly (touch gestures)  
+✅ Mobile-friendly (touch gestures)
 
 ---
 

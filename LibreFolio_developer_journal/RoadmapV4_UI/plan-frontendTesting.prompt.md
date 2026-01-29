@@ -5,6 +5,7 @@ Piano per implementare test automatici frontend per no-regression testing.
 ## Obiettivo
 
 Implementare una suite di test automatici per il frontend che:
+
 - Verifica il corretto rendering dei componenti
 - Testa le interazioni utente (click, input, form submission)
 - Previene regressioni durante lo sviluppo
@@ -127,6 +128,7 @@ vi.mock('$app/stores', () => ({
 ## Step 3: Configurazione Playwright
 
 [//]: # (TODO: prendere le configurazioni per il server di test da .env)
+
 ### frontend/playwright.config.ts
 
 ```typescript
@@ -369,7 +371,8 @@ test.describe('Brokers Management', () => {
 
 [//]: # TODO: il frontend sarà una nuova categoria, e le varie pagine le action
 
-[//]: # TODO: oltre la categoria del frontend ci sarà anche quella del UX (user experience), che coinsterà in prove sull'interfaccia dei vari path di lavoro. 
+[//]: # TODO: oltre la categoria del frontend ci sarà anche quella del UX (user experience), che coinsterà in prove sull'interfaccia dei vari path di lavoro.
+
 ```python
 # ============================================================================
 # FRONTEND TESTS
@@ -431,24 +434,24 @@ def run_all_tests(verbose: bool = False) -> bool:
 
 ### Unit Tests (Vitest)
 
-| Componente | Test Cases |
-|------------|------------|
-| LazyImage.svelte | placeholder, load success, error fallback, skeleton animation |
-| Tooltip.svelte | hover show, click outside close, position auto-adjust |
-| FuzzySelect.svelte | search filter, selection, keyboard navigation |
-| ImageUploader.svelte | drag&drop, file picker, resize preview |
-| PasswordStrength.svelte | weak/medium/strong indicators, requirements checklist |
-| ThemeToggle.svelte | toggle state, localStorage persistence |
+| Componente              | Test Cases                                                    |
+|-------------------------|---------------------------------------------------------------|
+| LazyImage.svelte        | placeholder, load success, error fallback, skeleton animation |
+| Tooltip.svelte          | hover show, click outside close, position auto-adjust         |
+| FuzzySelect.svelte      | search filter, selection, keyboard navigation                 |
+| ImageUploader.svelte    | drag&drop, file picker, resize preview                        |
+| PasswordStrength.svelte | weak/medium/strong indicators, requirements checklist         |
+| ThemeToggle.svelte      | toggle state, localStorage persistence                        |
 
 ### E2E Tests (Playwright)
 
-| Flow | Test Cases |
-|------|------------|
-| Auth | login, register, logout, password change, session expire |
-| Brokers | create, edit, delete, access management |
-| Settings | user preferences, global settings (admin only) |
-| Responsive | mobile menu, tablet layout, touch interactions |
-| i18n | language change, persistent preference |
+| Flow       | Test Cases                                               |
+|------------|----------------------------------------------------------|
+| Auth       | login, register, logout, password change, session expire |
+| Brokers    | create, edit, delete, access management                  |
+| Settings   | user preferences, global settings (admin only)           |
+| Responsive | mobile menu, tablet layout, touch interactions           |
+| i18n       | language change, persistent preference                   |
 
 ---
 

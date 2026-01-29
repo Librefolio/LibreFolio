@@ -7,7 +7,7 @@
      */
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {api} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
     import type {BrimPlugin} from '$lib/types';
 
     // Props
@@ -29,11 +29,8 @@
         error = null;
 
         try {
-            const response = await api.get<{
-                plugins: BrimPlugin[];
-            }>('/brokers/import/plugins');
-
-            plugins = response.plugins || [];
+            const response = await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get();
+            plugins = (response as BrimPlugin[]) || [];
         } catch (e) {
             console.error('Failed to load import plugins:', e);
             error = 'Failed to load plugins';

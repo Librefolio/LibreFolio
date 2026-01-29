@@ -4,7 +4,7 @@
      */
     import {createEventDispatcher, onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {api} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
     import {userSettings} from '$lib/stores/settings';
     import FuzzySelect from '$lib/components/FuzzySelect.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
@@ -118,14 +118,7 @@
     onMount(async () => {
         // Load currencies
         try {
-            const response = await api.get<{
-                currencies: Array<{
-                    code: string;
-                    name: string;
-                    symbol?: string;
-                }>;
-                count: number;
-            }>('/utilities/currencies');
+            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
 
             currencyOptions = response.currencies.map(c => ({
                 code: c.code,
@@ -140,13 +133,7 @@
 
         // Load import plugins
         try {
-            const response = await api.get<Array<{
-                code: string;
-                name: string;
-                description: string;
-                supported_extensions: string[];
-                icon_url?: string;
-            }>>('/brokers/import/plugins');
+            const response = await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get();
 
             // Backend returns array directly, not {plugins: [...]}
             // Sort: broker_generic_csv first with "(default)" suffix, rest alphabetically
@@ -154,7 +141,7 @@
                 id: p.code,
                 name: p.code === 'broker_generic_csv' ? `${p.name} (default)` : p.name,
                 description: p.description,
-                icon: p.icon_url
+                icon: p.icon_url ?? undefined
             }));
 
             importPlugins = plugins.sort((a, b) => {

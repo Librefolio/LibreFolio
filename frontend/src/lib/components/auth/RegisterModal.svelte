@@ -1,7 +1,8 @@
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {api} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
+    import {isAxiosError} from 'axios';
     import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/PasswordStrength.svelte';
 
@@ -85,12 +86,12 @@
 
         loading = true;
         try {
-            await api.post('/auth/register', {username, email, password});
+            await zodiosApi.register_api_v1_auth_register_post({username, email, password});
             // Success - go back to login with message
             dispatch('gotoLogin', {message: $_('auth.accountCreated')});
-        } catch (e: any) {
+        } catch (e: unknown) {
             // Handle specific error messages from backend
-            const detail = e.data?.detail;
+            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
             if (Array.isArray(detail)) {
                 // Pydantic validation errors
                 const firstError = detail[0];

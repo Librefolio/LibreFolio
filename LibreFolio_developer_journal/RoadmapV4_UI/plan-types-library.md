@@ -1,7 +1,7 @@
 # Plan: TypeScript Types Library
 
-**Status**: ✅ TYPES COMPLETED / 🔄 ZODIOS MIGRATION IN PROGRESS  
-**Durata effettiva**: ~3 ore  
+**Status**: ✅ COMPLETED  
+**Durata effettiva**: ~4 ore (Types + Zodios Migration)  
 **Priorità**: P0 (Infrastruttura)  
 **Dipendenze**: Nessuna
 
@@ -49,8 +49,8 @@ frontend/src/lib/
 ```typescript
 // Esempio da types/broker.ts
 
-import { z } from 'zod';
-import { schemas } from '$lib/api/generated';
+import {z} from 'zod';
+import {schemas} from '$lib/api/generated';
 
 // Tipo derivato dallo schema Zod (sync con backend)
 export type Broker = z.infer<typeof schemas.BRReadItem>;
@@ -104,9 +104,9 @@ graph LR
  * - Questo wrapper gestisce redirect 401 e aggiunge Accept-Language header
  */
 
-export { api, apiCall, ApiError } from './client';
-export type { ApiCallOptions } from './client';
-export { schemas } from './generated';
+export {api, apiCall, ApiError} from './client';
+export type {ApiCallOptions} from './client';
+export {schemas} from './generated';
 ```
 
 ### `$lib/types/index.ts`
@@ -150,21 +150,21 @@ export * from './asset';
 
 ### Step 3: Migrare Componenti Routes ✅
 
-| File | Interfacce rimosse | Import aggiunto |
-|------|-------------------|-----------------|
-| `brokers/+page.svelte` | `Broker`, `BrokerSummary` | `import type { Broker, BrokerSummary } from '$lib/types'` |
-| `brokers/[id]/+page.svelte` | `BrokerSummary`, `Transaction` | `import type { BrokerSummary, Transaction } from '$lib/types'` |
-| `files/+page.svelte` | `UploadedFile`, `BrimFile`, `Broker` | `import type { UploadedFile, BrimFile, BrokerInfo, Broker } from '$lib/types'` |
+| File                        | Interfacce rimosse                   | Import aggiunto                                                                |
+|-----------------------------|--------------------------------------|--------------------------------------------------------------------------------|
+| `brokers/+page.svelte`      | `Broker`, `BrokerSummary`            | `import type { Broker, BrokerSummary } from '$lib/types'`                      |
+| `brokers/[id]/+page.svelte` | `BrokerSummary`, `Transaction`       | `import type { BrokerSummary, Transaction } from '$lib/types'`                 |
+| `files/+page.svelte`        | `UploadedFile`, `BrimFile`, `Broker` | `import type { UploadedFile, BrimFile, BrokerInfo, Broker } from '$lib/types'` |
 
 ### Step 4: Migrare Componenti Lib ✅
 
-| File | Modifiche |
-|------|-----------|
-| `BrokerSelect.svelte` | Creato `BrokerSelectItem` interface locale (subset di Broker) |
-| `FilesTable.svelte` | Usa tipi da `$lib/types` + `safeNumber` helper |
-| `ImportPluginSelect.svelte` | Usa `BrimPlugin` da `$lib/types` |
-| `GlobalSettingsTab.svelte` | `GlobalSetting` da `$lib/types` |
-| `BrokerForm.svelte` | Fix: `base_currency` invece di `default_currency` |
+| File                        | Modifiche                                                     |
+|-----------------------------|---------------------------------------------------------------|
+| `BrokerSelect.svelte`       | Creato `BrokerSelectItem` interface locale (subset di Broker) |
+| `FilesTable.svelte`         | Usa tipi da `$lib/types` + `safeNumber` helper                |
+| `ImportPluginSelect.svelte` | Usa `BrimPlugin` da `$lib/types`                              |
+| `GlobalSettingsTab.svelte`  | `GlobalSetting` da `$lib/types`                               |
+| `BrokerForm.svelte`         | Fix: `base_currency` invece di `default_currency`             |
 
 ### Step 5: Verifiche Finali ✅
 
@@ -187,13 +187,13 @@ Alcuni tipi sono **frontend-only** e devono restare nei componenti:
 
 ### Naming Conventions
 
-| Backend Schema | Frontend Type | Motivo |
-|----------------|---------------|--------|
-| `BRReadItem` | `Broker` | Nome più intuitivo |
-| `BRSummary` | `BrokerSummary` | Consistente |
-| `TXReadItem` | `Transaction` | Nome più intuitivo |
-| `BRIMFileInfo` | `BrimFile` | Più corto |
-| `BRIMPluginInfo` | `BrimPlugin` | Più corto |
+| Backend Schema   | Frontend Type   | Motivo             |
+|------------------|-----------------|--------------------|
+| `BRReadItem`     | `Broker`        | Nome più intuitivo |
+| `BRSummary`      | `BrokerSummary` | Consistente        |
+| `TXReadItem`     | `Transaction`   | Nome più intuitivo |
+| `BRIMFileInfo`   | `BrimFile`      | Più corto          |
+| `BRIMPluginInfo` | `BrimPlugin`    | Più corto          |
 
 ### Quando cambia il Backend
 
@@ -210,34 +210,35 @@ Se il backend modifica uno schema:
 ### Obiettivo
 
 Sostituire il client `api` manuale (fetch-based) con `zodiosApi` (Axios-based) per:
+
 - Type-safety completa con autocomplete
 - Validazione runtime delle risposte via Zod
 - Gestione errori più robusta
 
 ### Stato Attuale
 
-| Componente | Stato |
-|------------|-------|
-| `zodios-client.ts` | ✅ Creato con Axios + interceptors |
-| `auth.ts` store | ✅ Migrato |
-| `settings.ts` store | ✅ Migrato |
-| Componenti settings | ⏳ Da migrare (5 file) |
-| Componenti brokers | ⏳ Da migrare (5 file) |
-| Route pages | ⏳ Da migrare (3 file) |
-| Altri componenti | ⏳ Da migrare (2 file) |
-| `client.ts` legacy | ⏳ Da rimuovere dopo migrazione |
+| Componente          | Stato                             |
+|---------------------|-----------------------------------|
+| `zodios-client.ts`  | ✅ Creato con Axios + interceptors |
+| `auth.ts` store     | ✅ Migrato                         |
+| `settings.ts` store | ✅ Migrato                         |
+| Componenti settings | ✅ Migrato (5 file)                |
+| Componenti brokers  | ✅ Migrato (5 file)                |
+| Route pages         | ✅ Migrato (3 file)                |
+| Altri componenti    | ✅ Migrato (2 file)                |
+| `client.ts` legacy  | ✅ Mantenuto per compatibility     |
 
 ### Come migrare un componente
 
 ```typescript
 // PRIMA (legacy fetch client)
-import { api, ApiError } from '$lib/api';
+import {api, ApiError} from '$lib/api';
 
 const response = await api.get<Broker[]>('/brokers');
 
 // DOPO (Zodios client)
-import { zodiosApi } from '$lib/api';
-import { isAxiosError } from 'axios';
+import {zodiosApi} from '$lib/api';
+import {isAxiosError} from 'axios';
 
 const response = await zodiosApi.list_brokers_api_v1_brokers_get();
 // ^ Type-safe! Autocomplete mostra tutti gli endpoint
@@ -294,10 +295,13 @@ if (isAxiosError(error)) {
 ### 1. Tipi Union Errati nel Generatore
 
 **Problema**: `openapi-zod-client` genera tipi union incorretti come:
+
 ```typescript
 portal_url?: ((string | null) | Array<string | null>) | undefined;
 ```
+
 invece di:
+
 ```typescript
 portal_url?: string | null | undefined;
 ```
@@ -305,6 +309,7 @@ portal_url?: string | null | undefined;
 **Causa**: Probabilmente un bug nel parsing di OpenAPI schema con `anyOf`/`oneOf`.
 
 **Soluzione Temporanea**: Creati helper in `$lib/types/common.ts`:
+
 - `safeString(value)` - Estrae string da union problematico
 - `safeNumber(value)` - Estrae number da union problematico
 - `safeCurrency(value)` - Estrae Currency object da union problematico
@@ -315,16 +320,50 @@ portal_url?: string | null | undefined;
 
 **Problema**: Backend usa `Decimal` per precisione finanziaria, ma viene serializzato come `string` in JSON.
 
-**Soluzione**: Mantenuto `string` nel tipo `Currency.amount` per preservare precisione. 
+**Soluzione**: Mantenuto `string` nel tipo `Currency.amount` per preservare precisione.
 Aggiunto helper `parseCurrencyAmount(amount)` solo per display formatting.
 
 ### 3. Field Names Mismatch
 
 **Problema**: Alcuni nomi campi diversi tra frontend legacy e backend:
+
 - `content_type` → `mime_type` (in UploadFileInfo)
 - `default_currency` → `base_currency` (in UserSettings)
 
 **Soluzione**: Aggiornati tutti i riferimenti per usare i nomi corretti del backend.
+
+### 4. DateTime senza Timezone (Z)
+
+**Problema**: Il backend restituiva datetime senza timezone suffix:
+
+```json
+"created_at": "2026-01-28T13:46:37.780795"
+```
+
+Ma Zod (con `z.string().datetime({ offset: true })`) si aspetta:
+
+```json
+"created_at": "2026-01-28T13:46:37.780795Z"
+```
+
+**Causa**: SQLite salva datetime come stringhe naive. Python li legge senza timezone info.
+
+**Soluzione**: Creato tipo custom `UTCDateTime` in `backend/app/utils/datetime_utils.py`:
+
+- `BeforeValidator`: Aggiunge UTC se datetime è naive
+- `PlainSerializer`: Serializza sempre con `Z` suffix
+
+Migrati tutti i campi `created_at`/`updated_at` negli schemas:
+
+- `brokers.py`: BRReadItem, BRAccessItem
+- `transactions.py`: TXReadItem
+- `settings.py`: GlobalSettingRead
+- `auth.py`: AuthUserResponse
+- `brim.py`: BRIMFileInfo
+- `uploads.py`: UploadFileInfo
+
+**Nota**: I campi `date` (senza ora) per transazioni e prezzi NON usano UTCDateTime -
+rappresentano la data locale della borsa/broker, non timestamp di sistema.
 
 ---
 

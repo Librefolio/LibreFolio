@@ -1,7 +1,8 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {auth, currentUser} from '$lib/stores/auth';
-    import {api} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
+    import {isAxiosError} from 'axios';
     import {goto} from '$app/navigation';
     import {debug} from '$lib/debug';
     import {Calendar, Key, Mail, User, AlertCircle, CheckCircle, Trash2, Save, Undo, Pencil, PencilOff} from 'lucide-svelte';
@@ -96,15 +97,16 @@
                 ? { username: editedUsername }
                 : { email: editedEmail };
 
-            await api.put<{ user: any; message: string }>('/auth/profile', payload);
+            await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
             await auth.checkAuth();
 
             const fieldName = field === 'username' ? $_('auth.username') : $_('auth.email');
             successItems = [fieldName];
             setTimeout(() => successItems = [], 3000);
-        } catch (e: any) {
+        } catch (e: unknown) {
             debug.error('ProfileTab', 'saveField failed', e);
-            error = e?.data?.detail || e?.message || $_('settings.updateFailed');
+            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
+            error = detail || (e instanceof Error ? e.message : $_('settings.updateFailed'));
             if (field === 'username') editedUsername = originalUsername;
             else editedEmail = originalEmail;
             setTimeout(() => error = null, 5000);
@@ -131,11 +133,11 @@
 
         try {
             if (usernameModified) {
-                await api.put<{ user: any; message: string }>('/auth/profile', { username: editedUsername });
+                await zodiosApi.update_profile_api_v1_auth_profile_put({ username: editedUsername });
                 saved.push($_('auth.username'));
             }
             if (emailModified) {
-                await api.put<{ user: any; message: string }>('/auth/profile', { email: editedEmail });
+                await zodiosApi.update_profile_api_v1_auth_profile_put({ email: editedEmail });
                 saved.push($_('auth.email'));
             }
 
@@ -144,9 +146,10 @@
                 successItems = saved;
                 setTimeout(() => successItems = [], 4000);
             }
-        } catch (e: any) {
+        } catch (e: unknown) {
             debug.error('ProfileTab', 'saveAll failed', e);
-            error = e?.data?.detail || e?.message || $_('settings.updateFailed');
+            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
+            error = detail || (e instanceof Error ? e.message : $_('settings.updateFailed'));
             setTimeout(() => error = null, 5000);
         } finally {
             saving = false;
@@ -168,12 +171,13 @@
         error = null;
 
         try {
-            await api.delete('/auth/users/me');
+            await zodiosApi.delete_own_account_api_v1_auth_users_me_delete(undefined, {});
             await auth.logout();
             goto('/');
-        } catch (e: any) {
+        } catch (e: unknown) {
             debug.error('ProfileTab', 'handleDeleteAccount failed', e);
-            error = e?.data?.detail || e?.message || $_('settings.deleteAccountFailed');
+            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
+            error = detail || (e instanceof Error ? e.message : $_('settings.deleteAccountFailed'));
             deleting = false;
         }
     }

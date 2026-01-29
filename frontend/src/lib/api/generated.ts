@@ -3008,10 +3008,7 @@ const UploadFileInfo: z.ZodType<UploadFileInfo> = z.object({
   original_name: z.string().describe("Original filename"),
   mime_type: z.string().describe("MIME type of the file"),
   size_bytes: z.number().int().describe("File size in bytes"),
-  uploaded_at: z
-    .string()
-    .datetime({ offset: true })
-    .describe("Upload timestamp (UTC)"),
+  uploaded_at: z.string().describe("Upload timestamp (UTC)"),
   uploaded_by_user_id: z
     .number()
     .int()
@@ -4495,8 +4492,8 @@ Impact:
   related_transaction_id: z.union([z.number(), z.null()]).optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
   description: z.union([z.string(), z.null()]).optional(),
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
+  created_at: z.string(),
+  updated_at: z.string(),
 });
 const TXUpdateItem: z.ZodType<TXUpdateItem> = z.object({
   id: z.number().int().gt(0).describe("Transaction ID to update"),
@@ -4665,8 +4662,8 @@ const BRReadItem = z.object({
   allow_asset_shorting: z.boolean(),
   is_active: z.boolean(),
   opened_at: z.union([z.string(), z.null()]).optional(),
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
+  created_at: z.string(),
+  updated_at: z.string(),
 });
 const BRDeleteResult: z.ZodType<BRDeleteResult> = z.object({
   success: z.boolean().describe("Whether the deletion succeeded"),
@@ -4812,8 +4809,8 @@ const BRSummary: z.ZodType<BRSummary> = z.object({
   allow_asset_shorting: z.boolean(),
   is_active: z.boolean(),
   opened_at: z.union([z.string(), z.null()]).optional(),
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
+  created_at: z.string(),
+  updated_at: z.string(),
   cash_balances: z
     .array(Currency_Output)
     .describe("Current cash balance per currency")
@@ -4837,10 +4834,7 @@ const BRAccessItem: z.ZodType<BRAccessItem> = z.object({
 - OWNER: Full access (CRUD broker, manage access, delete broker)
 - EDITOR: Modify broker and transactions, can only remove self
 - VIEWER: Read-only access`),
-  created_at: z
-    .string()
-    .datetime({ offset: true })
-    .describe("When access was granted"),
+  created_at: z.string().describe("When access was granted"),
 });
 const BRAccessListResponse: z.ZodType<BRAccessListResponse> = z.object({
   accesses: z.array(BRAccessItem).optional(),
@@ -4889,10 +4883,7 @@ const BRIMFileInfo: z.ZodType<BRIMFileInfo> = z
 Flow: UPLOADED → PARSED (success) or FAILED (error)
 After parsing, the file stays in PARSED. The actual transaction import
 uses POST /transactions and doesn't change file status.`),
-    uploaded_at: z
-      .string()
-      .datetime({ offset: true })
-      .describe("UTC timestamp when uploaded"),
+    uploaded_at: z.string().describe("UTC timestamp when uploaded"),
     processed_at: z
       .union([z.string(), z.null()])
       .describe("UTC timestamp when processed")

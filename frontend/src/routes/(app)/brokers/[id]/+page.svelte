@@ -5,7 +5,7 @@
     import {onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
-    import {api} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
     import {
         ArrowLeft,
         Briefcase,
@@ -47,12 +47,12 @@
         error = null;
 
         try {
-            broker = await api.get<BrokerSummary>(`/brokers/${data.brokerId}/summary`);
+            broker = await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}}) as BrokerSummary;
 
             // Load recent transactions
             try {
-                const txResponse = await api.get<Transaction[]>(`/transactions?broker_id=${data.brokerId}&limit=10`);
-                transactions = txResponse;
+                const txResponse = await zodiosApi.query_transactions_api_v1_transactions_get({queries: {broker_id: data.brokerId, limit: 10}});
+                transactions = txResponse as Transaction[];
             } catch {
                 transactions = [];
             }

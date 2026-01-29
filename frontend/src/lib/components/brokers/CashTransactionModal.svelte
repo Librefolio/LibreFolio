@@ -4,7 +4,7 @@
      */
     import {createEventDispatcher, onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {api} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
     import {X} from 'lucide-svelte';
     import FuzzySelect from '$lib/components/FuzzySelect.svelte';
     import type {SelectOption} from '$lib/components/FuzzySelect.svelte';
@@ -44,14 +44,7 @@
     // Load currencies on mount
     onMount(async () => {
         try {
-            const response = await api.get<{
-                currencies: Array<{
-                    code: string;
-                    name: string;
-                    symbol?: string;
-                }>;
-                count: number;
-            }>('/utilities/currencies');
+            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
 
             currencyOptions = response.currencies.map(c => ({
                 code: c.code,
@@ -74,18 +67,17 @@
         error = null;
 
         try {
-            // Create transaction
-            await api.post('/transactions', [{
+            // Create transaction - use cash object for cash movement
+            // DEPOSIT: cash.amount > 0, WITHDRAWAL: cash.amount < 0
+            const cashAmount = type === 'DEPOSIT' ? amount : -amount;
+            await zodiosApi.create_transactions_api_v1_transactions_post([{
                 broker_id: brokerId,
-                asset_id: null, // Cash transaction, no asset
                 type: type,
-                quantity: null,
-                currency: currency,
-                unit_price: null,
-                total_amount: amount,
-                fees: 0,
-                tax: 0,
                 date: date,
+                cash: {
+                    code: currency,
+                    amount: cashAmount
+                },
                 description: description || undefined
             }]);
 

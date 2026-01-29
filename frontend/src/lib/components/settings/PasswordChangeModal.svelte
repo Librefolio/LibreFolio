@@ -5,7 +5,8 @@
      */
     import { createEventDispatcher } from 'svelte';
     import { _ } from '$lib/i18n';
-    import { api, ApiError } from '$lib/api';
+    import { zodiosApi } from '$lib/api';
+    import { isAxiosError } from 'axios';
     import { X, Check, AlertCircle } from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/PasswordStrength.svelte';
@@ -68,7 +69,7 @@
         isSubmitting = true;
 
         try {
-            await api.post('/auth/change-password', {
+            await zodiosApi.change_password_api_v1_auth_change_password_post({
                 current_password: currentPassword,
                 new_password: newPassword
             });
@@ -79,8 +80,8 @@
                 handleClose();
             }, 1500);
         } catch (e) {
-            if (e instanceof ApiError) {
-                const detail = (e.data as { detail?: string })?.detail?.toLowerCase() || '';
+            if (isAxiosError(e)) {
+                const detail = (e.response?.data?.detail as string)?.toLowerCase() || '';
                 if (detail.includes('incorrect')) {
                     error = $_('settings.currentPasswordIncorrect');
                 } else if (detail.includes('different')) {

@@ -1,6 +1,7 @@
 <script lang="ts">
     import {_, LANGUAGE_OPTIONS} from '$lib/i18n';
-    import {api, ApiError} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
+    import {isAxiosError} from 'axios';
     import {onMount} from 'svelte';
     import {debug} from '$lib/debug';
     import {AlertCircle, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
@@ -76,7 +77,7 @@
         debug.log('GlobalSettingsTab', 'loadCurrencies');
         currenciesLoading = true;
         try {
-            const response = await api.get<{ currencies: CurrencyInfo[] }>('/utilities/currencies');
+            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
             currencyOptions = response.currencies.map(c => ({
                 code: c.code,
                 label: c.name,
@@ -94,16 +95,16 @@
         isLoading = true;
         error = null;
         try {
-            const response = await api.get<{ settings: GlobalSetting[] }>('/settings/global');
+            const response = await zodiosApi.list_global_settings_api_v1_settings_global_get();
             debug.log('GlobalSettingsTab', 'loadSettings response', response.settings.length);
-            settings = response.settings;
+            settings = response.settings as GlobalSetting[];
             // Initialize edited values
             editedValues = {};
             for (const setting of settings) {
                 editedValues[setting.key] = setting.value;
             }
         } catch (e) {
-            if (e instanceof ApiError) {
+            if (isAxiosError(e)) {
                 error = e.message;
             } else {
                 error = 'Failed to load settings';
@@ -119,7 +120,7 @@
         error = null;
         success = null;
         try {
-            await api.put(`/settings/global/${key}`, {value: editedValues[key]});
+            await zodiosApi.update_global_setting_endpoint_api_v1_settings_global__key__put({value: editedValues[key]}, {params: {key}});
             // Update local state
             const setting = settings.find(s => s.key === key);
             if (setting) {
@@ -131,8 +132,8 @@
             success = `"${label}" ${$_('settings.savedSuccessfully')}`;
             setTimeout(() => success = null, 3000);
         } catch (e) {
-            if (e instanceof ApiError) {
-                if (e.status === 403) {
+            if (isAxiosError(e)) {
+                if (e.response?.status === 403) {
                     error = $_('settings.adminRequired');
                 } else {
                     error = e.message;
@@ -169,7 +170,7 @@
             isSaving = true;
             error = null;
             try {
-                await api.put(`/settings/global/${key}`, {value: editedValues[key]});
+                await zodiosApi.update_global_setting_endpoint_api_v1_settings_global__key__put({value: editedValues[key]}, {params: {key}});
                 // Update local state
                 const setting = settings.find(s => s.key === key);
                 if (setting) {
@@ -177,8 +178,8 @@
                 }
                 savedLabels.push(getSettingLabel(key));
             } catch (e) {
-                if (e instanceof ApiError) {
-                    if (e.status === 403) {
+                if (isAxiosError(e)) {
+                    if (e.response?.status === 403) {
                         error = $_('settings.adminRequired');
                     } else {
                         error = e.message;

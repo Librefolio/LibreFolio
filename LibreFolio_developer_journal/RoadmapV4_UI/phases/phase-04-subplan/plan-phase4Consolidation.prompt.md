@@ -7,22 +7,22 @@ polish UX. Ordine: backend fix → backend nuovo → test API → frontend.
 
 ## 📊 Stato Attuale (19 Gennaio 2026)
 
-| Step | Descrizione | Stato |
-|------|-------------|-------|
-| 1 | Fix bug critici Backend | ✅ COMPLETATO |
-| 2 | Global Settings Service | ✅ COMPLETATO |
-| 3 | Sistema Upload Backend | ✅ COMPLETATO |
-| 4 | Static Assets Plugin | ✅ COMPLETATO |
-| 5 | Filtraggio Multi-Utente | ✅ COMPLETATO |
-| 6 | Test API Backend | ✅ COMPLETATO (~160 test) |
-| 7 | Cache JS | ✅ COMPLETATO |
-| 8 | Componenti UI | ✅ COMPLETATO |
-| 9 | Pagina Files | ✅ COMPLETATO |
-| 10 | Fix UX Brokers | ✅ COMPLETATO |
-| 11 | Temi Light/Dark | ✅ COMPLETATO |
-| 12 | User Preferences UI | ✅ COMPLETATO |
-| 13 | Aggiornamento docs | ✅ COMPLETATO |
-| 14 | Migrazione dev.sh → dev.py | ✅ COMPLETATO |
+| Step | Descrizione                | Stato                    |
+|------|----------------------------|--------------------------|
+| 1    | Fix bug critici Backend    | ✅ COMPLETATO             |
+| 2    | Global Settings Service    | ✅ COMPLETATO             |
+| 3    | Sistema Upload Backend     | ✅ COMPLETATO             |
+| 4    | Static Assets Plugin       | ✅ COMPLETATO             |
+| 5    | Filtraggio Multi-Utente    | ✅ COMPLETATO             |
+| 6    | Test API Backend           | ✅ COMPLETATO (~160 test) |
+| 7    | Cache JS                   | ✅ COMPLETATO             |
+| 8    | Componenti UI              | ✅ COMPLETATO             |
+| 9    | Pagina Files               | ✅ COMPLETATO             |
+| 10   | Fix UX Brokers             | ✅ COMPLETATO             |
+| 11   | Temi Light/Dark            | ✅ COMPLETATO             |
+| 12   | User Preferences UI        | ✅ COMPLETATO             |
+| 13   | Aggiornamento docs         | ✅ COMPLETATO             |
+| 14   | Migrazione dev.sh → dev.py | ✅ COMPLETATO             |
 
 **Progresso: 14/14 step completati (100%) 🎉**
 
@@ -265,6 +265,7 @@ polish UX. Ordine: backend fix → backend nuovo → test API → frontend.
 ### 7. Cache locale librerie JS (mkdocs + frontend) ✅ COMPLETATO
 
 **Implementazione:**
+
 - ✅ Creato `scripts/update_js_cache.py` - Script per scaricare e gestire cache JS
 - ✅ Aggiunto `vendor/` a `.gitignore` (non committato nel repo)
 - ✅ Cache popolata dinamicamente all'avvio del server
@@ -272,16 +273,19 @@ polish UX. Ordine: backend fix → backend nuovo → test API → frontend.
 - ✅ Manifest JSON per tracciare versioni e hash
 
 **Comandi dev.sh:**
+
 - `./dev.sh cache:js` - Aggiorna cache manualmente
 - `./dev.sh cache:js:force` - Forza re-download
 - Cache aggiornata automaticamente con `./dev.sh server`
 
 **lib-loader.js:**
+
 - Carica da locale (vendor/) prima
 - Fallback a CDN se locale non disponibile
 - Rimosso polyfill.io (deprecato, non necessario per browser moderni)
 
 **Nota su Polyfill.io:**
+
 - Servizio deprecato e con problemi di sicurezza (2024)
 - Browser moderni (2020+) non necessitano polyfill ES6
 - MathJax 3 funziona nativamente su tutti i browser moderni
@@ -297,18 +301,21 @@ polish UX. Ordine: backend fix → backend nuovo → test API → frontend.
 Creati in [components/ui/](../../frontend/src/lib/components/ui/):
 
 **LazyImage.svelte:** ✅
+
 - Placeholder SVG (generic/avatar/broker/icon)
 - Carica immagine async
 - Fallback su errore
 - Fade-in transition
 
 **Tooltip.svelte:** ✅
+
 - Apparizione istantanea (0ms delay)
 - Chiude su click outside
 - Posizionamento auto (evita overflow viewport)
 - Supporto keyboard (Enter/Space)
 
 **ImageUploader.svelte:** ✅
+
 - Drag&drop + file browser
 - Selezione size: original / avatar (200px) / icon (50px)
 - Resize client-side con canvas API
@@ -317,6 +324,7 @@ Creati in [components/ui/](../../frontend/src/lib/components/ui/):
 - Preview prima dell'upload
 
 **Traduzioni aggiunte:**
+
 - ✅ Sezione `uploads` in en.json, it.json, fr.json, es.json
 
 ---
@@ -426,6 +434,7 @@ Creati in [components/ui/](../../frontend/src/lib/components/ui/):
 **Obiettivo**: Trasformare dev.sh da script bash monolitico (~1100 linee) a sistema Python modulare con autocompletamento.
 
 **Struttura creata:**
+
 ```
 LibreFolio/
 ├── dev.py                      # Entry point principale Python
@@ -440,6 +449,7 @@ LibreFolio/
 ```
 
 **Vantaggi:**
+
 - ✅ Autocompletamento bash/zsh
 - ✅ Argparse per validazione argomenti
 - ✅ Help dettagliato per ogni comando
@@ -447,6 +457,7 @@ LibreFolio/
 - ✅ Singola fonte di verità per utilities
 
 **Comandi disponibili in dev.py:**
+
 - `server`, `server:test` - Avvio server
 - `fe dev|build|check|preview` - Frontend
 - `db check|current|migrate|upgrade|downgrade` - Database
@@ -460,6 +471,7 @@ LibreFolio/
 - `shell`, `install` - Utilities
 
 **Installazione autocompletamento:**
+
 ```bash
 # Bash (~/.bashrc)
 source /path/to/LibreFolio/scripts/dev_completion.bash
@@ -470,6 +482,7 @@ source /path/to/LibreFolio/scripts/dev_completion.bash
 ```
 
 **Note:**
+
 - dev.sh rimane funzionante per backward compatibility
 - I vecchi test_runner.py e user_cli.py nella root sono ancora funzionanti (symlink o copia)
 - Piano dettagliato: [plan-devShMigration.prompt.md](plan-devShMigration.prompt.md)

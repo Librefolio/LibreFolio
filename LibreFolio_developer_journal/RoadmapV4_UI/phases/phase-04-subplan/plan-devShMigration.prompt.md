@@ -1,6 +1,7 @@
 # Piano: Migrazione dev.sh → dev.py ✅ COMPLETATO
 
 ## Obiettivo
+
 Trasformare `dev.sh` da script bash monolitico (~1100 linee) a sistema Python modulare con autocompletamento automatico via `argcomplete` e visualizzazione ad albero dei comandi.
 
 ---
@@ -12,9 +13,9 @@ Trasformare `dev.sh` da script bash monolitico (~1100 linee) a sistema Python mo
 1. ✅ Creato `dev.py` - Entry point Python con argparse, argcomplete e TreeParser
 2. ✅ Semplificato `dev.sh` - Ora è un thin wrapper (~50 linee) che delega a dev.py
 3. ✅ Spostati script in `scripts/`:
-   - `test_runner.py` (da root)
-   - `user_cli.py` (da root)
-   - `list_api_endpoints.py` (da backend/test_scripts/)
+    - `test_runner.py` (da root)
+    - `user_cli.py` (da root)
+    - `list_api_endpoints.py` (da backend/test_scripts/)
 4. ✅ Creato `scripts/cli_base.py` - Utilities condivise (Colors, paths, run_command)
 5. ✅ Creato `scripts/cli_tree_parser.py` - TreeParser con visualizzazione albero comandi
 6. ✅ Aggiunto `argcomplete` per autocompletamento automatico
@@ -49,7 +50,9 @@ LibreFolio/
 La libreria `cli_tree_parser.py` fornisce:
 
 ### TreeParser
+
 Parser che mostra automaticamente l'albero dei comandi dopo l'help:
+
 ```
 Command tree:
 dev.py [-h]
@@ -65,11 +68,14 @@ dev.py [-h]
 ```
 
 ### CustomFormatter
+
 Formatter migliorato che combina opzioni short/long:
+
 - Prima: `-v VERBOSE, --verbose VERBOSE`
 - Dopo: `-v, --verbose`
 
 ### subparser_tree()
+
 Funzione standalone per generare l'albero ASCII.
 
 ---
@@ -92,6 +98,7 @@ eval "$(register-python-argcomplete dev.py)"
 ## Comandi Disponibili
 
 ### 🖥️ Backend
+
 ```bash
 ./dev.py server              # Avvia server sviluppo (:8000)
 ./dev.py server --test       # Avvia server test (:8001, test DB)
@@ -103,6 +110,7 @@ eval "$(register-python-argcomplete dev.py)"
 ```
 
 ### 🎨 Frontend
+
 ```bash
 ./dev.py front dev           # Dev server con HMR (:5173)
 ./dev.py front build         # Build produzione
@@ -111,6 +119,7 @@ eval "$(register-python-argcomplete dev.py)"
 ```
 
 ### 🧪 Testing
+
 ```bash
 ./dev.py test api auth       # Test auth API
 ./dev.py test api all        # Tutti i test API
@@ -119,6 +128,7 @@ eval "$(register-python-argcomplete dev.py)"
 ```
 
 ### 👤 User Management
+
 ```bash
 ./dev.py user create <user> <email> <pass>
 ./dev.py user list
@@ -127,6 +137,7 @@ eval "$(register-python-argcomplete dev.py)"
 ```
 
 ### 📚 Documentation
+
 ```bash
 ./dev.py mkdocs build        # Build sito documentazione
 ./dev.py mkdocs serve        # Serve localmente (:8002)
@@ -135,6 +146,7 @@ eval "$(register-python-argcomplete dev.py)"
 ```
 
 ### 📦 Tools
+
 ```bash
 ./dev.py api sync            # Rigenera client TypeScript
 ./dev.py i18n audit          # Audit traduzioni
@@ -145,6 +157,7 @@ eval "$(register-python-argcomplete dev.py)"
 ```
 
 ### 🔧 Setup
+
 ```bash
 ./dev.py install             # Installa dipendenze
 ./dev.py shell               # Pipenv shell

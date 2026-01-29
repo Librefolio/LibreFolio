@@ -30,7 +30,7 @@
     } = {};
 
 
-    import {api} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
 
     let loading = false;
     let error: string | null = null;
@@ -60,24 +60,22 @@
         try {
             if (mode === 'create') {
                 // Create broker
-                const response = await api.post<{
-                    total: number;
-                    succeeded: number;
-                    failed: number;
-                    results: Array<{ success: boolean; broker_id?: number; error?: string }>
-                }>('/brokers', [event.detail]);
+                const response = await zodiosApi.create_brokers_api_v1_brokers_post([event.detail]);
+                const result = response.results[0];
+                const brokerId = Array.isArray(result?.broker_id) ? result.broker_id[0] : result?.broker_id;
+                const errorMsg = Array.isArray(result?.error) ? result.error[0] : result?.error;
 
-                if (response.results[0]?.success && response.results[0].broker_id) {
+                if (result?.success && brokerId) {
                     formTouched = false;
-                    dispatch('created', {id: response.results[0].broker_id});
+                    dispatch('created', {id: brokerId});
                     dispatch('close');
                 } else {
-                    error = response.results[0]?.error ?? $_('brokers.createFailed');
+                    error = errorMsg ?? $_('brokers.createFailed');
                 }
             } else if (brokerId) {
                 // Update broker
                 // BrokerForm sends "" for cleared fields, value for set fields
-                await api.patch(`/brokers/${brokerId}`, {
+                await zodiosApi.update_broker_api_v1_brokers__broker_id__patch({
                     name: event.detail.name,
                     description: event.detail.description,
                     portal_url: event.detail.portal_url,
@@ -87,7 +85,7 @@
                     allow_asset_shorting: event.detail.allow_asset_shorting,
                     is_active: event.detail.is_active,
                     opened_at: event.detail.opened_at || null
-                });
+                }, {params: {broker_id: brokerId}});
 
                 formTouched = false;
                 dispatch('updated', {id: brokerId});

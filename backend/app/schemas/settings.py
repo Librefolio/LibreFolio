@@ -9,6 +9,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from backend.app.utils.datetime_utils import UTCDateTime
+
 
 # ============================================================================
 # USER SETTINGS
@@ -43,7 +45,7 @@ class GlobalSettingRead(BaseModel):
     value: str = Field(..., description="Setting value (as string)")
     value_type: str = Field(..., description="Value type: string, int, bool, json")
     description: Optional[str] = Field(None, description="Human-readable description")
-    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+    updated_at: Optional[UTCDateTime] = Field(None, description="Last update timestamp")
     updated_by: Optional[int] = Field(None, description="User ID who last updated")
 
     model_config = {"from_attributes": True}

@@ -1,6 +1,6 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {api} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
     import {onMount} from 'svelte';
     import {Check, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Monitor, Scale, Tag} from 'lucide-svelte';
 
@@ -28,7 +28,7 @@
 
     onMount(async () => {
         try {
-            systemInfo = await api.get<SystemInfo>('/system/info');
+            systemInfo = await zodiosApi.get_system_info_api_v1_system_info_get() as SystemInfo;
         } catch (e) {
             console.error('Failed to load system info', e);
         } finally {

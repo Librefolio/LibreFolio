@@ -120,79 +120,79 @@ Dopo il completamento delle features base di Phase 4, sono emerse diverse necess
 #### ✅ Fix Completati (20-01-2026)
 
 1. **Dark Mode**: ✅ **VERIFICATO**
-   - Input/Select/Textarea: Solo border `#546175`, background trasparente
-   - Tooltip: background `#61666f` ✅
-   - **Login page AnimatedBackground**: ✅ **FIXED** - Aggiunto dark mode (`#1e293b` bg, `#1a4031` waves, `#4ade80` chart lines)
+    - Input/Select/Textarea: Solo border `#546175`, background trasparente
+    - Tooltip: background `#61666f` ✅
+    - **Login page AnimatedBackground**: ✅ **FIXED** - Aggiunto dark mode (`#1e293b` bg, `#1a4031` waves, `#4ade80` chart lines)
 
 2. **Broker Icons**: ✅ **COMPLETO**
-   - Reattività BrokerCard migliorata ✅
-   - LazyImage bordino bianco rimosso (background transparent) ✅
-   - **Portal URL empty string**: ✅ **FIXED**
-     - BrokerForm invia `""` in edit mode
-     - Schema + service: `""` → `None` in DB
-   - **Plugin icon bordino**: ✅ **FIXED** - Rimosso `bg-gray-100` da plugin icon
-   - **BrokerIcon component**: ✅ **COMPLETATO**
-     - Prova icon_url → portal_url favicon → plugin icon API → Briefcase
-     - Carica plugin list da API per ottenere icon_url reale
-     - Gestisce stringhe vuote come null (fix finale)
-     - Usato in BrokerCard e BrokerForm
-     - Reattivo e gestisce errori automaticamente
-   - **BrokerIcon sync fallback fix**: ✅ **FIXED** (20-01-2026)
-     - Aggiunto `imageKey` + `{#key}` per forzare re-render durante moveToNextFallback()
-     - Risolve problema icona plugin non mostrata quando icon_url cancellato
-   - **BrokerIcon plugin load timing fix**: ✅ **FIXED** (21-01-2026)
-     - Rimossa dipendenza `pluginsLoaded` da `propsKey` per evitare reset icona dopo 1 secondo
-     - Ora reset solo quando cambiano i props reali (iconUrl, portalUrl, pluginCode)
-     - Plugin icon caricato correttamente senza flashare il fallback
+    - Reattività BrokerCard migliorata ✅
+    - LazyImage bordino bianco rimosso (background transparent) ✅
+    - **Portal URL empty string**: ✅ **FIXED**
+        - BrokerForm invia `""` in edit mode
+        - Schema + service: `""` → `None` in DB
+    - **Plugin icon bordino**: ✅ **FIXED** - Rimosso `bg-gray-100` da plugin icon
+    - **BrokerIcon component**: ✅ **COMPLETATO**
+        - Prova icon_url → portal_url favicon → plugin icon API → Briefcase
+        - Carica plugin list da API per ottenere icon_url reale
+        - Gestisce stringhe vuote come null (fix finale)
+        - Usato in BrokerCard e BrokerForm
+        - Reattivo e gestisce errori automaticamente
+    - **BrokerIcon sync fallback fix**: ✅ **FIXED** (20-01-2026)
+        - Aggiunto `imageKey` + `{#key}` per forzare re-render durante moveToNextFallback()
+        - Risolve problema icona plugin non mostrata quando icon_url cancellato
+    - **BrokerIcon plugin load timing fix**: ✅ **FIXED** (21-01-2026)
+        - Rimossa dipendenza `pluginsLoaded` da `propsKey` per evitare reset icona dopo 1 secondo
+        - Ora reset solo quando cambiano i props reali (iconUrl, portalUrl, pluginCode)
+        - Plugin icon caricato correttamente senza flashare il fallback
 
 3. **Broker Form**: ✅ **VERIFICATO**
-   - GenericCSV ordering: ✅ **FIXED** (code `'broker_generic_csv'`)
-   - GenericCSV appare primo con "(default)" label ✅
-   - **Form reactive to initialData**: ✅ **FIXED** (21-01-2026)
-     - Form fields ora si aggiornano quando `initialData` cambia
-     - Risolve problema modale modifica vuota dalla pagina dettaglio broker
+    - GenericCSV ordering: ✅ **FIXED** (code `'broker_generic_csv'`)
+    - GenericCSV appare primo con "(default)" label ✅
+    - **Form reactive to initialData**: ✅ **FIXED** (21-01-2026)
+        - Form fields ora si aggiornano quando `initialData` cambia
+        - Risolve problema modale modifica vuota dalla pagina dettaglio broker
 
 4. **Broker Detail Page `/brokers/[id]`**: ✅ **FIXED** (21-01-2026)
-   - Usa `BrokerIcon` invece di `LazyImage` per icona header
-   - Modal modifica passa tutti i campi in `initialData` (inclusi `icon_url`, `default_import_plugin`, `is_active`, `opened_at`)
+    - Usa `BrokerIcon` invece di `LazyImage` per icona header
+    - Modal modifica passa tutti i campi in `initialData` (inclusi `icon_url`, `default_import_plugin`, `is_active`, `opened_at`)
 
 5. **Files Page**: ✅ **VERIFICATO**
-   - Download con nome originale (`?download=true`) ✅
-   - Button "Cancel" → "New File" (tradotto 4 lingue) ✅
-   - ImageUploader preview reset corretto ✅
+    - Download con nome originale (`?download=true`) ✅
+    - Button "Cancel" → "New File" (tradotto 4 lingue) ✅
+    - ImageUploader preview reset corretto ✅
 
 5. **Backend API - Preview Features**: ✅ **IMPLEMENTATO**
-   - **Text Preview**: `?offset=0&window=1000` ✅
-   - **Image Preview**: `?img_preview=400x400` ✅
-     - ⚡ Resize in processo separato con `ProcessPoolExecutor`
-     - ⚡ Non blocca server, frontend può fare richieste parallele
-   - Pillow dependency installata ✅
-   - Error handling per file incompatibili ✅
+    - **Text Preview**: `?offset=0&window=1000` ✅
+    - **Image Preview**: `?img_preview=400x400` ✅
+        - ⚡ Resize in processo separato con `ProcessPoolExecutor`
+        - ⚡ Non blocca server, frontend può fare richieste parallele
+    - Pillow dependency installata ✅
+    - Error handling per file incompatibili ✅
 
 6. **UI/UX Polish**: ✅ **NUOVO**
-   - **Burger menu hover rimosso**: ✅ No più illuminazione in dark mode (Header completamente)
-   - **Sidebar logo hover rimosso**: ✅ No più opacity change
-   - **Auth redirect fix**: ✅ **FIXED** (21-01-2026)
-     - Layout (app) ora usa `$isAuthInitialized` per redirect reattivo
-     - Utente non loggato viene rediretto immediatamente a `/` invece di schermo bianco
+    - **Burger menu hover rimosso**: ✅ No più illuminazione in dark mode (Header completamente)
+    - **Sidebar logo hover rimosso**: ✅ No più opacity change
+    - **Auth redirect fix**: ✅ **FIXED** (21-01-2026)
+        - Layout (app) ora usa `$isAuthInitialized` per redirect reattivo
+        - Utente non loggato viene rediretto immediatamente a `/` invece di schermo bianco
 
 7. **Developer Tools**: ✅ **NUOVO**
-   - **GUIDA-DARK-MODE.md**: ✅ Creata guida per modificare velocemente variabili dark mode
+    - **GUIDA-DARK-MODE.md**: ✅ Creata guida per modificare velocemente variabili dark mode
 
 8. **Backend API Fixes**: ✅ **NUOVO** (21-01-2026)
-   - **Broker Access Authorization**: 403 invece di 400 per errori di autorizzazione
-     - `add_broker_access`, `update_broker_access`, `remove_broker_access`
-     - Distingue "Only OWNERs can..." (403) da altri errori (400)
-   - **Test deprecation warning fix**: 
-     - `test_profile_api.py`: cookies su client invece che per-request
-     - `test_broker_access_api.py`: aspetta 403 per errori auth
-   - **Logging cleanup**: Silenziati log verbose di aiosqlite/sqlalchemy
+    - **Broker Access Authorization**: 403 invece di 400 per errori di autorizzazione
+        - `add_broker_access`, `update_broker_access`, `remove_broker_access`
+        - Distingue "Only OWNERs can..." (403) da altri errori (400)
+    - **Test deprecation warning fix**:
+        - `test_profile_api.py`: cookies su client invece che per-request
+        - `test_broker_access_api.py`: aspetta 403 per errori auth
+    - **Logging cleanup**: Silenziati log verbose di aiosqlite/sqlalchemy
 
 9. **BrokerIcon & BrokerModal Fixes**: ✅ **NUOVO** (21-01-2026)
-   - **BrokerIcon.svelte**: Riorganizzato codice (funzioni prima dei reactive statements)
-   - **BrokerForm.svelte**: Form reactive a initialData + bordi arrotondati footer
-   - **vite.config.ts**: Aggiunto `base: '/'` per path assoluti (fix MIME type errors)
-   - **svelte.config.js**: `fallback: 'index.html'` per SPA routing
+    - **BrokerIcon.svelte**: Riorganizzato codice (funzioni prima dei reactive statements)
+    - **BrokerForm.svelte**: Form reactive a initialData + bordi arrotondati footer
+    - **vite.config.ts**: Aggiunto `base: '/'` per path assoluti (fix MIME type errors)
+    - **svelte.config.js**: `fallback: 'index.html'` per SPA routing
 
 10. **dev.py Server Flags**: ✅ **NUOVO** (21-01-2026)
     - `--rebuild, -r`: Forza rebuild frontend
@@ -217,37 +217,41 @@ Dopo il completamento delle features base di Phase 4, sono emerse diverse necess
     - Debug logging aggiunto a ProfileTab, PreferencesTab, GlobalSettingsTab
 
 #### 🎯 Settings Unification Plan - COMPLETATO ✅
+
 **File spostato in**: `phase-04-subplan/plan-settings-unification.md`
 
 #### ⚠️ Issue Rimanenti (Non Bloccanti)
 
 1. **BrokerCard refresh**: Lista non si aggiorna automaticamente dopo edit (serve F5)
-   - Workaround: F5 manuale
-   - Fix futuro: Key reactive o invalidate dopo update
+    - Workaround: F5 manuale
+    - Fix futuro: Key reactive o invalidate dopo update
 
 2. **Delete confirmation**: Alert invece di banner centrato
-   - Da implementare in Table Improvements plan
+    - Da implementare in Table Improvements plan
 
 3. **Dark mode contrasto**: ⏳ **ATTESA FEEDBACK UTENTE**
-   - Guida creata per modifiche rapide (`GUIDA-DARK-MODE.md`)
-   - Utente deve testare e indicare valori CSS ottimali
+    - Guida creata per modifiche rapide (`GUIDA-DARK-MODE.md`)
+    - Utente deve testare e indicare valori CSS ottimali
 
 ### 🎯 Piani di Miglioramento Attivi
 
 Sono stati creati diversi piani per affrontare problematiche di standardizzazione e usabilità:
 
 #### 1. Settings Unification Plan
+
 **File**: [`../plan-settings-unification.md`](../plan-settings-unification.md)
 
 **Obiettivo**: Unificare PreferencesTab, GlobalSettingsTab e creare Profile Page con componenti riutilizzabili.
 
 **Componenti da creare**:
+
 - `SettingField.svelte` - Campo singolo con azioni
 - `SettingsLayout.svelte` - Layout 2 colonne con sidebar
 - `SettingText.svelte` - Text/email con edit inline
 - `SettingImageUpload.svelte` - Upload con crop/resize
 
 **Key Decisions**:
+
 - ✅ Stato locale nei componenti (massima flessibilità)
 - ✅ Validazione a livello componente quando possibile
 - ✅ Profile page: Save globale ATTIVO (esclusi Password e Delete Account che hanno modali separate)
@@ -255,6 +259,7 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 **Stima**: 4-8 giorni
 
 #### 2. Table Improvements Plan ✅ **COMPLETATO (23-01-2026)**
+
 **File**: [`../plan-table-improvements.md`](../plan-table-improvements.md)
 
 **Obiettivo**: Migliorare tabelle Files (Static + BRIM) con sorting, filtering, pagination, e **preview**.
@@ -262,17 +267,18 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 **Libreria scelta**: **TanStack Table v8** (motivazione: licenza MIT + features complete)
 
 **Features implementate**:
-- ✅ **Preview API Backend**: 
-  - Text: `GET /uploads/file/{id}?offset=0&window=1000`
-  - Images: `GET /uploads/file/{id}?img_preview=400x400`
-  - Error 400 per file incompatibili
-- ✅ **DataTable Component Suite**: 
-  - `DataTable.svelte` - Componente principale generico (941 righe)
-  - `DataTablePagination.svelte` - Pagination sticky balloon
-  - `DataTableToolbar.svelte` - Bulk actions + column toggle + reorder
-  - `DataTableColumnFilter.svelte` - Filtri Excel-style per tipo colonna
-  - `ConfirmModal.svelte` - Modale conferma generica
-  - `types.ts` - Interfacce TypeScript
+
+- ✅ **Preview API Backend**:
+    - Text: `GET /uploads/file/{id}?offset=0&window=1000`
+    - Images: `GET /uploads/file/{id}?img_preview=400x400`
+    - Error 400 per file incompatibili
+- ✅ **DataTable Component Suite**:
+    - `DataTable.svelte` - Componente principale generico (941 righe)
+    - `DataTablePagination.svelte` - Pagination sticky balloon
+    - `DataTableToolbar.svelte` - Bulk actions + column toggle + reorder
+    - `DataTableColumnFilter.svelte` - Filtri Excel-style per tipo colonna
+    - `ConfirmModal.svelte` - Modale conferma generica
+    - `types.ts` - Interfacce TypeScript
 - ✅ **Sorting**: Click header per ASC/DESC/none, icone freccia
 - ✅ **Filtri colonna**: Text, Enum, Number, Size (logaritmico), Date
 - ✅ **Column resize**: Drag con localStorage persistence
@@ -286,12 +292,14 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 **Stima originale**: 3-6 giorni | **Effettivo**: ~4 giorni
 
 #### 2.5 BRIM Multi-User Support Plan ✅ **COMPLETED (27-01-2026)**
+
 **File Piano**: [`../plan-brim-multiuser-implementation.md`](../plan-brim-multiuser-implementation.md)  
 **File Analisi**: [`../analysis-brim-multiuser.md`](../analysis-brim-multiuser.md)
 
 **Obiettivo**: Rendere il sistema BRIM compatibile con multi-utente e multi-broker.
 
 **Backend ✅ Completato (24-01-2026)**:
+
 - [x] `broker_id` obbligatorio all'upload (file associato al broker)
 - [x] `uploaded_by_user_id` per tracciare chi ha caricato
 - [x] Filtri per broker accessibili all'utente
@@ -302,6 +310,7 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 - [x] 22 test API BRIM passati
 
 **Frontend ✅ Completato (27-01-2026)**:
+
 - [x] Colonna "Broker" con nome broker nella tabella Report Broker
 - [x] Badge colorato per broker (colori generati algoritmicamente)
 - [x] Filtro broker ora usa filtro colonna (rimosso dropdown separato)
@@ -309,16 +318,17 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 - [x] Upload con broker_id obbligatorio
 - [x] FileUploader: aggiunto parametro `accept` per tipi file
 - [x] **Modale assegnazione broker per-file**:
-  - Appare appena si selezionano file (via evento `on:change`)
-  - Sezione "Assegna tutti a" per assegnazione batch
-  - Lista file con dropdown broker individuale
-  - Pulsante "Carica" grigio se non tutti i broker assegnati
-  - Dopo upload, broker usati aggiunti automaticamente ai filtri
+    - Appare appena si selezionano file (via evento `on:change`)
+    - Sezione "Assegna tutti a" per assegnazione batch
+    - Lista file con dropdown broker individuale
+    - Pulsante "Carica" grigio se non tutti i broker assegnati
+    - Dopo upload, broker usati aggiunti automaticamente ai filtri
 - [x] Conferma chiusura uploader con file in sospeso (sia static che brim)
 - [x] Rimosso stato "processing" non esistente (refuso)
 - [x] Traduzioni complete per modale (assignBrokers, assignAll, file, etc.)
 
 **Storage Structure**:
+
 ```
 broker_reports/
 ├── uploaded/
@@ -334,6 +344,7 @@ broker_reports/
 **Stima frontend**: 3-5h | **Effettivo frontend**: ~6h
 
 #### 3. Image Crop Plan
+
 **File**: [`../plan-image-crop.md`](../plan-image-crop.md)
 
 **Obiettivo**: Implementare crop avanzato per avatar/icon/cover images.
@@ -341,6 +352,7 @@ broker_reports/
 **Libreria scelta**: **svelte-easy-crop** (leggera ~15KB, nativa Svelte)
 
 **Features**:
+
 - Crop area selection con drag
 - Aspect ratio lock (1:1, 16:9, 4:3, free)
 - Zoom & pan
@@ -348,6 +360,7 @@ broker_reports/
 - Preview real-time multipli (50x50, 200x200)
 
 **Use cases**:
+
 - Avatar upload (1:1)
 - Broker icon (1:1)
 - Future cover images (16:9)
@@ -355,11 +368,13 @@ broker_reports/
 **Stima**: 2-4 giorni
 
 #### 4. Bulk Download Plan
+
 **File**: [`../plan-bulk-download-v2.md`](../plan-bulk-download-v2.md)
 
 **Obiettivo**: Download multiplo di file come archivio o singolarmente.
 
 **Features**:
+
 - Download singoli file separati
 - Download come archivio (tar, zip, 7z)
 - Modal di selezione formato con preview dimensione stimata
@@ -367,11 +382,13 @@ broker_reports/
 - Supporto per uploads statici e BRIM files
 
 **Backend**:
+
 - `archive_service.py` - service comune per creazione archivi
 - Endpoint POST `/uploads/bulk-download`
 - Endpoint POST `/brokers/import/bulk-download`
 
 **Frontend**:
+
 - `BulkDownloadModal.svelte` - modal selezione formato
 - Integrazione in FilesTable per selezione multipla
 
@@ -384,31 +401,31 @@ broker_reports/
 Basandosi su priorità, dipendenze, e impatto:
 
 1. ~~**🥇 Table Improvements**~~ ✅ **COMPLETATO** (23-01-2026)
-   - DataTable component suite implementata
-   - Filtri Excel-style, sorting, pagination, column management
-   - FileUploader con upload multiplo
+    - DataTable component suite implementata
+    - Filtri Excel-style, sorting, pagination, column management
+    - FileUploader con upload multiplo
 
 2. ~~**🥇 BRIM Multi-User**~~ ✅ **COMPLETATO** (26-01-2026)
-   - Backend: broker_id obbligatorio, permessi, caching parse
-   - Frontend: colonna broker, filtri, upload con broker_id
-   - 22 test API passati
+    - Backend: broker_id obbligatorio, permessi, caching parse
+    - Frontend: colonna broker, filtri, upload con broker_id
+    - 22 test API passati
 
 3. **🥈 Image Crop** (2-4 giorni)
-   - **Motivazione**: Necessario per Profile page e migliora UX upload
-   - **Blocca**: Settings Unification (Profile avatar)
-   - **Estensibilità**: Riutilizzabile per broker icons, asset logos, cover images
-   - **Status**: 📋 Piano pronto, libreria valutata
+    - **Motivazione**: Necessario per Profile page e migliora UX upload
+    - **Blocca**: Settings Unification (Profile avatar)
+    - **Estensibilità**: Riutilizzabile per broker icons, asset logos, cover images
+    - **Status**: 📋 Piano pronto, libreria valutata
 
 4. **🥈 Bulk Download** (6-8h)
-   - **Motivazione**: Migliora UX download multiplo
-   - **Dipende da**: Niente
-   - **Status**: 📋 Piano pronto (plan-bulk-download-v2.md)
+    - **Motivazione**: Migliora UX download multiplo
+    - **Dipende da**: Niente
+    - **Status**: 📋 Piano pronto (plan-bulk-download-v2.md)
 
 5. **🥉 Settings Unification** (4-8 giorni)
-   - **Motivazione**: Standardizza UI settings, introduce Profile page
-   - **Dipende da**: Image Crop (per avatar upload)
-   - **Estensibilità**: Componenti Setting* riutilizzabili per future pagine config
-   - **Status**: 📋 Piano dettagliato, decisioni prese
+    - **Motivazione**: Standardizza UI settings, introduce Profile page
+    - **Dipende da**: Image Crop (per avatar upload)
+    - **Estensibilità**: Componenti Setting* riutilizzabili per future pagine config
+    - **Status**: 📋 Piano dettagliato, decisioni prese
 
 ---
 
@@ -422,14 +439,15 @@ Basandosi su priorità, dipendenze, e impatto:
 
 ### 🔗 Collegamenti ai Documenti
 
-| Documento | Descrizione | Status |
-|-----------|-------------|--------|
-| [plan-settings-unification.md](../plan-settings-unification.md) | Componenti condivisi Settings + Profile | 📋 Pronto |
-| [plan-table-improvements.md](../plan-table-improvements.md) | TanStack Table + Preview | ✅ Completato |
-| [plan-image-crop.md](../plan-image-crop.md) | Advanced crop component | 📋 Pronto |
-| [plan-bulk-download-v2.md](../plan-bulk-download-v2.md) | Bulk download as archive (zip/tar/7z) | 📋 Pronto |
-| [plan-brim-multiuser-implementation.md](../plan-brim-multiuser-implementation.md) | BRIM Multi-User | ✅ Completato |
-| [plan-data-separation.md](../plan-data-separation.md) | Data directory prod/test separation | 📋 Pronto |
+| Documento                                                                         | Descrizione                                 | Status       |
+|-----------------------------------------------------------------------------------|---------------------------------------------|--------------|
+| [plan-settings-unification.md](phase-04-subplan/plan-settings-unification.md)     | Componenti condivisi Settings + Profile     | 📋 Pronto    |
+| [plan-table-improvements.md](phase-04-subplan/plan-table-improvements.md)         | TanStack Table + Preview                    | ✅ Completato |
+| [plan-image-crop.md](../plan-image-crop.md)                                       | Advanced crop component                     | 📋 Pronto    |
+| [plan-bulk-download-v2.md](../plan-bulk-download-v2.md)                           | Bulk download as archive (zip/tar/7z)       | 📋 Pronto    |
+| [plan-brim-multiuser-implementation.md](../plan-brim-multiuser-implementation.md) | BRIM Multi-User                             | ✅ Completato |
+| [plan-data-separation.md](../plan-data-separation.md)                             | Data directory prod/test separation         | 📋 Pronto    |
+| [plan-types-library.md](phase-04-subplan/plan-types-library.md)                   | TypeScript Types Library + Zodios Migration | ✅ Completato |
 
 ---
 
@@ -527,7 +545,6 @@ const BrokerSchema = z.object({
 |----------------------------------------------------|---------------------|
 | `src/lib/components/brokers/AddBrokerModal.svelte` | Modal wrapper       |
 | `src/lib/components/brokers/BrokerForm.svelte`     | Form riutilizzabile |
-
 
 ---
 
@@ -650,4 +667,101 @@ Questo crea una transazione tipo DEPOSIT o WITHDRAWAL via `POST /transactions`.
 
 - **Richiede**: Phase 3 (Layout)
 - **Sblocca**: Phase 7 (Transactions - richiede broker_id)
+
+---
+
+## 🐛 Bug e Improvements (29 Gennaio 2026)
+
+Problemi minori rilevati durante i test finali della Phase 4.
+
+### Bug da Correggere
+
+| ID      | Priorità | Area     | Descrizione                                                                         | Stima |
+|---------|----------|----------|-------------------------------------------------------------------------------------|-------|
+| BUG-001 | P2       | Backend  | Broker esistente di altro utente: errore non indica chi è l'owner                   | 15min |
+| BUG-002 | P2       | Frontend | BrokerSelect: icona mostra broker sbagliato durante ricerca (problema index)        | 30min |
+| BUG-003 | P2       | Frontend | Files page: max upload size mostra sempre "10MB" anche se global setting diverso    | 30min |
+| BUG-004 | P3       | i18n     | Francese: "Byte" tradotto con "B" invece di "O" (Octets) - verificare tutte le aree | 30min |
+| BUG-005 | P2       | Docs     | MkDocs dark mode: colori non allineati con frontend theme                           | 1h    |
+
+### Improvements da Implementare
+
+| ID      | Priorità | Area     | Descrizione                                                                             | Stima |
+|---------|----------|----------|-----------------------------------------------------------------------------------------|-------|
+| IMP-001 | P2       | Frontend | Tabella: click su contatore righe selezionate deseleziona tutto (o aggiungere pulsante) | 20min |
+| IMP-002 | P2       | Frontend | Risorse statiche: pulsante "Copy Link" per copiare URL risorsa (utile per icone broker) | 30min |
+| IMP-003 | P2       | Frontend | Global Settings max file size: aggiungere unità di misura visibile                      | 15min |
+| IMP-004 | P2       | Frontend | Global Settings max file size: warning se > 500MB (rischio riempire HDD server)         | 30min |
+
+### Dettagli Tecnici
+
+#### BUG-001: Messaggio errore broker esistente
+
+**File**: `backend/app/services/broker_service.py` (o endpoint create)
+**Modifica**: Quando un broker con lo stesso nome esiste già, includere nel messaggio:
+
+- "Broker '{name}' already exists"
+- Se possibile: "owned by user '{owner_username}'"
+
+#### BUG-002: BrokerSelect icona errata
+
+**File**: `frontend/src/lib/components/brokers/BrokerSelect.svelte`
+**Causa probabile**: L'icona viene presa dall'array filtrato usando l'index originale invece del broker filtrato
+**Fix**: Usare il broker object diretto invece dell'index
+
+#### BUG-003: Max upload size hardcoded
+
+**File**: `frontend/src/routes/(app)/files/+page.svelte`
+**Modifica**: Leggere il valore da global settings invece di hardcoded "10MB"
+
+#### BUG-004: Traduzione Bytes in Francese
+
+**File**: `frontend/src/lib/i18n/locales/fr.ts` (o json)
+**Verifica**: Cercare tutte le occorrenze di "B" per bytes e sostituire con "o" (octets)
+
+- KB → Ko
+- MB → Mo
+- GB → Go
+
+#### BUG-005: MkDocs dark mode
+
+**File**: `mkdocs_src/docs/stylesheets/extra.css` o theme config
+**Modifica**: Allineare palette colori dark mode con frontend:
+
+- Background: simile a `bg-gray-900`
+- Text: simile a `text-gray-100`
+- Accent: brand green `#1a4031`
+
+#### IMP-001: Deseleziona tutto
+
+**File**: `frontend/src/lib/components/table/DataTableToolbar.svelte`
+**Modifica**: Aggiungere onClick al badge contatore che chiama `table.resetRowSelection()`
+
+#### IMP-002: Copy Link per risorse statiche
+
+**File**: `frontend/src/lib/components/files/FilesTable.svelte` (o actions)
+**Modifica**: Aggiungere action "Copy Link" che copia URL completo della risorsa
+**Uso**: Per ottenere link icona broker da inserire in icon_url
+
+#### IMP-003 & IMP-004: Max file size UX
+
+**File**: `frontend/src/lib/components/settings/GlobalSettingsTab.svelte`
+**Modifica IMP-003**: Mostrare unità (es: "10 MB", "100 MB")
+**Modifica IMP-004**: Se valore > 500MB, mostrare warning:
+> ⚠️ Large file uploads may fill server storage quickly
+
+---
+
+### Ordine di Implementazione Suggerito
+
+1. **BUG-003** - Blocca UX corretta upload
+2. **BUG-002** - Confonde utenti
+3. **IMP-001** - QoL tabelle
+4. **IMP-002** - Sblocca workflow icone broker
+5. **BUG-004** - i18n fix
+6. **IMP-003 + IMP-004** - UX global settings
+7. **BUG-001** - Backend minor
+8. **BUG-005** - Docs polish (bassa priorità)
+
+**Stima totale**: ~4-5 ore
 

@@ -24,6 +24,7 @@ from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from backend.app.db.models import TransactionType, Transaction
+from backend.app.utils.datetime_utils import UTCDateTime
 from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
@@ -256,8 +257,8 @@ class TXReadItem(BaseModel):
     tags: Optional[List[str]] = None
     description: Optional[str] = None
 
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
 
     @classmethod
     def from_db_model(cls, tx: Transaction) -> "TXReadItem":
