@@ -109,41 +109,15 @@
 		return Math.round(value * (unitInfo?.bytes || 1));
 	}
 
-	// Initialize size display values from bytes
-	const initialMinDisplay = bytesToUnit(getInitialSizeMin());
-	const initialMaxDisplay = bytesToUnit(getInitialSizeMax());
+	// Size input values (displayed with units) - will be initialized in onMount
+	let sizeMinInputValue = $state(0);
+	let sizeMinUnit = $state<SizeUnit>('B');
+	let sizeMaxInputValue = $state(0);
+	let sizeMaxUnit = $state<SizeUnit>('B');
 
-	// Size input values (displayed with units) - initialized from bytes
-	let sizeMinInputValue = $state(initialMinDisplay.value);
-	let sizeMinUnit = $state<SizeUnit>(initialMinDisplay.unit);
-	let sizeMaxInputValue = $state(initialMaxDisplay.value);
-	let sizeMaxUnit = $state<SizeUnit>(initialMaxDisplay.unit);
-
-	// Slider positions (0-100) - calculate initial positions
-	function calcInitialSliderPos(bytes: number, min: number, max: number): number {
-		// Handle edge cases
-		if (max <= min) return 50;  // Invalid range
-		if (bytes <= min) return 0;
-		if (bytes >= max) return 100;
-
-		// Use logarithmic scale, but handle 0/small values gracefully
-		// Minimum bytes for log calculation is 1
-		const safeMin = Math.max(min, 1);
-		const safeMax = Math.max(max, 1);
-		const safeBytes = Math.max(bytes, 1);
-
-		const logMin = Math.log10(safeMin);
-		const logMax = Math.log10(safeMax);
-		const logVal = Math.log10(safeBytes);
-
-		// Avoid division by zero
-		if (logMax <= logMin) return 50;
-
-		return Math.round((logVal - logMin) / (logMax - logMin) * 100);
-	}
-
-	let sliderMinPos = $state(calcInitialSliderPos(getInitialSizeMin(), numberMin, numberMax));
-	let sliderMaxPos = $state(calcInitialSliderPos(getInitialSizeMax(), numberMin, numberMax));
+	// Slider positions (0-100) - will be initialized in onMount
+	let sliderMinPos = $state(0);
+	let sliderMaxPos = $state(100);
 
 	// Initialize size input values from bytes
 	function initSizeInputs() {
@@ -153,7 +127,7 @@
 
 		const maxResult = bytesToUnit(sizeMaxBytes);
 		sizeMaxInputValue = maxResult.value;
-		sizeMaxUnit = minResult.unit;
+		sizeMaxUnit = maxResult.unit;  // Fixed: was minResult.unit
 
 		sliderMinPos = bytesToSliderPos(sizeMinBytes);
 		sliderMaxPos = bytesToSliderPos(sizeMaxBytes);
