@@ -97,13 +97,25 @@ class BrokerService:
                 result = await self.session.execute(stmt)
                 existing = result.scalar_one_or_none()
                 if existing:
-                    results.append(
-                        BRCreateResult(
-                            success=False,
-                            name=item.name,
-                            error=f"Broker with name '{item.name}' already exists",
-                            )
-                        )
+                    # Find the owner of the existing broker
+                    owner_stmt = (select(BrokerUserAccess).where(BrokerUserAccess.broker_id == existing.id, BrokerUserAccess.role == UserRole.OWNER))
+                    owner_result = await self.session.execute(owner_stmt)
+                    owner_access = owner_result.scalar_one_or_none()
+
+                    if owner_access and owner_access.user_id == user_id:
+                        error_msg = f"You already have a broker named '{item.name}'"
+                    elif owner_access:
+                        # Get owner username
+                        from backend.app.db.models import User
+                        user_stmt = select(User).where(User.id == owner_access.user_id)
+                        user_result = await self.session.execute(user_stmt)
+                        owner_user = user_result.scalar_one_or_none()
+                        owner_name = owner_user.username if owner_user else f"user #{owner_access.user_id}"
+                        error_msg = f"Broker '{item.name}' already exists (owned by '{owner_name}')"
+                    else:
+                        error_msg = f"Broker with name '{item.name}' already exists"
+
+                    results.append(BRCreateResult(success=False, name=item.name, error=error_msg, ))
                     continue
 
                 # Create broker

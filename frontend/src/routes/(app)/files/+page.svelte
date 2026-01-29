@@ -98,6 +98,9 @@
     // View mode with localStorage persistence (default: list/table)
     let viewMode: 'grid' | 'list' = 'list';
 
+    // Max upload size from global settings (default: 10MB)
+    let maxUploadSizeMB: number = 10;
+
     // Broker state for BRIM multi-user
     let brokers: Broker[] = [];
     let brokerMap: Map<number, BrokerInfo> = new Map();
@@ -118,9 +121,24 @@
         viewMode = loadViewMode();
         activeTab = loadActiveTab();
         selectedBrokerIds = loadBrokerFilter();
+        await loadGlobalSettings();
         await loadBrokers();
         await loadFiles();
     });
+
+    async function loadGlobalSettings() {
+        try {
+            const response = await zodiosApi.list_global_settings_api_v1_settings_global_get();
+            const settings = response.settings || [];
+            const maxSizeSetting = settings.find((s: { key: string }) => s.key === 'max_file_upload_mb');
+            if (maxSizeSetting && maxSizeSetting.value) {
+                maxUploadSizeMB = parseInt(maxSizeSetting.value, 10) || 10;
+            }
+        } catch (e) {
+            console.error('Failed to load global settings:', e);
+            // Keep default value
+        }
+    }
 
     async function loadBrokers() {
         try {
@@ -360,9 +378,14 @@
     }
 
     function formatBytes(bytes: number): string {
-        if (bytes === 0) return '0 B';
+        if (bytes === 0) return '0 ' + ($t('filter.bytes') || 'B');
         const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const sizes = [
+            $t('filter.bytes') || 'B',
+            $t('filter.kilobytes') || 'KB',
+            $t('filter.megabytes') || 'MB',
+            $t('filter.gigabytes') || 'GB'
+        ];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
@@ -476,7 +499,7 @@
                 on:change={handleStaticFileChange}
                 on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
                 multiple={true}
-                maxSizeMB={10}
+                maxSizeMB={maxUploadSizeMB}
             />
         </div>
     {/if}
@@ -488,7 +511,7 @@
                 on:change={handleBrimFileSelect}
                 on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
                 multiple={true}
-                maxSizeMB={10}
+                maxSizeMB={maxUploadSizeMB}
                 accept=".csv,.xlsx,.xls"
             />
         </div>

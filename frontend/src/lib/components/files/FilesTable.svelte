@@ -19,7 +19,8 @@
 		FileArchive,
 		FileVideo,
 		FileAudio,
-		FileType
+		FileType,
+		Link
 	} from 'lucide-svelte';
 	import type { UploadedFile, BrimFile, BrokerInfo, FileData } from '$lib/types';
 	import { safeNumber } from '$lib/types';
@@ -271,32 +272,64 @@
 		return cols;
 	}
 
+	// State for copy feedback
+	let copiedFileId = $state<string | null>(null);
+
 	// Row actions
 	function getRowActions(): RowAction<FileData>[] {
-		return [
-			{
-				id: 'download',
-				icon: Download,
-				label: () => $t('uploads.download'),
-				onClick: (file) => {
-					const link = document.createElement('a');
-					link.href = getDownloadUrl(file);
-					link.download = getFileName(file);
-					document.body.appendChild(link);
-					link.click();
-					document.body.removeChild(link);
+		const actions: RowAction<FileData>[] = [];
+
+		// Copy Link action (only for static files)
+		if (type === 'static') {
+			actions.push({
+				id: 'copyLink',
+				icon: Link,
+				label: () => copiedFileId ? ($t('common.copied') || 'Copied!') : ($t('uploads.copyLink') || 'Copy Link'),
+				onClick: async (file) => {
+					const staticFile = file as UploadedFile;
+					// Build absolute URL
+					const url = new URL(staticFile.url, window.location.origin).href;
+					try {
+						await navigator.clipboard.writeText(url);
+						copiedFileId = getFileId(file);
+						// Reset after 2 seconds
+						setTimeout(() => {
+							copiedFileId = null;
+						}, 2000);
+					} catch (err) {
+						console.error('Failed to copy link:', err);
+					}
 				},
+			});
+		}
+
+		// Download action
+		actions.push({
+			id: 'download',
+			icon: Download,
+			label: () => $t('uploads.download'),
+			onClick: (file) => {
+				const link = document.createElement('a');
+				link.href = getDownloadUrl(file);
+				link.download = getFileName(file);
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
 			},
-			{
-				id: 'delete',
-				icon: Trash2,
-				label: () => $t('common.delete'),
-				onClick: (file) => onDelete(getFileId(file)),
-				variant: 'danger',
-				requireConfirm: true,
-				confirmMessage: () => $t('uploads.deleteConfirmSingle'),
-			},
-		];
+		});
+
+		// Delete action
+		actions.push({
+			id: 'delete',
+			icon: Trash2,
+			label: () => $t('common.delete'),
+			onClick: (file) => onDelete(getFileId(file)),
+			variant: 'danger',
+			requireConfirm: true,
+			confirmMessage: () => $t('uploads.deleteConfirmSingle'),
+		});
+
+		return actions;
 	}
 
 	// Bulk actions

@@ -703,16 +703,22 @@ Problemi minori rilevati durante i test finali della Phase 4.
 - "Broker '{name}' already exists"
 - Se possibile: "owned by user '{owner_username}'"
 
+**Status**: ✅ COMPLETATO (29-01-2026) - Aggiunto controllo owner e messaggio personalizzato
+
 #### BUG-002: BrokerSelect icona errata
 
 **File**: `frontend/src/lib/components/brokers/BrokerSelect.svelte`
 **Causa probabile**: L'icona viene presa dall'array filtrato usando l'index originale invece del broker filtrato
-**Fix**: Usare il broker object diretto invece dell'index
+**Fix**: Usare il broker object diretto invece dell'index (aggiunta key al loop `{#each}`)
+
+**Status**: ✅ COMPLETATO (29-01-2026) - Aggiunta `(broker.id)` come key nel loop filteredBrokers
 
 #### BUG-003: Max upload size hardcoded
 
 **File**: `frontend/src/routes/(app)/files/+page.svelte`
 **Modifica**: Leggere il valore da global settings invece di hardcoded "10MB"
+
+**Status**: ✅ COMPLETATO (29-01-2026) - Aggiunta loadGlobalSettings() che legge max_file_upload_mb
 
 #### BUG-004: Traduzione Bytes in Francese
 
@@ -723,6 +729,8 @@ Problemi minori rilevati durante i test finali della Phase 4.
 - MB → Mo
 - GB → Go
 
+**Status**: ✅ COMPLETATO (29-01-2026) - formatBytes usa ora $t() per le unità, traduzioni già presenti in fr.json
+
 #### BUG-005: MkDocs dark mode
 
 **File**: `mkdocs_src/docs/stylesheets/extra.css` o theme config
@@ -732,16 +740,22 @@ Problemi minori rilevati durante i test finali della Phase 4.
 - Text: simile a `text-gray-100`
 - Accent: brand green `#1a4031`
 
+**Status**: 🔲 TODO (bassa priorità)
+
 #### IMP-001: Deseleziona tutto
 
 **File**: `frontend/src/lib/components/table/DataTableToolbar.svelte`
 **Modifica**: Aggiungere onClick al badge contatore che chiama `table.resetRowSelection()`
+
+**Status**: ✅ COMPLETATO (29-01-2026) - Badge contatore ora cliccabile con X per deselezionare
 
 #### IMP-002: Copy Link per risorse statiche
 
 **File**: `frontend/src/lib/components/files/FilesTable.svelte` (o actions)
 **Modifica**: Aggiungere action "Copy Link" che copia URL completo della risorsa
 **Uso**: Per ottenere link icona broker da inserire in icon_url
+
+**Status**: ✅ COMPLETATO (29-01-2026) - Aggiunta action "Copy Link" con feedback visivo
 
 #### IMP-003 & IMP-004: Max file size UX
 
@@ -750,18 +764,21 @@ Problemi minori rilevati durante i test finali della Phase 4.
 **Modifica IMP-004**: Se valore > 500MB, mostrare warning:
 > ⚠️ Large file uploads may fill server storage quickly
 
+**Status**: ✅ COMPLETATO (29-01-2026) - Unità già mostrate via getSettingUnit(), aggiunto warning per >500MB
+
 ---
 
 ### Ordine di Implementazione Suggerito
 
-1. **BUG-003** - Blocca UX corretta upload
-2. **BUG-002** - Confonde utenti
-3. **IMP-001** - QoL tabelle
-4. **IMP-002** - Sblocca workflow icone broker
-5. **BUG-004** - i18n fix
-6. **IMP-003 + IMP-004** - UX global settings
-7. **BUG-001** - Backend minor
-8. **BUG-005** - Docs polish (bassa priorità)
+1. ~~**BUG-003** - Blocca UX corretta upload~~ ✅ DONE
+2. ~~**BUG-002** - Confonde utenti~~ ✅ DONE
+3. ~~**IMP-001** - QoL tabelle~~ ✅ DONE
+4. ~~**IMP-002** - Sblocca workflow icone broker~~ ✅ DONE
+5. ~~**BUG-004** - i18n fix~~ ✅ DONE
+6. ~~**IMP-003 + IMP-004** - UX global settings~~ ✅ DONE
+7. ~~**BUG-001** - Backend minor~~ ✅ DONE
+8. **BUG-005** - Docs polish (bassa priorità) 🔲 TODO
 
-**Stima totale**: ~4-5 ore
+**Completati**: 7/8
+**Stima rimanente**: ~30 min (solo BUG-005 mkdocs dark mode)
 
