@@ -32,13 +32,20 @@
 
 	let popoverElement: HTMLDivElement;
 
-	// Size units conversion
-	const SIZE_UNITS: { unit: SizeUnit; bytes: number; label: string }[] = [
-		{ unit: 'B', bytes: 1, label: 'B' },
-		{ unit: 'KB', bytes: 1024, label: 'KB' },
-		{ unit: 'MB', bytes: 1024 * 1024, label: 'MB' },
-		{ unit: 'GB', bytes: 1024 * 1024 * 1024, label: 'GB' },
+	// Size units conversion (labels are translated via getter)
+	const SIZE_UNITS_BASE: { unit: SizeUnit; bytes: number; labelKey: string }[] = [
+		{ unit: 'B', bytes: 1, labelKey: 'filter.bytes' },
+		{ unit: 'KB', bytes: 1024, labelKey: 'filter.kilobytes' },
+		{ unit: 'MB', bytes: 1024 * 1024, labelKey: 'filter.megabytes' },
+		{ unit: 'GB', bytes: 1024 * 1024 * 1024, labelKey: 'filter.gigabytes' },
 	];
+
+	// Reactive translated size units
+	let SIZE_UNITS = $derived(SIZE_UNITS_BASE.map(u => ({
+		unit: u.unit,
+		bytes: u.bytes,
+		label: $t(u.labelKey) || u.unit,
+	})));
 
 	// Helper functions to get initial values
 	function getInitialTextValue(): string {

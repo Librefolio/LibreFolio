@@ -113,6 +113,17 @@ Implementare crop avanzato per avatar e icone broker con `svelte-easy-crop`.
 
 ---
 
+## Ripensare struttura di accesso ai broker Utente-SuperUtente per essere GDPR compliant
+**Nota GDPR**: La visibilità dei dati di altri utenti da parte del superuser deve essere
+ripensata per essere GDPR compliant. Possibili approcci:
+- Superuser non vede dati personali di altri utenti senza consenso esplicito
+- Log di accesso ai dati di altri utenti
+- Anonimizzazione dei dati visualizzati (solo statistiche aggregate)
+- Meccanismo di "data request" invece di accesso diretto (utente concede accesso all'assistenza per x tempo)
+
+
+---
+
 ## 📁 Template per Nuovi TODO
 
 ```markdown
