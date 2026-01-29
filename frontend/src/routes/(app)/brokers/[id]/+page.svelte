@@ -20,6 +20,7 @@
     import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerImportFiles from '$lib/components/brokers/BrokerImportFiles.svelte';
     import type {BrokerSummary, Transaction} from '$lib/types';
     import {safeString, safeCurrency, parseCurrencyAmount} from '$lib/types';
 
@@ -321,6 +322,9 @@
                         <p class="text-gray-400 text-sm italic py-4 text-center">{$_('brokers.noHoldings')}</p>
                     {/if}
                 </div>
+
+                <!-- Import Files Section -->
+                <BrokerImportFiles brokerId={data.brokerId} />
             </div>
 
             <!-- Right Column: Info & Recent Transactions -->

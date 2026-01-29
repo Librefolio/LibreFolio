@@ -241,7 +241,11 @@
     "discardChangesWarning": "You have unsaved changes to this broker. Do you want to discard them?",
     "continueEditing": "Continue Editing",
     "discardAndClose": "Discard & Close",
-    "loadFailed": "Failed to load broker"
+    "loadFailed": "Failed to load broker",
+    "importFiles": "Import Files",
+    "noImportFiles": "No import files yet",
+    "uploadHint": "Upload broker reports to import transactions",
+    "manageFiles": "Manage all files"
   },
   "assets": {
     "title": "Assets",
