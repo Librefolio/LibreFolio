@@ -412,6 +412,7 @@
     "uploadDate": "Uploaded",
     "status": "Status",
     "broker": "Broker",
+    "otherUser": "other user",
     "filterByBroker": "Filter by Broker",
     "actions": "Actions",
     "download": "Download",

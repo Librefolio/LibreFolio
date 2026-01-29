@@ -412,6 +412,7 @@
     "uploadDate": "Téléversé",
     "status": "Statut",
     "broker": "Courtier",
+    "otherUser": "autre utilisateur",
     "filterByBroker": "Filtrer par Courtier",
     "actions": "Actions",
     "download": "Télécharger",

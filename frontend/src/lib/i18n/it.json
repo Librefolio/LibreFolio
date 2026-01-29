@@ -412,6 +412,7 @@
     "uploadDate": "Caricato",
     "status": "Stato",
     "broker": "Broker",
+    "otherUser": "altro utente",
     "filterByBroker": "Filtra per Broker",
     "actions": "Azioni",
     "download": "Scarica",

@@ -148,7 +148,8 @@
 		const brokerId = safeNumber(brimFile.target_broker_id);
 		if (!brokerId || !brokers) return '-';
 		const broker = brokers.get(brokerId);
-		return broker?.name || `Broker #${brokerId}`;
+		// If broker not in map, it belongs to another user (shown to superuser)
+		return broker?.name || `#${brokerId} (${$t('uploads.otherUser') || 'other user'})`;
 	}
 
 	// Generate a consistent color based on broker id for visual distinction
@@ -274,6 +275,38 @@
 
 	// State for copy feedback
 	let copiedFileId = $state<string | null>(null);
+	let copyError = $state<string | null>(null);
+
+	// Helper to copy to clipboard with fallback
+	async function copyToClipboard(text: string): Promise<boolean> {
+		// Try modern clipboard API first
+		if (navigator.clipboard && window.isSecureContext) {
+			try {
+				await navigator.clipboard.writeText(text);
+				return true;
+			} catch (err) {
+				console.warn('Clipboard API failed:', err);
+			}
+		}
+
+		// Fallback for HTTP or older browsers
+		try {
+			const textArea = document.createElement('textarea');
+			textArea.value = text;
+			textArea.style.position = 'fixed';
+			textArea.style.left = '-9999px';
+			textArea.style.top = '-9999px';
+			document.body.appendChild(textArea);
+			textArea.focus();
+			textArea.select();
+			const success = document.execCommand('copy');
+			document.body.removeChild(textArea);
+			return success;
+		} catch (err) {
+			console.error('Fallback copy failed:', err);
+			return false;
+		}
+	}
 
 	// Row actions
 	function getRowActions(): RowAction<FileData>[] {
@@ -284,20 +317,24 @@
 			actions.push({
 				id: 'copyLink',
 				icon: Link,
-				label: () => copiedFileId ? ($t('common.copied') || 'Copied!') : ($t('uploads.copyLink') || 'Copy Link'),
+				label: () => $t('uploads.copyLink') || 'Copy Link',
 				onClick: async (file) => {
 					const staticFile = file as UploadedFile;
-					// Build absolute URL
-					const url = new URL(staticFile.url, window.location.origin).href;
-					try {
-						await navigator.clipboard.writeText(url);
+					// Copy relative URL (path only, for internal use)
+					const url = staticFile.url;
+					const success = await copyToClipboard(url);
+					if (success) {
 						copiedFileId = getFileId(file);
+						copyError = null;
 						// Reset after 2 seconds
 						setTimeout(() => {
 							copiedFileId = null;
 						}, 2000);
-					} catch (err) {
-						console.error('Failed to copy link:', err);
+					} else {
+						copyError = 'Copy failed';
+						setTimeout(() => {
+							copyError = null;
+						}, 2000);
 					}
 				},
 			});
@@ -386,3 +423,53 @@
 	{bulkActions}
 	emptyMessage={$t('uploads.noFiles')}
 />
+
+<!-- Copy feedback toast -->
+{#if copiedFileId}
+	<div class="copy-toast success" role="status" aria-live="polite">
+		✓ {$t('common.copied') || 'Copied!'}
+	</div>
+{/if}
+{#if copyError}
+	<div class="copy-toast error" role="alert" aria-live="assertive">
+		✗ {copyError}
+	</div>
+{/if}
+
+<style>
+	.copy-toast {
+		position: fixed;
+		top: 24px;
+		left: 50%;
+		transform: translateX(-50%);
+		padding: 12px 24px;
+		border-radius: 8px;
+		font-size: 14px;
+		font-weight: 500;
+		z-index: 9999;
+		animation: toast-in 0.2s ease-out;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	}
+
+	.copy-toast.success {
+		background-color: #059669;
+		color: white;
+	}
+
+	.copy-toast.error {
+		background-color: #dc2626;
+		color: white;
+	}
+
+	@keyframes toast-in {
+		from {
+			opacity: 0;
+			transform: translateX(-50%) translateY(-20px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(-50%) translateY(0);
+		}
+	}
+</style>
+

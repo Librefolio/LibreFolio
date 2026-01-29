@@ -755,7 +755,7 @@ Problemi minori rilevati durante i test finali della Phase 4.
 **Modifica**: Aggiungere action "Copy Link" che copia URL completo della risorsa
 **Uso**: Per ottenere link icona broker da inserire in icon_url
 
-**Status**: ✅ COMPLETATO (29-01-2026) - Aggiunta action "Copy Link" con feedback visivo
+**Status**: ✅ COMPLETATO (29-01-2026) - Aggiunta action "Copy Link" con feedback visivo toast
 
 #### IMP-003 & IMP-004: Max file size UX
 
@@ -765,6 +765,47 @@ Problemi minori rilevati durante i test finali della Phase 4.
 > ⚠️ Large file uploads may fill server storage quickly
 
 **Status**: ✅ COMPLETATO (29-01-2026) - Unità già mostrate via getSettingUnit(), aggiunto warning per >500MB
+
+---
+
+### Bug Fix Round 2 (29-01-2026)
+
+#### BUG-006: Copy Link non funzionava
+
+**File**: `frontend/src/lib/components/files/FilesTable.svelte`
+**Problema**: Clipboard API non funziona su HTTP, mancava fallback e feedback visivo
+**Fix**:
+- Aggiunto fallback con `document.execCommand('copy')` per HTTP
+- Aggiunto toast notification in alto per feedback visivo (success/error)
+- Copia path relativo (es: `/api/v1/uploads/file/...`) invece di URL assoluto
+- Rimosso cambio label che non funzionava
+
+**Status**: ✅ COMPLETATO (29-01-2026)
+
+#### BUG-007: FR Bytes nel filtro colonna
+
+**File**: `frontend/src/lib/components/table/DataTableColumnFilter.svelte`
+**Problema**: SIZE_UNITS hardcoded con label inglesi (B, KB, MB, GB)
+**Fix**: SIZE_UNITS ora usa `$t()` per le label tradotte (filter.bytes, filter.kilobytes, etc.)
+
+**Status**: ✅ COMPLETATO (29-01-2026)
+
+#### BUG-008: Broker altri utenti mostrano "Broker #N"
+
+**File**: `frontend/src/lib/components/files/FilesTable.svelte`
+**Problema**: Per superuser, i file di broker non accessibili mostravano "Broker #N"
+**Fix temporaneo**: Ora mostra "#N (other user)" con traduzione i18n (`uploads.otherUser`)
+
+**Status**: ⏸️ IN PAUSA - Richiede ripensamento GDPR
+
+**Nota GDPR**: La visibilità dei dati di altri utenti da parte del superuser deve essere
+ripensata per essere GDPR compliant. Possibili approcci:
+- Superuser non vede dati personali di altri utenti senza consenso esplicito
+- Log di accesso ai dati di altri utenti
+- Anonimizzazione dei dati visualizzati (solo statistiche aggregate)
+- Meccanismo di "data request" invece di accesso diretto
+
+Questa funzionalità richiede una rielaborazione profonda del sistema di permessi.
 
 ---
 
@@ -778,7 +819,11 @@ Problemi minori rilevati durante i test finali della Phase 4.
 6. ~~**IMP-003 + IMP-004** - UX global settings~~ ✅ DONE
 7. ~~**BUG-001** - Backend minor~~ ✅ DONE
 8. **BUG-005** - Docs polish (bassa priorità) 🔲 TODO
+9. ~~**BUG-006** - Copy Link fix~~ ✅ DONE
+10. ~~**BUG-007** - FR Bytes filtro~~ ✅ DONE  
+11. **BUG-008** - Broker altri utenti ⏸️ PAUSA (GDPR rethink needed)
 
-**Completati**: 7/8
-**Stima rimanente**: ~30 min (solo BUG-005 mkdocs dark mode)
+**Completati**: 9/11
+**In pausa**: 1 (BUG-008 - GDPR)
+**Stima rimanente**: ~30 min (BUG-005 mkdocs dark mode)
 
