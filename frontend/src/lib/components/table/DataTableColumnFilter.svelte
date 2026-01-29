@@ -95,15 +95,55 @@
 	let sizeMinBytes = $state(getInitialSizeMin());
 	let sizeMaxBytes = $state(getInitialSizeMax());
 
-	// Size input values (displayed with units)
-	let sizeMinInputValue = $state(0);
-	let sizeMinUnit = $state<SizeUnit>('B');
-	let sizeMaxInputValue = $state(0);
-	let sizeMaxUnit = $state<SizeUnit>('B');
+	// Helper to convert bytes to display unit
+	function bytesToUnit(bytes: number): { value: number; unit: SizeUnit } {
+		if (bytes >= 1024 * 1024 * 1024) return { value: Math.round(bytes / (1024 * 1024 * 1024) * 10) / 10, unit: 'GB' };
+		if (bytes >= 1024 * 1024) return { value: Math.round(bytes / (1024 * 1024) * 10) / 10, unit: 'MB' };
+		if (bytes >= 1024) return { value: Math.round(bytes / 1024 * 10) / 10, unit: 'KB' };
+		return { value: bytes, unit: 'B' };
+	}
 
-	// Slider positions (0-100)
-	let sliderMinPos = $state(0);
-	let sliderMaxPos = $state(100);
+	// Helper to convert unit to bytes
+	function unitToBytes(value: number, unit: SizeUnit): number {
+		const unitInfo = SIZE_UNITS.find(u => u.unit === unit);
+		return Math.round(value * (unitInfo?.bytes || 1));
+	}
+
+	// Initialize size display values from bytes
+	const initialMinDisplay = bytesToUnit(getInitialSizeMin());
+	const initialMaxDisplay = bytesToUnit(getInitialSizeMax());
+
+	// Size input values (displayed with units) - initialized from bytes
+	let sizeMinInputValue = $state(initialMinDisplay.value);
+	let sizeMinUnit = $state<SizeUnit>(initialMinDisplay.unit);
+	let sizeMaxInputValue = $state(initialMaxDisplay.value);
+	let sizeMaxUnit = $state<SizeUnit>(initialMaxDisplay.unit);
+
+	// Slider positions (0-100) - calculate initial positions
+	function calcInitialSliderPos(bytes: number, min: number, max: number): number {
+		// Handle edge cases
+		if (max <= min) return 50;  // Invalid range
+		if (bytes <= min) return 0;
+		if (bytes >= max) return 100;
+
+		// Use logarithmic scale, but handle 0/small values gracefully
+		// Minimum bytes for log calculation is 1
+		const safeMin = Math.max(min, 1);
+		const safeMax = Math.max(max, 1);
+		const safeBytes = Math.max(bytes, 1);
+
+		const logMin = Math.log10(safeMin);
+		const logMax = Math.log10(safeMax);
+		const logVal = Math.log10(safeBytes);
+
+		// Avoid division by zero
+		if (logMax <= logMin) return 50;
+
+		return Math.round((logVal - logMin) / (logMax - logMin) * 100);
+	}
+
+	let sliderMinPos = $state(calcInitialSliderPos(getInitialSizeMin(), numberMin, numberMax));
+	let sliderMaxPos = $state(calcInitialSliderPos(getInitialSizeMax(), numberMin, numberMax));
 
 	// Initialize size input values from bytes
 	function initSizeInputs() {
@@ -119,19 +159,6 @@
 		sliderMaxPos = bytesToSliderPos(sizeMaxBytes);
 	}
 
-	// Convert bytes to best unit
-	function bytesToUnit(bytes: number): { value: number; unit: SizeUnit } {
-		if (bytes >= 1024 * 1024 * 1024) return { value: Math.round(bytes / (1024 * 1024 * 1024) * 10) / 10, unit: 'GB' };
-		if (bytes >= 1024 * 1024) return { value: Math.round(bytes / (1024 * 1024) * 10) / 10, unit: 'MB' };
-		if (bytes >= 1024) return { value: Math.round(bytes / 1024 * 10) / 10, unit: 'KB' };
-		return { value: bytes, unit: 'B' };
-	}
-
-	// Convert value + unit to bytes
-	function unitToBytes(value: number, unit: SizeUnit): number {
-		const unitInfo = SIZE_UNITS.find(u => u.unit === unit);
-		return Math.round(value * (unitInfo?.bytes ?? 1));
-	}
 
 	// Logarithmic scale for slider (0-100 position to bytes)
 	function sliderPosToBytes(pos: number): number {
