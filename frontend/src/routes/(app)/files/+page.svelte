@@ -8,7 +8,7 @@
      */
     import { onMount } from 'svelte';
     import { t } from '$lib/i18n';
-    import { api } from '$lib/api';
+    import { zodiosApi } from '$lib/api';
     import FileUploader from '$lib/components/ui/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/LazyImage.svelte';
     import BrokerSelect from '$lib/components/brokers/BrokerSelect.svelte';
@@ -124,7 +124,7 @@
 
     async function loadBrokers() {
         try {
-            brokers = await api.get<Broker[]>('/brokers');
+            brokers = await zodiosApi.list_brokers_api_v1_brokers_get() as Broker[];
             brokerMap = new Map(brokers.map(b => [b.id, { id: b.id, name: b.name }]));
             // If no filter selected, select all brokers by default
             if (selectedBrokerIds.size === 0 && brokers.length > 0) {
@@ -142,16 +142,14 @@
 
         try {
             if (activeTab === 'static') {
-                const data = await api.get<{ files: UploadedFile[] }>('/uploads');
-                staticFiles = data.files || [];
+                const data = await zodiosApi.list_files_api_v1_uploads_get();
+                staticFiles = (data.files || []) as UploadedFile[];
             } else {
                 // For BRIM, filter by selected broker IDs
-                // FastAPI expects repeated query params for List[int]: ?broker_ids=1&broker_ids=2
                 const brokerIds = Array.from(selectedBrokerIds);
-                const queryParams = brokerIds.length > 0
-                    ? `?${brokerIds.map(id => `broker_ids=${id}`).join('&')}`
-                    : '';
-                brimFiles = await api.get<BrimFile[]>(`/brokers/import/files${queryParams}`);
+                brimFiles = await zodiosApi.list_files_api_v1_brokers_import_files_get({
+                    queries: brokerIds.length > 0 ? { broker_ids: brokerIds } : undefined
+                }) as BrimFile[];
             }
         } catch (e) {
             error = e instanceof Error ? e.message : 'Failed to load files';
@@ -191,7 +189,7 @@
             for (const file of files) {
                 const formData = new FormData();
                 formData.append('file', file);
-                await api.post('/uploads', formData);
+                await zodiosApi.upload_file_api_v1_uploads_post(formData as any);
             }
 
             showUploader = false;
@@ -264,7 +262,7 @@
                 usedBrokerIds.add(brokerId);
                 const formData = new FormData();
                 formData.append('file', file);
-                await api.post(`/brokers/import/upload?broker_id=${brokerId}`, formData);
+                await zodiosApi.upload_file_api_v1_brokers_import_upload_post(formData as any, {queries: {broker_id: brokerId}});
             }
 
             // Add used broker IDs to selected filter so uploaded files are visible
@@ -350,11 +348,11 @@
     async function deleteFile(fileId: string, isBrim: boolean = false) {
 
         try {
-            const endpoint = isBrim
-                ? `/brokers/import/files/${fileId}`
-                : `/uploads/${fileId}`;
-
-            await api.delete(endpoint);
+            if (isBrim) {
+                await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}});
+            } else {
+                await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
+            }
             await loadFiles();
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';

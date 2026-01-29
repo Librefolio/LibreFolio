@@ -6,7 +6,9 @@ Pydantic models for auth API requests/responses.
 
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, EmailStr, Field, field_serializer
+from pydantic import BaseModel, EmailStr, Field
+
+from backend.app.utils.datetime_utils import UTCDateTime
 
 
 # =============================================================================
@@ -63,17 +65,10 @@ class AuthUserResponse(BaseModel):
     email: str
     is_active: bool
     is_superuser: bool
-    created_at: datetime
+    created_at: UTCDateTime
 
     model_config = {"from_attributes": True}
 
-    @field_serializer("created_at")
-    def serialize_datetime(self, value: datetime) -> str:
-        """Serialize datetime with UTC timezone for Zod validation."""
-        if value.tzinfo is None:
-            # Assume naive datetime is UTC
-            value = value.replace(tzinfo=timezone.utc)
-        return value.isoformat()
 
 
 class AuthLoginResponse(BaseModel):

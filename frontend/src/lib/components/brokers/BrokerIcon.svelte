@@ -9,7 +9,7 @@
      */
     import { onMount } from 'svelte';
     import { Briefcase } from 'lucide-svelte';
-    import { api } from '$lib/api';
+    import { zodiosApi } from '$lib/api';
     import { debug } from '$lib/debug';
 
     // Props
@@ -122,7 +122,7 @@
     onMount(async () => {
         debug.log('BrokerIcon', 'onMount', { iconUrl, portalUrl, pluginCode });
         try {
-            const plugins = await api.get('/brokers/import/plugins');
+            const plugins = await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get();
             if (Array.isArray(plugins) && pluginCode) {
                 const plugin = plugins.find(p => p.code === pluginCode);
                 if (plugin?.icon_url) {

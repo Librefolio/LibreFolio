@@ -9,6 +9,8 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from backend.app.utils.datetime_utils import UTCDateTime
+
 
 class UploadFileInfo(BaseModel):
     """Information about an uploaded file."""
@@ -18,7 +20,7 @@ class UploadFileInfo(BaseModel):
     original_name: str = Field(..., description="Original filename")
     mime_type: str = Field(..., description="MIME type of the file")
     size_bytes: int = Field(..., description="File size in bytes")
-    uploaded_at: datetime = Field(..., description="Upload timestamp (UTC)")
+    uploaded_at: UTCDateTime = Field(..., description="Upload timestamp (UTC)")
     uploaded_by_user_id: int = Field(..., description="ID of user who uploaded the file")
 
     # Optional metadata

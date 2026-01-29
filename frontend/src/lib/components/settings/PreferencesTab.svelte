@@ -1,7 +1,8 @@
 <script lang="ts">
     import {_, LANGUAGE_OPTIONS, type SupportedLocale} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {api, ApiError} from '$lib/api';
+    import {zodiosApi} from '$lib/api';
+    import {isAxiosError} from 'axios';
     import {onMount} from 'svelte';
     import {debug} from '$lib/debug';
     import {Coins, Globe, Palette} from 'lucide-svelte';
@@ -72,9 +73,7 @@
         debug.log('PreferencesTab', 'loadGlobalDefaults');
         try {
             // API returns { settings: [{ key: "default_language", value: "en" }, ...] }
-            const response = await api.get<{
-                settings: Array<{ key: string; value: string }>;
-            }>('/settings/global');
+            const response = await zodiosApi.list_global_settings_api_v1_settings_global_get();
 
             debug.log('PreferencesTab', 'loadGlobalDefaults response', response);
 
@@ -101,11 +100,7 @@
         isLoading = true;
         error = null;
         try {
-            const response = await api.get<{
-                language: string;
-                base_currency: string;
-                theme: 'light' | 'dark' | 'auto';
-            }>('/settings/user');
+            const response = await zodiosApi.get_user_settings_endpoint_api_v1_settings_user_get();
 
             debug.log('PreferencesTab', 'loadSettings response', response);
             originalValues = {
@@ -125,7 +120,7 @@
         debug.log('PreferencesTab', 'loadCurrencies');
         currenciesLoading = true;
         try {
-            const response = await api.get<{ currencies: CurrencyInfo[] }>('/utilities/currencies');
+            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
             currencyOptions = response.currencies.map(c => ({
                 code: c.code,
                 label: c.name,
@@ -182,23 +177,23 @@
         try {
             if (field === 'language') {
                 currentLanguage.set(editedValues.language as SupportedLocale);
-                await api.put('/settings/user', {language: editedValues.language});
+                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({language: editedValues.language});
             } else if (field === 'default_currency') {
-                await api.put('/settings/user', {base_currency: editedValues.default_currency});
+                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({base_currency: editedValues.default_currency});
             } else if (field === 'theme') {
                 localStorage.setItem('librefolio-theme', editedValues.theme === 'auto' ? '' : editedValues.theme);
                 document.documentElement.classList.remove('light', 'dark');
                 if (editedValues.theme !== 'auto') {
                     document.documentElement.classList.add(editedValues.theme);
                 }
-                await api.put('/settings/user', {theme: editedValues.theme});
+                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({theme: editedValues.theme});
             }
 
             originalValues = {...originalValues, [field]: editedValues[field]};
             success = $_('settings.savedSuccessfully');
             setTimeout(() => success = null, 3000);
         } catch (e) {
-            if (e instanceof ApiError) {
+            if (isAxiosError(e)) {
                 error = e.message;
             } else {
                 error = $_('settings.saveFailed');
@@ -227,13 +222,13 @@
         try {
             if (languageModified) {
                 currentLanguage.set(editedValues.language as SupportedLocale);
-                await api.put('/settings/user', {language: editedValues.language});
+                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({language: editedValues.language});
                 originalValues.language = editedValues.language;
                 saved.push($_('settings.language'));
             }
 
             if (currencyModified) {
-                await api.put('/settings/user', {base_currency: editedValues.default_currency});
+                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({base_currency: editedValues.default_currency});
                 originalValues.default_currency = editedValues.default_currency;
                 saved.push($_('settings.defaultCurrency'));
             }
@@ -244,7 +239,7 @@
                 if (editedValues.theme !== 'auto') {
                     document.documentElement.classList.add(editedValues.theme);
                 }
-                await api.put('/settings/user', {theme: editedValues.theme});
+                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({theme: editedValues.theme});
                 originalValues.theme = editedValues.theme;
                 saved.push($_('settings.theme'));
             }
@@ -254,7 +249,7 @@
             }
             setTimeout(() => success = null, 4000);
         } catch (e) {
-            if (e instanceof ApiError) {
+            if (isAxiosError(e)) {
                 error = e.message;
             } else {
                 error = $_('settings.saveFailed');
