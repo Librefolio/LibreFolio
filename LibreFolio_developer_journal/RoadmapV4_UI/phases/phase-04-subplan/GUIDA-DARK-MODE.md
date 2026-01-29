@@ -38,11 +38,13 @@ html.dark {
 ## 🔧 Come Fare Prove
 
 ### Metodo 1: DevTools (Temporaneo)
+
 1. Apri DevTools (F12)
 2. Vai su `<html class="dark">`
 3. Aggiungi/modifica stili inline
 
 ### Metodo 2: Modifica CSS (Permanente)
+
 1. Apri `frontend/src/app.css`
 2. Modifica le variabili nella sezione `html.dark { ... }`
 3. Salva - Hot reload applica subito
@@ -52,6 +54,7 @@ html.dark {
 ## 📋 Parametri Comuni da Modificare
 
 ### Se sfondi troppo uniformi:
+
 ```css
 /* Aumenta contrasto tra livelli */
 --theme-bg-primary: #0a0f1a;    /* Più scuro */
@@ -60,6 +63,7 @@ html.dark {
 ```
 
 ### Se input troppo scuri:
+
 ```css
 /* Linea 157-162: Input specifici */
 html.dark input,
@@ -71,6 +75,7 @@ html.dark textarea {
 ```
 
 ### Se testi poco leggibili:
+
 ```css
 --theme-text-secondary: #e2e8f0; /* Più chiaro */
 --theme-text-muted: #a8b4c4;     /* Più chiaro */
@@ -80,19 +85,19 @@ html.dark textarea {
 
 ## 🎯 Scala Colori Consigliata (Slate Tailwind)
 
-| Nome | Colore | Uso |
-|------|--------|-----|
-| slate-950 | `#020617` | Sfondo più scuro |
-| slate-900 | `#0f172a` | Sfondo principale |
-| slate-800 | `#1e293b` | Card, input |
-| slate-700 | `#334155` | Hover, bordi |
-| slate-600 | `#475569` | Bordi chiari |
-| slate-500 | `#64748b` | Testo muted |
-| slate-400 | `#94a3b8` | Testo terziario |
-| slate-300 | `#cbd5e1` | Testo secondario |
+| Nome      | Colore    | Uso                 |
+|-----------|-----------|---------------------|
+| slate-950 | `#020617` | Sfondo più scuro    |
+| slate-900 | `#0f172a` | Sfondo principale   |
+| slate-800 | `#1e293b` | Card, input         |
+| slate-700 | `#334155` | Hover, bordi        |
+| slate-600 | `#475569` | Bordi chiari        |
+| slate-500 | `#64748b` | Testo muted         |
+| slate-400 | `#94a3b8` | Testo terziario     |
+| slate-300 | `#cbd5e1` | Testo secondario    |
 | slate-200 | `#e2e8f0` | Testo più leggibile |
-| slate-100 | `#f1f5f9` | Testo chiaro |
-| slate-50  | `#f8fafc` | Testo bianco |
+| slate-100 | `#f1f5f9` | Testo chiaro        |
+| slate-50  | `#f8fafc` | Testo bianco        |
 
 ---
 
@@ -100,10 +105,10 @@ html.dark textarea {
 
 1. **Aumenta contrasto input**: Usa `--theme-bg-tertiary` per input invece di `--theme-bg-secondary`
 
-2. **Differenzia livelli**: 
-   - Page background: `slate-900` (#0f172a)
-   - Card background: `slate-800` (#1e293b)  
-   - Input background: `slate-700` (#334155)
+2. **Differenzia livelli**:
+    - Page background: `slate-900` (#0f172a)
+    - Card background: `slate-800` (#1e293b)
+    - Input background: `slate-700` (#334155)
 
 3. **Test rapido in DevTools**:
    ```javascript
@@ -114,13 +119,13 @@ html.dark textarea {
 
 ## 📁 Dove Sono i Componenti Specifici
 
-| Componente | File |
-|------------|------|
-| Login page | `AnimatedBackground.svelte` |
-| Modali | `BrokerModal.svelte`, etc. |
-| Input generici | `app.css` linee 157-166 |
-| Sidebar | `Sidebar.svelte` (usa Tailwind) |
-| Card | Usa classe `bg-white` → overridden in `app.css` |
+| Componente     | File                                            |
+|----------------|-------------------------------------------------|
+| Login page     | `AnimatedBackground.svelte`                     |
+| Modali         | `BrokerModal.svelte`, etc.                      |
+| Input generici | `app.css` linee 157-166                         |
+| Sidebar        | `Sidebar.svelte` (usa Tailwind)                 |
+| Card           | Usa classe `bg-white` → overridden in `app.css` |
 
 ---
 

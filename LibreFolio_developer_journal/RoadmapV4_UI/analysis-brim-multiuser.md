@@ -13,12 +13,13 @@ Il sistema ha già un modello di accesso a 3 livelli per i broker:
 
 ```python
 class UserRole(str, Enum):
-    OWNER = "OWNER"    # Full access: CRUD broker, manage access, delete
+    OWNER = "OWNER"  # Full access: CRUD broker, manage access, delete
     EDITOR = "EDITOR"  # Modify broker/transactions, can only remove self
     VIEWER = "VIEWER"  # Read-only access
 ```
 
 **API esistenti:**
+
 - `GET /brokers/{id}/access` - Lista utenti con accesso
 - `POST /brokers/{id}/access` - Aggiungi accesso (solo OWNER)
 - `PATCH /brokers/{id}/access/{user_id}` - Modifica ruolo (solo OWNER)
@@ -31,6 +32,7 @@ class UserRole(str, Enum):
 ## Situazione Attuale BRIM
 
 ### Schema BRIMFileInfo Attuale
+
 ```python
 class BRIMFileInfo(BaseModel):
     file_id: str           # UUID del file
@@ -44,6 +46,7 @@ class BRIMFileInfo(BaseModel):
 ```
 
 ### Problemi
+
 1. ❌ **Nessun `uploaded_by_user_id`** - Chi ha caricato il file
 2. ❌ **Nessun `target_broker_id`** - File non associato a broker
 3. ❌ L'upload avviene senza specificare il broker
@@ -55,15 +58,15 @@ class BRIMFileInfo(BaseModel):
 
 ### Endpoint Attuali BR IMPORT
 
-| Metodo | Endpoint | Descrizione |
-|--------|----------|-------------|
-| GET | `/api/v1/brokers/import/files` | Lista tutti i file caricati |
-| GET | `/api/v1/brokers/import/files/{file_id}` | Dettagli file specifico |
-| DELETE | `/api/v1/brokers/import/files/{file_id}` | Elimina file |
-| GET | `/api/v1/brokers/import/files/{file_id}/download` | Download file |
-| POST | `/api/v1/brokers/import/files/{file_id}/parse` | Parse file → preview transactions |
-| GET | `/api/v1/brokers/import/plugins` | Lista plugin disponibili |
-| POST | `/api/v1/brokers/import/upload` | Upload file (senza broker!) |
+| Metodo | Endpoint                                          | Descrizione                       |
+|--------|---------------------------------------------------|-----------------------------------|
+| GET    | `/api/v1/brokers/import/files`                    | Lista tutti i file caricati       |
+| GET    | `/api/v1/brokers/import/files/{file_id}`          | Dettagli file specifico           |
+| DELETE | `/api/v1/brokers/import/files/{file_id}`          | Elimina file                      |
+| GET    | `/api/v1/brokers/import/files/{file_id}/download` | Download file                     |
+| POST   | `/api/v1/brokers/import/files/{file_id}/parse`    | Parse file → preview transactions |
+| GET    | `/api/v1/brokers/import/plugins`                  | Lista plugin disponibili          |
+| POST   | `/api/v1/brokers/import/upload`                   | Upload file (senza broker!)       |
 
 ### Flusso ATTUALE (ipotetico)
 
@@ -89,6 +92,7 @@ class BRIMFileInfo(BaseModel):
 ```
 
 **Problemi del flusso attuale:**
+
 - Upload senza controllo permessi broker
 - File "orfano" finché non viene parsato
 - Nessun modo di sapere a quale broker appartiene un file
@@ -120,13 +124,13 @@ class BRIMFileInfo(BaseModel):
 
 ### Modifiche API Necessarie
 
-| Endpoint | Modifica |
-|----------|----------|
-| `POST /brokers/import/upload` | + `broker_id` obbligatorio nel body o query param |
-| `GET /brokers/import/files` | + filtro `broker_ids[]` (multi-select) |
-| `DELETE /brokers/import/files/{id}` | + check permessi su target_broker_id |
-| `GET /brokers/import/files/{id}/download` | + check permessi (VIEWER+ ok) |
-| Schema `BRIMFileInfo` | + `uploaded_by_user_id`, `target_broker_id` |
+| Endpoint                                  | Modifica                                          |
+|-------------------------------------------|---------------------------------------------------|
+| `POST /brokers/import/upload`             | + `broker_id` obbligatorio nel body o query param |
+| `GET /brokers/import/files`               | + filtro `broker_ids[]` (multi-select)            |
+| `DELETE /brokers/import/files/{id}`       | + check permessi su target_broker_id              |
+| `GET /brokers/import/files/{id}/download` | + check permessi (VIEWER+ ok)                     |
+| Schema `BRIMFileInfo`                     | + `uploaded_by_user_id`, `target_broker_id`       |
 
 ### Endpoint NON necessari (già esistenti)
 
@@ -142,7 +146,8 @@ class BRIMFileInfo(BaseModel):
 
 > Un file BRIM deve essere associato a un broker **al momento dell'upload**, non dopo.
 
-**Motivo**: 
+**Motivo**:
+
 - L'utente deve avere almeno EDITOR sul broker per caricare file
 - Il file è logicamente parte del broker
 - Semplifica filtri e permessi
@@ -175,10 +180,10 @@ class BRIMFileInfo(BaseModel):
     processed_at: Optional[datetime]
     compatible_plugins: List[str]
     error_message: Optional[str]
-    
+
     # NUOVI CAMPI (solo ID, no nomi):
-    uploaded_by_user_id: int       # Chi ha caricato
-    target_broker_id: int          # Broker destinazione (OBBLIGATORIO)
+    uploaded_by_user_id: int  # Chi ha caricato
+    target_broker_id: int  # Broker destinazione (OBBLIGATORIO)
 ```
 
 ---
@@ -192,25 +197,25 @@ class BRIMFileInfo(BaseModel):
 ```python
 @brim_router.post("/{broker_id}/upload")
 async def upload_file(
-    broker_id: int,
-    file: UploadFile,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> BRIMFileInfo:
+        broker_id: int,
+        file: UploadFile,
+        current_user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+        ) -> BRIMFileInfo:
     # 1. Verifica accesso al broker (EDITOR o superiore)
     role = await broker_service.get_user_role(broker_id, current_user.id)
     if role is None and not current_user.is_superuser:
         raise HTTPException(404, "Broker not found or access denied")
     if role == UserRole.VIEWER:
         raise HTTPException(403, "VIEWER cannot upload files")
-    
+
     # 2. Salva file con broker_id e user_id
     file_info = brim_provider.save_uploaded_file(
         content,
         filename,
         user_id=current_user.id,
         broker_id=broker_id,
-    )
+        )
     return file_info
 ```
 
@@ -221,29 +226,29 @@ async def upload_file(
 ```python
 @brim_router.get("/files")
 async def list_files(
-    broker_ids: Optional[List[int]] = Query(None),  # Multi-select
-    status: Optional[BRIMFileStatus] = None,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> List[BRIMFileInfo]:
+        broker_ids: Optional[List[int]] = Query(None),  # Multi-select
+        status: Optional[BRIMFileStatus] = None,
+        current_user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+        ) -> List[BRIMFileInfo]:
     # 1. Ottieni broker accessibili dall'utente
     if current_user.is_superuser:
         accessible_broker_ids = None  # Tutti
     else:
         accessible_broker_ids = await broker_service.get_accessible_broker_ids(current_user.id)
-    
+
     # 2. Applica filtro broker_ids (interseca con accessibili)
     if broker_ids:
         if accessible_broker_ids is not None:
             broker_ids = [b for b in broker_ids if b in accessible_broker_ids]
     else:
         broker_ids = accessible_broker_ids  # Tutti quelli accessibili
-    
+
     # 3. Filtra files
     return brim_provider.list_files(
         status=status,
         broker_ids=broker_ids,
-    )
+        )
 ```
 
 ### 3. Delete (`DELETE /brokers/import/files/{id}`)
@@ -251,25 +256,25 @@ async def list_files(
 ```python
 @brim_router.delete("/files/{file_id}")
 async def delete_file(
-    file_id: str,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> dict:
+        file_id: str,
+        current_user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+        ) -> dict:
     file_info = brim_provider.get_file_info(file_id)
     if not file_info:
         raise HTTPException(404, "File not found")
-    
+
     # Verifica permessi: EDITOR+ sul broker o Superuser
     role = await broker_service.get_user_role(file_info.target_broker_id, current_user.id)
-    
+
     can_delete = (
-        current_user.is_superuser or
-        role in [UserRole.OWNER, UserRole.EDITOR]
+            current_user.is_superuser or
+            role in [UserRole.OWNER, UserRole.EDITOR]
     )
-    
+
     if not can_delete:
         raise HTTPException(403, "No permission to delete this file")
-    
+
     brim_provider.delete_file(file_id)
     return {"success": True}
 ```
@@ -288,9 +293,11 @@ if role is None and not current_user.is_superuser:
 ## Parse Result Caching
 
 ### Problema
+
 Attualmente, ogni volta che si vuole vedere il risultato di un parsing, bisogna ri-parsare il file. Questo è inefficiente e lento.
 
 ### Soluzione
+
 Salvare il risultato del parsing nel metadata JSON del file.
 
 ### Schema Esteso
@@ -342,10 +349,10 @@ class BRIMParseResultCache(BaseModel):
 ```python
 @brim_router.get("/files/{file_id}/last-parse")
 async def get_last_parse_result(
-    file_id: str,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> Optional[BRIMParseResultCache]:
+        file_id: str,
+        current_user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+        ) -> Optional[BRIMParseResultCache]:
     """
     Ritorna il risultato dell'ultimo parsing, se disponibile.
     Utile per ricaricare una preview senza ri-parsare il file.
@@ -359,14 +366,14 @@ async def get_last_parse_result(
     file_info = brim_provider.get_file_info(file_id)
     if not file_info:
         raise HTTPException(404, "File not found")
-    
+
     # Verifica permessi (VIEWER+ ok)
     role = await broker_service.get_user_role(
         file_info.target_broker_id, current_user.id, session
-    )
+        )
     if not current_user.is_superuser and role is None:
         raise HTTPException(403, "Access denied")
-    
+
     return file_info.last_parse_result
 ```
 
@@ -409,51 +416,51 @@ async def parse_file(...) -> BRIMParseResponse:
 ### Pagina Files (`/files`)
 
 1. **Filtro multi-broker** (dropdown con checkbox):
-   - Mostra solo broker a cui l'utente ha accesso
-   - Default: tutti i broker accessibili selezionati
-   - Superuser vede tutti i broker
+    - Mostra solo broker a cui l'utente ha accesso
+    - Default: tutti i broker accessibili selezionati
+    - Superuser vede tutti i broker
 
 2. **Colonna "Broker"**:
-   - Mostra nome broker
-   - Link cliccabile alla pagina del broker
+    - Mostra nome broker
+    - Link cliccabile alla pagina del broker
 
 3. **Azioni condizionali**:
-   - Download: sempre visibile (VIEWER+)
-   - Delete: solo se EDITOR+ sul broker
+    - Download: sempre visibile (VIEWER+)
+    - Delete: solo se EDITOR+ sul broker
 
 ### Pagina Broker (`/brokers/{id}`)
 
 1. **Tab/sezione "Files importati"**:
-   - FilesTableAdvanced con `broker_id` fisso
-   - Upload button (se EDITOR+)
+    - FilesTableAdvanced con `broker_id` fisso
+    - Upload button (se EDITOR+)
 
 2. **Upload diretto**:
-   - Non serve selettore broker (è implicito)
+    - Non serve selettore broker (è implicito)
 
 ### Pagina Transactions (`/transactions`)
 
 1. **Import Transactions button**:
-   - Step 1: Seleziona broker (dropdown)
-   - Step 2: Upload file
-   - Step 3: Parse e review
+    - Step 1: Seleziona broker (dropdown)
+    - Step 2: Upload file
+    - Step 3: Parse e review
 
 ### Pagina Brokers (`/brokers`)
 
 1. **Stesso filtro utente** (solo per superuser):
-   - Dropdown "Mostra broker di: [Tutti gli utenti | User1 | User2...]"
-   - Utenti normali vedono solo i propri broker
+    - Dropdown "Mostra broker di: [Tutti gli utenti | User1 | User2...]"
+    - Utenti normali vedono solo i propri broker
 
 ---
 
 ## Permessi Riepilogo
 
-| Azione | VIEWER | EDITOR | OWNER | Superuser |
-|--------|--------|--------|-------|-----------|
-| List files | ✅ (solo broker accessibili) | ✅ | ✅ | ✅ (tutti) |
-| Download | ✅ | ✅ | ✅ | ✅ |
-| Upload | ❌ | ✅ | ✅ | ✅ |
-| Delete | ❌ | ✅ | ✅ | ✅ |
-| Parse | ❌ | ✅ | ✅ | ✅ |
+| Azione     | VIEWER                      | EDITOR | OWNER | Superuser |
+|------------|-----------------------------|--------|-------|-----------|
+| List files | ✅ (solo broker accessibili) | ✅      | ✅     | ✅ (tutti) |
+| Download   | ✅                           | ✅      | ✅     | ✅         |
+| Upload     | ❌                           | ✅      | ✅     | ✅         |
+| Delete     | ❌                           | ✅      | ✅     | ✅         |
+| Parse      | ❌                           | ✅      | ✅     | ✅         |
 
 ---
 
@@ -488,14 +495,17 @@ async def parse_file(...) -> BRIMParseResponse:
 ## Timeline Consigliata
 
 **Backend**: Implementare subito (non dipende da UI)
+
 - Stabilizza le API
 - Permette test manuali
 - Blocca poco del frontend
 
 **Frontend Files Page**: Dopo completamento tabelle (già in corso)
+
 - Aggiungere filtro broker è un'estensione naturale
 
 **Frontend Broker Page / Transactions**: In parallelo o dopo
+
 - Dipende da priorità feature
 
 ---
@@ -503,13 +513,17 @@ async def parse_file(...) -> BRIMParseResponse:
 ## Note Migrazione
 
 ### Alpha Reset
+
 Essendo in fase alpha:
+
 1. Cancellare tutti i file in `broker_reports/`
 2. Aggiornare schema JSON con nuovi campi
 3. I nuovi upload avranno `uploaded_by_user_id` e `target_broker_id`
 
 ### Retrocompatibilità
+
 Per file esistenti senza i nuovi campi:
+
 - `uploaded_by_user_id`: se null, assegnare all'admin (user_id=1)
 - `target_broker_id`: se null, file non associato → nascondere o richiedere assegnazione
 
@@ -544,6 +558,7 @@ broker_reports/
 ```
 
 **Flusso attuale:**
+
 1. `POST /upload` → file va in `uploaded/`
 2. `POST /parse` → se successo, file va in `parsed/`, altrimenti in `failed/`
 3. Lo spostamento avviene in `_move_file()` in `brim_provider.py`
@@ -553,6 +568,7 @@ broker_reports/
 Con l'introduzione di `target_broker_id`, possiamo organizzare per broker:
 
 **Opzione A: Broker come primo livello**
+
 ```
 broker_reports/
 ├── broker_{id}/
@@ -564,6 +580,7 @@ broker_reports/
 ```
 
 **Opzione B: Status primo, broker secondo** (preferita)
+
 ```
 broker_reports/
 ├── uploaded/
@@ -580,11 +597,12 @@ broker_reports/
 ### Raccomandazione
 
 **Opzione B** è preferibile perché:
+
 1. Mantiene compatibilità con struttura attuale (cartelle status esistono già)
 2. Permette operazioni bulk per status (es. "pulisci tutti i failed")
 3. Il `target_broker_id` è già nel metadata JSON, la cartella è ridondante ma utile per:
-   - Pulizia veloce quando un broker viene eliminato
-   - Query filesystem senza leggere ogni JSON
+    - Pulizia veloce quando un broker viene eliminato
+    - Query filesystem senza leggere ogni JSON
 
 ### Modifiche Backend Necessarie
 
@@ -596,6 +614,7 @@ broker_reports/
 ### Considerazioni su Cancellazione Broker
 
 Quando un broker viene eliminato:
+
 - **Opzione 1**: Cancellare tutti i file associati (pulizia completa)
 - **Opzione 2**: Mantenere i file ma marcarli come "orfani"
 - **Opzione 3**: Richiedere che non ci siano file prima di eliminare

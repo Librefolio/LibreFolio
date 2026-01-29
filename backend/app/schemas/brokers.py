@@ -24,6 +24,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from backend.app.db.models import UserRole
+from backend.app.utils.datetime_utils import UTCDateTime
 from backend.app.schemas.common import (
     Currency,
     BaseBulkResponse,
@@ -132,8 +133,8 @@ class BRReadItem(BaseModel):
     is_active: bool
     opened_at: Optional[date_type] = None
 
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
 
 
 # =============================================================================
@@ -374,7 +375,7 @@ class BRAccessItem(BaseModel):
     username: str = Field(..., description="Username")
     email: str = Field(..., description="User email")
     role: UserRole = Field(..., description="Access role")
-    created_at: datetime = Field(..., description="When access was granted")
+    created_at: UTCDateTime = Field(..., description="When access was granted")
 
 
 class BRAccessListResponse(BaseModel):

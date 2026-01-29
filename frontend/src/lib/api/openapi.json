@@ -4316,7 +4316,6 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time",
             "title": "Created At",
             "description": "When access was granted"
           }
@@ -5045,15 +5044,13 @@
           },
           "uploaded_at": {
             "type": "string",
-            "format": "date-time",
             "title": "Uploaded At",
             "description": "UTC timestamp when uploaded"
           },
           "processed_at": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "date-time"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -5392,12 +5389,10 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time",
             "title": "Created At"
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time",
             "title": "Updated At"
           }
         },
@@ -5495,12 +5490,10 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time",
             "title": "Created At"
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time",
             "title": "Updated At"
           },
           "cash_balances": {
@@ -9025,8 +9018,7 @@
           "updated_at": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "date-time"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -9774,12 +9766,10 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time",
             "title": "Created At"
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time",
             "title": "Updated At"
           }
         },
@@ -10112,7 +10102,6 @@
           },
           "uploaded_at": {
             "type": "string",
-            "format": "date-time",
             "title": "Uploaded At",
             "description": "Upload timestamp (UTC)"
           },

@@ -9,15 +9,18 @@
 ## 📋 Problema
 
 Attualmente il progetto usa:
+
 - `backend/data/sqlite/app.db` per produzione
 - `backend/data/sqlite/test_app.db` per test
 
 Tuttavia, con la crescita del progetto, altri dati persistenti si accumulano nella stessa cartella `backend/data/`:
+
 - `uploads/` - File caricati dagli utenti
 - `brim/` - File BRIM (uploaded, parsed, failed)
 - Potenziali futuri: `cache/`, `logs/`, `exports/`, etc.
 
 **Problemi**:
+
 1. I test possono inquinare i dati di produzione (file nella stessa cartella)
 2. Non c'è isolamento completo tra ambienti
 3. I broker con ID alti dei test sono invisibili in prod solo per fortuna (non per design)
@@ -103,12 +106,12 @@ LIBREFOLIO_TEST_PORT=8001
 ### Logica di risoluzione
 
 1. **Test mode** (`--test`):
-   - Data dir: `LIBREFOLIO_TEST_DATA_DIR` (non sovrascrivibile da CLI)
-   - Port: `--port` se specificato, altrimenti `LIBREFOLIO_TEST_PORT`
+    - Data dir: `LIBREFOLIO_TEST_DATA_DIR` (non sovrascrivibile da CLI)
+    - Port: `--port` se specificato, altrimenti `LIBREFOLIO_TEST_PORT`
 
 2. **Prod mode** (default):
-   - Data dir: `--data` se specificato, altrimenti `LIBREFOLIO_DATA_DIR`
-   - Port: `--port` se specificato, altrimenti `LIBREFOLIO_PORT`
+    - Data dir: `--data` se specificato, altrimenti `LIBREFOLIO_DATA_DIR`
+    - Port: `--port` se specificato, altrimenti `LIBREFOLIO_PORT`
 
 ---
 
@@ -117,6 +120,7 @@ LIBREFOLIO_TEST_PORT=8001
 ### 1. Configuration (`backend/app/core/config.py`)
 
 Verificare come viene costruito il path del database:
+
 ```python
 # Cercare:
 DATABASE_URL
@@ -124,7 +128,8 @@ SQLITE_PATH
 data/sqlite
 ```
 
-**Modifica necessaria**: 
+**Modifica necessaria**:
+
 ```python
 DATA_DIR: str = Field(default="./backend/data/prod")
 
@@ -144,6 +149,7 @@ def brim_dir(self) -> Path:
 ### 2. Static Uploads (`backend/app/services/static_uploads.py`)
 
 Cercare:
+
 ```python
 # Path delle cartelle uploads
 UPLOAD_DIR
@@ -155,6 +161,7 @@ data/uploads
 ### 3. BRIM Provider (`backend/app/services/brim_provider.py`)
 
 Cercare:
+
 ```python
 # Path delle cartelle BRIM
 data/brim
@@ -168,6 +175,7 @@ failed/
 ### 4. Alembic (`backend/alembic/env.py` e `alembic.ini`)
 
 Cercare:
+
 ```python
 # Database URL per migrations
 sqlalchemy.url
@@ -180,12 +188,14 @@ Cercare come viene configurato il test mode e verificare che usi `LIBREFOLIO_TES
 ### 6. dev.py
 
 Aggiungere argomenti:
+
 ```python
 parser.add_argument('--data', help='Custom data directory (prod mode only)')
 parser.add_argument('--port', type=int, help='Custom port')
 ```
 
 E logica:
+
 ```python
 if args.test:
     data_dir = os.getenv('LIBREFOLIO_TEST_DATA_DIR', './backend/data/test')
@@ -220,9 +230,9 @@ find backend/data -type d -empty -exec touch {}/.gitkeep \;
 ### Fase 2: Backend Configuration
 
 1. **Modificare `config.py`**:
-   - Aggiungere `DATA_DIR` setting
-   - Creare properties per paths derivati
-   - Gestire creazione automatica directories
+    - Aggiungere `DATA_DIR` setting
+    - Creare properties per paths derivati
+    - Gestire creazione automatica directories
 
 2. **Creare helper centralizzato** in `backend/app/core/paths.py`:
    ```python
@@ -263,6 +273,7 @@ find backend/data -type d -empty -exec touch {}/.gitkeep \;
 ### Fase 6: Migration Dati Esistenti
 
 Script per migrare:
+
 ```bash
 #!/bin/bash
 # migrate-data.sh
@@ -307,11 +318,13 @@ backend/data/test/brim/**/*
 ## ✅ Checklist
 
 ### Setup Struttura
+
 - [ ] Creare struttura directory prod/test
 - [ ] Aggiungere .gitkeep in tutte le cartelle
 - [ ] Aggiornare .gitignore
 
 ### Backend
+
 - [ ] Modificare config.py con DATA_DIR
 - [ ] Creare helper paths.py
 - [ ] Aggiornare static_uploads.py
@@ -320,18 +333,21 @@ backend/data/test/brim/**/*
 - [ ] Aggiornare alembic.ini/env.py
 - [ ] Chiamare ensure_data_dirs() all'avvio
 
-### Test Infrastructure  
+### Test Infrastructure
+
 - [ ] Aggiornare test_server_helper.py
 - [ ] Aggiornare conftest.py se necessario
 - [ ] Verificare tutti i test passano
 
 ### Scripts & Dev
+
 - [ ] Aggiungere `--data` e `--port` a dev.py
 - [ ] Aggiornare .env.example
 - [ ] Creare script migration dati
 - [ ] Testare combinazioni di flags
 
 ### Documentation
+
 - [ ] Aggiornare README
 - [ ] Documentare nuova struttura
 - [ ] Documentare flags CLI

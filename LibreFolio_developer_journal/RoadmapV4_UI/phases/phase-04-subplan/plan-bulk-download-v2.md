@@ -8,6 +8,7 @@
 ## Obiettivo
 
 Implementare il download multiplo di file (sia da static uploads che da broker reports) con supporto per:
+
 - Download singoli file separati
 - Download come archivio (tar, zip, 7z)
 - Modal di selezione formato con preview dimensione
@@ -19,6 +20,7 @@ Implementare il download multiplo di file (sia da static uploads che da broker r
 ### 1.1 Dipendenze Python
 
 Verifica dipendenze già presenti in Python standard library:
+
 - `tarfile` - per .tar (built-in)
 - `zipfile` - per .zip (built-in)
 - `py7zr` - per .7z (**da aggiungere al Pipfile**)
@@ -411,6 +413,7 @@ class TestBRIMBulkDownload:
 **File**: `frontend/src/lib/components/ui/BulkDownloadModal.svelte`
 
 Features:
+
 - Lista file selezionati (foldable se >1, aperta se ==1)
 - Selettore formato: "Singoli file", "TAR", "ZIP", "7ZIP"
 - Mostra dimensione stimata: "Scarica (xx KB)"
@@ -601,11 +604,13 @@ Il formato di download di default deve essere configurabile sia a livello global
 #### Backend - Nuovi campi settings
 
 **GlobalSettings** (admin):
+
 ```python
 default_download_format: Literal["none", "tar", "zip", "7z"] = "zip"
 ```
 
 **UserSettings** (utente):
+
 ```python
 download_format: Literal["none", "tar", "zip", "7z"] | None = None  # None = usa globale
 ```
@@ -631,9 +636,11 @@ let format = $state<'none' | 'tar' | 'zip' | '7z'>(
 #### Frontend - Settings Pages
 
 **GlobalSettingsTab.svelte**:
+
 - Aggiungere selettore "Default download format" con opzioni: Single files, TAR, ZIP, 7-Zip
 
 **UserSettingsTab.svelte** (o ProfileSettings):
+
 - Aggiungere selettore "Download format" con opzioni + "Use default (from admin)"
 - Mostrare valore corrente globale come hint
 
@@ -663,11 +670,13 @@ downloads: {
 ### 6.1 Service Comune per File Storage
 
 Creare un service comune che gestisca:
+
 - Salvataggio file con metadata JSON
 - Campi comuni (id, filename, size, uploaded_at, user_id)
 - Campi specifici in sotto-oggetti
 
 Questo permetterà di:
+
 - Condividere logica tra uploads e BRIM
 - Aggiungere nuovi campi comuni facilmente
 - Mantenere separazione per campi specifici
@@ -677,6 +686,7 @@ Questo permetterà di:
 ## Checklist Implementazione
 
 ### Backend
+
 - [ ] Aggiungere `py7zr` a Pipfile
 - [ ] Creare `archive_service.py`
 - [ ] Aggiungere schema `BulkDownloadRequest/Info`
@@ -688,12 +698,14 @@ Questo permetterà di:
 - [ ] Aggiungere `download_format` a UserSettings
 
 ### Test Backend
+
 - [ ] Test bulk download uploads (zip, tar, single, none)
 - [ ] Test bulk download BRIM con access control
 - [ ] Test dimensione stimata
 - [ ] Test settings download format
 
 ### Frontend
+
 - [ ] Componente `BulkDownloadModal.svelte`
 - [ ] Integrazione in FilesTable (upload section)
 - [ ] Integrazione in FilesTable (BRIM section)
@@ -703,6 +715,7 @@ Questo permetterà di:
 - [ ] Aggiungere `api.postBlob()` se non esiste
 
 ### Documentazione
+
 - [ ] Aggiornare API docs con nuovi endpoint
 - [ ] Aggiornare README se necessario
 
@@ -710,12 +723,12 @@ Questo permetterà di:
 
 ## Timeline Stimata
 
-| Fase | Descrizione | Stima |
-|------|-------------|-------|
-| 1 | Archive Service | 1h |
-| 2 | Endpoint Uploads | 1h |
-| 3 | Endpoint BRIM | 1h |
-| 4 | Test Backend | 1h |
-| 5 | Frontend Modal + Settings | 3h |
-| 6 | Refactor (opz) | 2h |
-| **Totale** | | **7-9h** |
+| Fase       | Descrizione               | Stima    |
+|------------|---------------------------|----------|
+| 1          | Archive Service           | 1h       |
+| 2          | Endpoint Uploads          | 1h       |
+| 3          | Endpoint BRIM             | 1h       |
+| 4          | Test Backend              | 1h       |
+| 5          | Frontend Modal + Settings | 3h       |
+| 6          | Refactor (opz)            | 2h       |
+| **Totale** |                           | **7-9h** |

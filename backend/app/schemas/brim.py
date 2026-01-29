@@ -28,6 +28,8 @@ from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
 
+from backend.app.utils.datetime_utils import UTCDateTime
+
 from pydantic import BaseModel, Field, ConfigDict
 
 from backend.app.db.models import TransactionType
@@ -158,8 +160,8 @@ class BRIMFileInfo(BaseModel):
     filename: str = Field(..., description="Original filename from upload")
     size_bytes: int = Field(..., ge=0, description="File size in bytes")
     status: BRIMFileStatus = Field(..., description="Current processing status")
-    uploaded_at: datetime = Field(..., description="UTC timestamp when uploaded")
-    processed_at: Optional[datetime] = Field(default=None, description="UTC timestamp when processed")
+    uploaded_at: UTCDateTime = Field(..., description="UTC timestamp when uploaded")
+    processed_at: Optional[UTCDateTime] = Field(default=None, description="UTC timestamp when processed")
     compatible_plugins: List[str] = Field(default_factory=list, description="Plugin codes that can parse this file")
     error_message: Optional[str] = Field(default=None, description="Error description if processing failed")
     # Multi-user support fields
