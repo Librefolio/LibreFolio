@@ -498,25 +498,34 @@
                                         </div>
                                     {/if}
                                     <!-- Number input with unit -->
-                                    <div class="flex items-center space-x-2">
-                                        <input
-                                                id={setting.key}
-                                                type="number"
-                                                step={setting.value_type === 'float' ? '0.01' : '1'}
-                                                min="0"
-                                                value={editedValues[setting.key]}
-                                                on:input={(e) => {
-                                                    editedValues[setting.key] = e.currentTarget.value;
-                                                    editedValues = {...editedValues};
-                                                }}
-                                                disabled={isLocked}
-                                                class="w-20 px-3 py-2 border rounded-lg text-sm text-right
-                                                {isLocked
-                                                    ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                    : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
-                                        />
-                                        {#if getSettingUnit(setting.key)}
-                                            <span class="text-sm text-gray-500">{getSettingUnit(setting.key)}</span>
+                                    <div class="flex flex-col items-end space-y-1">
+                                        <div class="flex items-center space-x-2">
+                                            <input
+                                                    id={setting.key}
+                                                    type="number"
+                                                    step={setting.value_type === 'float' ? '0.01' : '1'}
+                                                    min="0"
+                                                    value={editedValues[setting.key]}
+                                                    on:input={(e) => {
+                                                        editedValues[setting.key] = e.currentTarget.value;
+                                                        editedValues = {...editedValues};
+                                                    }}
+                                                    disabled={isLocked}
+                                                    class="w-20 px-3 py-2 border rounded-lg text-sm text-right
+                                                    {isLocked
+                                                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                                                        : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
+                                            />
+                                            {#if getSettingUnit(setting.key)}
+                                                <span class="text-sm text-gray-500">{getSettingUnit(setting.key)}</span>
+                                            {/if}
+                                        </div>
+                                        <!-- Warning for large file upload size -->
+                                        {#if setting.key === 'max_file_upload_mb' && parseInt(editedValues[setting.key] || '0', 10) > 500}
+                                            <div class="flex items-center text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                                                <AlertCircle size={12} class="mr-1"/>
+                                                <span>{$_('settings.largeFileSizeWarning')}</span>
+                                            </div>
                                         {/if}
                                     </div>
                                 {:else if setting.key === 'default_language'}

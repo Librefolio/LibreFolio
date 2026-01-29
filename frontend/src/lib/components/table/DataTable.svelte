@@ -339,9 +339,14 @@
 	}
 
 	function formatBytes(bytes: number): string {
-		if (bytes === 0) return '0 B';
+		if (bytes === 0) return '0 ' + ($t('filter.bytes') || 'B');
 		const k = 1024;
-		const sizes = ['B', 'KB', 'MB', 'GB'];
+		const sizes = [
+			$t('filter.bytes') || 'B',
+			$t('filter.kilobytes') || 'KB',
+			$t('filter.megabytes') || 'MB',
+			$t('filter.gigabytes') || 'GB'
+		];
 		const i = Math.floor(Math.log(bytes) / Math.log(k));
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 	}
@@ -413,6 +418,11 @@
 		}
 		rowSelection = newSelection;
 		onSelectionChange?.(Object.keys(rowSelection).filter(id => rowSelection[id]));
+	}
+
+	function clearAllSelection() {
+		rowSelection = {};
+		onSelectionChange?.([]);
 	}
 
 	function handleBulkAction(action: BulkAction<T>) {
@@ -579,6 +589,7 @@
 			onToggleColumn={toggleColumnVisibility}
 			onResetColumns={resetColumns}
 			onReorderColumns={reorderColumns}
+			onClearSelection={clearAllSelection}
 		/>
 	{/if}
 

@@ -27,9 +27,10 @@
 		onToggleColumn: (columnId: string) => void;
 		onResetColumns: () => void;
 		onReorderColumns?: (newOrder: string[]) => void;
+		onClearSelection?: () => void;
 	}
 
-	let { selectedCount, columns, columnVisibility, bulkActions, onToggleColumn, onResetColumns, onReorderColumns }: Props = $props();
+	let { selectedCount, columns, columnVisibility, bulkActions, onToggleColumn, onResetColumns, onReorderColumns, onClearSelection }: Props = $props();
 
 	let showColumnDropdown = $state(false);
 
@@ -133,7 +134,15 @@
 	</div>
 	<div class="toolbar-right">
 		{#if selectedCount > 0}
-			<span class="selected-count">{selectedCount} {$t('table.selected')}</span>
+			<button
+				type="button"
+				class="selected-count-btn"
+				onclick={() => onClearSelection?.()}
+				title={$t('table.clearSelection') || 'Clear selection'}
+			>
+				<span class="count-text">{selectedCount} {$t('table.selected')}</span>
+				<span class="clear-icon">×</span>
+			</button>
 			<div class="bulk-actions">
 				{#each bulkActions as action}
 					<button
@@ -236,8 +245,12 @@
 	.toolbar { display: flex; justify-content: flex-end; align-items: center; padding: 0.375rem 0; gap: 0.75rem; }
 	.toolbar-left { display: flex; align-items: center; gap: 0.75rem; }
 	.toolbar-right { display: flex; align-items: center; gap: 0.5rem; }
-	.selected-count { font-size: 0.8125rem; color: #1a4031; font-weight: 500; }
-	:global(.dark) .selected-count { color: #4ade80; }
+	.selected-count-btn { display: flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.5rem; border: 1px solid transparent; border-radius: 6px; background: rgba(26, 64, 49, 0.1); font-size: 0.8125rem; color: #1a4031; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+	.selected-count-btn:hover { background: rgba(26, 64, 49, 0.15); border-color: rgba(26, 64, 49, 0.2); }
+	.selected-count-btn .clear-icon { font-size: 1rem; line-height: 1; opacity: 0.6; }
+	.selected-count-btn:hover .clear-icon { opacity: 1; }
+	:global(.dark) .selected-count-btn { background: rgba(74, 222, 128, 0.1); color: #4ade80; }
+	:global(.dark) .selected-count-btn:hover { background: rgba(74, 222, 128, 0.15); border-color: rgba(74, 222, 128, 0.2); }
 	.bulk-actions { display: flex; gap: 0.25rem; }
 	.divider { width: 1px; height: 1.5rem; background: #e2e8f0; }
 	:global(.dark) .divider { background: #334155; }

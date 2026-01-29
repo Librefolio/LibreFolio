@@ -230,7 +230,7 @@
 				{#if filteredBrokers.length === 0}
 					<div class="no-results">{$t('common.noResults') || 'No results'}</div>
 				{:else}
-					{#each filteredBrokers as broker, index}
+					{#each filteredBrokers as broker, index (broker.id)}
 						<button
 							type="button"
 							class="dropdown-option"
