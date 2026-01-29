@@ -54,6 +54,10 @@
     let success: string | null = null;
     let selectedCategory: string = 'all';
 
+    // File size unit selector state (for max_file_upload_mb)
+    let fileSizeUnit: 'MB' | 'GB' = 'MB';
+    let fileSizeDisplayValue: number = 10;
+
     // Currency options for FuzzySelect
     let currencyOptions: SelectOption[] = [];
     let currenciesLoading = true;
@@ -102,6 +106,15 @@
             editedValues = {};
             for (const setting of settings) {
                 editedValues[setting.key] = setting.value;
+            }
+            // Initialize file size display (convert MB to appropriate unit)
+            const mbValue = parseInt(editedValues['max_file_upload_mb'] || '10', 10);
+            if (mbValue >= 1024) {
+                fileSizeUnit = 'GB';
+                fileSizeDisplayValue = Math.round(mbValue / 1024 * 10) / 10;
+            } else {
+                fileSizeUnit = 'MB';
+                fileSizeDisplayValue = mbValue;
             }
         } catch (e) {
             if (isAxiosError(e)) {
@@ -500,24 +513,68 @@
                                     <!-- Number input with unit -->
                                     <div class="flex flex-col items-end space-y-1">
                                         <div class="flex items-center space-x-2">
-                                            <input
-                                                    id={setting.key}
-                                                    type="number"
-                                                    step={setting.value_type === 'float' ? '0.01' : '1'}
-                                                    min="0"
-                                                    value={editedValues[setting.key]}
-                                                    on:input={(e) => {
-                                                        editedValues[setting.key] = e.currentTarget.value;
-                                                        editedValues = {...editedValues};
-                                                    }}
-                                                    disabled={isLocked}
-                                                    class="w-20 px-3 py-2 border rounded-lg text-sm text-right
-                                                    {isLocked
-                                                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                        : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
-                                            />
-                                            {#if getSettingUnit(setting.key)}
-                                                <span class="text-sm text-gray-500">{getSettingUnit(setting.key)}</span>
+                                            {#if setting.key === 'max_file_upload_mb'}
+                                                <!-- Special case: file size with unit selector -->
+                                                <!-- Accepts decimals, rounds to nearest MB for storage -->
+                                                <input
+                                                        id={setting.key}
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0.1"
+                                                        value={fileSizeDisplayValue}
+                                                        on:input={(e) => {
+                                                            // Parse value, supporting both . and , as decimal separator
+                                                            const inputVal = e.currentTarget.value.replace(',', '.');
+                                                            const newVal = parseFloat(inputVal) || 0.1;
+                                                            fileSizeDisplayValue = newVal;
+                                                            // Convert to MB for storage (round to nearest integer)
+                                                            const mbValue = fileSizeUnit === 'GB' ? newVal * 1024 : newVal;
+                                                            editedValues[setting.key] = String(Math.round(mbValue));
+                                                            editedValues = {...editedValues};
+                                                        }}
+                                                        disabled={isLocked}
+                                                        class="w-20 px-3 py-2 border rounded-lg text-sm text-right
+                                                        {isLocked
+                                                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                                                            : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
+                                                />
+                                                <select
+                                                        bind:value={fileSizeUnit}
+                                                        on:change={() => {
+                                                            // Recalculate MB value when unit changes
+                                                            const mbValue = fileSizeUnit === 'GB' ? fileSizeDisplayValue * 1024 : fileSizeDisplayValue;
+                                                            editedValues[setting.key] = String(Math.round(mbValue));
+                                                            editedValues = {...editedValues};
+                                                        }}
+                                                        disabled={isLocked}
+                                                        class="px-2 py-2 border rounded-lg text-sm
+                                                        {isLocked
+                                                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                                                            : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green'}"
+                                                >
+                                                    <option value="MB">{$_('filter.megabytes') || 'MB'}</option>
+                                                    <option value="GB">{$_('filter.gigabytes') || 'GB'}</option>
+                                                </select>
+                                            {:else}
+                                                <input
+                                                        id={setting.key}
+                                                        type="number"
+                                                        step={setting.value_type === 'float' ? '0.01' : '1'}
+                                                        min="0"
+                                                        value={editedValues[setting.key]}
+                                                        on:input={(e) => {
+                                                            editedValues[setting.key] = e.currentTarget.value;
+                                                            editedValues = {...editedValues};
+                                                        }}
+                                                        disabled={isLocked}
+                                                        class="w-20 px-3 py-2 border rounded-lg text-sm text-right
+                                                        {isLocked
+                                                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                                                            : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
+                                                />
+                                                {#if getSettingUnit(setting.key)}
+                                                    <span class="text-sm text-gray-500">{getSettingUnit(setting.key)}</span>
+                                                {/if}
                                             {/if}
                                         </div>
                                         <!-- Warning for large file upload size -->
