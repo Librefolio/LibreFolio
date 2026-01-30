@@ -171,6 +171,18 @@
         if (SETTING_DEFAULTS[key] !== undefined) {
             editedValues[key] = SETTING_DEFAULTS[key];
             editedValues = {...editedValues}; // Trigger reactivity
+
+            // Update file size display if resetting max_file_upload_mb
+            if (key === 'max_file_upload_mb') {
+                const mbValue = parseInt(SETTING_DEFAULTS[key], 10);
+                if (mbValue >= 1024) {
+                    fileSizeUnit = 'GB';
+                    fileSizeDisplayValue = Math.round(mbValue / 1024 * 10) / 10;
+                } else {
+                    fileSizeUnit = 'MB';
+                    fileSizeDisplayValue = mbValue;
+                }
+            }
         }
     }
 

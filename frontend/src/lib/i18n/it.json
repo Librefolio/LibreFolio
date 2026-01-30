@@ -241,7 +241,11 @@
     "discardChangesWarning": "Hai modifiche non salvate a questo broker. Vuoi annullarle?",
     "continueEditing": "Continua Modifica",
     "discardAndClose": "Annulla e Chiudi",
-    "loadFailed": "Errore nel caricamento del broker"
+    "loadFailed": "Errore nel caricamento del broker",
+    "importFiles": "File di Importazione",
+    "noImportFiles": "Nessun file di importazione",
+    "uploadHint": "Carica report del broker per importare le transazioni",
+    "manageFiles": "Gestisci tutti i file"
   },
   "assets": {
     "title": "Asset",

@@ -57,10 +57,10 @@
         try {
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('broker_id', String(brokerId));
 
             // Upload file using fetch (Zodios doesn't handle multipart well)
-            const response = await fetch('/api/v1/brokers/import/files/upload', {
+            // broker_id must be in query string, not FormData
+            const response = await fetch(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, {
                 method: 'POST',
                 body: formData,
                 credentials: 'include'
@@ -159,7 +159,7 @@
                         <span>{$_('common.uploading')}</span>
                     {:else}
                         <FileUp size={14}/>
-                        <span>{$_('files.upload')}</span>
+                        <span>{$_('uploads.upload')}</span>
                     {/if}
                 </span>
             </label>

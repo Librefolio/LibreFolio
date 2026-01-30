@@ -109,15 +109,24 @@
 		return Math.round(value * (unitInfo?.bytes || 1));
 	}
 
-	// Size input values (displayed with units) - will be initialized in onMount
-	let sizeMinInputValue = $state(0);
-	let sizeMinUnit = $state<SizeUnit>('B');
-	let sizeMaxInputValue = $state(0);
-	let sizeMaxUnit = $state<SizeUnit>('B');
+	// Size input values (displayed with units) - initialize from bytes immediately
+	function initializeMinFromBytes(): { value: number; unit: SizeUnit } {
+		return bytesToUnit(getInitialSizeMin());
+	}
+	function initializeMaxFromBytes(): { value: number; unit: SizeUnit } {
+		return bytesToUnit(getInitialSizeMax());
+	}
 
-	// Slider positions (0-100) - will be initialized in onMount
-	let sliderMinPos = $state(0);
-	let sliderMaxPos = $state(100);
+	let sizeMinInputValue = $state(initializeMinFromBytes().value);
+	let sizeMinUnit = $state<SizeUnit>(initializeMinFromBytes().unit);
+	let sizeMaxInputValue = $state(initializeMaxFromBytes().value);
+	let sizeMaxUnit = $state<SizeUnit>(initializeMaxFromBytes().unit);
+
+	// Slider positions (0-100)
+	// svelte-ignore state_referenced_locally
+	let sliderMinPos = $state(bytesToSliderPos(getInitialSizeMin()));
+	// svelte-ignore state_referenced_locally
+	let sliderMaxPos = $state(bytesToSliderPos(getInitialSizeMax()));
 
 	// Initialize size input values from bytes
 	function initSizeInputs() {

@@ -241,7 +241,11 @@
     "discardChangesWarning": "Vous avez des modifications non enregistrées pour ce courtier. Voulez-vous les annuler ?",
     "continueEditing": "Continuer la Modification",
     "discardAndClose": "Annuler et Fermer",
-    "loadFailed": "Échec du chargement du courtier"
+    "loadFailed": "Échec du chargement du courtier",
+    "importFiles": "Fichiers d'Importation",
+    "noImportFiles": "Aucun fichier d'importation",
+    "uploadHint": "Téléchargez des rapports de courtier pour importer des transactions",
+    "manageFiles": "Gérer tous les fichiers"
   },
   "assets": {
     "title": "Actifs",
