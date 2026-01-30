@@ -871,7 +871,72 @@ Questa funzionalità richiede una rielaborazione profonda del sistema di permess
 
 ---
 
-**Completati**: 12/14
+### Bug Fix Round 4 (30-01-2026)
+
+#### BUG-013: BRIM Upload endpoint sbagliato in BrokerImportFiles
+
+**File**: `frontend/src/lib/components/brokers/BrokerImportFiles.svelte`
+**Problema**: Path era `/api/v1/brokers/import/files/upload` invece di `/api/v1/brokers/import/upload`
+**Causa**: Errore di copia-incolla
+**Fix**: Corretto path a `/api/v1/brokers/import/upload`
+
+**Status**: ✅ COMPLETATO (30-01-2026)
+
+#### BUG-014: Filtro size slider non allineato all'apertura
+
+**File**: `frontend/src/lib/components/table/DataTableColumnFilter.svelte`
+**Problema**: Valori min/max testuali e slider non allineati quando si apre il filtro
+**Causa**: Valori inizializzati a 0 e 'B' prima di `onMount`, che poi li ricalcolava
+**Fix**: Calcolo immediato di `sizeMinInputValue`, `sizeMaxInputValue`, `sliderMinPos`, 
+  `sliderMaxPos` usando funzioni di inizializzazione inline invece di aspettare onMount
+
+**Status**: ✅ COMPLETATO (30-01-2026)
+
+#### BUG-015: Restore Default per max_file_upload_mb non aggiornava UI
+
+**File**: `frontend/src/lib/components/settings/GlobalSettingsTab.svelte`
+**Problema**: Cliccando "Reset to Default" il valore tornava al precedente, non a 10
+**Causa**: `resetSettingToDefault()` non aggiornava `fileSizeDisplayValue` e `fileSizeUnit`
+**Fix**: Aggiunto update di fileSizeDisplayValue e fileSizeUnit quando si resetta max_file_upload_mb
+
+**Status**: ✅ COMPLETATO (30-01-2026)
+
+#### BUG-016: Traduzioni mancanti per broker import files
+
+**File**: `frontend/src/lib/i18n/{it,fr,es}.json`
+**Problema**: Chiavi `brokers.importFiles`, `brokers.noImportFiles`, `brokers.uploadHint`, 
+  `brokers.manageFiles` mancanti in IT, FR, ES
+**Fix**: Aggiunte tutte le traduzioni mancanti
+
+**Status**: ✅ COMPLETATO (30-01-2026)
+
+#### BUG-017: BRIM upload broker_id in FormData invece di query string
+
+**File**: `frontend/src/lib/components/brokers/BrokerImportFiles.svelte`
+**Problema**: broker_id era nel FormData ma backend lo aspetta come Query parameter
+**Fix**: Spostato broker_id nell'URL: `/api/v1/brokers/import/upload?broker_id=${brokerId}`
+
+**Status**: ✅ COMPLETATO (30-01-2026)
+
+#### BUG-018: Translation key sbagliata per upload button
+
+**File**: `frontend/src/lib/components/brokers/BrokerImportFiles.svelte`
+**Problema**: Usava `$_('files.upload')` ma la chiave corretta è `uploads.upload`
+**Fix**: Cambiato in `$_('uploads.upload')`
+
+**Status**: ✅ COMPLETATO (30-01-2026)
+
+#### BUG-019: Svelte warnings per prop capture in DataTableColumnFilter
+
+**File**: `frontend/src/lib/components/table/DataTableColumnFilter.svelte`
+**Problema**: Warnings "This reference only captures the initial value of numberMin/numberMax"
+**Fix**: Aggiunto `// svelte-ignore state_referenced_locally` prima delle righe interessate
+
+**Status**: ✅ COMPLETATO (30-01-2026)
+
+---
+
+**Completati**: 19/21
 **In pausa**: 1 (BUG-008 - GDPR)
 **TODO bassa priorità**: 1 (BUG-005 mkdocs dark mode)
 
