@@ -241,7 +241,11 @@
     "discardChangesWarning": "Tienes cambios sin guardar en este broker. ¿Quieres descartarlos?",
     "continueEditing": "Continuar Editando",
     "discardAndClose": "Descartar y Cerrar",
-    "loadFailed": "Error al cargar el broker"
+    "loadFailed": "Error al cargar el broker",
+    "importFiles": "Archivos de Importación",
+    "noImportFiles": "Sin archivos de importación",
+    "uploadHint": "Sube reportes del bróker para importar transacciones",
+    "manageFiles": "Gestionar todos los archivos"
   },
   "assets": {
     "title": "Activos",
