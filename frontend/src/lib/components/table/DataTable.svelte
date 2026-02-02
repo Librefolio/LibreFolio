@@ -49,6 +49,10 @@
 		emptyMessage?: string;
 		isLoading?: boolean;
 		getRowDisplayName?: (row: T) => string;
+		/** Called when column filters change (for URL sync) */
+		onFiltersChange?: (filters: Record<string, FilterValue>) => void;
+		/** Initial filters to apply (from URL params) */
+		initialFilters?: Record<string, FilterValue>;
 	}
 
 	let {
@@ -73,6 +77,8 @@
 		emptyMessage,
 		isLoading = false,
 		getRowDisplayName,
+		onFiltersChange,
+		initialFilters,
 	}: Props = $props();
 
 	// ============ State ============
@@ -556,6 +562,36 @@
 		columnVisibility = loadFromStorage(getStorageKey('columnVisibility'), defaultColumnVisibility);
 		columnWidths = loadFromStorage(getStorageKey('columnWidths'), defaultColumnWidths);
 		columnOrder = loadFromStorage(getStorageKey('columnOrder'), defaultColumnOrder);
+
+		// Apply initial filters from URL (if provided)
+		if (initialFilters && Object.keys(initialFilters).length > 0) {
+			// Map URL keys to column IDs
+			const filtersByColumnId: Record<string, FilterValue> = {};
+			for (const [urlKey, value] of Object.entries(initialFilters)) {
+				// Find column by urlKey or id
+				const col = columns.find(c => (c.urlKey ?? c.id) === urlKey);
+				if (col) {
+					filtersByColumnId[col.id] = value;
+				}
+			}
+			columnFilters = filtersByColumnId;
+		}
+	});
+
+	// Notify parent when filters change (for URL sync)
+	$effect(() => {
+		// Only call if handler provided and we have some filter activity
+		if (onFiltersChange) {
+			// Build filters with URL keys
+			const filtersWithUrlKeys: Record<string, FilterValue> = {};
+			for (const [columnId, value] of Object.entries(columnFilters)) {
+				if (!value) continue;
+				const col = columns.find(c => c.id === columnId);
+				const urlKey = col?.urlKey ?? columnId;
+				filtersWithUrlKeys[urlKey] = value;
+			}
+			onFiltersChange(filtersWithUrlKeys);
+		}
 	});
 
 	// Init column order/visibility/widths when columns change

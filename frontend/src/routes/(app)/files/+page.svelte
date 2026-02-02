@@ -5,8 +5,19 @@
      * Two tabs:
      * 1. Static Resources - User uploaded files (/api/v1/uploads)
      * 2. Broker Reports - BRIM files (/api/v1/brokers/import/files)
+     *
+     * URL Deep-Linking:
+     * - ?tab=static|brim - Active tab
+     * - ?filename=... - Text filter on filename
+     * - ?broker=1,2,3 - Filter by broker IDs (BRIM only)
+     * - ?status=uploaded,parsed - Filter by status (BRIM only)
+     * - ?size=min-max - Size range filter
+     * - ?date=from,to - Date range filter
      */
     import { onMount } from 'svelte';
+    import { page } from '$app/stores';
+    import { goto } from '$app/navigation';
+    import { browser } from '$app/environment';
     import { t } from '$lib/i18n';
     import { zodiosApi } from '$lib/api';
     import FileUploader from '$lib/components/ui/FileUploader.svelte';
@@ -14,9 +25,20 @@
     import BrokerSelect from '$lib/components/brokers/BrokerSelect.svelte';
     import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid, X } from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
+    import { parseUrlFilters, buildUrlFilters, type UrlFilterConfig } from '$lib/utils/urlFilters';
     import type { UploadedFile, BrimFile, BrokerInfo, Broker } from '$lib/types';
+    import type { FilterValue } from '$lib/components/table/types';
 
     type Tab = 'static' | 'brim';
+
+    // URL filter configuration - defines which columns can be filtered via URL
+    const urlFilterColumns: UrlFilterConfig[] = [
+        { urlKey: 'filename', type: 'text' },
+        { urlKey: 'broker', type: 'enum' },
+        { urlKey: 'status', type: 'enum' },
+        { urlKey: 'size', type: 'size' },
+        { urlKey: 'date', type: 'date' },
+    ];
 
 
     // LocalStorage keys
@@ -106,6 +128,10 @@
     let brokerMap: Map<number, BrokerInfo> = new Map();
     let selectedBrokerIds: Set<number> = new Set();
 
+    // URL filter state
+    let initialFilters: Record<string, FilterValue> = {};
+    let urlInitialized = false;  // Prevent URL update on initial load
+
     // BRIM upload with broker selection
     let showBrimUploader = false;
     let showBrimUploadModal = false;  // New modal for broker assignment
@@ -118,13 +144,74 @@
     let closeUploaderCallback: (() => void) | null = null;
 
     onMount(async () => {
+        // Load localStorage preferences as fallback
         viewMode = loadViewMode();
-        activeTab = loadActiveTab();
+
+        // Parse URL params (takes priority over localStorage)
+        if (browser) {
+            const params = $page.url.searchParams;
+
+            // Tab from URL or localStorage
+            const tabParam = params.get('tab');
+            if (tabParam === 'static' || tabParam === 'brim') {
+                activeTab = tabParam;
+            } else {
+                activeTab = loadActiveTab();
+            }
+
+            // Parse column filters from URL
+            const urlFilters = parseUrlFilters(params, urlFilterColumns);
+            if (urlFilters.size > 0) {
+                initialFilters = Object.fromEntries(urlFilters);
+            }
+        } else {
+            activeTab = loadActiveTab();
+        }
+
         selectedBrokerIds = loadBrokerFilter();
         await loadGlobalSettings();
         await loadBrokers();
         await loadFiles();
+
+        // Mark URL as initialized (allow updates now)
+        urlInitialized = true;
     });
+
+    /**
+     * Handle filter changes from FilesTable - update URL
+     */
+    function handleFiltersChange(filters: Record<string, FilterValue>) {
+        if (!browser || !urlInitialized) return;
+
+        // Build URL params from filters
+        const filterMap = new Map(Object.entries(filters));
+        const params = buildUrlFilters(filterMap, urlFilterColumns);
+
+        // Always include tab in URL for copy/paste sharing
+        params.set('tab', activeTab);
+
+        // Update URL without navigation (preserves focus on input fields)
+        const newUrl = `/files?${params.toString()}`;
+        history.replaceState(history.state, '', newUrl);
+    }
+
+    /**
+     * Handle tab change - update URL and reload files
+     */
+    function setActiveTab(tab: Tab) {
+        activeTab = tab;
+        saveActiveTab(tab);
+        loadFiles();
+
+        // Update URL with new tab (keep other filters - user can clear manually)
+        if (browser && urlInitialized) {
+            const params = new URLSearchParams($page.url.searchParams);
+            params.set('tab', tab);
+
+            const newUrl = `/files?${params.toString()}`;
+            goto(newUrl, { replaceState: true, noScroll: true });
+        }
+    }
 
     async function loadGlobalSettings() {
         try {
@@ -415,12 +502,6 @@
         viewMode = mode;
         saveViewMode(mode);
     }
-
-    function switchTab(tab: Tab) {
-        activeTab = tab;
-        saveActiveTab(tab);
-        loadFiles();
-    }
 </script>
 
 <svelte:head>
@@ -477,14 +558,14 @@
         <button
             class="tab"
             class:active={activeTab === 'static'}
-            on:click={() => switchTab('static')}
+            on:click={() => setActiveTab('static')}
         >
             {$t('uploads.staticResources')}
         </button>
         <button
             class="tab"
             class:active={activeTab === 'brim'}
-            on:click={() => switchTab('brim')}
+            on:click={() => setActiveTab('brim')}
         >
             {$t('uploads.brokerReports')}
         </button>
@@ -591,6 +672,8 @@
                     files={staticFiles}
                     type="static"
                     onDelete={(id) => deleteFile(id, false)}
+                    {initialFilters}
+                    onFiltersChange={handleFiltersChange}
                 />
             {/if}
         {:else}
@@ -607,6 +690,8 @@
                     type="brim"
                     onDelete={(id) => deleteFile(id, true)}
                     brokers={brokerMap}
+                    {initialFilters}
+                    onFiltersChange={handleFiltersChange}
                 />
             {/if}
         {/if}

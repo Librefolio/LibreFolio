@@ -3,10 +3,14 @@
   
   This component wraps DataTable with file-specific column definitions
   and actions. It supports both static uploads and BRIM reports.
+
+  URL Filter Support:
+  - Pass initialFilters to set filters from URL params
+  - Use onFiltersChange to sync filter changes back to URL
 -->
 <script lang="ts">
 	import { t } from '$lib/i18n';
-	import { DataTable, type ColumnDef, type RowAction, type BulkAction } from '$lib/components/table';
+	import { DataTable, type ColumnDef, type RowAction, type BulkAction, type FilterValue } from '$lib/components/table';
 	import {
 		Download,
 		Trash2,
@@ -34,9 +38,13 @@
 		brokers?: Map<number, BrokerInfo>;
 		/** Whether to show broker column (default: true for brim) */
 		showBrokerColumn?: boolean;
+		/** Initial filters from URL params */
+		initialFilters?: Record<string, FilterValue>;
+		/** Called when filters change (for URL sync) */
+		onFiltersChange?: (filters: Record<string, FilterValue>) => void;
 	}
 
-	let { files, type, onDelete, onDeleteMultiple, brokers, showBrokerColumn = true }: Props = $props();
+	let { files, type, onDelete, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange }: Props = $props();
 
 	// Helper functions
 	function getFileName(file: FileData): string {
@@ -186,6 +194,7 @@
 		const cols: ColumnDef<FileData>[] = [
 			{
 				id: 'filename',
+				urlKey: 'filename',
 				header: () => $t('uploads.fileName'),
 				cell: (row) => ({
 					type: 'icon-text',
@@ -203,6 +212,7 @@
 			if (showBrokerColumn && brokers && brokers.size > 0) {
 				cols.push({
 					id: 'broker',
+					urlKey: 'broker',
 					header: () => $t('uploads.broker') || 'Broker',
 					cell: (row) => {
 						const name = getBrokerName(row);
@@ -227,6 +237,7 @@
 
 			cols.push({
 				id: 'status',
+				urlKey: 'status',
 				header: () => $t('uploads.status'),
 				cell: (row) => ({
 					type: 'badge',
@@ -247,6 +258,7 @@
 		cols.push(
 			{
 				id: 'size',
+				urlKey: 'size',
 				header: () => $t('uploads.fileSize'),
 				cell: (row) => ({
 					type: 'size',
@@ -258,6 +270,7 @@
 			},
 			{
 				id: 'date',
+				urlKey: 'date',
 				header: () => $t('uploads.uploadDate'),
 				cell: (row) => ({
 					type: 'date',
@@ -422,6 +435,8 @@
 	{rowActions}
 	{bulkActions}
 	emptyMessage={$t('uploads.noFiles')}
+	{initialFilters}
+	{onFiltersChange}
 />
 
 <!-- Copy feedback toast -->
