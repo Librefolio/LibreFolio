@@ -508,7 +508,7 @@
     <title>{$t('uploads.title')} - LibreFolio</title>
 </svelte:head>
 
-<div class="files-page">
+<div class="files-page" data-testid="files-page">
     <header class="page-header">
         <h1>{$t('uploads.title')}</h1>
 
@@ -538,6 +538,7 @@
             {#if activeTab === 'static'}
                 <button
                     class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}"
+                    data-testid="upload-button"
                     on:click={toggleStaticUploader}
                 >
                     {showUploader ? $t('common.close') : $t('uploads.upload')}
@@ -545,6 +546,7 @@
             {:else if activeTab === 'brim' && brokers.length > 0}
                 <button
                     class="btn {showBrimUploader ? 'btn-secondary' : 'btn-primary'}"
+                    data-testid="upload-button"
                     on:click={toggleBrimUploader}
                 >
                     {showBrimUploader ? $t('common.close') : $t('uploads.upload')}
@@ -554,10 +556,13 @@
     </header>
 
     <!-- Tabs -->
-    <div class="tabs">
+    <div class="tabs" role="tablist">
         <button
             class="tab"
             class:active={activeTab === 'static'}
+            data-testid="files-tab-static"
+            role="tab"
+            aria-selected={activeTab === 'static'}
             on:click={() => setActiveTab('static')}
         >
             {$t('uploads.staticResources')}
@@ -565,6 +570,9 @@
         <button
             class="tab"
             class:active={activeTab === 'brim'}
+            data-testid="files-tab-brim"
+            role="tab"
+            aria-selected={activeTab === 'brim'}
             on:click={() => setActiveTab('brim')}
         >
             {$t('uploads.brokerReports')}
@@ -679,7 +687,7 @@
         {:else}
             <!-- BRIM Files -->
             {#if brimFiles.length === 0}
-                <div class="empty-state">
+                <div class="empty-state" data-testid="brim-empty-state">
                     <FileText size={48} />
                     <p>{$t('uploads.noFiles')}</p>
                 </div>

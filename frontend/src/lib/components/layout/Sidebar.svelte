@@ -208,6 +208,7 @@ import {_} from '$lib/i18n';
                 class="w-full flex items-center justify-center px-4 py-2
 				bg-white/10 hover:bg-white/20 rounded-lg transition-all text-sm
 				{collapsed ? '' : 'space-x-2'}"
+                data-testid="logout-button"
                 on:click={handleLogout}
                 title={collapsed ? $_('auth.logout') : ''}
         >

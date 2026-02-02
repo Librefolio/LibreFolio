@@ -21,12 +21,12 @@ export default defineConfig({
     retries: process.env.CI ? 2 : 0,
     workers: 1,
     reporter: [
-        ['html', { outputFolder: 'playwright-report' }],
+        ['html', { outputFolder: 'playwright-report', open: 'never' }],
         ['list']
     ],
 
-    timeout: 60000,
-    expect: { timeout: 10000 },
+    timeout: 30000,  // Test timeout (30s for full test including setup)
+    expect: { timeout: 3000 },  // 3s for localhost assertions
 
     use: {
         baseURL: BASE_URL,

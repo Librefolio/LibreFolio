@@ -296,7 +296,7 @@
         });
 </script>
 
-<div class="flex gap-6 min-h-[400px]">
+<div class="flex gap-6 min-h-[400px]" data-testid="global-settings-tab">
     <!-- Left sidebar: Category navigation -->
     <div class="w-48 flex-shrink-0">
         <nav class="space-y-1">

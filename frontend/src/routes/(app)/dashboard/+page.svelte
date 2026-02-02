@@ -44,7 +44,10 @@
     };
 </script>
 
-<div class="space-y-6">
+<div class="space-y-6" data-testid="dashboard-page">
+    <!-- Page Title (sr-only but present for tests) -->
+    <h1 class="sr-only">{$_('nav.dashboard')}</h1>
+
     <!-- Welcome Banner with User Name -->
     {#if $currentUser}
         <div class="bg-gradient-to-r from-libre-green to-libre-green/80 rounded-xl shadow-sm p-6 text-white">

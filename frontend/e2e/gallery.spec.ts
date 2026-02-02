@@ -6,8 +6,12 @@
  *   ./dev.py mkdocs gallery
  * 
  * Screenshots saved to: mkdocs_src/docs/gallery/{desktop|mobile}/{lang}/...
+ *
+ * Prerequisites:
+ *   - Run `./dev.py db populate --force` before generating gallery
+ *   - This ensures brokers with icons exist for realistic screenshots
  */
-import { test, Page } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { login, setLanguage, navigateTo, openMobileMenu } from './fixtures/auth-helpers';
 import { TEST_USER, TEST_ADMIN, SUPPORTED_LANGUAGES, type Language } from './fixtures/test-users';
 import * as path from 'path';
@@ -28,6 +32,22 @@ function ensureDir(dir: string) {
 
 function getGalleryPath(viewport: 'desktop' | 'mobile', lang: Language, category: string): string {
     return path.join(GALLERY_ROOT, viewport, lang, category);
+}
+
+/**
+ * Freeze all CSS animations at 10% for consistent screenshots.
+ * This ensures the animated background is always at the same state.
+ */
+async function freezeAnimations(page: Page) {
+    await page.addStyleTag({
+        content: `
+            *, *::before, *::after {
+                animation-play-state: paused !important;
+                animation-delay: -0.1s !important;
+                transition-duration: 0s !important;
+            }
+        `
+    });
 }
 
 async function screenshot(
@@ -64,27 +84,66 @@ function getViewport(testInfo: any): 'desktop' | 'mobile' {
 
 test.describe('Gallery Screenshots', () => {
     
+    // Freeze animations for all tests in this suite
+    test.beforeEach(async ({ page }) => {
+        // Will be applied after navigation in each test
+    });
+
     test.describe('Auth Pages', () => {
         test('login page - all languages', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             await page.goto('/');
-            
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await freezeAnimations(page);
+
             await forEachLanguage(page, async (lang) => {
-                await page.waitForTimeout(300);
-                await screenshot(page, viewport, lang, 'auth', 'login');
+                await page.waitForTimeout(100);
+                await screenshot(page, viewport, lang, 'auth', '01-login');
             });
         });
 
         test('register modal - all languages', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             await page.goto('/');
-            
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await freezeAnimations(page);
+
             await forEachLanguage(page, async (lang) => {
-                await page.getByRole('button', { name: /register|sign up|registrati/i }).click();
-                await page.waitForTimeout(300);
-                await screenshot(page, viewport, lang, 'auth', 'register-modal');
-                // Close modal
-                await page.keyboard.press('Escape');
+                await expect(page.getByTestId('login-modal')).toBeVisible({ timeout: 3000 });
+                await page.getByTestId('goto-register').click();
+                await expect(page.getByTestId('register-modal')).toBeVisible({ timeout: 3000 });
+                await page.waitForTimeout(200);
+                await screenshot(page, viewport, lang, 'auth', '02-register-empty');
+
+                // Go back to login for next iteration
+                await page.getByTestId('goto-login').click();
+                await expect(page.getByTestId('login-modal')).toBeVisible({ timeout: 3000 });
+            });
+        });
+
+        test('register with password strength - all languages', async ({ page }, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await freezeAnimations(page);
+
+            await forEachLanguage(page, async (lang) => {
+                await expect(page.getByTestId('login-modal')).toBeVisible({ timeout: 3000 });
+                await page.getByTestId('goto-register').click();
+                await expect(page.getByTestId('register-modal')).toBeVisible({ timeout: 3000 });
+
+                // Fill form with sample data to show password strength
+                await page.getByTestId('register-username').fill('demo_user');
+                await page.getByTestId('register-email').fill('demo@example.com');
+                // Find password input within register modal
+                await page.getByTestId('register-modal').locator('input[type="password"]').first().fill('MyStr0ng!Pass');
+                await page.waitForTimeout(500); // Let password strength meter update
+
+                await screenshot(page, viewport, lang, 'auth', '03-register-filled');
+
+                // Go back to login for next iteration
+                await page.getByTestId('goto-login').click();
+                await expect(page.getByTestId('login-modal')).toBeVisible({ timeout: 3000 });
             });
         });
     });
@@ -100,6 +159,7 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguage(page, async (lang) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle');
+                await freezeAnimations(page);
                 await screenshot(page, viewport, lang, 'dashboard', 'main');
             });
         });
@@ -112,6 +172,7 @@ test.describe('Gallery Screenshots', () => {
             
             await forEachLanguage(page, async (lang) => {
                 await page.goto('/dashboard');
+                await freezeAnimations(page);
                 await openMobileMenu(page);
                 await screenshot(page, 'mobile', lang, 'dashboard', 'menu-open');
             });
@@ -125,6 +186,7 @@ test.describe('Gallery Screenshots', () => {
             
             await forEachLanguage(page, async (lang) => {
                 await navigateTo(page, '/settings');
+                await freezeAnimations(page);
                 await screenshot(page, viewport, lang, 'settings', 'user-preferences');
             });
         });
@@ -135,7 +197,8 @@ test.describe('Gallery Screenshots', () => {
             
             await forEachLanguage(page, async (lang) => {
                 await navigateTo(page, '/settings');
-                await page.getByRole('tab', { name: /global/i }).click();
+                await freezeAnimations(page);
+                await page.getByTestId('settings-tab-admin').click();
                 await page.waitForTimeout(300);
                 await screenshot(page, viewport, lang, 'settings', 'global-settings');
             });
@@ -153,6 +216,7 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguage(page, async (lang) => {
                 await page.goto('/files?tab=static');
                 await page.waitForLoadState('networkidle');
+                await freezeAnimations(page);
                 await screenshot(page, viewport, lang, 'files', 'static-tab');
             });
         });
@@ -163,6 +227,7 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguage(page, async (lang) => {
                 await page.goto('/files?tab=brim');
                 await page.waitForLoadState('networkidle');
+                await freezeAnimations(page);
                 await screenshot(page, viewport, lang, 'files', 'brim-tab');
             });
         });
@@ -178,6 +243,9 @@ test.describe('Gallery Screenshots', () => {
             
             await forEachLanguage(page, async (lang) => {
                 await navigateTo(page, '/brokers');
+                await freezeAnimations(page);
+                // Wait for broker icons to load (favicon fetching)
+                await page.waitForTimeout(2000);
                 await screenshot(page, viewport, lang, 'brokers', 'list');
             });
         });
@@ -187,10 +255,13 @@ test.describe('Gallery Screenshots', () => {
             
             await forEachLanguage(page, async (lang) => {
                 await navigateTo(page, '/brokers');
-                const card = page.getByTestId('broker-card').first();
+                await freezeAnimations(page);
+                const card = page.locator('[data-testid^="broker-card-"]').first();
                 if (await card.isVisible()) {
                     await card.click();
                     await page.waitForLoadState('networkidle');
+                    // Wait for broker icon to load
+                    await page.waitForTimeout(1000);
                     await screenshot(page, viewport, lang, 'brokers', 'detail');
                 }
             });
@@ -201,7 +272,8 @@ test.describe('Gallery Screenshots', () => {
             
             await forEachLanguage(page, async (lang) => {
                 await navigateTo(page, '/brokers');
-                const card = page.getByTestId('broker-card').first();
+                await freezeAnimations(page);
+                const card = page.locator('[data-testid^="broker-card-"]').first();
                 if (await card.isVisible()) {
                     await card.click();
                     const btn = page.getByRole('button', { name: /import/i });

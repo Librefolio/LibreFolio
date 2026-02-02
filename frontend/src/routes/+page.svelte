@@ -66,11 +66,11 @@
 
 {#if checkingAuth}
     <!-- Loading while checking authentication -->
-    <div class="min-h-screen flex items-center justify-center">
+    <div class="min-h-screen flex items-center justify-center" data-testid="auth-loading">
         <div class="text-libre-green text-xl">Loading...</div>
     </div>
 {:else}
-    <div class="min-h-screen flex items-center justify-center p-4">
+    <div class="min-h-screen flex items-center justify-center p-4" data-testid="login-page">
         <!-- Language & Theme Selector (top right) -->
         <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
             <LanguageSelector variant="dropdown"/>

@@ -426,6 +426,7 @@
 	let bulkActions = $derived(getBulkActions());
 </script>
 
+<div data-testid="files-table-{type}">
 <DataTable
 	data={files}
 	{columns}
@@ -438,6 +439,7 @@
 	{initialFilters}
 	{onFiltersChange}
 />
+</div>
 
 <!-- Copy feedback toast -->
 {#if copiedFileId}

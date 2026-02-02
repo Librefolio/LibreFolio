@@ -188,7 +188,7 @@
     }
 </script>
 
-<div class="space-y-6">
+<div class="space-y-6" data-testid="profile-tab">
     <!-- Header with Lock/Unlock + Save/Undo All -->
     <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-slate-700">
         <div>
@@ -300,6 +300,7 @@
                     type="text"
                     bind:value={editedUsername}
                     disabled={saving || isLocked}
+                    data-testid="profile-username"
                     class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
                            text-gray-900 dark:text-gray-100 text-sm min-w-[200px] text-right
                            focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
@@ -351,6 +352,7 @@
                     type="email"
                     bind:value={editedEmail}
                     disabled={saving || isLocked}
+                    data-testid="profile-email"
                     class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
                            text-gray-900 dark:text-gray-100 text-sm min-w-[200px] text-right
                            focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
@@ -392,6 +394,7 @@
                 </div>
                 <button
                     on:click={() => showPasswordModal = true}
+                    data-testid="change-password-button"
                     class="px-4 py-2 bg-libre-green text-white text-sm rounded-lg hover:bg-libre-green/90 transition-colors"
                 >
                     {$_('settings.changePassword')}
@@ -406,6 +409,7 @@
                 </div>
                 <button
                     on:click={() => showDeleteModal = true}
+                    data-testid="delete-account-button"
                     class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
                 >
                     {$_('settings.deleteAccount')}

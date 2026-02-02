@@ -22,10 +22,11 @@
 
 {#if variant === 'dropdown'}
     <!-- Dropdown style (for header/top-right) -->
-    <div class="relative">
+    <div class="relative" data-testid="language-selector">
         <button
                 on:click={() => showMenu = !showMenu}
                 class="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all"
+                data-testid="language-selector-button"
         >
             <span class="text-xl">{$currentLanguageFlag}</span>
             <ChevronDown size={16} class="text-gray-600 dark:text-gray-300"/>

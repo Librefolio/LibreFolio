@@ -63,6 +63,7 @@
     tabindex="0"
     on:click={handleCardClick}
     on:keydown={(e) => e.key === 'Enter' && handleCardClick()}
+    data-testid="broker-card-{broker.id}"
     class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden cursor-pointer
            transition-all duration-200 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
            focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"

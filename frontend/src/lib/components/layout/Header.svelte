@@ -18,6 +18,7 @@
         <button
                 aria-label="Toggle menu"
                 class="lg:hidden p-2 rounded-lg transition-colors"
+                data-testid="mobile-menu-toggle"
                 on:click={toggleSidebar}
         >
             <Menu class="text-libre-dark dark:text-gray-200" size={24}/>
