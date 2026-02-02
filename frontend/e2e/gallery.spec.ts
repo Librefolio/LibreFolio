@@ -170,12 +170,35 @@ test.describe('Gallery Screenshots', () => {
                 return;
             }
             
-            await forEachLanguage(page, async (lang) => {
+            // For mobile menu, we need to handle language change differently
+            // since the menu overlay intercepts clicks
+            for (const lang of SUPPORTED_LANGUAGES) {
+                // Navigate to dashboard
                 await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle');
                 await freezeAnimations(page);
+
+                // Ensure sidebar is closed first (in case it auto-opened)
+                const overlay = page.locator('[aria-label="Close sidebar"]');
+                if (await overlay.isVisible().catch(() => false)) {
+                    await overlay.click();
+                    await page.waitForTimeout(200);
+                }
+
+                // Now change language with sidebar closed
+                await setLanguage(page, lang);
+
+                // Open the menu and take screenshot
                 await openMobileMenu(page);
+                await page.waitForTimeout(300); // Let menu animation complete
                 await screenshot(page, 'mobile', lang, 'dashboard', 'menu-open');
-            });
+
+                // Close menu for next iteration
+                if (await overlay.isVisible().catch(() => false)) {
+                    await overlay.click();
+                    await page.waitForTimeout(200);
+                }
+            }
         });
     });
 

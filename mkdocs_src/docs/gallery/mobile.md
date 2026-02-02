@@ -4,10 +4,12 @@ Experience LibreFolio's responsive mobile interface. Use the language selector b
 
 <div class="language-selector" id="lang-selector">
     <span class="lang-label">Language:</span>
-    <button class="lang-btn active" data-lang="en">🇬🇧 English</button>
-    <button class="lang-btn" data-lang="it">🇮🇹 Italiano</button>
-    <button class="lang-btn" data-lang="fr">🇫🇷 Français</button>
-    <button class="lang-btn" data-lang="es">🇪🇸 Español</button>
+    <div class="lang-grid">
+        <button class="lang-btn active" data-lang="en">🇬🇧 English</button>
+        <button class="lang-btn" data-lang="it">🇮🇹 Italiano</button>
+        <button class="lang-btn" data-lang="fr">🇫🇷 Français</button>
+        <button class="lang-btn" data-lang="es">🇪🇸 Español</button>
+    </div>
 </div>
 
 !!! info "Mobile Optimized"
@@ -118,9 +120,8 @@ document.addEventListener('DOMContentLoaded', function() {
 <style>
 .language-selector {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 0.75rem;
     padding: 1rem;
     background: var(--md-code-bg-color);
     border-radius: 8px;
@@ -129,17 +130,30 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .lang-label {
     font-weight: bold;
-    margin-right: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.lang-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+}
+
+@media (min-width: 600px) {
+    .lang-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
 }
 
 .lang-btn {
-    padding: 0.5rem 1rem;
+    padding: 0.6rem 1rem;
     border: 2px solid var(--md-primary-fg-color);
     background: transparent;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    text-align: center;
 }
 
 .lang-btn:hover {

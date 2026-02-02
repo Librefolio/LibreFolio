@@ -394,7 +394,8 @@
     "categoryAppearance": "Aspetto",
     "defaultCurrency": "Valuta Predefinita",
     "defaultCurrencyHint": "Valuta usata per nuove transazioni e calcoli",
-    "themeHint": "Scegli il tema preferito"
+    "themeHint": "Scegli il tema preferito",
+    "category": "Categoria"
   },
   "uploads": {
     "dropOrClick": "Trascina un file qui o clicca per sfogliare",

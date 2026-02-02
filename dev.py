@@ -443,8 +443,19 @@ def cmd_mkdocs_gallery(args):
     print(f"{Colors.BLUE}This runs gallery.spec.ts for both desktop and mobile viewports{Colors.NC}")
     print(f"{Colors.BLUE}Screenshots will be saved to mkdocs_src/docs/gallery/{Colors.NC}\n")
 
+    # Populate test database with realistic data
+    print(f"\n{Colors.CYAN}🗄️  Populating test database with sample data...{Colors.NC}")
+    result = subprocess.run(
+        ["python", "dev.py", "test", "db", "populate", "--force"],
+        cwd=PROJECT_ROOT
+    )
+    if result.returncode != 0:
+        print_error("Failed to populate test database")
+        return 1
+    print_success("Test database populated")
+
     # Ensure test users exist
-    print(f"{Colors.YELLOW}Ensuring E2E test users exist...{Colors.NC}")
+    print(f"\n{Colors.YELLOW}Ensuring E2E test users exist...{Colors.NC}")
     from scripts.test_runner import _ensure_test_users
     if not _ensure_test_users():
         print_error("Failed to create test users")

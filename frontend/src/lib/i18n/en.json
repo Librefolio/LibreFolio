@@ -394,7 +394,8 @@
     "categoryAppearance": "Appearance",
     "defaultCurrency": "Default Currency",
     "defaultCurrencyHint": "Currency used by default for new transactions and calculations",
-    "themeHint": "Choose your preferred color scheme"
+    "themeHint": "Choose your preferred color scheme",
+    "category": "Category"
   },
   "uploads": {
     "dropOrClick": "Drop file here or click to browse",
