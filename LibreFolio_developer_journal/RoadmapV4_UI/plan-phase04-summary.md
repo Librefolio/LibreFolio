@@ -111,28 +111,24 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | `plan-table-improvements.md`            | ✅ Miglioramenti DataTable             |
 | `plan-phase4Consolidation.prompt.md`    | ✅ Consolidamento fase 4               |
 | `GUIDA-DARK-MODE.md`                    | ✅ Guida variabili dark mode           |
+| `plan-frontendTesting.md`               | ✅ Infrastruttura test E2E Playwright  |
+| `plan-i18n-cli-improvements.md`         | ✅ CLI per gestione traduzioni         |
+| `plan-files-ux-refactor.md`             | ✅ Refactor UX pagina Files            |
 
 ### Plans DA IMPLEMENTARE (in `RoadmapV4_UI/`)
 
-| File                                 | Descrizione                                        | Priorità    |
-|--------------------------------------|----------------------------------------------------|-------------|
-| `plan-image-crop.md`                 | Componente crop immagini con cropperjs             | P2          |
-| `plan-data-separation.md`            | Separazione cartelle dati prod/test                | P2          |
-| `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend                      | Riferimento |
-| `plan-frontendTesting.prompt.md`     | Infrastruttura test frontend (Vitest + Playwright) | P1          |
+| File                                 | Descrizione                            | Priorità    |
+|--------------------------------------|----------------------------------------|-------------|
+| `plan-e2e-test-remediation.md`       | Remediation test E2E per features      | P1          |
+| `plan-image-crop.md`                 | Componente crop immagini con cropperjs | P2          |
+| `plan-data-separation.md`            | Separazione cartelle dati prod/test    | P2          |
+| `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend          | Riferimento |
 
 ### Plans DA CREARE
 
 | Piano                              | Descrizione                          | Priorità |
 |------------------------------------|--------------------------------------|----------|
 | `plan-gdpr-permissions-rethink.md` | Ripensamento permessi GDPR-compliant | P3       |
-
-### Plans COMPLETATI (spostati in `phases/phase-04-subplan/`)
-
-| File                            | Descrizione                                                   | Priorità | Status |
-|---------------------------------|---------------------------------------------------------------|----------|--------|
-| `plan-i18n-cli-improvements.md` | Script CLI per gestione traduzioni (add/remove/update/search) | P1       | ✅      |
-| `plan-files-ux-refactor.md`     | Refactor UX pagina Files + URL filters + modale broker        | P1       | ✅      |
 
 ---
 
@@ -176,15 +172,27 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - Link "Gestisci tutti i file" → `/files?tab=brim&broker={id}`
 - Sostituito tutte le chiamate `fetch()` dirette con client Zodios
 
-### Step 4: Frontend Testing Infrastructure (3-4h) 📋
+### Step 4: Frontend Testing Infrastructure ✅ COMPLETATO
 
-**Riferimento**: `plan-frontendTesting.prompt.md`
-**Obiettivo**: Setup Vitest + Playwright per test automatici
+**Riferimento**: `phases/phase-04-subplan/plan-frontendTesting.md`
+**Obiettivo**: Setup Playwright per test E2E automatici
 
-- Vitest per unit test componenti
-- Playwright per E2E test (login, CRUD broker, settings)
-- Integrazione con `./dev.py test front`
-- Test critici: auth flow, broker CRUD, settings save
+- Playwright installato e configurato
+- Test specs: auth, settings, files, brokers, multi-user, gallery
+- Integrazione con `./dev.py test front [action] [test_names] [--ui|--headed|--debug]`
+- Comando `./dev.py mkdocs gallery` per screenshot documentazione
+- TEST_NAMES filtering con `--grep` di Playwright
+
+### Step 4.1: E2E Test Remediation 📋 DA FARE
+
+**Riferimento**: `plan-e2e-test-remediation.md`
+**Obiettivo**: Aggiornare test E2E per coprire funzionalità implementate
+
+- Aggiungere `data-testid` ai componenti frontend
+- Riscrivere test per selettori realistici
+- Ordine: auth → settings → files → brokers → multi-user
+- Far passare tutti i test E2E
+- Stima: ~7h
 
 ### Step 5: Image Crop Component (2h) 📋
 
@@ -226,16 +234,17 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 Quando si lavora su questa fase, allegare:
 
-| Scenario         | Files da allegare                                          |
-|------------------|------------------------------------------------------------|
-| Bug fix generici | `plan-phase04-summary.md`                                  |
-| BRIM/Files       | `+ phase-04-subplan/plan-brim-multiuser-implementation.md` |
-| Tipi/API         | `+ phase-04-subplan/plan-types-library.md`                 |
-| Test frontend    | `+ plan-frontendTesting.prompt.md`                         |
-| Image upload     | `+ plan-image-crop.md`                                     |
-| Separazione dati | `+ plan-data-separation.md`                                |
-| i18n CLI         | `+ plan-i18n-cli-improvements.md`                          |
-| Files UX/URL     | `+ plan-files-ux-refactor.md`                              |
+| Scenario         | Files da allegare                                                  |
+|------------------|--------------------------------------------------------------------|
+| Bug fix generici | `plan-phase04-summary.md`                                          |
+| BRIM/Files       | `+ phases/phase-04-subplan/plan-brim-multiuser-implementation.md`  |
+| Tipi/API         | `+ phases/phase-04-subplan/plan-types-library.md`                  |
+| Test frontend    | `+ phases/phase-04-subplan/plan-frontendTesting.md`                |
+| Test remediation | `+ plan-e2e-test-remediation.md`                                   |
+| Image upload     | `+ plan-image-crop.md`                                             |
+| Separazione dati | `+ plan-data-separation.md`                                        |
+| i18n CLI         | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`          |
+| Files UX/URL     | `+ phases/phase-04-subplan/plan-files-ux-refactor.md`              |
 
 ---
 

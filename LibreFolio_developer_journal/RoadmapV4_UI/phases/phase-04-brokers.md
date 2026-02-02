@@ -239,7 +239,7 @@ Sono stati creati diversi piani per affrontare problematiche di standardizzazion
 
 #### 1. Settings Unification Plan
 
-**File**: [`../plan-settings-unification.md`](../plan-settings-unification.md)
+**File**: [`phase-04-subplan/plan-settings-unification.md`](phase-04-subplan/plan-settings-unification.md)
 
 **Obiettivo**: Unificare PreferencesTab, GlobalSettingsTab e creare Profile Page con componenti riutilizzabili.
 

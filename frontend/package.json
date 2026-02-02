@@ -15,14 +15,21 @@
     "i18n:audit": "python scripts/i18n-audit.py",
     "i18n:audit:xlsx": "python scripts/i18n-audit.py --format xlsx",
     "i18n:audit:md": "python scripts/i18n-audit.py --format md",
-    "i18n:audit:both": "python scripts/i18n-audit.py --format both"
+    "i18n:audit:both": "python scripts/i18n-audit.py --format both",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "PWDEBUG=1 playwright test --headed",
+    "test:report": "playwright show-report"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.1",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.48.5",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tailwindcss/postcss": "^4.1.17",
     "autoprefixer": "^10.4.22",
+    "dotenv": "^17.2.3",
     "openapi-zod-client": "^1.18.0",
     "postcss": "^8.5.6",
     "svelte": "^5.43.8",

@@ -1,9 +1,10 @@
 # Plan: Frontend Testing Infrastructure (v2)
 
 **Data creazione**: Phase 1 (aggiornato 2 Febbraio 2026)  
-**Status**: 📋 DA IMPLEMENTARE  
+**Status**: ✅ COMPLETATO  
 **Priorità**: P2  
 **Stima**: 6-8h setup + ongoing test writing
+**Completato**: 2 Febbraio 2026
 
 ---
 
@@ -128,13 +129,14 @@ BACKEND_CORS_ORIGINS=["http://localhost:3000", "http://localhost:5173"]
 ```json
 {
   "devDependencies": {
-    "@playwright/test": "^1.50.0"
+    "@playwright/test": "^1.50.0",
+    "dotenv": "^16.4.0"
   },
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:debug": "playwright test --debug --headed",
     "test:report": "playwright show-report"
   }
 }
@@ -853,6 +855,7 @@ def _run_playwright(
     spec_file: str = None, 
     ui: bool = False, 
     headed: bool = False,
+    debug: bool = False,
     project: str = "desktop"
 ) -> bool:
     """Run Playwright tests with given options."""
@@ -860,6 +863,8 @@ def _run_playwright(
     
     if ui:
         cmd.append("test:e2e:ui")
+    elif debug:
+        cmd.append("test:e2e:debug")  # Includes --headed
     elif headed:
         cmd.append("test:e2e:headed")
     else:
@@ -878,39 +883,39 @@ def _run_playwright(
     return run_command(cmd, f"Playwright {spec_file or 'all'}", cwd="frontend")
 
 
-def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False) -> bool:
+def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
     """Run auth E2E tests."""
     print_section("Frontend Auth Tests")
     if not _ensure_test_users():
         return False
-    return _run_playwright("auth.spec.ts", ui=ui, headed=headed)
+    return _run_playwright("auth.spec.ts", ui=ui, headed=headed, debug=debug)
 
 
-def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False) -> bool:
+def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
     """Run settings E2E tests."""
     print_section("Frontend Settings Tests")
-    return _run_playwright("settings.spec.ts", ui=ui, headed=headed)
+    return _run_playwright("settings.spec.ts", ui=ui, headed=headed, debug=debug)
 
 
-def front_files(verbose: bool = False, ui: bool = False, headed: bool = False) -> bool:
+def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
     """Run files E2E tests."""
     print_section("Frontend Files Tests")
-    return _run_playwright("files.spec.ts", ui=ui, headed=headed)
+    return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug)
 
 
-def front_brokers(verbose: bool = False, ui: bool = False, headed: bool = False) -> bool:
+def front_brokers(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
     """Run brokers E2E tests."""
     print_section("Frontend Brokers Tests")
-    return _run_playwright("brokers.spec.ts", ui=ui, headed=headed)
+    return _run_playwright("brokers.spec.ts", ui=ui, headed=headed, debug=debug)
 
 
-def front_multi_user(verbose: bool = False, ui: bool = False, headed: bool = False) -> bool:
+def front_multi_user(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
     """Run multi-user isolation tests."""
     print_section("Frontend Multi-User Tests")
-    return _run_playwright("multi-user.spec.ts", ui=ui, headed=headed)
+    return _run_playwright("multi-user.spec.ts", ui=ui, headed=headed, debug=debug)
 
 
-def front_all(verbose: bool = False, ui: bool = False, headed: bool = False) -> bool:
+def front_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
     """Run all frontend tests (excludes gallery)."""
     if not _ensure_test_users():
         return False
@@ -1055,12 +1060,15 @@ if args.clean_db:
 ./dev.py test front brokers
 ./dev.py test front multi-user
 
-# With Playwright UI (interactive debugging)
+# With Playwright UI (interactive test explorer)
 ./dev.py test front all --ui
 ./dev.py test front auth --ui
 
-# With visible browser (headless=false)
+# With visible browser (see what happens)
 ./dev.py test front auth --headed
+
+# With step-by-step debugging (pause, inspect DOM, console)
+./dev.py test front auth --debug
 
 # With clean database
 ./dev.py test front all --clean-db
@@ -1100,42 +1108,45 @@ if args.clean_db:
 ## 📋 Checklist Implementazione
 
 ### Setup
-- [ ] Aggiornare `.env` e `.env.example` con tutte le variabili da config.py
-- [ ] `cd frontend && npm install -D @playwright/test dotenv`
-- [ ] `npx playwright install chromium`
-- [ ] Creare `frontend/e2e/` directory structure
+- [x] Aggiornare `.env` e `.env.example` con tutte le variabili da config.py
+- [x] `cd frontend && npm install -D @playwright/test dotenv`
+- [x] `npx playwright install chromium`
+- [x] Creare `frontend/e2e/` directory structure
 
 ### Playwright Config
-- [ ] Creare `frontend/playwright.config.ts`
-- [ ] Aggiungere scripts a `frontend/package.json`
+- [x] Creare `frontend/playwright.config.ts`
+- [x] Aggiungere scripts a `frontend/package.json`
+- [x] Fix ES modules (`import.meta.url` invece di `__dirname`)
+- [x] Creare `tsconfig.e2e.json` per TypeScript E2E
 
 ### Test Fixtures
-- [ ] `e2e/fixtures/test-users.ts`
-- [ ] `e2e/fixtures/auth-helpers.ts`
-- [ ] `e2e/fixtures/db-helpers.ts`
+- [x] `e2e/fixtures/test-users.ts`
+- [x] `e2e/fixtures/auth-helpers.ts`
+- [x] `e2e/fixtures/db-helpers.ts`
 
 ### Test Specs
-- [ ] `e2e/auth.spec.ts`
-- [ ] `e2e/settings.spec.ts`
-- [ ] `e2e/files.spec.ts`
-- [ ] `e2e/brokers.spec.ts`
-- [ ] `e2e/multi-user.spec.ts`
-- [ ] `e2e/gallery.spec.ts`
+- [x] `e2e/auth.spec.ts`
+- [x] `e2e/settings.spec.ts`
+- [x] `e2e/files.spec.ts`
+- [x] `e2e/brokers.spec.ts`
+- [x] `e2e/multi-user.spec.ts`
+- [x] `e2e/gallery.spec.ts`
 
 ### Integration
-- [ ] Aggiungere categoria "front" a `test_runner.py`
-- [ ] Implementare `_ensure_test_users()`
-- [ ] Aggiungere `--ui`, `--headed`, `--clean-db` flags
-- [ ] Aggiungere frontend a `run_all_tests()`
-- [ ] Estendere `./dev.py mkdocs` con `gallery` e `--gallery` flag
+- [x] Aggiungere categoria "front" a `test_runner.py`
+- [x] Implementare `_ensure_test_users()` (usa `create-superuser`)
+- [x] Aggiungere `--ui`, `--headed`, `--debug` flags
+- [x] Fix `--debug` con `PWDEBUG=1` per step-by-step
+- [ ] Aggiungere frontend a `run_all_tests()` (opzionale - front tests sono lenti)
+- [x] Estendere `./dev.py mkdocs` con `gallery` command
 
 ### Gallery
-- [ ] Creare `mkdocs_src/docs/gallery/` structure
-- [ ] Aggiungere `data-testid` ai componenti necessari
+- [x] Creare `mkdocs_src/docs/gallery/` structure
+- [ ] Aggiungere `data-testid` ai componenti (da fare in Phase 4+)
 
 ### Documentation
-- [ ] Aggiornare dev.py --help
-- [ ] Documentare in README
+- [x] dev.py --help aggiornato (automaticamente dal parser)
+- [x] Documentare in frontend/README.md
 
 ---
 
