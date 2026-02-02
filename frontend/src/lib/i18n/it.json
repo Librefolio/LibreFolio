@@ -36,7 +36,9 @@
     "selectAll": "Seleziona Tutti",
     "clearAll": "Deseleziona Tutti",
     "multipleFiles": "File multipli permessi",
-    "remove": "Rimuovi"
+    "remove": "Rimuovi",
+    "discard": "Scarta",
+    "refresh": "Aggiorna"
   },
   "table": {
     "rowsPerPage": "Righe per pagina",
@@ -279,7 +281,7 @@
     "discardChangesWarning": "Hai modifiche non salvate. Vuoi annullarle?",
     "continueEditing": "Continua Modifica",
     "discardAndLock": "Annulla e Blocca",
-    "savedSuccessfully": "Salvato con successo",
+    "savedSuccessfully": "salvato con successo",
     "accountCreated": "Account Creato",
     "profileUpdated": "Profilo aggiornato con successo",
     "updateFailed": "Errore nell'aggiornamento del profilo",
@@ -344,7 +346,6 @@
     "resetAllToDefault": "Ripristina Tutto",
     "undo": "Annulla",
     "resetToDefault": "Ripristina Default",
-    "savedSuccessfully": "salvato con successo",
     "adminRequired": "Accesso admin richiesto per modificare le impostazioni globali",
     "saveFailed": "Errore nel salvataggio",
     "clickToEdit": "Clicca per sbloccare e modificare",
@@ -436,6 +437,9 @@
     "assignBrokers": "Assegna Broker",
     "file": "file",
     "filesSelected": "{count} file selezionati",
-    "confirmCloseWithPendingFiles": "Hai file selezionati per il caricamento. Sei sicuro di voler annullare?"
+    "confirmCloseWithPendingFiles": "Hai file selezionati per il caricamento. Sei sicuro di voler annullare?",
+    "pendingUploads": "Caricamenti in sospeso",
+    "pendingUploadsMessage": "Hai file selezionati per il caricamento. Vuoi scartarli?",
+    "filesToUpload": "File da caricare"
   }
 }

@@ -599,14 +599,326 @@ Examples:
     return run_from_args(args)
 
 
+# =============================================================================
+# i18n CLI Management Functions (add, remove, update, search)
+# =============================================================================
+
+def get_nested_key(data: dict, key: str) -> str | None:
+    """Get value from nested dict using dot notation key."""
+    parts = key.split(".")
+    current = data
+    for part in parts:
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            return None
+    return current if isinstance(current, str) else None
+
+
+def set_nested_key(data: dict, key: str, value: str) -> bool:
+    """Set value in nested dict using dot notation key. Creates parents if needed."""
+    parts = key.split(".")
+    current = data
+    for part in parts[:-1]:
+        if part not in current:
+            current[part] = {}
+        elif not isinstance(current[part], dict):
+            return False  # Cannot create nested key, parent is not a dict
+        current = current[part]
+    current[parts[-1]] = value
+    return True
+
+
+def delete_nested_key(data: dict, key: str) -> bool:
+    """Delete key from nested dict using dot notation. Cleans up empty parents."""
+    parts = key.split(".")
+
+    # Navigate to parent
+    current = data
+    parents = [(data, None)]  # Stack of (dict, key_in_parent)
+
+    for part in parts[:-1]:
+        if isinstance(current, dict) and part in current:
+            parents.append((current, part))
+            current = current[part]
+        else:
+            return False
+
+    # Delete the final key
+    if parts[-1] in current:
+        del current[parts[-1]]
+
+        # Clean up empty parent dictionaries
+        for parent_dict, parent_key in reversed(parents[1:]):
+            if parent_key and isinstance(parent_dict[parent_key], dict) and len(parent_dict[parent_key]) == 0:
+                del parent_dict[parent_key]
+
+        return True
+    return False
+
+
+def load_lang_file(lang: str) -> dict:
+    """Load translation file for a language."""
+    filepath = I18N_DIR / f"{lang}.json"
+    with open(filepath, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_lang_file(lang: str, data: dict) -> None:
+    """Save translation file for a language with consistent formatting."""
+    filepath = I18N_DIR / f"{lang}.json"
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")  # Trailing newline
+
+
+def cmd_add(args) -> int:
+    """Add a new translation key to all languages."""
+    key = args.key
+    translations = {
+        "en": args.en,
+        "it": args.it,
+        "fr": args.fr,
+        "es": args.es,
+    }
+
+    # Check if key already exists in any language
+    existing_values = {}
+    for lang in LANGUAGES:
+        data = load_lang_file(lang)
+        value = get_nested_key(data, key)
+        if value is not None:
+            existing_values[lang] = value
+
+    if existing_values:
+        print(f"\n❌ Key '{key}' already exists:\n")
+        # Build table row
+        row = [key]
+        for lang in LANGUAGES:
+            if lang in existing_values:
+                row.append(f"✗ {existing_values[lang]}")
+            else:
+                row.append("○ (missing)")
+
+        headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
+        print(tabulate([row], headers=headers, tablefmt="simple"))
+        print(f"\n💡 Use 'i18n update' to modify existing translations")
+        return 1
+
+    # Add to all languages
+    success_row = [key]
+    for lang in LANGUAGES:
+        data = load_lang_file(lang)
+        if set_nested_key(data, key, translations[lang]):
+            save_lang_file(lang, data)
+            success_row.append(f"✓ {translations[lang]}")
+        else:
+            print(f"❌ Failed to add '{key}' to {lang}.json (parent path conflict)")
+            return 1
+
+    print(f"\n✅ Successfully added key '{key}':\n")
+    headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
+    print(tabulate([success_row], headers=headers, tablefmt="simple"))
+    return 0
+
+
+def cmd_remove(args) -> int:
+    """Remove a translation key from all languages."""
+    key = args.key
+
+    # Check current values
+    current_values = {}
+    for lang in LANGUAGES:
+        data = load_lang_file(lang)
+        value = get_nested_key(data, key)
+        if value is not None:
+            current_values[lang] = value
+
+    if not current_values:
+        print(f"\n⚠️  Key '{key}' was not found in any language")
+        return 0
+
+    if not args.force:
+        # Show current values as table before confirming
+        print(f"\n🔍 Current values for '{key}':\n")
+        row = [key]
+        for lang in LANGUAGES:
+            if lang in current_values:
+                row.append(current_values[lang])
+            else:
+                row.append("—")
+        headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
+        print(tabulate([row], headers=headers, tablefmt="simple"))
+        print()
+
+        try:
+            confirm = input(f"Remove '{key}' from all languages? [y/N]: ")
+        except EOFError:
+            print("\nAborted.")
+            return 0
+        if confirm.lower() != 'y':
+            print("Aborted.")
+            return 0
+
+    # Remove from all languages
+    result_row = [key]
+    removed_count = 0
+    for lang in LANGUAGES:
+        data = load_lang_file(lang)
+        if delete_nested_key(data, key):
+            save_lang_file(lang, data)
+            result_row.append("✓ removed")
+            removed_count += 1
+        else:
+            result_row.append("— (not found)")
+
+    print(f"\n✅ Removed key '{key}':\n")
+    headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
+    print(tabulate([result_row], headers=headers, tablefmt="simple"))
+    return 0
+
+
+def cmd_update(args) -> int:
+    """Update a specific translation in one or more languages."""
+    key = args.key
+    updates = {}
+
+    if args.en: updates["en"] = args.en
+    if args.it: updates["it"] = args.it
+    if args.fr: updates["fr"] = args.fr
+    if args.es: updates["es"] = args.es
+
+    if not updates:
+        print("❌ At least one language must be specified (--en, --it, --fr, --es)")
+        return 1
+
+    # Get current values for all languages
+    current_values = {}
+    for lang in LANGUAGES:
+        data = load_lang_file(lang)
+        value = get_nested_key(data, key)
+        if value is not None:
+            current_values[lang] = value
+
+    if not current_values:
+        print(f"❌ Key '{key}' does not exist. Use 'i18n add' to create it first.")
+        return 1
+
+    # Update specified languages and build result table
+    result_row = [key]
+    for lang in LANGUAGES:
+        old_value = current_values.get(lang)
+        if lang in updates:
+            new_value = updates[lang]
+            data = load_lang_file(lang)
+            if set_nested_key(data, key, new_value):
+                save_lang_file(lang, data)
+                if old_value:
+                    result_row.append(f"✓ {old_value} → {new_value}")
+                else:
+                    result_row.append(f"✓ (new) {new_value}")
+            else:
+                print(f"❌ Failed to update {lang}.json")
+                return 1
+        else:
+            # Not updated, show current value
+            if old_value:
+                result_row.append(f"— {old_value}")
+            else:
+                result_row.append("— (missing)")
+
+    print(f"\n✅ Updated key '{key}':\n")
+    headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
+    print(tabulate([result_row], headers=headers, tablefmt="simple", maxcolwidths=[40, 30, 30, 30, 30]))
+    return 0
+    return 0
+
+
+def cmd_search(args) -> int:
+    """Search for keys/values in translations."""
+    query = args.query.lower()
+    results = []
+
+    def search_recursive(data: dict, prefix: str, lang: str):
+        for key, value in data.items():
+            full_key = f"{prefix}.{key}" if prefix else key
+            if isinstance(value, dict):
+                search_recursive(value, full_key, lang)
+            elif isinstance(value, str):
+                if query in full_key.lower() or query in value.lower():
+                    results.append((full_key, lang, value))
+
+    for lang in LANGUAGES:
+        data = load_lang_file(lang)
+        search_recursive(data, "", lang)
+
+    if not results:
+        print(f"🔍 No results found for '{args.query}'")
+        return 0
+
+    # Group by key
+    by_key = {}
+    for key, lang, value in results:
+        if key not in by_key:
+            by_key[key] = {}
+        by_key[key][lang] = value
+
+    # Build table rows
+    rows = []
+    for key in sorted(by_key.keys()):
+        row = [key]
+        for lang in LANGUAGES:
+            if lang in by_key[key]:
+                row.append(by_key[key][lang])
+            else:
+                row.append("—")
+        rows.append(row)
+
+    print(f"\n🔍 Found {len(by_key)} key(s) matching '{args.query}':\n")
+    headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
+    print(tabulate(rows, headers=headers, tablefmt="simple", maxcolwidths=[40, 30, 30, 30, 30]))
+
+    return 0
+
+
 def register_subparser(subparsers) -> None:
     """Register as subparser for dev.py integration."""
     p = subparsers.add_parser("i18n", help="📦 Translation commands")
     i18n_sub = p.add_subparsers(dest="i18n_cmd", metavar="action")
 
+    # Audit command
     audit_p = i18n_sub.add_parser("audit", help="Audit translations for missing keys")
     add_arguments(audit_p)
     audit_p.set_defaults(func=run_from_args)
+
+    # Add command
+    add_p = i18n_sub.add_parser("add", help="Add a new translation key to all languages")
+    add_p.add_argument("key", help="Translation key (e.g., 'common.save')")
+    add_p.add_argument("--en", required=True, help="English translation")
+    add_p.add_argument("--it", required=True, help="Italian translation")
+    add_p.add_argument("--fr", required=True, help="French translation")
+    add_p.add_argument("--es", required=True, help="Spanish translation")
+    add_p.set_defaults(func=cmd_add)
+
+    # Remove command
+    remove_p = i18n_sub.add_parser("remove", help="Remove a translation key from all languages")
+    remove_p.add_argument("key", help="Translation key to remove")
+    remove_p.add_argument("-f", "--force", action="store_true", help="Skip confirmation prompt")
+    remove_p.set_defaults(func=cmd_remove)
+
+    # Update command
+    update_p = i18n_sub.add_parser("update", help="Update a translation in one or more languages")
+    update_p.add_argument("key", help="Translation key to update")
+    update_p.add_argument("--en", help="English translation")
+    update_p.add_argument("--it", help="Italian translation")
+    update_p.add_argument("--fr", help="French translation")
+    update_p.add_argument("--es", help="Spanish translation")
+    update_p.set_defaults(func=cmd_update)
+
+    # Search command
+    search_p = i18n_sub.add_parser("search", help="Search for keys/values in translations")
+    search_p.add_argument("query", help="Search query (searches both keys and values)")
+    search_p.set_defaults(func=cmd_search)
 
 
 if __name__ == "__main__":

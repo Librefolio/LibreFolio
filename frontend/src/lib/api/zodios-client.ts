@@ -40,6 +40,36 @@ function getCurrentLanguage(): string {
 // =============================================================================
 
 /**
+ * Custom params serializer that serializes arrays as repeated query params.
+ * Example: { broker_ids: [1, 2] } → "broker_ids=1&broker_ids=2"
+ * Instead of default Axios behavior: "broker_ids[]=1&broker_ids[]=2"
+ *
+ * This matches FastAPI's expected format for List[int] query parameters.
+ */
+function serializeParams(params: Record<string, unknown>): string {
+	const searchParams = new URLSearchParams();
+
+	for (const [key, value] of Object.entries(params)) {
+		if (value === undefined || value === null) {
+			continue;
+		}
+
+		if (Array.isArray(value)) {
+			// Serialize arrays as repeated params: key=1&key=2
+			for (const item of value) {
+				if (item !== undefined && item !== null) {
+					searchParams.append(key, String(item));
+				}
+			}
+		} else {
+			searchParams.append(key, String(value));
+		}
+	}
+
+	return searchParams.toString();
+}
+
+/**
  * Custom Axios instance with LibreFolio configuration.
  * This is passed to Zodios to use instead of creating its own.
  *
@@ -50,6 +80,9 @@ const axiosInstance = axios.create({
 	withCredentials: true, // Include session cookies in requests
 	headers: {
 		'Content-Type': 'application/json'
+	},
+	paramsSerializer: {
+		serialize: serializeParams
 	}
 });
 

@@ -36,7 +36,9 @@
     "selectAll": "Tout Sélectionner",
     "clearAll": "Tout Désélectionner",
     "multipleFiles": "Fichiers multiples autorisés",
-    "remove": "Supprimer"
+    "remove": "Supprimer",
+    "discard": "Abandonner",
+    "refresh": "Actualiser"
   },
   "table": {
     "rowsPerPage": "Lignes par page",
@@ -279,7 +281,7 @@
     "discardChangesWarning": "Vous avez des modifications non enregistrées. Voulez-vous les annuler ?",
     "continueEditing": "Continuer la Modification",
     "discardAndLock": "Annuler et Verrouiller",
-    "savedSuccessfully": "Enregistré avec succès",
+    "savedSuccessfully": "enregistré avec succès",
     "accountCreated": "Compte Créé",
     "profileUpdated": "Profil mis à jour avec succès",
     "updateFailed": "Échec de la mise à jour du profil",
@@ -344,7 +346,6 @@
     "resetAllToDefault": "Tout Réinitialiser",
     "undo": "Annuler",
     "resetToDefault": "Réinitialiser par Défaut",
-    "savedSuccessfully": "enregistré avec succès",
     "adminRequired": "Accès admin requis pour modifier les paramètres globaux",
     "saveFailed": "Échec de l'enregistrement",
     "clickToEdit": "Cliquer pour déverrouiller et modifier",
@@ -436,6 +437,9 @@
     "assignBrokers": "Assigner les Courtiers",
     "file": "fichier",
     "filesSelected": "{count} fichier(s) sélectionné(s)",
-    "confirmCloseWithPendingFiles": "Vous avez des fichiers sélectionnés pour le téléversement. Êtes-vous sûr de vouloir annuler?"
+    "confirmCloseWithPendingFiles": "Vous avez des fichiers sélectionnés pour le téléversement. Êtes-vous sûr de vouloir annuler?",
+    "pendingUploads": "Téléversements en attente",
+    "pendingUploadsMessage": "Vous avez des fichiers sélectionnés pour le téléversement. Voulez-vous les abandonner?",
+    "filesToUpload": "Fichiers à téléverser"
   }
 }

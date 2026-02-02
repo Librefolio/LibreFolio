@@ -1,9 +1,10 @@
 # Plan: i18n CLI Improvements
 
 **Data creazione**: 30 Gennaio 2026  
-**Status**: 📋 DA IMPLEMENTARE  
+**Status**: ✅ COMPLETATO  
 **Priorità**: P1  
 **Stima**: 30-45 min
+**Completato**: 30 Gennaio 2026
 
 ---
 
@@ -371,15 +372,15 @@ dev.py i18n [-h]
 
 ## ✅ Checklist Implementazione
 
-- [ ] Creare `scripts/i18n_cli.py` con funzioni base
-- [ ] Integrare in `dev.py` i18n subcommands
-- [ ] Test: `./dev.py i18n add` con chiave nuova
-- [ ] Test: `./dev.py i18n add` con chiave esistente (deve fallire)
-- [ ] Test: `./dev.py i18n remove` con conferma
-- [ ] Test: `./dev.py i18n update` singola lingua
-- [ ] Test: `./dev.py i18n search` trova risultati
-- [ ] Aggiornare `--help` con nuovi comandi
-- [ ] Aggiornare Welcome Prompt con info su i18n CLI
+- [x] Creare `scripts/i18n_cli.py` con funzioni base → Integrato in `frontend/scripts/i18n-audit.py`
+- [x] Integrare in `dev.py` i18n subcommands
+- [x] Test: `./dev.py i18n add` con chiave nuova
+- [x] Test: `./dev.py i18n add` con chiave esistente (deve fallire)
+- [x] Test: `./dev.py i18n remove` con conferma
+- [x] Test: `./dev.py i18n update` singola lingua
+- [x] Test: `./dev.py i18n search` trova risultati
+- [x] Aggiornare `--help` con nuovi comandi
+- [x] Output formattato come tabelle (miglioramento extra)
 
 ---
 

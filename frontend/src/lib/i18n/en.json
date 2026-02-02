@@ -36,7 +36,9 @@
     "selectAll": "Select All",
     "clearAll": "Clear All",
     "multipleFiles": "Multiple files allowed",
-    "remove": "Remove"
+    "remove": "Remove",
+    "discard": "Discard",
+    "refresh": "Refresh"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -279,7 +281,7 @@
     "discardChangesWarning": "You have unsaved changes. Do you want to discard them?",
     "continueEditing": "Continue Editing",
     "discardAndLock": "Discard & Lock",
-    "savedSuccessfully": "Saved successfully",
+    "savedSuccessfully": "saved successfully",
     "accountCreated": "Account Created",
     "profileUpdated": "Profile updated successfully",
     "updateFailed": "Failed to update profile",
@@ -344,7 +346,6 @@
     "resetAllToDefault": "Reset All",
     "undo": "Undo",
     "resetToDefault": "Reset to Default",
-    "savedSuccessfully": "saved successfully",
     "adminRequired": "Admin access required to modify global settings",
     "saveFailed": "Failed to save setting",
     "clickToEdit": "Click to unlock and edit",
@@ -436,6 +437,9 @@
     "assignBrokers": "Assign Brokers",
     "file": "file",
     "filesSelected": "{count} file(s) selected",
-    "confirmCloseWithPendingFiles": "You have files selected for upload. Are you sure you want to cancel?"
+    "confirmCloseWithPendingFiles": "You have files selected for upload. Are you sure you want to cancel?",
+    "pendingUploads": "Pending Uploads",
+    "pendingUploadsMessage": "You have files selected for upload. Do you want to discard them?",
+    "filesToUpload": "Files to upload"
   }
 }

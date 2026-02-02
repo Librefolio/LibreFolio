@@ -143,6 +143,9 @@ export interface ColumnDef<T> {
 
 	/** Get raw value for sorting/filtering (if different from cell render) */
 	getValue?: (row: T) => unknown;
+
+	/** URL parameter key for deep-linking filters (default: column id) */
+	urlKey?: string;
 }
 
 // ============ Action Types ============

@@ -7,6 +7,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {FileUp, FileText, RefreshCw, Trash2, ExternalLink} from 'lucide-svelte';
+    import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
     import type {BrimFile} from '$lib/types';
 
     // Props
@@ -21,6 +22,11 @@
     let loading = $state(true);
     let error = $state<string | null>(null);
     let uploading = $state(false);
+
+    // Delete confirmation modal state
+    let showDeleteConfirm = $state(false);
+    let pendingDeleteFileId = $state<string | null>(null);
+    let pendingDeleteFileName = $state<string>('');
 
     // File input ref
     let fileInputRef: HTMLInputElement;
@@ -57,19 +63,10 @@
         try {
             const formData = new FormData();
             formData.append('file', file);
-
-            // Upload file using fetch (Zodios doesn't handle multipart well)
-            // broker_id must be in query string, not FormData
-            const response = await fetch(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, {
-                method: 'POST',
-                body: formData,
-                credentials: 'include'
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || 'Upload failed');
-            }
+            await zodiosApi.upload_file_api_v1_brokers_import_upload_post(
+                formData as any,
+                { queries: { broker_id: brokerId } }
+            );
 
             await loadFiles();
         } catch (e) {
@@ -83,17 +80,35 @@
     }
 
     async function handleDelete(fileId: string) {
-        if (!confirm($_('files.confirmDelete'))) return;
+        // Find file name for confirmation message
+        const file = files.find(f => f.file_id === fileId);
+        pendingDeleteFileId = fileId;
+        pendingDeleteFileName = file?.filename ?? '';
+        showDeleteConfirm = true;
+    }
+
+    async function confirmDelete() {
+        if (!pendingDeleteFileId) return;
 
         try {
             await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
-                params: {file_id: fileId}
+                params: {file_id: pendingDeleteFileId}
             });
             await loadFiles();
         } catch (e) {
             console.error('Delete failed:', e);
             error = $_('files.deleteFailed');
+        } finally {
+            showDeleteConfirm = false;
+            pendingDeleteFileId = null;
+            pendingDeleteFileName = '';
         }
+    }
+
+    function cancelDelete() {
+        showDeleteConfirm = false;
+        pendingDeleteFileId = null;
+        pendingDeleteFileName = '';
     }
 
     function formatDate(dateStr: string): string {
@@ -209,10 +224,24 @@
             {/each}
         </div>
         <a
-                href="/files?broker_id={brokerId}"
+                href="/files?tab=brim&broker={brokerId}"
                 class="block mt-3 text-center text-sm text-libre-green hover:underline"
         >
             {$_('brokers.manageFiles')} →
         </a>
     {/if}
 </div>
+
+<!-- Delete Confirmation Modal -->
+<ConfirmModal
+    open={showDeleteConfirm}
+    title={$_('common.confirmDelete')}
+    message={$_('uploads.deleteConfirm')}
+    items={pendingDeleteFileName ? [pendingDeleteFileName] : undefined}
+    itemsLabel={$_('uploads.filesToDelete')}
+    confirmText={$_('common.delete')}
+    onConfirm={confirmDelete}
+    onCancel={cancelDelete}
+    danger={true}
+/>
+
