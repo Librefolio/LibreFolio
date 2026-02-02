@@ -1156,6 +1156,168 @@ def e2e_test(verbose: bool = False) -> bool:
 
 
 # ============================================================================
+# FRONTEND E2E TESTS (Playwright)
+# ============================================================================
+
+def _ensure_test_users() -> bool:
+    """Ensure E2E test users exist in test database."""
+    print_info("Ensuring E2E test users exist...")
+
+    users = [
+        ("e2e_test_user", "e2e@test.example.com", "E2eTestPass123!"),
+        ("e2e_test_admin", "e2eadmin@test.example.com", "E2eAdminPass123!"),
+        ("e2e_test_user2", "e2e2@test.example.com", "E2eTestPass456!"),
+    ]
+
+    for username, email, password in users:
+        result = subprocess.run(
+            ["python", "scripts/user_cli.py", "--test-db", "create-superuser",
+             username, email, password],
+            capture_output=True,
+            text=True
+        )
+        # Ignore "already exists" errors
+        if result.returncode != 0 and "already exists" not in result.stderr.lower():
+            print_error(f"Failed to create user {username}: {result.stderr}")
+            return False
+
+    # Promote admin
+    subprocess.run(
+        ["python", "scripts/user_cli.py", "--test-db", "promote", "e2e_test_admin"],
+        capture_output=True
+    )
+
+    print_success("Test users ready")
+    return True
+
+
+def _run_playwright(
+    spec_file: str = None,
+    ui: bool = False,
+    headed: bool = False,
+    debug: bool = False,
+    project: str = "desktop",
+    test_names: list = None
+) -> bool:
+    """
+    Run Playwright tests with given options.
+
+    Args:
+        spec_file: Specific spec file to run (e.g., "auth.spec.ts")
+        ui: Open Playwright interactive UI
+        headed: Run with visible browser
+        debug: Run with PWDEBUG=1 for step-by-step debugging
+        project: Playwright project (desktop/mobile)
+        test_names: List of test name patterns to filter (uses -g/--grep)
+    """
+    cmd = ["npm", "run"]
+
+    if ui:
+        cmd.append("test:e2e:ui")
+    elif debug:
+        cmd.append("test:e2e:debug")  # Includes --headed
+    elif headed:
+        cmd.append("test:e2e:headed")
+    else:
+        cmd.append("test:e2e")
+
+    # Add extra args after --
+    extra_args = []
+    if spec_file:
+        extra_args.append(spec_file)
+    if project and not ui:  # UI mode ignores project
+        extra_args.extend(["--project", project])
+
+    # Add grep filter for test names (matches test description)
+    if test_names:
+        # Join multiple patterns with |
+        pattern = "|".join(test_names)
+        extra_args.extend(["--grep", pattern])
+
+    if extra_args:
+        cmd.extend(["--"] + extra_args)
+
+    print(f"\n{Colors.BLUE}Running: Playwright {spec_file or 'all tests'}{Colors.NC}")
+    if test_names:
+        print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
+    print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
+
+    try:
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True)
+        if result.returncode == 0:
+            print_success(f"Playwright {spec_file or 'all'} - PASSED")
+            return True
+        else:
+            print_error(f"Playwright {spec_file or 'all'} - FAILED (exit code: {result.returncode})")
+            return False
+    except Exception as e:
+        print_error(f"Playwright error: {e}")
+        return False
+
+
+def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run auth E2E tests."""
+    print_section("Frontend Auth Tests")
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run settings E2E tests."""
+    print_section("Frontend Settings Tests")
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run files E2E tests."""
+    print_section("Frontend Files Tests")
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_brokers(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run brokers E2E tests."""
+    print_section("Frontend Brokers Tests")
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_multi_user(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run multi-user isolation tests."""
+    print_section("Frontend Multi-User Tests")
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("multi-user.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
+def front_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
+    """Run all frontend tests (excludes gallery)."""
+    print_header("Frontend E2E Tests (Playwright)")
+    print_info("Running browser-based E2E tests")
+    print_info("Server will be started automatically by Playwright")
+
+    if not _ensure_test_users():
+        return False
+
+    # Run all specs except gallery
+    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "brokers.spec.ts", "multi-user.spec.ts"]
+
+    return _run_test_suite(
+        suite_name="Frontend E2E Tests",
+        tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug)) for spec in specs],
+        verbose=verbose,
+        header_msg=None,  # Already printed above
+        summary_title="Frontend E2E Test Summary",
+        success_msg="All frontend E2E tests passed! 🎉",
+    )
+
+
+# ============================================================================
 # GLOBAL ALL TESTS
 # ============================================================================
 
@@ -1755,6 +1917,69 @@ These tests verify complete end-to-end workflows via REST API:
             "desc": "Run all E2E tests",
             },
         },
+    "front": {
+        "_meta": {
+            "help": "Frontend E2E tests (Playwright on Chromium)",
+            "description": """
+Frontend E2E Tests
+
+Browser-based tests using Playwright:
+  • Backend server started automatically in test mode
+  • Tests run on Chromium (headless by default)
+  • Use --ui for interactive Playwright UI
+  • Use --headed to see browser
+  • Screenshots saved on failure
+
+Note: gallery.spec.ts is NOT included in 'all' - use ./dev.py mkdocs gallery
+""",
+            },
+        "auth": {
+            "func": front_auth,
+            "test_names": True,
+            "name": "Auth Tests",
+            "desc": "Login, register, logout, language change",
+            "prereq": "Test users created",
+            "tests": "auth.spec.ts",
+            },
+        "settings": {
+            "func": front_settings,
+            "test_names": True,
+            "name": "Settings Tests",
+            "desc": "User preferences, global settings (admin)",
+            "prereq": "Login working",
+            "tests": "settings.spec.ts",
+            },
+        "files": {
+            "func": front_files,
+            "test_names": True,
+            "name": "Files Tests",
+            "desc": "Files page, tabs, URL filters",
+            "prereq": "Login working",
+            "tests": "files.spec.ts",
+            },
+        "brokers": {
+            "func": front_brokers,
+            "test_names": True,
+            "name": "Brokers Tests",
+            "desc": "CRUD broker, import files modal",
+            "prereq": "Login working",
+            "tests": "brokers.spec.ts",
+            },
+        "multi-user": {
+            "func": front_multi_user,
+            "test_names": True,
+            "name": "Multi-User Tests",
+            "desc": "Data isolation between users",
+            "prereq": "Multiple test users",
+            "tests": "multi-user.spec.ts",
+            },
+        "all": {
+            "func": front_all,
+            "test_names": False,
+            "name": "All Frontend Tests",
+            "desc": "Run all E2E tests (excludes gallery)",
+            },
+        },
     }
 
 
@@ -1831,6 +2056,15 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False,
     if category == "db" and action == "populate":
         force = kwargs.get("force", False)
         return test_func(verbose=verbose, force=force)
+
+    # Special case for front category (has ui, headed, debug flags + test_names)
+    if category == "front":
+        ui = kwargs.get("ui", False)
+        headed = kwargs.get("headed", False)
+        debug = kwargs.get("debug", False)
+        if accepts_test_names and test_names:
+            return test_func(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names)
+        return test_func(verbose=verbose, ui=ui, headed=headed, debug=debug)
 
     # Build arguments
     if accepts_test_names and test_names:
@@ -1967,6 +2201,30 @@ def create_parser() -> argparse.ArgumentParser:
                     }
                     ),
                 ]
+        elif category == "front":
+            extra_args = [
+                (
+                    "--ui", {
+                    "action": "store_true",
+                    "help": "Run with Playwright interactive UI",
+                    "default": False,
+                    }
+                    ),
+                (
+                    "--headed", {
+                    "action": "store_true",
+                    "help": "Run with visible browser window",
+                    "default": False,
+                    }
+                    ),
+                (
+                    "--debug", {
+                    "action": "store_true",
+                    "help": "Run with step-by-step debugging (includes --headed)",
+                    "default": False,
+                    }
+                    ),
+                ]
         create_subparser_from_registry(subparsers, category, extra_args)
 
     # Special "all" category
@@ -2056,6 +2314,30 @@ def register_subparser(parent_subparsers):
                     }
                     ),
                 ]
+        elif category == "front":
+            extra_args = [
+                (
+                    "--ui", {
+                    "action": "store_true",
+                    "help": "Run with Playwright interactive UI",
+                    "default": False,
+                    }
+                    ),
+                (
+                    "--headed", {
+                    "action": "store_true",
+                    "help": "Run with visible browser window",
+                    "default": False,
+                    }
+                    ),
+                (
+                    "--debug", {
+                    "action": "store_true",
+                    "help": "Run with step-by-step debugging (includes --headed)",
+                    "default": False,
+                    }
+                    ),
+                ]
         create_subparser_from_registry(test_subparsers, category, extra_args)
 
     # "all" category
@@ -2114,13 +2396,21 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
     elif category in TEST_REGISTRY:
         action = getattr(args, 'action', None)
         if action:
-            force = getattr(args, 'force', False) if category == "db" else False
+            # Build kwargs based on category
+            kwargs = {}
+            if category == "db":
+                kwargs['force'] = getattr(args, 'force', False)
+            elif category == "front":
+                kwargs['ui'] = getattr(args, 'ui', False)
+                kwargs['headed'] = getattr(args, 'headed', False)
+                kwargs['debug'] = getattr(args, 'debug', False)
+
             success = run_test_from_registry(
                 category=category,
                 action=action,
                 verbose=verbose,
                 test_names=test_names,
-                force=force
+                **kwargs
                 )
         else:
             print_error(f"No action specified for category '{category}'")
