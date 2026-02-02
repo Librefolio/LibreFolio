@@ -435,6 +435,46 @@ def cmd_mkdocs_deploy(args):
     return run_pipenv(["mkdocs", "gh-deploy", "-f", "mkdocs_src/mkdocs.yml"])
 
 
+def cmd_mkdocs_gallery(args):
+    """Generate gallery screenshots for documentation using Playwright."""
+    import subprocess
+
+    print(Colors.success("Generating gallery screenshots for documentation..."))
+    print(f"{Colors.BLUE}This runs gallery.spec.ts for both desktop and mobile viewports{Colors.NC}")
+    print(f"{Colors.BLUE}Screenshots will be saved to mkdocs_src/docs/gallery/{Colors.NC}\n")
+
+    # Ensure test users exist
+    print(f"{Colors.YELLOW}Ensuring E2E test users exist...{Colors.NC}")
+    from scripts.test_runner import _ensure_test_users
+    if not _ensure_test_users():
+        print_error("Failed to create test users")
+        return 1
+
+    # Run gallery for desktop
+    print(f"\n{Colors.CYAN}📸 Running Desktop Screenshots...{Colors.NC}")
+    result = subprocess.run(
+        ["npm", "run", "test:e2e", "--", "gallery.spec.ts", "--project", "desktop", "--headed"],
+        cwd=PROJECT_ROOT / "frontend"
+    )
+    if result.returncode != 0:
+        print_error("Desktop gallery generation failed")
+        return 1
+
+    # Run gallery for mobile
+    print(f"\n{Colors.CYAN}📱 Running Mobile Screenshots...{Colors.NC}")
+    result = subprocess.run(
+        ["npm", "run", "test:e2e", "--", "gallery.spec.ts", "--project", "mobile", "--headed"],
+        cwd=PROJECT_ROOT / "frontend"
+    )
+    if result.returncode != 0:
+        print_error("Mobile gallery generation failed")
+        return 1
+
+    print_success("\n✅ Gallery screenshots generated successfully!")
+    print(f"{Colors.GREEN}Output: mkdocs_src/docs/gallery/{Colors.NC}")
+    return 0
+
+
 
 # =============================================================================
 # Format/Lint Commands
@@ -738,6 +778,9 @@ Examples:
 
     mk_p = mk_sub.add_parser("deploy", help="Deploy to GitHub Pages")
     mk_p.set_defaults(func=cmd_mkdocs_deploy)
+
+    mk_p = mk_sub.add_parser("gallery", help="Generate gallery screenshots with Playwright")
+    mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
     # =========================================================================
     # 📦 Tools Commands Group
