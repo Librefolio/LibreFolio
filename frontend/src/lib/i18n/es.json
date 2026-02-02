@@ -36,7 +36,9 @@
     "selectAll": "Seleccionar Todo",
     "clearAll": "Deseleccionar Todo",
     "multipleFiles": "Archivos múltiples permitidos",
-    "remove": "Eliminar"
+    "remove": "Eliminar",
+    "discard": "Descartar",
+    "refresh": "Actualizar"
   },
   "table": {
     "rowsPerPage": "Filas por página",
@@ -279,7 +281,7 @@
     "discardChangesWarning": "Tienes cambios sin guardar. ¿Quieres descartarlos?",
     "continueEditing": "Continuar Editando",
     "discardAndLock": "Descartar y Bloquear",
-    "savedSuccessfully": "Guardado con éxito",
+    "savedSuccessfully": "guardado con éxito",
     "accountCreated": "Cuenta Creada",
     "profileUpdated": "Perfil actualizado con éxito",
     "updateFailed": "Error al actualizar el perfil",
@@ -344,7 +346,6 @@
     "resetAllToDefault": "Restablecer Todo",
     "undo": "Deshacer",
     "resetToDefault": "Restablecer por Defecto",
-    "savedSuccessfully": "guardado con éxito",
     "adminRequired": "Acceso admin requerido para modificar la configuración global",
     "saveFailed": "Error al guardar",
     "clickToEdit": "Haga clic para desbloquear y editar",
@@ -436,6 +437,9 @@
     "assignBrokers": "Asignar Brokers",
     "file": "archivo",
     "filesSelected": "{count} archivo(s) seleccionado(s)",
-    "confirmCloseWithPendingFiles": "Tienes archivos seleccionados para subir. ¿Estás seguro de que quieres cancelar?"
+    "confirmCloseWithPendingFiles": "Tienes archivos seleccionados para subir. ¿Estás seguro de que quieres cancelar?",
+    "pendingUploads": "Subidas pendientes",
+    "pendingUploadsMessage": "Tienes archivos seleccionados para subir. ¿Quieres descartarlos?",
+    "filesToUpload": "Archivos para subir"
   }
 }

@@ -2,7 +2,7 @@
 
 ## 🎯 Obiettivo del Progetto
 
-LibreFolio è un'alternativa self-hosted e open-source a Ghostfolio, pensata per:
+LibreFolio è un'alternativa self-hosted e open-source ad altri software di analisi finanziaria come Ghostfolio, pensata per:
 
 - **Privacy**: I tuoi dati finanziari restano sul tuo server
 - **Flessibilità**: Supporto per asset tradizionali, crypto, prestiti P2P, scheduled-yield
@@ -175,8 +175,12 @@ dev.py [-h]
 │ ├──╴schema                       # Export OpenAPI
 │ ├──╴client                       # Genera client TypeScript
 │ ╰──╴sync                         # schema + client
-├─┬╴i18n [-h]
-│ ╰──╴audit [--format]             # Audit traduzioni
+├─┬╴i18n [-h]                      # Translation management
+│ ├──╴audit [--format]             # Audit traduzioni (coverage report)
+│ ├──╴add KEY --en --it --fr --es  # Aggiungi chiave a tutte le lingue
+│ ├──╴remove KEY [-f]              # Rimuovi chiave da tutte le lingue
+│ ├──╴update KEY [--en] [--it] [--fr] [--es]  # Modifica traduzioni
+│ ╰──╴search QUERY                 # Cerca nelle chiavi e valori
 ├─┬╴cache [-h]
 │ ╰──╴js [--force]                 # Aggiorna cache JS
 ├─┬╴info [-h]
@@ -189,20 +193,22 @@ dev.py [-h]
 
 ### Scenari Comuni
 
-| Scenario                           | Comando                                           |
-|------------------------------------|---------------------------------------------------|
-| **Avviare per sviluppo**           | `./dev.py server`                                 |
-| **Avviare in test mode**           | `./dev.py server --test`                          |
-| **Frontend con HMR**               | Terminal 1: `./dev.py server` — Terminal 2: `./dev.py front dev` |
-| **Verificare che tutto funzioni**  | `./dev.py test all`                               |
-| **Dopo modifica modelli DB**       | `./dev.py db create-clean`                        |
-| **Dopo modifica API**              | `./dev.py api sync`                               |
-| **Verificare traduzioni**          | `./dev.py i18n audit`                             |
-| **Build per produzione**           | `./dev.py front build && ./dev.py server`         |
-| **Nuovo utente**                   | `./dev.py user create admin admin@mail.com pass`  |
-| **Reset password**                 | `./dev.py user reset username newpassword`        |
-| **Lista endpoint API**             | `./dev.py info api`                               |
-
+| Scenario                          | Comando                                                                    |
+|-----------------------------------|----------------------------------------------------------------------------|
+| **Avviare per sviluppo**          | `./dev.py server`                                                          |
+| **Avviare in test mode**          | `./dev.py server --test`                                                   |
+| **Frontend con HMR**              | Terminal 1: `./dev.py server` — Terminal 2: `./dev.py front dev`           |
+| **Verificare che tutto funzioni** | `./dev.py test all`                                                        |
+| **Dopo modifica modelli DB**      | `./dev.py db create-clean`                                                 |
+| **Dopo modifica API**             | `./dev.py api sync`                                                        |
+| **Verificare traduzioni**         | `./dev.py i18n audit`                                                      |
+| **Aggiungere traduzione**         | `./dev.py i18n add "key.path" --en "..." --it "..." --fr "..." --es "..."` |
+| **Cercare traduzioni**            | `./dev.py i18n search "query"`                                             |
+| **Modificare traduzione**         | `./dev.py i18n update "key.path" --it "nuova traduzione"`                  |
+| **Build per produzione**          | `./dev.py front build && ./dev.py server`                                  |
+| **Nuovo utente**                  | `./dev.py user create admin admin@mail.com pass`                           |
+| **Reset password**                | `./dev.py user reset username newpassword`                                 |
+| **Lista endpoint API**            | `./dev.py info api`                                                        |
 
 ## ⚠️ Note per lo Sviluppo
 
@@ -212,7 +218,8 @@ dev.py [-h]
 - **UI multilingue**: Solo interfaccia grafica in EN/IT/FR/ES
 - **Obiettivo**: Codebase pulito e mantenibile per condivisione futura
 - **No migrazioni Alembic**: Modifica `001_initial.py` e ricrea DB
-- **Edit better rewrite**: Evita di riscrivere tutto un file se già esiste, preferisci modifiche puntuali per evitare perdite di funzionalità, la riscrittura è ammessa solo per file nuovi, quasi vuoti, obsoleti o quasi completamente sbagliati.
+- **Edit better rewrite**: Evita di riscrivere tutto un file se già esiste, preferisci modifiche puntuali per evitare perdite di funzionalità, la riscrittura è ammessa solo per
+  file nuovi, quasi vuoti, obsoleti o quasi completamente sbagliati.
 
 Prima di proseguire:
 

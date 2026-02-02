@@ -14,13 +14,14 @@
         RefreshCw,
         Wallet,
         TrendingUp,
-        ArrowRightLeft
+        ArrowRightLeft,
+        FileUp
     } from 'lucide-svelte';
     import CashBalanceCard from '$lib/components/brokers/CashBalanceCard.svelte';
     import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import BrokerImportFiles from '$lib/components/brokers/BrokerImportFiles.svelte';
+    import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
     import type {BrokerSummary, Transaction} from '$lib/types';
     import {safeString, safeCurrency, parseCurrencyAmount} from '$lib/types';
 
@@ -38,6 +39,7 @@
     let cashModalOpen = false;
     let cashModalType: 'DEPOSIT' | 'WITHDRAWAL' = 'DEPOSIT';
     let cashModalCurrency = 'EUR';
+    let importFilesModalOpen = false;
 
     onMount(async () => {
         await loadBroker();
@@ -322,12 +324,9 @@
                         <p class="text-gray-400 text-sm italic py-4 text-center">{$_('brokers.noHoldings')}</p>
                     {/if}
                 </div>
-
-                <!-- Import Files Section -->
-                <BrokerImportFiles brokerId={data.brokerId} />
             </div>
 
-            <!-- Right Column: Info & Recent Transactions -->
+            <!-- Right Column: Info, Import Files & Recent Transactions -->
             <div class="space-y-4">
                 <!-- Broker Info Card -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -375,6 +374,25 @@
                         {/if}
                     {/if}
                 </div>
+
+                <!-- Import Files Button -->
+                <button
+                    class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group"
+                    on:click={() => importFilesModalOpen = true}
+                >
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-libre-green/10 rounded-lg">
+                            <FileUp size={20} class="text-libre-green" />
+                        </div>
+                        <div class="text-left">
+                            <h3 class="font-semibold text-gray-700">{$_('brokers.importFiles')}</h3>
+                            <p class="text-sm text-gray-500">{$_('brokers.uploadHint')}</p>
+                        </div>
+                    </div>
+                    <span class="text-libre-green opacity-0 group-hover:opacity-100 transition-opacity">
+                        →
+                    </span>
+                </button>
 
                 <!-- Recent Transactions -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -448,5 +466,13 @@
             initialCurrency={cashModalCurrency}
             on:close={() => cashModalOpen = false}
             on:success={handleCashSuccess}
+    />
+
+    <!-- Import Files Modal -->
+    <BrokerImportFilesModal
+            open={importFilesModalOpen}
+            brokerId={broker.id}
+            brokerName={broker.name}
+            onClose={() => importFilesModalOpen = false}
     />
 {/if}
