@@ -1159,6 +1159,80 @@ def e2e_test(verbose: bool = False) -> bool:
 # FRONTEND E2E TESTS (Playwright)
 # ============================================================================
 
+def _check_frontend_needs_build() -> bool:
+    """
+    Check if frontend needs to be rebuilt.
+    Compares modification times of source files vs build output.
+
+    Returns True if build is needed, False otherwise.
+    """
+    build_dir = PROJECT_ROOT / "frontend" / "build"
+    src_dir = PROJECT_ROOT / "frontend" / "src"
+
+    # If no build exists, definitely need to build
+    if not build_dir.exists():
+        return True
+
+    # Get newest source file modification time
+    newest_src = 0
+    for pattern in ["**/*.svelte", "**/*.ts", "**/*.js", "**/*.css"]:
+        for f in src_dir.glob(pattern):
+            mtime = f.stat().st_mtime
+            if mtime > newest_src:
+                newest_src = mtime
+
+    # Also check package.json and config files
+    config_files = [
+        PROJECT_ROOT / "frontend" / "package.json",
+        PROJECT_ROOT / "frontend" / "vite.config.ts",
+        PROJECT_ROOT / "frontend" / "svelte.config.js",
+        PROJECT_ROOT / "frontend" / "tailwind.config.js",
+    ]
+    for f in config_files:
+        if f.exists():
+            mtime = f.stat().st_mtime
+            if mtime > newest_src:
+                newest_src = mtime
+
+    # Get oldest build file modification time (use index.html as reference)
+    build_marker = build_dir / "index.html"
+    if not build_marker.exists():
+        return True
+
+    build_time = build_marker.stat().st_mtime
+
+    # Need build if source is newer than build
+    return newest_src > build_time
+
+
+def _ensure_frontend_build() -> bool:
+    """
+    Ensure frontend is built and up to date.
+    Only rebuilds if sources have changed since last build.
+
+    Returns True if build is ready, False if build failed.
+    """
+    if not _check_frontend_needs_build():
+        print_info("Frontend build is up to date")
+        return True
+
+    print_info("Frontend sources changed, rebuilding...")
+    result = subprocess.run(
+        ["npm", "run", "build"],
+        cwd=PROJECT_ROOT / "frontend",
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        print_error("Frontend build failed!")
+        print(result.stderr)
+        return False
+
+    print_success("Frontend build completed")
+    return True
+
+
 def _ensure_test_users() -> bool:
     """Ensure E2E test users exist in test database."""
     print_info("Ensuring E2E test users exist...")
@@ -1258,6 +1332,8 @@ def _run_playwright(
 def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
     """Run auth E2E tests."""
     print_section("Frontend Auth Tests")
+    if not _ensure_frontend_build():
+        return False
     if not _ensure_test_users():
         return False
     return _run_playwright("auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
@@ -1266,6 +1342,8 @@ def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, de
 def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
     """Run settings E2E tests."""
     print_section("Frontend Settings Tests")
+    if not _ensure_frontend_build():
+        return False
     if not _ensure_test_users():
         return False
     return _run_playwright("settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
@@ -1274,6 +1352,8 @@ def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False
 def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
     """Run files E2E tests."""
     print_section("Frontend Files Tests")
+    if not _ensure_frontend_build():
+        return False
     if not _ensure_test_users():
         return False
     return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
@@ -1282,6 +1362,8 @@ def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, d
 def front_brokers(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
     """Run brokers E2E tests."""
     print_section("Frontend Brokers Tests")
+    if not _ensure_frontend_build():
+        return False
     if not _ensure_test_users():
         return False
     return _run_playwright("brokers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
@@ -1290,6 +1372,8 @@ def front_brokers(verbose: bool = False, ui: bool = False, headed: bool = False,
 def front_multi_user(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
     """Run multi-user isolation tests."""
     print_section("Frontend Multi-User Tests")
+    if not _ensure_frontend_build():
+        return False
     if not _ensure_test_users():
         return False
     return _run_playwright("multi-user.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
@@ -1300,6 +1384,10 @@ def front_all(verbose: bool = False, ui: bool = False, headed: bool = False, deb
     print_header("Frontend E2E Tests (Playwright)")
     print_info("Running browser-based E2E tests")
     print_info("Server will be started automatically by Playwright")
+
+    # Ensure frontend is built before running tests
+    if not _ensure_frontend_build():
+        return False
 
     if not _ensure_test_users():
         return False

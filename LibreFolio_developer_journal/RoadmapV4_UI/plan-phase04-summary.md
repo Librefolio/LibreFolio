@@ -1,7 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Status**: 🔄 IN PROGRESS (Bug fixes in corso, core features complete)
+**Ultimo aggiornamento**: 2 Febbraio 2026  
+**Status**: 🔄 IN PROGRESS (E2E Testing & Settings Mobile in corso)
 
 ---
 
@@ -46,6 +47,12 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Validazione runtime delle risposte API
     - Fix datetime serialization con `UTCDateTime`
 
+7. **E2E Test Infrastructure** (vedi `plan-frontendTesting.md`) ✅ NUOVO
+    - Playwright configurato con progetti desktop/mobile
+    - 51 test passanti (5/5 suite)
+    - Build check automatico prima dei test
+    - Gallery screenshot per documentazione
+
 ---
 
 ## 🔀 Deviazioni dal Piano Originale
@@ -54,32 +61,37 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 2. **BRIM Multi-User**: Espansa significativamente per supportare multi-utenza
 3. **DataTable Component**: Creato componente riutilizzabile per tabelle con filtri avanzati
 4. **BrokerSelect Component**: Creato per selezione broker con ricerca fuzzy e icone
+5. **E2E Test Remediation**: Si è scoperto che i test necessitavano data-testid sui componenti *(in corso)*
+6. **Settings Mobile Layout**: Identificato problema responsive durante test gallery *(in corso)*
+7. **Gallery Light/Dark Theme**: Richiesto supporto screenshot per entrambi i temi *(pianificato)*
 
 ---
 
 ## 🐛 Bug Risolti (Round 1-4)
 
-| ID      | Descrizione                                           | Status   |
-|---------|-------------------------------------------------------|----------|
-| BUG-001 | Backend error message migliorato per broker esistente | ✅        |
-| BUG-002 | Table: click badge counter per deselezionare          | ✅        |
-| BUG-003 | BRIM upload: endpoint path corretto                   | ✅        |
-| BUG-004 | FR Bytes: traduzione unità nei filtri                 | ✅        |
-| BUG-005 | MkDocs dark mode CSS                                  | 🔲 TODO  |
-| BUG-006 | Copy Link con feedback toast                          | ✅        |
-| BUG-007 | Traduzioni broker import files                        | ✅        |
-| BUG-008 | Broker altri utenti GDPR                              | ⏸️ PAUSA |
-| BUG-009 | 404 su refresh broker detail                          | ✅        |
-| BUG-010 | Filtro size slider inizializzazione                   | ✅        |
-| BUG-011 | Global Settings max_file_upload_mb unit selector      | ✅        |
-| BUG-012 | Copy Link path relativo + toast in alto               | ✅        |
-| BUG-013 | BRIM upload endpoint in BrokerImportFiles             | ✅        |
-| BUG-014 | Svelte warnings per prop capture in slider            | ✅        |
-| BUG-015 | Reset Default max_file_upload_mb                      | ✅        |
-| BUG-016 | Translation key files.upload → uploads.upload         | ✅        |
-| BUG-017 | BRIM upload broker_id in query string                 | ✅        |
-| BUG-018 | Translation key sbagliata per upload button           | ✅        |
-| BUG-019 | Svelte warnings con svelte-ignore                     | ✅        |
+| ID      | Descrizione                                            | Status   |
+|---------|--------------------------------------------------------|----------|
+| BUG-001 | Backend error message migliorato per broker esistente  | ✅        |
+| BUG-002 | Table: click badge counter per deselezionare           | ✅        |
+| BUG-003 | BRIM upload: endpoint path corretto                    | ✅        |
+| BUG-004 | FR Bytes: traduzione unità nei filtri                  | ✅        |
+| BUG-005 | MkDocs dark mode CSS                                   | 🔲 TODO  |
+| BUG-006 | Copy Link con feedback toast                           | ✅        |
+| BUG-007 | Traduzioni broker import files                         | ✅        |
+| BUG-008 | Broker altri utenti GDPR                               | ⏸️ PAUSA |
+| BUG-009 | 404 su refresh broker detail                           | ✅        |
+| BUG-010 | Filtro size slider inizializzazione                    | ✅        |
+| BUG-011 | Global Settings max_file_upload_mb unit selector       | ✅        |
+| BUG-012 | Copy Link path relativo + toast in alto                | ✅        |
+| BUG-013 | BRIM upload endpoint in BrokerImportFiles              | ✅        |
+| BUG-014 | Svelte warnings per prop capture in slider             | ✅        |
+| BUG-015 | Reset Default max_file_upload_mb                       | ✅        |
+| BUG-016 | Translation key files.upload → uploads.upload          | ✅        |
+| BUG-017 | BRIM upload broker_id in query string                  | ✅        |
+| BUG-018 | Translation key sbagliata per upload button            | ✅        |
+| BUG-019 | Svelte warnings con svelte-ignore                      | ✅        |
+| BUG-020 | Form submit handler syntax (on:submit\|preventDefault) | ✅ NUOVO  |
+| BUG-021 | Settings mobile layout comprime contenuto              | 🔄 NUOVO |
 
 ---
 
@@ -94,6 +106,13 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 - Superuser vede "Broker #N (other user)" per file di altri
 - Richiede ripensamento GDPR-compliant del sistema permessi
+
+### 🔄 BUG-021: Settings Mobile Layout (in corso)
+
+- `SettingsLayout.svelte` layout a 2 colonne non funziona su mobile
+- Category sidebar diventa dropdown su mobile (iniziato)
+- Necessario dropdown custom invece di select nativo
+- Header con titolo/pulsanti da sistemare
 
 ---
 
@@ -114,12 +133,20 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | `plan-frontendTesting.md`               | ✅ Infrastruttura test E2E Playwright  |
 | `plan-i18n-cli-improvements.md`         | ✅ CLI per gestione traduzioni         |
 | `plan-files-ux-refactor.md`             | ✅ Refactor UX pagina Files            |
+| `test-remediation-auth-settings.md`     | ✅ Note remediation auth/settings      |
+
+### Plans IN CORSO (in `RoadmapV4_UI/`)
+
+| File                              | Descrizione                                 | Priorità | Status      |
+|-----------------------------------|---------------------------------------------|----------|-------------|
+| `plan-e2e-test-remediation.md`    | Remediation test E2E (Fase 1 ✅, Fase 2+ 🔄) | P1       | IN PROGRESS |
+| `plan-settings-mobile-gallery.md` | Settings mobile + Gallery improvements      | P1       | IN PROGRESS |
+| `e2e-test-analysis.md`            | Analisi copertura test (doc vivo)           | P1       | IN PROGRESS |
 
 ### Plans DA IMPLEMENTARE (in `RoadmapV4_UI/`)
 
 | File                                 | Descrizione                            | Priorità    |
 |--------------------------------------|----------------------------------------|-------------|
-| `plan-e2e-test-remediation.md`       | Remediation test E2E per features      | P1          |
 | `plan-image-crop.md`                 | Componente crop immagini con cropperjs | P2          |
 | `plan-data-separation.md`            | Separazione cartelle dati prod/test    | P2          |
 | `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend          | Riferimento |
@@ -137,96 +164,86 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 ### Step 1: i18n CLI Improvements (30 min) ✅ COMPLETATO
 
 **Riferimento**: `phases/phase-04-subplan/plan-i18n-cli-improvements.md`
-**Obiettivo**: Aggiungere funzioni CLI per gestione traduzioni
-
-- `./dev.py i18n add <key> --en <en> --it <it> --fr <fr> --es <es>` - Aggiunge chiave (tutte required)
-- `./dev.py i18n remove <key>` - Rimuove chiave da tutte le lingue
-- `./dev.py i18n update <key> [--en <en>] [--it <it>] [--fr <fr>] [--es <es>]` - Modifica traduzione
-- `./dev.py i18n search <query>` - Cerca nelle traduzioni
-- **Output formattato come tabelle** (miglioramento extra)
 
 ### Step 2: Files Page URL Filters (1h) ✅ COMPLETATO
 
 **Riferimento**: `phases/phase-04-subplan/plan-files-ux-refactor.md` (Step 2)
-**Obiettivo**: Permettere deep-linking ai filtri della pagina `/files`
-
-- Sistema URL filters dinamico con `urlKey` per ogni colonna DataTable
-- Creato `$lib/utils/urlFilters.ts` con utility parseUrlFilters/buildUrlFilters
-- Aggiunto `initialFilters` e `onFiltersChange` props a DataTable e FilesTable
-- URL params: `?tab=static|brim&filename=X&broker=1,2&status=Y&size=min-max&date=from,to`
-- Lettura params da URL all'apertura pagina
-- Aggiornamento URL quando si cambiano filtri (senza reload)
-- **Fix extra**: Tab sempre in URL, focus preservato, matchMode in URL
-- **Fix extra**: Custom `paramsSerializer` in Axios per formato array FastAPI (`key=1&key=2`)
 
 ### Step 3: Files UX Refactoring (1h) ✅ COMPLETATO
 
 **Riferimento**: `phases/phase-04-subplan/plan-files-ux-refactor.md` (Step 3)
-**Obiettivo**: Migliorare UX sezione import files in broker detail
-
-- Creato `BrokerImportFilesModal.svelte` con DataTable integrato
-- Filtra solo file del broker corrente (non più tutti i file)
-- Colonna broker nascosta (implicita dal contesto)
-- Upload auto-assegnati al broker corrente
-- Sostituita sezione inline con bottone che apre modale
-- Link "Gestisci tutti i file" → `/files?tab=brim&broker={id}`
-- Sostituito tutte le chiamate `fetch()` dirette con client Zodios
 
 ### Step 4: Frontend Testing Infrastructure ✅ COMPLETATO
 
 **Riferimento**: `phases/phase-04-subplan/plan-frontendTesting.md`
-**Obiettivo**: Setup Playwright per test E2E automatici
 
-- Playwright installato e configurato
-- Test specs: auth, settings, files, brokers, multi-user, gallery
-- Integrazione con `./dev.py test front [action] [test_names] [--ui|--headed|--debug]`
-- Comando `./dev.py mkdocs gallery` per screenshot documentazione
-- TEST_NAMES filtering con `--grep` di Playwright
-
-### Step 4.1: E2E Test Remediation 📋 DA FARE
+### Step 4.1: E2E Test Remediation - Fase 1 ✅ COMPLETATO
 
 **Riferimento**: `plan-e2e-test-remediation.md`
-**Obiettivo**: Aggiornare test E2E per coprire funzionalità implementate
 
-- Aggiungere `data-testid` ai componenti frontend
-- Riscrivere test per selettori realistici
-- Ordine: auth → settings → files → brokers → multi-user
-- Far passare tutti i test E2E
-- Stima: ~7h
+**Lavoro svolto (2 Feb 2026)**:
+
+- ✅ Aggiunto `data-testid` a 15+ componenti (auth, layout, settings, files, brokers)
+- ✅ 51 test E2E passanti (auth: 10, settings: 13, files: 9, brokers: 7, multi-user: 2)
+- ✅ Test dinamici per lingue (genera test da file i18n)
+- ✅ Gallery screenshot base per documentazione
+- ✅ Build check automatico prima dei test (`_ensure_frontend_build()`)
+- ✅ Fix bug form submit (`on:submit|preventDefault`)
+
+### Step 4.2: Settings Mobile + Gallery 🔄 IN CORSO
+
+**Riferimento**: `plan-settings-mobile-gallery.md`
+
+**Problema identificato**: Durante generazione gallery, scoperto che Settings page non funziona bene su mobile - layout a 2 colonne comprime il contenuto.
+
+**Lavoro iniziato**:
+
+- ✅ `ProfileTab.svelte` - Righe responsive con `flex-col sm:flex-row`
+- ✅ `SettingsLayout.svelte` - Dropdown category su mobile (con select nativo)
+- 🔄 Dropdown custom per mobile (come DataTable rows selector)
+- 🔄 GlobalSettingsTab responsive
+- 🔄 Header layout mobile (titolo + pulsanti)
+
+**Da fare poi**:
+
+- Gallery con screenshot light/dark theme
+- Gallery coverage completa (tutti i tab settings)
+- Mobile menu screenshot fix
 
 ### Step 5: Image Crop Component (2h) 📋
 
 **Riferimento**: `plan-image-crop.md`
-**Obiettivo**: Componente avanzato crop/resize immagini
-
-- Libreria: cropperjs (svelte-cropperjs)
-- Aspect ratio forzato (1:1 per avatar, custom per altri)
-- Preview in tempo reale
-- Usabile per: avatar utente, icone broker, logo asset
 
 ### Step 6: Data Separation prod/test (2h) 📋
 
 **Riferimento**: `plan-data-separation.md`
-**Obiettivo**: Isolare completamente dati produzione e test
-
-- `backend/data/prod/` vs `backend/data/test/`
-- Configurazione automatica in base a `TEST_MODE`
-- Script cleanup test data sicuro
 
 ### Step 7: MkDocs Dark Mode (30 min) 🔲
 
-**Obiettivo**: Allineare CSS dark mode documentazione con frontend
-
-- File: `mkdocs_src/docs/stylesheets/extra.css`
-- Variabili colore coerenti con tema app
-
 ### Step 8: GDPR Permissions Analysis (planning only) ⏸️
 
-**Obiettivo**: Documentare problematiche e proporre soluzioni
+---
 
-- File: `plan-gdpr-permissions-rethink.md`
-- Analisi requisiti GDPR per accesso dati utenti
-- Proposte architetturali
+## 🎯 Prossimi Passi Immediati
+
+**Ordine di priorità**:
+
+1. **Completare Settings Mobile** (`plan-settings-mobile-gallery.md`)
+    - Dropdown custom per category selector
+    - Header responsive (titolo su riga, pulsanti sotto)
+    - GlobalSettingsTab responsive
+    - Testare visivamente
+
+2. **Completare Gallery**
+    - Aggiungere tutti gli screenshot mancanti
+    - Screenshot light + dark theme
+    - MkDocs Gallery walkthrough completo
+
+3. **E2E Test Fase 2** (`plan-e2e-test-remediation.md`)
+    - Test RegisterModal/ForgotPassword
+    - Test Profile edit/save
+    - Test file upload/delete
+    - Test broker edit/delete
 
 ---
 
@@ -234,24 +251,25 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 Quando si lavora su questa fase, allegare:
 
-| Scenario         | Files da allegare                                                  |
-|------------------|--------------------------------------------------------------------|
-| Bug fix generici | `plan-phase04-summary.md`                                          |
-| BRIM/Files       | `+ phases/phase-04-subplan/plan-brim-multiuser-implementation.md`  |
-| Tipi/API         | `+ phases/phase-04-subplan/plan-types-library.md`                  |
-| Test frontend    | `+ phases/phase-04-subplan/plan-frontendTesting.md`                |
-| Test remediation | `+ plan-e2e-test-remediation.md`                                   |
-| Image upload     | `+ plan-image-crop.md`                                             |
-| Separazione dati | `+ plan-data-separation.md`                                        |
-| i18n CLI         | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`          |
-| Files UX/URL     | `+ phases/phase-04-subplan/plan-files-ux-refactor.md`              |
+| Scenario                  | Files da allegare                                                 |
+|---------------------------|-------------------------------------------------------------------|
+| Bug fix generici          | `plan-phase04-summary.md`                                         |
+| BRIM/Files                | `+ phases/phase-04-subplan/plan-brim-multiuser-implementation.md` |
+| Tipi/API                  | `+ phases/phase-04-subplan/plan-types-library.md`                 |
+| Test frontend infra       | `+ phases/phase-04-subplan/plan-frontendTesting.md`               |
+| Test remediation          | `+ plan-e2e-test-remediation.md` + `e2e-test-analysis.md`         |
+| Settings mobile + gallery | `+ plan-settings-mobile-gallery.md`                               |
+| Image upload              | `+ plan-image-crop.md`                                            |
+| Separazione dati          | `+ plan-data-separation.md`                                       |
+| i18n CLI                  | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`         |
+| Files UX/URL              | `+ phases/phase-04-subplan/plan-files-ux-refactor.md`             |
 
 ---
 
 ## ✅ Checklist Pre-Commit
 
-- [ ] `./dev.py front build` senza errori/warnings
-- [ ] `./dev.py front check` senza errori
-- [ ] `./dev.py i18n audit` - 100% coverage
-- [ ] Test funzionale features modificate
-- [ ] (Futuro) `./dev.py test front` - tutti i test passano
+- [x] `./dev.py front build` senza errori/warnings
+- [x] `./dev.py front check` senza errori
+- [x] `./dev.py i18n audit` - 100% coverage
+- [x] Test funzionale features modificate
+- [x] `./dev.py test front all` - tutti i test passano (51/51)

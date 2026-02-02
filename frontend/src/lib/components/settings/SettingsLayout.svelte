@@ -1,12 +1,13 @@
 <script lang="ts">
     /**
      * SettingsLayout.svelte
-     * 2-column layout for settings pages (sidebar + content)
-     * Styled to match GlobalSettingsTab
+     * Responsive layout for settings pages
+     * - Desktop: 2-column (sidebar + content)
+     * - Mobile: dropdown + content
      */
     import { createEventDispatcher } from 'svelte';
     import { _ } from '$lib/i18n';
-    import { ChevronRight, Save, Undo, RotateCcw, Lock, Unlock } from 'lucide-svelte';
+    import { ChevronRight, ChevronDown, Save, Undo, RotateCcw, Lock, Unlock } from 'lucide-svelte';
     import type { ComponentType } from 'svelte';
 
     const dispatch = createEventDispatcher<{
@@ -33,9 +34,27 @@
     export let description: string = '';
 </script>
 
-<div class="flex gap-6 min-h-[400px]">
-    <!-- Left sidebar: Category navigation -->
-    <div class="w-48 flex-shrink-0">
+<!-- Mobile: Dropdown category selector -->
+<div class="sm:hidden mb-4">
+    <label for="mobile-category-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        {$_('settings.category')}
+    </label>
+    <select
+        id="mobile-category-select"
+        bind:value={selectedCategory}
+        class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
+               text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-libre-green focus:border-libre-green"
+    >
+        <option value="">{$_('settings.all')}</option>
+        {#each categories as category (category.id)}
+            <option value={category.id}>{$_(category.labelKey)}</option>
+        {/each}
+    </select>
+</div>
+
+<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px]">
+    <!-- Desktop: Left sidebar category navigation (hidden on mobile) -->
+    <div class="hidden sm:block w-48 flex-shrink-0">
         <nav class="space-y-1">
             <!-- All categories button -->
             <button
@@ -74,7 +93,7 @@
     <!-- Right side: Settings content -->
     <div class="flex-1 space-y-4">
         <!-- Header with actions -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-slate-700">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-gray-200 dark:border-slate-700">
             <div>
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
                 {#if description}

@@ -258,9 +258,9 @@
     <!-- Account Fields -->
     <div class="space-y-0">
         <!-- Username -->
-        <div class="setting-row flex items-start justify-between py-4 border-b border-gray-100 dark:border-slate-700 {usernameModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
+        <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-gray-100 dark:border-slate-700 gap-3 {usernameModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
             <!-- Left: Label and hint -->
-            <div class="flex-1 min-w-0 pr-4">
+            <div class="flex-1 min-w-0">
                 <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
                     <User size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
                     {$_('auth.username')}
@@ -269,7 +269,7 @@
             </div>
 
             <!-- Right: Actions + Input -->
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-3 w-full sm:w-auto">
                 <!-- Action buttons -->
                 {#if !isLocked}
                     <div class="flex items-center space-x-1">
@@ -302,7 +302,7 @@
                     disabled={saving || isLocked}
                     data-testid="profile-username"
                     class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
-                           text-gray-900 dark:text-gray-100 text-sm min-w-[200px] text-right
+                           text-gray-900 dark:text-gray-100 text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
                            focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
                            disabled:opacity-50 disabled:cursor-not-allowed"
                 />
@@ -310,9 +310,9 @@
         </div>
 
         <!-- Email -->
-        <div class="setting-row flex items-start justify-between py-4 border-b border-gray-100 dark:border-slate-700 {emailModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
+        <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-gray-100 dark:border-slate-700 gap-3 {emailModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
             <!-- Left: Label and hint -->
-            <div class="flex-1 min-w-0 pr-4">
+            <div class="flex-1 min-w-0">
                 <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
                     <Mail size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
                     {$_('auth.email')}
@@ -321,7 +321,7 @@
             </div>
 
             <!-- Right: Actions + Input -->
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-3 w-full sm:w-auto">
                 <!-- Action buttons -->
                 {#if !isLocked}
                     <div class="flex items-center space-x-1">
@@ -354,7 +354,7 @@
                     disabled={saving || isLocked}
                     data-testid="profile-email"
                     class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
-                           text-gray-900 dark:text-gray-100 text-sm min-w-[200px] text-right
+                           text-gray-900 dark:text-gray-100 text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
                            focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
                            disabled:opacity-50 disabled:cursor-not-allowed"
                 />
@@ -362,9 +362,9 @@
         </div>
 
         <!-- Account Created (readonly) -->
-        <div class="setting-row flex items-start justify-between py-4">
+        <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 gap-2">
             <!-- Left: Label -->
-            <div class="flex-1 min-w-0 pr-4">
+            <div class="flex-1 min-w-0">
                 <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
                     <Calendar size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
                     {$_('settings.accountCreated')}
@@ -372,7 +372,7 @@
             </div>
 
             <!-- Right: Value -->
-            <div class="text-sm text-gray-600 dark:text-gray-300">
+            <div class="text-sm text-gray-600 dark:text-gray-300 sm:text-right">
                 {formatDate($currentUser?.created_at)}
             </div>
         </div>
@@ -387,30 +387,30 @@
 
         <div class="space-y-0">
             <!-- Change Password -->
-            <div class="setting-row flex items-start justify-between py-4 border-b border-gray-100 dark:border-slate-700">
-                <div class="flex-1 min-w-0 pr-4">
+            <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-gray-100 dark:border-slate-700 gap-3">
+                <div class="flex-1 min-w-0">
                     <div class="text-sm font-medium text-gray-700 dark:text-gray-200">{$_('settings.changePassword')}</div>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.changePasswordDescription')}</p>
                 </div>
                 <button
                     on:click={() => showPasswordModal = true}
                     data-testid="change-password-button"
-                    class="px-4 py-2 bg-libre-green text-white text-sm rounded-lg hover:bg-libre-green/90 transition-colors"
+                    class="px-4 py-2 bg-libre-green text-white text-sm rounded-lg hover:bg-libre-green/90 transition-colors w-full sm:w-auto"
                 >
                     {$_('settings.changePassword')}
                 </button>
             </div>
 
             <!-- Delete Account -->
-            <div class="setting-row flex items-start justify-between py-4">
-                <div class="flex-1 min-w-0 pr-4">
+            <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 gap-3">
+                <div class="flex-1 min-w-0">
                     <div class="text-sm font-medium text-red-600 dark:text-red-400">{$_('settings.deleteAccount')}</div>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.deleteAccountDescription')}</p>
                 </div>
                 <button
                     on:click={() => showDeleteModal = true}
                     data-testid="delete-account-button"
-                    class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                    class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors w-full sm:w-auto"
                 >
                     {$_('settings.deleteAccount')}
                 </button>

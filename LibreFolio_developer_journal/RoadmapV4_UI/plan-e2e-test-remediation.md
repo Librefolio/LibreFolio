@@ -1,7 +1,8 @@
 # Plan: E2E Test Remediation
 
 **Data creazione**: 2 Febbraio 2026  
-**Status**: ✅ FASE 1 COMPLETATA  
+**Ultimo aggiornamento**: 2 Febbraio 2026  
+**Status**: ✅ FASE 1 COMPLETATA, 🔄 FASE 2 in pianificazione  
 **Priorità**: P1  
 **Dipendenze**: plan-frontendTesting.md (infrastruttura completata)
 
@@ -9,18 +10,24 @@
 
 ---
 
-## 📊 Stato Test (2 Feb 2026 - 17:00)
+## 📊 Stato Test (2 Feb 2026 - 18:30)
 
-| Suite              | Test | Status          | Note                                            |
-|--------------------|------|-----------------|-------------------------------------------------|
-| auth.spec.ts       | 10   | ✅ PASS          | Language-agnostic + test dinamici lingua        |
-| settings.spec.ts   | 13   | ✅ PASS          | Tabs, profile, preferences, admin               |
-| files.spec.ts      | 9    | ✅ PASS          | Tabs, URL deep-linking, empty states            |
-| brokers.spec.ts    | 7    | ✅ PASS          | CRUD, modal open/close                          |
-| multi-user.spec.ts | 2    | ✅ PASS          | Isolamento + unicità nomi globale               |
-| gallery.spec.ts    | 11   | ✅ 10/10 desktop | Mobile richiede `npx playwright install webkit` |
+| Suite              | Test | Status          | Note                                     |
+|--------------------|------|-----------------|------------------------------------------|
+| auth.spec.ts       | 10   | ✅ PASS          | Language-agnostic + test dinamici lingua |
+| settings.spec.ts   | 13   | ✅ PASS          | Tabs, profile, preferences, admin        |
+| files.spec.ts      | 9    | ✅ PASS          | Tabs, URL deep-linking, empty states     |
+| brokers.spec.ts    | 7    | ✅ PASS          | CRUD, modal open/close                   |
+| multi-user.spec.ts | 2    | ✅ PASS          | Isolamento + unicità nomi globale        |
+| gallery.spec.ts    | 12   | ✅ 11/12 desktop | Mobile menu fix in corso                 |
 
-**Totale: 52 test, 51 PASS (desktop)**
+**Totale: 51 test funzionali PASS (5/5 suite)**
+
+### Infrastruttura Aggiunta
+
+- ✅ Build check automatico (`_ensure_frontend_build()`) - ricompila solo se sorgenti cambiati
+- ✅ db populate automatico prima di gallery
+- ✅ freezeAnimations() per screenshot consistenti
 
 ---
 

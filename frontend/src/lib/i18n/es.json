@@ -394,7 +394,8 @@
     "categoryAppearance": "Apariencia",
     "defaultCurrency": "Moneda predeterminada",
     "defaultCurrencyHint": "Moneda utilizada por defecto para nuevas transacciones y cálculos",
-    "themeHint": "Elige tu tema preferido"
+    "themeHint": "Elige tu tema preferido",
+    "category": "Categoría"
   },
   "uploads": {
     "dropOrClick": "Arrastra un archivo aquí o haz clic para explorar",
