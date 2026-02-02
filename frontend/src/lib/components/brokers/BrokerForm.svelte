@@ -240,6 +240,7 @@
         </label>
         <input
                 id="broker-name"
+                data-testid="broker-name-input"
                 type="text"
                 bind:value={name}
                 placeholder={$_('brokers.namePlaceholder')}
@@ -508,6 +509,7 @@
     </button>
     <button
             type="button"
+            data-testid="broker-form-submit"
             on:click={handleSubmit}
             disabled={!isValid || loading || hasDuplicateCurrencies}
             class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

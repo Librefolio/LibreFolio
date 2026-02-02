@@ -10,6 +10,7 @@
     export let autocomplete: AutoFill = 'current-password';
     export let hasError: boolean = false;
     export let id: string = '';
+    export let testId: string = '';
 
     // Internal state
     let showPassword = false;
@@ -22,6 +23,7 @@
 <div class="relative">
     <input
             {id}
+            data-testid={testId || undefined}
             type={showPassword ? 'text' : 'password'}
             bind:value
             {placeholder}

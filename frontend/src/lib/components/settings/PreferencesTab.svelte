@@ -298,6 +298,7 @@
     {:else}
         <!-- Language Setting -->
         {#if visibleFields.includes('language')}
+            <div data-testid="preference-language">
             <SettingSelect
                 bind:value={editedValues.language}
                 options={languageOptions}
@@ -311,10 +312,12 @@
                 on:undo={() => undoField('language')}
                 on:reset={() => resetField('language')}
             />
+            </div>
         {/if}
 
         <!-- Default Currency Setting -->
         {#if visibleFields.includes('default_currency')}
+            <div data-testid="preference-currency">
             <SettingCurrency
                 bind:value={editedValues.default_currency}
                 options={currencyOptions}
@@ -329,10 +332,12 @@
                 on:undo={() => undoField('default_currency')}
                 on:reset={() => resetField('default_currency')}
             />
+            </div>
         {/if}
 
         <!-- Theme Setting -->
         {#if visibleFields.includes('theme')}
+            <div data-testid="preference-theme">
             <SettingTheme
                 bind:value={editedValues.theme}
                 label={$_('settings.theme')}
@@ -345,6 +350,7 @@
                 on:undo={() => undoField('theme')}
                 on:reset={() => resetField('theme')}
             />
+            </div>
         {/if}
     {/if}
 </SettingsLayout>

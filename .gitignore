@@ -66,6 +66,7 @@ Pipfile.lock
 # MkDocs
 mkdocs_src/site/
 mkdocs_src/docs/javascripts/vendor/
+/mkdocs_src/docs/gallery/**/*.png
 
 # Coverage reports
 htmlcov/
@@ -77,3 +78,4 @@ coverage.xml
 
 # Development stuff
 _backup_docs/
+

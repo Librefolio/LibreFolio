@@ -23,7 +23,7 @@
     ];
 </script>
 
-<div class="space-y-6">
+<div class="space-y-6" data-testid="settings-page">
     <!-- Page Title - shows active tab name on mobile -->
     <h1 class="text-2xl font-bold text-gray-900 sm:hidden">
         {$_(tabs.find(t => t.id === activeTab)?.labelKey ?? 'settings.profile')}
@@ -31,7 +31,7 @@
 
     <!-- Tabs Navigation -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div class="flex border-b border-gray-200">
+        <div class="flex border-b border-gray-200" role="tablist">
             {#each tabs as tab (tab.id)}
                 <button
                         on:click={() => (activeTab = tab.id)}
@@ -40,6 +40,9 @@
 						? 'text-libre-green border-b-2 border-libre-green bg-libre-green/5'
 						: 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}
 						{tab.id === 'admin' ? 'sm:ml-auto' : ''}"
+                        data-testid="settings-tab-{tab.id}"
+                        role="tab"
+                        aria-selected={activeTab === tab.id}
                         title={$_(tab.labelKey)}
                 >
                     <svelte:component this={tab.icon} size={18}/>
@@ -62,4 +65,3 @@
         </div>
     </div>
 </div>
-

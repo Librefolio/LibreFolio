@@ -140,6 +140,7 @@
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div
                 class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
+                data-testid="broker-modal"
                 role="dialog"
                 tabindex="-1"
                 on:click|stopPropagation

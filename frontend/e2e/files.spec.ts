@@ -7,52 +7,86 @@ test.describe('Files Page', () => {
         await login(page, TEST_USER);
     });
 
-    test('can access files page', async ({ page }) => {
-        await navigateTo(page, '/files');
-        await expect(page.getByRole('heading', { name: /files|file/i })).toBeVisible();
+    test.describe('Page Access and Navigation', () => {
+        test('can access files page', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await expect(page.getByTestId('files-page')).toBeVisible();
+        });
+
+        test('shows both tabs', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await expect(page.getByTestId('files-tab-static')).toBeVisible();
+            await expect(page.getByTestId('files-tab-brim')).toBeVisible();
+        });
+
+        test('can switch to BRIM tab', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await page.getByTestId('files-tab-brim').click();
+            await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
+        });
+
+        test('can switch back to static tab', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await page.getByTestId('files-tab-brim').click();
+            await page.getByTestId('files-tab-static').click();
+            await expect(page.getByTestId('files-tab-static')).toHaveAttribute('aria-selected', 'true');
+        });
     });
 
-    test('files page has tabs', async ({ page }) => {
-        await navigateTo(page, '/files');
+    test.describe('URL Deep-Linking', () => {
+        test('URL filter tab=static opens static tab', async ({ page }) => {
+            await page.goto('/files?tab=static');
+            await page.waitForLoadState('networkidle');
+            await expect(page.getByTestId('files-tab-static')).toHaveAttribute('aria-selected', 'true');
+        });
 
-        // Look for static and broker report tabs
-        const staticTab = page.getByRole('tab', { name: /static|resources|risorse/i });
-        const brimTab = page.getByRole('tab', { name: /broker|import|report/i });
-
-        // At least one tab should be visible
-        const hasStaticTab = await staticTab.isVisible().catch(() => false);
-        const hasBrimTab = await brimTab.isVisible().catch(() => false);
-
-        expect(hasStaticTab || hasBrimTab).toBeTruthy();
+        test('URL filter tab=brim opens BRIM tab', async ({ page }) => {
+            await page.goto('/files?tab=brim');
+            await page.waitForLoadState('networkidle');
+            await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
+        });
     });
 
-    test('URL filter tab=static works', async ({ page }) => {
-        await page.goto('/files?tab=static');
-        await page.waitForLoadState('networkidle');
+    test.describe('Static Files Tab', () => {
+        test('shows files table for static resources', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await page.getByTestId('files-tab-static').click();
+            // FilesTable wrapper has testid files-table-static
+            await expect(page.getByTestId('files-table-static')).toBeVisible();
+        });
 
-        // Should show static resources tab content
-        await expect(page.getByText(/static|resources|risorse/i)).toBeVisible();
+        test('upload button is visible', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await page.getByTestId('files-tab-static').click();
+            await expect(page.getByTestId('upload-button')).toBeVisible();
+        });
     });
 
-    test('URL filter tab=brim works', async ({ page }) => {
-        await page.goto('/files?tab=brim');
-        await page.waitForLoadState('networkidle');
+    test.describe('BRIM Tab', () => {
+        test('BRIM tab shows table or empty state', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await page.getByTestId('files-tab-brim').click();
 
-        // Should show broker reports tab content
-        await expect(page.getByText(/broker|import|report/i)).toBeVisible();
-    });
+            // Wait for tab to be selected
+            await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
 
-    test('can upload a file', async ({ page }) => {
-        await navigateTo(page, '/files');
+            // Wait a bit for content to load
+            await page.waitForTimeout(500);
 
-        // Look for upload button or drop zone
-        const uploadButton = page.getByRole('button', { name: /upload|carica/i });
-        const dropZone = page.getByTestId('file-drop-zone');
+            // Either files table is visible OR empty state is shown
+            const hasTable = await page.getByTestId('files-table-brim').isVisible().catch(() => false);
+            const hasEmptyState = await page.getByTestId('brim-empty-state').isVisible().catch(() => false);
 
-        const hasUpload = await uploadButton.isVisible().catch(() => false);
-        const hasDropZone = await dropZone.isVisible().catch(() => false);
-
-        // Should have some way to upload files
-        expect(hasUpload || hasDropZone).toBeTruthy();
+            // If neither, check for loading state
+            if (!hasTable && !hasEmptyState) {
+                // Maybe still loading - wait more
+                await page.waitForTimeout(1000);
+                const hasTableRetry = await page.getByTestId('files-table-brim').isVisible().catch(() => false);
+                const hasEmptyRetry = await page.getByTestId('brim-empty-state').isVisible().catch(() => false);
+                expect(hasTableRetry || hasEmptyRetry).toBeTruthy();
+            } else {
+                expect(hasTable || hasEmptyState).toBeTruthy();
+            }
+        });
     });
 });

@@ -120,7 +120,7 @@
     }
 </script>
 
-<div class="space-y-6">
+<div class="space-y-6" data-testid="brokers-page">
     <!-- Header with actions -->
     <div class="flex items-center justify-between">
         <div>
@@ -131,6 +131,7 @@
             <button
                     on:click={loadBrokers}
                     disabled={loading}
+                    data-testid="brokers-refresh"
                     class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50"
                     title="Refresh"
             >
@@ -138,6 +139,7 @@
             </button>
             <button
                     on:click={openCreateModal}
+                    data-testid="add-broker-button"
                     class="flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all"
             >
                 <Plus size={18}/>

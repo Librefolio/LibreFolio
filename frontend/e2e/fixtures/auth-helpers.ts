@@ -7,24 +7,25 @@ import { TEST_USER, type Language } from './test-users';
 export async function login(page: Page, user = TEST_USER) {
     await page.goto('/');
 
-    // Wait for login form
-    await expect(page.getByPlaceholder(/username|email/i)).toBeVisible();
+    // Wait for auth check to complete and login form to appear (3s for localhost)
+    await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+    await expect(page.getByTestId('login-form')).toBeVisible();
 
-    // Fill and submit
-    await page.getByPlaceholder(/username|email/i).fill(user.username);
-    await page.getByPlaceholder(/password/i).fill(user.password);
-    await page.getByRole('button', { name: /login|sign in|accedi/i }).click();
+    // Fill and submit using data-testid
+    await page.getByTestId('login-username').fill(user.username);
+    await page.getByTestId('login-password').fill(user.password);
+    await page.getByTestId('login-submit').click();
 
     // Wait for dashboard
-    await expect(page).toHaveURL(/.*dashboard.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(/.*dashboard.*/, { timeout: 3000 });
 }
 
 /**
  * Logout current user
  */
 export async function logout(page: Page) {
-    await page.getByTestId('user-menu').click();
-    await page.getByRole('menuitem', { name: /logout|sign out|esci/i }).click();
+    // Sidebar is visible on desktop, click logout button directly
+    await page.getByTestId('logout-button').click();
     await expect(page).toHaveURL('/');
 }
 
@@ -32,14 +33,19 @@ export async function logout(page: Page) {
  * Change UI language
  */
 export async function setLanguage(page: Page, lang: Language) {
-    await page.getByTestId('language-selector').click();
+    // Wait for language selector to be visible
+    await expect(page.getByTestId('language-selector-button')).toBeVisible({ timeout: 3000 });
+    await page.getByTestId('language-selector-button').click();
+
+    // Click the menu item specifically (not any element with that text)
     const langNames: Record<Language, string> = {
         en: 'English',
         it: 'Italiano',
         fr: 'Français',
         es: 'Español',
     };
-    await page.getByText(langNames[lang]).click();
+    // Use role='menuitem' to be specific and avoid conflicts with other dropdowns
+    await page.getByRole('menuitem', { name: new RegExp(langNames[lang]) }).click();
     await page.waitForTimeout(300); // Wait for i18n update
 }
 
@@ -65,5 +71,7 @@ export async function navigateTo(page: Page, route: string, menuItem?: string) {
     } else {
         await page.goto(route);
     }
-    await page.waitForLoadState('networkidle');
+    // Wait for page to be fully loaded
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(100); // Small buffer for Svelte hydration
 }

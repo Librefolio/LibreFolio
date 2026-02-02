@@ -125,7 +125,7 @@
     }
 </script>
 
-<div class="w-full max-w-lg bg-libre-beige rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans">
+<div class="w-full max-w-lg bg-libre-beige rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="register-modal">
 
     <!-- Header Section (Dark Green) -->
     <div class="bg-libre-green p-8 flex flex-col items-center justify-center space-y-2">
@@ -138,7 +138,7 @@
 
     <!-- Body Section -->
     <div class="p-8 pt-6">
-        <form class="space-y-4" on:submit|preventDefault={handleSubmit}>
+        <form class="space-y-4" on:submit|preventDefault={handleSubmit} data-testid="register-form">
 
             <!-- General Error Message -->
             {#if error}
@@ -150,6 +150,8 @@
             <!-- Username Input -->
             <div>
                 <input
+                        id="register-username"
+                        data-testid="register-username"
                         autocomplete="username"
                         bind:value={username}
                         class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
@@ -172,6 +174,8 @@
             <!-- Email Input -->
             <div>
                 <input
+                        id="register-email"
+                        data-testid="register-email"
                         autocomplete="email"
                         bind:value={email}
                         class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
@@ -240,6 +244,7 @@
                 <span>{$_('auth.hasAccount')} </span>
                 <button
                         class="font-bold text-libre-dark hover:underline"
+                        data-testid="goto-login"
                         on:click={() => dispatch('gotoLogin', {})}
                         type="button"
                 >

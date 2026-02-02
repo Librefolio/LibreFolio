@@ -1,44 +1,83 @@
 import { test, expect } from '@playwright/test';
 import { login, logout, setLanguage } from './fixtures/auth-helpers';
 import { TEST_USER, TEST_ADMIN } from './fixtures/test-users';
+import { SUPPORTED_LANGUAGES, LANGUAGE_INFO, t } from './fixtures/i18n-data';
 
 test.describe('Authentication', () => {
 
-    test('login page renders correctly', async ({ page }) => {
-        await page.goto('/');
-        await expect(page.getByPlaceholder(/username|email/i)).toBeVisible();
-        await expect(page.getByPlaceholder(/password/i)).toBeVisible();
-        await expect(page.getByRole('button', { name: /login|sign in/i })).toBeVisible();
+    test.describe('Core Auth Flow (language-agnostic)', () => {
+
+        test('login page renders correctly', async ({ page }) => {
+            await page.goto('/');
+            // Wait for auth check to complete (3s timeout for localhost)
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            // Then check login form elements
+            await expect(page.getByTestId('login-modal')).toBeVisible();
+            await expect(page.getByTestId('login-form')).toBeVisible();
+            await expect(page.getByTestId('login-username')).toBeVisible();
+            await expect(page.getByTestId('login-submit')).toBeVisible();
+        });
+
+        test('successful login redirects to dashboard', async ({ page }) => {
+            await login(page, TEST_USER);
+            await expect(page).toHaveURL(/.*dashboard.*/);
+            await expect(page.getByTestId('dashboard-page')).toBeVisible();
+        });
+
+        test('invalid credentials show error', async ({ page }) => {
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await page.getByTestId('login-username').fill('wronguser');
+            await page.getByTestId('login-password').fill('wrongpass');
+            await page.getByTestId('login-submit').click();
+            // Error message should appear (any language)
+            await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 3000 });
+        });
+
+        test('logout returns to login page', async ({ page }) => {
+            await login(page, TEST_USER);
+            await logout(page);
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await expect(page.getByTestId('login-modal')).toBeVisible();
+        });
+
+        test('admin can login', async ({ page }) => {
+            await login(page, TEST_ADMIN);
+            await expect(page).toHaveURL(/.*dashboard.*/);
+            await expect(page.getByTestId('dashboard-page')).toBeVisible();
+        });
     });
 
-    test('successful login redirects to dashboard', async ({ page }) => {
-        await login(page, TEST_USER);
-        await expect(page).toHaveURL(/.*dashboard.*/);
-        await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible();
-    });
+    test.describe('Language Selector', () => {
 
-    test('invalid credentials show error', async ({ page }) => {
-        await page.goto('/');
-        await page.getByPlaceholder(/username|email/i).fill('wronguser');
-        await page.getByPlaceholder(/password/i).fill('wrongpass');
-        await page.getByRole('button', { name: /login|sign in/i }).click();
-        await expect(page.getByText(/invalid|incorrect|failed|error/i)).toBeVisible();
-    });
+        test('language selector is visible and clickable', async ({ page }) => {
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await expect(page.getByTestId('language-selector')).toBeVisible();
+            await page.getByTestId('language-selector-button').click();
+            // Dropdown should open with language options
+            for (const lang of SUPPORTED_LANGUAGES) {
+                const info = LANGUAGE_INFO[lang];
+                if (info) {
+                    await expect(page.getByText(info.name)).toBeVisible();
+                }
+            }
+        });
 
-    test('logout returns to login page', async ({ page }) => {
-        await login(page, TEST_USER);
-        await logout(page);
-        await expect(page.getByPlaceholder(/username|email/i)).toBeVisible();
-    });
+        // Dynamic tests for each supported language
+        for (const lang of SUPPORTED_LANGUAGES) {
+            const info = LANGUAGE_INFO[lang];
+            if (!info) continue;
 
-    test('language selector changes UI', async ({ page }) => {
-        await page.goto('/');
-        await setLanguage(page, 'it');
-        await expect(page.getByRole('button', { name: /accedi/i })).toBeVisible();
-    });
+            test(`switching to ${info.name} (${lang}) updates login button text`, async ({ page }) => {
+                await page.goto('/');
+                await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+                await setLanguage(page, lang as any);
 
-    test('admin can login', async ({ page }) => {
-        await login(page, TEST_ADMIN);
-        await expect(page).toHaveURL(/.*dashboard.*/);
+                // Get expected login button text for this language
+                const expectedText = t(lang, 'auth.login');
+                await expect(page.getByTestId('login-submit')).toContainText(expectedText);
+            });
+        }
     });
 });
