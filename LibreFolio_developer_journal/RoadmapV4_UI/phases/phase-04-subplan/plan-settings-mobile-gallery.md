@@ -2,7 +2,7 @@
 
 **Data creazione**: 2 Febbraio 2026  
 **Ultimo aggiornamento**: 3 Febbraio 2026  
-**Status**: 🔄 IN PROGRESS (Fase 1 e 4 completate, Fase 2-3 da fare)  
+**Status**: ✅ COMPLETED  
 **Priorità**: P1  
 **Dipendenze**: E2E test infrastructure (completata)
 
@@ -170,65 +170,37 @@ Implementato: Titolo e pulsanti separati verticalmente su mobile:
 - ✅ `SettingTheme.svelte` - Layout 3 righe + allineamento destra
 - ✅ `GlobalSettingsTab.svelte` - Layout 3 righe per tutti i tipi
 
-### Fase 2: Gallery Theme Support (1.5h) ⏳
+### Fase 2: Gallery Theme Support (1.5h) ✅ COMPLETATA
 
-#### 2.1 Modificare gallery.spec.ts per loop temi
+#### 2.1 Modificare gallery.spec.ts per loop temi ✅
 
-```typescript
-const THEMES = ['light', 'dark'] as const;
+Implementato loop su `THEMES = ['light', 'dark']` per generare screenshot in entrambi i temi.
 
-async function setTheme(page: Page, theme: 'light' | 'dark') {
-    await page.getByTestId('theme-toggle').click();
-    // Verificare che il tema sia cambiato
-}
+#### 2.2 Aggiornare screenshot() function ✅
 
-// Struttura path: {viewport}/{lang}/{theme}/{category}/{name}.png
-```
+Path aggiornato a: `{viewport}/{lang}/{theme}/{category}/{name}.png`
 
-#### 2.2 Aggiornare screenshot() function
+#### 2.3 Gallery pages usano tema MkDocs ✅
 
-```typescript
-function getGalleryPath(
-    viewport: 'desktop' | 'mobile',
-    lang: Language,
-    theme: 'light' | 'dark',
-    category: string
-): string {
-    return path.join(GALLERY_ROOT, viewport, lang, theme, category);
-}
-```
+- Rimossi selettori tema inline dalle pagine
+- Le immagini seguono il tema MkDocs (toggle ☀️/🌙 nell'header)
+- MutationObserver per reagire ai cambi tema
 
-#### 2.3 Aggiornare gallery pages per theme detection
+### Fase 3: Gallery Coverage (1h) ✅ COMPLETATA
 
-```javascript
-// Detect MkDocs Material theme
-const isDark = document.documentElement.getAttribute('data-md-color-scheme') === 'slate';
-const theme = isDark ? 'dark' : 'light';
-// Update image src based on theme + language
-```
+#### 3.1 Aggiungere test per screenshot mancanti ✅
 
-### Fase 3: Gallery Coverage (1h) ⏳
+Aggiunti test per:
+- About tab (settings)
+- Password change modal (settings)
 
-#### 3.1 Aggiungere test per screenshot mancanti
+#### 3.2 Aggiornare desktop.md e mobile.md ✅
 
-```typescript
-// Settings - tutti i tab
-test('preferences tab - all languages', ...);
-test('about tab - all languages', ...);
-
-// Password change modal
-test('password change modal - all languages', ...);
-```
-
-#### 3.2 Aggiornare desktop.md e mobile.md
-
-Aggiungere sezioni per:
-
-- Register empty + filled (già generati)
-- All settings tabs
-- Password change modal
-- Files tabs
-- Brokers (list, detail, import)
+- Aggiunte sezioni About e Password Change
+- Aggiunte sezioni Files (static + brim)
+- Aggiunte sezioni Brokers (detail + import modal)
+- Language selector spostato nell'header MkDocs
+- Creato `gallery-lang-selector.js` per dropdown lingua nell'header
 
 ### Fase 4: Fix Mobile Menu Screenshot ✅ COMPLETATA
 
@@ -249,27 +221,26 @@ Soluzione implementata:
 | 1.2        | Header responsive         | 30min   | ✅      |
 | 1.3        | GlobalSettingsTab         | 15min   | ✅      |
 | 1.4        | Verifica setting controls | 15min   | ✅      |
-| 2.1        | Gallery theme loop        | 30min   | ⏳      |
-| 2.2        | Screenshot path update    | 15min   | ⏳      |
-| 2.3        | Gallery pages theme JS    | 30min   | ⏳      |
-| 3.1        | New screenshot tests      | 30min   | ⏳      |
-| 3.2        | Update gallery pages      | 30min   | ⏳      |
+| 2.1        | Gallery theme loop        | 30min   | ✅      |
+| 2.2        | Screenshot path update    | 15min   | ✅      |
+| 2.3        | Gallery pages theme JS    | 30min   | ✅      |
+| 3.1        | New screenshot tests      | 30min   | ✅      |
+| 3.2        | Update gallery pages      | 30min   | ✅      |
 | 4          | Mobile menu fix           | 15min   | ✅      |
-| **TOTALE** |                           | **~4h** |        |
+| **TOTALE** |                           | **~4h** | ✅      |
 
-**Completato**: ~2h (Fase 1 + Fase 4)
-**Rimanente**: ~2h (Fase 2 + Fase 3)
+**Completato**: 4h (tutte le fasi)
 
 ---
 
 ## 🎯 Criteri di Successo
 
 1. ✅ Settings page usabile su mobile (dropdown custom, layout verticale)
-2. ⏳ Gallery genera screenshot light + dark
-3. ⏳ Gallery pages mostrano tema corretto automaticamente
-4. ⏳ Tutti i tab settings hanno screenshot
+2. ✅ Gallery genera screenshot light + dark
+3. ✅ Gallery pages mostrano tema corretto automaticamente (via MkDocs theme toggle)
+4. ✅ Tutti i tab settings hanno screenshot (user-preferences, global-settings, about, password-modal)
 5. ✅ `./dev.py test front all` passa (51/51)
-6. ✅ `./dev.py mkdocs gallery` genera tutti gli screenshot senza errori (12/12 test pass)
+6. ✅ `./dev.py mkdocs gallery` genera tutti gli screenshot senza errori (14 test desktop + 14 mobile = 28 test, ~224 screenshots)
 
 ---
 
@@ -293,3 +264,4 @@ Soluzione implementata:
 - `mkdocs_src/docs/gallery/index.md`
 - `mkdocs_src/docs/gallery/desktop.md`
 - `mkdocs_src/docs/gallery/mobile.md`
+- `mkdocs_src/docs/javascripts/gallery-lang-selector.js` (NEW)

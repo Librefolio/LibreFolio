@@ -1,16 +1,10 @@
 # 🖥️ Desktop Gallery
 
-Experience LibreFolio's full desktop interface. Use the language selector below to view screenshots in your preferred language.
+Experience LibreFolio's full desktop interface. Screenshots automatically adapt to your selected theme and language.
 
-<div class="language-selector" id="lang-selector">
-    <span class="lang-label">Language:</span>
-    <div class="lang-grid">
-        <button class="lang-btn active" data-lang="en">🇬🇧 English</button>
-        <button class="lang-btn" data-lang="it">🇮🇹 Italiano</button>
-        <button class="lang-btn" data-lang="fr">🇫🇷 Français</button>
-        <button class="lang-btn" data-lang="es">🇪🇸 Español</button>
-    </div>
-</div>
+!!! tip "Theme & Language"
+    Use the **theme toggle** in the header (☀️/🌙) to switch between light and dark mode.
+    Use the **language selector** (🇬🇧) in the header to view screenshots in different languages.
 
 ---
 
@@ -21,7 +15,7 @@ Experience LibreFolio's full desktop interface. Use the language selector below 
 The welcoming login page with our signature animated background.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/auth/01-login.png" data-it="it/auth/01-login.png" data-fr="fr/auth/01-login.png" data-es="es/auth/01-login.png" alt="Login Page" src="en/auth/01-login.png">
+    <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page">
 </div>
 
 ### Registration - Empty Form
@@ -29,7 +23,7 @@ The welcoming login page with our signature animated background.
 New users can easily create an account.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/auth/02-register-empty.png" data-it="it/auth/02-register-empty.png" data-fr="fr/auth/02-register-empty.png" data-es="es/auth/02-register-empty.png" alt="Register Modal" src="en/auth/02-register-empty.png">
+    <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Register Modal">
 </div>
 
 ### Registration - With Password Strength
@@ -37,7 +31,7 @@ New users can easily create an account.
 Real-time password strength feedback helps users create secure passwords.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/auth/03-register-filled.png" data-it="it/auth/03-register-filled.png" data-fr="fr/auth/03-register-filled.png" data-es="es/auth/03-register-filled.png" alt="Register with Password Strength" src="en/auth/03-register-filled.png">
+    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Register with Password Strength">
 </div>
 
 ---
@@ -49,7 +43,7 @@ Real-time password strength feedback helps users create secure passwords.
 Your portfolio at a glance with quick stats and navigation.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/dashboard/main.png" data-it="it/dashboard/main.png" data-fr="fr/dashboard/main.png" data-es="es/dashboard/main.png" alt="Dashboard" src="en/dashboard/main.png">
+    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard">
 </div>
 
 ---
@@ -61,7 +55,7 @@ Your portfolio at a glance with quick stats and navigation.
 Customize language, currency, and theme to your liking.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/settings/user-preferences.png" data-it="it/settings/user-preferences.png" data-fr="fr/settings/user-preferences.png" data-es="es/settings/user-preferences.png" alt="User Preferences" src="en/settings/user-preferences.png">
+    <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
 </div>
 
 ### Global Settings (Admin)
@@ -69,7 +63,23 @@ Customize language, currency, and theme to your liking.
 Administrators can configure system-wide settings.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/settings/global-settings.png" data-it="it/settings/global-settings.png" data-fr="fr/settings/global-settings.png" data-es="es/settings/global-settings.png" alt="Global Settings" src="en/settings/global-settings.png">
+    <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings">
+</div>
+
+### About
+
+System information and version details.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="about" alt="About">
+</div>
+
+### Password Change
+
+Securely change your password with strength validation.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Password Change Modal">
 </div>
 
 ---
@@ -81,7 +91,7 @@ Administrators can configure system-wide settings.
 Upload and manage images, logos, and other static files.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/files/static-tab.png" data-it="it/files/static-tab.png" data-fr="fr/files/static-tab.png" data-es="es/files/static-tab.png" alt="Static Files Tab" src="en/files/static-tab.png">
+    <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab">
 </div>
 
 ### Broker Reports (BRIM)
@@ -89,7 +99,7 @@ Upload and manage images, logos, and other static files.
 Import and manage broker transaction reports.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/files/brim-tab.png" data-it="it/files/brim-tab.png" data-fr="fr/files/brim-tab.png" data-es="es/files/brim-tab.png" alt="BRIM Tab" src="en/files/brim-tab.png">
+    <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
 </div>
 
 ---
@@ -101,7 +111,7 @@ Import and manage broker transaction reports.
 All your brokerage accounts in one view.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/brokers/list.png" data-it="it/brokers/list.png" data-fr="fr/brokers/list.png" data-es="es/brokers/list.png" alt="Broker List" src="en/brokers/list.png">
+    <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List">
 </div>
 
 ### Broker Detail
@@ -109,7 +119,7 @@ All your brokerage accounts in one view.
 Detailed view of a single broker with cash balances and transactions.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/brokers/detail.png" data-it="it/brokers/detail.png" data-fr="fr/brokers/detail.png" data-es="es/brokers/detail.png" alt="Broker Detail" src="en/brokers/detail.png">
+    <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail">
 </div>
 
 ### Import Modal
@@ -117,96 +127,52 @@ Detailed view of a single broker with cash balances and transactions.
 Easily import transactions from your broker's export files.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-en="en/brokers/import-modal.png" data-it="it/brokers/import-modal.png" data-fr="fr/brokers/import-modal.png" data-es="es/brokers/import-modal.png" alt="Import Modal" src="en/brokers/import-modal.png">
+    <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
 </div>
 
 ---
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const langBtns = document.querySelectorAll('.lang-btn');
     const images = document.querySelectorAll('.gallery-img');
     
-    // Get stored language or default to 'en'
-    let currentLang = localStorage.getItem('gallery-lang') || 'en';
+    // Get language from localStorage (shared with header selector)
+    function getCurrentLang() {
+        return localStorage.getItem('gallery-lang') || 'en';
+    }
     
-    // Apply initial language
-    updateLanguage(currentLang);
+    // Detect MkDocs Material theme
+    function getMkDocsTheme() {
+        const scheme = document.body.getAttribute('data-md-color-scheme');
+        return scheme === 'slate' ? 'dark' : 'light';
+    }
     
-    langBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            currentLang = this.dataset.lang;
-            localStorage.setItem('gallery-lang', currentLang);
-            updateLanguage(currentLang);
-        });
-    });
-    
-    function updateLanguage(lang) {
-        // Update button states
-        langBtns.forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.lang === lang);
-        });
+    function updateImages() {
+        const lang = getCurrentLang();
+        const theme = getMkDocsTheme();
         
-        // Update images
         images.forEach(img => {
-            const newSrc = img.dataset[lang];
-            if (newSrc) {
-                img.src = newSrc;
+            const category = img.dataset.category;
+            const name = img.dataset.name;
+            if (category && name) {
+                img.src = `${lang}/${theme}/${category}/${name}.png`;
             }
         });
     }
+    
+    // Initial update
+    updateImages();
+    
+    // Listen for language changes from header selector
+    window.addEventListener('gallery-lang-change', updateImages);
+    
+    // Watch for MkDocs theme changes
+    const observer = new MutationObserver(updateImages);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-md-color-scheme'] });
 });
 </script>
 
 <style>
-.language-selector {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem;
-    background: var(--md-code-bg-color);
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
-}
-
-.lang-label {
-    font-weight: bold;
-    font-size: 1.1rem;
-}
-
-.lang-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-}
-
-@media (min-width: 600px) {
-    .lang-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
-
-.lang-btn {
-    padding: 0.6rem 1rem;
-    border: 2px solid var(--md-primary-fg-color);
-    background: transparent;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 0.95rem;
-    text-align: center;
-}
-
-.lang-btn:hover {
-    background: var(--md-primary-fg-color);
-    color: white;
-}
-
-.lang-btn.active {
-    background: var(--md-primary-fg-color);
-    color: white;
-}
-
 .screenshot-container {
     margin: 1rem 0 2rem 0;
     border-radius: 8px;
