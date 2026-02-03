@@ -83,8 +83,8 @@
             </div>
         {/if}
 
-        <!-- FuzzySelect for currency - full width on mobile -->
-        <div class="flex-1 sm:flex-none sm:min-w-[220px]">
+        <!-- FuzzySelect for currency - responsive width -->
+        <div class="w-48 sm:w-64">
             <FuzzySelect
                 bind:value
                 {options}
