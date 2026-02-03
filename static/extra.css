@@ -111,12 +111,114 @@
 
 /* --- HOMEPAGE STYLES --- */
 
+/* Animated Background */
+.animated-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1; /* Behind content */
+    /* background-color: #f5f4ef;  Removed to let theme bg show through if needed, or set explicitly */
+    overflow: hidden;
+    pointer-events: none; /* Allow clicking through */
+}
+
+.wave {
+    position: absolute;
+    bottom: 0;
+    left: -5%;
+    width: 110%;
+    height: 60%;
+    background: linear-gradient(to top, #9caf9c, transparent);
+    transform-origin: bottom center;
+    opacity: 0.25;
+}
+
+/* Dark mode waves */
+[data-md-color-scheme="slate"] .wave {
+    background: linear-gradient(to top, #00ff9a, transparent);
+    opacity: 0.15;
+}
+
+.wave-1 {
+    animation: wave1 12s ease-in-out infinite;
+    clip-path: polygon(0% 100%, 0% 60%, 15% 55%, 30% 65%, 45% 50%, 60% 60%, 75% 45%, 90% 55%, 100% 40%, 100% 100%);
+}
+
+.wave-2 {
+    opacity: 0.18;
+    animation: wave2 16s ease-in-out infinite;
+    clip-path: polygon(0% 100%, 0% 70%, 20% 60%, 40% 70%, 60% 55%, 80% 65%, 100% 50%, 100% 100%);
+}
+
+.wave-3 {
+    opacity: 0.12;
+    animation: wave3 20s ease-in-out infinite;
+    clip-path: polygon(0% 100%, 0% 55%, 25% 65%, 50% 50%, 75% 60%, 100% 45%, 100% 100%);
+}
+
+@keyframes wave1 {
+    0%, 100% { transform: scaleY(1); }
+    25% { transform: scaleY(1.15); }
+    50% { transform: scaleY(0.9); }
+    75% { transform: scaleY(1.1); }
+}
+
+@keyframes wave2 {
+    0%, 100% { transform: scaleY(1); }
+    33% { transform: scaleY(1.2); }
+    66% { transform: scaleY(0.85); }
+}
+
+@keyframes wave3 {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(1.25); }
+}
+
+.chart-svg {
+    position: absolute;
+    bottom: 40%;
+    left: 0;
+    width: 100%;
+    height: 30%;
+}
+
+.chart-line {
+    opacity: 0;
+    stroke-dasharray: 2000;
+    stroke-dashoffset: 2000;
+    stroke: #1a4031;
+    stroke-width: 2;
+    fill: none;
+}
+
+/* Dark mode chart lines */
+[data-md-color-scheme="slate"] .chart-line {
+    stroke: #4ade80;
+}
+
+.line-1 { animation: drawAndFade 12s ease-in-out infinite; }
+.line-2 { animation: drawAndFade 12s ease-in-out infinite; animation-delay: 4s; }
+.line-3 { animation: drawAndFade 12s ease-in-out infinite; animation-delay: 8s; }
+
+@keyframes drawAndFade {
+    0% { stroke-dashoffset: 2000; opacity: 0; }
+    5% { opacity: 0.15; }
+    30% { stroke-dashoffset: -0; }
+    55% { opacity: 0.15; }
+    60% { stroke-dashoffset: -2000; opacity: 0; }
+}
+
+/* Home Header Adjustments for Animation */
 .home-header {
     display: flex;
     align-items: flex-start; /* Align top */
     gap: 3rem;
     margin-bottom: 3rem;
     margin-top: 2rem;
+    position: relative; /* Ensure z-index works if needed */
+    z-index: 1;
+    max-width: 1200px; /* Match grid cards width */
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .home-logo-container {
@@ -163,17 +265,77 @@
     margin-top: 1.5rem;
 }
 
+/* Asset Icons Grid */
+.asset-icons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 columns */
+    gap: 1.5rem;
+    margin-top: 2rem;
+    max-width: 600px; /* Limit width to keep them together */
+}
+
+.asset-icon-link {
+    text-decoration: none !important;
+    color: inherit !important;
+    display: block;
+}
+
+.asset-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+    color: var(--md-default-fg-color--light);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: center;
+
+    /* Card Styling */
+    background-color: var(--md-default-bg-color);
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 12px;
+    padding: 1rem;
+    width: 100%; /* Fill grid cell */
+    height: 110px; /* Increased height */
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.asset-icon:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    border-color: var(--md-accent-fg-color);
+    background-color: var(--md-primary-bg-color);
+    color: var(--md-primary-fg-color);
+}
+
+.asset-icon img {
+    width: 40px; /* Slightly larger icon */
+    height: 40px;
+    object-fit: contain;
+}
+
 /* Clickable Cards */
 .grid.cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr); /* 2 columns */
     gap: 1.5rem;
     margin-top: 1rem;
+    position: relative;
+    z-index: 1;
+    max-width: 1200px; /* Limit width */
+    margin-left: auto;
+    margin-right: auto;
 }
 
 @media (max-width: 600px) {
     .grid.cards {
         grid-template-columns: 1fr; /* 1 column on mobile */
+    }
+
+    .asset-icons {
+        grid-template-columns: repeat(2, 1fr); /* 2 columns on mobile */
     }
 }
 
@@ -250,5 +412,9 @@
         flex-direction: column;
         align-items: center;
         text-align: center;
+    }
+
+    .asset-icons {
+        justify-content: center;
     }
 }
