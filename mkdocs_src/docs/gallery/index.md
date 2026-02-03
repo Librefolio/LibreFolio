@@ -2,9 +2,6 @@
 
 Welcome to the LibreFolio visual gallery! Here you can explore all the features of our portfolio management platform through screenshots.
 
-<div class="gallery-intro">
-    <p>Select your preferred view and language to see LibreFolio in action.</p>
-</div>
 
 ## Choose Your View
 
@@ -45,13 +42,6 @@ LibreFolio is available in:
 ---
 
 <style>
-.gallery-intro {
-    text-align: center;
-    padding: 1rem;
-    background: var(--md-code-bg-color);
-    border-radius: 8px;
-    margin-bottom: 2rem;
-}
 
 .gallery-cards {
     display: grid;

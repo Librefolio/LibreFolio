@@ -64,6 +64,8 @@ extra_javascript:
   - javascripts/lib-loader.js
   # Dashboard connectivity check
   - javascripts/dashboard-check.js
+  # Gallery language selector (for gallery pages)
+  - javascripts/gallery-lang-selector.js
 
 nav:
   - Home: index.md

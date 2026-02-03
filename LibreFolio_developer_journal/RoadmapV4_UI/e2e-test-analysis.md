@@ -2,7 +2,7 @@
 
 **Data**: 2 Febbraio 2026  
 **Ultimo aggiornamento**: 3 Febbraio 2026  
-**Status**: ✅ Test base completati, 🔄 Gallery improvements in corso  
+**Status**: 📊 REFERENCE DOC (test base OK, gap documentati da implementare)  
 **Obiettivo**: Valutare copertura, ridondanze e gap nei test E2E
 
 ---
@@ -16,9 +16,9 @@
 | files.spec.ts      | 9    | ✅ PASS   | Completamente riscritto        |
 | brokers.spec.ts    | 7    | ✅ PASS   | Completamente riscritto        |
 | multi-user.spec.ts | 2    | ✅ PASS   | Test isolamento + unicità nomi |
-| gallery.spec.ts    | ~12  | 🔄 WIP   | Mobile menu fix completato     |
+| gallery.spec.ts    | 28   | ✅ PASS   | Light/dark theme, 4 lingue     |
 
-**Totale**: 51 test passanti (5/5 suite)
+**Totale**: 69 test passanti (6/6 suite)
 
 ---
 
@@ -128,7 +128,7 @@ ID    Username             Email                          Active   Super
 
 ---
 
-### 3. files.spec.ts (9 test) ❌ 1 fallisce
+### 3. files.spec.ts (9 test) ✅
 
 **Cosa testa**:
 

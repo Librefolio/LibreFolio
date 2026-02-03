@@ -5,7 +5,7 @@
  * NOT included in normal test runs - run separately with:
  *   ./dev.py mkdocs gallery
  * 
- * Screenshots saved to: mkdocs_src/docs/gallery/{desktop|mobile}/{lang}/...
+ * Screenshots saved to: mkdocs_src/docs/gallery/{desktop|mobile}/{lang}/{theme}/...
  *
  * Prerequisites:
  *   - Run `./dev.py db populate --force` before generating gallery
@@ -23,6 +23,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const GALLERY_ROOT = path.join(__dirname, '../../mkdocs_src/docs/gallery');
+const THEMES = ['light', 'dark'] as const;
+type Theme = typeof THEMES[number];
 
 function ensureDir(dir: string) {
     if (!fs.existsSync(dir)) {
@@ -30,8 +32,8 @@ function ensureDir(dir: string) {
     }
 }
 
-function getGalleryPath(viewport: 'desktop' | 'mobile', lang: Language, category: string): string {
-    return path.join(GALLERY_ROOT, viewport, lang, category);
+function getGalleryPath(viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string): string {
+    return path.join(GALLERY_ROOT, viewport, lang, theme, category);
 }
 
 /**
@@ -50,30 +52,48 @@ async function freezeAnimations(page: Page) {
     });
 }
 
+/**
+ * Set the application theme (light/dark)
+ */
+async function setTheme(page: Page, theme: Theme) {
+    const currentTheme = await page.evaluate(() => {
+        return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    });
+
+    if (currentTheme !== theme) {
+        await page.getByTestId('theme-toggle').click();
+        await page.waitForTimeout(100); // Let theme transition complete
+    }
+}
+
 async function screenshot(
     page: Page, 
     viewport: 'desktop' | 'mobile',
     lang: Language, 
-    category: string, 
+    theme: Theme,
+    category: string,
     name: string
 ) {
-    const dir = getGalleryPath(viewport, lang, category);
+    const dir = getGalleryPath(viewport, lang, theme, category);
     ensureDir(dir);
     await page.screenshot({ 
         path: path.join(dir, `${name}.png`),
         fullPage: false 
     });
-    console.log(`  📸 ${viewport}/${lang}/${category}/${name}.png`);
+    console.log(`  📸 ${viewport}/${lang}/${theme}/${category}/${name}.png`);
 }
 
-// Helper to run for all languages
-async function forEachLanguage(
+// Helper to run for all languages and themes
+async function forEachLanguageAndTheme(
     page: Page,
-    callback: (lang: Language) => Promise<void>
+    callback: (lang: Language, theme: Theme) => Promise<void>
 ) {
     for (const lang of SUPPORTED_LANGUAGES) {
         await setLanguage(page, lang);
-        await callback(lang);
+        for (const theme of THEMES) {
+            await setTheme(page, theme);
+            await callback(lang, theme);
+        }
     }
 }
 
@@ -85,30 +105,30 @@ function getViewport(testInfo: any): 'desktop' | 'mobile' {
 test.describe('Gallery Screenshots', () => {
 
     test.describe('Auth Pages', () => {
-        test('login page - all languages', async ({ page }, testInfo) => {
+        test('login page - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             await page.goto('/');
             await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
             await freezeAnimations(page);
 
-            await forEachLanguage(page, async (lang) => {
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.waitForTimeout(100);
-                await screenshot(page, viewport, lang, 'auth', '01-login');
+                await screenshot(page, viewport, lang, theme, 'auth', '01-login');
             });
         });
 
-        test('register modal - all languages', async ({ page }, testInfo) => {
+        test('register modal - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             await page.goto('/');
             await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
             await freezeAnimations(page);
 
-            await forEachLanguage(page, async (lang) => {
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await expect(page.getByTestId('login-modal')).toBeVisible({ timeout: 3000 });
                 await page.getByTestId('goto-register').click();
                 await expect(page.getByTestId('register-modal')).toBeVisible({ timeout: 3000 });
                 await page.waitForTimeout(200);
-                await screenshot(page, viewport, lang, 'auth', '02-register-empty');
+                await screenshot(page, viewport, lang, theme, 'auth', '02-register-empty');
 
                 // Go back to login for next iteration
                 await page.getByTestId('goto-login').click();
@@ -116,13 +136,13 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
-        test('register with password strength - all languages', async ({ page }, testInfo) => {
+        test('register with password strength - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             await page.goto('/');
             await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
             await freezeAnimations(page);
 
-            await forEachLanguage(page, async (lang) => {
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await expect(page.getByTestId('login-modal')).toBeVisible({ timeout: 3000 });
                 await page.getByTestId('goto-register').click();
                 await expect(page.getByTestId('register-modal')).toBeVisible({ timeout: 3000 });
@@ -134,7 +154,7 @@ test.describe('Gallery Screenshots', () => {
                 await page.getByTestId('register-modal').locator('input[type="password"]').first().fill('MyStr0ng!Pass');
                 await page.waitForTimeout(500); // Let password strength meter update
 
-                await screenshot(page, viewport, lang, 'auth', '03-register-filled');
+                await screenshot(page, viewport, lang, theme, 'auth', '03-register-filled');
 
                 // Go back to login for next iteration
                 await page.getByTestId('goto-login').click();
@@ -149,14 +169,14 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
         });
 
-        test('main dashboard - all languages', async ({ page }, testInfo) => {
+        test('main dashboard - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             
-            await forEachLanguage(page, async (lang) => {
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle');
                 await freezeAnimations(page);
-                await screenshot(page, viewport, lang, 'dashboard', 'main');
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'main');
             });
         });
 
@@ -168,49 +188,82 @@ test.describe('Gallery Screenshots', () => {
 
             const menuToggle = page.getByTestId('mobile-menu-toggle');
 
-            // Take screenshot for each language
+            // Take screenshot for each language and theme
             for (const lang of SUPPORTED_LANGUAGES) {
-                // Navigate fresh to dashboard for each language (ensures clean state)
-                await page.goto('/dashboard');
-                await page.waitForLoadState('networkidle');
-                await freezeAnimations(page);
+                for (const theme of THEMES) {
+                    // Navigate fresh to dashboard for each combo (ensures clean state)
+                    await page.goto('/dashboard');
+                    await page.waitForLoadState('networkidle');
+                    await freezeAnimations(page);
 
-                // Change language while menu is closed
-                await setLanguage(page, lang);
-                await page.waitForTimeout(100);
+                    // Set language and theme while menu is closed
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.waitForTimeout(100);
 
-                // Open the menu for screenshot
-                await menuToggle.click();
-                await page.waitForTimeout(400); // Let menu animation complete
+                    // Open the menu for screenshot
+                    await menuToggle.click();
+                    await page.waitForTimeout(400); // Let menu animation complete
 
-                await screenshot(page, 'mobile', lang, 'dashboard', 'menu-open');
-                // No need to close - we navigate away next iteration
+                    await screenshot(page, 'mobile', lang, theme, 'dashboard', 'menu-open');
+                    // No need to close - we navigate away next iteration
+                }
             }
         });
     });
 
     test.describe('Settings', () => {
-        test('user preferences - all languages', async ({ page }, testInfo) => {
+        test('user preferences - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             await login(page, TEST_ADMIN);
 
-            await forEachLanguage(page, async (lang) => {
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
                 await freezeAnimations(page);
-                await screenshot(page, viewport, lang, 'settings', 'user-preferences');
+                await screenshot(page, viewport, lang, theme, 'settings', 'user-preferences');
             });
         });
 
-        test('global settings (admin) - all languages', async ({ page }, testInfo) => {
+        test('global settings (admin) - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             await login(page, TEST_ADMIN);
             
-            await forEachLanguage(page, async (lang) => {
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/settings');
                 await freezeAnimations(page);
                 await page.getByTestId('settings-tab-admin').click();
                 await page.waitForTimeout(300);
-                await screenshot(page, viewport, lang, 'settings', 'global-settings');
+                await screenshot(page, viewport, lang, theme, 'settings', 'global-settings');
+            });
+        });
+
+        test('about tab - all languages and themes', async ({ page }, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await navigateTo(page, '/settings');
+                await freezeAnimations(page);
+                await page.getByTestId('settings-tab-about').click();
+                await page.waitForTimeout(300);
+                await screenshot(page, viewport, lang, theme, 'settings', 'about');
+            });
+        });
+
+        test('password change modal - all languages and themes', async ({ page }, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await navigateTo(page, '/settings');
+                await freezeAnimations(page);
+                // Click change password button
+                await page.getByTestId('change-password-button').click();
+                await page.waitForTimeout(300);
+                await screenshot(page, viewport, lang, theme, 'settings', 'password-modal');
+                // Close modal
+                await page.keyboard.press('Escape');
+                await page.waitForTimeout(100);
             });
         });
     });
@@ -221,25 +274,25 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
         });
 
-        test('static resources tab - all languages', async ({ page }, testInfo) => {
+        test('static resources tab - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             
-            await forEachLanguage(page, async (lang) => {
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/files?tab=static');
                 await page.waitForLoadState('networkidle');
                 await freezeAnimations(page);
-                await screenshot(page, viewport, lang, 'files', 'static-tab');
+                await screenshot(page, viewport, lang, theme, 'files', 'static-tab');
             });
         });
 
-        test('broker reports tab - all languages', async ({ page }, testInfo) => {
+        test('broker reports tab - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             
-            await forEachLanguage(page, async (lang) => {
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/files?tab=brim');
                 await page.waitForLoadState('networkidle');
                 await freezeAnimations(page);
-                await screenshot(page, viewport, lang, 'files', 'brim-tab');
+                await screenshot(page, viewport, lang, theme, 'files', 'brim-tab');
             });
         });
     });
@@ -250,53 +303,78 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
         });
 
-        test('broker list - all languages', async ({ page }, testInfo) => {
+        test('broker list - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             
-            await forEachLanguage(page, async (lang) => {
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/brokers');
                 await freezeAnimations(page);
                 // Wait for broker icons to load (favicon fetching)
                 await page.waitForTimeout(2000);
-                await screenshot(page, viewport, lang, 'brokers', 'list');
+                await screenshot(page, viewport, lang, theme, 'brokers', 'list');
             });
         });
 
-        test('broker detail - all languages', async ({ page }, testInfo) => {
+        test('broker detail - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             
-            await forEachLanguage(page, async (lang) => {
-                await navigateTo(page, '/brokers');
-                await freezeAnimations(page);
-                const card = page.locator('[data-testid^="broker-card-"]').first();
-                if (await card.isVisible()) {
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    // Navigate fresh each iteration to ensure clean state
+                    await navigateTo(page, '/brokers');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Wait for cards to load
+                    await page.waitForTimeout(1000);
+
+                    const card = page.locator('[data-testid^="broker-card-"]').first();
+                    await expect(card).toBeVisible({ timeout: 3000 });
                     await card.click();
                     await page.waitForLoadState('networkidle');
                     // Wait for broker icon to load
                     await page.waitForTimeout(1000);
-                    await screenshot(page, viewport, lang, 'brokers', 'detail');
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'detail');
                 }
-            });
+            }
         });
 
-        test('import modal - all languages', async ({ page }, testInfo) => {
+        test('import modal - all languages and themes', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
             
-            await forEachLanguage(page, async (lang) => {
-                await navigateTo(page, '/brokers');
-                await freezeAnimations(page);
-                const card = page.locator('[data-testid^="broker-card-"]').first();
-                if (await card.isVisible()) {
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    // Navigate fresh each iteration
+                    await navigateTo(page, '/brokers');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Wait for cards to load
+                    await page.waitForTimeout(1000);
+
+                    const card = page.locator('[data-testid^="broker-card-"]').first();
+                    await expect(card).toBeVisible({ timeout: 3000 });
                     await card.click();
-                    const btn = page.getByRole('button', { name: /import/i });
-                    if (await btn.isVisible()) {
-                        await btn.click();
-                        await page.waitForTimeout(300);
-                        await screenshot(page, viewport, lang, 'brokers', 'import-modal');
-                        await page.keyboard.press('Escape');
-                    }
+                    await page.waitForLoadState('networkidle');
+                    await page.waitForTimeout(500);
+
+                    // Scroll to and click import files button
+                    const importBtn = page.getByTestId('import-files-button');
+                    await importBtn.scrollIntoViewIfNeeded();
+                    await expect(importBtn).toBeVisible({ timeout: 3000 });
+                    await importBtn.click();
+
+                    // Wait for modal to appear
+                    const modal = page.getByTestId('import-files-modal');
+                    await expect(modal).toBeVisible({ timeout: 3000 });
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-modal');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
                 }
-            });
+            }
         });
     });
 });

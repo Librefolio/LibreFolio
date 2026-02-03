@@ -2,7 +2,7 @@
 
 **Data creazione**: 30 Gennaio 2026  
 **Ultimo aggiornamento**: 3 Febbraio 2026  
-**Status**: 🔄 IN PROGRESS (Gallery theme/coverage da completare)
+**Status**: ✅ COMPLETED (Gallery + Settings Mobile completati)
 
 ---
 
@@ -119,12 +119,6 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - Superuser vede "Broker #N (other user)" per file di altri
 - Richiede ripensamento GDPR-compliant del sistema permessi
 
-### 🔄 BUG-021: Settings Mobile Layout (in corso)
-
-- `SettingsLayout.svelte` layout a 2 colonne non funziona su mobile
-- Category sidebar diventa dropdown su mobile (iniziato)
-- Necessario dropdown custom invece di select nativo
-- Header con titolo/pulsanti da sistemare
 
 ---
 
@@ -147,13 +141,18 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | `plan-files-ux-refactor.md`             | ✅ Refactor UX pagina Files            |
 | `test-remediation-auth-settings.md`     | ✅ Note remediation auth/settings      |
 
-### Plans IN CORSO (in `RoadmapV4_UI/`)
+### Plans COMPLETATI (spostati in `phase-04-subplan/`)
 
-| File                              | Descrizione                                 | Priorità | Status      |
-|-----------------------------------|---------------------------------------------|----------|-------------|
-| `plan-e2e-test-remediation.md`    | Remediation test E2E (Fase 1 ✅, Fase 2+ 🔄) | P1       | IN PROGRESS |
-| `plan-settings-mobile-gallery.md` | Settings mobile + Gallery improvements      | P1       | IN PROGRESS |
-| `e2e-test-analysis.md`            | Analisi copertura test (doc vivo)           | P1       | IN PROGRESS |
+| File                              | Descrizione                                 | Status      |
+|-----------------------------------|---------------------------------------------|-------------|
+| `plan-e2e-test-remediation.md`    | Remediation test E2E (Fase 1 ✅)             | ✅ COMPLETATO |
+| `plan-settings-mobile-gallery.md` | Settings mobile + Gallery improvements      | ✅ COMPLETATO |
+
+### Reference Docs (in `RoadmapV4_UI/`)
+
+| File                   | Descrizione                                      | Status          |
+|------------------------|--------------------------------------------------|-----------------|
+| `e2e-test-analysis.md` | Gap analysis test E2E - traccia test da scrivere | 📊 REFERENCE DOC |
 
 ### Plans DA IMPLEMENTARE (in `RoadmapV4_UI/`)
 
@@ -202,27 +201,25 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - ✅ Build check automatico prima dei test (`_ensure_frontend_build()`)
 - ✅ Fix bug form submit (`on:submit|preventDefault`)
 
-### Step 4.2: Settings Mobile + Gallery 🔄 IN CORSO
+### Step 4.2: Settings Mobile + Gallery ✅ COMPLETATO
 
 **Riferimento**: `plan-settings-mobile-gallery.md`
 
-**Problema identificato**: Durante generazione gallery, scoperto che Settings page non funziona bene su mobile - layout a 2 colonne comprime il contenuto.
-
-**Lavoro iniziato**:
+**Lavoro completato (3 Feb 2026)**:
 
 - ✅ `ProfileTab.svelte` - Righe responsive con `flex-col sm:flex-row`
-- ✅ `SettingsLayout.svelte` - Dropdown category su mobile (con select nativo)
-- 🔄 Dropdown custom per mobile (come DataTable rows selector)
-- 🔄 GlobalSettingsTab responsive
-- 🔄 Header layout mobile (titolo + pulsanti)
+- ✅ `SettingsLayout.svelte` - Dropdown custom per mobile
+- ✅ `GlobalSettingsTab.svelte` - Layout responsive
+- ✅ `SettingSelect.svelte`, `SettingCurrency.svelte`, `SettingTheme.svelte` - Layout 3 righe mobile
+- ✅ `CustomSelect.svelte` - Nuovo componente select semplice
+- ✅ Gallery screenshot light + dark theme (28 test, ~224 screenshots)
+- ✅ Gallery language selector nell'header MkDocs
+- ✅ Gallery usa tema MkDocs per auto-switch immagini
+- ✅ desktop.md e mobile.md aggiornati con tutte le sezioni
 
-**Da fare poi**:
+**Nota**: Gallery completa - tutti gli screenshot vengono generati correttamente (28 test, ~224 screenshots).
 
-- Gallery con screenshot light/dark theme
-- Gallery coverage completa (tutti i tab settings)
-- Mobile menu screenshot fix
-
-### Step 4.3: Frontend Component Reorganization
+### Step 4.3: Frontend Component Reorganization 📋 DA FARE
 
 **Riferimento**: `plan-component-reorganization.md`
 
@@ -245,24 +242,28 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ## 🎯 Prossimi Passi Immediati
 
-**Ordine di priorità**:
+**Phase 4 feature complete!** Test base passano, ma ci sono gap di copertura E2E documentati.
 
-1. **Completare Settings Mobile** (`plan-settings-mobile-gallery.md`)
-    - Dropdown custom per category selector
-    - Header responsive (titolo su riga, pulsanti sotto)
-    - GlobalSettingsTab responsive
-    - Testare visivamente
+### Opzione A: Completare Test E2E (raccomandato prima di Phase 5)
 
-2. **Completare Gallery**
-    - Aggiungere tutti gli screenshot mancanti
-    - Screenshot light + dark theme
-    - MkDocs Gallery walkthrough completo
+Vedi `e2e-test-analysis.md` per gap completi. Test mancanti critici:
 
-3. **E2E Test Fase 2** (`plan-e2e-test-remediation.md`)
-    - Test RegisterModal/ForgotPassword
-    - Test Profile edit/save
-    - Test file upload/delete
-    - Test broker edit/delete
+1. **Auth**: RegisterModal, ForgotPasswordModal
+2. **Settings**: Profile edit/save, Change password flow
+3. **Files**: Upload, Delete
+4. **Brokers**: Edit, Delete, Detail page content
+
+### Opzione B: Procedere a Phase 5 (FX Management)
+
+- Lista currency pairs
+- Visualizzazione tassi storici
+- Grafici con ECharts
+
+### Bassa Priorità
+
+- **Component Reorganization** (`plan-component-reorganization.md`) - ~5h, non bloccante
+- **Image Crop** (`plan-image-crop.md`)
+- **Data Separation** (`plan-data-separation.md`)
 
 ---
 

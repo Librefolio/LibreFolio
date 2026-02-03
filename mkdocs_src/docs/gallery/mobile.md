@@ -1,16 +1,10 @@
 # 📱 Mobile Gallery
 
-Experience LibreFolio's responsive mobile interface. Use the language selector below to view screenshots in your preferred language.
+Experience LibreFolio's responsive mobile interface. Screenshots automatically adapt to your selected theme and language.
 
-<div class="language-selector" id="lang-selector">
-    <span class="lang-label">Language:</span>
-    <div class="lang-grid">
-        <button class="lang-btn active" data-lang="en">🇬🇧 English</button>
-        <button class="lang-btn" data-lang="it">🇮🇹 Italiano</button>
-        <button class="lang-btn" data-lang="fr">🇫🇷 Français</button>
-        <button class="lang-btn" data-lang="es">🇪🇸 Español</button>
-    </div>
-</div>
+!!! tip "Theme & Language"
+    Use the **theme toggle** in the header (☀️/🌙) to switch between light and dark mode.
+    Use the **language selector** (🇬🇧) in the header to view screenshots in different languages.
 
 !!! info "Mobile Optimized"
     LibreFolio is fully responsive and works great on smartphones and tablets. The interface automatically adapts to smaller screens with a collapsible navigation menu.
@@ -24,7 +18,7 @@ Experience LibreFolio's responsive mobile interface. Use the language selector b
 Clean and accessible login on mobile devices.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-en="en/auth/01-login.png" data-it="it/auth/01-login.png" data-fr="fr/auth/01-login.png" data-es="es/auth/01-login.png" alt="Login Page" src="en/auth/01-login.png">
+    <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page">
 </div>
 
 ### Registration
@@ -32,7 +26,7 @@ Clean and accessible login on mobile devices.
 Easy account creation with password strength feedback.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-en="en/auth/03-register-filled.png" data-it="it/auth/03-register-filled.png" data-fr="fr/auth/03-register-filled.png" data-es="es/auth/03-register-filled.png" alt="Register Modal" src="en/auth/03-register-filled.png">
+    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Register Modal">
 </div>
 
 ---
@@ -44,7 +38,7 @@ Easy account creation with password strength feedback.
 Your portfolio overview optimized for mobile viewing.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-en="en/dashboard/main.png" data-it="it/dashboard/main.png" data-fr="fr/dashboard/main.png" data-es="es/dashboard/main.png" alt="Dashboard" src="en/dashboard/main.png">
+    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard">
 </div>
 
 ### Navigation Menu
@@ -52,7 +46,7 @@ Your portfolio overview optimized for mobile viewing.
 Full navigation accessible via the hamburger menu.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-en="en/dashboard/menu-open.png" data-it="it/dashboard/menu-open.png" data-fr="fr/dashboard/menu-open.png" data-es="es/dashboard/menu-open.png" alt="Mobile Menu" src="en/dashboard/menu-open.png">
+    <img class="gallery-img" data-category="dashboard" data-name="menu-open" alt="Mobile Menu">
 </div>
 
 ---
@@ -64,7 +58,51 @@ Full navigation accessible via the hamburger menu.
 All settings accessible on mobile with the same functionality.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-en="en/settings/user-preferences.png" data-it="it/settings/user-preferences.png" data-fr="fr/settings/user-preferences.png" data-es="es/settings/user-preferences.png" alt="User Preferences" src="en/settings/user-preferences.png">
+    <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
+</div>
+
+### Global Settings (Admin)
+
+System-wide configuration on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings">
+</div>
+
+### About
+
+System information at your fingertips.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="about" alt="About">
+</div>
+
+### Password Change
+
+Secure password changes on the go.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Password Change Modal">
+</div>
+
+---
+
+## 📁 Files
+
+### Static Resources
+
+Manage your uploaded files on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab">
+</div>
+
+### Broker Reports (BRIM)
+
+Import and manage broker reports.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
 </div>
 
 ---
@@ -76,96 +114,68 @@ All settings accessible on mobile with the same functionality.
 Your brokerage accounts with touch-friendly cards.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-en="en/brokers/list.png" data-it="it/brokers/list.png" data-fr="fr/brokers/list.png" data-es="es/brokers/list.png" alt="Broker List" src="en/brokers/list.png">
+    <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List">
+</div>
+
+### Broker Detail
+
+Detailed broker view optimized for mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail">
+</div>
+
+### Import Modal
+
+Import transactions directly from your phone.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
 </div>
 
 ---
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const langBtns = document.querySelectorAll('.lang-btn');
     const images = document.querySelectorAll('.gallery-img');
     
-    // Get stored language or default to 'en'
-    let currentLang = localStorage.getItem('gallery-lang') || 'en';
+    // Get language from localStorage (shared with header selector)
+    function getCurrentLang() {
+        return localStorage.getItem('gallery-lang') || 'en';
+    }
     
-    // Apply initial language
-    updateLanguage(currentLang);
+    // Detect MkDocs Material theme
+    function getMkDocsTheme() {
+        const scheme = document.body.getAttribute('data-md-color-scheme');
+        return scheme === 'slate' ? 'dark' : 'light';
+    }
     
-    langBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            currentLang = this.dataset.lang;
-            localStorage.setItem('gallery-lang', currentLang);
-            updateLanguage(currentLang);
-        });
-    });
-    
-    function updateLanguage(lang) {
-        // Update button states
-        langBtns.forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.lang === lang);
-        });
+    function updateImages() {
+        const lang = getCurrentLang();
+        const theme = getMkDocsTheme();
         
-        // Update images
         images.forEach(img => {
-            const newSrc = img.dataset[lang];
-            if (newSrc) {
-                img.src = newSrc;
+            const category = img.dataset.category;
+            const name = img.dataset.name;
+            if (category && name) {
+                img.src = `${lang}/${theme}/${category}/${name}.png`;
             }
         });
     }
+    
+    // Initial update
+    updateImages();
+    
+    // Listen for language changes from header selector
+    window.addEventListener('gallery-lang-change', updateImages);
+    
+    // Watch for MkDocs theme changes
+    const observer = new MutationObserver(updateImages);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-md-color-scheme'] });
 });
 </script>
 
 <style>
-.language-selector {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem;
-    background: var(--md-code-bg-color);
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
-}
-
-.lang-label {
-    font-weight: bold;
-    font-size: 1.1rem;
-}
-
-.lang-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-}
-
-@media (min-width: 600px) {
-    .lang-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
-
-.lang-btn {
-    padding: 0.6rem 1rem;
-    border: 2px solid var(--md-primary-fg-color);
-    background: transparent;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 0.95rem;
-    text-align: center;
-}
-
-.lang-btn:hover {
-    background: var(--md-primary-fg-color);
-    color: white;
-}
-
-.lang-btn.active {
-    background: var(--md-primary-fg-color);
-    color: white;
-}
-
 .screenshot-container {
     margin: 1rem 0 2rem 0;
     border-radius: 8px;
