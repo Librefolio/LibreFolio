@@ -39,9 +39,9 @@
     }
 </script>
 
-<div class="setting-row flex items-start justify-between py-4 border-b border-gray-100 dark:border-slate-700 last:border-0">
+<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0">
     <!-- Left: Label and hint -->
-    <div class="flex-1 min-w-0 pr-4">
+    <div class="flex-1 min-w-0">
         <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
             {#if icon}
                 <svelte:component this={icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
@@ -53,8 +53,8 @@
         {/if}
     </div>
 
-    <!-- Right: Actions + Select -->
-    <div class="flex items-center space-x-3">
+    <!-- Right: Actions + Select - On mobile, full width aligned right -->
+    <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto">
         <!-- Action buttons (only when unlocked and modified/non-default) -->
         {#if !isLocked}
             <div class="flex items-center space-x-1">
@@ -89,13 +89,13 @@
             </div>
         {/if}
 
-        <!-- Select dropdown -->
+        <!-- Select dropdown - full width on mobile -->
         <select
             {value}
             on:change={handleChange}
             disabled={isLocked || loading}
-            class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
-                   text-gray-900 dark:text-gray-100 text-sm min-w-[180px]
+            class="flex-1 sm:flex-none px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
+                   text-gray-900 dark:text-gray-100 text-sm sm:min-w-[180px]
                    focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
                    disabled:opacity-50 disabled:cursor-not-allowed"
         >

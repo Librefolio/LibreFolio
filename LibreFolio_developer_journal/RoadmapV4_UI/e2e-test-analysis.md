@@ -1,8 +1,8 @@
 # E2E Test Analysis - LibreFolio Frontend
 
 **Data**: 2 Febbraio 2026  
-**Ultimo aggiornamento**: 2 Febbraio 2026  
-**Status**: ✅ Fase 1 Completata, 🔄 Fase 2 in pianificazione  
+**Ultimo aggiornamento**: 3 Febbraio 2026  
+**Status**: ✅ Test base completati, 🔄 Gallery improvements in corso  
 **Obiettivo**: Valutare copertura, ridondanze e gap nei test E2E
 
 ---
@@ -16,9 +16,9 @@
 | files.spec.ts      | 9    | ✅ PASS   | Completamente riscritto        |
 | brokers.spec.ts    | 7    | ✅ PASS   | Completamente riscritto        |
 | multi-user.spec.ts | 2    | ✅ PASS   | Test isolamento + unicità nomi |
-| gallery.spec.ts    | ~12  | 🔧 11/12 | Mobile menu fix in corso       |
+| gallery.spec.ts    | ~12  | 🔄 WIP   | Mobile menu fix completato     |
 
-**Totale**: 51 test passanti + 12 gallery (11 pass, 1 skip)
+**Totale**: 51 test passanti (5/5 suite)
 
 ---
 

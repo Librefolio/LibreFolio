@@ -560,35 +560,25 @@ def cmd_install(args):
 # =============================================================================
 
 def auto_build_frontend(debug=False):
-    """Auto-build frontend if needed."""
-    build_dir = PROJECT_ROOT / "frontend" / "build"
-    src_dir = PROJECT_ROOT / "frontend" / "src"
+    """
+    Auto-build frontend if needed.
+    Uses shared logic from cli_base with dev.py's build function.
+    """
+    from scripts.cli_base import check_frontend_needs_build
 
-    needs_build = False
+    if not check_frontend_needs_build():
+        print(Colors.info("ℹ️  Frontend build is up to date"))
+        return None
 
-    if not build_dir.exists() or not (build_dir / "index.html").exists():
-        print(Colors.info("📦 Frontend build missing, building..."))
-        needs_build = True
-    else:
-        try:
-            build_time = (build_dir / "index.html").stat().st_mtime
-            for src_file in src_dir.rglob("*"):
-                if src_file.is_file() and src_file.stat().st_mtime > build_time:
-                    print(Colors.info("📦 Frontend sources changed, rebuilding..."))
-                    needs_build = True
-                    break
-        except Exception:
-            pass
+    print(Colors.info("📦 Frontend sources changed, rebuilding..."))
 
-    if needs_build:
-        # Create args object for cmd_fe_build
-        class BuildArgs:
-            pass
-        args = BuildArgs()
-        args.debug = debug
-        return cmd_fe_build(args)
+    # Create args object for cmd_fe_build
+    class BuildArgs:
+        pass
+    args = BuildArgs()
+    args.debug = debug
+    return cmd_fe_build(args)
 
-    return None  # No build needed
 
 
 def auto_build_mkdocs():

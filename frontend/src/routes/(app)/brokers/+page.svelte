@@ -140,10 +140,10 @@
             <button
                     on:click={openCreateModal}
                     data-testid="add-broker-button"
-                    class="flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all"
+                    class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all"
             >
                 <Plus size={18}/>
-                <span>{$_('brokers.addBroker')}</span>
+                <span class="hidden sm:inline">{$_('brokers.addBroker')}</span>
             </button>
         </div>
     </div>

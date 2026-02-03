@@ -139,7 +139,7 @@ nav:
   - Tutorials:
     - Track First Stock: tutorials/track-first-stock.md
     - Track P2P Loan: tutorials/track-p2p-loan.md
-  - 🖼️ Gallery:
+  - Gallery:
     - Overview: gallery/index.md
     - Desktop: gallery/desktop.md
     - Mobile: gallery/mobile.md
