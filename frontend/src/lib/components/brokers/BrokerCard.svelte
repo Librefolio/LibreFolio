@@ -96,6 +96,7 @@
                         on:click={handleEdit}
                         class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                         title={$_('common.edit')}
+                        data-testid="broker-edit-{broker.id}"
                 >
                     <Pencil size={18}/>
                 </button>
@@ -103,6 +104,7 @@
                         on:click={handleDelete}
                         class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                         title={$_('common.delete')}
+                        data-testid="broker-delete-{broker.id}"
                 >
                     <Trash2 size={18}/>
                 </button>
