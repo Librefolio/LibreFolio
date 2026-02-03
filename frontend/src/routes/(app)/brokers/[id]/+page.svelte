@@ -377,6 +377,7 @@
 
                 <!-- Import Files Button -->
                 <button
+                    data-testid="import-files-button"
                     class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group"
                     on:click={() => importFilesModalOpen = true}
                 >
