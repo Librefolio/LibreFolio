@@ -1108,23 +1108,27 @@ if args.clean_db:
 ## 📋 Checklist Implementazione
 
 ### Setup
+
 - [x] Aggiornare `.env` e `.env.example` con tutte le variabili da config.py
 - [x] `cd frontend && npm install -D @playwright/test dotenv`
 - [x] `npx playwright install chromium`
 - [x] Creare `frontend/e2e/` directory structure
 
 ### Playwright Config
+
 - [x] Creare `frontend/playwright.config.ts`
 - [x] Aggiungere scripts a `frontend/package.json`
 - [x] Fix ES modules (`import.meta.url` invece di `__dirname`)
 - [x] Creare `tsconfig.e2e.json` per TypeScript E2E
 
 ### Test Fixtures
+
 - [x] `e2e/fixtures/test-users.ts`
 - [x] `e2e/fixtures/auth-helpers.ts`
 - [x] `e2e/fixtures/db-helpers.ts`
 
 ### Test Specs
+
 - [x] `e2e/auth.spec.ts`
 - [x] `e2e/settings.spec.ts`
 - [x] `e2e/files.spec.ts`
@@ -1133,6 +1137,7 @@ if args.clean_db:
 - [x] `e2e/gallery.spec.ts`
 
 ### Integration
+
 - [x] Aggiungere categoria "front" a `test_runner.py`
 - [x] Implementare `_ensure_test_users()` (usa `create-superuser`)
 - [x] Aggiungere `--ui`, `--headed`, `--debug` flags
@@ -1141,10 +1146,12 @@ if args.clean_db:
 - [x] Estendere `./dev.py mkdocs` con `gallery` command
 
 ### Gallery
+
 - [x] Creare `mkdocs_src/docs/gallery/` structure
 - [ ] Aggiungere `data-testid` ai componenti (da fare in Phase 4+)
 
 ### Documentation
+
 - [x] dev.py --help aggiornato (automaticamente dal parser)
 - [x] Documentare in frontend/README.md
 
@@ -1153,6 +1160,7 @@ if args.clean_db:
 ## 📚 Note Future
 
 ### Aggiungere Safari/Firefox
+
 Playwright supporta nativamente Safari (WebKit) e Firefox. Per aggiungerli:
 
 ```typescript
@@ -1168,7 +1176,9 @@ Playwright supporta nativamente Safari (WebKit) e Firefox. Per aggiungerli:
 ```
 
 ### Test Condivisione Broker (futuro)
+
 Quando implementeremo la condivisione broker:
+
 - Estendere `multi-user.spec.ts`
 - Test: owner condivide → editor vede
 - Test: viewer non può modificare

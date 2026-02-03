@@ -117,7 +117,7 @@
         tabindex="-1"
     >
         <!-- Modal -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md" data-testid="password-change-modal">
             <!-- Header -->
             <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -158,6 +158,7 @@
                         placeholder={$_('settings.currentPassword')}
                         autocomplete="current-password"
                         disabled={isSubmitting}
+                        testId="password-current"
                     />
                 </div>
 
@@ -171,6 +172,7 @@
                         placeholder={$_('settings.newPassword')}
                         autocomplete="new-password"
                         disabled={isSubmitting}
+                        testId="password-new"
                     />
                     <PasswordStrength password={newPassword} />
                 </div>
@@ -185,6 +187,7 @@
                         placeholder={$_('settings.confirmNewPassword')}
                         autocomplete="new-password"
                         disabled={isSubmitting}
+                        testId="password-confirm"
                     />
                     {#if confirmPassword && newPassword !== confirmPassword}
                         <p class="text-xs text-red-500">{$_('settings.passwordsMustMatch')}</p>
@@ -199,6 +202,7 @@
                     on:click={handleClose}
                     disabled={isSubmitting}
                     class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
+                    data-testid="password-change-cancel"
                 >
                     {$_('common.cancel')}
                 </button>
@@ -207,6 +211,7 @@
                     on:click={handleSubmit}
                     disabled={!canSubmit || isSubmitting}
                     class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-testid="password-change-submit"
                 >
                     {#if isSubmitting}
                         {$_('common.loading')}

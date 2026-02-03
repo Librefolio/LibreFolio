@@ -49,9 +49,9 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 7. **E2E Test Infrastructure** (vedi `plan-frontendTesting.md`) ✅
     - Playwright configurato con progetti desktop/mobile
-    - 51 test passanti (5/5 suite)
+    - ~100 test passanti (5/5 suite)
     - Build check automatico prima dei test
-    - Gallery screenshot per documentazione (12/12 test pass)
+    - Gallery screenshot per documentazione (28/28 test pass, ~224 screenshots)
 
 8. **DB Populate Enhancement** ✅ NUOVO (3 Feb 2026)
     - 6 broker con `brim_plugin_key` e `BrokerUserAccess`
@@ -81,28 +81,28 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ## 🐛 Bug Risolti (Round 1-4)
 
-| ID      | Descrizione                                            | Status   |
-|---------|--------------------------------------------------------|----------|
-| BUG-001 | Backend error message migliorato per broker esistente  | ✅        |
-| BUG-002 | Table: click badge counter per deselezionare           | ✅        |
-| BUG-003 | BRIM upload: endpoint path corretto                    | ✅        |
-| BUG-004 | FR Bytes: traduzione unità nei filtri                  | ✅        |
-| BUG-005 | MkDocs dark mode CSS                                   | 🔲 TODO  |
-| BUG-006 | Copy Link con feedback toast                           | ✅        |
-| BUG-007 | Traduzioni broker import files                         | ✅        |
-| BUG-008 | Broker altri utenti GDPR                               | ⏸️ PAUSA |
-| BUG-009 | 404 su refresh broker detail                           | ✅        |
-| BUG-010 | Filtro size slider inizializzazione                    | ✅        |
-| BUG-011 | Global Settings max_file_upload_mb unit selector       | ✅        |
-| BUG-012 | Copy Link path relativo + toast in alto                | ✅        |
-| BUG-013 | BRIM upload endpoint in BrokerImportFiles              | ✅        |
-| BUG-014 | Svelte warnings per prop capture in slider             | ✅        |
-| BUG-015 | Reset Default max_file_upload_mb                       | ✅        |
-| BUG-016 | Translation key files.upload → uploads.upload          | ✅        |
-| BUG-017 | BRIM upload broker_id in query string                  | ✅        |
-| BUG-018 | Translation key sbagliata per upload button            | ✅        |
-| BUG-019 | Svelte warnings con svelte-ignore                      | ✅        |
-| BUG-020 | Form submit handler syntax (on:submit\|preventDefault) | ✅        |
+| ID      | Descrizione                                            | Status    |
+|---------|--------------------------------------------------------|-----------|
+| BUG-001 | Backend error message migliorato per broker esistente  | ✅         |
+| BUG-002 | Table: click badge counter per deselezionare           | ✅         |
+| BUG-003 | BRIM upload: endpoint path corretto                    | ✅         |
+| BUG-004 | FR Bytes: traduzione unità nei filtri                  | ✅         |
+| BUG-005 | MkDocs dark mode CSS                                   | 🔲 TODO   |
+| BUG-006 | Copy Link con feedback toast                           | ✅         |
+| BUG-007 | Traduzioni broker import files                         | ✅         |
+| BUG-008 | Broker altri utenti GDPR                               | ⏸️ PAUSA  |
+| BUG-009 | 404 su refresh broker detail                           | ✅         |
+| BUG-010 | Filtro size slider inizializzazione                    | ✅         |
+| BUG-011 | Global Settings max_file_upload_mb unit selector       | ✅         |
+| BUG-012 | Copy Link path relativo + toast in alto                | ✅         |
+| BUG-013 | BRIM upload endpoint in BrokerImportFiles              | ✅         |
+| BUG-014 | Svelte warnings per prop capture in slider             | ✅         |
+| BUG-015 | Reset Default max_file_upload_mb                       | ✅         |
+| BUG-016 | Translation key files.upload → uploads.upload          | ✅         |
+| BUG-017 | BRIM upload broker_id in query string                  | ✅         |
+| BUG-018 | Translation key sbagliata per upload button            | ✅         |
+| BUG-019 | Svelte warnings con svelte-ignore                      | ✅         |
+| BUG-020 | Form submit handler syntax (on:submit\|preventDefault) | ✅         |
 | BUG-021 | Settings mobile layout comprime contenuto              | ✅ RISOLTO |
 
 ---
@@ -118,7 +118,6 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 - Superuser vede "Broker #N (other user)" per file di altri
 - Richiede ripensamento GDPR-compliant del sistema permessi
-
 
 ---
 
@@ -143,15 +142,15 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### Plans COMPLETATI (spostati in `phase-04-subplan/`)
 
-| File                              | Descrizione                                 | Status      |
-|-----------------------------------|---------------------------------------------|-------------|
-| `plan-e2e-test-remediation.md`    | Remediation test E2E (Fase 1 ✅)             | ✅ COMPLETATO |
-| `plan-settings-mobile-gallery.md` | Settings mobile + Gallery improvements      | ✅ COMPLETATO |
+| File                              | Descrizione                            | Status       |
+|-----------------------------------|----------------------------------------|--------------|
+| `plan-e2e-test-remediation.md`    | Remediation test E2E (Fase 1 ✅)        | ✅ COMPLETATO |
+| `plan-settings-mobile-gallery.md` | Settings mobile + Gallery improvements | ✅ COMPLETATO |
 
 ### Reference Docs (in `RoadmapV4_UI/`)
 
-| File                   | Descrizione                                      | Status          |
-|------------------------|--------------------------------------------------|-----------------|
+| File                   | Descrizione                                      | Status           |
+|------------------------|--------------------------------------------------|------------------|
 | `e2e-test-analysis.md` | Gap analysis test E2E - traccia test da scrivere | 📊 REFERENCE DOC |
 
 ### Plans DA IMPLEMENTARE (in `RoadmapV4_UI/`)
@@ -225,7 +224,6 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 **Problema identificato**: Il frontend inizia ad avere molto componenti e ci sono varie duplicazioni di codice.
 
-
 ### Step 5: Image Crop Component (2h) 📋
 
 **Riferimento**: `plan-image-crop.md`
@@ -242,16 +240,16 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ## 🎯 Prossimi Passi Immediati
 
-**Phase 4 feature complete!** Test base passano, ma ci sono gap di copertura E2E documentati.
+**Phase 4 feature complete!** Test base passano, gallery completa, ma ci sono gap di copertura E2E.
 
 ### Opzione A: Completare Test E2E (raccomandato prima di Phase 5)
 
-Vedi `e2e-test-analysis.md` per gap completi. Test mancanti critici:
+Vedi `e2e-test-analysis.md` per gap completi. Test mancanti:
 
-1. **Auth**: RegisterModal, ForgotPasswordModal
-2. **Settings**: Profile edit/save, Change password flow
-3. **Files**: Upload, Delete
-4. **Brokers**: Edit, Delete, Detail page content
+1. **File upload** - Usare file da `backend/app/services/brim_providers/samples/`
+2. **Broker CRUD completo** - Create → Edit → Delete (flusso intero)
+3. **Preferences persistence** - F5/reload verifica persistenza
+4. ~~Cash operations~~ - Rimandato (richiede sviluppo transazioni)
 
 ### Opzione B: Procedere a Phase 5 (FX Management)
 
@@ -292,4 +290,5 @@ Quando si lavora su questa fase, allegare:
 - [x] `./dev.py front check` senza errori
 - [x] `./dev.py i18n audit` - 100% coverage
 - [x] Test funzionale features modificate
-- [x] `./dev.py test front all` - tutti i test passano (51/51)
+- [x] `./dev.py test front all` - tutti i test passano (~100 test, 5/5 suite)
+- [x] `./dev.py mkdocs gallery` - tutti gli screenshot generati (28 test, ~224 screenshots)

@@ -144,6 +144,7 @@ DESKTOP (>640px):           MOBILE (<640px):
 #### 1.1 Creare dropdown custom per category selector ✅
 
 Implementato in `SettingsLayout.svelte` e `GlobalSettingsTab.svelte`:
+
 - Dropdown custom con click outside handling
 - Icone category + chevron animato
 - Background highlight per item selezionato
@@ -152,6 +153,7 @@ Implementato in `SettingsLayout.svelte` e `GlobalSettingsTab.svelte`:
 #### 1.2 Sistemare header layout mobile ✅
 
 Implementato: Titolo e pulsanti separati verticalmente su mobile:
+
 - Titolo + descrizione in div con `mb-3`
 - Pulsanti in riga separata con `flex-wrap gap-2`
 
@@ -191,6 +193,7 @@ Path aggiornato a: `{viewport}/{lang}/{theme}/{category}/{name}.png`
 #### 3.1 Aggiungere test per screenshot mancanti ✅
 
 Aggiunti test per:
+
 - About tab (settings)
 - Password change modal (settings)
 
@@ -207,6 +210,7 @@ Aggiunti test per:
 Problema risolto navigando fresh alla pagina per ogni lingua invece di cercare di chiudere la sidebar.
 
 Soluzione implementata:
+
 - Ogni iterazione fa `page.goto('/dashboard')` fresco
 - Questo garantisce che la sidebar sia chiusa prima di cambiare lingua
 - Screenshot generati correttamente per tutte le 4 lingue

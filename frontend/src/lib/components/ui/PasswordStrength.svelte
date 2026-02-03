@@ -58,10 +58,10 @@
 </script>
 
 {#if password.length > 0}
-    <div class="mt-2 space-y-2">
+    <div class="mt-2 space-y-2" data-testid="password-strength-meter">
         <!-- Strength Bar -->
         <div class="flex items-center gap-2">
-            <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden flex gap-0.5">
+            <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden flex gap-0.5" data-testid="password-strength-bar" data-strength={score}>
                 {#each [0, 1, 2, 3, 4] as i}
                     <div
                         class="flex-1 h-full transition-all duration-300 rounded-full"

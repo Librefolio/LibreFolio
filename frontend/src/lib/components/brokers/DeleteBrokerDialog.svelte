@@ -54,6 +54,7 @@
                 on:click|stopPropagation
                 on:click|stopPropagation
                 on:keydown|stopPropagation
+                data-testid="delete-broker-dialog"
         >
             <!-- Header -->
             <div class="flex items-center justify-between p-4 border-b border-gray-100">
@@ -93,6 +94,7 @@
                         on:click={handleCancel}
                         disabled={loading}
                         class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        data-testid="delete-broker-cancel"
                 >
                     {$_('common.cancel')}
                 </button>
@@ -101,6 +103,7 @@
                             on:click={() => handleConfirm(true)}
                             disabled={loading}
                             class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                            data-testid="delete-broker-confirm"
                     >
                         {loading ? $_('common.loading') : $_('brokers.forceDelete')}
                     </button>
@@ -109,6 +112,7 @@
                             on:click={() => handleConfirm(false)}
                             disabled={loading}
                             class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                            data-testid="delete-broker-confirm"
                     >
                         {loading ? $_('common.loading') : $_('common.delete')}
                     </button>

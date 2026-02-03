@@ -8,16 +8,16 @@
 
 ## 📊 Riepilogo Dati Creati (Aggiornato)
 
-| Entità | Quantità | Note |
-|--------|----------|------|
-| Brokers | 6 | Con `brim_plugin_key` assegnato |
-| BrokerUserAccess | 6 | Admin = OWNER di tutti |
-| Assets | 9 | Stocks, ETFs, Crypto, Loans |
-| Asset Providers | 7 | yfinance per tutti i prezzabili |
-| Transactions | 24 | Depositi, Buy, Sell, Dividendi, Fee |
-| Price History | ~154 | 30 giorni per 7 asset |
-| FX Rates | 88 | 4 coppie x 22 giorni |
-| FX Pair Sources | 6 | ECB come provider |
+| Entità           | Quantità | Note                                |
+|------------------|----------|-------------------------------------|
+| Brokers          | 6        | Con `brim_plugin_key` assegnato     |
+| BrokerUserAccess | 6        | Admin = OWNER di tutti              |
+| Assets           | 9        | Stocks, ETFs, Crypto, Loans         |
+| Asset Providers  | 7        | yfinance per tutti i prezzabili     |
+| Transactions     | 24       | Depositi, Buy, Sell, Dividendi, Fee |
+| Price History    | ~154     | 30 giorni per 7 asset               |
+| FX Rates         | 88       | 4 coppie x 22 giorni                |
+| FX Pair Sources  | 6        | ECB come provider                   |
 
 ---
 
@@ -26,6 +26,7 @@
 ### 1. BrokerUserAccess ✅ NUOVO
 
 Aggiunta funzione `populate_broker_user_access()` che:
+
 - Associa tutti i broker all'utente `e2e_test_admin` come OWNER
 - Se non esiste nessun utente, crea `e2e_test_admin` automaticamente
 - Garantisce che la pagina brokers mostri i dati nella gallery
@@ -34,19 +35,19 @@ Aggiunta funzione `populate_broker_user_access()` che:
 
 Tutti i broker hanno ora `brim_plugin_key`:
 
-| Broker | Plugin |
-|--------|--------|
-| Interactive Brokers | `broker_ibkr` |
-| DEGIRO | `broker_degiro` |
-| Directa SIM | `broker_directa` |
-| eToro | `broker_etoro` |
-| Coinbase | `broker_coinbase` |
-| Recrowd | `broker_generic_csv` |
+| Broker              | Plugin               |
+|---------------------|----------------------|
+| Interactive Brokers | `broker_ibkr`        |
+| DEGIRO              | `broker_degiro`      |
+| Directa SIM         | `broker_directa`     |
+| eToro               | `broker_etoro`       |
+| Coinbase            | `broker_coinbase`    |
+| Recrowd             | `broker_generic_csv` |
 
 ### 3. Nuovi Broker Aggiunti ✅
 
 - Directa SIM (italiano)
-- eToro (social trading)  
+- eToro (social trading)
 - Coinbase (crypto)
 
 ### 4. Nuovi Asset Aggiunti ✅
@@ -58,6 +59,7 @@ Tutti i broker hanno ora `brim_plugin_key`:
 ### 5. Transazioni per Nuovi Broker ✅
 
 Aggiunte transazioni di test per:
+
 - Directa: Deposito + Buy Tesla
 - eToro: Deposito + Buy Apple
 - Coinbase: Deposito + Buy BTC + Buy ETH + Staking reward
@@ -92,13 +94,13 @@ Aggiunte transazioni di test per:
 
 ## 🎯 Priorità Fix (Tutte Completate)
 
-| Priorità | Fix                          | Status |
-|----------|------------------------------|--------|
-| **P1**   | Aggiungere `BrokerUserAccess` | ✅ |
-| **P1**   | Aggiungere `brim_plugin_key` | ✅ |
-| **P1**   | Aggiungere più broker        | ✅ |
-| P2       | Aggiungere crypto assets     | ✅ |
-| P2       | Fix price history crypto     | ✅ |
+| Priorità | Fix                           | Status |
+|----------|-------------------------------|--------|
+| **P1**   | Aggiungere `BrokerUserAccess` | ✅      |
+| **P1**   | Aggiungere `brim_plugin_key`  | ✅      |
+| **P1**   | Aggiungere più broker         | ✅      |
+| P2       | Aggiungere crypto assets      | ✅      |
+| P2       | Fix price history crypto      | ✅      |
 
 ---
 

@@ -10,6 +10,7 @@
 ## 🎯 Obiettivo
 
 Riorganizzare i componenti frontend per:
+
 1. Ridurre duplicazione di codice
 2. Strutturare le cartelle in modo logico
 3. Creare componenti base riutilizzabili con specializzazioni concrete
@@ -20,13 +21,13 @@ Riorganizzare i componenti frontend per:
 
 ### Componenti Select Esistenti
 
-| Componente | Posizione | Funzionalità | Note |
-|------------|-----------|--------------|------|
-| `FuzzySelect.svelte` | `/lib/components/` | Select con ricerca fuzzy | Usato per valute |
-| `CustomSelect.svelte` | `/lib/components/ui/` | Select semplice senza ricerca | Usato per lingue |
-| `BrokerSelect.svelte` | `/lib/components/brokers/` | Select broker con ricerca + icone | Duplica logica FuzzySelect |
-| `ImportPluginSelect.svelte` | `/lib/components/brokers/` | Select plugin BRIM con ricerca | Duplica logica FuzzySelect |
-| `LanguageSelector.svelte` | `/lib/components/` | Header language selector | Potrebbe usare CustomSelect |
+| Componente                  | Posizione                  | Funzionalità                      | Note                        |
+|-----------------------------|----------------------------|-----------------------------------|-----------------------------|
+| `FuzzySelect.svelte`        | `/lib/components/`         | Select con ricerca fuzzy          | Usato per valute            |
+| `CustomSelect.svelte`       | `/lib/components/ui/`      | Select semplice senza ricerca     | Usato per lingue            |
+| `BrokerSelect.svelte`       | `/lib/components/brokers/` | Select broker con ricerca + icone | Duplica logica FuzzySelect  |
+| `ImportPluginSelect.svelte` | `/lib/components/brokers/` | Select plugin BRIM con ricerca    | Duplica logica FuzzySelect  |
+| `LanguageSelector.svelte`   | `/lib/components/`         | Header language selector          | Potrebbe usare CustomSelect |
 
 ### Struttura Cartelle Attuale
 
@@ -146,6 +147,7 @@ frontend/src/lib/components/
 ### Fase 1: Creare BaseSelect (1h)
 
 Estrarre logica comune da FuzzySelect e CustomSelect:
+
 - Click outside handling
 - Keyboard navigation (Escape, Arrow keys, Enter)
 - Dropdown positioning
@@ -206,14 +208,14 @@ Spostare file nelle cartelle corrette e aggiornare import.
 
 ## ⏱️ Stima Tempo Totale
 
-| Fase | Tempo |
-|------|-------|
-| Fase 1: BaseSelect | 1h |
-| Fase 2: Simple/Searchable | 1.5h |
-| Fase 3: Specializzazioni | 1h |
-| Fase 4: Riorganizzazione | 30min |
-| Fase 5: Import e Test | 1h |
-| **Totale** | **~5h** |
+| Fase                      | Tempo   |
+|---------------------------|---------|
+| Fase 1: BaseSelect        | 1h      |
+| Fase 2: Simple/Searchable | 1.5h    |
+| Fase 3: Specializzazioni  | 1h      |
+| Fase 4: Riorganizzazione  | 30min   |
+| Fase 5: Import e Test     | 1h      |
+| **Totale**                | **~5h** |
 
 ---
 

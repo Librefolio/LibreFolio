@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from './fixtures/auth-helpers';
-import { TEST_USER } from './fixtures/test-users';
+import { TEST_USER, TEST_ADMIN } from './fixtures/test-users';
 
 test.describe('Brokers', () => {
     test.beforeEach(async ({ page }) => {
@@ -61,21 +61,214 @@ test.describe('Brokers', () => {
             const brokerCards = page.locator('[data-testid^="broker-card-"]');
             await expect(brokerCards).toHaveCount(await brokerCards.count());
         });
-    });
 
-    test.describe('Broker Card Interaction', () => {
-        test('broker cards are clickable (if any exist)', async ({ page }) => {
+        test('can open edit modal from broker card', async ({ page }) => {
             await navigateTo(page, '/brokers');
 
-            // Check if any broker cards exist
+            // Wait for broker cards to load
             const brokerCards = page.locator('[data-testid^="broker-card-"]');
             const count = await brokerCards.count();
 
             if (count > 0) {
-                // Click first broker card - should navigate to detail page
+                // Get the first broker card's id
+                const firstCard = brokerCards.first();
+                const testId = await firstCard.getAttribute('data-testid');
+                const brokerId = testId?.replace('broker-card-', '');
+
+                // Click edit button on first broker
+                await page.getByTestId(`broker-edit-${brokerId}`).click();
+                await expect(page.getByTestId('broker-modal')).toBeVisible();
+            }
+        });
+
+        test('can open delete dialog from broker card', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            // Wait for broker cards to load
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                // Get the first broker card's id
+                const firstCard = brokerCards.first();
+                const testId = await firstCard.getAttribute('data-testid');
+                const brokerId = testId?.replace('broker-card-', '');
+
+                // Click delete button on first broker
+                await page.getByTestId(`broker-delete-${brokerId}`).click();
+                await expect(page.getByTestId('delete-broker-dialog')).toBeVisible();
+
+                // Cancel to close dialog
+                await page.getByTestId('delete-broker-cancel').click();
+                await expect(page.getByTestId('delete-broker-dialog')).not.toBeVisible();
+            }
+        });
+    });
+
+    test.describe('Broker Detail Page', () => {
+        test('can navigate to broker detail by clicking card', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
                 const firstCard = brokerCards.first();
                 await firstCard.click();
                 await expect(page).toHaveURL(/\/brokers\/\d+/);
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+            }
+        });
+
+        test('broker detail page shows broker name', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+                await expect(page.getByTestId('broker-name')).toBeVisible();
+            }
+        });
+
+        test('broker detail page shows cash balances section', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+                await expect(page.getByTestId('broker-cash-balances')).toBeVisible();
+            }
+        });
+
+        test('broker detail page shows holdings section', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+                await expect(page.getByTestId('broker-holdings')).toBeVisible();
+            }
+        });
+
+        test('broker detail page shows transactions section', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+                await expect(page.getByTestId('broker-transactions')).toBeVisible();
+            }
+        });
+
+        test('broker detail page has import files button', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+                await expect(page.getByTestId('import-files-button')).toBeVisible();
+            }
+        });
+
+        test('broker detail page has edit button', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+                await expect(page.getByTestId('broker-edit-button')).toBeVisible();
+            }
+        });
+
+        test('can open edit modal from detail page', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+
+                await page.getByTestId('broker-edit-button').click();
+                await expect(page.getByTestId('broker-modal')).toBeVisible();
+            }
+        });
+
+        test('can navigate back from detail page', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+
+                await page.getByTestId('broker-back-button').click();
+                await expect(page.getByTestId('brokers-page')).toBeVisible();
+            }
+        });
+
+        test('can open import files modal', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+
+                await page.getByTestId('import-files-button').click();
+                await expect(page.getByTestId('import-files-modal')).toBeVisible();
+            }
+        });
+
+        test('can close import files modal', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            const brokerCards = page.locator('[data-testid^="broker-card-"]');
+            const count = await brokerCards.count();
+
+            if (count > 0) {
+                const firstCard = brokerCards.first();
+                await firstCard.click();
+                await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+
+                await page.getByTestId('import-files-button').click();
+                await expect(page.getByTestId('import-files-modal')).toBeVisible();
+
+                // Close by pressing Escape
+                await page.keyboard.press('Escape');
+                await expect(page.getByTestId('import-files-modal')).not.toBeVisible();
             }
         });
     });

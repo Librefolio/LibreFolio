@@ -775,6 +775,7 @@ Problemi minori rilevati durante i test finali della Phase 4.
 **File**: `frontend/src/lib/components/files/FilesTable.svelte`
 **Problema**: Clipboard API non funziona su HTTP, mancava fallback e feedback visivo
 **Fix**:
+
 - Aggiunto fallback con `document.execCommand('copy')` per HTTP
 - Aggiunto toast notification in alto per feedback visivo (success/error)
 - Copia path relativo (es: `/api/v1/uploads/file/...`) invece di URL assoluto
@@ -800,6 +801,7 @@ Problemi minori rilevati durante i test finali della Phase 4.
 
 **Nota GDPR**: La visibilità dei dati di altri utenti da parte del superuser deve essere
 ripensata per essere GDPR compliant. Possibili approcci:
+
 - Superuser non vede dati personali di altri utenti senza consenso esplicito
 - Log di accesso ai dati di altri utenti
 - Anonimizzazione dei dati visualizzati (solo statistiche aggregate)
@@ -820,7 +822,7 @@ Questa funzionalità richiede una rielaborazione profonda del sistema di permess
 7. ~~**BUG-001** - Backend minor~~ ✅ DONE
 8. **BUG-005** - Docs polish (bassa priorità) 🔲 TODO
 9. ~~**BUG-006** - Copy Link fix~~ ✅ DONE
-10. ~~**BUG-007** - FR Bytes filtro~~ ✅ DONE  
+10. ~~**BUG-007** - FR Bytes filtro~~ ✅ DONE
 11. **BUG-008** - Broker altri utenti ⏸️ PAUSA (GDPR rethink needed)
 
 ### Bug Fix Round 3 (29-01-2026)
@@ -829,9 +831,10 @@ Questa funzionalità richiede una rielaborazione profonda del sistema di permess
 
 **File**: `backend/app/main.py`
 **Problema**: Route dinamiche come `/brokers/10` davano 404 su refresh
-**Causa**: `frontend_catchall` era registrato condizionalmente (`if frontend_available()`) 
-  e valutato all'import, non a runtime
-**Fix**: 
+**Causa**: `frontend_catchall` era registrato condizionalmente (`if frontend_available()`)
+e valutato all'import, non a runtime
+**Fix**:
+
 - `frontend_catchall` ora sempre registrato
 - Check `frontend_available()` eseguito a runtime
 - Ritorna 503 con messaggio chiaro se frontend non buildato
@@ -842,9 +845,9 @@ Questa funzionalità richiede una rielaborazione profonda del sistema di permess
 
 **File**: `frontend/src/lib/components/table/DataTableColumnFilter.svelte`
 **Problema**: Valori testuali min/max non corrispondevano alla barra al caricamento
-**Fix**: Inizializzazione immediata di `sizeMinInputValue`, `sizeMaxInputValue`, 
-  `sliderMinPos`, `sliderMaxPos` usando `bytesToUnit()` e `calcInitialSliderPos()`
-  invece di aspettare `onMount`
+**Fix**: Inizializzazione immediata di `sizeMinInputValue`, `sizeMaxInputValue`,
+`sliderMinPos`, `sliderMaxPos` usando `bytesToUnit()` e `calcInitialSliderPos()`
+invece di aspettare `onMount`
 
 **Status**: ✅ COMPLETATO (29-01-2026)
 
@@ -853,6 +856,7 @@ Questa funzionalità richiede una rielaborazione profonda del sistema di permess
 **File**: `frontend/src/lib/components/settings/GlobalSettingsTab.svelte`
 **Problema**: Campo numerico senza possibilità di cambiare unità (MB/GB)
 **Fix**:
+
 - Aggiunto dropdown unità (MB/GB) accanto all'input numerico
 - Conversione automatica a MB per storage backend
 - Display iniziale: se valore >= 1024 MB, mostra in GB
@@ -863,7 +867,8 @@ Questa funzionalità richiede una rielaborazione profonda del sistema di permess
 #### BUG-012: Copy Link copiava URL assoluto + toast in basso
 
 **File**: `frontend/src/lib/components/files/FilesTable.svelte`
-**Fix**: 
+**Fix**:
+
 - Copia path relativo (es: `/api/v1/uploads/file/...`) invece di URL assoluto
 - Toast spostato in alto allo schermo invece che in basso
 
@@ -887,8 +892,8 @@ Questa funzionalità richiede una rielaborazione profonda del sistema di permess
 **File**: `frontend/src/lib/components/table/DataTableColumnFilter.svelte`
 **Problema**: Valori min/max testuali e slider non allineati quando si apre il filtro
 **Causa**: Valori inizializzati a 0 e 'B' prima di `onMount`, che poi li ricalcolava
-**Fix**: Calcolo immediato di `sizeMinInputValue`, `sizeMaxInputValue`, `sliderMinPos`, 
-  `sliderMaxPos` usando funzioni di inizializzazione inline invece di aspettare onMount
+**Fix**: Calcolo immediato di `sizeMinInputValue`, `sizeMaxInputValue`, `sliderMinPos`,
+`sliderMaxPos` usando funzioni di inizializzazione inline invece di aspettare onMount
 
 **Status**: ✅ COMPLETATO (30-01-2026)
 
@@ -904,8 +909,8 @@ Questa funzionalità richiede una rielaborazione profonda del sistema di permess
 #### BUG-016: Traduzioni mancanti per broker import files
 
 **File**: `frontend/src/lib/i18n/{it,fr,es}.json`
-**Problema**: Chiavi `brokers.importFiles`, `brokers.noImportFiles`, `brokers.uploadHint`, 
-  `brokers.manageFiles` mancanti in IT, FR, ES
+**Problema**: Chiavi `brokers.importFiles`, `brokers.noImportFiles`, `brokers.uploadHint`,
+`brokers.manageFiles` mancanti in IT, FR, ES
 **Fix**: Aggiunte tutte le traduzioni mancanti
 
 **Status**: ✅ COMPLETATO (30-01-2026)

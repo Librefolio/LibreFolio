@@ -515,12 +515,13 @@
         <div class="header-actions">
             <!-- View mode toggle (only for static tab) -->
             {#if activeTab === 'static' && staticFiles.length > 0}
-                <div class="view-toggle">
+                <div class="view-toggle" data-testid="view-mode-toggle">
                     <button
                         class="view-btn"
                         class:active={viewMode === 'grid'}
                         on:click={() => setViewMode('grid')}
                         title="Grid view"
+                        data-testid="view-mode-grid"
                     >
                         <LayoutGrid size={18} />
                     </button>
@@ -529,6 +530,7 @@
                         class:active={viewMode === 'list'}
                         on:click={() => setViewMode('list')}
                         title="List view"
+                        data-testid="view-mode-list"
                     >
                         <List size={18} />
                     </button>
