@@ -66,6 +66,17 @@
 2. ➕ Aggiungere test per ForgotPasswordModal
 3. ➕ Test auto-redirect quando già autenticato
 
+Nota:
+Attualmente tutti e 3 gli utenti al termine del test risultano super utenti:
+└─▶ $ ./dev.py user --test-db list
+ℹ️  Operating on TEST database
+
+ID    Username             Email                          Active   Super   
+---------------------------------------------------------------------------
+1     e2e_test_user        e2e@test.example.com           ✅        👑       
+2     e2e_test_admin       e2eadmin@test.example.com      ✅        👑       
+3     e2e_test_user2       e2e2@test.example.com          ✅        👑   
+
 ---
 
 ### 2. settings.spec.ts (13 test) ✅

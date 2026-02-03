@@ -2,10 +2,13 @@
     /**
      * SettingSelect.svelte
      * Select dropdown setting with inline actions (like GlobalSettingsTab)
+     * Uses CustomSelect for better mobile support
      */
     import { createEventDispatcher } from 'svelte';
     import { _ } from '$lib/i18n';
     import { Save, Undo, RotateCcw } from 'lucide-svelte';
+    import CustomSelect from '$lib/components/ui/CustomSelect.svelte';
+    import type { SelectOption } from '$lib/components/ui/CustomSelect.svelte';
     import type { ComponentType } from 'svelte';
 
     const dispatch = createEventDispatcher<{
@@ -14,12 +17,6 @@
         reset: void;
         change: string;
     }>();
-
-    interface SelectOption {
-        code: string;
-        label: string;
-        icon?: string;
-    }
 
     // Props
     export let value: string;
@@ -32,9 +29,8 @@
     export let isLocked: boolean = false;
     export let loading: boolean = false;
 
-    function handleChange(event: Event) {
-        const target = event.target as HTMLSelectElement;
-        value = target.value;
+    function handleChange(event: CustomEvent<{ value: string; option: SelectOption }>) {
+        value = event.detail.value;
         dispatch('change', value);
     }
 </script>
@@ -89,25 +85,16 @@
             </div>
         {/if}
 
-        <!-- Select dropdown - full width on mobile -->
-        <select
-            {value}
-            on:change={handleChange}
-            disabled={isLocked || loading}
-            class="flex-1 sm:flex-none px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
-                   text-gray-900 dark:text-gray-100 text-sm sm:min-w-[180px]
-                   focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
-                   disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-            {#if loading}
-                <option value="">{$_('common.loading')}</option>
-            {:else}
-                {#each options as option}
-                    <option value={option.code}>
-                        {#if option.icon}{option.icon} {/if}{option.label}
-                    </option>
-                {/each}
-            {/if}
-        </select>
+        <!-- CustomSelect dropdown - responsive width -->
+        <div class="w-40 sm:w-48">
+            <CustomSelect
+                bind:value
+                {options}
+                placeholder={$_('common.select')}
+                disabled={isLocked}
+                {loading}
+                on:change={handleChange}
+            />
+        </div>
     </div>
 </div>

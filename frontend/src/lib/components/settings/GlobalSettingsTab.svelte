@@ -6,6 +6,7 @@
     import {debug} from '$lib/debug';
     import {AlertCircle, ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
     import FuzzySelect, {type SelectOption} from '$lib/components/FuzzySelect.svelte';
+    import CustomSelect from '$lib/components/ui/CustomSelect.svelte';
     import type {GlobalSetting} from '$lib/types';
 
     // Props
@@ -336,9 +337,9 @@
 
 <!-- Mobile: Custom dropdown category selector -->
 <div class="sm:hidden mb-4" bind:this={dropdownRef}>
-    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+    <span class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {$_('settings.category')}
-    </label>
+    </span>
     <div class="relative">
         <button
             type="button"
@@ -433,13 +434,10 @@
 
     <!-- Right side: Settings content -->
     <div class="flex-1 space-y-4">
-        <!-- Header with lock/unlock - Title and buttons on same row -->
+        <!-- Header with lock/unlock - Title and icons on same row, description below -->
         <div class="pb-4 border-b border-gray-200 dark:border-slate-700">
-            <div class="flex items-start justify-between gap-2">
-                <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{$_('settings.globalSettings')}</h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{$_('settings.globalSettingsDescription')}</p>
-                </div>
+            <div class="flex items-center justify-between gap-2 mb-1 min-h-[36px]">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{$_('settings.globalSettings')}</h3>
                 <div class="flex items-center gap-1 flex-shrink-0">
                     {#if canEdit}
                         {#if !isLocked}
@@ -491,6 +489,7 @@
                 {/if}
                 </div>
             </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.globalSettingsDescription')}</p>
         </div>
 
         {#if error}
@@ -535,7 +534,7 @@
                                         : ''}
                                 </p>
                             </div>
-                            <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto">
+                            <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
                                 {#if setting.value_type === 'bool'}
                                     <!-- Action buttons BEFORE the field -->
                                     {#if !isLocked}
@@ -730,26 +729,16 @@
                                             {/if}
                                         </div>
                                     {/if}
-                                    <!-- Language dropdown -->
-                                    <select
-                                            id={setting.key}
-                                            value={editedValues[setting.key]}
-                                            on:change={(e) => {
-                                                editedValues[setting.key] = e.currentTarget.value;
-                                                editedValues = {...editedValues};
-                                            }}
-                                            disabled={isLocked}
-                                            class="w-40 px-3 py-2 border rounded-lg text-sm
-                                            {isLocked
-                                                ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                                                : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
-                                    >
-                                        {#each languageOptions as lang}
-                                            <option value={lang.code}>
-                                                {lang.icon} {lang.label}
-                                            </option>
-                                        {/each}
-                                    </select>
+                                    <!-- Language CustomSelect dropdown -->
+                                    <div class="w-40 sm:w-48">
+                                        <CustomSelect
+                                                bind:value={editedValues[setting.key]}
+                                                options={languageOptions}
+                                                placeholder={$_('settings.selectLanguage')}
+                                                disabled={isLocked}
+                                                on:change={() => { editedValues = {...editedValues}; }}
+                                        />
+                                    </div>
                                 {:else if setting.key === 'default_currency'}
                                     <!-- Action buttons BEFORE the field -->
                                     {#if !isLocked}
@@ -782,8 +771,8 @@
                                             {/if}
                                         </div>
                                     {/if}
-                                    <!-- Currency FuzzySelect -->
-                                    <div class="w-72">
+                                    <!-- Currency FuzzySelect - responsive width -->
+                                    <div class="w-48 sm:w-64">
                                         <FuzzySelect
                                                 bind:value={editedValues[setting.key]}
                                                 options={currencyOptions}

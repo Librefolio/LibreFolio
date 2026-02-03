@@ -26,13 +26,16 @@ LibreFolio/
 │   │   │   └── brim_providers/           # Import broker reports
 │   │   └── utils/             # Utilities condivise
 │   ├── alembic/               # Migrazioni database
+│   ├── test_scripts/          # Test suite completa
 │   └── data/sqlite/           # Database SQLite
 │
 ├── frontend/                   # SvelteKit SPA
 │   ├── src/
 │   │   ├── routes/            # Pagine e routing
 │   │   ├── lib/components/    # Componenti riutilizzabili
+│   │   ├── lib/api/           # Zodios client + OpenAPI types
 │   │   └── lib/i18n/          # Traduzioni (EN, IT, FR, ES)
+│   ├── e2e/                   # Playwright E2E tests
 │   └── build/                 # Build statica (servita da FastAPI)
 │
 ├── scripts/                    # CLI tools
@@ -41,6 +44,9 @@ LibreFolio/
 │   ├── test_runner.py         # Orchestratore test suite
 │   ├── user_cli.py            # User management CLI
 │   └── list_api_endpoints.py  # Lista endpoint API
+│
+├── mkdocs_src/                 # Documentazione MkDocs
+│   └── docs/gallery/          # Screenshot UI (generati da Playwright)
 │
 ├── dev.py                      # Entry point CLI principale (Python)
 ├── dev.sh                      # Wrapper bash per backward compatibility
@@ -55,12 +61,15 @@ LibreFolio/
 - **SQLModel + SQLite**: ORM + database embedded
 - **Alembic**: Migrazioni schema
 - **Pipenv**: Gestione dipendenze
+- **Pytest**: Test suite completa
 
 ### Frontend (TypeScript/Svelte)
 
 - **SvelteKit 2.48+**: Framework UI reattivo
 - **Tailwind CSS 4.1+**: Styling utility-first (config via `@theme` in CSS)
+- **Zodios**: Client API type-safe con validazione Zod
 - **lucide-svelte**: Icone
+- **Playwright**: E2E testing
 - **Apache ECharts**: Grafici finanziari (da implementare)
 
 ### Deploy
@@ -78,8 +87,9 @@ LibreFolio/
 5. **Scheduled-Yield Assets**: Valutazione prestiti P2P dalla schedule interessi
 6. **Tailwind v4**: Configurazione tramite `@theme {}` in CSS, no file config TS
 7. **Multi-User Broker Access**: Owner/Editor/Viewer roles per condivisione broker
+8. **Zodios API Client**: Tipi derivati da OpenAPI, validazione runtime
 
-## 📊 Stato Attuale (Gennaio 2026)
+## 📊 Stato Attuale (Febbraio 2026)
 
 ### ✅ Backend Completato
 
@@ -88,23 +98,31 @@ LibreFolio/
 - **Auth**: Registrazione, Login, Session cookie, Password change, First user = admin
 - **FX Multi-Provider**: ECB, FED, BOE, SNB con fallback automatico
 - **Asset Providers**: yfinance, JustETF, CSS Scraper, Scheduled Investment
-- **BRIM**: Broker Report Import Manager con plugin (Generic CSV, Directa, Degiro, eToro, etc.)
+- **BRIM**: 11 plugin (IBKR, Degiro, Directa, eToro, Coinbase, Revolut, Trading212, etc.)
 - **Broker Access Control**: Multi-user con ruoli Owner/Editor/Viewer
-- **Test Suite**: 7/7 categorie passano (external, db, services, utils, schemas, api, e2e)
+- **Test Suite**: 8/8 categorie passano (external, db, services, utils, schemas, api, e2e, frontend)
 
-### ✅ Frontend Completato (Phase 0-3)
+### ✅ Frontend Completato (Phase 0-4)
 
 - **Login/Register/Forgot Password**: Modali funzionanti con animazioni
 - **Dashboard Placeholder**: Struttura base con navigazione
 - **Settings Page**: User preferences + Global settings (admin only)
+- **Broker Management**: Lista, CRUD, dettaglio con holdings/transactions
+- **Files Management**: Upload, lista, BRIM import associato a broker
 - **Password Strength Meter**: zxcvbn-ts integration
 - **AnimatedBackground**: Onde animate + linee grafici
 - **Design System**: Colori brand (#1a4031 verde, #f5f4ef beige)
 - **i18n**: Supporto EN, IT, FR, ES
+- **Mobile Responsive**: Settings e layout ottimizzati per mobile
+- **E2E Tests**: 51 test + 12 gallery screenshot (63 totali)
 
-### 🔲 Da Implementare (Phase 4+)
+### 🔄 In Corso (Phase 4 finale)
 
-- **Phase 4**: Broker Management Pages (in corso)
+- **Gallery Theme Support**: Screenshot light/dark con auto-switch
+- **Gallery Coverage**: Aggiungere screenshot mancanti (about tab, password modal)
+
+### 🔲 Da Implementare (Phase 5+)
+
 - **Phase 5**: FX Management Pages
 - **Phase 6**: Asset Management Pages
 - **Phase 7**: Transaction Management + BRIM Import UI
@@ -113,20 +131,24 @@ LibreFolio/
 
 ## 📁 Dove Trovare Cosa
 
-| Cosa cerchi?       | Dove guardare                                  |
-|--------------------|------------------------------------------------|
-| **Modelli DB**     | `backend/app/db/models.py`                     |
-| **Schemi API**     | `backend/app/schemas/*.py`                     |
-| **Business Logic** | `backend/app/services/*.py`                    |
-| **API Endpoints**  | `backend/app/api/v1/*.py`                      |
-| **Provider FX**    | `backend/app/services/fx_providers/`           |
-| **Provider Asset** | `backend/app/services/asset_source_providers/` |
-| **Import Broker**  | `backend/app/services/brim_providers/`         |
-| **Test Suite**     | `backend/test_scripts/`                        |
-| **Frontend Pages** | `frontend/src/routes/`                         |
-| **Componenti UI**  | `frontend/src/lib/components/`                 |
-| **CLI Scripts**    | `scripts/`                                     |
-| **Roadmap UI**     | `LibreFolio_developer_journal/RoadmapV4_UI/`   |
+| Cosa cerchi?            | Dove guardare                                        |
+|-------------------------|------------------------------------------------------|
+| **Modelli DB**          | `backend/app/db/models.py`                           |
+| **Schemi API**          | `backend/app/schemas/*.py`                           |
+| **Business Logic**      | `backend/app/services/*.py`                          |
+| **API Endpoints**       | `backend/app/api/v1/*.py`                            |
+| **Provider FX**         | `backend/app/services/fx_providers/`                 |
+| **Provider Asset**      | `backend/app/services/asset_source_providers/`       |
+| **Import Broker**       | `backend/app/services/brim_providers/`               |
+| **Backend Test Suite**  | `backend/test_scripts/`                              |
+| **Frontend Pages**      | `frontend/src/routes/`                               |
+| **Componenti UI**       | `frontend/src/lib/components/`                       |
+| **E2E Tests**           | `frontend/e2e/`                                      |
+| **API Client (Zodios)** | `frontend/src/lib/api/`                              |
+| **CLI Scripts**         | `scripts/`                                           |
+| **Roadmap UI**          | `LibreFolio_developer_journal/RoadmapV4_UI/`         |
+| **Plan attivi**         | `RoadmapV4_UI/plan-*.md` (root)                      |
+| **Plan completati**     | `RoadmapV4_UI/phases/phase-XX-subplan/`              |
 
 ## 🛠️ Comandi Utili - USARE SEMPRE dev.py
 
@@ -137,58 +159,60 @@ Non eseguire comandi manuali quando esiste uno script che fa quel lavoro!
 
 ```
 dev.py [-h]
-├──╴server [--test] [-h]           # Avvia server (--test per test mode)
-├─┬╴db [-h]                        # Database commands
-│ ├──╴check [PATH]                 # Verifica CHECK constraints
-│ ├──╴current [PATH]               # Mostra migrazione corrente
-│ ├──╴migrate MESSAGE [PATH]       # Crea nuova migrazione
-│ ├──╴upgrade [PATH]               # Applica migrazioni
-│ ├──╴downgrade [PATH]             # Rollback una migrazione
-│ ╰──╴create-clean [--test]        # Cancella e ricrea DB da zero
-├─┬╴front [-h]                     # Frontend commands
-│ ├──╴dev                          # Dev server con HMR (:5173)
-│ ├──╴build                        # Build produzione
-│ ├──╴check                        # Type-check Svelte/TypeScript
-│ ╰──╴preview                      # Preview build locale
-├─┬╴test [--coverage] [-v]         # Test suite
-│ ├──╴external ACTION              # Provider tests (FX, assets, BRIM)
-│ ├──╴db ACTION                    # Database layer tests
-│ ├──╴services ACTION              # Service logic tests
-│ ├──╴utils ACTION                 # Utility tests
-│ ├──╴schemas ACTION               # Schema validation tests
-│ ├──╴api ACTION                   # API endpoint tests
-│ ├──╴e2e ACTION                   # End-to-end tests
-│ ╰──╴all                          # Tutti i test
-├─┬╴user [--test-db]               # User management
+├──╴server [--test] [--rebuild] [-h]  # Avvia server (--test per test mode)
+├─┬╴db [-h]                           # Database commands
+│ ├──╴check [PATH]                    # Verifica CHECK constraints
+│ ├──╴current [PATH]                  # Mostra migrazione corrente
+│ ├──╴migrate MESSAGE [PATH]          # Crea nuova migrazione
+│ ├──╴upgrade [PATH]                  # Applica migrazioni
+│ ├──╴downgrade [PATH]                # Rollback una migrazione
+│ ╰──╴create-clean [--test]           # Cancella e ricrea DB da zero
+├─┬╴front [-h]                        # Frontend commands
+│ ├──╴dev                             # Dev server con HMR (:5173)
+│ ├──╴build                           # Build produzione
+│ ├──╴check                           # Type-check Svelte/TypeScript
+│ ╰──╴preview                         # Preview build locale
+├─┬╴test [--coverage] [-v]            # Test suite
+│ ├──╴external ACTION                 # Provider tests (FX, assets, BRIM)
+│ ├──╴db ACTION                       # Database layer tests (populate)
+│ ├──╴services ACTION                 # Service logic tests
+│ ├──╴utils ACTION                    # Utility tests
+│ ├──╴schemas ACTION                  # Schema validation tests
+│ ├──╴api ACTION                      # API endpoint tests
+│ ├──╴e2e ACTION                      # End-to-end tests
+│ ├──╴front ACTION                    # Frontend E2E (Playwright)
+│ ╰──╴all                             # Tutti i test
+├─┬╴user [--test-db]                  # User management
 │ ├──╴create EMAIL PASSWORD USERNAME
 │ ├──╴list
 │ ├──╴reset NEW_PASSWORD USERNAME
 │ ├──╴activate/deactivate USERNAME
 │ ├──╴promote/demote USERNAME
 │ ╰──╴init-settings
-├─┬╴mkdocs [-h]                    # Documentation
-│ ├──╴build                        # Build sito docs
-│ ├──╴serve                        # Serve localmente (:8002)
-│ ├──╴clean                        # Rimuove site/
-│ ╰──╴deploy                       # Deploy GitHub Pages
-├─┬╴api [-h]                       # API schema tools
-│ ├──╴schema                       # Export OpenAPI
-│ ├──╴client                       # Genera client TypeScript
-│ ╰──╴sync                         # schema + client
-├─┬╴i18n [-h]                      # Translation management
-│ ├──╴audit [--format]             # Audit traduzioni (coverage report)
-│ ├──╴add KEY --en --it --fr --es  # Aggiungi chiave a tutte le lingue
-│ ├──╴remove KEY [-f]              # Rimuovi chiave da tutte le lingue
+├─┬╴mkdocs [-h]                       # Documentation
+│ ├──╴build                           # Build sito docs
+│ ├──╴serve                           # Serve localmente (:8002)
+│ ├──╴clean                           # Rimuove site/
+│ ├──╴gallery                         # Genera screenshot con Playwright
+│ ╰──╴deploy                          # Deploy GitHub Pages
+├─┬╴api [-h]                          # API schema tools
+│ ├──╴schema                          # Export OpenAPI
+│ ├──╴client                          # Genera client TypeScript
+│ ╰──╴sync                            # schema + client
+├─┬╴i18n [-h]                         # Translation management
+│ ├──╴audit [--format]                # Audit traduzioni (coverage report)
+│ ├──╴add KEY --en --it --fr --es     # Aggiungi chiave a tutte le lingue
+│ ├──╴remove KEY [-f]                 # Rimuovi chiave da tutte le lingue
 │ ├──╴update KEY [--en] [--it] [--fr] [--es]  # Modifica traduzioni
-│ ╰──╴search QUERY                 # Cerca nelle chiavi e valori
+│ ╰──╴search QUERY                    # Cerca nelle chiavi e valori
 ├─┬╴cache [-h]
-│ ╰──╴js [--force]                 # Aggiorna cache JS
+│ ╰──╴js [--force]                    # Aggiorna cache JS
 ├─┬╴info [-h]
-│ ╰──╴api                          # Lista tutti endpoint
-├──╴format                         # Format con black
-├──╴lint                           # Lint con ruff
-├──╴shell                          # Pipenv shell
-╰──╴install                        # Installa dipendenze
+│ ╰──╴api                             # Lista tutti endpoint
+├──╴format                            # Format con black
+├──╴lint                              # Lint con ruff
+├──╴shell                             # Pipenv shell
+╰──╴install                           # Installa dipendenze
 ```
 
 ### Scenari Comuni
@@ -199,6 +223,9 @@ dev.py [-h]
 | **Avviare in test mode**          | `./dev.py server --test`                                                   |
 | **Frontend con HMR**              | Terminal 1: `./dev.py server` — Terminal 2: `./dev.py front dev`           |
 | **Verificare che tutto funzioni** | `./dev.py test all`                                                        |
+| **Solo test frontend**            | `./dev.py test front all`                                                  |
+| **Popola DB con dati mock**       | `./dev.py test db populate --force`                                        |
+| **Genera gallery screenshot**     | `./dev.py mkdocs gallery`                                                  |
 | **Dopo modifica modelli DB**      | `./dev.py db create-clean`                                                 |
 | **Dopo modifica API**             | `./dev.py api sync`                                                        |
 | **Verificare traduzioni**         | `./dev.py i18n audit`                                                      |
@@ -218,8 +245,7 @@ dev.py [-h]
 - **UI multilingue**: Solo interfaccia grafica in EN/IT/FR/ES
 - **Obiettivo**: Codebase pulito e mantenibile per condivisione futura
 - **No migrazioni Alembic**: Modifica `001_initial.py` e ricrea DB
-- **Edit better rewrite**: Evita di riscrivere tutto un file se già esiste, preferisci modifiche puntuali per evitare perdite di funzionalità, la riscrittura è ammessa solo per
-  file nuovi, quasi vuoti, obsoleti o quasi completamente sbagliati.
+- **Edit better rewrite**: Evita di riscrivere tutto un file se già esiste, preferisci modifiche puntuali per evitare perdite di funzionalità
 
 Prima di proseguire:
 

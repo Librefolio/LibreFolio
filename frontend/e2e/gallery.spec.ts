@@ -12,8 +12,8 @@
  *   - This ensures brokers with icons exist for realistic screenshots
  */
 import { test, expect, Page } from '@playwright/test';
-import { login, setLanguage, navigateTo, openMobileMenu } from './fixtures/auth-helpers';
-import { TEST_USER, TEST_ADMIN, SUPPORTED_LANGUAGES, type Language } from './fixtures/test-users';
+import { login, setLanguage, navigateTo } from './fixtures/auth-helpers';
+import { TEST_ADMIN, SUPPORTED_LANGUAGES, type Language } from './fixtures/test-users';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -83,11 +83,6 @@ function getViewport(testInfo: any): 'desktop' | 'mobile' {
 }
 
 test.describe('Gallery Screenshots', () => {
-    
-    // Freeze animations for all tests in this suite
-    test.beforeEach(async ({ page }) => {
-        // Will be applied after navigation in each test
-    });
 
     test.describe('Auth Pages', () => {
         test('login page - all languages', async ({ page }, testInfo) => {
@@ -150,7 +145,8 @@ test.describe('Gallery Screenshots', () => {
 
     test.describe('Dashboard', () => {
         test.beforeEach(async ({ page }) => {
-            await login(page, TEST_USER);
+            // Use TEST_ADMIN since db populate assigns brokers to admin
+            await login(page, TEST_ADMIN);
         });
 
         test('main dashboard - all languages', async ({ page }, testInfo) => {
@@ -169,41 +165,26 @@ test.describe('Gallery Screenshots', () => {
                 test.skip();
                 return;
             }
-            
-            // For mobile menu, we take screenshot only in first language to avoid complexity
-            // The menu layout is the same regardless of language
-            await page.goto('/dashboard');
-            await page.waitForLoadState('networkidle');
-            await freezeAnimations(page);
 
-            // Ensure sidebar is closed first by clicking hamburger if menu is open
             const menuToggle = page.getByTestId('mobile-menu-toggle');
-            const sidebar = page.locator('nav.fixed');
-
-            // Check if sidebar is visible and close it
-            if (await sidebar.isVisible().catch(() => false)) {
-                const translateClass = await sidebar.getAttribute('class');
-                if (translateClass && !translateClass.includes('-translate-x-full')) {
-                    await menuToggle.click();
-                    await page.waitForTimeout(300);
-                }
-            }
 
             // Take screenshot for each language
             for (const lang of SUPPORTED_LANGUAGES) {
-                // Change language first (while menu is closed)
+                // Navigate fresh to dashboard for each language (ensures clean state)
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle');
+                await freezeAnimations(page);
+
+                // Change language while menu is closed
                 await setLanguage(page, lang);
                 await page.waitForTimeout(100);
 
-                // Open the menu
+                // Open the menu for screenshot
                 await menuToggle.click();
                 await page.waitForTimeout(400); // Let menu animation complete
 
                 await screenshot(page, 'mobile', lang, 'dashboard', 'menu-open');
-
-                // Close menu by clicking hamburger again
-                await menuToggle.click();
-                await page.waitForTimeout(300);
+                // No need to close - we navigate away next iteration
             }
         });
     });
@@ -211,8 +192,8 @@ test.describe('Gallery Screenshots', () => {
     test.describe('Settings', () => {
         test('user preferences - all languages', async ({ page }, testInfo) => {
             const viewport = getViewport(testInfo);
-            await login(page, TEST_USER);
-            
+            await login(page, TEST_ADMIN);
+
             await forEachLanguage(page, async (lang) => {
                 await navigateTo(page, '/settings');
                 await freezeAnimations(page);
@@ -236,7 +217,8 @@ test.describe('Gallery Screenshots', () => {
 
     test.describe('Files', () => {
         test.beforeEach(async ({ page }) => {
-            await login(page, TEST_USER);
+            // Use TEST_ADMIN since db populate assigns brokers to admin
+            await login(page, TEST_ADMIN);
         });
 
         test('static resources tab - all languages', async ({ page }, testInfo) => {
@@ -264,7 +246,8 @@ test.describe('Gallery Screenshots', () => {
 
     test.describe('Brokers', () => {
         test.beforeEach(async ({ page }) => {
-            await login(page, TEST_USER);
+            // Use TEST_ADMIN since db populate assigns brokers to admin
+            await login(page, TEST_ADMIN);
         });
 
         test('broker list - all languages', async ({ page }, testInfo) => {

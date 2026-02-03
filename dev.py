@@ -443,7 +443,8 @@ def cmd_mkdocs_gallery(args):
     print(f"{Colors.BLUE}This runs gallery.spec.ts for both desktop and mobile viewports{Colors.NC}")
     print(f"{Colors.BLUE}Screenshots will be saved to mkdocs_src/docs/gallery/{Colors.NC}\n")
 
-    # Populate test database with realistic data
+    # Populate test database with realistic data (creates fresh DB with --force)
+    # Note: This also creates e2e_test_admin if not exists
     print(f"\n{Colors.CYAN}🗄️  Populating test database with sample data...{Colors.NC}")
     result = subprocess.run(
         ["python", "dev.py", "test", "db", "populate", "--force"],
@@ -454,12 +455,14 @@ def cmd_mkdocs_gallery(args):
         return 1
     print_success("Test database populated")
 
-    # Ensure test users exist
+    # Ensure ALL test users exist (adds e2e_test_user and e2e_test_user2 if missing)
     print(f"\n{Colors.YELLOW}Ensuring E2E test users exist...{Colors.NC}")
     from scripts.test_runner import _ensure_test_users
     if not _ensure_test_users():
         print_error("Failed to create test users")
         return 1
+    print_success("Test users ready")
+
 
     # Run gallery for desktop
     print(f"\n{Colors.CYAN}📸 Running Desktop Screenshots...{Colors.NC}")

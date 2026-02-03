@@ -74,9 +74,9 @@
 
 <!-- Mobile: Custom dropdown category selector -->
 <div class="sm:hidden mb-4" bind:this={dropdownRef}>
-    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+    <span class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {$_('settings.category')}
-    </label>
+    </span>
     <div class="relative">
         <button
             type="button"
@@ -174,16 +174,10 @@
 
     <!-- Right side: Settings content -->
     <div class="flex-1 space-y-4">
-        <!-- Header with actions - Title and buttons on same row -->
+        <!-- Header with actions - Title and icons on same row, description below -->
         <div class="pb-4 border-b border-gray-200 dark:border-slate-700">
-            <div class="flex items-start justify-between gap-2">
-                <!-- Title and description -->
-                <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
-                    {#if description}
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>
-                    {/if}
-                </div>
+            <div class="flex items-center justify-between gap-2 mb-1 min-h-[36px]">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
 
                 <!-- Action buttons - inline with title -->
                 {#if showLock || hasChanges || hasNonDefaults}
@@ -237,6 +231,9 @@
                     </div>
                 {/if}
             </div>
+            {#if description}
+                <p class="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+            {/if}
         </div>
 
         <!-- Content slot -->

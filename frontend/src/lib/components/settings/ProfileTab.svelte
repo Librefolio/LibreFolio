@@ -259,20 +259,44 @@
     <div class="space-y-0">
         <!-- Username -->
         <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-gray-100 dark:border-slate-700 gap-3 {usernameModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
-            <!-- Left: Label and hint -->
+            <!-- Left: Label, hint and action buttons on mobile -->
             <div class="flex-1 min-w-0">
-                <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
-                    <User size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
-                    {$_('auth.username')}
+                <div class="flex items-center justify-between min-h-[28px]">
+                    <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+                        <User size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
+                        {$_('auth.username')}
+                    </div>
+                    <!-- Action buttons - next to label on mobile, hidden on desktop -->
+                    {#if !isLocked && usernameModified}
+                        <div class="flex items-center space-x-1 sm:hidden">
+                            <button
+                                type="button"
+                                on:click={() => saveField('username')}
+                                disabled={saving}
+                                class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                                title={$_('common.save')}
+                            >
+                                <Save size={14}/>
+                            </button>
+                            <button
+                                type="button"
+                                on:click={() => undoField('username')}
+                                class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                                title={$_('common.undo')}
+                            >
+                                <Undo size={14}/>
+                            </button>
+                        </div>
+                    {/if}
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.usernameHint')}</p>
             </div>
 
-            <!-- Right: Actions + Input -->
+            <!-- Right: Actions (desktop only) + Input -->
             <div class="flex items-center space-x-3 w-full sm:w-auto">
-                <!-- Action buttons -->
+                <!-- Action buttons - desktop only -->
                 {#if !isLocked}
-                    <div class="flex items-center space-x-1">
+                    <div class="hidden sm:flex items-center space-x-1">
                         {#if usernameModified}
                             <button
                                 type="button"
@@ -311,20 +335,44 @@
 
         <!-- Email -->
         <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-gray-100 dark:border-slate-700 gap-3 {emailModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
-            <!-- Left: Label and hint -->
+            <!-- Left: Label, hint and action buttons on mobile -->
             <div class="flex-1 min-w-0">
-                <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
-                    <Mail size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
-                    {$_('auth.email')}
+                <div class="flex items-center justify-between min-h-[28px]">
+                    <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+                        <Mail size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
+                        {$_('auth.email')}
+                    </div>
+                    <!-- Action buttons - next to label on mobile, hidden on desktop -->
+                    {#if !isLocked && emailModified}
+                        <div class="flex items-center space-x-1 sm:hidden">
+                            <button
+                                type="button"
+                                on:click={() => saveField('email')}
+                                disabled={saving}
+                                class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                                title={$_('common.save')}
+                            >
+                                <Save size={14}/>
+                            </button>
+                            <button
+                                type="button"
+                                on:click={() => undoField('email')}
+                                class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                                title={$_('common.undo')}
+                            >
+                                <Undo size={14}/>
+                            </button>
+                        </div>
+                    {/if}
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.emailHint')}</p>
             </div>
 
-            <!-- Right: Actions + Input -->
+            <!-- Right: Actions (desktop only) + Input -->
             <div class="flex items-center space-x-3 w-full sm:w-auto">
-                <!-- Action buttons -->
+                <!-- Action buttons - desktop only -->
                 {#if !isLocked}
-                    <div class="flex items-center space-x-1">
+                    <div class="hidden sm:flex items-center space-x-1">
                         {#if emailModified}
                             <button
                                 type="button"

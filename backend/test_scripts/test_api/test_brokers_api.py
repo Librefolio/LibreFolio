@@ -216,7 +216,9 @@ class TestBrokerCreate:
             assert response.status_code == 200
             data = response.json()
             assert data["results"][0]["success"] is False
-            assert "already exists" in data["results"][0]["error"]
+            # Error message can be "already exists" or "already have a broker named"
+            error_msg = data["results"][0]["error"].lower()
+            assert "already" in error_msg and ("exists" in error_msg or "have" in error_msg)
 
             print_success("✓ Got error for duplicate name")
 
@@ -617,7 +619,9 @@ class TestBrokerBulkOperations:
             assert data["success_count"] == 2
             assert data["results"][0]["success"] is True
             assert data["results"][1]["success"] is False
-            assert "already exists" in data["results"][1]["error"]
+            # Error message can be "already exists" or "already have a broker named"
+            error_msg = data["results"][1]["error"].lower()
+            assert "already" in error_msg and ("exists" in error_msg or "have" in error_msg)
             assert data["results"][2]["success"] is True
 
             print_success("✓ Bulk create with partial failure handled correctly")

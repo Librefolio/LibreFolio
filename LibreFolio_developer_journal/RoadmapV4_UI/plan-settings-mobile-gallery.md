@@ -1,14 +1,14 @@
-# Plan: Settings Mobile Layout + Gallery Improvements
+# Plan: Settings Mobile Layout & Gallery Improvements
 
 **Data creazione**: 2 Febbraio 2026  
 **Ultimo aggiornamento**: 3 Febbraio 2026  
-**Status**: 🔄 IN PROGRESS  
+**Status**: 🔄 IN PROGRESS (Fase 1 e 4 completate, Fase 2-3 da fare)  
 **Priorità**: P1  
 **Dipendenze**: E2E test infrastructure (completata)
 
 ---
 
-## 🎯 Obiettivi
+## 🎯 Obiettivo
 
 1. **Settings Page Mobile Layout** - Redesign per schermi piccoli
 2. **Gallery Theme Support** - Screenshot light/dark con auto-switch
@@ -88,9 +88,9 @@ DESKTOP (>640px):           MOBILE (<640px):
 
 ---
 
-## ✅ Lavoro Già Completato
+## ✅ Completato in Sessioni Precedenti
 
-### Infrastruttura
+### Infrastruttura Test
 
 - [x] `freezeAnimations()` helper per screenshot consistenti (animazioni al 10%)
 - [x] `db populate --force` automatico prima di gallery
@@ -102,11 +102,13 @@ DESKTOP (>640px):           MOBILE (<640px):
 
 - [x] `ProfileTab.svelte` - Righe responsive con `flex-col sm:flex-row`
 - [x] `SettingsLayout.svelte` - Dropdown custom per mobile (sostituito select nativo)
-- [x] `SettingSelect.svelte` - Layout 3 righe su mobile con allineamento a destra
+- [x] `SettingSelect.svelte` - Layout 3 righe su mobile con allineamento a destra + CustomSelect
 - [x] `SettingCurrency.svelte` - Layout 3 righe su mobile con allineamento a destra
 - [x] `SettingTheme.svelte` - Layout 3 righe su mobile con allineamento a destra
-- [x] `GlobalSettingsTab.svelte` - Layout 3 righe + dropdown custom mobile
+- [x] `GlobalSettingsTab.svelte` - Layout 3 righe + dropdown custom mobile + CustomSelect per lingua
 - [x] Traduzione `settings.category` aggiunta
+- [x] `min-h-[28px]` e `min-h-[36px]` per evitare shift quando icone appaiono
+- [x] Titolo e icone su stessa riga, sottotitolo sotto (evita shift)
 
 ### Gallery Structure
 
@@ -116,6 +118,22 @@ DESKTOP (>640px):           MOBILE (<640px):
 - [x] Language switcher con layout 2x2 (responsive a 4x1)
 - [x] Aggiunto a mkdocs.yml navigation
 - [x] Card Gallery nella home page
+
+### DB Populate ✅ COMPLETATO
+
+- [x] Aggiunto `BrokerUserAccess` per associare broker a utenti
+- [x] Aggiunto `brim_plugin_key` a tutti i broker
+- [x] Aggiunto 3 nuovi broker: Directa SIM, eToro, Coinbase
+- [x] Aggiunto 3 nuovi asset: Bitcoin, Ethereum, Tesla
+- [x] Aggiunto transazioni per nuovi broker
+- [x] Aggiunto price history per crypto (24/7, no weekend skip)
+- [x] Gallery usa `TEST_ADMIN` invece di `TEST_USER`
+
+### UI Components
+
+- [x] `CustomSelect.svelte` - Select semplice senza ricerca per liste corte
+- [x] Fix warning a11y: `<label>` → `<span>` per category selector
+- [x] Bottone "Add Broker" nasconde testo su mobile, mostra solo +
 
 ---
 
@@ -212,15 +230,14 @@ Aggiungere sezioni per:
 - Files tabs
 - Brokers (list, detail, import)
 
-### Fase 4: Fix Mobile Menu Screenshot ⏳
+### Fase 4: Fix Mobile Menu Screenshot ✅ COMPLETATA
 
-Problema: Sidebar overlay intercetta click su language selector.
+Problema risolto navigando fresh alla pagina per ogni lingua invece di cercare di chiudere la sidebar.
 
-Opzioni:
-
-1. Skip test (non critico per documentazione)
-2. Chiudere sidebar prima di cambiare lingua (già provato, non funziona sempre)
-3. Usare diversa strategia (screenshot solo in EN per mobile menu)
+Soluzione implementata:
+- Ogni iterazione fa `page.goto('/dashboard')` fresco
+- Questo garantisce che la sidebar sia chiusa prima di cambiare lingua
+- Screenshot generati correttamente per tutte le 4 lingue
 
 ---
 
@@ -237,8 +254,11 @@ Opzioni:
 | 2.3        | Gallery pages theme JS    | 30min   | ⏳      |
 | 3.1        | New screenshot tests      | 30min   | ⏳      |
 | 3.2        | Update gallery pages      | 30min   | ⏳      |
-| 4          | Mobile menu fix           | 15min   | ⏳      |
+| 4          | Mobile menu fix           | 15min   | ✅      |
 | **TOTALE** |                           | **~4h** |        |
+
+**Completato**: ~2h (Fase 1 + Fase 4)
+**Rimanente**: ~2h (Fase 2 + Fase 3)
 
 ---
 
@@ -249,7 +269,7 @@ Opzioni:
 3. ⏳ Gallery pages mostrano tema corretto automaticamente
 4. ⏳ Tutti i tab settings hanno screenshot
 5. ✅ `./dev.py test front all` passa (51/51)
-6. ⏳ `./dev.py mkdocs gallery` genera tutti gli screenshot senza errori
+6. ✅ `./dev.py mkdocs gallery` genera tutti gli screenshot senza errori (12/12 test pass)
 
 ---
 
