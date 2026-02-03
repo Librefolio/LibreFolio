@@ -6,7 +6,7 @@
 **Priorità**: P1  
 **Dipendenze**: plan-frontendTesting.md (infrastruttura completata)
 
-> 📋 **Analisi dettagliata**: Vedi [e2e-test-analysis.md](../../e2e-test-analysis.md) per gap analysis completa
+> 📋 **Analisi dettagliata**: Vedi [e2e-test-analysis.md](./e2e-test-analysis.md) per gap analysis completa
 
 ---
 
