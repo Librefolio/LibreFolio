@@ -82,11 +82,13 @@ nav:
     - CLI Tools: admin/cli_tools.md
     - Advanced Docker: admin/docker_advanced.md
     - Exposing with Tailscale: admin/tailscale_exposure.md
-  - Financial Math:
-    - Overview: financial-calculations/index.md
-    - Day Count Conventions: financial-calculations/day-count.md
-    - Interest Types: financial-calculations/interest-types.md
-    - Compounding: financial-calculations/compounding.md
+  - Financial Theory:
+    - Overview: financial-theory/index.md
+    - Asset Types: financial-theory/asset-types.md
+    - Transaction Types: financial-theory/transaction-types.md
+    - Day Count Conventions: financial-theory/day-count.md
+    - Interest Types: financial-theory/interest-types.md
+    - Compounding: financial-theory/compounding.md
   - Developer Manual:
     - Overview: developer/index.md
     - Technologies:
@@ -129,6 +131,8 @@ nav:
         - File Upload: developer/frontend/components/file-upload.md
       - Pages: developer/frontend/pages/index.md
       - State Management: developer/frontend/state/index.md
+      - Internationalization: developer/frontend/i18n.md
+      - Styling: developer/frontend/styling.md
     - Test Walkthrough:
       - Overview: developer/test-walkthrough/index.md
       - External: developer/test-walkthrough/external.md
@@ -146,6 +150,7 @@ nav:
     - Desktop: gallery/desktop.md
     - Mobile: gallery/mobile.md
   - POC UX: POC_UX/index.md
+  - Credits & Legal: credits-legal.md
 
 extra_css:
   - static/extra.css

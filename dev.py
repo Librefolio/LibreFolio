@@ -608,18 +608,26 @@ def auto_build_mkdocs():
 
 
 def copy_docs_assets():
-    """Copy logo and favicon to docs."""
+    """Copy logo, favicon, and icons to docs."""
     import shutil
     static_dir = PROJECT_ROOT / "mkdocs_src" / "docs" / "static"
     static_dir.mkdir(parents=True, exist_ok=True)
 
     src_logo = PROJECT_ROOT / "frontend" / "static" / "logo.png"
     src_favicon = PROJECT_ROOT / "frontend" / "static" / "favicon.png"
+    src_icons = PROJECT_ROOT / "frontend" / "static" / "icons"
 
     if src_logo.exists():
         shutil.copy(src_logo, static_dir / "logo.png")
     if src_favicon.exists():
         shutil.copy(src_favicon, static_dir / "favicon.png")
+    
+    # Copy icons folder
+    if src_icons.exists():
+        dest_icons = static_dir / "icons"
+        if dest_icons.exists():
+            shutil.rmtree(dest_icons)
+        shutil.copytree(src_icons, dest_icons)
 
 
 def update_js_cache():
