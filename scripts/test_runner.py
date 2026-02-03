@@ -1159,74 +1159,23 @@ def e2e_test(verbose: bool = False) -> bool:
 # FRONTEND E2E TESTS (Playwright)
 # ============================================================================
 
-def _check_frontend_needs_build() -> bool:
-    """
-    Check if frontend needs to be rebuilt.
-    Compares modification times of source files vs build output.
-
-    Returns True if build is needed, False otherwise.
-    """
-    build_dir = PROJECT_ROOT / "frontend" / "build"
-    src_dir = PROJECT_ROOT / "frontend" / "src"
-
-    # If no build exists, definitely need to build
-    if not build_dir.exists():
-        return True
-
-    # Get newest source file modification time
-    newest_src = 0
-    for pattern in ["**/*.svelte", "**/*.ts", "**/*.js", "**/*.css"]:
-        for f in src_dir.glob(pattern):
-            mtime = f.stat().st_mtime
-            if mtime > newest_src:
-                newest_src = mtime
-
-    # Also check package.json and config files
-    config_files = [
-        PROJECT_ROOT / "frontend" / "package.json",
-        PROJECT_ROOT / "frontend" / "vite.config.ts",
-        PROJECT_ROOT / "frontend" / "svelte.config.js",
-        PROJECT_ROOT / "frontend" / "tailwind.config.js",
-    ]
-    for f in config_files:
-        if f.exists():
-            mtime = f.stat().st_mtime
-            if mtime > newest_src:
-                newest_src = mtime
-
-    # Get oldest build file modification time (use index.html as reference)
-    build_marker = build_dir / "index.html"
-    if not build_marker.exists():
-        return True
-
-    build_time = build_marker.stat().st_mtime
-
-    # Need build if source is newer than build
-    return newest_src > build_time
-
-
 def _ensure_frontend_build() -> bool:
     """
     Ensure frontend is built and up to date.
-    Only rebuilds if sources have changed since last build.
+    Uses shared logic from cli_base.
 
-    Returns True if build is ready, False if build failed.
+    Returns:
+        True if build is ready, False if build failed.
     """
-    if not _check_frontend_needs_build():
-        print_info("Frontend build is up to date")
+    from scripts.cli_base import auto_build_frontend
+
+    result = auto_build_frontend(debug=False)
+
+    # auto_build_frontend returns None if no build needed, 0 if success, non-zero if failed
+    if result is None or result == 0:
         return True
-
-    print_info("Frontend sources changed, rebuilding...")
-    result = subprocess.run(
-        ["npm", "run", "build"],
-        cwd=PROJECT_ROOT / "frontend",
-        capture_output=True,
-        text=True
-    )
-
-    if result.returncode != 0:
+    else:
         print_error("Frontend build failed!")
-        print(result.stderr)
         return False
 
     print_success("Frontend build completed")

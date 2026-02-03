@@ -259,3 +259,83 @@ def print_error(msg: str):
 def print_info(msg: str):
     """Print an info message."""
     print(f"{Colors.BLUE}ℹ️  {msg}{Colors.NC}")
+
+
+# =============================================================================
+# Frontend Build Utilities
+# =============================================================================
+
+def check_frontend_needs_build() -> bool:
+    """
+    Check if frontend needs to be rebuilt.
+    Compares modification times of source files vs build output.
+
+    Returns:
+        True if build is needed, False otherwise.
+    """
+    project_root = get_project_root()
+    build_dir = project_root / "frontend" / "build"
+    src_dir = project_root / "frontend" / "src"
+
+    # If no build exists, definitely need to build
+    if not build_dir.exists() or not (build_dir / "index.html").exists():
+        return True
+
+    try:
+        build_time = (build_dir / "index.html").stat().st_mtime
+
+        # Check all source files
+        for src_file in src_dir.rglob("*"):
+            if src_file.is_file() and src_file.stat().st_mtime > build_time:
+                return True
+
+        # Also check config files
+        config_files = [
+            project_root / "frontend" / "package.json",
+            project_root / "frontend" / "vite.config.ts",
+            project_root / "frontend" / "svelte.config.js",
+            project_root / "frontend" / "tailwind.config.js",
+        ]
+        for f in config_files:
+            if f.exists() and f.stat().st_mtime > build_time:
+                return True
+
+    except Exception:
+        pass
+
+    return False
+
+
+def auto_build_frontend(debug: bool = False, build_func=None) -> Optional[int]:
+    """
+    Auto-build frontend if sources have changed since last build.
+
+    Args:
+        debug: Enable debug mode for build
+        build_func: Optional function to call for building (for dev.py integration)
+                   If None, uses npm run build directly
+
+    Returns:
+        None if no build needed
+        0 if build succeeded
+        Non-zero if build failed
+    """
+    if not check_frontend_needs_build():
+        print_info("Frontend build is up to date")
+        return None
+
+    print_info("Frontend sources changed, rebuilding...")
+
+    if build_func:
+        # Use provided build function (from dev.py)
+        return build_func(debug=debug)
+    else:
+        # Direct npm build
+        project_root = get_project_root()
+        result = subprocess.run(
+            ["npm", "run", "build"],
+            cwd=project_root / "frontend",
+            capture_output=False
+        )
+        return result.returncode
+

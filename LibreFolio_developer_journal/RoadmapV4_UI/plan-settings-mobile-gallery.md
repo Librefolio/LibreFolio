@@ -1,7 +1,7 @@
 # Plan: Settings Mobile Layout + Gallery Improvements
 
 **Data creazione**: 2 Febbraio 2026  
-**Ultimo aggiornamento**: 2 Febbraio 2026  
+**Ultimo aggiornamento**: 3 Febbraio 2026  
 **Status**: 🔄 IN PROGRESS  
 **Priorità**: P1  
 **Dipendenze**: E2E test infrastructure (completata)
@@ -101,7 +101,11 @@ DESKTOP (>640px):           MOBILE (<640px):
 ### Componenti Settings
 
 - [x] `ProfileTab.svelte` - Righe responsive con `flex-col sm:flex-row`
-- [x] `SettingsLayout.svelte` - Dropdown category su mobile (select nativo - da migliorare)
+- [x] `SettingsLayout.svelte` - Dropdown custom per mobile (sostituito select nativo)
+- [x] `SettingSelect.svelte` - Layout 3 righe su mobile con allineamento a destra
+- [x] `SettingCurrency.svelte` - Layout 3 righe su mobile con allineamento a destra
+- [x] `SettingTheme.svelte` - Layout 3 righe su mobile con allineamento a destra
+- [x] `GlobalSettingsTab.svelte` - Layout 3 righe + dropdown custom mobile
 - [x] Traduzione `settings.category` aggiunta
 
 ### Gallery Structure
@@ -117,64 +121,36 @@ DESKTOP (>640px):           MOBILE (<640px):
 
 ## 📋 Piano di Implementazione
 
-### Fase 1: Settings Mobile Layout (2h) 🔄 IN CORSO
+### Fase 1: Settings Mobile Layout (2h) ✅ COMPLETATA
 
-#### 1.1 Creare dropdown custom per category selector ⏳
+#### 1.1 Creare dropdown custom per category selector ✅
 
-Riferimento: DataTable rows selector (`DataTablePagination.svelte`)
+Implementato in `SettingsLayout.svelte` e `GlobalSettingsTab.svelte`:
+- Dropdown custom con click outside handling
+- Icone category + chevron animato
+- Background highlight per item selezionato
+- Dark mode support
 
-```svelte
-<!-- In SettingsLayout.svelte -->
-<!-- Sostituire <select> nativo con dropdown custom -->
-<div class="sm:hidden mb-4 relative">
-    <button on:click={toggleDropdown} class="...">
-        {selectedCategoryLabel}
-        <ChevronDown />
-    </button>
-    {#if isDropdownOpen}
-        <div class="absolute z-50 bg-white shadow-lg rounded-lg ...">
-            {#each categories as cat}
-                <button on:click={() => selectCategory(cat.id)}>
-                    <svelte:component this={cat.icon} />
-                    {$_(cat.labelKey)}
-                </button>
-            {/each}
-        </div>
-    {/if}
-</div>
-```
+#### 1.2 Sistemare header layout mobile ✅
 
-#### 1.2 Sistemare header layout mobile ⏳
+Implementato: Titolo e pulsanti separati verticalmente su mobile:
+- Titolo + descrizione in div con `mb-3`
+- Pulsanti in riga separata con `flex-wrap gap-2`
 
-Problema: Titolo e pulsanti sulla stessa riga causano wrap confuso.
+#### 1.3 Applicare stesse modifiche a GlobalSettingsTab ✅
 
-Soluzione:
+- ✅ Aggiunto dropdown custom per category selector mobile
+- ✅ Layout responsive per header (titolo + pulsanti in linea)
+- ✅ Dark mode classes aggiunte a tutti gli elementi
+- ✅ Lucchetto edit sempre visibile per admin
+- ✅ Setting rows su 3 righe per mobile (`flex-col sm:flex-row`)
 
-```svelte
-<!-- Mobile: stack verticalmente -->
-<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-    <div>
-        <h3>{title}</h3>
-        <p>{description}</p>
-    </div>
-    <!-- Pulsanti su riga separata su mobile -->
-    <div class="flex items-center space-x-1 justify-end">
-        <!-- Save, Undo, Reset, Lock buttons -->
-    </div>
-</div>
-```
+#### 1.4 Verificare e sistemare setting controls ✅
 
-#### 1.3 Applicare stesse modifiche a GlobalSettingsTab ⏳
-
-- Verificare che usi SettingsLayout (sì, lo usa)
-- Verificare che lucchetto edit sia visibile
-- Testare visivamente
-
-#### 1.4 Verificare setting controls ⏳
-
-- `SettingSelect.svelte` - dropdown lingua
-- `SettingCurrency.svelte` - FuzzySelect valuta
-- `SettingTheme.svelte` - toggle tema
+- ✅ `SettingSelect.svelte` - Layout 3 righe + allineamento destra (`self-end`)
+- ✅ `SettingCurrency.svelte` - Layout 3 righe + allineamento destra
+- ✅ `SettingTheme.svelte` - Layout 3 righe + allineamento destra
+- ✅ `GlobalSettingsTab.svelte` - Layout 3 righe per tutti i tipi
 
 ### Fase 2: Gallery Theme Support (1.5h) ⏳
 
@@ -252,10 +228,10 @@ Opzioni:
 
 | Fase       | Task                      | Tempo   | Status |
 |------------|---------------------------|---------|--------|
-| 1.1        | Dropdown custom mobile    | 45min   | ⏳      |
-| 1.2        | Header responsive         | 30min   | ⏳      |
-| 1.3        | GlobalSettingsTab         | 15min   | ⏳      |
-| 1.4        | Verifica setting controls | 15min   | ⏳      |
+| 1.1        | Dropdown custom mobile    | 45min   | ✅      |
+| 1.2        | Header responsive         | 30min   | ✅      |
+| 1.3        | GlobalSettingsTab         | 15min   | ✅      |
+| 1.4        | Verifica setting controls | 15min   | ✅      |
 | 2.1        | Gallery theme loop        | 30min   | ⏳      |
 | 2.2        | Screenshot path update    | 15min   | ⏳      |
 | 2.3        | Gallery pages theme JS    | 30min   | ⏳      |

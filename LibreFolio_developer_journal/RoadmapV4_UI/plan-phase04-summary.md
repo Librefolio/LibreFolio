@@ -1,8 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 2 Febbraio 2026  
-**Status**: 🔄 IN PROGRESS (E2E Testing & Settings Mobile in corso)
+**Ultimo aggiornamento**: 3 Febbraio 2026  
+**Status**: 🔄 IN PROGRESS (Gallery & DB Populate improvements)
 
 ---
 
@@ -90,8 +90,8 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | BUG-017 | BRIM upload broker_id in query string                  | ✅        |
 | BUG-018 | Translation key sbagliata per upload button            | ✅        |
 | BUG-019 | Svelte warnings con svelte-ignore                      | ✅        |
-| BUG-020 | Form submit handler syntax (on:submit\|preventDefault) | ✅ NUOVO  |
-| BUG-021 | Settings mobile layout comprime contenuto              | 🔄 NUOVO |
+| BUG-020 | Form submit handler syntax (on:submit\|preventDefault) | ✅        |
+| BUG-021 | Settings mobile layout comprime contenuto              | ✅ RISOLTO |
 
 ---
 

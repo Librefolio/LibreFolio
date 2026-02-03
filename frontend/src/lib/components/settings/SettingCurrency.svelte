@@ -33,9 +33,9 @@
     }
 </script>
 
-<div class="setting-row flex items-start justify-between py-4 border-b border-gray-100 dark:border-slate-700 last:border-0">
+<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0">
     <!-- Left: Label and hint -->
-    <div class="flex-1 min-w-0 pr-4">
+    <div class="flex-1 min-w-0">
         <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
             {#if icon}
                 <svelte:component this={icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
@@ -47,8 +47,8 @@
         {/if}
     </div>
 
-    <!-- Right: Actions + FuzzySelect -->
-    <div class="flex items-center space-x-3">
+    <!-- Right: Actions + FuzzySelect - On mobile, full width aligned right -->
+    <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto">
         <!-- Action buttons -->
         {#if !isLocked}
             <div class="flex items-center space-x-1">
@@ -83,8 +83,8 @@
             </div>
         {/if}
 
-        <!-- FuzzySelect for currency -->
-        <div class="min-w-[220px]">
+        <!-- FuzzySelect for currency - full width on mobile -->
+        <div class="flex-1 sm:flex-none sm:min-w-[220px]">
             <FuzzySelect
                 bind:value
                 {options}

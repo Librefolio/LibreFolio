@@ -1,8 +1,8 @@
 # Plan: E2E Test Remediation
 
 **Data creazione**: 2 Febbraio 2026  
-**Ultimo aggiornamento**: 2 Febbraio 2026  
-**Status**: ✅ FASE 1 COMPLETATA, 🔄 FASE 2 in pianificazione  
+**Ultimo aggiornamento**: 3 Febbraio 2026  
+**Status**: ✅ TEST BASE COMPLETATI (51/51 PASS)  
 **Priorità**: P1  
 **Dipendenze**: plan-frontendTesting.md (infrastruttura completata)
 
@@ -10,7 +10,7 @@
 
 ---
 
-## 📊 Stato Test (2 Feb 2026 - 18:30)
+## 📊 Stato Test (3 Feb 2026)
 
 | Suite              | Test | Status          | Note                                     |
 |--------------------|------|-----------------|------------------------------------------|
@@ -19,15 +19,16 @@
 | files.spec.ts      | 9    | ✅ PASS          | Tabs, URL deep-linking, empty states     |
 | brokers.spec.ts    | 7    | ✅ PASS          | CRUD, modal open/close                   |
 | multi-user.spec.ts | 2    | ✅ PASS          | Isolamento + unicità nomi globale        |
-| gallery.spec.ts    | 12   | ✅ 11/12 desktop | Mobile menu fix in corso                 |
+| gallery.spec.ts    | 12   | 🔄 WIP          | Screenshot per documentazione            |
 
 **Totale: 51 test funzionali PASS (5/5 suite)**
 
 ### Infrastruttura Aggiunta
 
-- ✅ Build check automatico (`_ensure_frontend_build()`) - ricompila solo se sorgenti cambiati
+- ✅ Build check automatico (`_ensure_frontend_build()` via `cli_base.py`) - ricompila solo se sorgenti cambiati
 - ✅ db populate automatico prima di gallery
 - ✅ freezeAnimations() per screenshot consistenti
+- ✅ Mobile menu toggle fix per gallery
 
 ---
 
