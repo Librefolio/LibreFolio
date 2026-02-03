@@ -166,9 +166,15 @@
 /* Clickable Cards */
 .grid.cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Slightly wider min */
+    grid-template-columns: repeat(3, 1fr); /* 2 columns */
     gap: 1.5rem;
     margin-top: 1rem;
+}
+
+@media (max-width: 600px) {
+    .grid.cards {
+        grid-template-columns: 1fr; /* 1 column on mobile */
+    }
 }
 
 .card-link {
