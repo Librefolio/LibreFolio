@@ -48,16 +48,6 @@ hide:
     </div>
   </a>
 
-  <a href="admin/" class="card-link">
-    <div class="card-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M20,19V7H4V19H20M20,3A2,2 0 0,1 22,5V19A2,2 0 0,1 20,21H4A2,2 0 0,1 2,19V5C2,3.89 2.9,3 4,3H20M13,17V15H18V17H13M9.58,13L5.57,9H8.4L11.7,12.3C12.09,12.69 12.09,13.33 11.7,13.72L8.42,17H5.59L9.58,13Z" /></svg>
-    </div>
-    <div class="card-content">
-      <span class="card-title">Admin Manual</span>
-      <span class="card-desc">For system administrators: CLI tools, Docker, and maintenance.</span>
-    </div>
-  </a>
-
   <a href="developer/" class="card-link">
     <div class="card-icon">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" /></svg>
@@ -77,4 +67,24 @@ hide:
       <span class="card-desc">Visual walkthrough of all features in 4 languages.</span>
     </div>
   </a>
+
+  <a href="admin/" class="card-link">
+    <div class="card-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M20,19V7H4V19H20M20,3A2,2 0 0,1 22,5V19A2,2 0 0,1 20,21H4A2,2 0 0,1 2,19V5C2,3.89 2.9,3 4,3H20M13,17V15H18V17H13M9.58,13L5.57,9H8.4L11.7,12.3C12.09,12.69 12.09,13.33 11.7,13.72L8.42,17H5.59L9.58,13Z" /></svg>
+    </div>
+    <div class="card-content">
+      <span class="card-title">Admin Manual</span>
+      <span class="card-desc">For system administrators: CLI tools, Docker, and maintenance.</span>
+    </div>
+  </a>
+
+  <a href="faq/" class="card-link">
+    <div class="card-icon">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" /></svg>    </div>
+    <div class="card-content">
+      <span class="card-title">Frequently Asked Questions (FAQ)</span>
+      <span class="card-desc">General questions about the projects</span>
+    </div>
+  </a>
+
 </div>

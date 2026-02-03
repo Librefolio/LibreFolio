@@ -2,9 +2,9 @@
     import {_, LANGUAGE_OPTIONS} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
-    import {onMount} from 'svelte';
+    import {onMount, onDestroy} from 'svelte';
     import {debug} from '$lib/debug';
-    import {AlertCircle, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
+    import {AlertCircle, ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
     import FuzzySelect, {type SelectOption} from '$lib/components/FuzzySelect.svelte';
     import type {GlobalSetting} from '$lib/types';
 
@@ -294,18 +294,118 @@
             const category = categories.find(c => c.id === selectedCategory);
             return category ? category.keys.includes(s.key) : true;
         });
+
+    // Mobile dropdown state
+    let showDropdown = false;
+    let dropdownRef: HTMLDivElement | null = null;
+
+    // Get selected category label for mobile display
+    $: selectedCategoryLabel = selectedCategory === 'all'
+        ? $_('settings.globalSettingCategories.all')
+        : $_(`settings.globalSettingCategories.${selectedCategory}`);
+
+    // Get selected category icon
+    $: selectedCategoryIcon = selectedCategory === 'all'
+        ? null
+        : categories.find(c => c.id === selectedCategory)?.icon || null;
+
+    function toggleDropdown() {
+        showDropdown = !showDropdown;
+    }
+
+    function selectCategoryMobile(id: string) {
+        selectedCategory = id;
+        showDropdown = false;
+    }
+
+    // Close dropdown on click outside
+    function handleClickOutside(event: MouseEvent) {
+        if (dropdownRef && !dropdownRef.contains(event.target as Node)) {
+            showDropdown = false;
+        }
+    }
+
+    onMount(() => {
+        document.addEventListener('click', handleClickOutside);
+    });
+
+    onDestroy(() => {
+        document.removeEventListener('click', handleClickOutside);
+    });
 </script>
 
-<div class="flex gap-6 min-h-[400px]" data-testid="global-settings-tab">
-    <!-- Left sidebar: Category navigation -->
-    <div class="w-48 flex-shrink-0">
+<!-- Mobile: Custom dropdown category selector -->
+<div class="sm:hidden mb-4" bind:this={dropdownRef}>
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        {$_('settings.category')}
+    </label>
+    <div class="relative">
+        <button
+            type="button"
+            on:click={toggleDropdown}
+            class="w-full flex items-center justify-between px-4 py-3 border border-gray-300 dark:border-slate-600
+                   rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-sm
+                   focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all"
+        >
+            <span class="flex items-center gap-2">
+                {#if selectedCategoryIcon}
+                    <svelte:component this={selectedCategoryIcon} size={16} class="text-gray-500 dark:text-gray-400"/>
+                {/if}
+                {selectedCategoryLabel}
+            </span>
+            <ChevronDown size={18} class="text-gray-400 transition-transform {showDropdown ? 'rotate-180' : ''}"/>
+        </button>
+
+        {#if showDropdown}
+            <div class="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200
+                        dark:border-slate-600 rounded-lg shadow-lg overflow-hidden z-50">
+                <!-- All Settings option -->
+                <button
+                    type="button"
+                    on:click={() => selectCategoryMobile('all')}
+                    class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
+                           {selectedCategory === 'all'
+                               ? 'bg-libre-green/10 text-libre-green font-medium'
+                               : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                >
+                    <span class="flex-1">{$_('settings.globalSettingCategories.all')}</span>
+                    {#if selectedCategory === 'all'}
+                        <ChevronRight size={16}/>
+                    {/if}
+                </button>
+
+                <!-- Category options -->
+                {#each categories as cat (cat.id)}
+                    <button
+                        type="button"
+                        on:click={() => selectCategoryMobile(cat.id)}
+                        class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
+                               {selectedCategory === cat.id
+                                   ? 'bg-libre-green/10 text-libre-green font-medium'
+                                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                    >
+                        <svelte:component this={cat.icon} size={16} class="{selectedCategory === cat.id ? 'text-libre-green' : 'text-gray-400'}"/>
+                        <span class="flex-1">{$_(`settings.globalSettingCategories.${cat.id}`)}</span>
+                        {#if selectedCategory === cat.id}
+                            <ChevronRight size={16}/>
+                        {/if}
+                    </button>
+                {/each}
+            </div>
+        {/if}
+    </div>
+</div>
+
+<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px]" data-testid="global-settings-tab">
+    <!-- Left sidebar: Category navigation (hidden on mobile) -->
+    <div class="hidden sm:block w-48 flex-shrink-0">
         <nav class="space-y-1">
             <button
                     on:click={() => selectedCategory = 'all'}
                     class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
                     {selectedCategory === 'all'
                         ? 'bg-libre-green text-white'
-                        : 'text-gray-700 hover:bg-gray-100'}"
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
             >
                 <span class="flex-1 text-left">{$_('settings.globalSettingCategories.all')}</span>
                 {#if selectedCategory === 'all'}
@@ -319,7 +419,7 @@
                         class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
                         {selectedCategory === cat.id
                             ? 'bg-libre-green text-white'
-                            : 'text-gray-700 hover:bg-gray-100'}"
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                 >
                     <svelte:component this={cat.icon} size={16} class="mr-2"/>
                     <span class="flex-1 text-left">{$_(`settings.globalSettingCategories.${cat.id}`)}</span>
@@ -333,51 +433,51 @@
 
     <!-- Right side: Settings content -->
     <div class="flex-1 space-y-4">
-        <!-- Header with lock/unlock -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-200">
-            <div>
-                <h3 class="text-lg font-semibold text-gray-900">{$_('settings.globalSettings')}</h3>
-                <p class="text-sm text-gray-500">{$_('settings.globalSettingsDescription')}</p>
-            </div>
-            <div class="flex items-center space-x-1">
-                {#if canEdit}
-                    {#if !isLocked}
-                        <!-- Bulk action buttons when unlocked - only visible when actionable -->
-                        {#if hasAnyChanges}
-                            <button
-                                    on:click={saveAll}
-                                    disabled={isSaving}
-                                    class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
-                                    title={$_('settings.saveAll')}
-                            >
-                                <Save size={18}/>
-                            </button>
-                            <button
-                                    on:click={undoAll}
-                                    class="p-2 rounded-lg transition-all bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    title={$_('settings.undoAll')}
-                            >
-                                <Undo size={18}/>
-                            </button>
+        <!-- Header with lock/unlock - Title and buttons on same row -->
+        <div class="pb-4 border-b border-gray-200 dark:border-slate-700">
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{$_('settings.globalSettings')}</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{$_('settings.globalSettingsDescription')}</p>
+                </div>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    {#if canEdit}
+                        {#if !isLocked}
+                            {#if hasAnyChanges}
+                                <button
+                                        on:click={saveAll}
+                                        disabled={isSaving}
+                                        class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
+                                        title={$_('settings.saveAll')}
+                                >
+                                    <Save size={18}/>
+                                </button>
+                                <button
+                                        on:click={undoAll}
+                                        class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
+                                        title={$_('settings.undoAll')}
+                                >
+                                    <Undo size={18}/>
+                                </button>
+                            {/if}
+                            {#if hasAnyNonDefault}
+                                <button
+                                        on:click={resetAllToDefaults}
+                                        class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50"
+                                        title={$_('settings.resetAllToDefault')}
+                                >
+                                    <RotateCcw size={18}/>
+                                </button>
+                            {/if}
                         {/if}
-                        {#if hasAnyNonDefault}
-                            <button
-                                    on:click={resetAllToDefaults}
-                                    class="p-2 rounded-lg transition-all bg-orange-100 text-orange-700 hover:bg-orange-200"
-                                    title={$_('settings.resetAllToDefault')}
-                            >
-                                <RotateCcw size={18}/>
-                            </button>
-                        {/if}
-                    {/if}
-                    <button
-                            on:click={toggleLock}
-                            class="p-2 rounded-lg transition-all
-                            {isLocked
-                                ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}"
-                            title={isLocked ? $_('settings.clickToEdit') : $_('settings.clickToLock')}
-                    >
+                        <button
+                                on:click={toggleLock}
+                                class="p-2 rounded-lg transition-all
+                                {isLocked
+                                    ? 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                                    : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'}"
+                                title={isLocked ? $_('settings.clickToEdit') : $_('settings.clickToLock')}
+                        >
                         {#if isLocked}
                             <Lock size={18}/>
                         {:else}
@@ -385,10 +485,11 @@
                         {/if}
                     </button>
                 {:else}
-                    <div class="flex items-center space-x-2 px-3 py-2 bg-gray-50 text-gray-500 rounded-lg" title={$_('settings.readOnlyMode')}>
+                    <div class="flex items-center space-x-2 px-3 py-2 bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 rounded-lg" title={$_('settings.readOnlyMode')}>
                         <ShieldOff size={18}/>
                     </div>
                 {/if}
+                </div>
             </div>
         </div>
 
@@ -417,24 +518,24 @@
             <div class="space-y-4">
                 {#each filteredSettings as setting (setting.key)}
                     {@const category = getCategoryForSetting(setting.key)}
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="flex items-center justify-between">
-                            <div class="flex-1">
-                                <label for={setting.key} class="flex items-center text-sm font-medium text-gray-700">
+                    <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
+                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div class="flex-1 min-w-0">
+                                <label for={setting.key} class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
                                     {#if category}
-                                        <svelte:component this={category.icon} size={16} class="mr-2 text-gray-500"/>
+                                        <svelte:component this={category.icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
                                     {/if}
                                     {$_(`settings.globalSettingNames.${setting.key}`) !== `settings.globalSettingNames.${setting.key}`
                                         ? $_(`settings.globalSettingNames.${setting.key}`)
                                         : setting.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                                 </label>
-                                <p class="text-xs text-gray-500 mt-1">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                     {$_(`settings.globalSettingDescriptions.${setting.key}`) !== `settings.globalSettingDescriptions.${setting.key}`
                                         ? $_(`settings.globalSettingDescriptions.${setting.key}`)
                                         : ''}
                                 </p>
                             </div>
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto">
                                 {#if setting.value_type === 'bool'}
                                     <!-- Action buttons BEFORE the field -->
                                     {#if !isLocked}

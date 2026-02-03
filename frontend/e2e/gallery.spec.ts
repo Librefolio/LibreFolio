@@ -170,34 +170,40 @@ test.describe('Gallery Screenshots', () => {
                 return;
             }
             
-            // For mobile menu, we need to handle language change differently
-            // since the menu overlay intercepts clicks
-            for (const lang of SUPPORTED_LANGUAGES) {
-                // Navigate to dashboard
-                await page.goto('/dashboard');
-                await page.waitForLoadState('networkidle');
-                await freezeAnimations(page);
+            // For mobile menu, we take screenshot only in first language to avoid complexity
+            // The menu layout is the same regardless of language
+            await page.goto('/dashboard');
+            await page.waitForLoadState('networkidle');
+            await freezeAnimations(page);
 
-                // Ensure sidebar is closed first (in case it auto-opened)
-                const overlay = page.locator('[aria-label="Close sidebar"]');
-                if (await overlay.isVisible().catch(() => false)) {
-                    await overlay.click();
-                    await page.waitForTimeout(200);
+            // Ensure sidebar is closed first by clicking hamburger if menu is open
+            const menuToggle = page.getByTestId('mobile-menu-toggle');
+            const sidebar = page.locator('nav.fixed');
+
+            // Check if sidebar is visible and close it
+            if (await sidebar.isVisible().catch(() => false)) {
+                const translateClass = await sidebar.getAttribute('class');
+                if (translateClass && !translateClass.includes('-translate-x-full')) {
+                    await menuToggle.click();
+                    await page.waitForTimeout(300);
                 }
+            }
 
-                // Now change language with sidebar closed
+            // Take screenshot for each language
+            for (const lang of SUPPORTED_LANGUAGES) {
+                // Change language first (while menu is closed)
                 await setLanguage(page, lang);
+                await page.waitForTimeout(100);
 
-                // Open the menu and take screenshot
-                await openMobileMenu(page);
-                await page.waitForTimeout(300); // Let menu animation complete
+                // Open the menu
+                await menuToggle.click();
+                await page.waitForTimeout(400); // Let menu animation complete
+
                 await screenshot(page, 'mobile', lang, 'dashboard', 'menu-open');
 
-                // Close menu for next iteration
-                if (await overlay.isVisible().catch(() => false)) {
-                    await overlay.click();
-                    await page.waitForTimeout(200);
-                }
+                // Close menu by clicking hamburger again
+                await menuToggle.click();
+                await page.waitForTimeout(300);
             }
         });
     });
