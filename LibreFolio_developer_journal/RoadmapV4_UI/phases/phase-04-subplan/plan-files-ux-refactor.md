@@ -9,6 +9,7 @@
 ### Note Finali
 
 Durante l'implementazione è stato necessario:
+
 - Aggiungere un custom `paramsSerializer` in `zodios-client.ts` per serializzare gli array come `key=1&key=2` invece di `key[]=1` (formato atteso da FastAPI)
 - Sostituire tutte le chiamate `fetch()` dirette con il client Zodios tipizzato
 
@@ -45,29 +46,32 @@ Migliorare l'esperienza utente della pagina `/files` e della sezione Import File
 
 ### 2.1 Sistema URL Filters Dinamico
 
-**Obiettivo**: Permettere deep-linking a qualsiasi combinazione di filtri tramite URL. Il sistema deve essere **dinamico** e funzionare con qualsiasi colonna DataTable, non hardcoded per un sottoinsieme specifico.
+**Obiettivo**: Permettere deep-linking a qualsiasi combinazione di filtri tramite URL. Il sistema deve essere **dinamico** e funzionare con qualsiasi colonna DataTable, non
+hardcoded per un sottoinsieme specifico.
 
 **Principi**:
+
 1. Ogni colonna ha una `urlKey` per il mapping URL ↔ stato filtro
 2. I valori ammessi nell'URL sono gli stessi dei filtri della tabella
 3. Se una key non viene trovata nelle colonne, viene ignorata e rimossa dall'URL
 4. Il sistema parsa `key=value` e inizializza i filtri di conseguenza
 
 **URL Format**:
+
 ```
 /files?tab=brim&filename=report&broker=1,2&status=uploaded,parsed&size=1000-50000&date=2026-01-01,2026-01-31
 ```
 
 **Mapping Colonne ↔ URL Keys**:
 
-| Colonna    | URL Key    | Tipo      | Formato Valori URL              |
-|------------|------------|-----------|--------------------------------|
-| `filename` | `filename` | text      | Stringa (search query)         |
-| `broker`   | `broker`   | enum      | IDs comma-separated: `1,2,3`   |
-| `status`   | `status`   | enum      | Values comma-separated         |
-| `size`     | `size`     | size      | `min-max` in bytes             |
-| `date`     | `date`     | date      | `start,end` ISO format         |
-| N/A        | `tab`      | special   | `static` \| `brim`             |
+| Colonna    | URL Key    | Tipo    | Formato Valori URL           |
+|------------|------------|---------|------------------------------|
+| `filename` | `filename` | text    | Stringa (search query)       |
+| `broker`   | `broker`   | enum    | IDs comma-separated: `1,2,3` |
+| `status`   | `status`   | enum    | Values comma-separated       |
+| `size`     | `size`     | size    | `min-max` in bytes           |
+| `date`     | `date`     | date    | `start,end` ISO format       |
+| N/A        | `tab`      | special | `static` \| `brim`           |
 
 ### 2.2 Implementazione in FilesTable
 
@@ -488,13 +492,13 @@ Nel componente FileUploader/BrokerImportFilesModal, quando `brokerId` è passato
 
 ## 📚 File Coinvolti
 
-| File                                               | Modifiche                                       |
-|----------------------------------------------------|-------------------------------------------------|
-| `routes/(app)/files/+page.svelte`                  | URL params sync ✅                              |
-| `routes/(app)/brokers/[id]/+page.svelte`           | Button modale, rimuovi sezione inline ✅        |
-| `components/brokers/BrokerImportFilesModal.svelte` | NUOVO - Modale con DataTable ✅                 |
-| `components/brokers/BrokerImportFiles.svelte`      | Migliorato ma non più usato in broker detail    |
-| `components/files/FilesTable.svelte`               | Aggiunto urlKey alle colonne ✅                 |
-| `components/table/DataTable.svelte`                | Props initialFilters, onFiltersChange ✅        |
-| `components/table/types.ts`                        | Aggiunto urlKey a ColumnDef ✅                  |
-| `lib/utils/urlFilters.ts`                          | NUOVO - Utility parse/build URL filters ✅      |
+| File                                               | Modifiche                                    |
+|----------------------------------------------------|----------------------------------------------|
+| `routes/(app)/files/+page.svelte`                  | URL params sync ✅                            |
+| `routes/(app)/brokers/[id]/+page.svelte`           | Button modale, rimuovi sezione inline ✅      |
+| `components/brokers/BrokerImportFilesModal.svelte` | NUOVO - Modale con DataTable ✅               |
+| `components/brokers/BrokerImportFiles.svelte`      | Migliorato ma non più usato in broker detail |
+| `components/files/FilesTable.svelte`               | Aggiunto urlKey alle colonne ✅               |
+| `components/table/DataTable.svelte`                | Props initialFilters, onFiltersChange ✅      |
+| `components/table/types.ts`                        | Aggiunto urlKey a ColumnDef ✅                |
+| `lib/utils/urlFilters.ts`                          | NUOVO - Utility parse/build URL filters ✅    |

@@ -204,6 +204,7 @@
                         autocomplete="new-password"
                         hasError={!!passwordError}
                         on:blur={validatePassword}
+                        testId="register-password"
                 />
                 <PasswordStrength {password} />
                 {#if passwordError}
@@ -220,6 +221,7 @@
                         autocomplete="new-password"
                         hasError={!!confirmPasswordError}
                         on:blur={validateConfirmPassword}
+                        testId="register-confirm-password"
                 />
                 {#if confirmPasswordError}
                     <p class="text-red-600 text-xs mt-1">{confirmPasswordError}</p>
@@ -231,6 +233,7 @@
                     class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                     disabled={loading}
                     type="submit"
+                    data-testid="register-submit"
             >
                 {#if loading}
                     {$_('common.loading')}

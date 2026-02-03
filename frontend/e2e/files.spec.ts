@@ -60,6 +60,55 @@ test.describe('Files Page', () => {
             await page.getByTestId('files-tab-static').click();
             await expect(page.getByTestId('upload-button')).toBeVisible();
         });
+
+        test('can toggle uploader visibility', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await page.getByTestId('files-tab-static').click();
+
+            // Initially uploader should not be visible
+            await expect(page.getByTestId('file-uploader')).not.toBeVisible();
+
+            // Click upload button to show uploader
+            await page.getByTestId('upload-button').click();
+            await expect(page.getByTestId('file-uploader')).toBeVisible();
+            await expect(page.getByTestId('file-drop-zone')).toBeVisible();
+
+            // Click again to hide
+            await page.getByTestId('upload-button').click();
+            await expect(page.getByTestId('file-uploader')).not.toBeVisible();
+        });
+
+        test('view mode toggle shows when files exist', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await page.getByTestId('files-tab-static').click();
+
+            // Check if view mode toggle is visible (only shows when files exist)
+            const hasViewToggle = await page.getByTestId('view-mode-toggle').isVisible().catch(() => false);
+
+            if (hasViewToggle) {
+                await expect(page.getByTestId('view-mode-grid')).toBeVisible();
+                await expect(page.getByTestId('view-mode-list')).toBeVisible();
+            }
+            // If no files, view toggle won't be shown - that's expected
+        });
+
+        test('can switch between grid and list view', async ({ page }) => {
+            await navigateTo(page, '/files');
+            await page.getByTestId('files-tab-static').click();
+
+            // Only test if view toggle exists (files present)
+            const hasViewToggle = await page.getByTestId('view-mode-toggle').isVisible().catch(() => false);
+
+            if (hasViewToggle) {
+                // Click grid view
+                await page.getByTestId('view-mode-grid').click();
+                await expect(page.getByTestId('view-mode-grid')).toHaveClass(/active/);
+
+                // Click list view
+                await page.getByTestId('view-mode-list').click();
+                await expect(page.getByTestId('view-mode-list')).toHaveClass(/active/);
+            }
+        });
     });
 
     test.describe('BRIM Tab', () => {

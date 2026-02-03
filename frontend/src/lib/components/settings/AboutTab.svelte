@@ -61,15 +61,15 @@ Generated: ${new Date().toISOString()}
     }
 </script>
 
-<div class="space-y-8">
+<div class="space-y-8" data-testid="about-tab">
     <!-- App Info -->
     <div class="flex items-center space-x-4">
         <div class="p-4 bg-libre-green rounded-xl">
             <img alt="LibreFolio" class="w-10 h-10" src="/logo.png"/>
         </div>
         <div>
-            <h3 class="text-xl font-bold text-gray-800">LibreFolio</h3>
-            <p class="text-gray-500">{$_('settings.version')} {systemInfo?.app_version ?? '...'}</p>
+            <h3 class="text-xl font-bold text-gray-800" data-testid="about-app-name">LibreFolio</h3>
+            <p class="text-gray-500" data-testid="about-version">{$_('settings.version')} {systemInfo?.app_version ?? '...'}</p>
         </div>
     </div>
 

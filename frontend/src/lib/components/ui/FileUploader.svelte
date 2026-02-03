@@ -144,7 +144,7 @@
 	}
 </script>
 
-<div class="file-uploader">
+<div class="file-uploader" data-testid="file-uploader">
 	<!-- Drop zone -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
@@ -158,6 +158,7 @@
 		on:keydown={(e) => e.key === 'Enter' && openFileBrowser()}
 		role="button"
 		tabindex="0"
+		data-testid="file-drop-zone"
 	>
 		<input
 			type="file"
@@ -166,6 +167,7 @@
 			{multiple}
 			accept={accept || undefined}
 			hidden
+			data-testid="file-input"
 		/>
 
 		{#if selectedFiles.length === 0}

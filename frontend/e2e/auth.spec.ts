@@ -48,6 +48,78 @@ test.describe('Authentication', () => {
         });
     });
 
+    test.describe('Register Modal', () => {
+
+        test('can open register modal from login', async ({ page }) => {
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await page.getByTestId('goto-register').click();
+            await expect(page.getByTestId('register-modal')).toBeVisible();
+        });
+
+        test('register form has all required fields', async ({ page }) => {
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await page.getByTestId('goto-register').click();
+            await expect(page.getByTestId('register-modal')).toBeVisible();
+
+            // Check all form fields
+            await expect(page.getByTestId('register-username')).toBeVisible();
+            await expect(page.getByTestId('register-email')).toBeVisible();
+            await expect(page.getByTestId('register-password')).toBeVisible();
+            await expect(page.getByTestId('register-confirm-password')).toBeVisible();
+            await expect(page.getByTestId('register-submit')).toBeVisible();
+        });
+
+        test('password strength meter shows when typing', async ({ page }) => {
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await page.getByTestId('goto-register').click();
+            await expect(page.getByTestId('register-modal')).toBeVisible();
+
+            // Password strength should not be visible initially
+            await expect(page.getByTestId('password-strength-meter')).not.toBeVisible();
+
+            // Type a password
+            await page.getByTestId('register-password').fill('Test123!');
+
+            // Password strength meter should appear
+            await expect(page.getByTestId('password-strength-meter')).toBeVisible();
+        });
+
+        test('can navigate back to login from register', async ({ page }) => {
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await page.getByTestId('goto-register').click();
+            await expect(page.getByTestId('register-modal')).toBeVisible();
+
+            // Click back to login
+            await page.getByTestId('goto-login').click();
+            await expect(page.getByTestId('login-modal')).toBeVisible();
+        });
+    });
+
+    test.describe('Forgot Password Modal', () => {
+
+        test('can open forgot password modal from login', async ({ page }) => {
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await page.getByTestId('goto-forgot').click();
+            await expect(page.getByTestId('forgot-modal')).toBeVisible();
+        });
+
+        test('can navigate back to login from forgot password', async ({ page }) => {
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+            await page.getByTestId('goto-forgot').click();
+            await expect(page.getByTestId('forgot-modal')).toBeVisible();
+
+            // Click back to login
+            await page.getByTestId('forgot-back-to-login').click();
+            await expect(page.getByTestId('login-modal')).toBeVisible();
+        });
+    });
+
     test.describe('Language Selector', () => {
 
         test('language selector is visible and clickable', async ({ page }) => {

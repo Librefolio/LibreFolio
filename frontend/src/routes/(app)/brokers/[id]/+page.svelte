@@ -143,13 +143,14 @@
 
 </script>
 
-<div class="space-y-6">
+<div class="space-y-6" data-testid="broker-detail-page">
     <!-- Header -->
     <div class="flex items-center space-x-4">
         <button
                 on:click={handleBack}
                 class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors"
                 title={$_('common.back')}
+                data-testid="broker-back-button"
         >
             <ArrowLeft size={20}/>
         </button>
@@ -165,9 +166,9 @@
             />
 
             <div class="flex-1 min-w-0">
-                <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate">{broker.name}</h1>
+                <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate" data-testid="broker-name">{broker.name}</h1>
                 {#if broker.description}
-                    <p class="text-gray-500 dark:text-gray-400 text-sm truncate">{broker.description}</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm truncate" data-testid="broker-description">{broker.description}</p>
                 {/if}
             </div>
 
@@ -188,12 +189,14 @@
                         disabled={loading}
                         class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50"
                         title="Refresh"
+                        data-testid="broker-refresh"
                 >
                     <RefreshCw size={20} class={loading ? 'animate-spin' : ''}/>
                 </button>
                 <button
                         on:click={handleEdit}
                         class="flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                        data-testid="broker-edit-button"
                 >
                     <Pencil size={18}/>
                     <span>{$_('common.edit')}</span>
@@ -234,7 +237,7 @@
             <!-- Left Column: Cash Balances -->
             <div class="lg:col-span-2 space-y-4">
                 <!-- Cash Balances Section -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-cash-balances">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center space-x-2 text-gray-700">
                             <Wallet size={20}/>
@@ -265,7 +268,7 @@
                 </div>
 
                 <!-- Holdings Section -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-holdings">
                     <div class="flex items-center space-x-2 text-gray-700 mb-4">
                         <TrendingUp size={20}/>
                         <h2 class="font-semibold">{$_('brokers.holdings')}</h2>
@@ -396,7 +399,7 @@
                 </button>
 
                 <!-- Recent Transactions -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-transactions">
                     <div class="flex items-center space-x-2 text-gray-700 mb-3">
                         <ArrowRightLeft size={18}/>
                         <h3 class="font-semibold">{$_('brokers.recentTransactions')}</h3>

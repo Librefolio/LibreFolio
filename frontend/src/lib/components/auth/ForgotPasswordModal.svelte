@@ -8,7 +8,7 @@
     }>();
 </script>
 
-<div class="w-full max-w-lg bg-libre-beige rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans">
+<div class="w-full max-w-lg bg-libre-beige rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="forgot-modal">
 
     <!-- Header Section (Dark Green) -->
     <div class="bg-libre-green p-8 flex flex-col items-center justify-center space-y-2">
@@ -51,6 +51,7 @@
                 class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] flex items-center justify-center space-x-2"
                 on:click={() => dispatch('gotoLogin')}
                 type="button"
+                data-testid="forgot-back-to-login"
         >
             <ArrowLeft size={18}/>
             <span>{$_('auth.backToLogin')}</span>

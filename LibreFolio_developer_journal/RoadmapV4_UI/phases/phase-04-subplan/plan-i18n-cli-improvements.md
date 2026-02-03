@@ -11,6 +11,7 @@
 ## 🎯 Obiettivo
 
 Estendere lo script `./dev.py i18n` con funzioni per gestire le traduzioni da CLI:
+
 - Aggiungere nuove chiavi di traduzione
 - Rimuovere chiavi obsolete
 - Modificare traduzioni esistenti

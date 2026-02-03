@@ -2,26 +2,26 @@
 
 **Data creazione**: 2 Febbraio 2026  
 **Ultimo aggiornamento**: 3 Febbraio 2026  
-**Status**: ✅ COMPLETATO (51/51 test pass + 12/12 gallery pass)  
+**Status**: ✅ COMPLETATO (~100 test pass + 28 gallery pass)  
 **Priorità**: P1  
 **Dipendenze**: plan-frontendTesting.md (infrastruttura completata)
 
-> 📋 **Analisi dettagliata**: Vedi [e2e-test-analysis.md](./e2e-test-analysis.md) per gap analysis completa
+> 📋 **Analisi dettagliata**: Vedi [e2e-test-analysis.md](../../e2e-test-analysis.md) per gap analysis completa
 
 ---
 
 ## 📊 Stato Test (3 Feb 2026)
 
-| Suite              | Test | Status          | Note                                     |
-|--------------------|------|-----------------|------------------------------------------|
-| auth.spec.ts       | 10   | ✅ PASS          | Language-agnostic + test dinamici lingua |
-| settings.spec.ts   | 13   | ✅ PASS          | Tabs, profile, preferences, admin        |
-| files.spec.ts      | 9    | ✅ PASS          | Tabs, URL deep-linking, empty states     |
-| brokers.spec.ts    | 7    | ✅ PASS          | CRUD, modal open/close                   |
-| multi-user.spec.ts | 2    | ✅ PASS          | Isolamento + unicità nomi globale        |
-| gallery.spec.ts    | 12   | ✅ PASS          | Screenshot per documentazione            |
+| Suite              | Test | Status | Note                                          |
+|--------------------|------|--------|-----------------------------------------------|
+| auth.spec.ts       | 17   | ✅ PASS | +7 test Register/Forgot modals                |
+| settings.spec.ts   | 23   | ✅ PASS | +10 test Profile edit, Change password, About |
+| files.spec.ts      | 12   | ✅ PASS | +3 test toggle uploader, view mode            |
+| brokers.spec.ts    | 18   | ✅ PASS | +11 test edit/delete/detail/import modal      |
+| multi-user.spec.ts | 2    | ✅ PASS | Isolamento + unicità nomi globale             |
+| gallery.spec.ts    | 28   | ✅ PASS | Light/dark theme, 4 lingue, ~224 screenshots  |
 
-**Totale: 51 test funzionali + 12 gallery = 63 test PASS**
+**Totale: ~100 test funzionali + 28 gallery = ~128 test PASS**
 
 ### Infrastruttura Aggiunta
 

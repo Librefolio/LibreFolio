@@ -9,16 +9,16 @@
 
 ## 📊 Stato Attuale dei Test
 
-| Suite              | Test | Status   | Note                           |
-|--------------------|------|----------|--------------------------------|
-| auth.spec.ts       | 10   | ✅ PASS   | Completamente riscritto        |
-| settings.spec.ts   | 13   | ✅ PASS   | Completamente riscritto        |
-| files.spec.ts      | 9    | ✅ PASS   | Completamente riscritto        |
-| brokers.spec.ts    | 7    | ✅ PASS   | Completamente riscritto        |
-| multi-user.spec.ts | 2    | ✅ PASS   | Test isolamento + unicità nomi |
-| gallery.spec.ts    | 28   | ✅ PASS   | Light/dark theme, 4 lingue     |
+| Suite              | Test | Status | Note                                          |
+|--------------------|------|--------|-----------------------------------------------|
+| auth.spec.ts       | 17   | ✅ PASS | +7 test Register/Forgot modals                |
+| settings.spec.ts   | 23   | ✅ PASS | +10 test Profile edit, Change password, About |
+| files.spec.ts      | 12   | ✅ PASS | +3 test toggle uploader, view mode            |
+| brokers.spec.ts    | 18   | ✅ PASS | +11 test edit/delete/detail/import modal      |
+| multi-user.spec.ts | 2    | ✅ PASS | Test isolamento + unicità nomi                |
+| gallery.spec.ts    | 28   | ✅ PASS | Light/dark theme, 4 lingue                    |
 
-**Totale**: 69 test passanti (6/6 suite)
+**Totale**: ~100 test (6/6 suite)
 
 ---
 
@@ -46,36 +46,36 @@
 
 **Copertura funzionalità**:
 
-| Funzionalità                      | Testata | Note                                               |
-|-----------------------------------|---------|----------------------------------------------------|
-| Login form rendering              | ✅       |                                                    |
-| Login success                     | ✅       |                                                    |
-| Login failure                     | ✅       |                                                    |
-| Logout                            | ✅       |                                                    |
-| Language switch                   | ✅       | Dinamico per tutte le lingue                       |
-| Register modal                    | ❌       | **MANCANTE** - goto-register esiste ma non testato |
-| Forgot password modal             | ❌       | **MANCANTE** - flow non testato                    |
-| Auto-redirect se già autenticato  | ❌       | **MANCANTE**                                       |
-| Remember me / session persistence | ❌       | N/A (non implementato)                             |
+| Funzionalità                      | Testata | Note                                        |
+|-----------------------------------|---------|---------------------------------------------|
+| Login form rendering              | ✅       |                                             |
+| Login success                     | ✅       |                                             |
+| Login failure                     | ✅       |                                             |
+| Logout                            | ✅       |                                             |
+| Language switch                   | ✅       | Dinamico per tutte le lingue                |
+| Register modal                    | ✅       | Apertura, form, password strength, nav back |
+| Forgot password modal             | ✅       | Apertura, nav back to login                 |
+| Auto-redirect se già autenticato  | ❌       | **MANCANTE**                                |
+| Remember me / session persistence | ❌       | N/A (non implementato)                      |
 
 **Ridondanze**: Nessuna
 
 **Raccomandazioni**:
 
-1. ➕ Aggiungere test per RegisterModal (apertura, form, validazione password strength)
-2. ➕ Aggiungere test per ForgotPasswordModal
+1. ✅ ~~Aggiungere test per RegisterModal~~ FATTO
+2. ✅ ~~Aggiungere test per ForgotPasswordModal~~ FATTO
 3. ➕ Test auto-redirect quando già autenticato
 
 Nota:
 Attualmente tutti e 3 gli utenti al termine del test risultano super utenti:
 └─▶ $ ./dev.py user --test-db list
-ℹ️  Operating on TEST database
+ℹ️ Operating on TEST database
 
-ID    Username             Email                          Active   Super   
+ID    Username             Email                          Active   Super
 ---------------------------------------------------------------------------
-1     e2e_test_user        e2e@test.example.com           ✅        👑       
-2     e2e_test_admin       e2eadmin@test.example.com      ✅        👑       
-3     e2e_test_user2       e2e2@test.example.com          ✅        👑   
+1 e2e_test_user e2e@test.example.com ✅ 👑       
+2 e2e_test_admin e2eadmin@test.example.com ✅ 👑       
+3 e2e_test_user2 e2e2@test.example.com ✅ 👑
 
 ---
 
@@ -101,34 +101,34 @@ ID    Username             Email                          Active   Super
 
 **Copertura funzionalità**:
 
-| Funzionalità                 | Testata | Note                                 |
-|------------------------------|---------|--------------------------------------|
-| Tab navigation               | ✅       |                                      |
-| Profile display              | ✅       |                                      |
-| Profile edit mode (unlock)   | ❌       | **MANCANTE** - solo verifica locked  |
-| Profile save changes         | ❌       | **MANCANTE**                         |
-| Change password flow         | ❌       | **MANCANTE** - solo bottone visibile |
-| Delete account flow          | ❌       | **MANCANTE** - solo bottone visibile |
-| Preferences change & save    | ❌       | **MANCANTE** - solo visibilità       |
-| Language change persists     | ❌       | Testato in auth, non in settings     |
-| Theme change                 | ❌       | **MANCANTE**                         |
-| Currency change              | ❌       | **MANCANTE**                         |
-| Global settings edit (admin) | ❌       | **MANCANTE**                         |
-| About tab content            | ❌       | **MANCANTE**                         |
+| Funzionalità                 | Testata | Note                                       |
+|------------------------------|---------|--------------------------------------------|
+| Tab navigation               | ✅       |                                            |
+| Profile display              | ✅       |                                            |
+| Profile edit mode (unlock)   | ✅       | Unlock, modify, undo                       |
+| Profile save changes         | ⚠️      | Test UI buttons, non salvataggio effettivo |
+| Change password flow         | ✅       | Modal apertura, campi, chiusura, strength  |
+| Delete account flow          | ❌       | **MANCANTE** - solo bottone visibile       |
+| Preferences change & save    | ❌       | **MANCANTE** - solo visibilità             |
+| Language change persists     | ❌       | Testato in auth, non in settings           |
+| Theme change                 | ❌       | **MANCANTE**                               |
+| Currency change              | ❌       | **MANCANTE**                               |
+| Global settings edit (admin) | ❌       | **MANCANTE**                               |
+| About tab content            | ✅       | Tab switch, app name, version              |
 
 **Ridondanze**: Nessuna evidente
 
 **Raccomandazioni**:
 
-1. ➕ Test unlock/edit mode per profile
-2. ➕ Test save changes (username, email)
-3. ➕ Test change password modal flow completo
+1. ✅ ~~Test unlock/edit mode per profile~~ FATTO
+2. ⚠️ Test save changes effettivo (salvataggio API)
+3. ✅ ~~Test change password modal flow~~ FATTO
 4. ➕ Test preferences save & persist (almeno 1 per tipo)
 5. ➖ I test "button is visible" sono deboli - meglio testare l'azione
 
 ---
 
-### 3. files.spec.ts (9 test) ✅
+### 3. files.spec.ts (12 test) ✅
 
 **Cosa testa**:
 
@@ -137,6 +137,8 @@ ID    Username             Email                          Active   Super
 - Switch tra tab
 - URL deep-linking (tab=static, tab=brim)
 - Static tab: table visibile, upload button visibile
+- Toggle uploader visibility
+- View mode toggle (grid/list) quando ci sono file
 - BRIM tab: table O empty state
 
 **Criteri di successo**:
@@ -146,41 +148,39 @@ ID    Username             Email                          Active   Super
 - `files-table-static` visibile
 - `files-table-brim` O `brim-empty-state` visibile
 - `upload-button` visibile
-
-**Problema attuale**:
-Il test BRIM fallisce perché cerca `files-table-brim` O `brim-empty-state`, ma nessuno dei due è trovato. Probabile problema di timing o di rendering condizionale.
+- `file-uploader` toggle on/off
+- `view-mode-toggle`, `view-mode-grid`, `view-mode-list` (quando file esistono)
 
 **Copertura funzionalità**:
 
-| Funzionalità                       | Testata | Note                                 |
-|------------------------------------|---------|--------------------------------------|
-| Page access                        | ✅       |                                      |
-| Tab navigation                     | ✅       |                                      |
-| URL deep-linking                   | ✅       |                                      |
-| Static files table                 | ✅       | Solo visibilità                      |
-| BRIM files table                   | ⚠️      | Fallisce                             |
-| File upload                        | ❌       | **MANCANTE** - solo bottone visibile |
-| File download                      | ❌       | **MANCANTE**                         |
-| File delete                        | ❌       | **MANCANTE**                         |
-| File preview                       | ❌       | **MANCANTE**                         |
-| Broker filter (BRIM)               | ❌       | **MANCANTE**                         |
-| URL filters (filename, size, date) | ❌       | **MANCANTE**                         |
-| View mode toggle (grid/list)       | ❌       | **MANCANTE**                         |
+| Funzionalità                       | Testata | Note                               |
+|------------------------------------|---------|------------------------------------|
+| Page access                        | ✅       |                                    |
+| Tab navigation                     | ✅       |                                    |
+| URL deep-linking                   | ✅       |                                    |
+| Static files table                 | ✅       | Solo visibilità                    |
+| BRIM files table                   | ✅       | Table o empty state                |
+| Toggle uploader                    | ✅       | Show/hide con bottone              |
+| View mode toggle (grid/list)       | ✅       | Condizionale (solo se file)        |
+| File upload                        | ❌       | **MANCANTE** - richiede file reale |
+| File download                      | ❌       | **MANCANTE**                       |
+| File delete                        | ❌       | **MANCANTE**                       |
+| File preview                       | ❌       | **MANCANTE**                       |
+| Broker filter (BRIM)               | ❌       | **MANCANTE**                       |
+| URL filters (filename, size, date) | ❌       | **MANCANTE**                       |
 
-**Ridondanze**:
-
-- `can switch to BRIM tab` e `can switch back to static tab` potrebbero essere un unico test
+**Ridondanze**: Nessuna
 
 **Raccomandazioni**:
 
-1. 🔧 Fix test BRIM - aggiungere wait o verificare rendering
-2. ➕ Test upload file (almeno mock)
-3. ➕ Test delete file
-4. ➖ Rimuovere test ridondanti di switch tab (tenerne 1)
+1. ✅ ~~Fix test BRIM~~ FATTO
+2. ✅ ~~Test toggle uploader~~ FATTO
+3. ➕ Test upload file (richiede fixture file)
+4. ➕ Test delete file
 
 ---
 
-### 4. brokers.spec.ts (7 test) ⏳
+### 4. brokers.spec.ts (18 test) ✅
 
 **Cosa testa**:
 
@@ -190,37 +190,52 @@ Il test BRIM fallisce perché cerca `files-table-brim` O `brim-empty-state`, ma 
 - Apertura create broker modal
 - Chiusura modal (click outside)
 - Creazione broker con nome
-- Click su broker card (se esistono)
+- Apertura edit modal da card
+- Apertura delete dialog da card
+- Navigazione a broker detail
+- Broker detail: nome, cash balances, holdings, transactions
+- Import files button e modal
+- Edit button su detail
+- Navigazione back
 
 **Criteri di successo**:
 
 - `brokers-page` visibile
 - `add-broker-button`, `brokers-refresh` visibili
 - `broker-modal` si apre/chiude
+- `delete-broker-dialog` si apre/chiude
+- `broker-detail-page` con sezioni visibili
+- `import-files-modal` si apre/chiude
 - Broker card appare dopo creazione
 
 **Copertura funzionalità**:
 
-| Funzionalità                | Testata | Note                               |
-|-----------------------------|---------|------------------------------------|
-| Page access                 | ✅       |                                    |
-| Create broker               | ✅       | Solo nome base                     |
-| Create with initial balance | ❌       | **MANCANTE**                       |
-| Edit broker                 | ❌       | **MANCANTE**                       |
-| Delete broker               | ❌       | **MANCANTE**                       |
-| Broker detail page          | ⚠️      | Solo click, non verifica contenuto |
-| Cash deposit/withdraw       | ❌       | **MANCANTE**                       |
-| Import files modal          | ❌       | **MANCANTE**                       |
-| Broker card info display    | ❌       | **MANCANTE**                       |
+| Funzionalità                | Testata | Note                                  |
+|-----------------------------|---------|---------------------------------------|
+| Page access                 | ✅       |                                       |
+| Create broker               | ✅       | Solo nome base                        |
+| Create with initial balance | ❌       | **MANCANTE**                          |
+| Edit broker (open modal)    | ✅       | Da card e da detail page              |
+| Delete broker (open dialog) | ✅       | Apertura e cancel                     |
+| Delete broker (confirm)     | ❌       | **MANCANTE** - non conferma realmente |
+| Broker detail page          | ✅       | Tutte le sezioni verificate           |
+| Cash balances section       | ✅       | Visibilità verificata                 |
+| Holdings section            | ✅       | Visibilità verificata                 |
+| Transactions section        | ✅       | Visibilità verificata                 |
+| Cash deposit/withdraw       | ❌       | **MANCANTE**                          |
+| Import files button         | ✅       | Visibilità verificata                 |
+| Import files modal          | ✅       | Apertura e chiusura con Escape        |
+| Navigate back               | ✅       | Da detail a list                      |
 
 **Ridondanze**: Nessuna
 
 **Raccomandazioni**:
 
-1. ➕ Test edit broker
-2. ➕ Test delete broker con conferma
-3. ➕ Test broker detail page contenuto
-4. ➕ Test cash operations (se implementate)
+1. ✅ ~~Test edit broker modal~~ FATTO
+2. ✅ ~~Test delete broker dialog~~ FATTO
+3. ✅ ~~Test broker detail page content~~ FATTO
+4. ➕ Test import files modal apertura
+5. ➕ Test delete broker con conferma effettiva
 
 ---
 
@@ -299,56 +314,61 @@ npx playwright install webkit
 
 ## 📋 Riepilogo Gap di Copertura
 
-### Alta Priorità (funzionalità core non testate)
+### ✅ Completato
 
-1. **RegisterModal** - form completo, validazione, password strength
-2. **ForgotPasswordModal** - flow completo
-3. **Profile edit & save** - unlock, modifica, salvataggio
-4. **Change password** - modal, validazione, submit
-5. **File upload** - almeno static upload
-6. **File delete** - con conferma
-7. **Broker edit** - modal edit
-8. **Broker delete** - con conferma
+1. **RegisterModal** - apertura, form fields, password strength, back to login
+2. **ForgotPasswordModal** - apertura, back to login
+3. **Profile edit** - unlock, modify, undo
+4. **Change password modal** - apertura, campi, chiusura, password strength
+5. **Broker edit modal** - apertura da card e da detail
+6. **Broker delete dialog** - apertura e cancel
+7. **Broker detail sections** - cash balances, holdings, transactions
+8. **File uploader toggle** - show/hide con bottone
+9. **About tab** - contenuto, app name, version
+10. **View mode toggle** - grid/list (condizionale)
+11. **Import files modal** - apertura e chiusura
 
-### Media Priorità
+### 🔲 Prossimi test da implementare
 
-9. Preferences save & persist
-10. Theme/language change in settings
-11. Broker detail page content
-12. BRIM broker filter
-13. URL filters su files
+1. **File upload effettivo** - Usare file di esempio dai plugin BRIM (`backend/app/services/brim_providers/samples/`)
+2. **Delete broker con conferma** - Creare broker → Edit → Delete (verifica flusso completo)
+3. **Preferences persistence** - Cambiare setting → F5/reload → verificare persistenza
+4. **Theme/language change** - Persistenza dopo reload
 
-### Bassa Priorità
+### Bassa Priorità (rimandati)
 
-14. About tab content
-15. View mode toggle (grid/list)
-16. File preview
-17. File download
+1. ~~Cash deposit/withdraw operations~~ - Richiede sviluppo transazioni (solo POC attuale)
+2. BRIM broker filter
+3. URL filters su files
+4. File preview/download
 
 ---
 
-## 🎯 Piano di Azione Proposto
+## 🎯 Piano di Azione
 
-### Fase 1: Fix test esistenti
+### ✅ Fase 1: Fix test esistenti - COMPLETATA
 
 1. ✅ auth.spec.ts - OK
 2. ✅ settings.spec.ts - OK
-3. 🔧 files.spec.ts - Fix test BRIM
-4. 🔧 brokers.spec.ts - Verificare che passino
-5. 🔧 multi-user.spec.ts - Verificare che passino
+3. ✅ files.spec.ts - OK
+4. ✅ brokers.spec.ts - OK
+5. ✅ multi-user.spec.ts - OK
 
-### Fase 2: Aggiungere test mancanti critici
+### ✅ Fase 2: Test mancanti critici - COMPLETATA
 
-1. ➕ auth.spec.ts: Register modal, Forgot password
-2. ➕ settings.spec.ts: Profile edit flow, Change password flow
-3. ➕ files.spec.ts: Upload, Delete
-4. ➕ brokers.spec.ts: Edit, Delete, Detail page
+1. ✅ auth.spec.ts: Register modal, Forgot password
+2. ✅ settings.spec.ts: Profile edit flow, Change password modal
+3. ✅ files.spec.ts: Toggle uploader
+4. ✅ brokers.spec.ts: Edit, Delete dialog, Detail page sections
 
-### Fase 3: Test secondari
+### 🔲 Fase 3: Test secondari - DA IMPLEMENTARE
 
-- Preferences persistence
-- Multi-user file isolation
-- URL filters
+**File fixture disponibili**: `backend/app/services/brim_providers/samples/`
+
+1. ➕ **File upload** - Upload file reale da samples BRIM
+2. ➕ **Broker CRUD completo** - Create → Edit → Delete (flusso intero)
+3. ➕ **Preferences persistence** - F5/reload verifica persistenza
+4. ➖ ~~Cash operations~~ - Rimandato (richiede sviluppo transazioni)
 
 ---
 
@@ -359,7 +379,11 @@ npx playwright install webkit
 ```
 # Auth
 login-page, login-modal, login-form, login-username, login-password
-login-submit, login-error, goto-register
+login-submit, login-error, goto-register, goto-forgot
+register-modal, register-form, register-username, register-email
+register-password, register-confirm-password, register-submit, goto-login
+forgot-modal, forgot-back-to-login
+password-strength-meter, password-strength-bar
 
 # Layout
 sidebar, logout-button, mobile-menu-toggle
@@ -369,49 +393,51 @@ dashboard-page
 # Settings
 settings-page, settings-tab-{profile,preferences,about,admin}
 profile-tab, profile-username, profile-email
+profile-edit-toggle, profile-save-all, profile-undo-all
+profile-error, profile-success
 change-password-button, delete-account-button
+password-change-modal, password-current, password-new, password-confirm
+password-change-submit, password-change-cancel
 preference-language, preference-currency, preference-theme
 global-settings-tab
+about-tab, about-app-name, about-version
 
 # Files
 files-page, files-tab-static, files-tab-brim
 files-table-static, files-table-brim
 upload-button, brim-empty-state
+file-uploader, file-drop-zone, file-input
+view-mode-toggle, view-mode-grid, view-mode-list
 
 # Brokers
 brokers-page, add-broker-button, brokers-refresh
-broker-card-{id}, broker-modal
+broker-card-{id}, broker-edit-{id}, broker-delete-{id}
+broker-modal, broker-name-input, broker-form-submit
+delete-broker-dialog, delete-broker-cancel, delete-broker-confirm
+broker-detail-page, broker-name, broker-description
+broker-back-button, broker-refresh, broker-edit-button
+broker-cash-balances, broker-holdings, broker-transactions
+import-files-button, import-files-modal
 ```
 
-### Da aggiungere per nuovi test
+### Da aggiungere per test futuri (opzionali)
 
 ```
-# Auth (per Register/Forgot)
-register-modal, register-form, register-submit
-register-username, register-email, register-password
-password-strength-meter
-forgot-modal, forgot-email, forgot-submit
+# Files (per upload/delete effettivo)
+file-row-{id}, file-delete-{id}
+delete-file-modal, delete-file-confirm
 
-# Settings (per edit flows)
-profile-edit-toggle, profile-save-button
-password-change-modal, password-current, password-new
-password-confirm, password-change-submit
-
-# Files (per upload/delete)
-file-upload-zone, file-row-{id}, file-delete-{id}
-delete-confirm-modal, delete-confirm-button
-
-# Brokers (per edit/delete)
-broker-edit-button-{id}, broker-delete-button-{id}
-broker-detail-page, broker-name, broker-cash-balances
-delete-broker-modal, delete-broker-confirm
+# Settings (per persistenza)
+preference-save-button
 ```
 
 ---
 
-## ✅ Lavoro Completato in Questa Sessione
+## ✅ Lavoro Completato
 
-### Componenti modificati con data-testid
+### Sessione 1 (2 Feb 2026)
+
+**Componenti modificati con data-testid**:
 
 - [x] LoginModal.svelte
 - [x] RegisterModal.svelte (parziale)
@@ -431,28 +457,43 @@ delete-broker-modal, delete-broker-confirm
 - [x] BrokerModal.svelte
 - [x] +page.svelte (login page)
 
-### Test riscritti
+### Sessione 2 (3 Feb 2026)
 
-- [x] auth.spec.ts - Language-agnostic + test dinamici lingua
-- [x] settings.spec.ts - Language-agnostic
-- [x] files.spec.ts - Language-agnostic (1 test ancora fallisce)
-- [x] brokers.spec.ts - Language-agnostic
-- [x] multi-user.spec.ts - Aggiornato selettori
+**Nuovi data-testid aggiunti**:
 
-### Fixture create
+- [x] ForgotPasswordModal.svelte (forgot-modal, forgot-back-to-login)
+- [x] RegisterModal.svelte (register-password, register-confirm-password, register-submit)
+- [x] PasswordStrength.svelte (password-strength-meter, password-strength-bar)
+- [x] PasswordChangeModal.svelte (password-change-modal, password-current/new/confirm, submit/cancel)
+- [x] ProfileTab.svelte (profile-edit-toggle, profile-save-all, profile-undo-all, profile-error/success)
+- [x] LoginModal.svelte (goto-forgot)
+- [x] BrokerCard.svelte (broker-edit-{id}, broker-delete-{id})
+- [x] DeleteBrokerDialog.svelte (delete-broker-dialog, delete-broker-cancel/confirm)
+- [x] brokers/[id]/+page.svelte (broker-detail-page, broker-name, broker-back-button, broker-edit-button, broker-cash-balances, broker-holdings, broker-transactions)
+- [x] FileUploader.svelte (file-uploader, file-drop-zone, file-input)
+
+**Test aggiunti**:
+
+- [x] auth.spec.ts: 7 nuovi test (Register modal x4, Forgot modal x2, + fix)
+- [x] settings.spec.ts: 10 nuovi test (Profile edit x3, Change password x4, About tab x3)
+- [x] files.spec.ts: 3 nuovi test (toggle uploader, view mode x2)
+- [x] brokers.spec.ts: 11 nuovi test (edit modal x2, delete dialog x1, detail page x6, import modal x2)
+
+**Totale test**: ~100 (vs 69 iniziali)
+
+### Fixture e configurazione
 
 - [x] i18n-data.ts - Auto-discovery lingue da i18n/*.json
-
-### Configurazione
 
 - [x] playwright.config.ts - timeout 3s, open: 'never'
 - [x] auth-helpers.ts - Aggiornato per usare data-testid
 
 ---
 
-## 🤔 Domande Aperte
+## 🤔 Domande e Risposte
 
-1. **Test upload file**: Serve mock del backend o test reale? (Playwright supporta file upload)
-2. **Test delete**: Testare conferma dialog o assumere che funzioni?
-3. **Coverage multilingua**: Il pattern con `SUPPORTED_LANGUAGES` è corretto o meglio testare solo 1 lingua per i test funzionali?
-4. **Test negativi**: Aggiungere test per errori (es. creazione broker senza nome)?
+1. **Test upload file**: ✅ Usare file reali dai samples BRIM (`backend/app/services/brim_providers/samples/`)
+2. **Test delete broker**: ✅ Fare dopo aver creato un broker, verificare anche update nel flusso
+3. **Test persistence**: ✅ Testare sia F5/reload che goto (non serve riavviare server)
+4. **Cash operations**: ⏸️ Rimandato - richiede prima sviluppo transazioni (attualmente POC)
+5. **Coverage multilingua**: Il pattern con `SUPPORTED_LANGUAGES` è corretto per test funzionali

@@ -80,6 +80,7 @@
                         class="text-xs font-semibold text-libre-dark hover:text-libre-green underline decoration-1 underline-offset-2"
                         on:click={() => dispatch('gotoForgot')}
                         type="button"
+                        data-testid="goto-forgot"
                 >
                     {$_('auth.forgotPassword')}
                 </button>

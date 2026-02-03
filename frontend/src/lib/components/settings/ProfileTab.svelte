@@ -205,6 +205,7 @@
                     disabled={saving}
                     class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
                     title={$_('common.saveAll')}
+                    data-testid="profile-save-all"
                 >
                     <Save size={18}/>
                 </button>
@@ -212,6 +213,7 @@
                     on:click={undoAll}
                     class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
                     title={$_('common.undoAll')}
+                    data-testid="profile-undo-all"
                 >
                     <Undo size={18}/>
                 </button>
@@ -223,6 +225,7 @@
                     ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
                     : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'}"
                 title={isLocked ? $_('settings.enableEditing') : $_('settings.disableEditing')}
+                data-testid="profile-edit-toggle"
             >
                 {#if isLocked}
                     <Pencil size={18}/>
@@ -235,14 +238,14 @@
 
     <!-- Status Messages -->
     {#if error}
-        <div class="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
+        <div class="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm" data-testid="profile-error">
             <AlertCircle size={18} />
             <span>{error}</span>
         </div>
     {/if}
 
     {#if successItems.length > 0}
-        <div class="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">
+        <div class="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm" data-testid="profile-success">
             <div class="flex items-center gap-2 mb-2">
                 <CheckCircle size={18} />
                 <span class="font-medium">{$_('settings.savedSuccessfully')}:</span>
