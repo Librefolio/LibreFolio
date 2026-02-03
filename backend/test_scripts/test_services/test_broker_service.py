@@ -135,7 +135,9 @@ class TestCreateBulkBasic:
         response = await service.create_bulk(items2, user_id=test_user.id)
 
         assert response.results[0].success is False
-        assert "already exists" in response.results[0].error
+        # Error message can be "already exists" or "already have a broker named"
+        error_msg = response.results[0].error.lower()
+        assert "already" in error_msg and ("exists" in error_msg or "have" in error_msg)
 
     @pytest.mark.asyncio
     async def test_create_sets_timestamps(self, session, test_user):

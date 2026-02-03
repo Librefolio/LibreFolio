@@ -2,7 +2,7 @@
 
 **Data creazione**: 2 Febbraio 2026  
 **Ultimo aggiornamento**: 3 Febbraio 2026  
-**Status**: ✅ TEST BASE COMPLETATI (51/51 PASS)  
+**Status**: ✅ COMPLETATO (51/51 test pass + 12/12 gallery pass)  
 **Priorità**: P1  
 **Dipendenze**: plan-frontendTesting.md (infrastruttura completata)
 
@@ -19,9 +19,9 @@
 | files.spec.ts      | 9    | ✅ PASS          | Tabs, URL deep-linking, empty states     |
 | brokers.spec.ts    | 7    | ✅ PASS          | CRUD, modal open/close                   |
 | multi-user.spec.ts | 2    | ✅ PASS          | Isolamento + unicità nomi globale        |
-| gallery.spec.ts    | 12   | 🔄 WIP          | Screenshot per documentazione            |
+| gallery.spec.ts    | 12   | ✅ PASS          | Screenshot per documentazione            |
 
-**Totale: 51 test funzionali PASS (5/5 suite)**
+**Totale: 51 test funzionali + 12 gallery = 63 test PASS**
 
 ### Infrastruttura Aggiunta
 

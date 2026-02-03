@@ -2,7 +2,7 @@
 
 **Data creazione**: 30 Gennaio 2026  
 **Ultimo aggiornamento**: 3 Febbraio 2026  
-**Status**: 🔄 IN PROGRESS (Gallery & DB Populate improvements)
+**Status**: 🔄 IN PROGRESS (Gallery theme/coverage da completare)
 
 ---
 
@@ -47,11 +47,23 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Validazione runtime delle risposte API
     - Fix datetime serialization con `UTCDateTime`
 
-7. **E2E Test Infrastructure** (vedi `plan-frontendTesting.md`) ✅ NUOVO
+7. **E2E Test Infrastructure** (vedi `plan-frontendTesting.md`) ✅
     - Playwright configurato con progetti desktop/mobile
     - 51 test passanti (5/5 suite)
     - Build check automatico prima dei test
-    - Gallery screenshot per documentazione
+    - Gallery screenshot per documentazione (12/12 test pass)
+
+8. **DB Populate Enhancement** ✅ NUOVO (3 Feb 2026)
+    - 6 broker con `brim_plugin_key` e `BrokerUserAccess`
+    - 9 asset (stocks, ETFs, crypto, loans)
+    - 24 transazioni realistiche
+    - Price history per crypto (24/7, no weekend skip)
+
+9. **Settings Mobile Layout** ✅ NUOVO (3 Feb 2026)
+    - Dropdown custom per category selector
+    - Layout 3 righe per ogni setting
+    - CustomSelect component per select semplici
+    - FuzzySelect per select con ricerca
 
 ---
 
@@ -209,6 +221,13 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - Gallery con screenshot light/dark theme
 - Gallery coverage completa (tutti i tab settings)
 - Mobile menu screenshot fix
+
+### Step 4.3: Frontend Component Reorganization
+
+**Riferimento**: `plan-component-reorganization.md`
+
+**Problema identificato**: Il frontend inizia ad avere molto componenti e ci sono varie duplicazioni di codice.
+
 
 ### Step 5: Image Crop Component (2h) 📋
 
