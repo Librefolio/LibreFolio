@@ -2,7 +2,20 @@
 hide:
   - navigation
   - toc
+description: Reclaim ownership of your financial data. LibreFolio is the privacy-first, self-hosted investment dashboard for your entire portfolio.
 ---
+
+<!-- Animated Background -->
+<div class="animated-bg">
+    <div class="wave wave-1"></div>
+    <div class="wave wave-2"></div>
+    <div class="wave wave-3"></div>
+    <svg class="chart-svg" preserveAspectRatio="none" viewBox="0 0 1200 200">
+        <path class="chart-line line-1" d="M0,150 L100,130 L200,140 L300,100 L400,120 L500,80 L600,90 L700,60 L800,70 L900,40 L1000,55 L1100,30 L1200,45" />
+        <path class="chart-line line-2" d="M0,120 L100,140 L200,100 L300,130 L400,90 L500,110 L600,70 L700,95 L800,55 L900,80 L1000,45 L1100,65 L1200,35" />
+        <path class="chart-line line-3" d="M0,140 L100,110 L200,130 L300,85 L400,115 L500,75 L600,100 L700,50 L800,85 L900,60 L1000,75 L1100,40 L1200,55" />
+    </svg>
+</div>
 
 <div class="home-header">
   <div class="home-logo-container">
@@ -14,14 +27,67 @@ hide:
     </a>
   </div>
   <div class="home-content">
-    <h1>Welcome to LibreFolio</h1>
-    <h2>Your Self-Hosted Financial Portfolio Tracker</h2>
+    <h1>LibreFolio</h1>
+    <h2><strong>Your Wealth, Your Rules.</strong></h2>
     <p class="mission">
-      <strong>LibreFolio</strong> is an open-source, self-hosted solution for tracking your financial portfolio. 
-      It aims to provide a privacy-focused alternative to commercial portfolio trackers, giving you full control over your financial data.
+      Experience the freedom of true financial sovereignty.
+      <br>
+      Bring all your assets into one secure, self-hosted dashboard.
       <br><br>
-      Whether you are tracking stocks, ETFs, P2P loans, or cryptocurrencies, LibreFolio provides the tools to import, analyze, and visualize your investments.
+      Total control, zero compromise.
     </p>
+
+    <div class="asset-icons">
+      <a href="financial-theory/asset-types/" class="asset-icon-link">
+        <div class="asset-icon" title="Stocks">
+          <img src="static/icons/asset-types/stock.png" alt="Stocks" />
+          <span>Stocks</span>
+        </div>
+      </a>
+      <a href="financial-theory/asset-types/" class="asset-icon-link">
+        <div class="asset-icon" title="ETFs">
+          <img src="static/icons/asset-types/etf.png" alt="ETFs" />
+          <span>ETFs</span>
+        </div>
+      </a>
+      <a href="financial-theory/asset-types/" class="asset-icon-link">
+        <div class="asset-icon" title="Crypto">
+          <img src="static/icons/asset-types/crypto.png" alt="Crypto" />
+          <span>Crypto</span>
+        </div>
+      </a>
+      <a href="financial-theory/asset-types/" class="asset-icon-link">
+        <div class="asset-icon" title="Bonds">
+          <img src="static/icons/asset-types/bond.png" alt="Bonds" />
+          <span>Bonds</span>
+        </div>
+      </a>
+      <a href="financial-theory/asset-types/" class="asset-icon-link">
+        <div class="asset-icon" title="P2P Loans">
+          <img src="static/icons/asset-types/crowdfunding.png" alt="P2P" />
+          <span>P2P</span>
+        </div>
+      </a>
+      <a href="financial-theory/asset-types/" class="asset-icon-link">
+        <div class="asset-icon" title="Funds">
+          <img src="static/icons/asset-types/fund.png" alt="Funds" />
+          <span>Funds</span>
+        </div>
+      </a>
+      <a href="financial-theory/asset-types/" class="asset-icon-link">
+        <div class="asset-icon" title="Commodities">
+          <img src="static/icons/asset-types/hold.png" alt="Commodities" />
+          <span>Commodities</span>
+        </div>
+      </a>
+      <a href="financial-theory/asset-types/" class="asset-icon-link">
+        <div class="asset-icon" title="Other">
+          <img src="static/icons/asset-types/other.png" alt="Other" />
+          <span>Other</span>
+        </div>
+      </a>
+    </div>
+
   </div>
 </div>
 
@@ -34,7 +100,7 @@ hide:
     </div>
     <div class="card-content">
       <span class="card-title">Getting Started</span>
-      <span class="card-desc">New to LibreFolio? Start here to understand the basics.</span>
+      <span class="card-desc">Discover what LibreFolio can do for you.</span>
     </div>
   </a>
 
@@ -44,17 +110,7 @@ hide:
     </div>
     <div class="card-content">
       <span class="card-title">User Manual</span>
-      <span class="card-desc">Guides on how to use the application features.</span>
-    </div>
-  </a>
-
-  <a href="developer/" class="card-link">
-    <div class="card-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" /></svg>
-    </div>
-    <div class="card-content">
-      <span class="card-title">Developer Manual</span>
-      <span class="card-desc">Deep dive into the architecture, API, and codebase.</span>
+      <span class="card-desc">Step-by-step guides to manage your portfolio.</span>
     </div>
   </a>
 
@@ -64,7 +120,7 @@ hide:
     </div>
     <div class="card-content">
       <span class="card-title">Gallery</span>
-      <span class="card-desc">Visual walkthrough of all features in 4 languages.</span>
+      <span class="card-desc">See LibreFolio in action across devices.</span>
     </div>
   </a>
 
@@ -74,16 +130,27 @@ hide:
     </div>
     <div class="card-content">
       <span class="card-title">Admin Manual</span>
-      <span class="card-desc">For system administrators: CLI tools, Docker, and maintenance.</span>
+      <span class="card-desc">Installation, Docker, and system maintenance.</span>
     </div>
   </a>
 
-  <a href="faq/" class="card-link">
+  <a href="developer/" class="card-link">
     <div class="card-icon">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" /></svg>    </div>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" /></svg>
+    </div>
     <div class="card-content">
-      <span class="card-title">Frequently Asked Questions (FAQ)</span>
-      <span class="card-desc">General questions about the projects</span>
+      <span class="card-title">Developer Manual</span>
+      <span class="card-desc">Architecture,<br>API reference, and contribution guide.</span>
+    </div>
+  </a>
+
+  <a href="credits-legal/" class="card-link">
+    <div class="card-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" id="mdi-scale-unbalanced" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M13 20V8.8C13.5 8.6 14 8.3 14.3 7.9L17.8 9.2L14.9 16C14.4 18 15.9 19 18.4 19S22.5 18 21.9 16L19.3 9.7L20.2 10L20.9 8.1L15 6C15 4.8 14.3 3.6 13 3.1C11.8 2.6 10.5 3.1 9.7 4L3.9 2L3.2 3.8L4.8 4.4L2.1 11C1.6 13 3.1 14 5.6 14S9.7 13 9.1 11L6.6 5.1L9 6C9 7.2 9.7 8.4 11 8.9V20H2V22H22V20H13M19.9 16H16.9L18.4 12.2L19.9 16M7.1 11H4.1L5.6 7.2L7.1 11M11.1 5.7C11.3 5.2 11.9 4.9 12.4 5.1S13.2 5.9 13 6.4 12.2 7.2 11.7 7 10.9 6.2 11.1 5.7Z" /></svg>
+    </div>
+    <div class="card-content">
+      <span class="card-title">Legal & Credits</span>
+      <span class="card-desc">License (AGPL-3.0),<br>Team member and Acknowledgments.</span>
     </div>
   </a>
 
