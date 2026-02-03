@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from './fixtures/auth-helpers';
-import { TEST_USER, TEST_ADMIN } from './fixtures/test-users';
+import { TEST_USER } from './fixtures/test-users';
 
 test.describe('Brokers', () => {
     test.beforeEach(async ({ page }) => {
@@ -102,6 +102,55 @@ test.describe('Brokers', () => {
                 await page.getByTestId('delete-broker-cancel').click();
                 await expect(page.getByTestId('delete-broker-dialog')).not.toBeVisible();
             }
+        });
+
+        test('full broker CRUD flow: create, edit, delete', async ({ page }) => {
+            await navigateTo(page, '/brokers');
+
+            // === CREATE ===
+            const brokerName = `CRUD Test Broker ${Date.now()}`;
+            await page.getByTestId('add-broker-button').click();
+            await expect(page.getByTestId('broker-modal')).toBeVisible();
+            await page.getByTestId('broker-name-input').fill(brokerName);
+            await page.getByTestId('broker-form-submit').click();
+            await expect(page.getByTestId('broker-modal')).not.toBeVisible({ timeout: 5000 });
+
+            // Find the newly created broker card
+            await page.waitForTimeout(1000);
+            const newBrokerCard = page.locator('[data-testid^="broker-card-"]').filter({ hasText: brokerName });
+            await expect(newBrokerCard).toBeVisible({ timeout: 5000 });
+
+            // Get broker ID from card
+            const cardTestId = await newBrokerCard.getAttribute('data-testid');
+            const brokerId = cardTestId?.replace('broker-card-', '');
+
+            // === EDIT ===
+            const editedName = `${brokerName} EDITED`;
+            await page.getByTestId(`broker-edit-${brokerId}`).click();
+            await expect(page.getByTestId('broker-modal')).toBeVisible();
+
+            // Clear and fill with new name
+            await page.getByTestId('broker-name-input').clear();
+            await page.getByTestId('broker-name-input').fill(editedName);
+            await page.getByTestId('broker-form-submit').click();
+            await expect(page.getByTestId('broker-modal')).not.toBeVisible({ timeout: 5000 });
+
+            // Verify edited name appears
+            await page.waitForTimeout(500);
+            const editedBrokerCard = page.locator('[data-testid^="broker-card-"]').filter({ hasText: editedName });
+            await expect(editedBrokerCard).toBeVisible({ timeout: 5000 });
+
+            // === DELETE ===
+            await page.getByTestId(`broker-delete-${brokerId}`).click();
+            await expect(page.getByTestId('delete-broker-dialog')).toBeVisible();
+
+            // Confirm delete
+            await page.getByTestId('delete-broker-confirm').click();
+            await expect(page.getByTestId('delete-broker-dialog')).not.toBeVisible({ timeout: 5000 });
+
+            // Verify broker is gone
+            await page.waitForTimeout(500);
+            await expect(page.locator(`[data-testid="broker-card-${brokerId}"]`)).not.toBeVisible({ timeout: 5000 });
         });
     });
 
