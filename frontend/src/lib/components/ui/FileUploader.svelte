@@ -213,10 +213,10 @@
 	<!-- Actions -->
 	{#if selectedFiles.length > 0}
 		<div class="actions">
-			<button type="button" class="btn btn-secondary" on:click={clearAll}>
+			<button type="button" class="btn btn-secondary" on:click={clearAll} data-testid="file-clear">
 				{$t('common.clear') || 'Clear'}
 			</button>
-			<button type="button" class="btn btn-primary" on:click={uploadFiles}>
+			<button type="button" class="btn btn-primary" on:click={uploadFiles} data-testid="file-upload-submit">
 				<Upload size={16} />
 				{$t('uploads.upload')} ({selectedFiles.length})
 			</button>

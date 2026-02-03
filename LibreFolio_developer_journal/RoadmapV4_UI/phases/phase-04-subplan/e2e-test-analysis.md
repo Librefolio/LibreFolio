@@ -2,23 +2,23 @@
 
 **Data**: 2 Febbraio 2026  
 **Ultimo aggiornamento**: 3 Febbraio 2026  
-**Status**: 📊 REFERENCE DOC (test base OK, gap documentati da implementare)  
+**Status**: ✅ COMPLETATO - Tutte le fasi implementate  
 **Obiettivo**: Valutare copertura, ridondanze e gap nei test E2E
 
 ---
 
 ## 📊 Stato Attuale dei Test
 
-| Suite              | Test | Status | Note                                          |
-|--------------------|------|--------|-----------------------------------------------|
-| auth.spec.ts       | 17   | ✅ PASS | +7 test Register/Forgot modals                |
-| settings.spec.ts   | 23   | ✅ PASS | +10 test Profile edit, Change password, About |
-| files.spec.ts      | 12   | ✅ PASS | +3 test toggle uploader, view mode            |
-| brokers.spec.ts    | 18   | ✅ PASS | +11 test edit/delete/detail/import modal      |
-| multi-user.spec.ts | 2    | ✅ PASS | Test isolamento + unicità nomi                |
-| gallery.spec.ts    | 28   | ✅ PASS | Light/dark theme, 4 lingue                    |
+| Suite              | Test | Status   | Note                                       |
+|--------------------|------|----------|--------------------------------------------|
+| auth.spec.ts       | 17   | ✅ PASS   | +7 test Register/Forgot modals             |
+| settings.spec.ts   | 26   | ✅ PASS   | +13 test Profile edit, Change password, About, Persistence |
+| files.spec.ts      | 14   | ✅ PASS   | +5 test toggle uploader, view mode, upload/clear         |
+| brokers.spec.ts    | 20   | ✅ PASS   | +13 test edit/delete/detail/import modal, CRUD completo   |
+| multi-user.spec.ts | 2    | ✅ PASS   | Test isolamento + unicità nomi             |
+| gallery.spec.ts    | 28   | ✅ PASS   | Light/dark theme, 4 lingue                 |
 
-**Totale**: ~100 test (6/6 suite)
+**Totale**: ~107 test (6/6 suite)
 
 ---
 
@@ -328,12 +328,11 @@ npx playwright install webkit
 10. **View mode toggle** - grid/list (condizionale)
 11. **Import files modal** - apertura e chiusura
 
-### 🔲 Prossimi test da implementare
+### ✅ Completato (3 Feb 2026 - Sessione 3)
 
-1. **File upload effettivo** - Usare file di esempio dai plugin BRIM (`backend/app/services/brim_providers/samples/`)
-2. **Delete broker con conferma** - Creare broker → Edit → Delete (verifica flusso completo)
-3. **Preferences persistence** - Cambiare setting → F5/reload → verificare persistenza
-4. **Theme/language change** - Persistenza dopo reload
+1. **File upload** - ✅ Upload file da samples BRIM, select/clear
+2. **Broker CRUD completo** - ✅ Create → Edit → Delete (flusso intero)
+3. **Preferences persistence** - ✅ F5/reload + goto verifica persistenza
 
 ### Bassa Priorità (rimandati)
 
@@ -361,13 +360,13 @@ npx playwright install webkit
 3. ✅ files.spec.ts: Toggle uploader
 4. ✅ brokers.spec.ts: Edit, Delete dialog, Detail page sections
 
-### 🔲 Fase 3: Test secondari - DA IMPLEMENTARE
+### ✅ Fase 3: Test secondari - COMPLETATA
 
-**File fixture disponibili**: `backend/app/services/brim_providers/samples/`
+**File fixture utilizzati**: `backend/app/services/brim_providers/sample_reports/`
 
-1. ➕ **File upload** - Upload file reale da samples BRIM
-2. ➕ **Broker CRUD completo** - Create → Edit → Delete (flusso intero)
-3. ➕ **Preferences persistence** - F5/reload verifica persistenza
+1. ✅ **File upload** - Upload file reale da samples BRIM + clear
+2. ✅ **Broker CRUD completo** - Create → Edit → Delete (flusso intero)
+3. ✅ **Preferences persistence** - F5/reload + goto verifica persistenza
 4. ➖ ~~Cash operations~~ - Rimandato (richiede sviluppo transazioni)
 
 ---

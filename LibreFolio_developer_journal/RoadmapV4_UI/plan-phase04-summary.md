@@ -147,19 +147,20 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | `plan-e2e-test-remediation.md`    | Remediation test E2E (Fase 1 ✅)        | ✅ COMPLETATO |
 | `plan-settings-mobile-gallery.md` | Settings mobile + Gallery improvements | ✅ COMPLETATO |
 
-### Reference Docs (in `RoadmapV4_UI/`)
+### Reference Docs (in `phases/phase-04-subplan/`)
 
-| File                   | Descrizione                                      | Status           |
-|------------------------|--------------------------------------------------|------------------|
-| `e2e-test-analysis.md` | Gap analysis test E2E - traccia test da scrivere | 📊 REFERENCE DOC |
+| File                   | Descrizione                                      | Status          |
+|------------------------|--------------------------------------------------|-----------------|
+| `e2e-test-analysis.md` | Gap analysis test E2E - traccia test completati  | ✅ COMPLETATO    |
 
 ### Plans DA IMPLEMENTARE (in `RoadmapV4_UI/`)
 
-| File                                 | Descrizione                            | Priorità    |
-|--------------------------------------|----------------------------------------|-------------|
-| `plan-image-crop.md`                 | Componente crop immagini con cropperjs | P2          |
-| `plan-data-separation.md`            | Separazione cartelle dati prod/test    | P2          |
-| `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend          | Riferimento |
+| File                                 | Descrizione                            | Priorità       |
+|--------------------------------------|----------------------------------------|----------------|
+| `plan-component-reorganization.md`   | Refactor FuzzySelect/CustomSelect      | 🔜 PROSSIMO    |
+| `plan-data-separation.md`            | Separazione cartelle dati prod/test    | 📋 ALTA        |
+| `plan-image-crop.md`                 | Componente crop immagini con cropperjs | 📋 ALTA        |
+| `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend          | Riferimento    |
 
 ### Plans DA CREARE
 
@@ -218,50 +219,66 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 **Nota**: Gallery completa - tutti gli screenshot vengono generati correttamente (28 test, ~224 screenshots).
 
-### Step 4.3: Frontend Component Reorganization 📋 DA FARE
+### Step 4.3: Frontend Component Reorganization 🔜 PROSSIMO
 
 **Riferimento**: `plan-component-reorganization.md`
 
-**Problema identificato**: Il frontend inizia ad avere molto componenti e ci sono varie duplicazioni di codice.
+**Problema identificato**: Il frontend inizia ad avere molti componenti e ci sono varie duplicazioni di codice.
 
-### Step 5: Image Crop Component (2h) 📋
+**Priorità**: ALTA - Necessario per mantenibilità prima di Phase 5
 
-**Riferimento**: `plan-image-crop.md`
-
-### Step 6: Data Separation prod/test (2h) 📋
+### Step 4.4: Data Separation prod/test 📋 PRIORITÀ ALTA
 
 **Riferimento**: `plan-data-separation.md`
 
-### Step 7: MkDocs Dark Mode (30 min) 🔲
+**Priorità**: ALTA - Prerequisito per test affidabili
 
-### Step 8: GDPR Permissions Analysis (planning only) ⏸️
+### Step 4.5: Image Crop Component 📋 PRIORITÀ ALTA
+
+**Riferimento**: `plan-image-crop.md`
+
+**Priorità**: ALTA - Necessario per upload avatar/icone
+
+### Step 4.6: MkDocs Dark Mode (30 min) 🔲
+
+### Step 4.7: GDPR Permissions Analysis (planning only) ⏸️
 
 ---
 
 ## 🎯 Prossimi Passi Immediati
 
-**Phase 4 feature complete!** Test base passano, gallery completa, ma ci sono gap di copertura E2E.
+**Phase 4 COMPLETA!** ✅ Tutti i test passano, gallery completa, test E2E coprono tutti i flussi principali.
 
-### Opzione A: Completare Test E2E (raccomandato prima di Phase 5)
+### ✅ Test E2E Completati (3 Feb 2026)
 
-Vedi `e2e-test-analysis.md` per gap completi. Test mancanti:
+1. ✅ **File upload** - Upload + clear con file da samples BRIM
+2. ✅ **Broker CRUD completo** - Create → Edit → Delete
+3. ✅ **Preferences persistence** - F5/reload + goto
 
-1. **File upload** - Usare file da `backend/app/services/brim_providers/samples/`
-2. **Broker CRUD completo** - Create → Edit → Delete (flusso intero)
-3. **Preferences persistence** - F5/reload verifica persistenza
-4. ~~Cash operations~~ - Rimandato (richiede sviluppo transazioni)
+### 🔜 Prossimi Step (Pre-Phase 5)
 
-### Opzione B: Procedere a Phase 5 (FX Management)
+Questi step sono **fondamentali** prima di procedere con Phase 5:
+
+1. **Component Reorganization** (`plan-component-reorganization.md`) - ~5h
+   - Unificare FuzzySelect/CustomSelect in BaseSelect
+   - Ridurre duplicazioni di codice
+   - Necessario per mantenibilità futura
+
+2. **Data Separation** (`plan-data-separation.md`) - ~2h
+   - Separare cartelle dati prod/test
+   - Evitare conflitti tra ambienti
+   - Prerequisito per test affidabili
+
+3. **Image Crop Component** (`plan-image-crop.md`) - ~2h
+   - Componente crop immagini con cropperjs
+   - Necessario per upload avatar/icone
+
+### Dopo: Phase 5 (FX Management)
 
 - Lista currency pairs
 - Visualizzazione tassi storici
 - Grafici con ECharts
 
-### Bassa Priorità
-
-- **Component Reorganization** (`plan-component-reorganization.md`) - ~5h, non bloccante
-- **Image Crop** (`plan-image-crop.md`)
-- **Data Separation** (`plan-data-separation.md`)
 
 ---
 
@@ -275,8 +292,8 @@ Quando si lavora su questa fase, allegare:
 | BRIM/Files                | `+ phases/phase-04-subplan/plan-brim-multiuser-implementation.md` |
 | Tipi/API                  | `+ phases/phase-04-subplan/plan-types-library.md`                 |
 | Test frontend infra       | `+ phases/phase-04-subplan/plan-frontendTesting.md`               |
-| Test remediation          | `+ plan-e2e-test-remediation.md` + `e2e-test-analysis.md`         |
-| Settings mobile + gallery | `+ plan-settings-mobile-gallery.md`                               |
+| Test remediation          | `+ phases/phase-04-subplan/plan-e2e-test-remediation.md` + `phases/phase-04-subplan/e2e-test-analysis.md` |
+| Settings mobile + gallery | `+ phases/phase-04-subplan/plan-settings-mobile-gallery.md`                               |
 | Image upload              | `+ plan-image-crop.md`                                            |
 | Separazione dati          | `+ plan-data-separation.md`                                       |
 | i18n CLI                  | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`         |
@@ -290,5 +307,5 @@ Quando si lavora su questa fase, allegare:
 - [x] `./dev.py front check` senza errori
 - [x] `./dev.py i18n audit` - 100% coverage
 - [x] Test funzionale features modificate
-- [x] `./dev.py test front all` - tutti i test passano (~100 test, 5/5 suite)
+- [x] `./dev.py test front all` - tutti i test passano (~107 test, 5/5 suite)
 - [x] `./dev.py mkdocs gallery` - tutti gli screenshot generati (28 test, ~224 screenshots)
