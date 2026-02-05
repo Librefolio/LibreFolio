@@ -1,9 +1,9 @@
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {Menu} from 'lucide-svelte';
-    import LanguageSelector from '$lib/components/LanguageSelector.svelte';
+    import LanguageSelector from '$lib/components/layout/LanguageSelector.svelte';
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
-    import HelpMenu from '$lib/components/HelpMenu.svelte';
+    import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
 
     const dispatch = createEventDispatcher();
 

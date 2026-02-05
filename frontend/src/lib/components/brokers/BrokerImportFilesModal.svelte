@@ -11,11 +11,11 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { _ } from '$lib/i18n';
-    import { zodiosApi } from '$lib/api';
+    import { zodiosApi, axiosInstance } from '$lib/api';
     import { X, FileUp, ExternalLink, RefreshCw } from 'lucide-svelte';
     import { fade, scale } from 'svelte/transition';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
-    import FileUploader from '$lib/components/ui/FileUploader.svelte';
+    import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
     import type { BrimFile } from '$lib/types';
 
@@ -85,10 +85,8 @@
             for (const file of uploadFiles) {
                 const formData = new FormData();
                 formData.append('file', file);
-                await zodiosApi.upload_file_api_v1_brokers_import_upload_post(
-                    formData as any,
-                    { queries: { broker_id: brokerId } }
-                );
+                // Use axios directly - Zodios doesn't handle FormData correctly
+                await axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData);
             }
 
             showUploader = false;

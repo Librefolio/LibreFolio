@@ -4,6 +4,7 @@
 @theme {
     /* Brand Colors */
     --color-libre-green: #1a4031;
+    --color-libre-banner: #1a4031;
     --color-libre-beige: #f5f4ef;
     --color-libre-sage: #9caf9c;
     --color-libre-dark: #111111;
@@ -81,6 +82,7 @@ html.light {
 /* Dark theme */
 html.dark {
     --color-libre-green: #00d681;
+    --color-libre-banner: #00834f;
     --theme-bg-primary: #0f172a;
     --theme-bg-secondary: #1e293b;
     --theme-bg-tertiary: #334155;

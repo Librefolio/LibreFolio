@@ -3,8 +3,8 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
-    import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
-    import PasswordStrength from '$lib/components/ui/PasswordStrength.svelte';
+    import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
+    import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
 
     const dispatch = createEventDispatcher<{
         gotoLogin: { message?: string };

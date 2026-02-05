@@ -1,33 +1,37 @@
 # Plan: Frontend Component Reorganization v3 - Cleanup & Final Structure
 
 **Data creazione**: 5 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
+**Status**: ✅ COMPLETATO
 **Prerequisito**: plan-componentReorganizationV2 ✅ COMPLETATO
 **Priorità**: P2 (cleanup e organizzazione)
 **Stima tempo**: ~2h
+**Tempo effettivo**: ~3h
 
 ---
 
 ## 🎯 Obiettivo
 
-1. Eliminare i file deprecati (prefisso `Old`)
-2. Riorganizzare la struttura cartelle secondo il target definito in V2
-3. Aggiornare tutti gli import
-4. Aggiungere test E2E per le nuove feature dei componenti Select
+1. ✅ Eliminare i file deprecati (prefisso `Old`)
+2. ✅ Riorganizzare la struttura cartelle secondo il target definito in V2
+3. ✅ Aggiornare tutti gli import
+4. ✅ Creare index.ts per export puliti
+5. ✅ Fix file upload (Zodios FormData bug)
+6. ✅ Fix dashboard dark mode
+7. 📋 Test E2E aggiuntivi (documentati, implementazione futura)
 
 ---
 
-## 📁 FASE 1: Eliminazione File Deprecati
+## 📁 FASE 1: Eliminazione File Deprecati ✅ COMPLETATA
 
-### Comandi `rm` da eseguire
+### Comandi `rm` eseguiti
 
 ```bash
 cd /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/frontend/src/lib/components
 
-# Rimuovi vecchi Select components
-rm OldFuzzySelect.svelte
-rm ui/OldCustomSelect.svelte
-rm brokers/OldBrokerSelect.svelte
+# Rimossi vecchi Select components
+rm OldFuzzySelect.svelte ✅
+rm ui/OldCustomSelect.svelte ✅
+rm brokers/OldBrokerSelect.svelte ✅
 ```
 
 ### Verifica post-eliminazione
@@ -43,7 +47,7 @@ grep -r "OldBrokerSelect" --include="*.svelte" --include="*.ts" .
 
 ---
 
-## 📁 FASE 2: Riorganizzazione Struttura Cartelle
+## 📁 FASE 2: Riorganizzazione Struttura Cartelle ✅ COMPLETATA
 
 ### Struttura Attuale vs Target
 
@@ -129,180 +133,75 @@ mv settings/AboutTab.svelte settings/tabs/AboutTab.svelte
 
 ---
 
-## 📁 FASE 3: Aggiornamento Import
+## 📁 FASE 3: Aggiornamento Import ✅ COMPLETATA
 
-### File da aggiornare dopo gli spostamenti
+### File aggiornati
 
-Dopo ogni `mv`, aggiornare gli import in tutti i file che usano quei componenti.
+| File | Import aggiornato |
+|------|-------------------|
+| `routes/+page.svelte` | AnimatedBackground → `ui/AnimatedBackground.svelte` |
+| `routes/+error.svelte` | AnimatedBackground → `ui/AnimatedBackground.svelte` |
+| `routes/+page.svelte` | LanguageSelector → `layout/LanguageSelector.svelte` |
+| `layout/Header.svelte` | HelpMenu → `layout/HelpMenu.svelte` |
+| `layout/Header.svelte` | LanguageSelector → `layout/LanguageSelector.svelte` |
+| `routes/(app)/files/+page.svelte` | FileUploader, LazyImage → `ui/media/` |
+| `brokers/BrokerImportFilesModal.svelte` | FileUploader → `ui/media/FileUploader.svelte` |
+| `auth/LoginModal.svelte` | PasswordInput → `ui/input/PasswordInput.svelte` |
+| `auth/RegisterModal.svelte` | PasswordInput, PasswordStrength → `ui/input/` |
+| `settings/PasswordChangeModal.svelte` | PasswordInput, PasswordStrength → `ui/input/` |
+| `routes/(app)/settings/+page.svelte` | Tabs → `settings/tabs/` |
 
-#### 3.1 Import AnimatedBackground
+### Bugfix applicati durante la riorganizzazione
 
-```bash
-# Trova tutti gli import
-grep -r "AnimatedBackground" --include="*.svelte" -l .
-
-# Aggiorna da:
-# import AnimatedBackground from '$lib/components/AnimatedBackground.svelte'
-# A:
-# import AnimatedBackground from '$lib/components/ui/AnimatedBackground.svelte'
-```
-
-**File da aggiornare:**
-- `routes/(app)/+layout.svelte`
-- `routes/+page.svelte` (login page)
-
-#### 3.2 Import HelpMenu
-
-```bash
-grep -r "HelpMenu" --include="*.svelte" -l .
-```
-
-**File da aggiornare:**
-- `components/layout/Header.svelte`
-
-Aggiorna:
-```svelte
-// DA:
-import HelpMenu from '$lib/components/HelpMenu.svelte';
-// A:
-import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
-```
-
-#### 3.3 Import LanguageSelector
-
-```bash
-grep -r "LanguageSelector" --include="*.svelte" -l .
-```
-
-**File da aggiornare:**
-- `components/layout/Header.svelte`
-- `routes/+page.svelte` (se usato in login)
-
-Aggiorna:
-```svelte
-// DA:
-import LanguageSelector from '$lib/components/LanguageSelector.svelte';
-// A:
-import LanguageSelector from '$lib/components/layout/LanguageSelector.svelte';
-```
-
-#### 3.4 Import FileUploader, LazyImage, ImageUploader
-
-```bash
-grep -r "FileUploader\|LazyImage\|ImageUploader" --include="*.svelte" -l .
-```
-
-**File da aggiornare:**
-- `routes/(app)/files/+page.svelte`
-- `components/brokers/BrokerForm.svelte` (se usa ImageUploader)
-- Altri file che usano questi componenti
-
-Aggiorna:
-```svelte
-// DA:
-import FileUploader from '$lib/components/ui/FileUploader.svelte';
-import LazyImage from '$lib/components/ui/LazyImage.svelte';
-// A:
-import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
-import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
-```
-
-#### 3.5 Import PasswordStrengthMeter
-
-```bash
-grep -r "PasswordStrengthMeter" --include="*.svelte" -l .
-```
-
-**File da aggiornare:**
-- `components/auth/RegisterModal.svelte`
-- `components/settings/PasswordChangeModal.svelte`
-
-Aggiorna:
-```svelte
-// DA:
-import PasswordStrengthMeter from '$lib/components/ui/PasswordStrengthMeter.svelte';
-// A:
-import PasswordStrengthMeter from '$lib/components/ui/input/PasswordStrengthMeter.svelte';
-```
-
-#### 3.6 Import Settings Tabs
-
-```bash
-grep -r "PreferencesTab\|GlobalSettingsTab\|ProfileTab\|AboutTab" --include="*.svelte" -l .
-```
-
-**File da aggiornare:**
-- `routes/(app)/settings/+page.svelte`
-
-Aggiorna:
-```svelte
-// DA:
-import PreferencesTab from '$lib/components/settings/PreferencesTab.svelte';
-import GlobalSettingsTab from '$lib/components/settings/GlobalSettingsTab.svelte';
-import ProfileTab from '$lib/components/settings/ProfileTab.svelte';
-import AboutTab from '$lib/components/settings/AboutTab.svelte';
-// A:
-import PreferencesTab from '$lib/components/settings/tabs/PreferencesTab.svelte';
-import GlobalSettingsTab from '$lib/components/settings/tabs/GlobalSettingsTab.svelte';
-import ProfileTab from '$lib/components/settings/tabs/ProfileTab.svelte';
-import AboutTab from '$lib/components/settings/tabs/AboutTab.svelte';
-```
+| File | Fix |
+|------|-----|
+| `routes/(app)/files/+page.svelte` | BRIM upload: `{ file }` invece di `formData as any` |
+| `brokers/BrokerImportFilesModal.svelte` | BRIM upload: `{ file }` invece di `formData as any` |
+| `brokers/BrokerImportFiles.svelte` | BRIM upload: `{ file }` invece di `formData as any` |
 
 ---
 
-## 📁 FASE 4: Creare File index.ts per Export Puliti
+## 📁 FASE 4: Creare File index.ts ✅ COMPLETATA
 
-### 4.1 `ui/index.ts`
+### File creati
 
-```typescript
-// frontend/src/lib/components/ui/index.ts
-export * from './select';
-export { default as AnimatedBackground } from './AnimatedBackground.svelte';
-export { default as ThemeToggle } from './ThemeToggle.svelte';
-export { default as Tooltip } from './Tooltip.svelte';
-```
-
-### 4.2 `ui/input/index.ts`
-
-```typescript
-// frontend/src/lib/components/ui/input/index.ts
-export { default as PasswordStrengthMeter } from './PasswordStrengthMeter.svelte';
-```
-
-### 4.3 `ui/media/index.ts`
-
-```typescript
-// frontend/src/lib/components/ui/media/index.ts
-export { default as FileUploader } from './FileUploader.svelte';
-export { default as LazyImage } from './LazyImage.svelte';
-export { default as ImageUploader } from './ImageUploader.svelte';
-```
-
-### 4.4 `layout/index.ts`
-
-```typescript
-// frontend/src/lib/components/layout/index.ts
-export { default as Header } from './Header.svelte';
-export { default as Sidebar } from './Sidebar.svelte';
-export { default as HelpMenu } from './HelpMenu.svelte';
-export { default as LanguageSelector } from './LanguageSelector.svelte';
-```
-
-### 4.5 `settings/tabs/index.ts`
-
-```typescript
-// frontend/src/lib/components/settings/tabs/index.ts
-export { default as PreferencesTab } from './PreferencesTab.svelte';
-export { default as GlobalSettingsTab } from './GlobalSettingsTab.svelte';
-export { default as ProfileTab } from './ProfileTab.svelte';
-export { default as AboutTab } from './AboutTab.svelte';
-```
+- `ui/index.ts` ✅
+- `ui/input/index.ts` ✅
+- `ui/media/index.ts` ✅
+- `layout/index.ts` ✅
+- `settings/tabs/index.ts` ✅
 
 ---
 
-## 🧪 FASE 5: Test E2E da Aggiungere
+## 🔧 FASE 5: Fix Aggiuntivi ✅ COMPLETATA
 
-### 5.1 Nuovo file: `e2e/select-components.spec.ts`
+### Fix File Upload (Zodios FormData bug)
+
+**Problema**: Zodios serializzava le proprietà/metodi del FormData invece del contenuto del file.
+
+**Soluzione**: Usare `axiosInstance` direttamente per gli upload file invece di Zodios.
+
+**File modificati:**
+- `routes/(app)/files/+page.svelte` - import axiosInstance, uso diretto per upload
+- `brokers/BrokerImportFilesModal.svelte` - stesso fix
+- `brokers/BrokerImportFiles.svelte` - stesso fix
+
+### Fix Dashboard Dark Mode
+
+**Problema**: Welcome banner troppo chiaro in dark mode.
+
+**Soluzione**: Creato nuovo colore `--color-libre-banner` con valore specifico per dark mode.
+
+**File modificati:**
+- `app.css` - aggiunto `--color-libre-banner: #1a4031` (light) e `#00834f` (dark)
+- `dashboard/+page.svelte` - usa `libre-banner` per il gradient del welcome banner
+- Semplificato colorClasses per quick actions (classi inline invece di oggetto complesso)
+
+---
+
+## 🧪 FASE 6: Test E2E da Aggiungere 📋 DOCUMENTATO (Implementazione futura)
+
+### 6.1 Nuovo file: `e2e/select-components.spec.ts`
 
 Test per SimpleSelect e SearchSelect:
 
@@ -461,7 +360,7 @@ test.describe('Select Components', () => {
 });
 ```
 
-### 5.2 Aggiungere test in `e2e/settings.spec.ts`
+### 6.2 Aggiungere test in `e2e/settings.spec.ts`
 
 ```typescript
 // Aggiungi a settings.spec.ts esistente
@@ -525,7 +424,7 @@ test.describe('Global Settings (Admin)', () => {
 });
 ```
 
-### 5.3 Test da aggiungere in `e2e/brokers.spec.ts`
+### 6.3 Test da aggiungere in `e2e/brokers.spec.ts`
 
 ```typescript
 // Aggiungi a brokers.spec.ts esistente
@@ -603,7 +502,7 @@ test.describe('Broker Form Select Components', () => {
 - [ ] Crea `layout/index.ts`
 - [ ] Crea `settings/tabs/index.ts`
 
-### Fase 5: Test
+### Fase 6: Test
 - [ ] Crea `e2e/select-components.spec.ts`
 - [ ] Aggiungi test a `settings.spec.ts`
 - [ ] Aggiungi test a `brokers.spec.ts`

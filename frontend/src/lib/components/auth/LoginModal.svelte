@@ -3,7 +3,7 @@
     import {_} from '$lib/i18n';
     import {auth, authError, isAuthLoading} from '$lib/stores/auth';
     import {goto} from '$app/navigation';
-    import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
+    import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
 
     const dispatch = createEventDispatcher<{
         gotoRegister: void;
