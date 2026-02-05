@@ -6,10 +6,10 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {userSettings} from '$lib/stores/settings';
-    import FuzzySelect from '$lib/components/FuzzySelect.svelte';
+    import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
+    import ImportPluginSelect from '$lib/components/ImportPluginSelect.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import type {SelectOption} from '$lib/components/FuzzySelect.svelte';
     import {Plus, Trash2, Info} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
@@ -106,22 +106,18 @@
     // Initial balances (only for create mode)
     let initialBalances: Array<{ code: string; amount: number }> = [];
 
-    // Currency options for FuzzySelect
+    // Currency options for SearchSelect
     let currencyOptions: SelectOption[] = [];
     let loadingCurrencies = true;
 
-    // Import plugins for select
-    let importPlugins: Array<{ id: string; name: string; description: string; icon?: string }> = [];
-    let loadingPlugins = true;
-
-    // Load currencies and plugins on mount
+    // Load currencies on mount
     onMount(async () => {
         // Load currencies
         try {
             const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
 
             currencyOptions = response.currencies.map(c => ({
-                code: c.code,
+                value: c.code,
                 label: c.name,
                 icon: c.symbol && c.symbol !== c.code ? c.symbol : undefined
             }));
@@ -129,30 +125,6 @@
             console.error('Failed to load currencies:', e);
         } finally {
             loadingCurrencies = false;
-        }
-
-        // Load import plugins
-        try {
-            const response = await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get();
-
-            // Backend returns array directly, not {plugins: [...]}
-            // Sort: broker_generic_csv first with "(default)" suffix, rest alphabetically
-            const plugins = (response || []).map(p => ({
-                id: p.code,
-                name: p.code === 'broker_generic_csv' ? `${p.name} (default)` : p.name,
-                description: p.description,
-                icon: p.icon_url ?? undefined
-            }));
-
-            importPlugins = plugins.sort((a, b) => {
-                if (a.id === 'broker_generic_csv') return -1;
-                if (b.id === 'broker_generic_csv') return 1;
-                return a.name.localeCompare(b.name);
-            });
-        } catch (e) {
-            console.error('Failed to load import plugins:', e);
-        } finally {
-            loadingPlugins = false;
         }
     });
 
@@ -165,9 +137,6 @@
     // Get user's default currency
     $: defaultCurrency = $userSettings?.base_currency ?? 'EUR';
 
-    // Get selected plugin info (for tooltip/description)
-    $: selectedPlugin = importPlugins.find(p => p.id === defaultImportPlugin);
-
 
     function addBalance() {
         // First balance uses user's default currency, subsequent ones find unused
@@ -176,8 +145,8 @@
 
         if (usedCodes.has(defaultCurrency)) {
             // Find a currency not already used
-            const available = currencyOptions.find(c => !usedCodes.has(c.code));
-            newCode = available?.code ?? 'EUR';
+            const available = currencyOptions.find(c => !usedCodes.has(c.value));
+            newCode = available?.value ?? 'EUR';
         }
 
         initialBalances = [...initialBalances, {
@@ -272,37 +241,10 @@
         <label for="broker-plugin" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {$_('brokers.defaultImportPlugin')}
         </label>
-        <div class="flex items-center gap-2">
-            {#if selectedPlugin?.icon}
-                <img
-                    src={selectedPlugin.icon}
-                    alt=""
-                    class="w-6 h-6 rounded object-cover"
-                    on:error={(e) => {
-                        const target = e.currentTarget;
-                        if (target instanceof HTMLImageElement) target.style.display = 'none';
-                    }}
-                />
-            {/if}
-            <select
-                    id="broker-plugin"
-                    bind:value={defaultImportPlugin}
-                    class="flex-1 px-3 py-2 border dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
-                    disabled={loadingPlugins}
-            >
-                <option value="">{loadingPlugins ? $_('common.loading') : $_('brokers.selectPlugin')}</option>
-                {#each importPlugins as plugin}
-                    <option value={plugin.id}>{plugin.name}</option>
-                {/each}
-            </select>
-            {#if selectedPlugin?.description}
-                <Tooltip text={selectedPlugin.description} position="left" maxWidth="350px">
-                    <span class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help">
-                        <Info size={16}/>
-                    </span>
-                </Tooltip>
-            {/if}
-        </div>
+        <ImportPluginSelect
+            bind:value={defaultImportPlugin}
+            placeholder={$_('brokers.selectPlugin')}
+        />
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('brokers.defaultImportPluginHint')}</p>
     </div>
 
@@ -468,7 +410,7 @@
 
                             <!-- Currency Select (40% width, dropdown opens upward) -->
                             <div class="flex-[4] min-w-[120px]">
-                                <FuzzySelect
+                                <SearchSelect
                                         bind:value={balance.code}
                                         options={currencyOptions}
                                         placeholder={$_('settings.selectCurrency')}

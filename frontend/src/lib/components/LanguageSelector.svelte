@@ -1,83 +1,82 @@
 <script lang="ts">
-    import {currentLanguage, currentLanguageFlag} from '$lib/stores/language';
-    import {LANGUAGE_OPTIONS, type SupportedLocale} from '$lib/i18n';
-    import {ChevronDown} from 'lucide-svelte';
+    /**
+     * LanguageSelector - Svelte 5
+     * Language selector dropdown for header.
+     * Uses custom dropdown styling optimized for header placement (minimal, transparent).
+     */
+    import { currentLanguage } from '$lib/stores/language';
+    import { LANGUAGE_OPTIONS, type SupportedLocale } from '$lib/i18n';
+    import { ChevronDown } from 'lucide-svelte';
 
-    // Position variant: 'dropdown' for header usage, 'inline' for sidebar
-    export let variant: 'dropdown' | 'inline' = 'dropdown';
+    let isOpen = $state(false);
+    let containerRef = $state<HTMLDivElement | null>(null);
 
-    let showMenu = false;
+    // Get current language info
+    let currentLangInfo = $derived(
+        LANGUAGE_OPTIONS.find(l => l.code === $currentLanguage) || LANGUAGE_OPTIONS[0]
+    );
+
+    // Close on click outside
+    $effect(() => {
+        if (!isOpen) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef && !containerRef.contains(event.target as Node)) {
+                isOpen = false;
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside, true);
+        return () => document.removeEventListener('mousedown', handleClickOutside, true);
+    });
+
+    // Close on Escape
+    $effect(() => {
+        if (!isOpen) return;
+
+        const handleKeydown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                isOpen = false;
+            }
+        };
+
+        document.addEventListener('keydown', handleKeydown);
+        return () => document.removeEventListener('keydown', handleKeydown);
+    });
 
     function handleLanguageChange(code: SupportedLocale) {
         currentLanguage.set(code);
-        showMenu = false;
-    }
-
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape') {
-            showMenu = false;
-        }
+        isOpen = false;
     }
 </script>
 
-{#if variant === 'dropdown'}
-    <!-- Dropdown style (for header/top-right) -->
-    <div class="relative" data-testid="language-selector">
-        <button
-                on:click={() => showMenu = !showMenu}
-                class="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all"
-                data-testid="language-selector-button"
-        >
-            <span class="text-xl">{$currentLanguageFlag}</span>
-            <ChevronDown size={16} class="text-gray-600 dark:text-gray-300"/>
-        </button>
-
-        {#if showMenu}
-            <div
-                    class="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden z-50"
-                    on:keydown={handleKeydown}
-                    role="menu"
-                    tabindex="-1"
-            >
-                {#each LANGUAGE_OPTIONS as lang}
-                    <button
-                            on:click={() => handleLanguageChange(lang.code)}
-                            class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all text-left
-							{$currentLanguage === lang.code ? 'bg-libre-green/10 dark:bg-libre-green/20' : ''}"
-                            role="menuitem"
-                    >
-                        <span class="text-xl">{lang.flag}</span>
-                        <span class="text-sm text-gray-700 dark:text-gray-200">{lang.name}</span>
-                    </button>
-                {/each}
-            </div>
-        {/if}
-    </div>
-
-    <!-- Click outside to close -->
-    {#if showMenu}
-        <div
-                class="fixed inset-0 z-40"
-                on:click={() => showMenu = false}
-                on:keydown={handleKeydown}
-                role="button"
-                tabindex="-1"
-        ></div>
-    {/if}
-
-{:else}
-    <!-- Inline select style (for sidebar) -->
-    <select
-            class="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm
-			appearance-none cursor-pointer hover:bg-white/20 transition-all"
-            value={$currentLanguage}
-            on:change={(e) => handleLanguageChange(e.currentTarget.value as SupportedLocale)}
+<div class="relative" bind:this={containerRef} data-testid="language-selector">
+    <button
+        onclick={() => isOpen = !isOpen}
+        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all"
+        data-testid="language-selector-button"
     >
-        {#each LANGUAGE_OPTIONS as lang}
-            <option value={lang.code} class="bg-libre-green text-white">
-                {lang.flag} {lang.name}
-            </option>
-        {/each}
-    </select>
-{/if}
+        <span class="text-xl">{currentLangInfo.flag}</span>
+        <ChevronDown size={14} class="text-gray-600 dark:text-gray-300 transition-transform {isOpen ? 'rotate-180' : ''}"/>
+    </button>
+
+    {#if isOpen}
+        <div
+            class="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden z-50"
+            role="menu"
+        >
+            {#each LANGUAGE_OPTIONS as lang}
+                <button
+                    onclick={() => handleLanguageChange(lang.code)}
+                    role="menuitem"
+                    class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all text-left
+                           {$currentLanguage === lang.code ? 'bg-libre-green/10 dark:bg-libre-green/20' : ''}"
+                >
+                    <span class="text-xl">{lang.flag}</span>
+                    <span class="text-sm text-gray-700 dark:text-gray-200">{lang.name}</span>
+                </button>
+            {/each}
+        </div>
+    {/if}
+</div>
 

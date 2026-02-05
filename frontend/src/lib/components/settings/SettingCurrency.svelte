@@ -1,35 +1,48 @@
 <script lang="ts">
     /**
-     * SettingCurrency.svelte
-     * Currency setting with FuzzySelect and inline actions
+     * SettingCurrency.svelte - Svelte 5
+     * Currency setting with SearchSelect and inline actions
      */
-    import { createEventDispatcher } from 'svelte';
     import { _ } from '$lib/i18n';
     import { Save, Undo, RotateCcw } from 'lucide-svelte';
-    import FuzzySelect, { type SelectOption } from '$lib/components/FuzzySelect.svelte';
-    import type { ComponentType } from 'svelte';
+    import { SearchSelect, type SelectOption } from '$lib/components/ui/select';
+    import type { Component } from 'svelte';
 
-    const dispatch = createEventDispatcher<{
-        save: void;
-        undo: void;
-        reset: void;
-        change: string;
-    }>();
+    interface Props {
+        value: string;
+        options?: SelectOption[];
+        label: string;
+        hint?: string;
+        icon?: Component | null;
+        isModified?: boolean;
+        isNonDefault?: boolean;
+        isLocked?: boolean;
+        loading?: boolean;
+        onsave?: () => void;
+        onundo?: () => void;
+        onreset?: () => void;
+        onchange?: (value: string) => void;
+    }
 
-    // Props
-    export let value: string;
-    export let options: SelectOption[] = [];
-    export let label: string;
-    export let hint: string = '';
-    export let icon: ComponentType | null = null;
-    export let isModified: boolean = false;
-    export let isNonDefault: boolean = false;
-    export let isLocked: boolean = false;
-    export let loading: boolean = false;
+    let {
+        value = $bindable(''),
+        options = [],
+        label,
+        hint = '',
+        icon = null,
+        isModified = false,
+        isNonDefault = false,
+        isLocked = false,
+        loading = false,
+        onsave,
+        onundo,
+        onreset,
+        onchange
+    }: Props = $props();
 
-    function handleChange(event: CustomEvent<{value: string; option: SelectOption}>) {
-        value = event.detail.value;
-        dispatch('change', value);
+    function handleChange(newValue: string) {
+        value = newValue;
+        onchange?.(newValue);
     }
 </script>
 
@@ -38,7 +51,8 @@
     <div class="flex-1 min-w-0">
         <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
             {#if icon}
-                <svelte:component this={icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
+                {@const Icon = icon}
+                <Icon size={16} class="mr-2 text-gray-500 dark:text-gray-400"/>
             {/if}
             {label}
         </div>
@@ -47,7 +61,7 @@
         {/if}
     </div>
 
-    <!-- Right: Actions + FuzzySelect - On mobile, full width aligned right -->
+    <!-- Right: Actions + SearchSelect - On mobile, full width aligned right -->
     <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto">
         <!-- Action buttons -->
         {#if !isLocked}
@@ -55,7 +69,7 @@
                 {#if isModified}
                     <button
                         type="button"
-                        on:click={() => dispatch('save')}
+                        onclick={() => onsave?.()}
                         class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
                         title={$_('common.save')}
                     >
@@ -63,7 +77,7 @@
                     </button>
                     <button
                         type="button"
-                        on:click={() => dispatch('undo')}
+                        onclick={() => onundo?.()}
                         class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
                         title={$_('common.undo')}
                     >
@@ -73,7 +87,7 @@
                 {#if isNonDefault && !isModified}
                     <button
                         type="button"
-                        on:click={() => dispatch('reset')}
+                        onclick={() => onreset?.()}
                         class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
                         title={$_('common.reset')}
                     >
@@ -83,15 +97,15 @@
             </div>
         {/if}
 
-        <!-- FuzzySelect for currency - responsive width -->
+        <!-- SearchSelect for currency - responsive width -->
         <div class="w-48 sm:w-64">
-            <FuzzySelect
+            <SearchSelect
                 bind:value
                 {options}
                 placeholder={$_('settings.selectCurrency')}
                 {loading}
                 disabled={isLocked}
-                on:change={handleChange}
+                onchange={handleChange}
             />
         </div>
     </div>

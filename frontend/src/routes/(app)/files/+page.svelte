@@ -22,7 +22,7 @@
     import { zodiosApi } from '$lib/api';
     import FileUploader from '$lib/components/ui/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/LazyImage.svelte';
-    import BrokerSelect from '$lib/components/brokers/BrokerSelect.svelte';
+    import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
     import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid, X } from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import { parseUrlFilters, buildUrlFilters, type UrlFilterConfig } from '$lib/utils/urlFilters';
@@ -748,11 +748,11 @@
                 <!-- Assign All section -->
                 <div class="assign-all-section">
                     <span class="assign-all-label">{$t('uploads.assignAll') || 'Assign all to'}:</span>
-                    <BrokerSelect
+                    <BrokerSearchSelect
                         brokers={brokers}
                         value={null}
                         placeholder={$t('uploads.chooseBroker') || '-- Choose broker --'}
-                        dropdownDirection="down"
+                        dropdownPosition="bottom"
                         onchange={(brokerId) => {
                             if (brokerId != null) {
                                 assignAllBroker(brokerId);
@@ -774,7 +774,7 @@
                                 <span class="file-name" title={file.name}>{file.name}</span>
                                 <span class="file-size">({formatBytes(file.size)})</span>
                             </div>
-                            <BrokerSelect
+                            <BrokerSearchSelect
                                 brokers={brokers}
                                 value={fileBrokerAssignments.get(index) ?? null}
                                 placeholder={$t('uploads.selectBroker') || '-- Select --'}
@@ -1293,6 +1293,7 @@
         max-width: 600px;
         width: 95%;
         max-height: 80vh;
+        min-height: 350px;
         display: flex;
         flex-direction: column;
     }
@@ -1300,6 +1301,7 @@
     .upload-modal-body {
         overflow-y: auto;
         max-height: 60vh;
+        min-height: 220px;
     }
 
     .assign-all-section {

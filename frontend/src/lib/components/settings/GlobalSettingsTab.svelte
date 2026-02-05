@@ -5,8 +5,7 @@
     import {onMount, onDestroy} from 'svelte';
     import {debug} from '$lib/debug';
     import {AlertCircle, ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
-    import FuzzySelect, {type SelectOption} from '$lib/components/FuzzySelect.svelte';
-    import CustomSelect from '$lib/components/ui/CustomSelect.svelte';
+    import {SearchSelect, SimpleSelect, type SelectOption} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
 
     // Props
@@ -59,13 +58,13 @@
     let fileSizeUnit: 'MB' | 'GB' = 'MB';
     let fileSizeDisplayValue: number = 10;
 
-    // Currency options for FuzzySelect
+    // Currency options for SearchSelect
     let currencyOptions: SelectOption[] = [];
     let currenciesLoading = true;
 
     // Language options for dropdown
-    const languageOptions = LANGUAGE_OPTIONS.map(l => ({
-        code: l.code,
+    const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map(l => ({
+        value: l.code,
         label: l.name,
         icon: l.flag
     }));
@@ -84,7 +83,7 @@
         try {
             const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
             currencyOptions = response.currencies.map(c => ({
-                code: c.code,
+                value: c.code,
                 label: c.name,
                 icon: c.symbol
             }));
@@ -729,14 +728,14 @@
                                             {/if}
                                         </div>
                                     {/if}
-                                    <!-- Language CustomSelect dropdown -->
+                                    <!-- Language SimpleSelect dropdown -->
                                     <div class="w-40 sm:w-48">
-                                        <CustomSelect
+                                        <SimpleSelect
                                                 bind:value={editedValues[setting.key]}
                                                 options={languageOptions}
                                                 placeholder={$_('settings.selectLanguage')}
                                                 disabled={isLocked}
-                                                on:change={() => { editedValues = {...editedValues}; }}
+                                                onchange={() => { editedValues = {...editedValues}; }}
                                         />
                                     </div>
                                 {:else if setting.key === 'default_currency'}
@@ -771,15 +770,15 @@
                                             {/if}
                                         </div>
                                     {/if}
-                                    <!-- Currency FuzzySelect - responsive width -->
+                                    <!-- Currency SearchSelect - responsive width -->
                                     <div class="w-48 sm:w-64">
-                                        <FuzzySelect
+                                        <SearchSelect
                                                 bind:value={editedValues[setting.key]}
                                                 options={currencyOptions}
                                                 placeholder={$_('settings.selectCurrency')}
                                                 disabled={isLocked}
                                                 loading={currenciesLoading}
-                                                on:change={() => { editedValues = {...editedValues}; }}
+                                                onchange={() => { editedValues = {...editedValues}; }}
                                         />
                                     </div>
                                 {:else}
