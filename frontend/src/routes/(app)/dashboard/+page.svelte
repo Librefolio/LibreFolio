@@ -10,38 +10,34 @@
             icon: Briefcase,
             titleKey: 'nav.brokers',
             descKey: 'dashboard.manageBrokers',
-            color: 'blue'
+            bgClass: 'bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50',
+            iconClass: 'text-blue-600 dark:text-blue-400'
         },
         {
             href: '/assets',
             icon: BarChart3,
             titleKey: 'nav.assets',
             descKey: 'dashboard.manageAssets',
-            color: 'green'
+            bgClass: 'bg-green-100 dark:bg-green-900/30 group-hover:bg-green-200 dark:group-hover:bg-green-900/50',
+            iconClass: 'text-green-600 dark:text-green-400'
         },
         {
             href: '/transactions',
             icon: ArrowRightLeft,
             titleKey: 'nav.transactions',
             descKey: 'dashboard.manageTransactions',
-            color: 'purple'
+            bgClass: 'bg-purple-100 dark:bg-purple-900/30 group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50',
+            iconClass: 'text-purple-600 dark:text-purple-400'
         },
         {
             href: '/fx',
             icon: Coins,
             titleKey: 'nav.fx',
             descKey: 'dashboard.manageFx',
-            color: 'yellow'
+            bgClass: 'bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50',
+            iconClass: 'text-amber-600 dark:text-amber-400'
         }
     ];
-
-    // Color mappings for cards
-    const colorClasses: Record<string, { bg: string; bgHover: string; text: string }> = {
-        blue: {bg: 'bg-blue-100', bgHover: 'group-hover:bg-blue-200', text: 'text-blue-600'},
-        green: {bg: 'bg-green-100', bgHover: 'group-hover:bg-green-200', text: 'text-green-600'},
-        purple: {bg: 'bg-purple-100', bgHover: 'group-hover:bg-purple-200', text: 'text-purple-600'},
-        yellow: {bg: 'bg-amber-100', bgHover: 'group-hover:bg-amber-200', text: 'text-amber-600'}
-    };
 </script>
 
 <div class="space-y-6" data-testid="dashboard-page">
@@ -50,7 +46,7 @@
 
     <!-- Welcome Banner with User Name -->
     {#if $currentUser}
-        <div class="bg-gradient-to-r from-libre-green to-libre-green/80 rounded-xl shadow-sm p-6 text-white">
+        <div class="bg-gradient-to-r from-libre-banner to-libre-banner/80 rounded-xl shadow-sm p-6 text-white">
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-2xl font-bold">
@@ -69,38 +65,38 @@
 
     <!-- Quick Stats (placeholder for future) -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-700">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-gray-500 text-sm">{$_('dashboard.totalValue')}</p>
-                    <p class="text-2xl font-bold text-gray-800 mt-1">€ --,---.--</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('dashboard.totalValue')}</p>
+                    <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">€ --,---.--</p>
                 </div>
-                <div class="p-3 bg-libre-green/10 rounded-lg">
+                <div class="p-3 bg-libre-green/10 dark:bg-libre-green/20 rounded-lg">
                     <Wallet class="text-libre-green" size={24}/>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-700">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-gray-500 text-sm">{$_('dashboard.totalGain')}</p>
-                    <p class="text-2xl font-bold text-green-600 mt-1">+€ ---.--</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('dashboard.totalGain')}</p>
+                    <p class="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">+€ ---.--</p>
                 </div>
-                <div class="p-3 bg-green-100 rounded-lg">
-                    <TrendingUp class="text-green-600" size={24}/>
+                <div class="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <TrendingUp class="text-green-600 dark:text-green-400" size={24}/>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-700">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-gray-500 text-sm">{$_('dashboard.assetCount')}</p>
-                    <p class="text-2xl font-bold text-gray-800 mt-1">--</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('dashboard.assetCount')}</p>
+                    <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">--</p>
                 </div>
-                <div class="p-3 bg-purple-100 rounded-lg">
-                    <PieChart class="text-purple-600" size={24}/>
+                <div class="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <PieChart class="text-purple-600 dark:text-purple-400" size={24}/>
                 </div>
             </div>
         </div>
@@ -108,35 +104,33 @@
 
     <!-- Quick Actions -->
     <div>
-        <h2 class="text-lg font-semibold text-gray-700 mb-4">{$_('dashboard.quickActions')}</h2>
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">{$_('dashboard.quickActions')}</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {#each quickActions as action}
-                {@const colors = colorClasses[action.color]}
                 <a
                         href={action.href}
-                        class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-all group"
+                        class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all group"
                 >
                     <div class="flex items-center justify-between mb-4">
-                        <div class="{colors.bg} {colors.bgHover} p-3 rounded-lg transition-all">
-                            <svelte:component this={action.icon} class={colors.text} size={24}/>
+                        <div class="{action.bgClass} p-3 rounded-lg transition-all">
+                            <svelte:component this={action.icon} class={action.iconClass} size={24}/>
                         </div>
                     </div>
-                    <h3 class="text-lg font-semibold text-gray-700">{$_(action.titleKey)}</h3>
-                    <p class="text-gray-500 text-sm mt-1">{$_(action.descKey)}</p>
+                    <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200">{$_(action.titleKey)}</h3>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">{$_(action.descKey)}</p>
                 </a>
             {/each}
         </div>
     </div>
 
     <!-- Welcome Section -->
-    <div class="bg-white rounded-xl shadow-sm p-8 text-center border border-gray-100">
-        <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-8 text-center border border-gray-100 dark:border-slate-700">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 dark:bg-libre-green/20 rounded-full mb-4">
             <BarChart3 class="text-libre-green" size={32}/>
         </div>
-        <h2 class="text-xl font-semibold text-gray-700 mb-2">{$_('dashboard.welcomeTitle')}</h2>
-        <p class="text-gray-500 max-w-md mx-auto">
+        <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('dashboard.welcomeTitle')}</h2>
+        <p class="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
             {$_('dashboard.welcomeMessage')}
         </p>
     </div>
 </div>
-

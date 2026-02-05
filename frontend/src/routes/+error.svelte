@@ -1,7 +1,7 @@
 <script lang="ts">
     import {page} from '$app/stores';
     import {_} from 'svelte-i18n';
-    import AnimatedBackground from '$lib/components/AnimatedBackground.svelte';
+    import AnimatedBackground from '$lib/components/ui/AnimatedBackground.svelte';
 </script>
 
 <AnimatedBackground/>

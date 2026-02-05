@@ -19,9 +19,9 @@
     import { goto } from '$app/navigation';
     import { browser } from '$app/environment';
     import { t } from '$lib/i18n';
-    import { zodiosApi } from '$lib/api';
-    import FileUploader from '$lib/components/ui/FileUploader.svelte';
-    import LazyImage from '$lib/components/ui/LazyImage.svelte';
+    import { zodiosApi, axiosInstance } from '$lib/api';
+    import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
+    import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
     import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid, X } from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
@@ -290,11 +290,11 @@
         const { files } = event.detail;
 
         try {
-            // Upload files sequentially
+            // Upload files sequentially using axios directly (Zodios doesn't handle FormData well)
             for (const file of files) {
                 const formData = new FormData();
                 formData.append('file', file);
-                await zodiosApi.upload_file_api_v1_uploads_post(formData as any);
+                await axiosInstance.post('/api/v1/uploads', formData);
             }
 
             showUploader = false;
@@ -367,7 +367,8 @@
                 usedBrokerIds.add(brokerId);
                 const formData = new FormData();
                 formData.append('file', file);
-                await zodiosApi.upload_file_api_v1_brokers_import_upload_post(formData as any, {queries: {broker_id: brokerId}});
+                // Use axios directly - Zodios doesn't handle FormData correctly
+                await axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData);
             }
 
             // Add used broker IDs to selected filter so uploaded files are visible

@@ -2,11 +2,11 @@
     import {onMount} from 'svelte';
     import {browser} from '$app/environment';
     import {goto} from '$app/navigation';
-    import AnimatedBackground from '$lib/components/AnimatedBackground.svelte';
+    import AnimatedBackground from '$lib/components/ui/AnimatedBackground.svelte';
     import LoginModal from '$lib/components/auth/LoginModal.svelte';
     import RegisterModal from '$lib/components/auth/RegisterModal.svelte';
     import ForgotPasswordModal from '$lib/components/auth/ForgotPasswordModal.svelte';
-    import LanguageSelector from '$lib/components/LanguageSelector.svelte';
+    import LanguageSelector from '$lib/components/layout/LanguageSelector.svelte';
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
     import {auth} from '$lib/stores/auth';
     import {page} from '$app/stores';

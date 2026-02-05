@@ -74,13 +74,13 @@ function serializeParams(params: Record<string, unknown>): string {
  * This is passed to Zodios to use instead of creating its own.
  *
  * Note: No baseURL needed because endpoints already include full path (e.g., /api/v1/auth/login)
+ * Note: Content-Type is NOT set globally - Axios auto-detects it based on body type:
+ *       - JSON body → application/json
+ *       - FormData → multipart/form-data with correct boundary
  */
 const axiosInstance = axios.create({
 	timeout: DEFAULT_TIMEOUT,
 	withCredentials: true, // Include session cookies in requests
-	headers: {
-		'Content-Type': 'application/json'
-	},
 	paramsSerializer: {
 		serialize: serializeParams
 	}

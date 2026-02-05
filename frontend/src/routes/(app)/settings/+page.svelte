@@ -2,10 +2,10 @@
     import {_} from '$lib/i18n';
     import {Info, Shield, Sliders, User} from 'lucide-svelte';
     import {auth} from '$lib/stores/auth';
-    import ProfileTab from '$lib/components/settings/ProfileTab.svelte';
-    import PreferencesTab from '$lib/components/settings/PreferencesTab.svelte';
-    import AboutTab from '$lib/components/settings/AboutTab.svelte';
-    import GlobalSettingsTab from '$lib/components/settings/GlobalSettingsTab.svelte';
+    import ProfileTab from '$lib/components/settings/tabs/ProfileTab.svelte';
+    import PreferencesTab from '$lib/components/settings/tabs/PreferencesTab.svelte';
+    import AboutTab from '$lib/components/settings/tabs/AboutTab.svelte';
+    import GlobalSettingsTab from '$lib/components/settings/tabs/GlobalSettingsTab.svelte';
 
     type TabId = 'profile' | 'preferences' | 'about' | 'admin';
 
