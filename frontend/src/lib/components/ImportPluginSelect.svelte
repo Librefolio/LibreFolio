@@ -68,7 +68,7 @@
     }
 </script>
 
-<div class="import-plugin-select">
+<div class="import-plugin-select" data-testid="import-plugin-select">
     <SearchSelect
         bind:value
         options={pluginOptions}
