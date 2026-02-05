@@ -5,7 +5,7 @@
 **Prerequisito**: plan-componentReorganizationV2 ✅ COMPLETATO
 **Priorità**: P2 (cleanup e organizzazione)
 **Stima tempo**: ~2h
-**Tempo effettivo**: ~3h
+**Tempo effettivo**: ~4h
 
 ---
 
@@ -17,7 +17,7 @@
 4. ✅ Creare index.ts per export puliti
 5. ✅ Fix file upload (Zodios FormData bug)
 6. ✅ Fix dashboard dark mode
-7. 📋 Test E2E aggiuntivi (documentati, implementazione futura)
+7. ✅ Test E2E per componenti Select (16 test aggiuntivi)
 
 ---
 
@@ -199,7 +199,45 @@ mv settings/AboutTab.svelte settings/tabs/AboutTab.svelte
 
 ---
 
-## 🧪 FASE 6: Test E2E da Aggiungere 📋 DOCUMENTATO (Implementazione futura)
+## 🧪 FASE 6: Test E2E per Select Components ✅ COMPLETATA
+
+### File creato: `e2e/select-components.spec.ts`
+
+16 test che coprono:
+
+**LanguageSelector (SimpleSelect style)** - 4 test:
+- Opens dropdown on click
+- Closes dropdown on click outside
+- Closes dropdown on Escape key
+- Selects language and updates UI
+
+**SearchSelect (Currency Selector in Settings)** - 3 test:
+- Currency select opens with search field
+- Currency select shows options in listbox
+- Currency select can close with Escape
+
+**ImportPluginSelect (Broker Form)** - 4 test:
+- Plugin select is visible in broker form
+- Plugin select opens dropdown with listbox
+- Plugin select shows search input when opened
+- Plugin select can be closed with Escape
+
+**Global Settings Selects (Admin)** - 2 test:
+- Global settings tab loads for admin
+- Global settings has interactive elements
+
+**BrokerSearchSelect (Files Page)** - 1 test:
+- Files page loads with tab navigation
+
+**Accessibility** - 2 test:
+- Language selector has proper menu role
+- Search select has listbox role when open
+
+### Integrazione in test_runner.py
+
+Aggiunto `select-components.spec.ts` alla lista dei spec file in `_run_front_e2e_tests()`.
+
+---
 
 ### 6.1 Nuovo file: `e2e/select-components.spec.ts`
 

@@ -18,6 +18,7 @@
         isNonDefault?: boolean;
         isLocked?: boolean;
         loading?: boolean;
+        testId?: string;
         onsave?: () => void;
         onundo?: () => void;
         onreset?: () => void;
@@ -34,6 +35,7 @@
         isNonDefault = false,
         isLocked = false,
         loading = false,
+        testId = '',
         onsave,
         onundo,
         onreset,
@@ -46,7 +48,10 @@
     }
 </script>
 
-<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0">
+<div
+    class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0"
+    data-testid={testId || undefined}
+>
     <!-- Left: Label and hint -->
     <div class="flex-1 min-w-0">
         <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">

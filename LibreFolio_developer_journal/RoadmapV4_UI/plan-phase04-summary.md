@@ -142,10 +142,12 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### Plans COMPLETATI (spostati in `phase-04-subplan/`)
 
-| File                              | Descrizione                            | Status       |
-|-----------------------------------|----------------------------------------|--------------|
-| `plan-e2e-test-remediation.md`    | Remediation test E2E (Fase 1 ✅)        | ✅ COMPLETATO |
-| `plan-settings-mobile-gallery.md` | Settings mobile + Gallery improvements | ✅ COMPLETATO |
+| File                                       | Descrizione                                | Status       |
+|--------------------------------------------|--------------------------------------------|--------------|
+| `plan-e2e-test-remediation.md`             | Remediation test E2E (Fase 1 ✅)            | ✅ COMPLETATO |
+| `plan-settings-mobile-gallery.md`          | Settings mobile + Gallery improvements     | ✅ COMPLETATO |
+| `plan-componentReorganizationV2.prompt.md` | Famiglia Select unificata + Svelte 5 runes | ✅ COMPLETATO |
+| `plan-componentReorganizationV3-cleanup.md`| Cleanup + test E2E Select components       | ✅ COMPLETATO |
 
 ### Reference Docs (in `phases/phase-04-subplan/`)
 
@@ -157,8 +159,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 | File                                      | Descrizione                                          | Priorità       |
 |-------------------------------------------|------------------------------------------------------|----------------|
-| `plan-componentReorganizationV2.prompt.md` | Refactor completo Select + Settings + Svelte 5 runes | 🔜 PROSSIMO    |
-| `plan-data-separation.md`                 | Separazione cartelle dati prod/test                  | 📋 ALTA        |
+| `plan-data-separation.md`                 | Separazione cartelle dati prod/test                  | 🔜 PROSSIMO    |
 | `plan-image-crop.md`                      | Componente crop immagini con cropperjs               | 📋 ALTA        |
 | `plan-frontendDevelopment.prompt.md`      | Linee guida sviluppo frontend                        | Riferimento    |
 
@@ -225,19 +226,25 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 **Nota**: Gallery completa - tutti gli screenshot vengono generati correttamente (28 test, ~224 screenshots).
 
-### Step 4.3: Frontend Component Reorganization 🔜 PROSSIMO
+### Step 4.3: Frontend Component Reorganization ✅ COMPLETATO
 
-**Riferimento**: `plan-componentReorganizationV2.prompt.md`
+**Riferimento**: `phases/phase-04-subplan/plan-componentReorganizationV2.prompt.md` + `phases/phase-04-subplan/plan-componentReorganizationV3-cleanup.md`
 
-**Problema identificato**: Il frontend ha 5 implementazioni diverse di dropdown con ~800 righe duplicate, mix Svelte 4/5.
+**Lavoro completato (5 Feb 2026)**:
 
-**Soluzione**: Creare famiglia di componenti Select unificata con Svelte 5 runes e slot-based rendering.
+- ✅ Famiglia Select unificata: `ui/select/` con BaseDropdown, SimpleSelect, SearchSelect
+- ✅ Migrazione tutti i consumer a nuovi componenti
+- ✅ LanguageSelector con supporto header compatto
+- ✅ ImportPluginSelect con inline search e icone broker
+- ✅ BrokerSearchSelect con auto-positioning dropdown
+- ✅ SettingToggle e SettingNumber per GlobalSettings
+- ✅ Fix file upload (Zodios FormData bug → uso axiosInstance)
+- ✅ Fix dashboard dark mode (nuovo colore `libre-banner`)
+- ✅ Riorganizzazione cartelle: `ui/input/`, `ui/media/`, `layout/`, `settings/tabs/`
+- ✅ 16 nuovi test E2E per componenti Select
+- ✅ Tutti i test passano (6/6 suite, 67+ test)
 
-**Priorità**: ALTA - Necessario per mantenibilità prima di Phase 5
-
-**Stima**: ~10h
-
-### Step 4.4: Data Separation prod/test 📋 PRIORITÀ ALTA
+### Step 4.4: Data Separation prod/test 📋 PROSSIMO
 
 **Riferimento**: `plan-data-separation.md`
 
@@ -269,14 +276,9 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 Questi step sono **fondamentali** prima di procedere con Phase 5:
 
-1. **Component Reorganization V2** (`plan-componentReorganizationV2.prompt.md`) - ~10h
-   - Creare famiglia Select unificata (BaseDropdown, SimpleSelect, SearchSelect)
-   - Migrare tutto a Svelte 5 runes
-   - Slot-based rendering per items personalizzabili
-   - Ridurre ~1000 righe di codice duplicato
-   - Refactorare GlobalSettingsTab (da 855 a ~300 righe)
+1. ~~**Component Reorganization V2**~~ ✅ COMPLETATO (5 Feb 2026)
 
-2. **Data Separation** (`plan-data-separation.md`) - ~2h
+2. **Data Separation** (`plan-data-separation.md`) - ~2h 📋 PROSSIMO
    - Separare cartelle dati prod/test
    - Evitare conflitti tra ambienti
    - Prerequisito per test affidabili
@@ -320,5 +322,5 @@ Quando si lavora su questa fase, allegare:
 - [x] `./dev.py front check` senza errori
 - [x] `./dev.py i18n audit` - 100% coverage
 - [x] Test funzionale features modificate
-- [x] `./dev.py test front all` - tutti i test passano (~107 test, 5/5 suite)
+- [x] `./dev.py test front all` - tutti i test passano (6/6 suite, 67+ test)
 - [x] `./dev.py mkdocs gallery` - tutti gli screenshot generati (28 test, ~224 screenshots)
