@@ -155,12 +155,18 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### Plans DA IMPLEMENTARE (in `RoadmapV4_UI/`)
 
-| File                                 | Descrizione                            | Priorità       |
-|--------------------------------------|----------------------------------------|----------------|
-| `plan-component-reorganization.md`   | Refactor FuzzySelect/CustomSelect      | 🔜 PROSSIMO    |
-| `plan-data-separation.md`            | Separazione cartelle dati prod/test    | 📋 ALTA        |
-| `plan-image-crop.md`                 | Componente crop immagini con cropperjs | 📋 ALTA        |
-| `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend          | Riferimento    |
+| File                                      | Descrizione                                          | Priorità       |
+|-------------------------------------------|------------------------------------------------------|----------------|
+| `plan-componentReorganizationV2.prompt.md` | Refactor completo Select + Settings + Svelte 5 runes | 🔜 PROSSIMO    |
+| `plan-data-separation.md`                 | Separazione cartelle dati prod/test                  | 📋 ALTA        |
+| `plan-image-crop.md`                      | Componente crop immagini con cropperjs               | 📋 ALTA        |
+| `plan-frontendDevelopment.prompt.md`      | Linee guida sviluppo frontend                        | Riferimento    |
+
+### Plans ARCHIVIATI (in `phase-04-subplan/`)
+
+| File                               | Descrizione                          | Status           |
+|------------------------------------|--------------------------------------|------------------|
+| `plan-component-reorganization.md` | Piano originale (sostituito da V2)   | 📦 ARCHIVIATO    |
 
 ### Plans DA CREARE
 
@@ -221,11 +227,15 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### Step 4.3: Frontend Component Reorganization 🔜 PROSSIMO
 
-**Riferimento**: `plan-component-reorganization.md`
+**Riferimento**: `plan-componentReorganizationV2.prompt.md`
 
-**Problema identificato**: Il frontend inizia ad avere molti componenti e ci sono varie duplicazioni di codice.
+**Problema identificato**: Il frontend ha 5 implementazioni diverse di dropdown con ~800 righe duplicate, mix Svelte 4/5.
+
+**Soluzione**: Creare famiglia di componenti Select unificata con Svelte 5 runes e slot-based rendering.
 
 **Priorità**: ALTA - Necessario per mantenibilità prima di Phase 5
+
+**Stima**: ~10h
 
 ### Step 4.4: Data Separation prod/test 📋 PRIORITÀ ALTA
 
@@ -259,10 +269,12 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 Questi step sono **fondamentali** prima di procedere con Phase 5:
 
-1. **Component Reorganization** (`plan-component-reorganization.md`) - ~5h
-   - Unificare FuzzySelect/CustomSelect in BaseSelect
-   - Ridurre duplicazioni di codice
-   - Necessario per mantenibilità futura
+1. **Component Reorganization V2** (`plan-componentReorganizationV2.prompt.md`) - ~10h
+   - Creare famiglia Select unificata (BaseDropdown, SimpleSelect, SearchSelect)
+   - Migrare tutto a Svelte 5 runes
+   - Slot-based rendering per items personalizzabili
+   - Ridurre ~1000 righe di codice duplicato
+   - Refactorare GlobalSettingsTab (da 855 a ~300 righe)
 
 2. **Data Separation** (`plan-data-separation.md`) - ~2h
    - Separare cartelle dati prod/test
@@ -286,18 +298,19 @@ Questi step sono **fondamentali** prima di procedere con Phase 5:
 
 Quando si lavora su questa fase, allegare:
 
-| Scenario                  | Files da allegare                                                 |
-|---------------------------|-------------------------------------------------------------------|
-| Bug fix generici          | `plan-phase04-summary.md`                                         |
-| BRIM/Files                | `+ phases/phase-04-subplan/plan-brim-multiuser-implementation.md` |
-| Tipi/API                  | `+ phases/phase-04-subplan/plan-types-library.md`                 |
-| Test frontend infra       | `+ phases/phase-04-subplan/plan-frontendTesting.md`               |
-| Test remediation          | `+ phases/phase-04-subplan/plan-e2e-test-remediation.md` + `phases/phase-04-subplan/e2e-test-analysis.md` |
-| Settings mobile + gallery | `+ phases/phase-04-subplan/plan-settings-mobile-gallery.md`                               |
-| Image upload              | `+ plan-image-crop.md`                                            |
-| Separazione dati          | `+ plan-data-separation.md`                                       |
-| i18n CLI                  | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`         |
-| Files UX/URL              | `+ phases/phase-04-subplan/plan-files-ux-refactor.md`             |
+| Scenario                   | Files da allegare                                                                          |
+|----------------------------|--------------------------------------------------------------------------------------------|
+| Bug fix generici           | `plan-phase04-summary.md`                                                                  |
+| BRIM/Files                 | `+ phases/phase-04-subplan/plan-brim-multiuser-implementation.md`                          |
+| Tipi/API                   | `+ phases/phase-04-subplan/plan-types-library.md`                                          |
+| Test frontend infra        | `+ phases/phase-04-subplan/plan-frontendTesting.md`                                        |
+| Test remediation           | `+ phases/phase-04-subplan/plan-e2e-test-remediation.md` + `phases/phase-04-subplan/e2e-test-analysis.md` |
+| Settings mobile + gallery  | `+ phases/phase-04-subplan/plan-settings-mobile-gallery.md`                                |
+| **Component Reorganization** | `+ plan-componentReorganizationV2.prompt.md`                                              |
+| Image upload               | `+ plan-image-crop.md`                                                                     |
+| Separazione dati           | `+ plan-data-separation.md`                                                                |
+| i18n CLI                   | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`                                  |
+| Files UX/URL               | `+ phases/phase-04-subplan/plan-files-ux-refactor.md`                                      |
 
 ---
 
