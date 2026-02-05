@@ -127,11 +127,11 @@ test.describe('Authentication', () => {
             await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
             await expect(page.getByTestId('language-selector')).toBeVisible();
             await page.getByTestId('language-selector-button').click();
-            // Dropdown should open with language options
+            // Dropdown should open with language options (use menuitem role to be specific)
             for (const lang of SUPPORTED_LANGUAGES) {
                 const info = LANGUAGE_INFO[lang];
                 if (info) {
-                    await expect(page.getByText(info.name)).toBeVisible();
+                    await expect(page.getByRole('menuitem', { name: new RegExp(info.name) })).toBeVisible();
                 }
             }
         });

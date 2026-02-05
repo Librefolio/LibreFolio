@@ -27,10 +27,10 @@
         <!-- Spacer for desktop (sidebar visible) -->
         <div class="hidden lg:block"></div>
 
-        <!-- Right side - Language, Theme Toggle, Help Menu -->
+        <!-- Right side - Theme Toggle, Language, Help Menu -->
         <div class="flex items-center space-x-2">
-            <LanguageSelector variant="dropdown"/>
             <ThemeToggle />
+            <LanguageSelector />
             <HelpMenu/>
         </div>
     </div>

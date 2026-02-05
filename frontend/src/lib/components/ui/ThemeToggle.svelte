@@ -71,8 +71,7 @@
     on:click={toggleTheme}
     data-testid="theme-toggle"
     class="p-2 rounded-lg transition-colors duration-200
-           text-gray-600 hover:text-gray-800 hover:bg-gray-100
-           dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
+           text-gray-600 dark:text-gray-300 hover:bg-white/20 dark:hover:bg-slate-600"
     aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
     title={theme === 'light' ? 'Dark mode' : 'Light mode'}
 >

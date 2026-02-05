@@ -1,8 +1,11 @@
 <script lang="ts" module>
     /**
+     * @deprecated Use SimpleSelect from '$lib/components/ui/select' instead.
+     * This component will be removed in a future version.
+     *
      * CustomSelect.svelte
      * A simple custom dropdown select that works well on mobile.
-     * For complex selects with search, use FuzzySelect instead.
+     * For complex selects with search, use SimpleSelect instead.
      */
     export interface SelectOption {
         code: string;

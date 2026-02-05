@@ -6,8 +6,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {X} from 'lucide-svelte';
-    import FuzzySelect from '$lib/components/FuzzySelect.svelte';
-    import type {SelectOption} from '$lib/components/FuzzySelect.svelte';
+    import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -47,7 +46,7 @@
             const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
 
             currencyOptions = response.currencies.map(c => ({
-                code: c.code,
+                value: c.code,
                 label: c.name,
                 icon: c.symbol && c.symbol !== c.code ? c.symbol : undefined
             }));
@@ -166,7 +165,7 @@
                     <span class="block text-sm font-medium text-gray-700 mb-1">
                         Currency *
                     </span>
-                    <FuzzySelect
+                    <SearchSelect
                             bind:value={currency}
                             options={currencyOptions}
                             placeholder={$_('settings.selectCurrency')}

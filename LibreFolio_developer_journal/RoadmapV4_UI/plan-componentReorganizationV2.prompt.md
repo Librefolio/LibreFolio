@@ -1,15 +1,119 @@
 # Plan: Frontend Component Reorganization v2
 
 **Data creazione**: 5 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
+**Status**: ✅ COMPLETATO  
 **Priorità**: P1 (fondamentale per manutenibilità)
 **Stima tempo**: ~8-10h
+**Tempo effettivo**: ~6h
+
+---
+
+## 📋 Stato Implementazione (5 Feb 2026)
+
+### ✅ FASE 1: Infrastruttura Base Select - COMPLETATA
+
+- `ui/select/types.ts` ✅
+- `ui/select/BaseDropdown.svelte` ✅
+- `ui/select/SimpleSelect.svelte` ✅ (con supporto testId)
+- `ui/select/SearchSelect.svelte` ✅ (con inlineSearch, auto-position, dynamic maxHeight)
+- `ui/select/index.ts` ✅
+
+### ✅ FASE 2: Migrazione Select Consumer - COMPLETATA
+
+- `LanguageSelector.svelte` → custom dropdown Svelte 5 (stile header) ✅
+- `SettingSelect.svelte` → usa SimpleSelect ✅
+- `SettingCurrency.svelte` → usa SearchSelect ✅
+- `ImportPluginSelect.svelte` → usa SearchSelect (inlineSearch + icone broker) ✅
+- `GlobalSettingsTab.svelte` → usa SimpleSelect e SearchSelect ✅
+- `PreferencesTab.svelte` → aggiornati imports e callbacks ✅
+- `BrokerForm.svelte` → usa ImportPluginSelect + SearchSelect per currency ✅
+- `CashTransactionModal.svelte` → usa SearchSelect per currency ✅
+- `BrokerSearchSelect.svelte` → nuovo componente, sostituisce BrokerSelect ✅
+- `files/+page.svelte` → usa BrokerSearchSelect ✅
+
+### ✅ FASE 3: Setting Fields Components - COMPLETATA
+
+- `settings/fields/SettingToggle.svelte` ✅
+- `settings/fields/SettingNumber.svelte` ✅
+- `settings/fields/index.ts` ✅
+
+### ✅ FASE 4: Riorganizzazione File - COMPLETATA
+
+- File rinominati con prefisso `Old` per deprecazione (DA CANCELLARE):
+    - `OldFuzzySelect.svelte`
+    - `ui/OldCustomSelect.svelte`
+    - `brokers/OldBrokerSelect.svelte`
+
+### ✅ FASE 5: Test e Validazione - COMPLETATA
+
+- `./dev.py front check` → 0 errori, 0 warning ✅
+- `./dev.py front build` → build OK ✅
+- `./dev.py test front all` → 5/5 suite passano ✅
+- Test auth.spec.ts aggiornato per usare `role="menuitem"` ✅
+- Validazione visiva utente completata ✅
+
+---
+
+## 📁 Dettaglio File Changes
+
+### File CREATI (Nuovi componenti)
+
+| File                                                               | Descrizione                                                      |
+|--------------------------------------------------------------------|------------------------------------------------------------------|
+| `frontend/src/lib/components/ui/select/types.ts`                   | Tipi comuni SelectOption                                         |
+| `frontend/src/lib/components/ui/select/BaseDropdown.svelte`        | Logica dropdown base                                             |
+| `frontend/src/lib/components/ui/select/SimpleSelect.svelte`        | Select senza ricerca, con testId support                         |
+| `frontend/src/lib/components/ui/select/SearchSelect.svelte`        | Select con ricerca (inline/separate), auto-position, dyn. height |
+| `frontend/src/lib/components/ui/select/index.ts`                   | Re-export componenti                                             |
+| `frontend/src/lib/components/settings/fields/SettingToggle.svelte` | Toggle boolean                                                   |
+| `frontend/src/lib/components/settings/fields/SettingNumber.svelte` | Input numerico                                                   |
+| `frontend/src/lib/components/settings/fields/index.ts`             | Re-export fields                                                 |
+| `frontend/src/lib/components/brokers/BrokerSearchSelect.svelte`    | Broker select con SearchSelect                                   |
+
+### File MODIFICATI (Migrazioni)
+
+| File                          | Modifica                                                |
+|-------------------------------|---------------------------------------------------------|
+| `LanguageSelector.svelte`     | Riscritto in Svelte 5, dropdown custom per header       |
+| `SettingSelect.svelte`        | Usa SimpleSelect, Svelte 5 props                        |
+| `SettingCurrency.svelte`      | Usa SearchSelect, Svelte 5 props                        |
+| `ImportPluginSelect.svelte`   | Usa SearchSelect con inlineSearch e BrokerIcon          |
+| `GlobalSettingsTab.svelte`    | Import da ui/select, option.value invece di .code       |
+| `PreferencesTab.svelte`       | Import da ui/select, callbacks invece di eventi         |
+| `BrokerForm.svelte`           | Usa ImportPluginSelect, rimosso codice plugin inline    |
+| `CashTransactionModal.svelte` | Usa SearchSelect per currency                           |
+| `Header.svelte`               | Ordine icone: ThemeToggle → LanguageSelector → HelpMenu |
+| `ThemeToggle.svelte`          | Hover style allineato agli altri header icons           |
+| `HelpMenu.svelte`             | Hover style + dark mode support                         |
+| `files/+page.svelte`          | Usa BrokerSearchSelect, upload modal styling            |
+| `frontend/e2e/auth.spec.ts`   | Test aggiornato per role="menuitem"                     |
+
+### File DEPRECATI (Rinominati con prefisso Old - DA CANCELLARE)
+
+| File Originale                | File Rinominato                     | Sostituzione       |
+|-------------------------------|-------------------------------------|--------------------|
+| `FuzzySelect.svelte`          | `OldFuzzySelect.svelte`             | SearchSelect       |
+| `ui/CustomSelect.svelte`      | `ui/OldCustomSelect.svelte`         | SimpleSelect       |
+| `brokers/BrokerSelect.svelte` | `brokers/OldBrokerSelect.svelte`    | BrokerSearchSelect |
+
+---
+
+## 🧪 Test da Aggiungere (Futuro)
+
+| Test                          | Descrizione                                            |
+|-------------------------------|--------------------------------------------------------|
+| `select-components.spec.ts`   | Test per SimpleSelect e SearchSelect                   |
+| Keyboard navigation           | Frecce su/giù, Enter per selezionare, Escape per chiudere |
+| Inline search mode            | Verifica ricerca inline in ImportPluginSelect          |
+| Auto-position dropdown        | Verifica apertura up/down in base allo spazio          |
+| BrokerSearchSelect            | Test selezione broker in upload modal                  |
 
 ---
 
 ## 🎯 Obiettivo
 
 Riorganizzare completamente i componenti frontend per:
+
 1. Eliminare duplicazioni di codice (5 implementazioni dropdown diverse)
 2. Migrare tutto a Svelte 5 runes (`$state`, `$derived`, `$effect`)
 3. Struttura cartelle per **categoria funzionale**
@@ -22,15 +126,16 @@ Riorganizzare completamente i componenti frontend per:
 
 ### Componenti Select Esistenti (5 implementazioni!)
 
-| Componente | Svelte | Ricerca | Click Outside | Keyboard | Slot Item |
-|------------|--------|---------|---------------|----------|-----------|
-| `FuzzySelect` | 4 | ✅ fuzzy | ✅ onMount | ✅ full | ❌ hardcoded |
-| `CustomSelect` | 4 | ❌ | ✅ onMount | Escape only | ❌ hardcoded |
-| `BrokerSelect` | 5 | ✅ inline | ✅ $effect | ✅ full | ❌ hardcoded |
-| `ImportPluginSelect` | 4 | ❌ native | - | - | - |
-| `LanguageSelector` | 4 | ❌ | ✅ inline | Escape only | ❌ hardcoded |
+| Componente           | Svelte | Ricerca  | Click Outside | Keyboard    | Slot Item   |
+|----------------------|--------|----------|---------------|-------------|-------------|
+| `FuzzySelect`        | 4      | ✅ fuzzy  | ✅ onMount     | ✅ full      | ❌ hardcoded |
+| `CustomSelect`       | 4      | ❌        | ✅ onMount     | Escape only | ❌ hardcoded |
+| `BrokerSelect`       | 5      | ✅ inline | ✅ $effect     | ✅ full      | ❌ hardcoded |
+| `ImportPluginSelect` | 4      | ❌ native | -             | -           | -           |
+| `LanguageSelector`   | 4      | ❌        | ✅ inline      | Escape only | ❌ hardcoded |
 
 ### Problemi Identificati
+
 - **~800 righe** di logica dropdown duplicata
 - `GlobalSettingsTab` è **855 righe** con HTML inline ripetuto
 - Mix Svelte 4/5 causa inconsistenze
@@ -101,6 +206,7 @@ components/
 ### FASE 1: Infrastruttura Base Select (2h)
 
 #### Step 1.1: Creare `ui/select/types.ts`
+
 ```typescript
 export interface SelectOption {
     value: string;           // Chiave univoca
@@ -117,6 +223,7 @@ export interface BaseDropdownProps {
 ```
 
 #### Step 1.2: Creare `ui/select/BaseDropdown.svelte` (Svelte 5)
+
 - Props: `disabled`, `dropdownPosition`
 - State: `isOpen` con `$state`
 - Logic: click outside con `$effect`, keyboard base (Escape)
@@ -124,6 +231,7 @@ export interface BaseDropdownProps {
 - Export `open()`, `close()`, `toggle()` per controllo esterno
 
 #### Step 1.3: Creare `ui/select/SimpleSelect.svelte` (Svelte 5)
+
 - Usa `BaseDropdown`
 - Props: `options: SelectOption[]`, `value`, `placeholder`, `loading`
 - Snippet: `item` per rendering custom (default: `{option.label}`)
@@ -131,16 +239,18 @@ export interface BaseDropdownProps {
 - Events: `onchange`
 
 #### Step 1.4: Creare `ui/select/SearchSelect.svelte` (Svelte 5)
+
 - Estende logica `SimpleSelect`
 - Aggiunge: input ricerca con filtro fuzzy
 - Snippet: `item` + `selectedItem` (trigger display)
 - Filtro su `label` + `searchText` + `value`
 
 #### Step 1.5: Creare `ui/select/index.ts`
+
 ```typescript
-export { default as BaseDropdown } from './BaseDropdown.svelte';
-export { default as SimpleSelect } from './SimpleSelect.svelte';
-export { default as SearchSelect } from './SearchSelect.svelte';
+export {default as BaseDropdown} from './BaseDropdown.svelte';
+export {default as SimpleSelect} from './SimpleSelect.svelte';
+export {default as SearchSelect} from './SearchSelect.svelte';
 export * from './types';
 ```
 
@@ -149,25 +259,30 @@ export * from './types';
 ### FASE 2: Migrazione Select Consumer (2h)
 
 #### Step 2.1: Aggiornare `LanguageSelector.svelte`
+
 - Rimuovere variante `inline` (usare solo dropdown custom)
 - Usare `SimpleSelect` internamente
 - Snippet per item con bandiera + nome lingua
 - Mantenere stile header esistente
 
 #### Step 2.2: Aggiornare `settings/SettingSelect.svelte`
+
 - Usare `SimpleSelect` invece di `CustomSelect`
 - Props esistenti rimangono compatibili
 
 #### Step 2.3: Aggiornare `settings/SettingCurrency.svelte`
+
 - Usare `SearchSelect` invece di `FuzzySelect`
 - Snippet per item con simbolo + codice + nome
 
 #### Step 2.4: Creare `brokers/ImportPluginSelect.svelte` (refactor)
+
 - Usare `SearchSelect`
 - Snippet per item con nome plugin + descrizione
 - Mantiene caricamento API esistente
 
 #### Step 2.5: Aggiornare `brokers/BrokerSelect.svelte`
+
 - Già Svelte 5, refactorare per usare `SearchSelect`
 - Snippet per item con `BrokerIcon` + nome
 - Riduzione da ~490 righe a ~100 righe
@@ -177,18 +292,21 @@ export * from './types';
 ### FASE 3: Setting Fields Components (2h)
 
 #### Step 3.1: Creare `settings/fields/SettingToggle.svelte`
+
 - Estrae pattern boolean da `GlobalSettingsTab`
 - Props: `value`, `label`, `hint`, `icon`, `isModified`, `isLocked`
 - Events: `save`, `undo`, `reset`
 - UI: toggle switch con ON/OFF label
 
 #### Step 3.2: Creare `settings/fields/SettingNumber.svelte`
+
 - Estrae pattern int/float da `GlobalSettingsTab`
 - Props: `value`, `type: 'int' | 'float'`, `min`, `max`, `step`, `unit`
 - Supporta unit selector (MB/GB per file size)
 - Warning per valori estremi
 
 #### Step 3.3: Refactorare `GlobalSettingsTab.svelte`
+
 - Da 855 righe a ~300 righe
 - Usa composizione di `SettingToggle`, `SettingNumber`, `SettingSelect`, `SettingSearchSelect`
 - Mantiene logica di categoria e lock/unlock
@@ -198,6 +316,7 @@ export * from './types';
 ### FASE 4: Riorganizzazione File (1h)
 
 #### Step 4.1: Spostare file in cartelle corrette
+
 ```bash
 # Da root components/ a ui/
 mv FuzzySelect.svelte → DEPRECATO (sostituito da SearchSelect)
@@ -214,16 +333,18 @@ mv settings/*.Tab.svelte → settings/tabs/
 ```
 
 #### Step 4.2: Aggiornare tutti gli import
+
 - Usare regex per find/replace in tutto il frontend
 - Pattern: `from '$lib/components/FuzzySelect'` → `from '$lib/components/ui/select'`
 
 #### Step 4.3: Creare file index.ts per export puliti
+
 ```typescript
 // lib/components/ui/index.ts
 export * from './select';
-export { default as AnimatedBackground } from './AnimatedBackground.svelte';
-export { default as ThemeToggle } from './ThemeToggle.svelte';
-export { default as Tooltip } from './Tooltip.svelte';
+export {default as AnimatedBackground} from './AnimatedBackground.svelte';
+export {default as ThemeToggle} from './ThemeToggle.svelte';
+export {default as Tooltip} from './Tooltip.svelte';
 ```
 
 ---
@@ -231,13 +352,16 @@ export { default as Tooltip } from './Tooltip.svelte';
 ### FASE 5: Test e Validazione (2h)
 
 #### Step 5.1: Eseguire test esistenti
+
 ```bash
 ./dev.py test front all
 ```
+
 - Tutti i 51+ test devono passare
 - Fix eventuali regressioni
 
 #### Step 5.2: Aggiungere test specifici per Select
+
 ```typescript
 // e2e/components.spec.ts (NEW)
 test.describe('Select Components', () => {
@@ -249,15 +373,18 @@ test.describe('Select Components', () => {
 ```
 
 #### Step 5.3: Test Settings con nuovi componenti
+
 - Verificare `GlobalSettingsTab` con componenti refactorati
 - Verificare `PreferencesTab` con nuovi Select
 - Verificare persistenza valori
 
 #### Step 5.4: Verificare build e check
+
 ```bash
 ./dev.py front build
 ./dev.py front check
 ```
+
 - Zero warning TypeScript
 - Zero warning Svelte
 
@@ -265,53 +392,53 @@ test.describe('Select Components', () => {
 
 ## 📁 File da Creare
 
-| File | Descrizione | Righe stimate |
-|------|-------------|---------------|
-| `ui/select/types.ts` | Interfacce comuni | ~30 |
-| `ui/select/BaseDropdown.svelte` | Logica dropdown pura | ~80 |
-| `ui/select/SimpleSelect.svelte` | Select senza ricerca | ~120 |
-| `ui/select/SearchSelect.svelte` | Select con ricerca | ~150 |
-| `ui/select/index.ts` | Re-export | ~10 |
-| `settings/fields/SettingToggle.svelte` | Toggle boolean | ~80 |
-| `settings/fields/SettingNumber.svelte` | Input numerico | ~120 |
-| `settings/fields/index.ts` | Re-export | ~15 |
-| `e2e/components.spec.ts` | Test componenti | ~100 |
+| File                                   | Descrizione          | Righe stimate |
+|----------------------------------------|----------------------|---------------|
+| `ui/select/types.ts`                   | Interfacce comuni    | ~30           |
+| `ui/select/BaseDropdown.svelte`        | Logica dropdown pura | ~80           |
+| `ui/select/SimpleSelect.svelte`        | Select senza ricerca | ~120          |
+| `ui/select/SearchSelect.svelte`        | Select con ricerca   | ~150          |
+| `ui/select/index.ts`                   | Re-export            | ~10           |
+| `settings/fields/SettingToggle.svelte` | Toggle boolean       | ~80           |
+| `settings/fields/SettingNumber.svelte` | Input numerico       | ~120          |
+| `settings/fields/index.ts`             | Re-export            | ~15           |
+| `e2e/components.spec.ts`               | Test componenti      | ~100          |
 
 **Totale nuove righe**: ~700
 
 ## 📁 File da Modificare
 
-| File | Modifiche | Riduzione righe |
-|------|-----------|-----------------|
-| `LanguageSelector.svelte` | Usa SimpleSelect | 84 → 60 |
-| `BrokerSelect.svelte` | Usa SearchSelect | 490 → 100 |
-| `ImportPluginSelect.svelte` | Usa SearchSelect | 69 → 80 |
-| `SettingSelect.svelte` | Usa SimpleSelect | 101 → 60 |
-| `SettingCurrency.svelte` | Usa SearchSelect | 99 → 60 |
-| `GlobalSettingsTab.svelte` | Usa Setting* components | 855 → 300 |
+| File                        | Modifiche               | Riduzione righe |
+|-----------------------------|-------------------------|-----------------|
+| `LanguageSelector.svelte`   | Usa SimpleSelect        | 84 → 60         |
+| `BrokerSelect.svelte`       | Usa SearchSelect        | 490 → 100       |
+| `ImportPluginSelect.svelte` | Usa SearchSelect        | 69 → 80         |
+| `SettingSelect.svelte`      | Usa SimpleSelect        | 101 → 60        |
+| `SettingCurrency.svelte`    | Usa SearchSelect        | 99 → 60         |
+| `GlobalSettingsTab.svelte`  | Usa Setting* components | 855 → 300       |
 
 **Riduzione totale**: ~1000 righe eliminate
 
 ## 📁 File da Eliminare/Deprecare
 
-| File | Motivo |
-|------|--------|
-| `FuzzySelect.svelte` | Sostituito da SearchSelect |
+| File                     | Motivo                     |
+|--------------------------|----------------------------|
+| `FuzzySelect.svelte`     | Sostituito da SearchSelect |
 | `ui/CustomSelect.svelte` | Sostituito da SimpleSelect |
 
 ---
 
 ## ⏱️ Stima Tempo
 
-| Fase | Descrizione | Tempo |
-|------|-------------|-------|
-| Fase 1 | Infrastruttura Base Select | 2h |
-| Fase 2 | Migrazione Select Consumer | 2h |
-| Fase 3 | Setting Fields Components | 2h |
-| Fase 4 | Riorganizzazione File | 1h |
-| Fase 5 | Test e Validazione | 2h |
-| Buffer | Imprevisti | 1h |
-| **Totale** | | **~10h** |
+| Fase       | Descrizione                | Tempo    |
+|------------|----------------------------|----------|
+| Fase 1     | Infrastruttura Base Select | 2h       |
+| Fase 2     | Migrazione Select Consumer | 2h       |
+| Fase 3     | Setting Fields Components  | 2h       |
+| Fase 4     | Riorganizzazione File      | 1h       |
+| Fase 5     | Test e Validazione         | 2h       |
+| Buffer     | Imprevisti                 | 1h       |
+| **Totale** |                            | **~10h** |
 
 ---
 
@@ -337,6 +464,7 @@ test.describe('Select Components', () => {
 ## 📝 Note Tecniche
 
 ### Svelte 5 Snippet Pattern
+
 ```svelte
 <!-- SearchSelect.svelte -->
 <script lang="ts">
@@ -363,6 +491,7 @@ test.describe('Select Components', () => {
 ```
 
 ### Esempio Uso con Snippet
+
 ```svelte
 <!-- Uso in BrokerSelect -->
 <SearchSelect {options} bind:value>
@@ -402,8 +531,10 @@ test.describe('Select Components', () => {
 ```
 
 ### Compatibilità ECharts
+
 - ECharts è vanilla JS, funziona con Svelte 5 senza problemi
 - Pattern: `echarts.init(container)` in `$effect`
+
 ```svelte
 <script lang="ts">
     import * as echarts from 'echarts';
