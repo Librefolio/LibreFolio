@@ -1,49 +1,60 @@
+<!--
+  SettingToggle.svelte - Svelte 5
+
+  Boolean toggle setting with inline actions (save, undo, reset).
+  Extracts the toggle pattern from GlobalSettingsTab for reuse.
+-->
 <script lang="ts">
-    /**
-     * SettingSelect.svelte - Svelte 5
-     * Select dropdown setting with inline actions (like GlobalSettingsTab)
-     * Uses SimpleSelect for better mobile support
-     */
     import { _ } from '$lib/i18n';
     import { Save, Undo, RotateCcw } from 'lucide-svelte';
-    import { SimpleSelect, type SelectOption } from '$lib/components/ui/select';
     import type { Component } from 'svelte';
 
     interface Props {
-        value: string;
-        options?: SelectOption[];
+        /** Current value as boolean */
+        value: boolean;
+        /** Field label */
         label: string;
+        /** Optional hint text */
         hint?: string;
+        /** Optional icon component */
         icon?: Component | null;
+        /** Whether field has been modified */
         isModified?: boolean;
+        /** Whether value differs from default */
         isNonDefault?: boolean;
+        /** Whether field is locked/read-only */
         isLocked?: boolean;
-        loading?: boolean;
+        /** Saving in progress */
+        isSaving?: boolean;
+        /** Save callback */
         onsave?: () => void;
+        /** Undo callback */
         onundo?: () => void;
+        /** Reset to default callback */
         onreset?: () => void;
-        onchange?: (value: string) => void;
+        /** Change callback */
+        onchange?: (value: boolean) => void;
     }
 
     let {
-        value = $bindable(''),
-        options = [],
+        value = $bindable(false),
         label,
         hint = '',
         icon = null,
         isModified = false,
         isNonDefault = false,
         isLocked = false,
-        loading = false,
+        isSaving = false,
         onsave,
         onundo,
         onreset,
         onchange
     }: Props = $props();
 
-    function handleChange(newValue: string) {
-        value = newValue;
-        onchange?.(newValue);
+    function toggle() {
+        if (isLocked) return;
+        value = !value;
+        onchange?.(value);
     }
 </script>
 
@@ -62,8 +73,8 @@
         {/if}
     </div>
 
-    <!-- Right: Actions + Select - On mobile, full width aligned right -->
-    <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto">
+    <!-- Right: Actions + Toggle -->
+    <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
         <!-- Action buttons (only when unlocked and modified/non-default) -->
         {#if !isLocked}
             <div class="flex items-center space-x-1">
@@ -71,7 +82,8 @@
                     <button
                         type="button"
                         onclick={() => onsave?.()}
-                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                        disabled={isSaving}
+                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
                         title={$_('common.save')}
                     >
                         <Save size={14}/>
@@ -98,16 +110,23 @@
             </div>
         {/if}
 
-        <!-- SimpleSelect dropdown - responsive width -->
-        <div class="w-40 sm:w-48">
-            <SimpleSelect
-                bind:value
-                {options}
-                placeholder={$_('common.select')}
-                disabled={isLocked}
-                {loading}
-                onchange={handleChange}
-            />
-        </div>
+        <!-- Toggle Switch -->
+        <button
+            type="button"
+            disabled={isLocked}
+            aria-label="Toggle {label}"
+            onclick={toggle}
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                   {value ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}
+                   {isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
+        >
+            <span
+                class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                       {value ? 'translate-x-6' : 'translate-x-1'}"
+            ></span>
+        </button>
+        <span class="text-sm text-gray-600 dark:text-gray-400 w-10">
+            {value ? 'ON' : 'OFF'}
+        </span>
     </div>
 </div>

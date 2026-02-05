@@ -1,27 +1,50 @@
 <script lang="ts">
     /**
-     * ImportPluginSelect - Reusable dropdown for selecting import plugins
-     *
-     * Loads available plugins from the API and displays them in a select.
-     * Can be used in broker forms and transaction import forms.
+     * ImportPluginSelect - Svelte 5
+     * Reusable dropdown for selecting import plugins.
+     * Uses SearchSelect with broker icons for better UX.
      */
-    import {onMount} from 'svelte';
-    import {_} from '$lib/i18n';
-    import {zodiosApi} from '$lib/api';
-    import type {BrimPlugin} from '$lib/types';
+    import { _ } from '$lib/i18n';
+    import { zodiosApi } from '$lib/api';
+    import { SearchSelect, type SelectOption } from '$lib/components/ui/select';
+    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import type { BrimPlugin } from '$lib/types';
 
-    // Props
-    export let value: string = '';
-    export let disabled: boolean = false;
-    export let placeholder: string = '';
+    interface Props {
+        value?: string;
+        disabled?: boolean;
+        placeholder?: string;
+        onchange?: (value: string) => void;
+    }
 
-    let plugins: BrimPlugin[] = [];
-    let loading = true;
-    let error: string | null = null;
+    let {
+        value = $bindable(''),
+        disabled = false,
+        placeholder = '',
+        onchange
+    }: Props = $props();
 
-    // Load plugins on mount
-    onMount(async () => {
-        await loadPlugins();
+    let plugins = $state<BrimPlugin[]>([]);
+    let loading = $state(true);
+    let error = $state<string | null>(null);
+
+    // Convert plugins to SelectOption format with icon_url in data
+    let pluginOptions = $derived<SelectOption[]>(
+        plugins.map(p => ({
+            value: p.code,
+            label: p.name,
+            searchText: p.description,
+            icon: p.icon_url || undefined,
+            data: p
+        }))
+    );
+
+    // Get selected plugin info
+    let selectedPlugin = $derived(plugins.find(p => p.code === value));
+
+    // Load plugins on component initialization
+    $effect(() => {
+        loadPlugins();
     });
 
     async function loadPlugins() {
@@ -39,23 +62,49 @@
         }
     }
 
-    // Get selected plugin info
-    $: selectedPlugin = plugins.find(p => p.id === value);
+    function handleChange(newValue: string) {
+        value = newValue;
+        onchange?.(newValue);
+    }
 </script>
 
 <div class="import-plugin-select">
-    <select
-            bind:value
-            {disabled}
-            class="w-full px-3 py-2 border rounded-lg
-                   focus:ring-2 focus:ring-libre-green focus:border-libre-green
-                   transition-colors disabled:opacity-50 disabled:bg-gray-100"
+    <SearchSelect
+        bind:value
+        options={pluginOptions}
+        placeholder={placeholder || $_('brokers.selectPlugin')}
+        {disabled}
+        {loading}
+        inlineSearch={true}
+        onchange={handleChange}
     >
-        <option value="">{placeholder || $_('brokers.selectPlugin')}</option>
-        {#each plugins as plugin}
-            <option value={plugin.id}>{plugin.name}</option>
-        {/each}
-    </select>
+        {#snippet item(option)}
+            {@const plugin = option.data as BrimPlugin | undefined}
+            <div class="flex items-center gap-2">
+                <BrokerIcon
+                    iconUrl={option.icon}
+                    altText={option.label}
+                    size="sm"
+                />
+                <div class="min-w-0 flex-1">
+                    <div class="text-sm font-medium">{option.label}</div>
+                    {#if plugin?.description}
+                        <div class="text-xs text-gray-500 truncate">{plugin.description}</div>
+                    {/if}
+                </div>
+            </div>
+        {/snippet}
+        {#snippet selectedItem(option)}
+            <div class="flex items-center gap-2">
+                <BrokerIcon
+                    iconUrl={option.icon}
+                    altText={option.label}
+                    size="sm"
+                />
+                <span class="truncate">{option.label}</span>
+            </div>
+        {/snippet}
+    </SearchSelect>
 
     {#if loading}
         <p class="text-xs text-gray-400 mt-1">{$_('common.loading')}</p>

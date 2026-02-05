@@ -80,6 +80,7 @@ html.light {
 
 /* Dark theme */
 html.dark {
+    --color-libre-green: #00d681;
     --theme-bg-primary: #0f172a;
     --theme-bg-secondary: #1e293b;
     --theme-bg-tertiary: #334155;
@@ -224,7 +225,6 @@ html.dark .shadow-xl {
 html.dark .bg-libre-green {
     background-color: #166534 !important; /* Darker green for better contrast */
 }
-
 
 /* Dark mode: AnimatedBackground (login page) */
 html.dark .animated-bg-gradient {

@@ -6,7 +6,7 @@
     import {onMount} from 'svelte';
     import {debug} from '$lib/debug';
     import {Coins, Globe, Palette} from 'lucide-svelte';
-    import type {SelectOption} from '$lib/components/FuzzySelect.svelte';
+    import type {SelectOption} from '$lib/components/ui/select';
     import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
     import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
     import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
@@ -58,8 +58,8 @@
     let currenciesLoading = true;
 
     // Language options
-    const languageOptions = LANGUAGE_OPTIONS.map(l => ({
-        code: l.code,
+    const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map(l => ({
+        value: l.code,
         label: l.name,
         icon: l.flag
     }));
@@ -122,7 +122,7 @@
         try {
             const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
             currencyOptions = response.currencies.map(c => ({
-                code: c.code,
+                value: c.code,
                 label: c.name,
                 icon: c.symbol !== c.code ? c.symbol : undefined
             }));
@@ -304,13 +304,12 @@
                 options={languageOptions}
                 label={$_('settings.language')}
                 hint={$_('settings.languageHint')}
-                icon={Globe}
                 isModified={languageModified}
                 isNonDefault={languageNonDefault}
                 isLocked={false}
-                on:save={() => saveField('language')}
-                on:undo={() => undoField('language')}
-                on:reset={() => resetField('language')}
+                onsave={() => saveField('language')}
+                onundo={() => undoField('language')}
+                onreset={() => resetField('language')}
             />
             </div>
         {/if}
@@ -323,14 +322,13 @@
                 options={currencyOptions}
                 label={$_('settings.defaultCurrency')}
                 hint={$_('settings.defaultCurrencyHint')}
-                icon={Coins}
                 isModified={currencyModified}
                 isNonDefault={currencyNonDefault}
                 isLocked={false}
                 loading={currenciesLoading}
-                on:save={() => saveField('default_currency')}
-                on:undo={() => undoField('default_currency')}
-                on:reset={() => resetField('default_currency')}
+                onsave={() => saveField('default_currency')}
+                onundo={() => undoField('default_currency')}
+                onreset={() => resetField('default_currency')}
             />
             </div>
         {/if}

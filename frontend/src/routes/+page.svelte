@@ -73,8 +73,8 @@
     <div class="min-h-screen flex items-center justify-center p-4" data-testid="login-page">
         <!-- Language & Theme Selector (top right) -->
         <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
-            <LanguageSelector variant="dropdown"/>
-            <ThemeToggle />
+            <LanguageSelector/>
+            <ThemeToggle/>
         </div>
 
         <!-- Modal Container - Cambio istantaneo senza transizione -->
@@ -86,13 +86,9 @@
                     on:gotoForgot={handleGotoForgot}
             />
         {:else if currentView === 'register'}
-            <RegisterModal
-                    on:gotoLogin={handleGotoLogin}
-            />
+            <RegisterModal on:gotoLogin={handleGotoLogin}/>
         {:else if currentView === 'forgot-password'}
-            <ForgotPasswordModal
-                    on:gotoLogin={handleGotoLoginSimple}
-            />
+            <ForgotPasswordModal on:gotoLogin={handleGotoLoginSimple}/>
         {/if}
     </div>
 {/if}

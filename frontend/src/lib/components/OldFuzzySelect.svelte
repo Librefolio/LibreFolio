@@ -1,5 +1,8 @@
 <script lang="ts" module>
     /**
+     * @deprecated Use SearchSelect from '$lib/components/ui/select' instead.
+     * This component will be removed in a future version.
+     *
      * FuzzySelect - A reusable searchable dropdown component
      *
      * Works with any data source that provides items with:

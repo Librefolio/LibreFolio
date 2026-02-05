@@ -29,7 +29,7 @@
 <div class="relative" bind:this={menuRef}>
     <button
             on:click={toggleMenu}
-            class="flex items-center space-x-1 p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-gray-900"
+            class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-gray-600 dark:text-gray-300"
             title={$_('help.helpAndSupport')}
     >
         <HelpCircle size={20}/>
