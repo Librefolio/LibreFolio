@@ -1,9 +1,10 @@
 # Phase 4: Brokers Management
 
 **Status**: 🔄 IN PROGRESS  
-**Durata**: 3 giorni  
+**Durata**: 3 giorni (pianificato)
 **Priorità**: P0 (MVP)
 **Dipendenze**: Phase 3
+**Ultimo aggiornamento**: 6 Febbraio 2026
 
 ---
 

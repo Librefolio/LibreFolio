@@ -1,8 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 3 Febbraio 2026  
-**Status**: ✅ COMPLETED (Gallery + Settings Mobile completati)
+**Ultimo aggiornamento**: 6 Febbraio 2026  
+**Status**: 🔄 IN PROGRESS (Step 4.4 Data Separation completato)
 
 ---
 
@@ -53,17 +53,25 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Build check automatico prima dei test
     - Gallery screenshot per documentazione (28/28 test pass, ~224 screenshots)
 
-8. **DB Populate Enhancement** ✅ NUOVO (3 Feb 2026)
+9. **DB Populate Enhancement** ✅ NUOVO (3 Feb 2026)
     - 6 broker con `brim_plugin_key` e `BrokerUserAccess`
     - 9 asset (stocks, ETFs, crypto, loans)
     - 24 transazioni realistiche
     - Price history per crypto (24/7, no weekend skip)
 
-9. **Settings Mobile Layout** ✅ NUOVO (3 Feb 2026)
+10. **Settings Mobile Layout** ✅ NUOVO (3 Feb 2026)
     - Dropdown custom per category selector
     - Layout 3 righe per ogni setting
     - CustomSelect component per select semplici
     - FuzzySelect per select con ricerca
+
+11. **Data Separation prod/test** ✅ NUOVO (6 Feb 2026)
+    - Separazione completa cartelle dati `backend/data/prod/` e `backend/data/test/`
+    - `get_data_dir()` centralizzato in `config.py` per gestione path
+    - `ensure_data_dirs()` crea struttura all'avvio
+    - Tutti i servizi (BRIM, uploads, logging) usano path dinamico
+    - Test isolati non inquinano dati produzione
+    - Script migrazione `scripts/migrate_data_structure.py`
 
 ---
 
@@ -148,6 +156,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | `plan-settings-mobile-gallery.md`          | Settings mobile + Gallery improvements     | ✅ COMPLETATO |
 | `plan-componentReorganizationV2.prompt.md` | Famiglia Select unificata + Svelte 5 runes | ✅ COMPLETATO |
 | `plan-componentReorganizationV3-cleanup.md`| Cleanup + test E2E Select components       | ✅ COMPLETATO |
+| `plan-data-separation.md`                  | Separazione cartelle dati prod/test        | ✅ COMPLETATO |
 
 ### Reference Docs (in `phases/phase-04-subplan/`)
 
@@ -159,7 +168,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 | File                                      | Descrizione                                          | Priorità       |
 |-------------------------------------------|------------------------------------------------------|----------------|
-| `plan-data-separation.md`                 | Separazione cartelle dati prod/test                  | 🔜 PROSSIMO    |
+| `plan-ui-fixes.md`                        | Bug UI scoperti durante test data separation         | 🔜 PROSSIMO    |
 | `plan-image-crop.md`                      | Componente crop immagini con cropperjs               | 📋 ALTA        |
 | `plan-frontendDevelopment.prompt.md`      | Linee guida sviluppo frontend                        | Riferimento    |
 
@@ -244,46 +253,63 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - ✅ 16 nuovi test E2E per componenti Select
 - ✅ Tutti i test passano (6/6 suite, 67+ test)
 
-### Step 4.4: Data Separation prod/test 📋 PROSSIMO
+### Step 4.4: Data Separation prod/test ✅ COMPLETATO
 
-**Riferimento**: `plan-data-separation.md`
+**Riferimento**: `phases/phase-04-subplan/plan-data-separation.md`
 
-**Priorità**: ALTA - Prerequisito per test affidabili
+**Lavoro completato (6 Feb 2026)**:
 
-### Step 4.5: Image Crop Component 📋 PRIORITÀ ALTA
+- ✅ Nuova struttura `backend/data/prod/` e `backend/data/test/`
+- ✅ `config.py`: `get_data_dir()`, `get_uploads_dir()`, `ensure_data_dirs()`
+- ✅ `brim_provider.py`: usa `get_broker_reports_dir()` dinamico
+- ✅ `static_uploads.py`: usa `get_uploads_dir()` dinamico
+- ✅ `logging_config.py`: logs in `{data_dir}/logs/`
+- ✅ `check_constraints_hook.py`: rispetta `LIBREFOLIO_TEST_MODE`
+- ✅ `.gitignore` aggiornato per nuova struttura
+- ✅ Script migrazione `scripts/migrate_data_structure.py`
+- ✅ Tutti i test passano (8/8 categorie)
+- ✅ Verifica manuale: dati prod/test completamente isolati
+
+### Step 4.5: UI Fixes Post Data-Separation 📋 PROSSIMO
+
+**Riferimento**: `plan-ui-fixes.md`
+
+Bug scoperti durante test manuali della data separation:
+- User preferences non applicate al login (lingua, tema)
+- Base currency non usata come default in broker creation modal
+- BRIM upload modal: no scroll con molti file
+- Files page: colonna broker non auto-aggiunta
+
+### Step 4.6: Image Crop Component 📋 PRIORITÀ ALTA
 
 **Riferimento**: `plan-image-crop.md`
 
 **Priorità**: ALTA - Necessario per upload avatar/icone
 
-### Step 4.6: MkDocs Dark Mode (30 min) 🔲
+### Step 4.7: MkDocs Dark Mode (30 min) 🔲
 
-### Step 4.7: GDPR Permissions Analysis (planning only) ⏸️
+### Step 4.8: GDPR Permissions Analysis (planning only) ⏸️
 
 ---
 
 ## 🎯 Prossimi Passi Immediati
 
-**Phase 4 COMPLETA!** ✅ Tutti i test passano, gallery completa, test E2E coprono tutti i flussi principali.
+**Phase 4 IN PROGRESS** - Step 4.4 Data Separation completato, restano UI fixes e Image Crop.
 
-### ✅ Test E2E Completati (3 Feb 2026)
+### ✅ Step Completati
 
-1. ✅ **File upload** - Upload + clear con file da samples BRIM
-2. ✅ **Broker CRUD completo** - Create → Edit → Delete
-3. ✅ **Preferences persistence** - F5/reload + goto
+1. ✅ **Data Separation** (6 Feb 2026) - Cartelle prod/test isolate, 8/8 test passano
+2. ✅ **Component Reorganization** (5 Feb 2026) - Famiglia Select, 67+ test E2E
+3. ✅ **Settings Mobile + Gallery** (3 Feb 2026) - Layout responsive, 224 screenshots
+4. ✅ **E2E Test Remediation** (2 Feb 2026) - 51 test, data-testid
 
-### 🔜 Prossimi Step (Pre-Phase 5)
+### 🔜 Prossimi Step
 
-Questi step sono **fondamentali** prima di procedere con Phase 5:
+1. **UI Fixes** (`plan-ui-fixes.md`) - ~2h 📋 PROSSIMO
+   - Bug scoperti durante test data separation
+   - User preferences al login, modal scroll, etc.
 
-1. ~~**Component Reorganization V2**~~ ✅ COMPLETATO (5 Feb 2026)
-
-2. **Data Separation** (`plan-data-separation.md`) - ~2h 📋 PROSSIMO
-   - Separare cartelle dati prod/test
-   - Evitare conflitti tra ambienti
-   - Prerequisito per test affidabili
-
-3. **Image Crop Component** (`plan-image-crop.md`) - ~2h
+2. **Image Crop Component** (`plan-image-crop.md`) - ~2h
    - Componente crop immagini con cropperjs
    - Necessario per upload avatar/icone
 

@@ -67,34 +67,27 @@ def is_check_constraints_eq(cc1: CheckColumnConstraint, cc2: CheckColumnConstrai
 def get_engine_for_check():
     """Get engine respecting DATABASE_URL environment variable if set.
 
-    This function carefully avoids importing anything that might create
-    the default database (app.db) when we want to work with a test database.
+    This function uses get_data_dir() from config.py to ensure consistent
+    path resolution for both prod and test environments.
+
+    Priority:
+    1. ALEMBIC_DATABASE_URL (explicit override from dev.sh)
+    2. get_data_dir() based on LIBREFOLIO_TEST_MODE
+    3. DATABASE_URL from environment
+    4. DATABASE_URL from .env file
+    5. Fallback to prod database path via get_data_dir()
     """
+    from backend.app.config import get_data_dir
+
     # Check for custom override first (won't be overridden by .env loading)
     # This is set by dev.sh when specifying a non-default database
     database_url = os.environ.get("ALEMBIC_DATABASE_URL")
 
     if not database_url:
-        # Fall back to DATABASE_URL from environment
-        database_url = os.environ.get("DATABASE_URL")
-
-    if not database_url:
-        # Load from .env file manually to avoid importing Settings
-        # (which might trigger other imports that create app.db)
-        env_file = Path(__file__).parent.parent.parent / ".env"
-        if env_file.exists():
-            with open(env_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        key, value = line.split("=", 1)
-                        if key.strip() == "DATABASE_URL":
-                            database_url = value.strip().strip('"').strip("'")
-                            break
-
-        # Fallback to hardcoded default if not found
-        if not database_url:
-            database_url = "sqlite:///./backend/data/sqlite/app.db"
+        # Use get_data_dir() which respects LIBREFOLIO_TEST_MODE
+        data_dir = get_data_dir()
+        db_path = data_dir / "sqlite" / "app.db"
+        database_url = f"sqlite:///{db_path}"
 
     # Always create a new engine (never import existing one)
     # This prevents unintended database file creation
