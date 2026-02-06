@@ -111,10 +111,10 @@ def cmd_server(args):
 
     if test_mode:
         port = get_test_server_port()
-        db = get_test_database_path()
+        db = get_database_path(test_mode=True)
     else:
         port = get_server_port()
-        db = get_database_path()
+        db = get_database_path(test_mode=False)
 
     # Check if port is already in use
     processes_using_port = check_port_in_use(port)

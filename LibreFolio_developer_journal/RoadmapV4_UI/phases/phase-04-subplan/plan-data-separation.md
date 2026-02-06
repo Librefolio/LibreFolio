@@ -1,8 +1,11 @@
 # Migration Plan: Data Directory Separation (prod/test)
 
 **Data creazione**: 2026-01-26  
+**Completato**: 2026-02-06  
+**Status**: ✅ COMPLETATO
 **Priorità**: Media (da fare dopo completamento BRIM multiuser)  
 **Stima**: 2-4 ore
+**Tempo effettivo**: ~3 ore
 
 ---
 
@@ -319,38 +322,38 @@ backend/data/test/brim/**/*
 
 ### Setup Struttura
 
-- [ ] Creare struttura directory prod/test
-- [ ] Aggiungere .gitkeep in tutte le cartelle
-- [ ] Aggiornare .gitignore
+- [x] Creare struttura directory prod/test
+- [x] Aggiungere .gitkeep in tutte le cartelle
+- [x] Aggiornare .gitignore
 
 ### Backend
 
-- [ ] Modificare config.py con DATA_DIR
-- [ ] Creare helper paths.py
-- [ ] Aggiornare static_uploads.py
-- [ ] Aggiornare brim_provider.py
-- [ ] Aggiornare database URL construction
-- [ ] Aggiornare alembic.ini/env.py
-- [ ] Chiamare ensure_data_dirs() all'avvio
+- [x] Modificare config.py con DATA_DIR
+- [x] Creare helper ensure_data_dirs() in config.py
+- [x] Aggiornare static_uploads.py
+- [x] Aggiornare brim_provider.py
+- [x] Aggiornare database URL construction
+- [x] Aggiornare check_constraints_hook.py
+- [x] Aggiornare logging_config.py
+- [x] Chiamare ensure_data_dirs() all'avvio (main.py)
 
 ### Test Infrastructure
 
-- [ ] Aggiornare test_server_helper.py
-- [ ] Aggiornare conftest.py se necessario
-- [ ] Verificare tutti i test passano
+- [x] Aggiornare test_db_config.py
+- [x] Aggiornare cli_base.py
+- [x] Verificare tutti i test passano (8/8 categorie)
 
 ### Scripts & Dev
 
-- [ ] Aggiungere `--data` e `--port` a dev.py
-- [ ] Aggiornare .env.example
-- [ ] Creare script migration dati
-- [ ] Testare combinazioni di flags
+- [x] Aggiornare dev.py per usare get_database_path()
+- [x] Creare script migration dati (scripts/migrate_data_structure.py)
+- [x] Testare ./dev.py server (prod)
+- [x] Testare ./dev.py server --test (test)
 
 ### Documentation
 
-- [ ] Aggiornare README
-- [ ] Documentare nuova struttura
-- [ ] Documentare flags CLI
+- [x] Aggiornare plan-phase04-summary.md
+- [x] Creare plan-ui-fixes.md per bug trovati durante test
 
 ---
 

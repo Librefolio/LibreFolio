@@ -86,19 +86,52 @@ def get_test_server_port() -> int:
 # Database Configuration
 # =============================================================================
 
-def get_database_path() -> str:
-    """Get production database path from environment variable."""
-    db_url = os.environ.get("DATABASE_URL", "sqlite:///./backend/data/sqlite/app.db")
-    # Extract path from URL (remove sqlite:///./  or sqlite:///)
-    path = db_url.replace("sqlite:///./", "").replace("sqlite:///", "")
-    return path
+# Default data directories (relative to project root)
+DEFAULT_PROD_DATA_DIR = "backend/data/prod"
+DEFAULT_TEST_DATA_DIR = "backend/data/test"
+
+
+def get_data_dir(test_mode: bool = False) -> Path:
+    """
+    Get the data directory based on mode.
+
+    Args:
+        test_mode: If True, return test data directory
+
+    Returns:
+        Path to data directory
+    """
+    if test_mode:
+        return get_project_root() / DEFAULT_TEST_DATA_DIR
+
+    # Check for custom data dir in env (only for prod mode)
+    env_data_dir = os.environ.get("LIBREFOLIO_DATA_DIR")
+    if env_data_dir:
+        path = Path(env_data_dir)
+        if not path.is_absolute():
+            path = get_project_root() / path
+        return path
+
+    return get_project_root() / DEFAULT_PROD_DATA_DIR
+
+
+def get_database_path(test_mode: bool = False) -> str:
+    """
+    Get database path based on mode.
+
+    Args:
+        test_mode: If True, return test database path
+
+    Returns:
+        Relative path to database file
+    """
+    data_dir = get_data_dir(test_mode)
+    return str(data_dir / "sqlite" / "app.db")
 
 
 def get_test_database_path() -> str:
-    """Get test database path from environment variable."""
-    db_url = os.environ.get("TEST_DATABASE_URL", "sqlite:///./backend/data/sqlite/test_app.db")
-    path = db_url.replace("sqlite:///./", "").replace("sqlite:///", "")
-    return path
+    """Get test database path (convenience wrapper)."""
+    return get_database_path(test_mode=True)
 
 
 def path_to_url(db_path: str) -> str:

@@ -39,7 +39,6 @@ from typing import List, Tuple, Optional, Dict, Any
 import structlog
 from sqlalchemy import select, and_
 
-from backend.app.config import PROJECT_ROOT
 from backend.app.db.models import Transaction
 from backend.app.schemas.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import BRIMAssetCandidate, BRIMMatchConfidence
@@ -365,8 +364,12 @@ class BRIMProvider(ABC):
 # FILE STORAGE
 # =============================================================================
 
-# Storage directory: backend/data/broker_reports/
-BROKER_REPORTS_DIR = PROJECT_ROOT / "backend" / "data" / "broker_reports"
+from backend.app.config import get_data_dir
+
+
+def get_broker_reports_dir() -> Path:
+    """Get the broker reports directory based on current environment (prod/test)."""
+    return get_data_dir() / "broker_reports"
 
 
 def _ensure_dirs(broker_id: Optional[int] = None) -> None:
@@ -376,8 +379,9 @@ def _ensure_dirs(broker_id: Optional[int] = None) -> None:
     Args:
         broker_id: If provided, also create broker-specific subdirectories
     """
+    broker_reports_dir = get_broker_reports_dir()
     for status in BRIMFileStatus:
-        base_dir = BROKER_REPORTS_DIR / status.value
+        base_dir = broker_reports_dir / status.value
         base_dir.mkdir(parents=True, exist_ok=True)
         if broker_id is not None:
             (base_dir / f"broker_{broker_id}").mkdir(parents=True, exist_ok=True)
@@ -394,7 +398,7 @@ def _get_folder_for_status(status: BRIMFileStatus, broker_id: Optional[int] = No
     Returns:
         Path to the appropriate folder
     """
-    base = BROKER_REPORTS_DIR / status.value
+    base = get_broker_reports_dir() / status.value
     if broker_id is not None:
         return base / f"broker_{broker_id}"
     return base
@@ -508,10 +512,11 @@ def list_files(
     _ensure_dirs()
 
     # Determine status folders to scan
+    broker_reports_dir = get_broker_reports_dir()
     if status:
-        status_folders = [BROKER_REPORTS_DIR / status.value]
+        status_folders = [broker_reports_dir / status.value]
     else:
-        status_folders = [BROKER_REPORTS_DIR / s.value for s in BRIMFileStatus]
+        status_folders = [broker_reports_dir / s.value for s in BRIMFileStatus]
 
     files = []
 
@@ -603,8 +608,9 @@ def get_file_info(file_id: str) -> Optional[BRIMFileInfo]:
             logger.warning("Error reading file metadata", file_id=file_id, error=str(e))
             return None
 
+    broker_reports_dir = get_broker_reports_dir()
     for status in BRIMFileStatus:
-        status_folder = BROKER_REPORTS_DIR / status.value
+        status_folder = broker_reports_dir / status.value
 
         # Try root folder first (backward compatibility)
         meta_path = status_folder / f"{file_id}.json"
@@ -758,9 +764,10 @@ def save_parse_result(file_id: str, parse_result: dict) -> bool:
     _ensure_dirs()
 
     # Search for the metadata file in all status folders and broker subfolders
+    broker_reports_dir = get_broker_reports_dir()
     meta_path = None
     for status in BRIMFileStatus:
-        status_folder = BROKER_REPORTS_DIR / status.value
+        status_folder = broker_reports_dir / status.value
 
         # Try root folder first
         candidate = status_folder / f"{file_id}.json"
@@ -826,7 +833,8 @@ def _move_file(
     broker_id = file_info.target_broker_id
 
     # Source paths - check broker subfolder first, then root
-    src_status_folder = BROKER_REPORTS_DIR / BRIMFileStatus.UPLOADED.value
+    broker_reports_dir = get_broker_reports_dir()
+    src_status_folder = broker_reports_dir / BRIMFileStatus.UPLOADED.value
     if broker_id:
         broker_subfolder = src_status_folder / f"broker_{broker_id}"
         src_file = broker_subfolder / f"{file_id}{ext}"
@@ -840,7 +848,7 @@ def _move_file(
         src_meta = src_status_folder / f"{file_id}.json"
 
     # Target paths - keep in broker subfolder if source was there
-    dst_status_folder = BROKER_REPORTS_DIR / target_status.value
+    dst_status_folder = broker_reports_dir / target_status.value
     if broker_id:
         dst_broker_folder = dst_status_folder / f"broker_{broker_id}"
         dst_broker_folder.mkdir(parents=True, exist_ok=True)

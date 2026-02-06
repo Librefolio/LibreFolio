@@ -42,14 +42,17 @@ try:
 except ImportError:
     MAGIC_AVAILABLE = False
 
-from backend.app.config import PROJECT_ROOT
+from backend.app.config import get_data_dir
 from backend.app.schemas.uploads import UploadFileInfo
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
 
-# Storage directory
-UPLOADS_DIR = PROJECT_ROOT / "backend" / "data" / "custom-uploads"
+
+def get_uploads_dir() -> Path:
+    """Get the uploads directory based on current environment (prod/test)."""
+    return get_data_dir() / "custom-uploads"
+
 
 # Blocked MIME types (executables, scripts)
 BLOCKED_MIME_TYPES = {
@@ -121,7 +124,7 @@ class UploadSecurityError(Exception):
 
 def _ensure_dir() -> None:
     """Create storage directory if it doesn't exist."""
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    get_uploads_dir().mkdir(parents=True, exist_ok=True)
 
 
 def _get_file_url(file_id: str) -> str:
@@ -131,7 +134,7 @@ def _get_file_url(file_id: str) -> str:
 
 def _load_metadata(file_id: str) -> Optional[dict]:
     """Load metadata from JSON sidecar."""
-    meta_path = UPLOADS_DIR / f"{file_id}.json"
+    meta_path = get_uploads_dir() / f"{file_id}.json"
     if not meta_path.exists():
         return None
     try:
@@ -143,7 +146,7 @@ def _load_metadata(file_id: str) -> Optional[dict]:
 
 def _save_metadata(file_id: str, metadata: dict) -> None:
     """Save metadata to JSON sidecar."""
-    meta_path = UPLOADS_DIR / f"{file_id}.json"
+    meta_path = get_uploads_dir() / f"{file_id}.json"
     meta_path.write_text(json.dumps(metadata, indent=2, default=str))
 
 
@@ -288,7 +291,7 @@ def save_upload(
     ext = Path(original_filename).suffix.lower() or ".bin"
 
     # Write file
-    file_path = UPLOADS_DIR / f"{file_id}{ext}"
+    file_path = get_uploads_dir() / f"{file_id}{ext}"
     file_path.write_bytes(content)
 
     # Create metadata (use validated MIME type)
@@ -329,7 +332,8 @@ def list_uploads(user_id: Optional[int] = None) -> Tuple[List[UploadFileInfo], i
     _ensure_dir()
 
     files = []
-    for meta_path in UPLOADS_DIR.glob("*.json"):
+    uploads_dir = get_uploads_dir()
+    for meta_path in uploads_dir.glob("*.json"):
         metadata = _load_metadata(meta_path.stem)
         if metadata:
             # Filter by user if requested
@@ -338,7 +342,7 @@ def list_uploads(user_id: Optional[int] = None) -> Tuple[List[UploadFileInfo], i
 
             # Check that actual file exists
             ext = metadata.get("extension", "")
-            file_path = UPLOADS_DIR / f"{metadata['id']}{ext}"
+            file_path = uploads_dir / f"{metadata['id']}{ext}"
             if file_path.exists():
                 files.append(_metadata_to_info(metadata))
 
@@ -364,7 +368,7 @@ def get_upload_info(file_id: str) -> Optional[UploadFileInfo]:
 
     # Check that actual file exists
     ext = metadata.get("extension", "")
-    file_path = UPLOADS_DIR / f"{file_id}{ext}"
+    file_path = get_uploads_dir() / f"{file_id}{ext}"
     if not file_path.exists():
         return None
 
@@ -386,7 +390,7 @@ def get_upload_path(file_id: str) -> Optional[Path]:
         return None
 
     ext = metadata.get("extension", "")
-    file_path = UPLOADS_DIR / f"{file_id}{ext}"
+    file_path = get_uploads_dir() / f"{file_id}{ext}"
 
     if not file_path.exists():
         return None
@@ -426,12 +430,13 @@ def delete_upload(file_id: str) -> bool:
 
     # Delete file
     ext = metadata.get("extension", "")
-    file_path = UPLOADS_DIR / f"{file_id}{ext}"
+    uploads_dir = get_uploads_dir()
+    file_path = uploads_dir / f"{file_id}{ext}"
     if file_path.exists():
         file_path.unlink()
 
     # Delete metadata
-    meta_path = UPLOADS_DIR / f"{file_id}.json"
+    meta_path = uploads_dir / f"{file_id}.json"
     if meta_path.exists():
         meta_path.unlink()
 
