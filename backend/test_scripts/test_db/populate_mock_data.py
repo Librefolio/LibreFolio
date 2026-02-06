@@ -194,7 +194,7 @@ def populate_broker_user_access(session: Session):
             hashed_password=hash_password("E2eAdminPass123!"),
             is_active=True,
             is_admin=True,
-        )
+            )
         session.add(admin)
         session.commit()
         session.refresh(admin)
@@ -214,7 +214,7 @@ def populate_broker_user_access(session: Session):
                 user_id=admin.id,
                 broker_id=broker.id,
                 role=UserRole.OWNER,
-            )
+                )
             session.add(access)
             print(f"  ✅ {admin.username} → {broker.name} (OWNER)")
 
@@ -227,7 +227,7 @@ def populate_broker_user_access(session: Session):
                 user_id=user.id,
                 broker_id=broker.id,
                 role=role,
-            )
+                )
             session.add(access)
             print(f"  ✅ {user.username} → {broker.name} ({role.value})")
 
@@ -384,7 +384,7 @@ def populate_asset_provider_assignments(session: Session):
         ("iShares Core S&P 500 UCITS ETF", "yfinance", "SXR8.DE", IdentifierType.TICKER, None),
         ("Bitcoin", "yfinance", "BTC-USD", IdentifierType.TICKER, None),
         ("Ethereum", "yfinance", "ETH-USD", IdentifierType.TICKER, None),
-    ]
+        ]
 
     for display_name, provider_code, identifier, id_type, params in provider_configs:
         asset = session.exec(select(Asset).where(Asset.display_name == display_name)).first()

@@ -24,7 +24,7 @@ from backend.app.db.models import (
     FxRate,
     FxCurrencyPairSource,
     AssetProviderAssignment,
-)
+    )
 
 __all__ = [
     "SQLModel",
@@ -44,4 +44,4 @@ __all__ = [
     "FxRate",
     "FxCurrencyPairSource",
     "AssetProviderAssignment",
-]
+    ]

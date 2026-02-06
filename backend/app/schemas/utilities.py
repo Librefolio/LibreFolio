@@ -68,7 +68,7 @@ class CurrencyNormalizationResponse(BaseModel):
     iso_codes: List[str] = Field(..., description="List of ISO 4217 currency codes")
     match_type: str = Field(
         ..., description="Match type: exact, symbol_ambiguous, multi-match, not_found"
-    )
+        )
     error: Optional[str] = Field(None, description="Error message if normalization failed")
 
 

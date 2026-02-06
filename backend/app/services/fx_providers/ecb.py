@@ -73,7 +73,7 @@ class ECBProvider(FXRateProvider):
             "CAD",  # Canadian Dollar
             "AUD",  # Australian Dollar
             "EUR",  # Euro (base currency)
-        ]
+            ]
 
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -91,7 +91,7 @@ class ECBProvider(FXRateProvider):
             "format": "jsondata",
             "detail": "dataonly",
             "lastNObservations": 1,  # We only need structure, not all data
-        }
+            }
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -138,7 +138,7 @@ class ECBProvider(FXRateProvider):
 
     async def fetch_rates(
         self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from ECB API for given date range and currencies.
 
@@ -160,7 +160,7 @@ class ECBProvider(FXRateProvider):
         if base_currency is not None and base_currency != "EUR":
             raise ValueError(
                 f"ECB provider only supports EUR as base currency, got {base_currency}"
-            )
+                )
 
         start_date, end_date = date_range
         results = {}
@@ -177,7 +177,7 @@ class ECBProvider(FXRateProvider):
                 "format": "jsondata",
                 "startPeriod": start_date.isoformat(),
                 "endPeriod": end_date.isoformat(),
-            }
+                }
 
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
@@ -194,7 +194,7 @@ class ECBProvider(FXRateProvider):
                         logger.info(
                             f"No FX rates available for {currency} ({start_date} to {end_date}). "
                             f"This is normal for weekends/holidays when ECB doesn't publish rates."
-                        )
+                            )
                         results[currency] = []
                         continue
 
@@ -219,7 +219,7 @@ class ECBProvider(FXRateProvider):
                             dimensions = data["structure"]["dimensions"]["observation"]
                             time_periods = next(
                                 d["values"] for d in dimensions if d["id"] == "TIME_PERIOD"
-                            )
+                                )
 
                             # Iterate through observations
                             # Format: {"0": [1.0850], "1": [1.0860], ...}
@@ -236,7 +236,7 @@ class ECBProvider(FXRateProvider):
 
                                 observations.append(
                                     (rate_date, self.base_currency, currency, ecb_rate)
-                                )
+                                    )
 
                     results[currency] = observations
 

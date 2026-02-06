@@ -67,7 +67,7 @@ def ensure_database_exists():
         elif db_path.stat().st_size == 0:
             logger.warning(
                 "Database file is empty (0 bytes), running migrations", db_path=str(db_path)
-            )
+                )
             needs_migration = True
         else:
             # Check if database has tables using SQLite directly
@@ -79,23 +79,23 @@ def ensure_database_exists():
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-                )
+                    )
                 table_count = cursor.fetchone()[0]
                 conn.close()
 
                 if table_count == 0:
                     logger.warning(
                         "Database has no tables, running migrations", db_path=str(db_path)
-                    )
+                        )
                     needs_migration = True
                 else:
                     logger.info(
                         f"Database initialized with {table_count} tables", db_path=str(db_path)
-                    )
+                        )
             except sqlite3.DatabaseError as e:
                 logger.warning(
                     f"Database appears corrupted, running migrations: {e}", db_path=str(db_path)
-                )
+                    )
                 needs_migration = True
 
         if needs_migration:
@@ -112,7 +112,7 @@ def ensure_database_exists():
                     cwd=PROJECT_ROOT,
                     capture_output=True,
                     text=True,
-                )
+                    )
 
                 if result.returncode == 0:
                     logger.info("Database created and migrated successfully")
@@ -137,7 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         version=settings.VERSION,
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
         test_mode=is_test_mode(),
-    )
+        )
 
     # Ensure all data directories exist (prod or test based on mode)
     ensure_data_dirs()
@@ -174,7 +174,7 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_PREFIX}/docs",
     redoc_url=f"{settings.API_V1_PREFIX}/redoc",
     lifespan=lifespan,
-)
+    )
 
 # Configure CORS
 app.add_middleware(
@@ -183,7 +183,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
+    )
 
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
@@ -216,7 +216,7 @@ def render_docs_not_built() -> HTMLResponse:
         <pre><code>docker compose exec backend /bin/bash
 ./dev.sh info:mk build</code></pre>
         </body></html>"""
-    )
+        )
 
 
 @app.get("/mkdocs", response_class=HTMLResponse)
@@ -256,7 +256,7 @@ async def root():
         "version": settings.VERSION,
         "docs": f"{settings.API_V1_PREFIX}/docs",
         "frontend": "Not built. Run: ./dev.sh fe:build",
-    }
+        }
 
 
 # Serve frontend static assets (JS, CSS, images) if build exists
@@ -281,7 +281,7 @@ async def frontend_catchall(path: str):
         return HTMLResponse(
             "<h1>Frontend not built</h1><p>Run: ./dev.py front build</p>",
             status_code=503
-        )
+            )
 
     # Handle nested _app requests (e.g., /brokers/_app/... -> /_app/...)
     # This happens because SvelteKit uses relative paths in the HTML

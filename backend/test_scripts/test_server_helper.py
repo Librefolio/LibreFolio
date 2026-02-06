@@ -144,7 +144,7 @@ class _TestingServerManager:
             port=TEST_SERVER_PORT,
             log_level="error",  # Reduce noise
             access_log=False,
-        )
+            )
 
     def start_server(self) -> bool:
         """
@@ -164,7 +164,7 @@ class _TestingServerManager:
             target=self._run_server,
             daemon=True,  # Thread dies when main process exits
             name="uvicorn-test-server",
-        )
+            )
         self.server_thread.start()
 
         # Wait for thread to signal start

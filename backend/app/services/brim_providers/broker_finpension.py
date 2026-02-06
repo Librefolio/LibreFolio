@@ -64,7 +64,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "flat-rate administrative fee": TransactionType.FEE,
     "deposit": TransactionType.DEPOSIT,
     "withdrawal": TransactionType.WITHDRAWAL,
-}
+    }
 
 
 def _parse_finpension_date(value: str) -> Optional[date_type]:
@@ -148,7 +148,7 @@ class FinpensionBrokerProvider(BRIMProvider):
 
     def parse(
         self, file_path: Path, broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Finpension CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -190,13 +190,13 @@ class FinpensionBrokerProvider(BRIMProvider):
                     asset_required = tx_type in [
                         TransactionType.BUY,
                         TransactionType.SELL,
-                    ]
+                        ]
 
                     if asset_required:
                         if not isin and not asset_name:
                             warnings.append(
                                 f"Row {row_num}: {tx_type.value} requires asset, skipping"
-                            )
+                                )
                             continue
 
                         asset_key = isin if isin else asset_name
@@ -211,7 +211,7 @@ class FinpensionBrokerProvider(BRIMProvider):
                                 "extracted_symbol": None,
                                 "extracted_isin": isin if isin else None,
                                 "extracted_name": asset_name if asset_name else None,
-                            }
+                                }
 
                             next_fake_id -= 1
 
@@ -236,7 +236,7 @@ class FinpensionBrokerProvider(BRIMProvider):
                             cash=Currency(code="CHF", amount=amount) if amount else None,
                             description=f"{category}: {asset_name}" if asset_name else category,
                             tags=["import", "finpension"],
-                        )
+                            )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -257,16 +257,16 @@ class FinpensionBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-            )
+                )
             for fake_id, info in extracted_assets.items()
-        }
+            }
 
         logger.info(
             "Finpension file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
             asset_count=len(extracted_assets_typed),
-        )
+            )
 
         return transactions, warnings, extracted_assets_typed
 

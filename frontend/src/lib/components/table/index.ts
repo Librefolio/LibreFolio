@@ -36,46 +36,46 @@
  */
 
 // Main component
-export { default as DataTable } from './DataTable.svelte';
+export {default as DataTable} from './DataTable.svelte';
 
 // Sub-components (for advanced customization)
-export { default as DataTablePagination } from './DataTablePagination.svelte';
-export { default as DataTableToolbar } from './DataTableToolbar.svelte';
-export { default as DataTableColumnFilter } from './DataTableColumnFilter.svelte';
-export { default as ConfirmModal } from './ConfirmModal.svelte';
+export {default as DataTablePagination} from './DataTablePagination.svelte';
+export {default as DataTableToolbar} from './DataTableToolbar.svelte';
+export {default as DataTableColumnFilter} from './DataTableColumnFilter.svelte';
+export {default as ConfirmModal} from './ConfirmModal.svelte';
 
 // Types
 export type {
-	// Cell content
-	CellContent,
-	SimpleCellContent,
-	IconTextCell,
-	BadgeCell,
-	DateCell,
-	SizeCell,
-	LinkCell,
-	CustomCell,
-	// Column definition
-	ColumnDef,
-	ColumnType,
-	EnumOption,
-	// Actions
-	RowAction,
-	BulkAction,
-	// Filters
-	ColumnFilter,
-	FilterValue,
-	TextFilter,
-	NumberFilter,
-	DateFilter,
-	EnumFilter,
-	// State
-	SortState,
-	PaginationState,
-	VisibilityState,
-	ColumnWidthsState,
-	SelectionState,
-	TablePreferences,
-	// Props
-	DataTableProps,
+    // Cell content
+    CellContent,
+    SimpleCellContent,
+    IconTextCell,
+    BadgeCell,
+    DateCell,
+    SizeCell,
+    LinkCell,
+    CustomCell,
+    // Column definition
+    ColumnDef,
+    ColumnType,
+    EnumOption,
+    // Actions
+    RowAction,
+    BulkAction,
+    // Filters
+    ColumnFilter,
+    FilterValue,
+    TextFilter,
+    NumberFilter,
+    DateFilter,
+    EnumFilter,
+    // State
+    SortState,
+    PaginationState,
+    VisibilityState,
+    ColumnWidthsState,
+    SelectionState,
+    TablePreferences,
+    // Props
+    DataTableProps,
 } from './types';

@@ -34,18 +34,18 @@ from backend.app.db.models import (
     Asset,
     AssetType,
     IdentifierType,
-)
+    )
 from backend.app.services.asset_source import AssetSourceManager
 
 from backend.app.utils.financial_math import (
     calculate_day_count_fraction,
     find_active_period,
-)
+    )
 from backend.test_scripts.test_utils import (
     print_info,
     print_section,
     print_success,
-)
+    )
 
 from backend.app.db.models import PriceHistory
 from sqlalchemy import select
@@ -54,7 +54,7 @@ from backend.app.schemas.assets import (
     FALateInterestConfig,
     CompoundingType,
     DayCountConvention,
-)
+    )
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.prices import FAUpsert, FAPricePoint
 
@@ -93,9 +93,9 @@ def asset_ids():
                     currency="USD",
                     asset_type=AssetType.STOCK,
                     active=True,
-                )
+                    )
                 for i in range(1, 4)
-            ]
+                ]
 
             session.add_all(test_assets)
             await session.commit()
@@ -140,7 +140,7 @@ def test_truncate_price():
         ("175.123456", "175.123456"),  # Already at precision
         ("175.12", "175.120000"),  # Pad to 6 decimals
         ("1000.9999999", "1000.999999"),  # Large number
-    ]
+        ]
 
     for input_str, expected_str in test_cases:
         input_val = Decimal(input_str)
@@ -162,7 +162,7 @@ def test_act365_calculation():
         (date(2025, 1, 1), date(2025, 1, 31), Decimal("30") / Decimal("365")),  # 30 days
         (date(2025, 1, 1), date(2025, 12, 31), Decimal("364") / Decimal("365")),  # 364 days
         (date(2025, 1, 1), date(2026, 1, 1), Decimal("365") / Decimal("365")),  # Exactly 1 year
-    ]
+        ]
 
     for start, end, expected in test_cases:
         result = calculate_day_count_fraction(start, end)
@@ -193,15 +193,15 @@ def test_find_active_period():
             annual_rate=Decimal("0.05"),
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365,
-        ),
+            ),
         FAInterestRatePeriod(
             start_date=date(2026, 1, 1),
             end_date=date(2026, 12, 31),
             annual_rate=Decimal("0.06"),
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365,
-        ),
-    ]
+            ),
+        ]
 
     maturity = date(2026, 12, 31)
     late_interest = FALateInterestConfig(
@@ -209,7 +209,7 @@ def test_find_active_period():
         grace_period_days=30,
         compounding=CompoundingType.SIMPLE,
         day_count=DayCountConvention.ACT_365,
-    )
+        )
 
     test_cases = [
         (date(2025, 6, 15), Decimal("0.05"), "Mid-2025 (first period)"),
@@ -217,7 +217,7 @@ def test_find_active_period():
         (date(2026, 12, 31), Decimal("0.06"), "Maturity date"),
         (date(2027, 1, 15), Decimal("0.06"), "15 days after maturity (grace period)"),
         (date(2027, 2, 15), Decimal("0.12"), "45 days after maturity (late interest)"),
-    ]
+        ]
 
     for target, expected_rate, desc in test_cases:
         period = find_active_period(schedule, target, maturity, late_interest)
@@ -256,9 +256,9 @@ async def test_bulk_assign_providers():
                 currency="USD",
                 asset_type=AssetType.STOCK,
                 active=True,
-            )
+                )
             for i in range(1, 4)
-        ]
+            ]
 
         session.add_all(test_assets)
         await session.commit()
@@ -277,22 +277,22 @@ async def test_bulk_assign_providers():
                 identifier="TEST1",
                 identifier_type=IdentifierType.TICKER,
                 provider_params={"ticker": "TEST1"},
-            ),
+                ),
             FAProviderAssignmentItem(
                 asset_id=test_assets[1].id,
                 provider_code="yfinance",
                 identifier="TEST2",
                 identifier_type=IdentifierType.TICKER,
                 provider_params={"ticker": "TEST2"},
-            ),
+                ),
             FAProviderAssignmentItem(
                 asset_id=test_assets[2].id,
                 provider_code="mockprov",
                 identifier="MOCK1",
                 identifier_type=IdentifierType.UUID,
                 provider_params=None,
-            ),
-        ]
+                ),
+            ]
 
         results = await AssetSourceManager.bulk_assign_providers(assignments, session)
 
@@ -301,7 +301,7 @@ async def test_bulk_assign_providers():
             status = "OK" if r.success else "ERROR"
             print_info(
                 f"Assignment result: asset_id={r.asset_id} status={status} message={r.message}"
-            )
+                )
 
         # Verify all succeeded
         for result in results:
@@ -332,7 +332,7 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
             asset_type=AssetType.STOCK,
             active=True,
             classification_params=None,  # Start with no metadata
-        )
+            )
         session.add(test_asset)
         await session.commit()
         await session.refresh(test_asset)
@@ -345,7 +345,7 @@ async def test_metadata_auto_populate(asset_ids: list[int]):
             identifier="MOCK_META_TEST",
             identifier_type=IdentifierType.UUID,
             provider_params={"mock_param": "test"},
-        )
+            )
 
         results = await AssetSourceManager.bulk_assign_providers([item], session)
         # Assuming single result, extract it
@@ -395,7 +395,7 @@ async def test_bulk_remove_providers(asset_ids: list[int]):
             assert provider is None, f"Provider still exists for asset {asset_id}"
             print_success(
                 f"✓ Verified DB: asset {asset_id} has no provider providers successfully removed"
-            )
+                )
 
 
 # ============================================================================
@@ -419,15 +419,15 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
                         close=Decimal("100.50"),
                         volume=Decimal("1000"),
                         currency="USD",
-                    ),
+                        ),
                     FAPricePoint(
                         date=date(2025, 1, 2),
                         close=Decimal("101.25"),
                         volume=Decimal("1500"),
                         currency="USD",
-                    ),
-                ],
-            ),
+                        ),
+                    ],
+                ),
             FAUpsert(
                 asset_id=asset_ids[1],
                 prices=[
@@ -436,10 +436,10 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
                         close=Decimal("200.00"),
                         volume=Decimal("500"),
                         currency="USD",
-                    ),
-                ],
-            ),
-        ]
+                        ),
+                    ],
+                ),
+            ]
 
         result = await AssetSourceManager.bulk_upsert_prices(data, session)
 
@@ -456,7 +456,7 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
             prices = db_result.scalars().all()
             print_info(
                 f"Asset {item.asset_id} prices in DB: {[(p.date, p.close, p.volume) for p in prices]}"
-            )
+                )
 
         # Verify in DB
         stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_ids[0])
@@ -466,7 +466,7 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
         assert len(prices) == 2, f"Expected 2 prices, got {len(prices)}"
         assert prices[0].volume == Decimal("1000") and prices[1].volume == Decimal(
             "1500"
-        ), "Volume values not persisted correctly"
+            ), "Volume values not persisted correctly"
 
 
 @pytest.mark.asyncio
@@ -481,7 +481,7 @@ async def test_get_prices_with_backfill(asset_ids: list[int]):
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 5),
             session=session,
-        )
+            )
 
         assert len(prices) == 5, f"Expected 5 prices, got {len(prices)}"
 
@@ -491,7 +491,7 @@ async def test_get_prices_with_backfill(asset_ids: list[int]):
             if bf:
                 print_info(
                     f"{p.date}: {p.close} (backfilled from {bf.actual_rate_date} , days_back={bf.days_back})"
-                )
+                    )
             else:
                 print_info(f"{p.date}: {p.close} (exact)")
 
@@ -544,7 +544,7 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                 volume=day1_volume,
                 currency="USD",
                 source_plugin_key="manual_test",
-            ),
+                ),
             PriceHistory(
                 asset_id=test_asset_id,
                 date=date(2025, 1, 2),
@@ -555,8 +555,8 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                 volume=day2_volume,
                 currency="USD",
                 source_plugin_key="manual_test",
-            ),
-        ]
+                ),
+            ]
 
         session.add_all(prices_to_insert)
         await session.commit()
@@ -567,7 +567,7 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 4),
             session=session,
-        )
+            )
 
         assert len(prices) == 4, f"Expected 4 prices (2 actual + 2 backfilled), got {len(prices)}"
 
@@ -599,7 +599,7 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
             ), f"Day {idx + 1} should have backward_fill_info"
             assert price.backward_fill_info.actual_rate_date == date(
                 2025, 1, 2
-            ), f"Day {idx + 1} should be backfilled from Day 2"
+                ), f"Day {idx + 1} should be backfilled from Day 2"
             assert (
                 price.backward_fill_info.days_back == idx - 1
             ), f"Day {idx + 1} days_back should be {idx - 1}"
@@ -614,7 +614,7 @@ async def test_backward_fill_volume_propagation(asset_ids: list[int]):
                 f"✓ Day {idx + 1}: close={price.close}, volume={price.volume} "
                 f"(backfilled from {price.backward_fill_info.actual_rate_date}, "
                 f"days_back={price.backward_fill_info.days_back})"
-            )
+                )
 
         backfilled_count = sum(1 for p in prices if p.backward_fill_info)
 
@@ -649,7 +649,7 @@ async def test_backward_fill_edge_case_no_initial_data(asset_ids: list[int]):
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 4),
             session=session,
-        )
+            )
 
         # Should return empty list (no data to backfill from)
         assert (
@@ -685,7 +685,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
         # Delete existing assignment if any
         await session.execute(
             delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == test_asset_id)
-        )
+            )
 
         # Insert invalid provider directly
         invalid_assignment = AssetProviderAssignment(
@@ -695,12 +695,12 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             identifier_type=IdentifierType.UUID,
             provider_params=None,
             fetch_interval=1440,
-        )
+            )
         session.add(invalid_assignment)
         await session.commit()
         print_info(
             f"Inserted invalid provider '{invalid_provider}' directly in DB for asset {test_asset_id}"
-        )
+            )
 
         # Insert fallback prices in DB
         await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == test_asset_id))
@@ -712,7 +712,7 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             close=Decimal("999.00"),
             currency="USD",
             source_plugin_key="manual_test_fallback",
-        )
+            )
         session.add(fallback_price)
         await session.commit()
         print_info(f"Inserted fallback price in DB: date=2025-01-10, close=999.00")
@@ -723,19 +723,19 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             start_date=date(2025, 1, 10),
             end_date=date(2025, 1, 10),
             session=session,
-        )
+            )
 
         # Verify fallback worked
         assert len(prices) == 1, f"Expected 1 price from DB fallback, got {len(prices)}"
         assert prices[0].close == Decimal("999.00"), f"Expected price 999.00, got {prices[0].close}"
         assert prices[0].date == date(
             2025, 1, 10
-        ), f"Expected date 2025-01-10, got {prices[0].date}"
+            ), f"Expected date 2025-01-10, got {prices[0].date}"
 
         print_success(f"✓ Fallback to DB successful: retrieved price {prices[0].close}")
         print_info(
             "⚠️  Check logs for warning: 'Provider not registered in registry, falling back to DB'"
-        )
+            )
 
 
 @pytest.mark.asyncio
@@ -749,12 +749,12 @@ async def test_bulk_delete_prices(asset_ids: list[int]):
             FAAssetDelete(
                 asset_id=asset_ids[0],
                 date_ranges=[DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 2))],
-            ),
+                ),
             FAAssetDelete(
                 asset_id=asset_ids[1],
                 date_ranges=[DateRangeModel(start=date(2025, 1, 1), end=None)],  # Single day
-            ),
-        ]
+                ),
+            ]
 
         bulkDelresult = await AssetSourceManager.bulk_delete_prices(data, session)
 

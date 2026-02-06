@@ -5,7 +5,7 @@
   Used as base for SimpleSelect and SearchSelect.
 -->
 <script lang="ts">
-    import type { Snippet } from 'svelte';
+    import type {Snippet} from 'svelte';
 
     interface Props {
         /** Disable the dropdown */
@@ -20,7 +20,7 @@
         class?: string;
     }
 
-    let { disabled = false, dropdownPosition = 'bottom', trigger, content, class: className = '' }: Props = $props();
+    let {disabled = false, dropdownPosition = 'bottom', trigger, content, class: className = ''}: Props = $props();
 
     // Internal state
     let isOpen = $state(false);
@@ -91,26 +91,26 @@
     }
 </script>
 
-<div class="relative {className}" bind:this={containerRef}>
+<div bind:this={containerRef} class="relative {className}">
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-        onclick={handleTriggerClick}
-        onkeydown={handleTriggerKeydown}
-        role="button"
-        tabindex={disabled ? -1 : 0}
-        class:cursor-not-allowed={disabled}
-        class:opacity-50={disabled}
+            class:cursor-not-allowed={disabled}
+            class:opacity-50={disabled}
+            onclick={handleTriggerClick}
+            onkeydown={handleTriggerKeydown}
+            role="button"
+            tabindex={disabled ? -1 : 0}
     >
-        {@render trigger({ isOpen })}
+        {@render trigger({isOpen})}
     </div>
 
     {#if isOpen}
         <div
-            class="absolute z-50 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden
+                class="absolute z-50 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden
                    {dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}"
-            role="listbox"
+                role="listbox"
         >
-            {@render content({ close })}
+            {@render content({close})}
         </div>
     {/if}
 </div>

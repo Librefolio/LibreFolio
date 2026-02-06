@@ -72,83 +72,83 @@ nav:
   - 🚀 Dashboard: /
   - FAQ: faq.md
   - Getting Started:
-    - Introduction: getting-started/introduction.md
-    - Installation: getting-started/installation.md
+      - Introduction: getting-started/introduction.md
+      - Installation: getting-started/installation.md
   - User Manual:
-    - Overview: user/index.md
-    - Installation (Docker): user/installation.md
+      - Overview: user/index.md
+      - Installation (Docker): user/installation.md
   - Admin Manual:
-    - Overview: admin/index.md
-    - CLI Tools: admin/cli_tools.md
-    - Advanced Docker: admin/docker_advanced.md
-    - Exposing with Tailscale: admin/tailscale_exposure.md
+      - Overview: admin/index.md
+      - CLI Tools: admin/cli_tools.md
+      - Advanced Docker: admin/docker_advanced.md
+      - Exposing with Tailscale: admin/tailscale_exposure.md
   - Financial Theory:
-    - Overview: financial-theory/index.md
-    - Asset Types: financial-theory/asset-types.md
-    - Transaction Types: financial-theory/transaction-types.md
-    - Day Count Conventions: financial-theory/day-count.md
-    - Interest Types: financial-theory/interest-types.md
-    - Compounding: financial-theory/compounding.md
+      - Overview: financial-theory/index.md
+      - Asset Types: financial-theory/asset-types.md
+      - Transaction Types: financial-theory/transaction-types.md
+      - Day Count Conventions: financial-theory/day-count.md
+      - Interest Types: financial-theory/interest-types.md
+      - Compounding: financial-theory/compounding.md
   - Developer Manual:
-    - Overview: developer/index.md
-    - Technologies:
-      - Overview: developer/technologies/overview.md
-      - Async Architecture: developer/technologies/async_architecture.md
-      - Database Migrations (Alembic): developer/technologies/alembic.md
-      - Configuration: developer/technologies/configuration.md
-    - Architecture:
-      - System Overview: developer/architecture/overview.md
-      - Database Schema: developer/architecture/database.md
-      - Users & Brokers: developer/architecture/users_and_brokers.md
-      - Access Control (RBAC): developer/architecture/access_control.md
-      - Settings System: developer/architecture/settings.md
-      - Registry Pattern: developer/architecture/registry_pattern.md
-      - Security: developer/architecture/security.md
-    - API & Communication:
-      - Overview: developer/api/overview.md
-      - Reference: developer/api/index.md
-      - cURL Testing: developer/api/curl-testing.md
-    - Backend Development:
-      - BRIM (Import):
-        - Architecture: developer/backend/brim/architecture.md
-        - Generic CSV Provider: developer/backend/brim/generic_csv.md
-        - Providers List: developer/backend/brim/providers_list.md
-      - Assets (Pricing):
-        - Architecture: developer/backend/assets/architecture.md
-        - System Providers: developer/backend/assets/system_providers.md
-        - Providers List: developer/backend/assets/providers_list.md
-      - FX (Currency):
-        - Architecture: developer/backend/fx/architecture.md
-        - Configuration & Routing: developer/backend/fx/configuration.md
-        - Providers List: developer/backend/fx/providers_list.md
-    - Frontend Development:
-      - Overview: developer/frontend/index.md
-      - Components:
-        - Overview: developer/frontend/components/index.md
-        - DataTable: developer/frontend/components/data-table.md
-        - Authentication: developer/frontend/components/auth.md
-        - Settings: developer/frontend/components/settings.md
-        - File Upload: developer/frontend/components/file-upload.md
-      - Pages: developer/frontend/pages/index.md
-      - State Management: developer/frontend/state/index.md
-      - Internationalization: developer/frontend/i18n.md
-      - Styling: developer/frontend/styling.md
-    - Test Walkthrough:
-      - Overview: developer/test-walkthrough/index.md
-      - External: developer/test-walkthrough/external.md
-      - Database: developer/test-walkthrough/db.md
-      - Services: developer/test-walkthrough/services.md
-      - Utils: developer/test-walkthrough/utils.md
-      - Schemas: developer/test-walkthrough/schemas.md
-      - API: developer/test-walkthrough/api.md
-      - E2E: developer/test-walkthrough/e2e.md
+      - Overview: developer/index.md
+      - Technologies:
+          - Overview: developer/technologies/overview.md
+          - Async Architecture: developer/technologies/async_architecture.md
+          - Database Migrations (Alembic): developer/technologies/alembic.md
+          - Configuration: developer/technologies/configuration.md
+      - Architecture:
+          - System Overview: developer/architecture/overview.md
+          - Database Schema: developer/architecture/database.md
+          - Users & Brokers: developer/architecture/users_and_brokers.md
+          - Access Control (RBAC): developer/architecture/access_control.md
+          - Settings System: developer/architecture/settings.md
+          - Registry Pattern: developer/architecture/registry_pattern.md
+          - Security: developer/architecture/security.md
+      - API & Communication:
+          - Overview: developer/api/overview.md
+          - Reference: developer/api/index.md
+          - cURL Testing: developer/api/curl-testing.md
+      - Backend Development:
+          - BRIM (Import):
+              - Architecture: developer/backend/brim/architecture.md
+              - Generic CSV Provider: developer/backend/brim/generic_csv.md
+              - Providers List: developer/backend/brim/providers_list.md
+          - Assets (Pricing):
+              - Architecture: developer/backend/assets/architecture.md
+              - System Providers: developer/backend/assets/system_providers.md
+              - Providers List: developer/backend/assets/providers_list.md
+          - FX (Currency):
+              - Architecture: developer/backend/fx/architecture.md
+              - Configuration & Routing: developer/backend/fx/configuration.md
+              - Providers List: developer/backend/fx/providers_list.md
+      - Frontend Development:
+          - Overview: developer/frontend/index.md
+          - Components:
+              - Overview: developer/frontend/components/index.md
+              - DataTable: developer/frontend/components/data-table.md
+              - Authentication: developer/frontend/components/auth.md
+              - Settings: developer/frontend/components/settings.md
+              - File Upload: developer/frontend/components/file-upload.md
+          - Pages: developer/frontend/pages/index.md
+          - State Management: developer/frontend/state/index.md
+          - Internationalization: developer/frontend/i18n.md
+          - Styling: developer/frontend/styling.md
+      - Test Walkthrough:
+          - Overview: developer/test-walkthrough/index.md
+          - External: developer/test-walkthrough/external.md
+          - Database: developer/test-walkthrough/db.md
+          - Services: developer/test-walkthrough/services.md
+          - Utils: developer/test-walkthrough/utils.md
+          - Schemas: developer/test-walkthrough/schemas.md
+          - API: developer/test-walkthrough/api.md
+          - E2E: developer/test-walkthrough/e2e.md
   - Tutorials:
-    - Track First Stock: tutorials/track-first-stock.md
-    - Track P2P Loan: tutorials/track-p2p-loan.md
+      - Track First Stock: tutorials/track-first-stock.md
+      - Track P2P Loan: tutorials/track-p2p-loan.md
   - Gallery:
-    - Overview: gallery/index.md
-    - Desktop: gallery/desktop.md
-    - Mobile: gallery/mobile.md
+      - Overview: gallery/index.md
+      - Desktop: gallery/desktop.md
+      - Mobile: gallery/mobile.md
   - POC UX: POC_UX/index.md
   - Credits & Legal: credits-legal.md
 

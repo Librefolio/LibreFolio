@@ -6,24 +6,14 @@
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {
-        ArrowLeft,
-        Briefcase,
-        ExternalLink,
-        Pencil,
-        RefreshCw,
-        Wallet,
-        TrendingUp,
-        ArrowRightLeft,
-        FileUp
-    } from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, Briefcase, ExternalLink, FileUp, Pencil, RefreshCw, TrendingUp, Wallet} from 'lucide-svelte';
     import CashBalanceCard from '$lib/components/brokers/CashBalanceCard.svelte';
     import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
     import type {BrokerSummary, Transaction} from '$lib/types';
-    import {safeString, safeCurrency, parseCurrencyAmount} from '$lib/types';
+    import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
 
     // Page data
     export let data: { brokerId: number };
@@ -147,10 +137,10 @@
     <!-- Header -->
     <div class="flex items-center space-x-4">
         <button
-                on:click={handleBack}
                 class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors"
-                title={$_('common.back')}
                 data-testid="broker-back-button"
+                on:click={handleBack}
+                title={$_('common.back')}
         >
             <ArrowLeft size={20}/>
         </button>
@@ -158,11 +148,11 @@
         {#if broker}
             <!-- Broker Icon -->
             <BrokerIcon
-                iconUrl={safeString(broker.icon_url)}
-                portalUrl={safeString(broker.portal_url)}
-                pluginCode={safeString(broker.default_import_plugin)}
-                altText={broker.name}
-                size="lg"
+                    iconUrl={safeString(broker.icon_url)}
+                    portalUrl={safeString(broker.portal_url)}
+                    pluginCode={safeString(broker.default_import_plugin)}
+                    altText={broker.name}
+                    size="lg"
             />
 
             <div class="flex-1 min-w-0">
@@ -380,13 +370,13 @@
 
                 <!-- Import Files Button -->
                 <button
-                    data-testid="import-files-button"
-                    class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group"
-                    on:click={() => importFilesModalOpen = true}
+                        data-testid="import-files-button"
+                        class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group"
+                        on:click={() => importFilesModalOpen = true}
                 >
                     <div class="flex items-center gap-3">
                         <div class="p-2 bg-libre-green/10 rounded-lg">
-                            <FileUp size={20} class="text-libre-green" />
+                            <FileUp size={20} class="text-libre-green"/>
                         </div>
                         <div class="text-left">
                             <h3 class="font-semibold text-gray-700">{$_('brokers.importFiles')}</h3>

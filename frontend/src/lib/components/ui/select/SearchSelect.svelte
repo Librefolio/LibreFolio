@@ -5,10 +5,10 @@
   Supports keyboard navigation and custom item rendering via snippets.
 -->
 <script lang="ts">
-    import type { Snippet } from 'svelte';
-    import type { SelectOption } from './types';
-    import { ChevronDown, Search, X } from 'lucide-svelte';
-    import { _ } from '$lib/i18n';
+    import type {Snippet} from 'svelte';
+    import type {SelectOption} from './types';
+    import {ChevronDown, Search, X} from 'lucide-svelte';
+    import {_} from '$lib/i18n';
 
     interface Props {
         /** Currently selected value */
@@ -241,39 +241,39 @@
             const listEl = containerRef?.querySelector('.options-list');
             const highlightedEl = listEl?.querySelector('.highlighted');
             if (highlightedEl) {
-                highlightedEl.scrollIntoView({ block: 'nearest' });
+                highlightedEl.scrollIntoView({block: 'nearest'});
             }
         }, 0);
     }
 </script>
 
-<div class="relative {className}" bind:this={containerRef}>
+<div bind:this={containerRef} class="relative {className}">
     <!-- Trigger Button / Inline Search -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-        onclick={() => !isOpen && openDropdown()}
-        onkeydown={handleTriggerKeydown}
-        role="combobox"
-        tabindex={disabled ? -1 : 0}
-        aria-expanded={isOpen}
-        aria-haspopup="listbox"
-        aria-controls={listboxId}
-        class="w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white dark:bg-slate-700
+            aria-controls={listboxId}
+            aria-expanded={isOpen}
+            aria-haspopup="listbox"
+            class="w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white dark:bg-slate-700
                transition-all text-left gap-2
                {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed' : 'dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer'}
                {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
+            onclick={() => !isOpen && openDropdown()}
+            onkeydown={handleTriggerKeydown}
+            role="combobox"
+            tabindex={disabled ? -1 : 0}
     >
         {#if inlineSearch && isOpen}
             <!-- Inline search mode: show search icon + input in trigger -->
             <Search size={14} class="text-gray-400 shrink-0"/>
             <input
-                type="text"
-                bind:this={inputRef}
-                bind:value={searchQuery}
-                onkeydown={(e) => { e.stopPropagation(); handleSearchKeydown(e); }}
-                onclick={(e) => e.stopPropagation()}
-                class="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100"
-                placeholder={$_('common.search')}
+                    type="text"
+                    bind:this={inputRef}
+                    bind:value={searchQuery}
+                    onkeydown={(e) => { e.stopPropagation(); handleSearchKeydown(e); }}
+                    onclick={(e) => e.stopPropagation()}
+                    class="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100"
+                    placeholder={$_('common.search')}
             />
         {:else if selectedOption}
             {#if selectedItem}
@@ -296,7 +296,7 @@
         {:else}
             <span class="text-gray-400">{placeholder || $_('common.search')}</span>
         {/if}
-        <ChevronDown size={14} class="text-gray-400 shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}"/>
+        <ChevronDown class="text-gray-400 shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" size={14}/>
     </div>
 
     <!-- Dropdown -->
@@ -305,28 +305,28 @@
                     {computedPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}"
         >
             {#if !inlineSearch}
-            <div class="p-2 border-b border-gray-100 dark:border-slate-700">
-                <div class="relative">
-                    <Search size={16} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                    <input
-                        bind:this={inputRef}
-                        bind:value={searchQuery}
-                        onkeydown={handleSearchKeydown}
-                        type="text"
-                        class="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg
+                <div class="p-2 border-b border-gray-100 dark:border-slate-700">
+                    <div class="relative">
+                        <Search size={16} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input
+                                bind:this={inputRef}
+                                bind:value={searchQuery}
+                                onkeydown={handleSearchKeydown}
+                                type="text"
+                                class="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg
                                focus:outline-none focus:ring-2 focus:ring-libre-green focus:border-libre-green"
-                        placeholder={$_('common.search')}
-                    />
-                    {#if searchQuery}
-                        <button
-                            onclick={() => searchQuery = ''}
-                            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-                        >
-                            <X size={14}/>
-                        </button>
-                    {/if}
+                                placeholder={$_('common.search')}
+                        />
+                        {#if searchQuery}
+                            <button
+                                    onclick={() => searchQuery = ''}
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                            >
+                                <X size={14}/>
+                            </button>
+                        {/if}
+                    </div>
                 </div>
-            </div>
             {/if}
 
             <!-- Options List -->
@@ -342,11 +342,11 @@
                 {:else}
                     {#each filteredOptions as option, index (option.value)}
                         <button
-                            type="button"
-                            onclick={() => selectOption(option)}
-                            onmouseenter={() => highlightedIndex = index}
-                            disabled={option.disabled}
-                            class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
+                                type="button"
+                                onclick={() => selectOption(option)}
+                                onmouseenter={() => highlightedIndex = index}
+                                disabled={option.disabled}
+                                class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
                                    {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                                    {index === highlightedIndex ? 'bg-libre-green/30 dark:bg-libre-green dark:text-white highlighted' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
                         >

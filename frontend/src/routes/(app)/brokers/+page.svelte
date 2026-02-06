@@ -6,7 +6,7 @@
     import BrokerCard from '$lib/components/brokers/BrokerCard.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import DeleteBrokerDialog from '$lib/components/brokers/DeleteBrokerDialog.svelte';
-    import type {Broker, BrokerSummary} from '$lib/types';
+    import type {Broker} from '$lib/types';
 
     // State
     let brokers: Broker[] = [];
@@ -129,18 +129,18 @@
         </div>
         <div class="flex items-center space-x-2">
             <button
-                    on:click={loadBrokers}
-                    disabled={loading}
-                    data-testid="brokers-refresh"
                     class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50"
+                    data-testid="brokers-refresh"
+                    disabled={loading}
+                    on:click={loadBrokers}
                     title="Refresh"
             >
-                <RefreshCw size={18} class={loading ? 'animate-spin' : ''}/>
+                <RefreshCw class={loading ? 'animate-spin' : ''} size={18}/>
             </button>
             <button
-                    on:click={openCreateModal}
-                    data-testid="add-broker-button"
                     class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all"
+                    data-testid="add-broker-button"
+                    on:click={openCreateModal}
             >
                 <Plus size={18}/>
                 <span class="hidden sm:inline">{$_('brokers.addBroker')}</span>
@@ -204,10 +204,10 @@
 
 <!-- Add/Edit Modal -->
 <BrokerModal
-        isOpen={modalOpen}
-        mode={modalMode}
         brokerId={editingBrokerId}
         initialData={editingBrokerData}
+        isOpen={modalOpen}
+        mode={modalMode}
         on:close={handleModalClose}
         on:created={handleCreated}
         on:updated={handleUpdated}
@@ -215,10 +215,10 @@
 
 <!-- Delete Confirmation Dialog -->
 <DeleteBrokerDialog
-        isOpen={deleteDialogOpen}
         brokerName={deletingBroker?.name ?? ''}
-        transactionCount={deletingTransactionCount}
+        isOpen={deleteDialogOpen}
         loading={deleteLoading}
-        on:confirm={confirmDelete}
         on:cancel={() => { deleteDialogOpen = false; deletingBroker = null; }}
+        on:confirm={confirmDelete}
+        transactionCount={deletingTransactionCount}
 />

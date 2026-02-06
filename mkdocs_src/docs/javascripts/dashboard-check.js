@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", function () {
     // Use relative paths for deployment flexibility
     const healthUrl = "/api/v1/system/health";
     const dashboardUrl = "/";

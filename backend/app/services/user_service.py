@@ -119,7 +119,7 @@ async def create_user(
     password: str,
     is_superuser: bool = False,
     is_active: bool = True,
-) -> tuple[Optional[User], Optional[str]]:
+    ) -> tuple[Optional[User], Optional[str]]:
     """
     Create a new user.
 
@@ -151,7 +151,7 @@ async def create_user(
         hashed_password=hash_password(password),
         is_active=is_active,
         is_superuser=is_superuser,
-    )
+        )
 
     session.add(user)
     await session.commit()
@@ -165,7 +165,7 @@ async def reset_password(
     session: AsyncSession,
     username: str,
     new_password: str,
-) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, Optional[str]]:
     """
     Reset a user's password.
 
@@ -200,7 +200,7 @@ async def set_user_active(
     session: AsyncSession,
     username: str,
     active: bool,
-) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, Optional[str]]:
     """
     Activate or deactivate a user.
 
@@ -234,7 +234,7 @@ async def set_user_admin(
     session: AsyncSession,
     username: str,
     is_admin: bool,
-) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, Optional[str]]:
     """
     Promote or demote a user to/from admin.
 
@@ -272,7 +272,7 @@ async def update_profile(
     user_id: int,
     username: str | None = None,
     email: str | None = None,
-) -> tuple[Optional[User], Optional[str]]:
+    ) -> tuple[Optional[User], Optional[str]]:
     """
     Update user profile (username and/or email).
 
@@ -322,7 +322,7 @@ async def update_profile(
         user_id=user.id,
         username=user.username,
         email=user.email
-    )
+        )
     return user, None
 
 
@@ -373,7 +373,5 @@ async def delete_user(session: AsyncSession, user_id: int) -> bool:
         "User deleted",
         user_id=user_id,
         username=user.username
-    )
+        )
     return True
-
-

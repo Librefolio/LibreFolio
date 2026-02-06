@@ -2,10 +2,10 @@
     import {_, LANGUAGE_OPTIONS} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
-    import {onMount, onDestroy} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import {debug} from '$lib/debug';
     import {AlertCircle, ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
-    import {SearchSelect, SimpleSelect, type SelectOption} from '$lib/components/ui/select';
+    import {SearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
 
     // Props
@@ -335,17 +335,17 @@
 </script>
 
 <!-- Mobile: Custom dropdown category selector -->
-<div class="sm:hidden mb-4" bind:this={dropdownRef}>
+<div bind:this={dropdownRef} class="sm:hidden mb-4">
     <span class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {$_('settings.category')}
     </span>
     <div class="relative">
         <button
-            type="button"
-            on:click={toggleDropdown}
-            class="w-full flex items-center justify-between px-4 py-3 border border-gray-300 dark:border-slate-600
+                class="w-full flex items-center justify-between px-4 py-3 border border-gray-300 dark:border-slate-600
                    rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-sm
                    focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all"
+                on:click={toggleDropdown}
+                type="button"
         >
             <span class="flex items-center gap-2">
                 {#if selectedCategoryIcon}
@@ -353,7 +353,7 @@
                 {/if}
                 {selectedCategoryLabel}
             </span>
-            <ChevronDown size={18} class="text-gray-400 transition-transform {showDropdown ? 'rotate-180' : ''}"/>
+            <ChevronDown class="text-gray-400 transition-transform {showDropdown ? 'rotate-180' : ''}" size={18}/>
         </button>
 
         {#if showDropdown}
@@ -361,9 +361,9 @@
                         dark:border-slate-600 rounded-lg shadow-lg overflow-hidden z-50">
                 <!-- All Settings option -->
                 <button
-                    type="button"
-                    on:click={() => selectCategoryMobile('all')}
-                    class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
+                        type="button"
+                        on:click={() => selectCategoryMobile('all')}
+                        class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                            {selectedCategory === 'all'
                                ? 'bg-libre-green/10 text-libre-green font-medium'
                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
@@ -377,9 +377,9 @@
                 <!-- Category options -->
                 {#each categories as cat (cat.id)}
                     <button
-                        type="button"
-                        on:click={() => selectCategoryMobile(cat.id)}
-                        class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
+                            type="button"
+                            on:click={() => selectCategoryMobile(cat.id)}
+                            class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                                {selectedCategory === cat.id
                                    ? 'bg-libre-green/10 text-libre-green font-medium'
                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
@@ -401,11 +401,11 @@
     <div class="hidden sm:block w-48 flex-shrink-0">
         <nav class="space-y-1">
             <button
-                    on:click={() => selectedCategory = 'all'}
                     class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
                     {selectedCategory === 'all'
                         ? 'bg-libre-green text-white'
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
+                    on:click={() => selectedCategory = 'all'}
             >
                 <span class="flex-1 text-left">{$_('settings.globalSettingCategories.all')}</span>
                 {#if selectedCategory === 'all'}
@@ -475,17 +475,18 @@
                                     : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'}"
                                 title={isLocked ? $_('settings.clickToEdit') : $_('settings.clickToLock')}
                         >
-                        {#if isLocked}
-                            <Lock size={18}/>
-                        {:else}
-                            <Unlock size={18}/>
-                        {/if}
-                    </button>
-                {:else}
-                    <div class="flex items-center space-x-2 px-3 py-2 bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 rounded-lg" title={$_('settings.readOnlyMode')}>
-                        <ShieldOff size={18}/>
-                    </div>
-                {/if}
+                            {#if isLocked}
+                                <Lock size={18}/>
+                            {:else}
+                                <Unlock size={18}/>
+                            {/if}
+                        </button>
+                    {:else}
+                        <div class="flex items-center space-x-2 px-3 py-2 bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 rounded-lg"
+                             title={$_('settings.readOnlyMode')}>
+                            <ShieldOff size={18}/>
+                        </div>
+                    {/if}
                 </div>
             </div>
             <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.globalSettingsDescription')}</p>

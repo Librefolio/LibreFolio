@@ -8,8 +8,8 @@
      * - Saves preference to localStorage
      * - Applies theme class to html element
      */
-    import { onMount } from 'svelte';
-    import { Sun, Moon } from 'lucide-svelte';
+    import {onMount} from 'svelte';
+    import {Moon, Sun} from 'lucide-svelte';
 
     let theme: 'light' | 'dark' = 'light';
     let mounted = false;
@@ -68,19 +68,19 @@
 </script>
 
 <button
-    on:click={toggleTheme}
-    data-testid="theme-toggle"
-    class="p-2 rounded-lg transition-colors duration-200
+        aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+        class="p-2 rounded-lg transition-colors duration-200
            text-gray-600 dark:text-gray-300 hover:bg-white/20 dark:hover:bg-slate-600"
-    aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-    title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+        data-testid="theme-toggle"
+        on:click={toggleTheme}
+        title={theme === 'light' ? 'Dark mode' : 'Light mode'}
 >
     {#if !mounted}
         <!-- Placeholder during SSR -->
         <div class="w-5 h-5"></div>
     {:else if theme === 'light'}
-        <Moon size={20} />
+        <Moon size={20}/>
     {:else}
-        <Sun size={20} />
+        <Sun size={20}/>
     {/if}
 </button>

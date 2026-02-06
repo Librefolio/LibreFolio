@@ -68,7 +68,7 @@ async def test_list_sectors_with_other(test_server):
             "Telecommunication",
             "Utilities",
             "Other",
-        ]
+            ]
         for sector in expected:
             assert sector in data["sectors"], f"Missing sector: {sector}"
 
@@ -84,7 +84,7 @@ async def test_list_sectors_without_other(test_server):
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"{API_BASE}/utilities/sectors", params={"include_other": "false"}, timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -109,7 +109,7 @@ async def test_normalize_country_iso3(test_server):
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"{API_BASE}/utilities/countries/normalize", params={"name": "USA"}, timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -131,7 +131,7 @@ async def test_normalize_country_iso2(test_server):
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"{API_BASE}/utilities/countries/normalize", params={"name": "IT"}, timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -152,7 +152,7 @@ async def test_normalize_country_name(test_server):
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"{API_BASE}/utilities/countries/normalize", params={"name": "Germany"}, timeout=TIMEOUT
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -175,7 +175,7 @@ async def test_normalize_country_invalid(test_server):
             f"{API_BASE}/utilities/countries/normalize",
             params={"name": "InvalidCountryXYZ"},
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
@@ -201,12 +201,12 @@ async def test_normalize_country_case_insensitive(test_server):
             ("italy", "ITA"),
             ("FRANCE", "FRA"),
             ("jApAn", "JPN"),
-        ]
+            ]
 
         for name, expected_iso3 in test_cases:
             response = await client.get(
                 f"{API_BASE}/utilities/countries/normalize", params={"name": name}, timeout=TIMEOUT
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()

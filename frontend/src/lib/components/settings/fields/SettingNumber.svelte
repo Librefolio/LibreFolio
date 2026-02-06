@@ -6,9 +6,9 @@
   Extracts the number input pattern from GlobalSettingsTab.
 -->
 <script lang="ts">
-    import { _ } from '$lib/i18n';
-    import { Save, Undo, RotateCcw, AlertCircle } from 'lucide-svelte';
-    import type { Component, Snippet } from 'svelte';
+    import {_} from '$lib/i18n';
+    import {AlertCircle, RotateCcw, Save, Undo} from 'lucide-svelte';
+    import type {Component, Snippet} from 'svelte';
 
     interface Props {
         /** Current value */
@@ -115,29 +115,29 @@
             <div class="flex items-center space-x-1">
                 {#if isModified}
                     <button
-                        type="button"
-                        onclick={() => onsave?.()}
-                        disabled={isSaving}
-                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                        title={$_('common.save')}
+                            type="button"
+                            onclick={() => onsave?.()}
+                            disabled={isSaving}
+                            class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                            title={$_('common.save')}
                     >
                         <Save size={14}/>
                     </button>
                     <button
-                        type="button"
-                        onclick={() => onundo?.()}
-                        class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                        title={$_('common.undo')}
+                            type="button"
+                            onclick={() => onundo?.()}
+                            class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                            title={$_('common.undo')}
                     >
                         <Undo size={14}/>
                     </button>
                 {/if}
                 {#if isNonDefault && !isModified}
                     <button
-                        type="button"
-                        onclick={() => onreset?.()}
-                        class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
-                        title={$_('common.reset')}
+                            type="button"
+                            onclick={() => onreset?.()}
+                            class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                            title={$_('common.reset')}
                     >
                         <RotateCcw size={14}/>
                     </button>
@@ -149,17 +149,17 @@
         <div class="flex flex-col items-end space-y-1">
             <div class="flex items-center space-x-2">
                 <input
-                    type="number"
-                    step={effectiveStep}
-                    {min}
-                    {max}
-                    {value}
-                    oninput={handleInput}
-                    disabled={isLocked}
-                    class="w-20 px-3 py-2 border rounded-lg text-sm text-right
+                        class="w-20 px-3 py-2 border rounded-lg text-sm text-right
                            {isLocked
                                ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-200 dark:border-slate-700'
                                : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-slate-600 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
+                        disabled={isLocked}
+                        {max}
+                        {min}
+                        oninput={handleInput}
+                        step={effectiveStep}
+                        type="number"
+                        {value}
                 />
                 {#if unit}
                     <span class="text-sm text-gray-500 dark:text-gray-400">{unit}</span>

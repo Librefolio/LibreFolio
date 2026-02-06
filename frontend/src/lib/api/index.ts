@@ -23,10 +23,10 @@
 // =============================================================================
 // ZODIOS CLIENT
 // =============================================================================
-export { zodiosApi, ApiError, axiosInstance } from './zodios-client';
+export {zodiosApi, ApiError, axiosInstance} from './zodios-client';
 
 // =============================================================================
 // ZOD SCHEMAS (for deriving types in /lib/types/)
 // =============================================================================
 // Usage: import { schemas } from '$lib/api'; then z.infer<typeof schemas.X>
-export { schemas } from './generated';
+export {schemas} from './generated';

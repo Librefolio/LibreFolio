@@ -25,7 +25,7 @@ from backend.test_scripts.test_utils import (
     print_section,
     print_success,
     print_warning,
-)
+    )
 import traceback
 
 # ============================================================================
@@ -131,7 +131,7 @@ async def test_current_value(provider_code: str):
                 provider_params["_transaction_override"] = test_case.get("_transaction_override")
             identifier_type = test_case.get(
                 "identifier_type", IdentifierType.TICKER
-            )  # Default to TICKER
+                )  # Default to TICKER
 
             print_info(f"  Testing: {identifier} (expects: {expected_symbol})")
 
@@ -145,7 +145,7 @@ async def test_current_value(provider_code: str):
                 if provider_params:
                     result = await provider.get_current_value(
                         identifier, identifier_type, provider_params
-                    )
+                        )
                 else:
                     result = await provider.get_current_value(identifier, identifier_type)
             except TypeError as e:
@@ -153,14 +153,14 @@ async def test_current_value(provider_code: str):
                 if "provider_params" in str(e):
                     print_warning(
                         f"{provider_code} requires provider_params but none in test_case - SKIPPING"
-                    )
+                        )
                     pytest.skip(f"{provider_code} test_case missing provider_params")
                 raise
 
             # Validate result is FACurrentValue Pydantic model
             assert isinstance(
                 result, FACurrentValue
-            ), f"Result is not FACurrentValue: {type(result)}"
+                ), f"Result is not FACurrentValue: {type(result)}"
 
             # Access Pydantic model attributes directly (FACurrentValue has: value, currency, as_of_date, source)
             current_price = result.value
@@ -228,7 +228,7 @@ async def test_historical_data(provider_code: str):
 
         result = await provider.get_history_value(
             identifier, identifier_type, provider_params, start_date, end_date
-        )
+            )
 
         # Validate result structure - FAHistoricalData has .prices attribute
         assert hasattr(result, "prices"), f"Result missing 'prices' attribute: {type(result)}"
@@ -393,15 +393,15 @@ def test_validate_params(provider_code: str):
             # If any test_case has params, ensure None/empty were rejected (provider requires params)
             any_test_case_has_params = any(
                 tc.get("provider_params") is not None for tc in provider.test_cases
-            )
+                )
             if any_test_case_has_params and none_accepted:
                 print_warning(
                     f"  Provider has test_cases with params but also accepts None - may be intentional"
-                )
+                    )
         else:
             print_info(
                 f"  {provider_code} has no test_cases - skipping params validation from test_cases"
-            )
+                )
 
         print_success("Provider params validation test passed")
 

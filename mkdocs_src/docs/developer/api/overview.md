@@ -21,16 +21,17 @@ graph LR
 
 The synchronization process is automated via the `dev.sh` script.
 
-1.  **Backend Definition**: API endpoints and Pydantic models are defined in Python (`backend/app/api/`).
-2.  **Schema Export**: `dev.sh api:schema` starts a temporary backend process to export the `openapi.json` file.
-3.  **Client Generation**: `dev.sh api:client` uses `openapi-zod-client` to read the JSON schema and generate a TypeScript client (`frontend/src/lib/api/generated.ts`).
+1. **Backend Definition**: API endpoints and Pydantic models are defined in Python (`backend/app/api/`).
+2. **Schema Export**: `dev.sh api:schema` starts a temporary backend process to export the `openapi.json` file.
+3. **Client Generation**: `dev.sh api:client` uses `openapi-zod-client` to read the JSON schema and generate a TypeScript client (`frontend/src/lib/api/generated.ts`).
 
 ### Generated Client Features
 
 The generated client provides:
--   **TypeScript Interfaces**: Matching the Pydantic models (e.g., `AssetRead`, `TransactionCreate`).
--   **Zod Schemas**: Runtime validation schemas for API responses.
--   **API Functions**: Typed functions for each endpoint (e.g., `api.getAssets()`).
+
+- **TypeScript Interfaces**: Matching the Pydantic models (e.g., `AssetRead`, `TransactionCreate`).
+- **Zod Schemas**: Runtime validation schemas for API responses.
+- **API Functions**: Typed functions for each endpoint (e.g., `api.getAssets()`).
 
 ## Usage in Frontend
 

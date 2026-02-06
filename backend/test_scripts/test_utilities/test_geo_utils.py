@@ -52,7 +52,7 @@ def test_FAGeographicArea():
         "USA": Decimal("0.6000"),
         "GBR": Decimal("0.3000"),
         "ITA": Decimal("0.1000"),
-    }
+        }
     assert sum(result.distribution.values()) == Decimal("1.0")
 
     # ISO-2 to ISO-3 conversion

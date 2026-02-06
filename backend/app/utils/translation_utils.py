@@ -37,5 +37,5 @@ def get_babel_locale(language: str) -> Locale:
     except Exception as e:
         logger.warning(
             "Language not supported, falling back to English", language=language, error=str(e)
-        )
+            )
         return Locale.parse("en")

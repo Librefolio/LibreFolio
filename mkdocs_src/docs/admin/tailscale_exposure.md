@@ -9,6 +9,7 @@ This document will explain how to securely expose your self-hosted LibreFolio in
 Instead of opening ports on your router (which is risky), we will use Tailscale to create a secure, encrypted tunnel.
 
 ### Planned Topics
--   Setting up a Tailscale container in `docker-compose.yml`.
--   Configuring Tailscale Funnel for public HTTPS access.
--   Using Tailscale VPN for private, authenticated access only.
+
+- Setting up a Tailscale container in `docker-compose.yml`.
+- Configuring Tailscale Funnel for public HTTPS access.
+- Using Tailscale VPN for private, authenticated access only.

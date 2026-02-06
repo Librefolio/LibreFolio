@@ -82,29 +82,29 @@ async def test_assets(async_session: AsyncSession) -> List[Asset]:
             "currency": "USD",
             "identifier_isin": "US0378331005",
             "identifier_ticker": None,
-        },
+            },
         {
             "display_name": f"Apple Stock (Ticker) {suffix}",
             "asset_type": AssetType.STOCK,
             "currency": "USD",
             "identifier_isin": None,
             "identifier_ticker": "AAPL",
-        },
+            },
         {
             "display_name": f"Microsoft Corporation {suffix}",
             "asset_type": AssetType.STOCK,
             "currency": "USD",
             "identifier_isin": None,
             "identifier_ticker": "MSFT",
-        },
+            },
         {
             "display_name": f"SAP SE {suffix}",
             "asset_type": AssetType.STOCK,
             "currency": "EUR",
             "identifier_isin": "DE0007164600",
             "identifier_ticker": None,
-        },
-    ]
+            },
+        ]
 
     assets = []
 
@@ -117,7 +117,7 @@ async def test_assets(async_session: AsyncSession) -> List[Asset]:
             identifier_isin=data.get("identifier_isin"),
             identifier_ticker=data.get("identifier_ticker"),
             active=True,
-        )
+            )
         async_session.add(asset)
         assets.append(asset)
 
@@ -145,7 +145,7 @@ class TestAssetCandidateSearch:
     @pytest.mark.asyncio
     async def test_search_by_isin_exact_match(
         self, async_session: AsyncSession, test_assets: List[Asset]
-    ):
+        ):
         """
         AC-001: ISIN search.
 
@@ -153,7 +153,7 @@ class TestAssetCandidateSearch:
         """
         candidates, auto_selected = await search_asset_candidates(
             async_session, extracted_symbol=None, extracted_isin="US0378331005", extracted_name=None
-        )
+            )
 
         assert len(candidates) >= 1, "Expected at least 1 candidate for ISIN match"
 
@@ -167,7 +167,7 @@ class TestAssetCandidateSearch:
     @pytest.mark.asyncio
     async def test_search_by_symbol_exact_match(
         self, async_session: AsyncSession, test_assets: List[Asset]
-    ):
+        ):
         """
         AC-002: Symbol search.
 
@@ -175,7 +175,7 @@ class TestAssetCandidateSearch:
         """
         candidates, auto_selected = await search_asset_candidates(
             async_session, extracted_symbol="MSFT", extracted_isin=None, extracted_name=None
-        )
+            )
 
         assert len(candidates) >= 1, "Expected at least 1 candidate for symbol match"
 
@@ -185,7 +185,7 @@ class TestAssetCandidateSearch:
     @pytest.mark.asyncio
     async def test_search_by_name_partial_match(
         self, async_session: AsyncSession, test_assets: List[Asset]
-    ):
+        ):
         """
         AC-003: Name search.
 
@@ -193,7 +193,7 @@ class TestAssetCandidateSearch:
         """
         candidates, auto_selected = await search_asset_candidates(
             async_session, extracted_symbol=None, extracted_isin=None, extracted_name="Microsoft"
-        )
+            )
 
         # If found, should be LOW confidence
         if candidates:
@@ -211,7 +211,7 @@ class TestAssetCandidateSearch:
             extracted_symbol="NONEXISTENT123",
             extracted_isin="XX0000000000",
             extracted_name="NonExistent Company XYZ",
-        )
+            )
 
         # Should return empty list
         assert len(candidates) == 0, f"Expected no candidates, got {len(candidates)}"
@@ -220,7 +220,7 @@ class TestAssetCandidateSearch:
     @pytest.mark.asyncio
     async def test_auto_select_single_candidate(
         self, async_session: AsyncSession, test_assets: List[Asset]
-    ):
+        ):
         """
         AC-006: Single match.
 
@@ -232,7 +232,7 @@ class TestAssetCandidateSearch:
             extracted_symbol=None,
             extracted_isin="DE0007164600",  # SAP - should be unique
             extracted_name=None,
-        )
+            )
 
         if len(candidates) == 1:
             assert auto_selected is not None, "Should auto-select when exactly 1 candidate"
@@ -241,7 +241,7 @@ class TestAssetCandidateSearch:
     @pytest.mark.asyncio
     async def test_no_auto_select_multiple_candidates(
         self, async_session: AsyncSession, test_assets: List[Asset]
-    ):
+        ):
         """
         AC-007: Multiple matches.
 
@@ -250,7 +250,7 @@ class TestAssetCandidateSearch:
         # Search for "Apple" - might match multiple assets
         candidates, auto_selected = await search_asset_candidates(
             async_session, extracted_symbol=None, extracted_isin=None, extracted_name="Apple"
-        )
+            )
 
         if len(candidates) > 1:
             assert auto_selected is None, "Should NOT auto-select when multiple candidates"
@@ -267,7 +267,7 @@ class TestDuplicateDetection:
     @pytest.mark.asyncio
     async def test_detect_no_duplicates(
         self, async_session: AsyncSession, test_broker: int, test_date: date
-    ):
+        ):
         """
         DD-001: Fresh transactions.
 
@@ -283,7 +283,7 @@ class TestDuplicateDetection:
                 quantity=Decimal("0"),
                 cash=Currency(code="EUR", amount=Decimal("1000")),
                 description="Unique deposit 1",
-            ),
+                ),
             TXCreateItem(
                 broker_id=test_broker,
                 asset_id=None,
@@ -292,12 +292,12 @@ class TestDuplicateDetection:
                 quantity=Decimal("0"),
                 cash=Currency(code="EUR", amount=Decimal("2000")),
                 description="Unique deposit 2",
-            ),
-        ]
+                ),
+            ]
 
         report = await detect_tx_duplicates(
             transactions=transactions, broker_id=test_broker, session=async_session
-        )
+            )
 
         # All should be unique (no existing transactions in DB yet)
         assert len(report.tx_unique_indices) == len(transactions)
@@ -307,7 +307,7 @@ class TestDuplicateDetection:
     @pytest.mark.asyncio
     async def test_detect_possible_duplicate(
         self, async_session: AsyncSession, test_broker: int, test_date: date
-    ):
+        ):
         """
         DD-002: Same type/date/qty/cash, different description.
 
@@ -323,7 +323,7 @@ class TestDuplicateDetection:
             amount=Decimal("1500"),
             currency="EUR",
             description="Original deposit",
-        )
+            )
         async_session.add(existing_tx)
         await async_session.commit()
 
@@ -338,12 +338,12 @@ class TestDuplicateDetection:
                     quantity=Decimal("0"),
                     cash=Currency(code="EUR", amount=Decimal("1500")),
                     description="Different deposit description",  # Different!
-                ),
-            ]
+                    ),
+                ]
 
             report = await detect_tx_duplicates(
                 transactions=transactions, broker_id=test_broker, session=async_session
-            )
+                )
 
             # Should be flagged as possible duplicate
             assert (
@@ -358,7 +358,7 @@ class TestDuplicateDetection:
                 assert match.match_level in [
                     BRIMDuplicateLevel.POSSIBLE,
                     BRIMDuplicateLevel.POSSIBLE_WITH_ASSET,
-                ]
+                    ]
 
         finally:
             # Cleanup
@@ -368,7 +368,7 @@ class TestDuplicateDetection:
     @pytest.mark.asyncio
     async def test_detect_likely_duplicate(
         self, async_session: AsyncSession, test_broker: int, test_date: date
-    ):
+        ):
         """
         DD-003: Same type/date/qty/cash AND same description.
 
@@ -386,7 +386,7 @@ class TestDuplicateDetection:
             amount=Decimal("2500"),
             currency="EUR",
             description=description,
-        )
+            )
         async_session.add(existing_tx)
         await async_session.commit()
 
@@ -401,12 +401,12 @@ class TestDuplicateDetection:
                     quantity=Decimal("0"),
                     cash=Currency(code="EUR", amount=Decimal("2500")),
                     description=description,  # SAME description
-                ),
-            ]
+                    ),
+                ]
 
             report = await detect_tx_duplicates(
                 transactions=transactions, broker_id=test_broker, session=async_session
-            )
+                )
 
             # Should be flagged as likely duplicate
             assert (
@@ -421,7 +421,7 @@ class TestDuplicateDetection:
                 assert match.match_level in [
                     BRIMDuplicateLevel.LIKELY,
                     BRIMDuplicateLevel.LIKELY_WITH_ASSET,
-                ]
+                    ]
 
         finally:
             await async_session.delete(existing_tx)
@@ -430,7 +430,7 @@ class TestDuplicateDetection:
     @pytest.mark.asyncio
     async def test_different_broker_not_duplicate(
         self, async_session: AsyncSession, test_broker: int, test_date: date
-    ):
+        ):
         """
         DD-004: Same data, different broker.
 
@@ -441,7 +441,7 @@ class TestDuplicateDetection:
 
         other_broker = Broker(
             name=f"Other Broker {uuid.uuid4().hex[:8]}", description="Another broker"
-        )
+            )
         async_session.add(other_broker)
         await async_session.commit()
         await async_session.refresh(other_broker)
@@ -457,7 +457,7 @@ class TestDuplicateDetection:
             amount=Decimal("3000"),
             currency="EUR",
             description="Deposit on other broker",
-        )
+            )
         async_session.add(existing_tx)
         await async_session.commit()
 
@@ -472,14 +472,14 @@ class TestDuplicateDetection:
                     quantity=Decimal("0"),
                     cash=Currency(code="EUR", amount=Decimal("3000")),
                     description="Deposit on other broker",
-                ),
-            ]
+                    ),
+                ]
 
             report = await detect_tx_duplicates(
                 transactions=transactions,
                 broker_id=test_broker,  # Different broker!
                 session=async_session,
-            )
+                )
 
             # Should NOT be flagged as duplicate (different broker)
             assert (
@@ -497,7 +497,7 @@ class TestDuplicateDetection:
     @pytest.mark.asyncio
     async def test_empty_description_not_likely(
         self, async_session: AsyncSession, test_broker: int, test_date: date
-    ):
+        ):
         """
         DD-007: Both descriptions empty.
 
@@ -514,7 +514,7 @@ class TestDuplicateDetection:
             amount=Decimal("4000"),
             currency="EUR",
             description="",  # Empty
-        )
+            )
         async_session.add(existing_tx)
         await async_session.commit()
 
@@ -529,12 +529,12 @@ class TestDuplicateDetection:
                     quantity=Decimal("0"),
                     cash=Currency(code="EUR", amount=Decimal("4000")),
                     description="",  # Also empty
-                ),
-            ]
+                    ),
+                ]
 
             report = await detect_tx_duplicates(
                 transactions=transactions, broker_id=test_broker, session=async_session
-            )
+                )
 
             # Empty descriptions should NOT elevate to LIKELY
             # Should be flagged as POSSIBLE (same data) but not LIKELY

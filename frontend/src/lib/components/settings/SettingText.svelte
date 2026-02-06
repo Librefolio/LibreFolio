@@ -3,8 +3,8 @@
      * SettingText.svelte
      * Text/Email input with inline edit functionality
      */
-    import { createEventDispatcher } from 'svelte';
-    import { Pencil, Check, X } from 'lucide-svelte';
+    import {createEventDispatcher} from 'svelte';
+    import {Check, Pencil, X} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
         change: string;
@@ -84,33 +84,33 @@
         <!-- Edit Mode -->
         <div class="edit-container">
             <input
-                bind:this={inputElement}
-                bind:value={editValue}
-                {type}
-                {placeholder}
-                {maxlength}
-                {pattern}
-                on:keydown={handleKeydown}
-                class="input"
-                class:invalid={!isValid}
+                    bind:this={inputElement}
+                    bind:value={editValue}
+                    {type}
+                    {placeholder}
+                    {maxlength}
+                    {pattern}
+                    on:keydown={handleKeydown}
+                    class="input"
+                    class:invalid={!isValid}
             />
             <div class="actions">
                 <button
-                    type="button"
-                    on:click={saveEdit}
-                    disabled={!isValid}
-                    class="action-btn save"
-                    title="Save"
+                        type="button"
+                        on:click={saveEdit}
+                        disabled={!isValid}
+                        class="action-btn save"
+                        title="Save"
                 >
-                    <Check size={16} />
+                    <Check size={16}/>
                 </button>
                 <button
-                    type="button"
-                    on:click={cancelEdit}
-                    class="action-btn cancel"
-                    title="Cancel"
+                        type="button"
+                        on:click={cancelEdit}
+                        class="action-btn cancel"
+                        title="Cancel"
                 >
-                    <X size={16} />
+                    <X size={16}/>
                 </button>
             </div>
         </div>
@@ -120,12 +120,12 @@
             <span class="value">{value}</span>
             {#if !readonly}
                 <button
-                    type="button"
-                    on:click={startEdit}
-                    class="edit-btn"
-                    title="Edit"
+                        type="button"
+                        on:click={startEdit}
+                        class="edit-btn"
+                        title="Edit"
                 >
-                    <Pencil size={14} />
+                    <Pencil size={14}/>
                 </button>
             {/if}
         </div>

@@ -81,7 +81,7 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
     patterns_exact = [
         # $t('key') or $_('key') or t('key') with single/double quotes
         re.compile(r"(?:\$t|\$_|(?<![a-zA-Z])t|(?<![a-zA-Z])_)\s*\(\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
-    ]
+        ]
 
     # Patterns for INDIRECT keys (passed as props/variables)
     # These are keys stored in objects/arrays and later passed to $t/$_
@@ -92,7 +92,7 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
         re.compile(r"['\"]?key['\"]?\s*:\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
         # i18n key strings in arrays: ['common.yes', 'common.no']
         re.compile(r"\[\s*['\"]([a-zA-Z0-9_.]+)['\"](?:\s*,\s*['\"]([a-zA-Z0-9_.]+)['\"])*\s*\]"),
-    ]
+        ]
 
     # Patterns for DYNAMIC keys (template literals / concatenation)
     patterns_dynamic = [
@@ -100,7 +100,7 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
         re.compile(r"`([a-zA-Z0-9_.]+)\.\$\{"),
         # 'prefix.' + var or "prefix." + var
         re.compile(r"['\"]([a-zA-Z0-9_.]+)\.['\"]?\s*\+"),
-    ]
+        ]
 
     # Scan all .svelte, .ts, and .js files
     for ext in ["*.svelte", "*.ts", "*.js"]:
@@ -292,7 +292,7 @@ def generate_missing_report(df: pd.DataFrame) -> str:
             table_data,
             headers=["Key", "Status"],
             tablefmt="github"
-        )
+            )
         lines.append(table_str)
         lines.append("")
 
@@ -303,7 +303,7 @@ def generate_unused_keys_report(
     all_keys: list[str],
     exact_keys: set[str],
     prefix_patterns: set[str]
-) -> tuple[str, list[str]]:
+    ) -> tuple[str, list[str]]:
     """
     Generate a report of translation keys that exist but are not used in the codebase.
 
@@ -313,7 +313,7 @@ def generate_unused_keys_report(
     unused_keys = [
         key for key in all_keys
         if not is_key_potentially_used(key, exact_keys, prefix_patterns)
-    ]
+        ]
 
     if len(unused_keys) == 0:
         return "\n## ✅ No Unused Translation Keys\n\nAll translation keys are used in the codebase.\n", []
@@ -325,7 +325,7 @@ def generate_unused_keys_report(
         "- Keys constructed dynamically (e.g., `$t(\\`prefix.${var}\\`)`)\n",
         "- Keys passed as variables\n",
         "- Keys used in computed expressions\n\n",
-    ]
+        ]
 
     if prefix_patterns:
         lines.append(f"**Dynamic prefixes detected:** `{', '.join(sorted(prefix_patterns))}`\n")
@@ -353,7 +353,7 @@ def export_markdown(
     output_path: Path | None,
     include_full_table: bool = True,
     unused_keys_report: str = ""
-) -> None:
+    ) -> None:
     """
     Export the translation table to Markdown format using tabulate.
 
@@ -387,7 +387,7 @@ def export_markdown(
         f"*Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}*\n",
         summary,
         missing_report,
-    ]
+        ]
 
     if unused_keys_report:
         parts.append(unused_keys_report)
@@ -396,7 +396,7 @@ def export_markdown(
         parts.extend([
             "\n## 📋 Complete Translation Table\n",
             table_md,
-        ])
+            ])
 
     parts.append("")
     content = "\n".join(parts)
@@ -561,13 +561,13 @@ def add_arguments(parser) -> None:
         choices=["none", "md", "xlsx", "both"],
         default="none",
         help="Output format: none=only warnings (default), md=full markdown, xlsx=excel, both=md+xlsx"
-    )
+        )
     parser.add_argument(
         "--output", "-o",
         type=str,
         default=None,
         help="Output directory or file path (default: current directory for file output)"
-    )
+        )
 
 
 def run_from_args(args) -> int:
@@ -575,7 +575,7 @@ def run_from_args(args) -> int:
     return run_audit(
         format_type=getattr(args, 'format', 'none'),
         output=getattr(args, 'output', None)
-    )
+        )
 
 
 def main():
@@ -593,7 +593,7 @@ Examples:
   python i18n-audit.py --format both      Generate both formats in current dir
   python i18n-audit.py -o ./reports/      Save to specific directory
         """
-    )
+        )
     add_arguments(parser)
     args = parser.parse_args()
     return run_from_args(args)
@@ -680,7 +680,7 @@ def cmd_add(args) -> int:
         "it": args.it,
         "fr": args.fr,
         "es": args.es,
-    }
+        }
 
     # Check if key already exists in any language
     existing_values = {}

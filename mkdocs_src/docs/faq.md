@@ -6,7 +6,8 @@ Welcome to the LibreFolio FAQ. Here you'll find answers to common questions.
 
 ### What is LibreFolio?
 
-LibreFolio is a self-hosted, open-source portfolio tracker designed for privacy-conscious investors. It allows you to track your investments, analyze performance, and maintain full control of your financial data.
+LibreFolio is a self-hosted, open-source portfolio tracker designed for privacy-conscious investors. It allows you to track your investments, analyze performance, and maintain full
+control of your financial data.
 
 ### Is LibreFolio free?
 
@@ -31,7 +32,7 @@ See our [Installation Guide](getting-started/installation.md) for detailed instr
 ### How do I create an account?
 
 1. Navigate to the login page
-2. Click "Register" 
+2. Click "Register"
 3. Fill in your details
 4. Your account is ready to use!
 

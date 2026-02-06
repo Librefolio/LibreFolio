@@ -92,7 +92,7 @@ def create_session(user_id: int, ttl_hours: int) -> str:
         "user_id": user_id,
         "created_at": now,
         "expires_at": now + timedelta(hours=ttl_hours),
-    }
+        }
 
     logger.info("Session created", user_id=user_id, session_id=session_id[:8] + "...")
     return session_id

@@ -5,8 +5,8 @@
  * Derived from Zod schemas in generated.ts.
  */
 
-import { z } from 'zod';
-import { schemas } from '$lib/api/generated';
+import {z} from 'zod';
+import {schemas} from '$lib/api/generated';
 
 // =============================================================================
 // TYPES DERIVED FROM ZOD SCHEMAS
@@ -61,12 +61,12 @@ export type UpdateProfileResponse = z.infer<typeof schemas.UpdateProfileResponse
  * Authentication state for the auth store.
  */
 export interface AuthState {
-	/** Currently authenticated user, or null if not logged in */
-	user: AuthUser | null;
-	/** Whether an auth operation is in progress */
-	isLoading: boolean;
-	/** Error message from last failed operation */
-	error: string | null;
-	/** Whether initial auth check has completed */
-	isInitialized: boolean;
+    /** Currently authenticated user, or null if not logged in */
+    user: AuthUser | null;
+    /** Whether an auth operation is in progress */
+    isLoading: boolean;
+    /** Error message from last failed operation */
+    error: string | null;
+    /** Whether initial auth check has completed */
+    isInitialized: boolean;
 }

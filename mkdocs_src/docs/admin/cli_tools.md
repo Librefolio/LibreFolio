@@ -8,15 +8,16 @@ This section provides detailed information on the command-line tools available i
 
 ### Common Commands
 
--   **`./dev.sh install`**: Installs all project dependencies (Python and Node.js).
--   **`./dev.sh server`**: Starts the FastAPI server with auto-reload.
--   **`./dev.sh db:upgrade`**: Applies database migrations.
--   **`./dev.sh db:migrate "message"`**: Creates a new database migration.
--   **`./dev.sh test <args>`**: Runs the test suite.
--   **`./dev.sh fe:build`**: Builds the frontend for production.
--   **`./dev.sh info:mk deploy`**: Deploys the documentation to GitHub Pages.
+- **`./dev.sh install`**: Installs all project dependencies (Python and Node.js).
+- **`./dev.sh server`**: Starts the FastAPI server with auto-reload.
+- **`./dev.sh db:upgrade`**: Applies database migrations.
+- **`./dev.sh db:migrate "message"`**: Creates a new database migration.
+- **`./dev.sh test <args>`**: Runs the test suite.
+- **`./dev.sh fe:build`**: Builds the frontend for production.
+- **`./dev.sh info:mk deploy`**: Deploys the documentation to GitHub Pages.
 
 For a full list of commands, run:
+
 ```bash
 ./dev.sh help
 ```
@@ -27,33 +28,33 @@ For a full list of commands, run:
 
 ### User Management
 
--   **Create a Superuser**:
-    ```bash
-    ./dev.sh user:create <username> <email> <password>
-    ```
+- **Create a Superuser**:
+  ```bash
+  ./dev.sh user:create <username> <email> <password>
+  ```
 
--   **Reset a User's Password**:
-    ```bash
-    ./dev.sh user:reset <username> <new_password>
-    ```
+- **Reset a User's Password**:
+  ```bash
+  ./dev.sh user:reset <username> <new_password>
+  ```
 
--   **List All Users**:
-    ```bash
-    ./dev.sh user:list
-    ```
+- **List All Users**:
+  ```bash
+  ./dev.sh user:list
+  ```
 
--   **Promote a User to Admin**:
-    ```bash
-    ./dev.sh user:promote <username>
-    ```
+- **Promote a User to Admin**:
+  ```bash
+  ./dev.sh user:promote <username>
+  ```
 
 ### System Management
 
--   **Initialize Global Settings**:
-    ```bash
-    ./dev.sh user:init-settings
-    ```
-    This command populates the database with default global settings if they don't already exist.
+- **Initialize Global Settings**:
+  ```bash
+  ./dev.sh user:init-settings
+  ```
+  This command populates the database with default global settings if they don't already exist.
 
 ## `test_runner.py`
 
@@ -61,23 +62,24 @@ For a full list of commands, run:
 
 ### Running Tests
 
--   **Run all tests**:
-    ```bash
-    ./dev.sh test all
-    ```
+- **Run all tests**:
+  ```bash
+  ./dev.sh test all
+  ```
 
--   **Run a specific test group**:
-    ```bash
-    ./dev.sh test db all  # Run all database tests
-    ```
+- **Run a specific test group**:
+  ```bash
+  ./dev.sh test db all  # Run all database tests
+  ```
 
--   **Run tests with coverage**:
-    ```bash
-    ./dev.sh test:coverage
-    ```
-    This generates an HTML report in the `htmlcov/` directory.
+- **Run tests with coverage**:
+  ```bash
+  ./dev.sh test:coverage
+  ```
+  This generates an HTML report in the `htmlcov/` directory.
 
 For more options, see the test runner's help message:
+
 ```bash
 ./dev.sh test --help
 ```

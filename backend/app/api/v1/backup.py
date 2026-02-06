@@ -17,7 +17,7 @@ from pydantic import BaseModel
 backup_router = APIRouter(
     prefix="/backup",
     tags=["Backup & Export"],
-)
+    )
 
 
 # =============================================================================
@@ -102,7 +102,7 @@ async def export_data(request: ExportRequest):
     """
     raise HTTPException(
         status_code=501, detail="Export functionality is not yet implemented. Coming soon!"
-    )
+        )
 
 
 @backup_router.post("/restore", response_model=RestoreResponse)
@@ -122,7 +122,7 @@ async def restore_data(request: RestoreRequest):
     """
     raise HTTPException(
         status_code=501, detail="Restore functionality is not yet implemented. Coming soon!"
-    )
+        )
 
 
 @backup_router.get("/formats")
@@ -140,23 +140,23 @@ async def list_export_formats():
                 "description": "Human-readable JSON file with all data",
                 "extension": ".json",
                 "available": False,  # Not yet implemented
-            },
+                },
             {
                 "code": "csv",
                 "name": "CSV Archive",
                 "description": "ZIP file containing CSV files for each table",
                 "extension": ".zip",
                 "available": False,
-            },
+                },
             {
                 "code": "sqlite",
                 "name": "SQLite Database",
                 "description": "Full database backup as SQLite file",
                 "extension": ".db",
                 "available": False,
-            },
-        ]
-    }
+                },
+            ]
+        }
 
 
 @backup_router.get("/status")
@@ -171,4 +171,4 @@ async def backup_status():
         "message": "Backup/Export functionality is planned for a future release",
         "implemented_endpoints": ["/backup/formats", "/backup/status"],
         "planned_endpoints": ["/backup/export", "/backup/restore"],
-    }
+        }

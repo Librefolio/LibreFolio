@@ -40,7 +40,7 @@ from backend.app.schemas.fx import (
     FXDeletePairSourceResult,
     FXDeletePairSourcesResponse,
     FXCurrenciesResponse,
-)
+    )
 from backend.app.schemas.refresh import FXSyncResponse
 from backend.app.services.fx import (
     FXServiceError,
@@ -48,7 +48,7 @@ from backend.app.services.fx import (
     ensure_rates_multi_source,
     upsert_rates_bulk,
     delete_rates_bulk,
-)
+    )
 from backend.app.services.provider_registry import FXProviderRegistry
 
 logger = get_logger(__name__)
@@ -98,10 +98,10 @@ async def list_providers():
                     base_currencies=base_currencies,
                     description=getattr(
                         instance, "description", f'{provider_dict["name"]} FX rate provider'
-                    ),
+                        ),
                     icon_url=instance.get_icon(),
+                    )
                 )
-            )
 
         return providers  # Return list directly, no wrapper
     except Exception as e:
@@ -111,7 +111,7 @@ async def list_providers():
 @router_currencies.get("", response_model=FXCurrenciesResponse)
 async def list_currencies(
     provider: str = Query("ECB", description="Provider code (ECB, FED, BOE, SNB)")
-):
+    ):
     """
     Get the list of available currencies from specified provider.
 
@@ -128,7 +128,7 @@ async def list_currencies(
             raise HTTPException(
                 status_code=400,
                 detail=f"Unknown FX provider: {provider}. Available providers: {', '.join(available) if available else 'none registered'}",
-            )
+                )
 
         currencies = await provider_instance.get_supported_currencies()
         return FXCurrenciesResponse(currencies=currencies, count=len(currencies))
@@ -148,10 +148,10 @@ async def sync_rates(
     provider: str | None = Query(
         None,
         description="Provider code (ECB, FED, BOE, SNB). If NULL, uses fx_currency_pair_sources configuration.",
-    ),
+        ),
     base_currency: str | None = Query(None, description="Base currency (for multi-base providers)"),
     session: AsyncSession = Depends(get_session_generator),
-):
+    ):
     """
     Synchronize FX rates for the specified date range and currencies.
 
@@ -182,7 +182,7 @@ async def sync_rates(
     if start > end:
         raise HTTPException(
             status_code=400, detail="Start date must be before or equal to end date"
-        )
+            )
     if end > date.today():
         raise HTTPException(status_code=400, detail="End date cannot be in the future")
 
@@ -200,19 +200,19 @@ async def sync_rates(
                 currency_list,
                 provider_code=provider,
                 base_currency=base_currency,
-            )
+                )
             return FXSyncResponse(
                 synced=result["total_changed"],
                 date_range=DateRangeModel(start=start, end=end),
                 currencies=result["currencies_synced"],
-            )
+                )
 
         else:
             # AUTO-CONFIGURATION MODE: Use fx_currency_pair_sources with fallback logic
             # Query ALL configured pair sources (all priorities), ordered by priority ASC
             stmt = select(FxCurrencyPairSource).order_by(
                 FxCurrencyPairSource.base, FxCurrencyPairSource.quote, FxCurrencyPairSource.priority
-            )
+                )
             result = await session.execute(stmt)
             all_pair_sources = result.scalars().all()
 
@@ -220,9 +220,9 @@ async def sync_rates(
                 raise HTTPException(
                     status_code=400,
                     detail="No currency pair sources configured. Please either: "
-                    "(1) specify 'provider' parameter explicitly, or "
-                    "(2) configure pair sources via POST /fx/pair-sources/bulk",
-                )
+                           "(1) specify 'provider' parameter explicitly, or "
+                           "(2) configure pair sources via POST /fx/pair-sources/bulk",
+                    )
 
             # Build lookup: (base, quote) -> list of (provider_code, priority) ordered by priority
             config_lookup = {}
@@ -268,9 +268,9 @@ async def sync_rates(
                 raise HTTPException(
                     status_code=400,
                     detail=f"No configuration found for currencies: {', '.join(missing_pairs)}. "
-                    f"Please configure pair sources via POST /fx/pair-sources/bulk "
-                    f"or use explicit 'provider' parameter.",
-                )
+                           f"Please configure pair sources via POST /fx/pair-sources/bulk "
+                           f"or use explicit 'provider' parameter.",
+                    )
 
             # Execute sync with fallback logic
             total_changed = 0
@@ -290,7 +290,7 @@ async def sync_rates(
                         currencies_list,
                         provider_code=provider_code,
                         base_currency=None,
-                    )
+                        )
                     total_changed += result["total_changed"]
                     total_fetched += result["total_fetched"]
                     all_currencies_synced.update(result["currencies_synced"])
@@ -304,14 +304,14 @@ async def sync_rates(
                     fallback_attempted = False
                     for base, quote in [
                         (c1, c2) for c1 in currencies_list for c2 in currencies_list if c1 < c2
-                    ]:
+                        ]:
                         pair_key = (base, quote)
                         if pair_key in config_lookup and len(config_lookup[pair_key]) > 1:
                             # Has fallback providers (priority > 1)
                             for fallback_provider, fallback_priority in config_lookup[pair_key][1:]:
                                 logger.info(
                                     f"Trying fallback provider {fallback_provider} (priority={fallback_priority}) for {base}/{quote}"
-                                )
+                                    )
                                 fallback_attempted = True
 
                                 try:
@@ -321,19 +321,19 @@ async def sync_rates(
                                         [base, quote],
                                         provider_code=fallback_provider,
                                         base_currency=None,
-                                    )
+                                        )
                                     total_changed += result["total_changed"]
                                     total_fetched += result["total_fetched"]
                                     all_currencies_synced.update(result["currencies_synced"])
                                     logger.info(
                                         f"Fallback successful: {fallback_provider} provided {base}/{quote}"
-                                    )
+                                        )
                                     break  # Success, no need to try more fallbacks for this pair
 
                                 except FXServiceError as fallback_e:
                                     logger.warning(
                                         f"Fallback provider {fallback_provider} (priority={fallback_priority}) also failed: {str(fallback_e)}"
-                                    )
+                                        )
                                     continue  # Try next fallback
 
                     if not fallback_attempted:
@@ -344,13 +344,13 @@ async def sync_rates(
             if final_errors and not all_currencies_synced:
                 raise HTTPException(
                     status_code=502, detail=f"All providers failed: {'; '.join(final_errors)}"
-                )
+                    )
 
             return FXSyncResponse(
                 synced=total_changed,
                 date_range=DateRangeModel(start=start, end=end),
                 currencies=sorted(list(all_currencies_synced)),
-            )
+                )
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -361,7 +361,7 @@ async def sync_rates(
 @router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)
 async def upsert_rates_endpoint(
     rates: List[FXUpsertItem], session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Manually insert or update one or more FX rates (bulk operation).
 
@@ -402,7 +402,7 @@ async def upsert_rates_endpoint(
             # Use bulk service function
             rate_results = await upsert_rates_bulk(
                 session, [(rate_item.rate_date, base, quote, rate_value, rate_item.source)]
-            )
+                )
 
             success, action = rate_results[0]
 
@@ -414,8 +414,8 @@ async def upsert_rates_endpoint(
                     date=rate_item.rate_date.isoformat(),
                     base=base,
                     quote=quote,
+                    )
                 )
-            )
 
         except ValueError as e:
             error_msg = f"Rate {idx}: Validation error: {str(e)}"
@@ -434,7 +434,7 @@ async def upsert_rates_endpoint(
 @router_currencies.delete("/rate", response_model=FXBulkDeleteResponse)
 async def delete_rates_endpoint(
     deletions: List[FXDeleteItem], session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Delete one or more FX rates (bulk operation).
 
@@ -501,8 +501,8 @@ async def delete_rates_endpoint(
                 "to_currency": to_cur,
                 "start_date": start_date,
                 "end_date": end_date,
-            }
-        )
+                }
+            )
 
     # Execute bulk deletions if any valid
     if bulk_deletions:
@@ -513,7 +513,7 @@ async def delete_rates_endpoint(
             # Process results
             for metadata, (success, existing_count, deleted_count, message) in zip(
                 deletion_metadata, delete_results
-            ):
+                ):
                 # Backend normalized the pair, we need to figure out what it became
                 # For display, we'll show the normalized version
                 from_cur = metadata["from_currency"]
@@ -533,12 +533,12 @@ async def delete_rates_endpoint(
                         date_range=DateRangeModel(
                             start=metadata["start_date"],
                             end=metadata["end_date"] if metadata["end_date"] else None,
-                        ),
+                            ),
                         existing_count=existing_count,
                         deleted_count=deleted_count,
                         message=message,
+                        )
                     )
-                )
 
                 total_deleted += deleted_count
 
@@ -552,20 +552,20 @@ async def delete_rates_endpoint(
     if errors and not results:
         raise HTTPException(
             status_code=400, detail=f"All deletions failed validation: {'; '.join(errors)}"
-        )
+            )
 
     return FXBulkDeleteResponse(
         results=results,
         success_count=len([r for r in results if r.success]),
         total_deleted=total_deleted,
         errors=errors,
-    )
+        )
 
 
 @router_currencies.post("/convert", response_model=FXConvertResponse)
 async def convert_currency_bulk(
     request: List[FXConversionRequest], session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Convert one or more amounts between currencies (bulk operation).
 
@@ -599,7 +599,7 @@ async def convert_currency_bulk(
             raise HTTPException(
                 status_code=400,
                 detail=f"Conversion {conv_idx}: start date must be before or equal to end date",
-            )
+                )
 
         # Expand date range into individual days
         # Now using new signature: (Currency, to_currency, date)
@@ -610,7 +610,7 @@ async def convert_currency_bulk(
                 bulk_conversions.append((conversion.from_amount, to_cur, current_date))
                 conversion_metadata.append(
                     {"original_idx": conv_idx, "conversion": conversion, "date": current_date}
-                )
+                    )
                 current_date += timedelta(days=1)
         else:
             # Single-day conversion
@@ -620,8 +620,8 @@ async def convert_currency_bulk(
                     "original_idx": conv_idx,
                     "conversion": conversion,
                     "date": conversion.date_range.start,
-                }
-            )
+                    }
+                )
 
     # Call convert_bulk with raise_on_error=False to get partial results
     bulk_results, bulk_errors = await convert_bulk(session, bulk_conversions, raise_on_error=False)
@@ -652,7 +652,7 @@ async def convert_currency_bulk(
             days_back = (on_date - actual_rate_date).days
             backward_fill_info = BackwardFillInfo(
                 actual_rate_date=actual_rate_date, days_back=days_back
-            )
+                )
 
         results.append(
             FXConversionResult(
@@ -661,20 +661,20 @@ async def convert_currency_bulk(
                 conversion_date=on_date.isoformat(),
                 rate=rate,
                 backward_fill_info=backward_fill_info,
+                )
             )
-        )
 
     # If all conversions failed, return 404
     if bulk_errors and not results:
         raise HTTPException(
             status_code=404, detail=f"All conversions failed: {'; '.join(bulk_errors)}"
-        )
+            )
 
     return FXConvertResponse(
         results=results,
         success_count=len([r for r in results if r.to_amount is not None]),
         errors=bulk_errors,
-    )
+        )
 
 
 # ============================================================================
@@ -696,16 +696,16 @@ async def list_pair_sources(session: AsyncSession = Depends(get_session_generato
     try:
         stmt = select(FxCurrencyPairSource).order_by(
             FxCurrencyPairSource.base, FxCurrencyPairSource.quote, FxCurrencyPairSource.priority
-        )
+            )
         result = await session.execute(stmt)
         sources = result.scalars().all()
 
         sources_list = [
             FXPairSourceItem(
                 base=s.base, quote=s.quote, provider_code=s.provider_code, priority=s.priority
-            )
+                )
             for s in sources
-        ]
+            ]
 
         return FXPairSourcesResponse(sources=sources_list, count=len(sources_list))
     except Exception as e:
@@ -715,7 +715,7 @@ async def list_pair_sources(session: AsyncSession = Depends(get_session_generato
 @router_providers.post("/pair-sources", response_model=FXCreatePairSourcesResponse, status_code=201)
 async def create_pair_sources_bulk(
     sources: List[FXPairSourceItem], session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Create or update multiple currency pair sources in a single atomic transaction.
 
@@ -755,17 +755,17 @@ async def create_pair_sources_bulk(
                         FxCurrencyPairSource.base == inv_base,
                         FxCurrencyPairSource.quote == inv_quote,
                         FxCurrencyPairSource.priority == inv_priority,
+                        )
                     )
-                )
 
             inverse_stmt = select(
                 FxCurrencyPairSource.base, FxCurrencyPairSource.quote, FxCurrencyPairSource.priority
-            ).where(or_(*inverse_conditions))
+                ).where(or_(*inverse_conditions))
 
             inverse_result = await session.execute(inverse_stmt)
             existing_inverses = {
                 (row.base, row.quote, row.priority) for row in inverse_result.all()
-            }
+                }
         else:
             existing_inverses = set()
 
@@ -782,8 +782,8 @@ async def create_pair_sources_bulk(
                         provider_code=source.provider_code,
                         priority=source.priority,
                         message=f"Unknown provider: {source.provider_code}",
+                        )
                     )
-                )
                 error_count += 1
                 continue
 
@@ -799,8 +799,8 @@ async def create_pair_sources_bulk(
                         provider_code=source.provider_code,
                         priority=source.priority,
                         message=f"Conflict: Inverse pair {source.quote}/{source.base} with priority={source.priority} already exists. Use different priority.",
+                        )
                     )
-                )
                 error_count += 1
                 continue
 
@@ -809,7 +809,7 @@ async def create_pair_sources_bulk(
                 FxCurrencyPairSource.base == source.base.upper(),
                 FxCurrencyPairSource.quote == source.quote.upper(),
                 FxCurrencyPairSource.priority == source.priority,
-            )
+                )
             result = await session.execute(stmt)
             existing = result.scalar_one_or_none()
 
@@ -825,7 +825,7 @@ async def create_pair_sources_bulk(
                     quote=source.quote.upper(),
                     provider_code=source.provider_code.upper(),
                     priority=source.priority,
-                )
+                    )
                 session.add(new_source)
                 action = "created"
 
@@ -838,8 +838,8 @@ async def create_pair_sources_bulk(
                     provider_code=source.provider_code.upper(),
                     priority=source.priority,
                     message=None,
+                    )
                 )
-            )
             success_count += 1
 
         # Commit only if all validations passed
@@ -850,14 +850,14 @@ async def create_pair_sources_bulk(
                 detail={
                     "message": f"Validation failed for {error_count} source(s). Transaction rolled back.",
                     "results": [r.model_dump() for r in results],
-                },
-            )
+                    },
+                )
 
         await session.commit()
 
         return FXCreatePairSourcesResponse(
             results=results, success_count=success_count, error_count=error_count
-        )
+            )
 
     except HTTPException:
         raise
@@ -869,7 +869,7 @@ async def create_pair_sources_bulk(
 @router_providers.delete("/pair-sources", response_model=FXDeletePairSourcesResponse)
 async def delete_pair_sources_bulk(
     sources: List[FXDeletePairSourceItem], session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Delete multiple currency pair sources.
 
@@ -903,12 +903,12 @@ async def delete_pair_sources_bulk(
                     FxCurrencyPairSource.base == base,
                     FxCurrencyPairSource.quote == quote,
                     FxCurrencyPairSource.priority == priority,
-                )
+                    )
             else:
                 # Delete all priorities for this pair
                 stmt = sql_delete(FxCurrencyPairSource).where(
                     FxCurrencyPairSource.base == base, FxCurrencyPairSource.quote == quote
-                )
+                    )
 
             result = await session.execute(stmt)
             deleted_count = result.rowcount
@@ -924,8 +924,8 @@ async def delete_pair_sources_bulk(
                         priority=priority,
                         deleted_count=0,
                         message=f"Pair {base}/{quote}{priority_str} not found (nothing to delete)",
+                        )
                     )
-                )
             else:
                 results.append(
                     FXDeletePairSourceResult(
@@ -935,8 +935,8 @@ async def delete_pair_sources_bulk(
                         priority=priority,
                         deleted_count=deleted_count,
                         message=None,
+                        )
                     )
-                )
                 total_deleted += deleted_count
 
         await session.commit()
@@ -945,7 +945,7 @@ async def delete_pair_sources_bulk(
             results=results,
             success_count=len([r for r in results if r.success]),
             total_deleted=total_deleted,
-        )
+            )
 
     except Exception as e:
         await session.rollback()
