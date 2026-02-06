@@ -5,8 +5,8 @@
  * Derived from Zod schemas in generated.ts.
  */
 
-import { z } from 'zod';
-import { schemas } from '$lib/api/generated';
+import {z} from 'zod';
+import {schemas} from '$lib/api/generated';
 
 // =============================================================================
 // TYPES DERIVED FROM ZOD SCHEMAS

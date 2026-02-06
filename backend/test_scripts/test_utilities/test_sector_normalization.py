@@ -38,7 +38,7 @@ class TestFinancialSectorEnum:
             "Telecommunication",
             "Utilities",
             "Other",
-        ]
+            ]
         actual = [s.value for s in FinancialSector]
         for sector in expected:
             assert sector in actual, f"Missing sector: {sector}"
@@ -84,8 +84,8 @@ class TestFinancialSectorFromString:
             ("Telecommunication", FinancialSector.TELECOMMUNICATION),
             ("Utilities", FinancialSector.UTILITIES),
             ("Other", FinancialSector.OTHER),
-        ],
-    )
+            ],
+        )
     def test_exact_matches(self, input_val, expected):
         """Exact sector names should be recognized."""
         assert FinancialSector.from_string(input_val) == expected
@@ -97,8 +97,8 @@ class TestFinancialSectorFromString:
             ("healthcare", FinancialSector.HEALTH_CARE),  # No space
             ("materials", FinancialSector.BASIC_MATERIALS),  # Short form
             ("telecom", FinancialSector.TELECOMMUNICATION),  # Short form
-        ],
-    )
+            ],
+        )
     def test_aliases(self, input_val, expected):
         """Aliases should be recognized."""
         assert FinancialSector.from_string(input_val) == expected
@@ -116,8 +116,8 @@ class TestFinancialSectorFromString:
             "Gaming",
             "Automotive",
             "SomeRandomSector",
-        ],
-    )
+            ],
+        )
     def test_unknown_sectors_map_to_other(self, input_val):
         """Unknown sector names should map to OTHER."""
         result = FinancialSector.from_string(input_val)

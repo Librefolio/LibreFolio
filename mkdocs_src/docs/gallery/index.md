@@ -2,7 +2,6 @@
 
 Welcome to the LibreFolio visual gallery! Here you can explore all the features of our portfolio management platform through screenshots.
 
-
 ## Choose Your View
 
 <div class="gallery-cards">
@@ -21,7 +20,7 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
 ## Features Highlighted
 
 !!! tip "What You'll See"
-    
+
     - **Authentication**: Secure login with password strength meter
     - **Dashboard**: Quick overview of your portfolio
     - **Brokers**: Manage multiple brokerage accounts
@@ -32,12 +31,12 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
 
 LibreFolio is available in:
 
-| Language | Flag | Status |
-|----------|------|--------|
-| English | 🇬🇧 | ✅ Complete |
+| Language | Flag | Status     |
+|----------|------|------------|
+| English  | 🇬🇧 | ✅ Complete |
 | Italiano | 🇮🇹 | ✅ Complete |
 | Français | 🇫🇷 | ✅ Complete |
-| Español | 🇪🇸 | ✅ Complete |
+| Español  | 🇪🇸 | ✅ Complete |
 
 ---
 

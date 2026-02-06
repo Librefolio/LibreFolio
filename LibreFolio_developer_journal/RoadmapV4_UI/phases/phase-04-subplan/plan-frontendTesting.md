@@ -970,25 +970,25 @@ def mkdocs_gallery(args) -> bool:
     print_header("Gallery Screenshot Generation")
     print_info("Generating screenshots for mkdocs documentation")
     print_info("This runs gallery.spec.ts on both desktop and mobile viewports")
-    
+
     # Ensure test users exist
     if not _ensure_test_users():
         return False
-    
+
     # Run gallery for desktop
     print_section("Desktop Screenshots")
     success = _run_playwright("gallery.spec.ts", headed=True, project="desktop")
     if not success:
         return False
-    
+
     # Run gallery for mobile
     print_section("Mobile Screenshots")
     success = _run_playwright("gallery.spec.ts", headed=True, project="mobile")
-    
+
     if success:
         print_success("Gallery screenshots generated!")
         print_info("Output: mkdocs_src/docs/gallery/")
-    
+
     return success
 
 
@@ -998,7 +998,7 @@ def mkdocs_build(args) -> bool:
         print_info("Regenerating gallery screenshots first...")
         if not mkdocs_gallery(args):
             print_warning("Gallery generation failed, continuing with build...")
-    
+
     # Normal mkdocs build
     return run_command(["mkdocs", "build"], "MkDocs build")
 ```

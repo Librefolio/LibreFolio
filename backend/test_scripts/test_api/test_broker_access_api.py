@@ -45,7 +45,7 @@ def unique_username() -> str:
 
 async def create_user_and_login(
     client: httpx.AsyncClient, username: Optional[str] = None
-) -> tuple[int, str, str, Optional[str]]:
+    ) -> tuple[int, str, str, Optional[str]]:
     """
     Create a new user, login, and return (user_id, username, email, session).
     Sets session cookie on client.
@@ -59,7 +59,7 @@ async def create_user_and_login(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-    )
+        )
 
     if resp.status_code != 201:
         raise Exception(f"Failed to create user: {resp.text}")
@@ -69,7 +69,7 @@ async def create_user_and_login(
     # Login
     login_resp = await client.post(
         f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-    )
+        )
 
     session = login_resp.cookies.get("session")
     if session:
@@ -127,7 +127,7 @@ class TestAccessList:
             response = await client.get(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -151,7 +151,7 @@ class TestAccessList:
             response = await client2.get(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 404
 
@@ -184,7 +184,7 @@ class TestAddAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -208,7 +208,7 @@ class TestAddAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             assert response.json()["access"]["role"] == "EDITOR"
@@ -230,7 +230,7 @@ class TestAddAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "OWNER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             assert response.json()["access"]["role"] == "OWNER"
@@ -246,7 +246,7 @@ class TestAddAccess:
             httpx.AsyncClient() as client1,
             httpx.AsyncClient() as client2,
             httpx.AsyncClient() as client3,
-        ):
+            ):
             # User 1 creates broker
             await create_user_and_login(client1)
             broker_id = await create_broker(client1)
@@ -257,7 +257,7 @@ class TestAddAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # Create user 3
             user3_id, _, _, _ = await create_user_and_login(client3)
@@ -267,7 +267,7 @@ class TestAddAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user3_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 403
             assert "OWNER" in response.json()["detail"]
@@ -283,7 +283,7 @@ class TestAddAccess:
             httpx.AsyncClient() as client1,
             httpx.AsyncClient() as client2,
             httpx.AsyncClient() as client3,
-        ):
+            ):
             await create_user_and_login(client1)
             broker_id = await create_broker(client1)
 
@@ -292,7 +292,7 @@ class TestAddAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             user3_id, _, _, _ = await create_user_and_login(client3)
 
@@ -300,7 +300,7 @@ class TestAddAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user3_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 403
 
@@ -322,14 +322,14 @@ class TestAddAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # Try to add again
             response = await client1.post(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 400
             assert "already has access" in response.json()["detail"]
@@ -349,7 +349,7 @@ class TestAddAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": 999999, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 400
             assert "not found" in response.json()["detail"]
@@ -379,14 +379,14 @@ class TestUpdateAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # Promote
             response = await client1.patch(
                 f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
                 json={"role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             assert response.json()["access"]["role"] == "EDITOR"
@@ -407,13 +407,13 @@ class TestUpdateAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             response = await client1.patch(
                 f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
                 json={"role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             assert response.json()["access"]["role"] == "VIEWER"
@@ -434,7 +434,7 @@ class TestUpdateAccess:
                 f"{API_BASE}/brokers/{broker_id}/access/{user_id}",
                 json={"role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 400
             assert "last OWNER" in response.json()["detail"]
@@ -450,7 +450,7 @@ class TestUpdateAccess:
             httpx.AsyncClient() as client1,
             httpx.AsyncClient() as client2,
             httpx.AsyncClient() as client3,
-        ):
+            ):
             await create_user_and_login(client1)
             broker_id = await create_broker(client1)
 
@@ -460,21 +460,21 @@ class TestUpdateAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             user3_id, _, _, _ = await create_user_and_login(client3)
             await client1.post(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user3_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # Editor tries to modify viewer
             response = await client2.patch(
                 f"{API_BASE}/brokers/{broker_id}/access/{user3_id}",
                 json={"role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 403
             assert "OWNER" in response.json()["detail"]
@@ -504,12 +504,12 @@ class TestRemoveAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             response = await client1.delete(
                 f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             assert response.json()["success"] is True
@@ -530,12 +530,12 @@ class TestRemoveAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             response = await client1.delete(
                 f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
 
@@ -556,13 +556,13 @@ class TestRemoveAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "OWNER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # Remove second owner
             response = await client1.delete(
                 f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
 
@@ -580,7 +580,7 @@ class TestRemoveAccess:
             response = await client.delete(
                 f"{API_BASE}/brokers/{broker_id}/access/{user_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 400
             assert "last OWNER" in response.json()["detail"]
@@ -601,13 +601,13 @@ class TestRemoveAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # Editor removes self
             response = await client2.delete(
                 f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
 
@@ -627,12 +627,12 @@ class TestRemoveAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             response = await client2.delete(
                 f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
 
@@ -647,7 +647,7 @@ class TestRemoveAccess:
             httpx.AsyncClient() as client1,
             httpx.AsyncClient() as client2,
             httpx.AsyncClient() as client3,
-        ):
+            ):
             await create_user_and_login(client1)
             broker_id = await create_broker(client1)
 
@@ -656,20 +656,20 @@ class TestRemoveAccess:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             user3_id, _, _, _ = await create_user_and_login(client3)
             await client1.post(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user3_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # Editor tries to remove viewer
             response = await client2.delete(
                 f"{API_BASE}/brokers/{broker_id}/access/{user3_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 400
             assert "only remove yourself" in response.json()["detail"]
@@ -707,7 +707,7 @@ class TestMultiUserIsolation:
             direct_resp = await client2.get(
                 f"{API_BASE}/brokers/{broker_id}",
                 timeout=TIMEOUT,
-            )
+                )
             assert direct_resp.status_code == 404
 
             print_success("✓ User isolation works correctly")
@@ -754,7 +754,7 @@ class TestSuperuserAccess:
                     "First user is not superuser (DB not clean). "
                     "To test manually: rm backend/data/sqlite/test_app.db && "
                     "./dev.sh server:test && ./dev.sh test api broker-access -k superuser"
-                )
+                    )
 
             # Create regular user with broker
             await create_user_and_login(user_client)
@@ -765,7 +765,7 @@ class TestSuperuserAccess:
                 f"{API_BASE}/brokers",
                 params={"as_user_id": "all"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             broker_ids = [b["id"] for b in response.json()]
@@ -785,7 +785,7 @@ class TestSuperuserAccess:
                 f"{API_BASE}/brokers",
                 params={"as_user_id": "all"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 403
             assert "superuser" in response.json()["detail"].lower()
@@ -815,7 +815,7 @@ class TestSelfModification:
                 f"{API_BASE}/brokers/{broker_id}/access/{user_id}",
                 json={"role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 400
             assert "last OWNER" in response.json()["detail"]
@@ -837,14 +837,14 @@ class TestSelfModification:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "OWNER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # User 1 can now degrade self
             response = await client1.patch(
                 f"{API_BASE}/brokers/{broker_id}/access/{user1_id}",
                 json={"role": "EDITOR"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             assert response.json()["access"]["role"] == "EDITOR"

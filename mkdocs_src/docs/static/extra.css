@@ -4,7 +4,7 @@
     /* Brand Colors from Frontend */
     --md-primary-fg-color: #1a4031; /* libre-green */
     --md-primary-bg-color: #f5f4ef; /* libre-beige */
-    --md-accent-fg-color: #5a947c;  /* primary-400 */
+    --md-accent-fg-color: #5a947c; /* primary-400 */
 
     --md-sidebar-width: 12rem;
 }
@@ -34,7 +34,7 @@
     color: white;
     background: linear-gradient(135deg, var(--md-primary-fg-color) 0%, var(--md-accent-fg-color) 100%);
     border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     display: block; /* Full width */
     width: 100%;
     text-align: center; /* Centered text */
@@ -55,7 +55,7 @@
     padding: 0.5rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     border-bottom: none;
     text-align: center; /* Centered text */
     display: block; /* Ensure block display for centering */
@@ -89,7 +89,7 @@
     font-weight: bold;
     border-left: 3px solid var(--md-primary-fg-color);
     padding-left: 0.5rem;
-    background-color: rgba(0,0,0,0.03);
+    background-color: rgba(0, 0, 0, 0.03);
 }
 
 /* --- RIGHT SIDEBAR (Table of Contents) --- */
@@ -156,21 +156,39 @@
 }
 
 @keyframes wave1 {
-    0%, 100% { transform: scaleY(1); }
-    25% { transform: scaleY(1.15); }
-    50% { transform: scaleY(0.9); }
-    75% { transform: scaleY(1.1); }
+    0%, 100% {
+        transform: scaleY(1);
+    }
+    25% {
+        transform: scaleY(1.15);
+    }
+    50% {
+        transform: scaleY(0.9);
+    }
+    75% {
+        transform: scaleY(1.1);
+    }
 }
 
 @keyframes wave2 {
-    0%, 100% { transform: scaleY(1); }
-    33% { transform: scaleY(1.2); }
-    66% { transform: scaleY(0.85); }
+    0%, 100% {
+        transform: scaleY(1);
+    }
+    33% {
+        transform: scaleY(1.2);
+    }
+    66% {
+        transform: scaleY(0.85);
+    }
 }
 
 @keyframes wave3 {
-    0%, 100% { transform: scaleY(1); }
-    50% { transform: scaleY(1.25); }
+    0%, 100% {
+        transform: scaleY(1);
+    }
+    50% {
+        transform: scaleY(1.25);
+    }
 }
 
 .chart-svg {
@@ -195,16 +213,38 @@
     stroke: #4ade80;
 }
 
-.line-1 { animation: drawAndFade 12s ease-in-out infinite; }
-.line-2 { animation: drawAndFade 12s ease-in-out infinite; animation-delay: 4s; }
-.line-3 { animation: drawAndFade 12s ease-in-out infinite; animation-delay: 8s; }
+.line-1 {
+    animation: drawAndFade 12s ease-in-out infinite;
+}
+
+.line-2 {
+    animation: drawAndFade 12s ease-in-out infinite;
+    animation-delay: 4s;
+}
+
+.line-3 {
+    animation: drawAndFade 12s ease-in-out infinite;
+    animation-delay: 8s;
+}
 
 @keyframes drawAndFade {
-    0% { stroke-dashoffset: 2000; opacity: 0; }
-    5% { opacity: 0.15; }
-    30% { stroke-dashoffset: -0; }
-    55% { opacity: 0.15; }
-    60% { stroke-dashoffset: -2000; opacity: 0; }
+    0% {
+        stroke-dashoffset: 2000;
+        opacity: 0;
+    }
+    5% {
+        opacity: 0.15;
+    }
+    30% {
+        stroke-dashoffset: -0;
+    }
+    55% {
+        opacity: 0.15;
+    }
+    60% {
+        stroke-dashoffset: -2000;
+        opacity: 0;
+    }
 }
 
 /* Home Header Adjustments for Animation */
@@ -299,12 +339,12 @@
     width: 100%; /* Fill grid cell */
     height: 110px; /* Increased height */
     transition: all 0.2s ease-in-out;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
 .asset-icon:hover {
     transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
     border-color: var(--md-accent-fg-color);
     background-color: var(--md-primary-bg-color);
     color: var(--md-primary-fg-color);
@@ -359,7 +399,7 @@
 /* Hover Effect */
 .card-link:hover {
     transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
     border-color: var(--md-accent-fg-color);
     background-color: var(--md-primary-bg-color); /* Use brand beige on hover */
 }

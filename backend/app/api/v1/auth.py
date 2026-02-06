@@ -24,7 +24,7 @@ from backend.app.schemas.auth import (
     ChangePasswordResponse,
     UpdateProfileRequest,
     UpdateProfileResponse,
-)
+    )
 from backend.app.services import user_service
 from backend.app.services.auth_service import (
     verify_password,
@@ -32,7 +32,7 @@ from backend.app.services.auth_service import (
     create_session,
     get_user_id_from_session,
     delete_session,
-)
+    )
 from backend.app.services.global_settings_service import get_session_ttl_hours
 
 logger = structlog.get_logger(__name__)
@@ -54,7 +54,7 @@ def get_session_cookie(request: Request) -> str | None:
 
 async def get_current_user(
     request: Request, session: AsyncSession = Depends(get_session_generator)
-) -> User:
+    ) -> User:
     """
     Dependency to get current authenticated user.
     Raises 401 if not authenticated.
@@ -83,7 +83,7 @@ async def get_current_user(
 
 async def get_optional_user(
     request: Request, session: AsyncSession = Depends(get_session_generator)
-) -> User | None:
+    ) -> User | None:
     """
     Dependency to get current user if authenticated, None otherwise.
     Does not raise exceptions.
@@ -99,7 +99,7 @@ async def login(
     request: AuthLoginRequest,
     response: Response,
     session: AsyncSession = Depends(get_session_generator),
-):
+    ):
     """
     Authenticate user and create session.
 
@@ -140,7 +140,7 @@ async def login(
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
         secure=SESSION_COOKIE_SECURE,
-    )
+        )
 
     logger.info("User logged in", user_id=user.id, username=user.username)
 
@@ -151,7 +151,7 @@ async def login(
 async def logout(
     request: Request,
     response: Response,
-):
+    ):
     """
     Logout current user and destroy session.
     """
@@ -166,7 +166,7 @@ async def logout(
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
         secure=SESSION_COOKIE_SECURE,
-    )
+        )
 
     return AuthLogoutResponse(message="Logged out successfully")
 
@@ -182,7 +182,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 @router.post("/register", response_model=AuthRegisterResponse, status_code=201)
 async def register(
     request: AuthRegisterRequest, session: AsyncSession = Depends(get_session_generator)
-):
+    ):
     """
     Register a new user.
 
@@ -201,19 +201,19 @@ async def register(
         password=request.password,
         is_superuser=is_first_user,  # First user becomes admin
         is_active=True,
-    )
+        )
 
     if not user:
         raise HTTPException(status_code=400, detail=error)
 
     logger.info(
         "User registered", user_id=user.id, username=user.username, is_first_user=is_first_user
-    )
+        )
 
     return AuthRegisterResponse(
         user=AuthUserResponse.model_validate(user),
         message="Registration successful" + (" (Admin)" if is_first_user else ""),
-    )
+        )
 
 
 @router.post("/change-password", response_model=ChangePasswordResponse)
@@ -221,7 +221,7 @@ async def change_password(
     request: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-):
+    ):
     """
     Change password for the currently authenticated user.
 
@@ -236,7 +236,7 @@ async def change_password(
     if request.current_password == request.new_password:
         raise HTTPException(
             status_code=400, detail="New password must be different from current password"
-        )
+            )
 
     # Update password
     current_user.hashed_password = hash_password(request.new_password)
@@ -253,7 +253,7 @@ async def update_profile(
     request: UpdateProfileRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-):
+    ):
     """
     Update profile for the currently authenticated user.
 
@@ -265,7 +265,7 @@ async def update_profile(
         return UpdateProfileResponse(
             user=AuthUserResponse.model_validate(current_user),
             message="No changes requested"
-        )
+            )
 
     # Update profile
     updated_user, error = await user_service.update_profile(
@@ -273,7 +273,7 @@ async def update_profile(
         user_id=current_user.id,
         username=request.username,
         email=request.email,
-    )
+        )
 
     if error:
         raise HTTPException(status_code=400, detail=error)
@@ -283,19 +283,20 @@ async def update_profile(
         user_id=updated_user.id,
         username=updated_user.username,
         email=updated_user.email
-    )
+        )
 
     return UpdateProfileResponse(
         user=AuthUserResponse.model_validate(updated_user),
         message="Profile updated successfully"
-    )
+        )
+
 
 @router.delete("/users/me", response_model=dict)
 async def delete_own_account(
     response: Response,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-):
+    ):
     """
     Delete the currently authenticated user's account.
 
@@ -314,7 +315,7 @@ async def delete_own_account(
             raise HTTPException(
                 status_code=400,
                 detail="Cannot delete account: you are the only administrator"
-            )
+                )
 
     # Delete the user (cascades to related data)
     await user_service.delete_user(session, current_user.id)
@@ -323,7 +324,7 @@ async def delete_own_account(
         "User account deleted",
         user_id=current_user.id,
         username=current_user.username
-    )
+        )
 
     # Clear session cookie
     response.delete_cookie(
@@ -331,8 +332,6 @@ async def delete_own_account(
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
         secure=SESSION_COOKIE_SECURE,
-    )
+        )
 
     return {"message": "Account deleted successfully"}
-
-

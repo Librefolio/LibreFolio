@@ -26,7 +26,7 @@ class TestACT365:
         """30 days = 30/365."""
         result = calculate_day_count_fraction(
             date(2025, 1, 1), date(2025, 1, 31), DayCountConvention.ACT_365
-        )
+            )
         expected = Decimal("30") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -34,7 +34,7 @@ class TestACT365:
         """1 year (non-leap) = 365/365 = 1.0."""
         result = calculate_day_count_fraction(
             date(2025, 1, 1), date(2026, 1, 1), DayCountConvention.ACT_365
-        )
+            )
         expected = Decimal("365") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -42,7 +42,7 @@ class TestACT365:
         """1 year (leap year) = 366/365."""
         result = calculate_day_count_fraction(
             date(2024, 1, 1), date(2025, 1, 1), DayCountConvention.ACT_365
-        )
+            )
         expected = Decimal("366") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -50,7 +50,7 @@ class TestACT365:
         """2 years crossing leap year (2024-2026)."""
         result = calculate_day_count_fraction(
             date(2024, 1, 1), date(2026, 1, 1), DayCountConvention.ACT_365
-        )
+            )
         # 366 days (2024) + 365 days (2025) = 731 days
         expected = Decimal("731") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
@@ -63,7 +63,7 @@ class TestACT360:
         """30 days = 30/360."""
         result = calculate_day_count_fraction(
             date(2025, 1, 1), date(2025, 1, 31), DayCountConvention.ACT_360
-        )
+            )
         expected = Decimal("30") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -71,7 +71,7 @@ class TestACT360:
         """90 days = 90/360 = 0.25."""
         result = calculate_day_count_fraction(
             date(2025, 1, 1), date(2025, 4, 1), DayCountConvention.ACT_360
-        )
+            )
         expected = Decimal("90") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -79,7 +79,7 @@ class TestACT360:
         """360 days = 360/360 = 1.0."""
         result = calculate_day_count_fraction(
             date(2025, 1, 1), date(2025, 12, 27), DayCountConvention.ACT_360  # 360 days after Jan 1
-        )
+            )
         expected = Decimal("360") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -87,7 +87,7 @@ class TestACT360:
         """1 year (365 days) = 365/360."""
         result = calculate_day_count_fraction(
             date(2025, 1, 1), date(2026, 1, 1), DayCountConvention.ACT_360
-        )
+            )
         expected = Decimal("365") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -99,7 +99,7 @@ class TestACTACT:
         """30 days in non-leap year = 30/365."""
         result = calculate_day_count_fraction(
             date(2025, 1, 1), date(2025, 1, 31), DayCountConvention.ACT_ACT
-        )
+            )
         expected = Decimal("30") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -107,7 +107,7 @@ class TestACTACT:
         """30 days in leap year = 30/366."""
         result = calculate_day_count_fraction(
             date(2024, 1, 1), date(2024, 1, 31), DayCountConvention.ACT_ACT
-        )
+            )
         expected = Decimal("30") / Decimal("366")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -119,7 +119,7 @@ class TestACTACT:
         # 2024: Jan 1 to Feb 1 = 31 days (31/366)
         result = calculate_day_count_fraction(
             date(2023, 12, 1), date(2024, 2, 1), DayCountConvention.ACT_ACT
-        )
+            )
         expected = Decimal("30") / Decimal("365") + Decimal("31") / Decimal("366")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -130,7 +130,7 @@ class TestACTACT:
         # 2025: Jan 1 to Feb 1 = 31 days (31/365)
         result = calculate_day_count_fraction(
             date(2024, 12, 1), date(2025, 2, 1), DayCountConvention.ACT_ACT
-        )
+            )
         expected = Decimal("30") / Decimal("366") + Decimal("31") / Decimal("365")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -144,7 +144,7 @@ class TestACTACT:
         # Total: 364/365 + 365/366 + 365/365 = 2.994528033535444269780672206
         result = calculate_day_count_fraction(
             date(2023, 1, 1), date(2026, 1, 1), DayCountConvention.ACT_ACT
-        )
+            )
         expected = (
             Decimal("364") / Decimal("365")
             + Decimal("365") / Decimal("366")
@@ -161,7 +161,7 @@ class Test30360:
         # Jan 5 to Jan 20 = 15 days
         result = calculate_day_count_fraction(
             date(2025, 1, 5), date(2025, 1, 20), DayCountConvention.THIRTY_360
-        )
+            )
         expected = Decimal("15") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -170,7 +170,7 @@ class Test30360:
         # Jan 1 to Feb 1 = 30 days (1 month)
         result = calculate_day_count_fraction(
             date(2025, 1, 1), date(2025, 2, 1), DayCountConvention.THIRTY_360
-        )
+            )
         expected = Decimal("30") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -178,7 +178,7 @@ class Test30360:
         """1 year = 360/360 = 1.0."""
         result = calculate_day_count_fraction(
             date(2025, 1, 1), date(2026, 1, 1), DayCountConvention.THIRTY_360
-        )
+            )
         # 12 months * 30 days = 360 days
         expected = Decimal("360") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
@@ -189,7 +189,7 @@ class Test30360:
         # (2026-2025)*360 + (2-1)*30 + (28-30) = 0 + 30 + (-2) = 28
         result = calculate_day_count_fraction(
             date(2025, 1, 31), date(2025, 2, 28), DayCountConvention.THIRTY_360
-        )
+            )
         expected = Decimal("28") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 
@@ -200,7 +200,7 @@ class Test30360:
         # (2025-2025)*360 + (3-1)*30 + (15-30) = 0 + 60 + (-15) = 45
         result = calculate_day_count_fraction(
             date(2025, 1, 31), date(2025, 3, 15), DayCountConvention.THIRTY_360
-        )
+            )
         expected = Decimal("45") / Decimal("360")
         assert result == expected, f"Expected {expected}, got {result}"
 

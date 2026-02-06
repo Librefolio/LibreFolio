@@ -43,7 +43,7 @@ def unique_username() -> str:
 
 async def create_user_and_login(
     client: httpx.AsyncClient, username: Optional[str] = None
-) -> tuple[int, str]:
+    ) -> tuple[int, str]:
     """Create user, login, return (user_id, username)."""
     username = username or unique_username()
     email = f"{username}@test.com"
@@ -53,12 +53,12 @@ async def create_user_and_login(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-    )
+        )
     user_id = resp.json()["user"]["id"]
 
     login_resp = await client.post(
         f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-    )
+        )
     session = login_resp.cookies.get("session")
     if session:
         client.cookies.set("session", session)
@@ -79,7 +79,7 @@ async def add_access(client: httpx.AsyncClient, broker_id: int, user_id: int, ro
         f"{API_BASE}/brokers/{broker_id}/access",
         json={"user_id": user_id, "role": role},
         timeout=TIMEOUT,
-    )
+        )
 
 
 # ============================================================================
@@ -143,7 +143,7 @@ class TestMultiUserRoles:
                 f"{API_BASE}/brokers/{broker_id}",
                 json={"description": "Modified by editor"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert resp.status_code == 200
             assert resp.json()["results"][0]["success"] is True
@@ -165,7 +165,7 @@ class TestMultiUserRoles:
             # Editor tries to delete
             resp = await editor_client.delete(
                 f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT
-            )
+                )
 
             # Should get success=False with "Access denied"
             assert resp.status_code == 200
@@ -191,7 +191,7 @@ class TestMultiUserRoles:
                 f"{API_BASE}/brokers/{broker_id}",
                 json={"description": "Should fail"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert resp.status_code == 200
             assert resp.json()["results"][0]["success"] is False
@@ -220,7 +220,7 @@ class TestMultiUserRoles:
             # Viewer reads summary
             summary_resp = await viewer_client.get(
                 f"{API_BASE}/brokers/{broker_id}/summary", timeout=TIMEOUT
-            )
+                )
 
             assert summary_resp.status_code == 200
 
@@ -237,7 +237,7 @@ class TestMultiUserRoles:
 
             resp = await client.delete(
                 f"{API_BASE}/brokers", params={"ids": [broker_id]}, timeout=TIMEOUT
-            )
+                )
 
             assert resp.status_code == 200
             assert resp.json()["total_deleted"] == 1
@@ -265,12 +265,12 @@ class TestMultiUserRoles:
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "1000"},
-                }
-            ]
+                    }
+                ]
 
             resp = await editor_client.post(
                 f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT
-            )
+                )
 
             assert resp.status_code == 200
             assert resp.json()["success_count"] == 1
@@ -298,12 +298,12 @@ class TestMultiUserRoles:
                     "type": "DEPOSIT",
                     "date": date.today().isoformat(),
                     "cash": {"code": "EUR", "amount": "1000"},
-                }
-            ]
+                    }
+                ]
 
             resp = await viewer_client.post(
                 f"{API_BASE}/transactions", json=tx_payload, timeout=TIMEOUT
-            )
+                )
 
             # Should fail - viewer has read-only access, EDITOR required
             assert resp.status_code == 200
@@ -332,7 +332,7 @@ class TestEditorRestrictions:
             # Editor tries to delete broker
             resp = await editor_client.delete(
                 f"{API_BASE}/brokers", params={"ids": [broker_id]}, timeout=TIMEOUT
-            )
+                )
 
             # Should fail - EDITOR cannot delete, only OWNER can
             assert resp.status_code == 200
@@ -352,7 +352,7 @@ class TestEditorRestrictions:
             httpx.AsyncClient() as owner_client,
             httpx.AsyncClient() as editor_client,
             httpx.AsyncClient() as third_client,
-        ):
+            ):
             await create_user_and_login(owner_client)
             broker_id = await create_broker(owner_client)
 
@@ -366,7 +366,7 @@ class TestEditorRestrictions:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": third_id, "role": "VIEWER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # Should fail with 403
             assert resp.status_code == 403

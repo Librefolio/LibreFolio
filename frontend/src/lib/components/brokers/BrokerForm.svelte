@@ -10,7 +10,7 @@
     import ImportPluginSelect from '$lib/components/ImportPluginSelect.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import {Plus, Trash2, Info} from 'lucide-svelte';
+    import {Info, Plus, Trash2} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
         submit: {
@@ -45,6 +45,7 @@
 
     // Debug flag - set to false in production
     const DEBUG = false;
+
     function log(...args: any[]) {
         if (DEBUG) console.log('[BrokerForm]', ...args);
     }
@@ -100,7 +101,7 @@
         allowShorting = initialData.allow_asset_shorting ?? false;
         isActive = initialData.is_active ?? true;
         openedAt = parseDate(initialData.opened_at) || (mode === 'create' ? getTodayDate() : '');
-        log('Form fields set to:', { name, description, portalUrl, iconUrl, defaultImportPlugin, allowOverdraft, allowShorting, isActive, openedAt });
+        log('Form fields set to:', {name, description, portalUrl, iconUrl, defaultImportPlugin, allowOverdraft, allowShorting, isActive, openedAt});
     }
 
     // Initial balances (only for create mode)
@@ -201,87 +202,87 @@
     }
 </script>
 
-<form on:submit|preventDefault={handleSubmit} class="space-y-5">
+<form class="space-y-5" on:submit|preventDefault={handleSubmit}>
     <!-- Name -->
     <div>
-        <label for="broker-name" class="block text-sm font-medium text-gray-700 mb-1">
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-name">
             {$_('brokers.name')} *
         </label>
         <input
-                id="broker-name"
-                data-testid="broker-name-input"
-                type="text"
                 bind:value={name}
-                placeholder={$_('brokers.namePlaceholder')}
-                required
-                minlength="1"
-                maxlength="100"
                 class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
                 class:border-red-300={name.length > 0 && name.trim().length === 0}
+                data-testid="broker-name-input"
+                id="broker-name"
+                maxlength="100"
+                minlength="1"
+                placeholder={$_('brokers.namePlaceholder')}
+                required
+                type="text"
         />
     </div>
 
     <!-- Description -->
     <div>
-        <label for="broker-description" class="block text-sm font-medium text-gray-700 mb-1">
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-description">
             {$_('brokers.description')}
         </label>
         <textarea
-                id="broker-description"
                 bind:value={description}
+                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors resize-none"
+                id="broker-description"
+                maxlength="500"
                 placeholder={$_('brokers.descriptionPlaceholder')}
                 rows="3"
-                maxlength="500"
-                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors resize-none"
         ></textarea>
     </div>
 
     <!-- Default Import Plugin (moved up) -->
     <div>
-        <label for="broker-plugin" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="broker-plugin">
             {$_('brokers.defaultImportPlugin')}
         </label>
         <ImportPluginSelect
-            bind:value={defaultImportPlugin}
-            placeholder={$_('brokers.selectPlugin')}
+                bind:value={defaultImportPlugin}
+                placeholder={$_('brokers.selectPlugin')}
         />
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('brokers.defaultImportPluginHint')}</p>
     </div>
 
     <!-- Portal URL -->
     <div>
-        <label for="broker-portal" class="block text-sm font-medium text-gray-700 mb-1">
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-portal">
             {$_('brokers.portalUrl')}
         </label>
         <input
-                id="broker-portal"
-                type="url"
                 bind:value={portalUrl}
-                placeholder={$_('brokers.portalUrlPlaceholder')}
                 class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                id="broker-portal"
+                placeholder={$_('brokers.portalUrlPlaceholder')}
+                type="url"
         />
     </div>
 
     <!-- Icon URL -->
     <div>
-        <label for="broker-icon" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="broker-icon">
             {$_('brokers.iconUrl')}
         </label>
         <div class="flex items-center gap-3">
             <input
-                    id="broker-icon"
-                    type="url"
                     bind:value={iconUrl}
-                    placeholder={$_('brokers.iconUrlPlaceholder')}
                     class="flex-1 px-3 py-2 border dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                    id="broker-icon"
+                    placeholder={$_('brokers.iconUrlPlaceholder')}
+                    type="url"
             />
             <!-- Icon preview using BrokerIcon component -->
             <BrokerIcon
-                iconUrl={iconUrl}
-                portalUrl={portalUrl}
-                pluginCode={defaultImportPlugin}
-                altText="Preview"
-                size="md"
+                    altText="Preview"
+                    iconUrl={iconUrl}
+                    pluginCode={defaultImportPlugin}
+                    portalUrl={portalUrl}
+                    size="md"
             />
         </div>
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('brokers.iconUrlHint')}</p>
@@ -291,14 +292,14 @@
     <div class="flex flex-col sm:flex-row sm:items-end gap-4">
         <!-- Opened At -->
         <div class="flex-1">
-            <label for="broker-opened" class="block text-sm font-medium text-gray-700 mb-1">
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-opened">
                 {$_('brokers.openedAt')}
             </label>
             <input
-                    id="broker-opened"
-                    type="date"
                     bind:value={openedAt}
                     class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
+                    id="broker-opened"
+                    type="date"
             />
         </div>
 
@@ -306,19 +307,19 @@
         <div class="flex items-center gap-3 pb-2">
             <span class="text-sm text-gray-700">{$_('brokers.isActive')}</span>
             <button
-                    type="button"
-                    role="switch"
                     aria-checked={isActive}
                     aria-label={$_('brokers.isActive')}
-                    on:click={() => isActive = !isActive}
                     class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
-                    class:bg-libre-green={isActive}
                     class:bg-gray-300={!isActive}
+                    class:bg-libre-green={isActive}
+                    on:click={() => isActive = !isActive}
+                    role="switch"
+                    type="button"
             >
                 <span
                         class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                        class:translate-x-5={isActive}
                         class:translate-x-0={!isActive}
+                        class:translate-x-5={isActive}
                 ></span>
             </button>
         </div>
@@ -332,9 +333,9 @@
         <div class="flex items-start gap-3">
             <label class="flex items-center gap-2 cursor-pointer flex-1">
                 <input
-                        type="checkbox"
                         bind:checked={allowOverdraft}
                         class="w-4 h-4 text-libre-green rounded focus:ring-libre-green"
+                        type="checkbox"
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowOverdraft')}</span>
             </label>
@@ -354,9 +355,9 @@
         <div class="flex items-start gap-3">
             <label class="flex items-center gap-2 cursor-pointer flex-1">
                 <input
-                        type="checkbox"
                         bind:checked={allowShorting}
                         class="w-4 h-4 text-libre-green rounded focus:ring-libre-green"
+                        type="checkbox"
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowShorting')}</span>
             </label>
@@ -442,19 +443,19 @@
 <!-- Actions (sempre visibili - fuori dal form scrollabile) -->
 <div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky bottom-0 pb-4 px-4 -mx-4 -mb-4 rounded-b-2xl">
     <button
-            type="button"
-            on:click={handleCancel}
-            disabled={loading}
             class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            disabled={loading}
+            on:click={handleCancel}
+            type="button"
     >
         {$_('common.cancel')}
     </button>
     <button
-            type="button"
-            data-testid="broker-form-submit"
-            on:click={handleSubmit}
-            disabled={!isValid || loading || hasDuplicateCurrencies}
             class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid="broker-form-submit"
+            disabled={!isValid || loading || hasDuplicateCurrencies}
+            on:click={handleSubmit}
+            type="button"
     >
         {#if loading}
             <span class="inline-flex items-center space-x-2">

@@ -5,9 +5,9 @@
   Extracts the toggle pattern from GlobalSettingsTab for reuse.
 -->
 <script lang="ts">
-    import { _ } from '$lib/i18n';
-    import { Save, Undo, RotateCcw } from 'lucide-svelte';
-    import type { Component } from 'svelte';
+    import {_} from '$lib/i18n';
+    import {RotateCcw, Save, Undo} from 'lucide-svelte';
+    import type {Component} from 'svelte';
 
     interface Props {
         /** Current value as boolean */
@@ -80,29 +80,29 @@
             <div class="flex items-center space-x-1">
                 {#if isModified}
                     <button
-                        type="button"
-                        onclick={() => onsave?.()}
-                        disabled={isSaving}
-                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                        title={$_('common.save')}
+                            type="button"
+                            onclick={() => onsave?.()}
+                            disabled={isSaving}
+                            class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                            title={$_('common.save')}
                     >
                         <Save size={14}/>
                     </button>
                     <button
-                        type="button"
-                        onclick={() => onundo?.()}
-                        class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                        title={$_('common.undo')}
+                            type="button"
+                            onclick={() => onundo?.()}
+                            class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                            title={$_('common.undo')}
                     >
                         <Undo size={14}/>
                     </button>
                 {/if}
                 {#if isNonDefault && !isModified}
                     <button
-                        type="button"
-                        onclick={() => onreset?.()}
-                        class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
-                        title={$_('common.reset')}
+                            type="button"
+                            onclick={() => onreset?.()}
+                            class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                            title={$_('common.reset')}
                     >
                         <RotateCcw size={14}/>
                     </button>
@@ -112,16 +112,16 @@
 
         <!-- Toggle Switch -->
         <button
-            type="button"
-            disabled={isLocked}
-            aria-label="Toggle {label}"
-            onclick={toggle}
-            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                aria-label="Toggle {label}"
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
                    {value ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}
                    {isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
+                disabled={isLocked}
+                onclick={toggle}
+                type="button"
         >
             <span
-                class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform
                        {value ? 'translate-x-6' : 'translate-x-1'}"
             ></span>
         </button>

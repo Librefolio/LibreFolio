@@ -50,19 +50,19 @@ frontend/src/lib/components/ui/
 
 ## Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `accept` | `string` | `*` | Accepted file types |
-| `maxSize` | `number` | `10MB` | Max file size in bytes |
-| `multiple` | `boolean` | `true` | Allow multiple files |
-| `disabled` | `boolean` | `false` | Disable upload |
+| Prop       | Type      | Default | Description            |
+|------------|-----------|---------|------------------------|
+| `accept`   | `string`  | `*`     | Accepted file types    |
+| `maxSize`  | `number`  | `10MB`  | Max file size in bytes |
+| `multiple` | `boolean` | `true`  | Allow multiple files   |
+| `disabled` | `boolean` | `false` | Disable upload         |
 
 ## Events
 
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `upload` | `{ files: File[] }` | Files ready for upload |
-| `error` | `{ message: string }` | Validation error |
+| Event    | Payload               | Description            |
+|----------|-----------------------|------------------------|
+| `upload` | `{ files: File[] }`   | Files ready for upload |
+| `error`  | `{ message: string }` | Validation error       |
 
 ## Validation
 

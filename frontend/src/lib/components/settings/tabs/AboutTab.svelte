@@ -93,7 +93,7 @@ Generated: ${new Date().toISOString()}
             <div class="flex-1">
                 <p class="font-medium text-gray-700 flex items-center">
                     {$_('settings.officialWebsite')}
-                    <ExternalLink size={14} class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                    <ExternalLink class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity" size={14}/>
                 </p>
                 <p class="text-sm text-gray-500">{$_('settings.visitWebsite')}</p>
             </div>
@@ -110,7 +110,7 @@ Generated: ${new Date().toISOString()}
             <div class="flex-1">
                 <p class="font-medium text-gray-700 flex items-center">
                     {$_('settings.githubRepo')}
-                    <ExternalLink size={14} class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                    <ExternalLink class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity" size={14}/>
                 </p>
                 <p class="text-sm text-gray-500">{$_('settings.viewSource')}</p>
             </div>
@@ -127,7 +127,7 @@ Generated: ${new Date().toISOString()}
             <div class="flex-1">
                 <p class="font-medium text-gray-700 flex items-center">
                     {$_('settings.license')}
-                    <ExternalLink size={14} class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                    <ExternalLink class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity" size={14}/>
                 </p>
                 <p class="text-sm text-gray-500">GNU Affero General Public License v3.0 (AGPL-3.0)</p>
             </div>
@@ -139,9 +139,9 @@ Generated: ${new Date().toISOString()}
         <div class="flex items-center justify-between mb-4">
             <h4 class="text-md font-medium text-gray-700">{$_('settings.systemInfo')}</h4>
             <button
-                    on:click={copySystemInfo}
-                    disabled={!systemInfo}
                     class="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!systemInfo}
+                    on:click={copySystemInfo}
             >
                 {#if copied}
                     <Check size={16} class="text-green-600"/>

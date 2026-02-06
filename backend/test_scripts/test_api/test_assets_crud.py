@@ -19,7 +19,7 @@ from backend.app.schemas import (
     FABulkAssetDeleteResponse,
     FAGeographicArea,
     FASectorArea,
-)
+    )
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success, unique_id
@@ -63,11 +63,11 @@ async def test_create_single_asset(test_server):
             display_name=f"Apple Inc. {unique_id('AAPL')}",
             currency="USD",
             asset_type=AssetType.STOCK,
-        )
+            )
 
         response = await client.post(
             f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         assert (
             response.status_code == 201
         ), f"Expected 201, got {response.status_code}: {response.text}"
@@ -92,17 +92,17 @@ async def test_create_multiple_assets(test_server):
             display_name=f"Microsoft Corp. {unique_id('MSFT')}",
             currency="USD",
             asset_type=AssetType.STOCK,
-        )
+            )
         item2 = FAAssetCreateItem(
             display_name=f"Google LLC {unique_id('GOOGL')}",
             currency="USD",
             asset_type=AssetType.STOCK,
-        )
+            )
         item3 = FAAssetCreateItem(
             display_name=f"Amazon.com Inc. {unique_id('AMZN')}",
             currency="USD",
             asset_type=AssetType.STOCK,
-        )
+            )
 
         response = await client.post(
             f"{API_BASE}/assets",
@@ -110,9 +110,9 @@ async def test_create_multiple_assets(test_server):
                 item1.model_dump(mode="json"),
                 item2.model_dump(mode="json"),
                 item3.model_dump(mode="json"),
-            ],
+                ],
             timeout=TIMEOUT,
-        )
+            )
 
         assert response.status_code == 201, f"Expected 201, got {response.status_code}"
 
@@ -135,26 +135,26 @@ async def test_create_partial_success(test_server):
         item = FAAssetCreateItem(display_name=dup_name, currency="USD", asset_type=AssetType.STOCK)
         await client.post(
             f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
 
         # Try to create 3 assets, one with duplicate display_name
         item1 = FAAssetCreateItem(
             display_name=f"Valid 1 {unique_id('VALID1')}",
             currency="USD",
             asset_type=AssetType.STOCK,
-        )
+            )
         item2 = FAAssetCreateItem(display_name=dup_name, currency="USD")
         item3 = FAAssetCreateItem(
             display_name=f"Valid 2 {unique_id('VALID2')}",
             currency="USD",
             asset_type=AssetType.STOCK,
-        )
+            )
 
         response = await client.post(
             f"{API_BASE}/assets",
             json=[a.model_dump(mode="json") for a in [item1, item2, item3]],
             timeout=TIMEOUT,
-        )
+            )
 
         data = FABulkAssetCreateResponse(**response.json())
         assert data.success_count == 2, f"Expected success_count=2, got {data.success_count}"
@@ -186,13 +186,13 @@ async def test_create_duplicate_identifier(test_server):
         item = FAAssetCreateItem(display_name=uniq_name, currency="USD")
         await client.post(
             f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
 
         # Try to create duplicate
         item_dup = FAAssetCreateItem(display_name=uniq_name, currency="USD")
         response = await client.post(
             f"{API_BASE}/assets", json=[item_dup.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         data = FABulkAssetCreateResponse(**response.json())
         assert data.success_count == 0, f"Expected success_count=0, got {data.success_count}"
         # Check that duplicate was rejected (success=False in results)
@@ -223,11 +223,11 @@ async def test_create_with_classification_params(test_server):
             classification_params=FAClassificationParams(
                 sector_area=FASectorArea(distribution={"Technology": 1.0}),
                 geographic_area=FAGeographicArea(distribution={"USA": 0.8, "CHN": 0.2}),
-            ),
-        )
+                ),
+            )
         response = await client.post(
             f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         assert (
             response.status_code == 201
         ), f"Expected 201, got {response.status_code}: {response.text}"
@@ -247,12 +247,12 @@ async def test_list_no_filters(test_server):
             FAAssetCreateItem(display_name=f"List Test 1 {unique_id('LIST1')}", currency="USD"),
             FAAssetCreateItem(display_name=f"List Test 2 {unique_id('LIST2')}", currency="EUR"),
             FAAssetCreateItem(display_name=f"List Test 3 {unique_id('LIST3')}", currency="USD"),
-        ]
+            ]
         await client.post(
             f"{API_BASE}/assets",
             json=[item.model_dump(mode="json") for item in items],
             timeout=TIMEOUT,
-        )
+            )
 
         # List all assets
         response = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
@@ -272,14 +272,14 @@ async def test_list_filter_currency(test_server):
             FAAssetCreateItem(display_name=f"USD Asset 1 {unique_id('USD1')}", currency="USD"),
             FAAssetCreateItem(display_name=f"USD Asset 2 {unique_id('USD2')}", currency="USD"),
             FAAssetCreateItem(display_name=f"EUR Asset {unique_id('EUR1')}", currency="EUR"),
-        ]
+            ]
         await client.post(
             f"{API_BASE}/assets", json=[a.model_dump(mode="json") for a in items], timeout=TIMEOUT
-        )
+            )
         # Filter by USD
         response = await client.get(
             f"{API_BASE}/assets/query", params={"currency": "USD"}, timeout=TIMEOUT
-        )
+            )
         data = [FAinfoResponse(**item) for item in response.json()]
         # All should be USD
         non_usd = [a for a in data if a.currency != "USD"]
@@ -298,14 +298,14 @@ async def test_list_filter_asset_type(test_server):
                 display_name=f"Stock 1 {unique_id('STK1')}",
                 currency="USD",
                 asset_type=AssetType.STOCK,
-            ),
+                ),
             FAAssetCreateItem(
                 display_name=f"ETF 1 {unique_id('ETF1')}", currency="USD", asset_type="ETF"
-            ),
-        ]
+                ),
+            ]
         await client.post(
             f"{API_BASE}/assets", json=[a.model_dump(mode="json") for a in items], timeout=TIMEOUT
-        )
+            )
 
         response = await client.get(f"{API_BASE}/assets/query?asset_type=STOCK", timeout=TIMEOUT)
         data = [FAinfoResponse(**item) for item in response.json()]
@@ -327,11 +327,11 @@ async def test_list_search(test_server):
             FAAssetCreateItem(display_name=f"Apple Inc. {unique_id('SEARCHAPPL')}", currency="USD"),
             FAAssetCreateItem(
                 display_name=f"Microsoft Corp. {unique_id('SEARCHMSFT')}", currency="USD"
-            ),
-        ]
+                ),
+            ]
         await client.post(
             f"{API_BASE}/assets", json=[a.model_dump(mode="json") for a in items], timeout=TIMEOUT
-        )
+            )
 
         response = await client.get(f"{API_BASE}/assets/query?search=Apple", timeout=TIMEOUT)
         data = [FAinfoResponse(**item) for item in response.json()]
@@ -353,19 +353,19 @@ async def test_list_active_filter(test_server):
         items = [
             FAAssetCreateItem(display_name=f"Active Asset {unique_id('ACT1')}", currency="USD"),
             FAAssetCreateItem(display_name=f"Inactive Asset {unique_id('ACT2')}", currency="USD"),
-        ]
+            ]
         create_resp = await client.post(
             f"{API_BASE}/assets",
             json=[item.model_dump(mode="json") for item in items],
             timeout=TIMEOUT,
-        )
+            )
         assert create_resp.status_code == 201
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset1_id = create_data.results[0].asset_id
         asset2_id = create_data.results[1].asset_id
         print_info(
             f"  Created assets: {asset1_id} (will stay active), {asset2_id} (will be deactivated)"
-        )
+            )
 
         # Step 2: Deactivate second asset via PATCH
         from backend.app.schemas.assets import FAAssetPatchItem
@@ -373,7 +373,7 @@ async def test_list_active_filter(test_server):
         patch_item = FAAssetPatchItem(asset_id=asset2_id, active=False)
         patch_resp = await client.patch(
             f"{API_BASE}/assets", json=[patch_item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         assert patch_resp.status_code == 200, f"PATCH failed: {patch_resp.status_code}"
         print_info(f"  Deactivated asset {asset2_id}")
 
@@ -391,7 +391,7 @@ async def test_list_active_filter(test_server):
         # Step 4: Test active=false filter
         response_inactive = await client.get(
             f"{API_BASE}/assets/query?active=false", timeout=TIMEOUT
-        )
+            )
         assert response_inactive.status_code == 200
         inactive_assets = [FAinfoResponse(**item) for item in response_inactive.json()]
 
@@ -411,10 +411,10 @@ async def test_list_has_provider(test_server):
         # Create asset with unique identifier
         item = FAAssetCreateItem(
             display_name=f"Provider Test {unique_id('PROVTEST')}", currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         data = FABulkAssetCreateResponse(**create_resp.json())
         result = data.results[0]
         assert result.success, f"Asset creation failed: {result.message}"
@@ -429,10 +429,10 @@ async def test_list_has_provider(test_server):
             identifier="TEST",
             identifier_type=IdentifierType.TICKER,
             provider_params=None,
-        )
+            )
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         assert (
             assign_resp.status_code == 200
         ), f"Expected 200, got {assign_resp.status_code}, error message: {assign_resp.text}"
@@ -459,10 +459,10 @@ async def test_delete_success(test_server):
         items: list[FAAssetCreateItem] = [
             FAAssetCreateItem(display_name=f"Delete 1 {unique_id('DEL1')}", currency="USD"),
             FAAssetCreateItem(display_name=f"Delete 2 {unique_id('DEL2')}", currency="USD"),
-        ]
+            ]
         create_resp = await client.post(
             f"{API_BASE}/assets", json=[a.model_dump(mode="json") for a in items], timeout=TIMEOUT
-        )
+            )
         assert (
             create_resp.status_code == 201
         ), f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
@@ -473,7 +473,7 @@ async def test_delete_success(test_server):
         # Delete them using query params
         response = await client.delete(
             f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT
-        )
+            )
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = FABulkAssetDeleteResponse(**response.json())
         assert data.success_count == 2, f"Expected success_count=2, got {data.success_count}"
@@ -490,10 +490,10 @@ async def test_delete_cascade(test_server):
         # Step 1: Create asset
         item_fa_create = FAAssetCreateItem(
             display_name=f"Cascade Test {unique_id('CASCTEST')}", currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets", json=[item_fa_create.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         assert (
             create_resp.status_code == 201
         ), f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
@@ -510,12 +510,12 @@ async def test_delete_cascade(test_server):
             identifier="TEST",
             identifier_type=IdentifierType.TICKER,
             provider_params=None,
-        )
+            )
         provider_resp = await client.post(
             f"{API_BASE}/assets/provider",
             json=[item_fa_provider.model_dump(mode="json")],
             timeout=TIMEOUT,
-        )
+            )
         assert (
             provider_resp.status_code == 200
         ), f"Provider assignment failed: {provider_resp.status_code}: {provider_resp.text}"
@@ -529,7 +529,7 @@ async def test_delete_cascade(test_server):
         # Step 4: Delete asset (cascade test without prices for now)
         delete_resp = await client.delete(
             f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT
-        )
+            )
         assert (
             delete_resp.status_code == 200
         ), f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
@@ -554,10 +554,10 @@ async def test_delete_partial_success(test_server):
         # Step 1: Create one valid asset
         item = FAAssetCreateItem(
             display_name=f"Delete Partial {unique_id('DELPART')}", currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         assert (
             create_resp.status_code == 201
         ), f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
@@ -573,7 +573,7 @@ async def test_delete_partial_success(test_server):
         # Step 2: Try to delete both (one valid, one invalid)
         delete_resp = await client.delete(
             f"{API_BASE}/assets", params={"asset_ids": [valid_id, invalid_id]}, timeout=TIMEOUT
-        )
+            )
         assert (
             delete_resp.status_code == 200
         ), f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
@@ -641,10 +641,10 @@ async def test_bulk_remove_providers(test_server):
         # Step 1: Create asset
         item = FAAssetCreateItem(
             display_name=f"Provider Remove Test {unique_id('PROVREM')}", currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         assert create_resp.status_code == 201, f"Asset creation failed: {create_resp.status_code}"
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
@@ -657,12 +657,12 @@ async def test_bulk_remove_providers(test_server):
             identifier="MOCK_TEST",
             identifier_type=IdentifierType.UUID,
             provider_params=None,
-        )
+            )
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider",
             json=[assignment.model_dump(mode="json")],
             timeout=TIMEOUT,
-        )
+            )
         assert (
             assign_resp.status_code == 200
         ), f"Provider assignment failed: {assign_resp.status_code}"
@@ -673,7 +673,7 @@ async def test_bulk_remove_providers(test_server):
             f"{API_BASE}/assets/provider",
             params={"asset_ids": asset_id},  # FastAPI will handle single value for List[int]
             timeout=TIMEOUT,
-        )
+            )
         assert (
             remove_resp.status_code == 200
         ), f"Expected 200, got {remove_resp.status_code}: {remove_resp.text}"
@@ -707,10 +707,10 @@ async def test_bulk_delete_prices(test_server):
         # Step 1: Create asset
         item = FAAssetCreateItem(
             display_name=f"Price Delete Test {unique_id('PRICEDEL')}", currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id}")
@@ -729,10 +729,10 @@ async def test_bulk_refresh_prices(test_server):
         # Step 1: Create asset
         item = FAAssetCreateItem(
             display_name=f"Price Refresh Test {unique_id('REFRESH')}", currency="USD"
-        )
+            )
         create_resp = await client.post(
             f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT
-        )
+            )
         create_data = FABulkAssetCreateResponse(**create_resp.json())
         asset_id = create_data.results[0].asset_id
         print_info(f"  Created asset ID: {asset_id}")
@@ -744,12 +744,12 @@ async def test_bulk_refresh_prices(test_server):
             identifier="MOCK_REFRESH",
             identifier_type=IdentifierType.UUID,
             provider_params={"symbol": "MOCK"},
-        )
+            )
         assign_resp = await client.post(
             f"{API_BASE}/assets/provider",
             json=[assignment.model_dump(mode="json")],
             timeout=TIMEOUT,
-        )
+            )
         assert (
             assign_resp.status_code == 200
         ), f"Provider assignment failed: {assign_resp.status_code}"

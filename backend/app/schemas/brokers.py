@@ -17,20 +17,20 @@ These schemas provide strict validation for API input/output.
 
 from __future__ import annotations
 
-from datetime import datetime, date as date_type
+from datetime import date as date_type
 from decimal import Decimal
 from typing import Optional, List
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from backend.app.db.models import UserRole
-from backend.app.utils.datetime_utils import UTCDateTime
 from backend.app.schemas.common import (
     Currency,
     BaseBulkResponse,
     BaseBulkDeleteResponse,
     BaseDeleteResult,
     )
+from backend.app.utils.datetime_utils import UTCDateTime
 
 
 # =============================================================================

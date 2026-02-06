@@ -20,7 +20,7 @@ from backend.test_scripts.test_utils import (
     print_section,
     print_success,
     print_warning,
-)
+    )
 from backend.app.services.fx import FXServiceError, normalize_rate_for_storage
 from backend.app.services.provider_registry import FXProviderRegistry
 
@@ -191,7 +191,7 @@ async def test_fetch_rates(provider_code: str):
 
         print_info(
             f"Fetching rates for {', '.join(test_currencies)} from {start_date} to {end_date}..."
-        )
+            )
 
         rates_data = await provider.fetch_rates((start_date, end_date), test_currencies)
 
@@ -219,7 +219,7 @@ async def test_fetch_rates(provider_code: str):
                 if not isinstance(base, str) or not isinstance(quote, str):
                     print_error(
                         f"Invalid currency types for {currency}: {type(base)}, {type(quote)}"
-                    )
+                        )
 
                 if not isinstance(obs_rate, Decimal):
                     print_error(f"Invalid rate type for {currency}: {type(obs_rate)}")
@@ -262,7 +262,7 @@ async def test_normalize_for_storage(provider_code: str):
             rate = Decimal("1.5")
             base, quote, normalized_rate = normalize_rate_for_storage(
                 provider.base_currency, test_currency_higher, rate
-            )
+                )
             print_info(f"  Case 1: {provider.base_currency} < {test_currency_higher}")
             print_info(f"    Input rate: {rate}")
             print_info(f"    Stored as: {base}/{quote} = {normalized_rate}")
@@ -288,7 +288,7 @@ async def test_normalize_for_storage(provider_code: str):
             rate = Decimal("1.5")
             base, quote, normalized_rate = normalize_rate_for_storage(
                 provider.base_currency, test_currency_lower, rate
-            )
+                )
 
             print_info(f"  Case 2: {test_currency_lower} < {provider.base_currency}")
             print_info(f"    Input rate: {rate}")
@@ -301,7 +301,7 @@ async def test_normalize_for_storage(provider_code: str):
             expected_inverted = Decimal("1") / rate
             assert abs(normalized_rate - expected_inverted) <= Decimal(
                 "0.0001"
-            ), f"Rate should be inverted: expected {expected_inverted}, got {normalized_rate}"
+                ), f"Rate should be inverted: expected {expected_inverted}, got {normalized_rate}"
 
             print_success(f"  ✓ Inverted: {base}/{quote} = {normalized_rate}")
 
@@ -333,7 +333,7 @@ REASONABLE_RANGES = {
     "SEK": (Decimal("8"), Decimal("15")),  # 1 USD = 8-15 SEK (typical)
     "NOK": (Decimal("8"), Decimal("15")),  # 1 USD = 8-15 NOK (typical)
     "DKK": (Decimal("6"), Decimal("10")),  # 1 USD = 6-10 DKK (typical)
-}
+    }
 
 
 def is_rate_reasonable(currency: str, rate: Decimal, base_currency: str) -> tuple[bool, str]:
@@ -368,12 +368,12 @@ def is_rate_reasonable(currency: str, rate: Decimal, base_currency: str) -> tupl
         return (
             False,
             f"Rate {rate} is too low (expected {min_val}-{max_val}). Possible over-inversion?",
-        )
+            )
     elif rate > max_val:
         return (
             False,
             f"Rate {rate} is too high (expected {min_val}-{max_val}). Possible missing 100x division?",
-        )
+            )
     else:
         return True, f"Rate {rate} is within expected range ({min_val}-{max_val})"
 
@@ -475,11 +475,11 @@ async def test_multi_unit_reasonableness(provider_code: str):
             if is_reasonable:
                 print_success(
                     f"  ✓ {currency}: {rate:.2f} per {provider.base_currency} - {explanation}"
-                )
+                    )
             else:
                 print_error(
                     f"  ✗ {currency}: {rate:.2f} per {provider.base_currency} - {explanation}"
-                )
+                    )
                 all_reasonable = False
 
         assert all_reasonable, "Some multi-unit rates are outside reasonable ranges"

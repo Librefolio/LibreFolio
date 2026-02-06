@@ -25,10 +25,10 @@ from backend.app.schemas.assets import (
     CompoundingType,
     CompoundFrequency,
     DayCountConvention,
-)
+    )
 from backend.app.services.asset_source_providers.scheduled_investment import (
     ScheduledInvestmentProvider,
-)
+    )
 
 
 # Helper to run provider current value with override
@@ -62,27 +62,27 @@ async def test_e2e_p2p_loan_two_periods_late_interest():
                 annual_rate=Decimal("0.05"),
                 compounding=CompoundingType.SIMPLE,
                 day_count=DayCountConvention.ACT_365,
-            ),
+                ),
             FAInterestRatePeriod(
                 start_date=date(2025, 7, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.06"),
                 compounding=CompoundingType.SIMPLE,
                 day_count=DayCountConvention.ACT_365,
-            ),
-        ],
+                ),
+            ],
         late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365,
-        ),
-    )
+            ),
+        )
 
     params = json.loads(schedule_model.model_dump_json())
     params["_transaction_override"] = [
         {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
-    ]
+        ]
 
     # Helper to get single-day value
     async def value_on(d: date) -> Decimal:
@@ -124,14 +124,14 @@ async def test_e2e_bond_quarterly_compound():
                 compounding=CompoundingType.COMPOUND,
                 compound_frequency=CompoundFrequency.QUARTERLY,
                 day_count=DayCountConvention.ACT_365,
-            )
-        ]
-    )
+                )
+            ]
+        )
 
     params = json.loads(schedule_model.model_dump_json())
     params["_transaction_override"] = [
         {"type": TransactionType.BUY, "quantity": 1, "price": "20000", "trade_date": "2025-01-01"}
-    ]
+        ]
 
     # Value end of Q1 vs start
     hist_q1 = await _history_values(params, date(2025, 1, 1), date(2025, 3, 31))
@@ -157,7 +157,7 @@ async def test_e2e_mixed_schedule_simple_compound():
                 annual_rate=Decimal("0.03"),
                 compounding=CompoundingType.SIMPLE,
                 day_count=DayCountConvention.ACT_365,
-            ),
+                ),
             FAInterestRatePeriod(
                 start_date=date(2025, 4, 1),
                 end_date=date(2025, 6, 30),
@@ -165,21 +165,21 @@ async def test_e2e_mixed_schedule_simple_compound():
                 compounding=CompoundingType.COMPOUND,
                 compound_frequency=CompoundFrequency.MONTHLY,
                 day_count=DayCountConvention.ACT_365,
-            ),
+                ),
             FAInterestRatePeriod(
                 start_date=date(2025, 7, 1),
                 end_date=date(2025, 12, 31),
                 annual_rate=Decimal("0.04"),
                 compounding=CompoundingType.SIMPLE,
                 day_count=DayCountConvention.ACT_365,
-            ),
-        ]
-    )
+                ),
+            ]
+        )
 
     params = json.loads(schedule_model.model_dump_json())
     params["_transaction_override"] = [
         {"type": TransactionType.BUY, "quantity": 1, "price": "5000", "trade_date": "2025-01-01"}
-    ]
+        ]
 
     # Collect quarterly snapshots
     q1_end = (await _history_values(params, date(2025, 3, 31), date(2025, 3, 31)))[0]

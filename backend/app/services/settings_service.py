@@ -16,7 +16,7 @@ from backend.app.schemas.settings import (
     GlobalSettingRead,
     UserSettingsRead,
     UserSettingsUpdate,
-)
+    )
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -34,7 +34,7 @@ async def get_user_settings(user_id: int, session: AsyncSession) -> Optional[Use
     if settings:
         return UserSettingsRead(
             language=settings.language, base_currency=settings.base_currency, theme=settings.theme
-        )
+            )
     return None
 
 
@@ -52,7 +52,7 @@ async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> Us
         theme="light",
         created_at=utcnow(),
         updated_at=utcnow(),
-    )
+        )
     session.add(new_settings)
     await session.commit()
     await session.refresh(new_settings)
@@ -63,12 +63,12 @@ async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> Us
         language=new_settings.language,
         base_currency=new_settings.base_currency,
         theme=new_settings.theme,
-    )
+        )
 
 
 async def update_user_settings(
     user_id: int, updates: UserSettingsUpdate, session: AsyncSession
-) -> UserSettingsRead:
+    ) -> UserSettingsRead:
     """Update user settings. Creates if not exists."""
     # Get existing settings
     result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
@@ -83,7 +83,7 @@ async def update_user_settings(
             theme=updates.theme or "light",
             created_at=utcnow(),
             updated_at=utcnow(),
-        )
+            )
         session.add(settings)
     else:
         # Update existing
@@ -102,7 +102,7 @@ async def update_user_settings(
 
     return UserSettingsRead(
         language=settings.language, base_currency=settings.base_currency, theme=settings.theme
-    )
+        )
 
 
 # ============================================================================
@@ -122,7 +122,7 @@ async def get_global_setting(key: str, session: AsyncSession) -> Optional[Global
             description=setting.description,
             updated_at=setting.updated_at,
             updated_by=setting.updated_by_user_id,
-        )
+            )
     return None
 
 
@@ -138,14 +138,14 @@ async def get_all_global_settings(session: AsyncSession) -> list[GlobalSettingRe
             description=s.description,
             updated_at=s.updated_at,
             updated_by=s.updated_by_user_id,
-        )
+            )
         for s in settings
-    ]
+        ]
 
 
 async def update_global_setting(
     key: str, value: str, user_id: int, session: AsyncSession
-) -> Optional[GlobalSettingRead]:
+    ) -> Optional[GlobalSettingRead]:
     """Update a global setting. Returns None if key doesn't exist."""
     result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
     setting = result.scalar_one_or_none()
@@ -169,7 +169,7 @@ async def update_global_setting(
         description=setting.description,
         updated_at=setting.updated_at,
         updated_by=setting.updated_by_user_id,
-    )
+        )
 
 
 async def initialize_global_settings(session: AsyncSession) -> int:
@@ -192,7 +192,7 @@ async def initialize_global_settings(session: AsyncSession) -> int:
                 value_type=config["type"],
                 description=config["description"],
                 updated_at=utcnow(),
-            )
+                )
             session.add(setting)
             created += 1
 

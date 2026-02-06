@@ -47,24 +47,24 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
 
 ### Key Runes Used
 
--   **`$state`**: Declares reactive state.
-    ```typescript
-    let count = $state(0);
-    ```
--   **`$derived`**: Declares derived state (automatically updates when dependencies change).
-    ```typescript
-    let double = $derived(count * 2);
-    ```
--   **`$effect`**: Side effects (runs when dependencies change).
-    ```typescript
-    $effect(() => {
-        console.log(count);
-    });
-    ```
--   **`$props`**: Declares component props.
-    ```typescript
-    let { title, active = false } = $props();
-    ```
+- **`$state`**: Declares reactive state.
+  ```typescript
+  let count = $state(0);
+  ```
+- **`$derived`**: Declares derived state (automatically updates when dependencies change).
+  ```typescript
+  let double = $derived(count * 2);
+  ```
+- **`$effect`**: Side effects (runs when dependencies change).
+  ```typescript
+  $effect(() => {
+      console.log(count);
+  });
+  ```
+- **`$props`**: Declares component props.
+  ```typescript
+  let { title, active = false } = $props();
+  ```
 
 ## Documentation Sections
 
@@ -76,9 +76,9 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
 
 ## Quick Links
 
-| Topic | Description |
-|-------|-------------|
-| [DataTable](components/data-table.md) | Advanced table with sorting, filtering, pagination |
-| [Authentication](components/auth.md) | Login, register, password reset modals |
-| [Settings](components/settings.md) | User preferences and global settings |
-| [File Upload](components/file-upload.md) | File uploader with preview |
+| Topic                                    | Description                                        |
+|------------------------------------------|----------------------------------------------------|
+| [DataTable](components/data-table.md)    | Advanced table with sorting, filtering, pagination |
+| [Authentication](components/auth.md)     | Login, register, password reset modals             |
+| [Settings](components/settings.md)       | User preferences and global settings               |
+| [File Upload](components/file-upload.md) | File uploader with preview                         |

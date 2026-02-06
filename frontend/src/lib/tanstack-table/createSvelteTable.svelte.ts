@@ -12,13 +12,7 @@
  * @see TODO_FUTURI.md per la nota sulla migrazione a v9 quando sarà stabile
  */
 
-import {
-	createTable,
-	type RowData,
-	type TableOptions,
-	type TableOptionsResolved,
-	type Table,
-} from '@tanstack/table-core';
+import {createTable, type RowData, type Table, type TableOptions, type TableOptionsResolved,} from '@tanstack/table-core';
 
 /**
  * Crea una tabella TanStack Table reattiva per Svelte 5.
@@ -45,62 +39,63 @@ import {
  * ```
  */
 export function createSvelteTable<TData extends RowData>(
-	options: TableOptions<TData>
+    options: TableOptions<TData>
 ): Table<TData> {
-	// Risolvi le opzioni con i default
-	const resolvedOptions: TableOptionsResolved<TData> = {
-		state: {},
-		onStateChange: () => {},
-		renderFallbackValue: null,
-		...options,
-	};
+    // Risolvi le opzioni con i default
+    const resolvedOptions: TableOptionsResolved<TData> = {
+        state: {},
+        onStateChange: () => {
+        },
+        renderFallbackValue: null,
+        ...options,
+    };
 
-	// Crea la tabella base
-	const table = createTable(resolvedOptions);
+    // Crea la tabella base
+    const table = createTable(resolvedOptions);
 
-	// Stato reattivo Svelte 5
-	let tableState = $state(table.initialState);
+    // Stato reattivo Svelte 5
+    let tableState = $state(table.initialState);
 
-	// Override dell'opzione setOptions per gestire la reattività
-	table.setOptions((prev) => ({
-		...prev,
-		...options,
-		state: {
-			...tableState,
-			...options.state,
-		},
-		onStateChange: (updater) => {
-			// Aggiorna lo stato locale
-			if (typeof updater === 'function') {
-				tableState = updater(tableState);
-			} else {
-				tableState = updater;
-			}
+    // Override dell'opzione setOptions per gestire la reattività
+    table.setOptions((prev) => ({
+        ...prev,
+        ...options,
+        state: {
+            ...tableState,
+            ...options.state,
+        },
+        onStateChange: (updater) => {
+            // Aggiorna lo stato locale
+            if (typeof updater === 'function') {
+                tableState = updater(tableState);
+            } else {
+                tableState = updater;
+            }
 
-			// Chiama il callback originale se esiste
-			options.onStateChange?.(updater);
-		},
-	}));
+            // Chiama il callback originale se esiste
+            options.onStateChange?.(updater);
+        },
+    }));
 
-	// Effetto per sincronizzare le opzioni quando cambiano
-	$effect(() => {
-		table.setOptions((prev) => ({
-			...prev,
-			...options,
-			state: {
-				...tableState,
-				...options.state,
-			},
-			onStateChange: (updater) => {
-				if (typeof updater === 'function') {
-					tableState = updater(tableState);
-				} else {
-					tableState = updater;
-				}
-				options.onStateChange?.(updater);
-			},
-		}));
-	});
+    // Effetto per sincronizzare le opzioni quando cambiano
+    $effect(() => {
+        table.setOptions((prev) => ({
+            ...prev,
+            ...options,
+            state: {
+                ...tableState,
+                ...options.state,
+            },
+            onStateChange: (updater) => {
+                if (typeof updater === 'function') {
+                    tableState = updater(tableState);
+                } else {
+                    tableState = updater;
+                }
+                options.onStateChange?.(updater);
+            },
+        }));
+    });
 
-	return table;
+    return table;
 }

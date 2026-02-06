@@ -36,7 +36,8 @@ interface DebugLogger {
 function createLogger(level: LogLevel): (component: string, ...args: unknown[]) => void {
     if (!DEBUG_ENABLED) {
         // Return no-op function - will be eliminated by minifier
-        return () => {};
+        return () => {
+        };
     }
 
     return (component: string, ...args: unknown[]) => {
@@ -58,19 +59,23 @@ export const debug: DebugLogger = {
 
     group: DEBUG_ENABLED
         ? (component: string, label: string) => console.group(`[${component}] ${label}`)
-        : () => {},
+        : () => {
+        },
 
     groupEnd: DEBUG_ENABLED
         ? () => console.groupEnd()
-        : () => {},
+        : () => {
+        },
 
     time: DEBUG_ENABLED
         ? (label: string) => console.time(label)
-        : () => {},
+        : () => {
+        },
 
     timeEnd: DEBUG_ENABLED
         ? (label: string) => console.timeEnd(label)
-        : () => {},
+        : () => {
+        },
 };
 
 /**

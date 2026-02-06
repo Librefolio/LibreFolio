@@ -4,14 +4,15 @@ This guide explains how to deploy LibreFolio for regular use using Docker. This 
 
 ## Prerequisites
 
--   **Docker**: [Install Docker](https://docs.docker.com/get-docker/)
--   **Docker Compose**: Usually included with Docker Desktop.
+- **Docker**: [Install Docker](https://docs.docker.com/get-docker/)
+- **Docker Compose**: Usually included with Docker Desktop.
 
 ## 1. Download the Project
 
 Download the latest release from the [GitHub Releases](https://github.com/ea-enel/LibreFolio/releases) page. Unzip the folder.
 
 Alternatively, you can clone the repository:
+
 ```bash
 git clone https://github.com/ea-enel/LibreFolio.git
 cd LibreFolio
@@ -21,14 +22,14 @@ cd LibreFolio
 
 The project uses a `.env` file for configuration. A sample file is provided.
 
-1.  **Copy the example file**:
-    ```bash
-    cp .env.example .env
-    ```
+1. **Copy the example file**:
+   ```bash
+   cp .env.example .env
+   ```
 
-2.  **Edit `.env`** (Optional):
-    -   `PORT`: Change the port if `8000` is already in use.
-    -   `SECRET_KEY`: For better security, change this to a long, random string. You can generate one [here](https://random-string-generator.com/).
+2. **Edit `.env`** (Optional):
+    - `PORT`: Change the port if `8000` is already in use.
+    - `SECRET_KEY`: For better security, change this to a long, random string. You can generate one [here](https://random-string-generator.com/).
 
 ## 3. Run with Docker Compose
 
@@ -38,8 +39,8 @@ This single command will build the images and start the application.
 docker-compose up -d
 ```
 
--   `-d` runs the application in detached mode (in the background).
--   The first time you run this, Docker will download the necessary base images and build the application, which may take a few minutes.
+- `-d` runs the application in detached mode (in the background).
+- The first time you run this, Docker will download the necessary base images and build the application, which may take a few minutes.
 
 ## 4. Create a Superuser
 
@@ -63,17 +64,17 @@ The application is now running! Open your browser and go to:
 
 To update to a new version:
 
-1.  **Download the latest code**:
-    ```bash
-    git pull
-    ```
+1. **Download the latest code**:
+   ```bash
+   git pull
+   ```
 
-2.  **Rebuild and restart the containers**:
-    ```bash
-    docker-compose up -d --build
-    ```
+2. **Rebuild and restart the containers**:
+   ```bash
+   docker-compose up -d --build
+   ```
 
-3.  **Apply database migrations** (if any):
-    ```bash
-    docker-compose exec backend pipenv run alembic upgrade head
-    ```
+3. **Apply database migrations** (if any):
+   ```bash
+   docker-compose exec backend pipenv run alembic upgrade head
+   ```

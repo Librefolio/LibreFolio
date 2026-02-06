@@ -128,7 +128,7 @@ Verificare come viene costruito il path del database:
 # Cercare:
 DATABASE_URL
 SQLITE_PATH
-data/sqlite
+data / sqlite
 ```
 
 **Modifica necessaria**:
@@ -136,13 +136,16 @@ data/sqlite
 ```python
 DATA_DIR: str = Field(default="./backend/data/prod")
 
+
 @property
 def sqlite_path(self) -> Path:
     return Path(self.DATA_DIR) / "sqlite" / "app.db"
 
-@property  
+
+@property
 def uploads_dir(self) -> Path:
     return Path(self.DATA_DIR) / "uploads"
+
 
 @property
 def brim_dir(self) -> Path:
@@ -156,7 +159,7 @@ Cercare:
 ```python
 # Path delle cartelle uploads
 UPLOAD_DIR
-data/uploads
+data / uploads
 ```
 
 **Modifica necessaria**: Usare `settings.uploads_dir`.
@@ -167,10 +170,10 @@ Cercare:
 
 ```python
 # Path delle cartelle BRIM
-data/brim
-uploaded/
-parsed/
-failed/
+data / brim
+uploaded /
+parsed /
+failed /
 ```
 
 **Modifica necessaria**: Usare `settings.brim_dir`.

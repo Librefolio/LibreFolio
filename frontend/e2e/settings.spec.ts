@@ -1,20 +1,20 @@
-import { test, expect } from '@playwright/test';
-import { login, navigateTo } from './fixtures/auth-helpers';
-import { TEST_USER, TEST_ADMIN } from './fixtures/test-users';
+import {expect, test} from '@playwright/test';
+import {login, navigateTo} from './fixtures/auth-helpers';
+import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 
 test.describe('Settings', () => {
 
     test.describe('Settings Page Access', () => {
-        test.beforeEach(async ({ page }) => {
+        test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
         });
 
-        test('can access settings page', async ({ page }) => {
+        test('can access settings page', async ({page}) => {
             await navigateTo(page, '/settings');
             await expect(page.getByTestId('settings-page')).toBeVisible();
         });
 
-        test('shows all settings tabs', async ({ page }) => {
+        test('shows all settings tabs', async ({page}) => {
             await navigateTo(page, '/settings');
             await expect(page.getByTestId('settings-tab-profile')).toBeVisible();
             await expect(page.getByTestId('settings-tab-preferences')).toBeVisible();
@@ -22,7 +22,7 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('settings-tab-admin')).toBeVisible();
         });
 
-        test('profile tab is active by default', async ({ page }) => {
+        test('profile tab is active by default', async ({page}) => {
             await navigateTo(page, '/settings');
             await expect(page.getByTestId('settings-tab-profile')).toHaveAttribute('aria-selected', 'true');
             await expect(page.getByTestId('profile-tab')).toBeVisible();
@@ -30,31 +30,31 @@ test.describe('Settings', () => {
     });
 
     test.describe('Profile Tab', () => {
-        test.beforeEach(async ({ page }) => {
+        test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
         });
 
-        test('shows user profile information', async ({ page }) => {
+        test('shows user profile information', async ({page}) => {
             await expect(page.getByTestId('profile-tab')).toBeVisible();
             await expect(page.getByTestId('profile-username')).toBeVisible();
             await expect(page.getByTestId('profile-email')).toBeVisible();
         });
 
-        test('profile fields are initially disabled (locked)', async ({ page }) => {
+        test('profile fields are initially disabled (locked)', async ({page}) => {
             await expect(page.getByTestId('profile-username')).toBeDisabled();
             await expect(page.getByTestId('profile-email')).toBeDisabled();
         });
 
-        test('change password button is visible', async ({ page }) => {
+        test('change password button is visible', async ({page}) => {
             await expect(page.getByTestId('change-password-button')).toBeVisible();
         });
 
-        test('delete account button is visible', async ({ page }) => {
+        test('delete account button is visible', async ({page}) => {
             await expect(page.getByTestId('delete-account-button')).toBeVisible();
         });
 
-        test('can unlock profile for editing', async ({ page }) => {
+        test('can unlock profile for editing', async ({page}) => {
             // Fields should be disabled initially
             await expect(page.getByTestId('profile-username')).toBeDisabled();
 
@@ -66,7 +66,7 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('profile-email')).toBeEnabled();
         });
 
-        test('can modify and see save/undo buttons appear', async ({ page }) => {
+        test('can modify and see save/undo buttons appear', async ({page}) => {
             // Unlock editing
             await page.getByTestId('profile-edit-toggle').click();
             await expect(page.getByTestId('profile-username')).toBeEnabled();
@@ -84,7 +84,7 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('profile-undo-all')).toBeVisible();
         });
 
-        test('can undo changes', async ({ page }) => {
+        test('can undo changes', async ({page}) => {
             // Unlock editing
             await page.getByTestId('profile-edit-toggle').click();
 
@@ -105,17 +105,17 @@ test.describe('Settings', () => {
     });
 
     test.describe('Change Password Modal', () => {
-        test.beforeEach(async ({ page }) => {
+        test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
         });
 
-        test('can open change password modal', async ({ page }) => {
+        test('can open change password modal', async ({page}) => {
             await page.getByTestId('change-password-button').click();
             await expect(page.getByTestId('password-change-modal')).toBeVisible();
         });
 
-        test('change password modal has all fields', async ({ page }) => {
+        test('change password modal has all fields', async ({page}) => {
             await page.getByTestId('change-password-button').click();
             await expect(page.getByTestId('password-change-modal')).toBeVisible();
 
@@ -126,7 +126,7 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('password-change-cancel')).toBeVisible();
         });
 
-        test('can close change password modal', async ({ page }) => {
+        test('can close change password modal', async ({page}) => {
             await page.getByTestId('change-password-button').click();
             await expect(page.getByTestId('password-change-modal')).toBeVisible();
 
@@ -134,7 +134,7 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('password-change-modal')).not.toBeVisible();
         });
 
-        test('password strength meter shows when typing new password', async ({ page }) => {
+        test('password strength meter shows when typing new password', async ({page}) => {
             await page.getByTestId('change-password-button').click();
             await expect(page.getByTestId('password-change-modal')).toBeVisible();
 
@@ -150,32 +150,32 @@ test.describe('Settings', () => {
     });
 
     test.describe('Preferences Tab', () => {
-        test.beforeEach(async ({ page }) => {
+        test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-preferences').click();
         });
 
-        test('can switch to preferences tab', async ({ page }) => {
+        test('can switch to preferences tab', async ({page}) => {
             await expect(page.getByTestId('settings-tab-preferences')).toHaveAttribute('aria-selected', 'true');
         });
 
-        test('shows language preference', async ({ page }) => {
+        test('shows language preference', async ({page}) => {
             await expect(page.getByTestId('preference-language')).toBeVisible();
         });
 
-        test('shows currency preference', async ({ page }) => {
+        test('shows currency preference', async ({page}) => {
             await expect(page.getByTestId('preference-currency')).toBeVisible();
         });
 
-        test('shows theme preference', async ({ page }) => {
+        test('shows theme preference', async ({page}) => {
             await expect(page.getByTestId('preference-theme')).toBeVisible();
         });
     });
 
     test.describe('Admin Tab (Global Settings)', () => {
 
-        test('admin can view and access global settings', async ({ page }) => {
+        test('admin can view and access global settings', async ({page}) => {
             await login(page, TEST_ADMIN);
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-admin').click();
@@ -184,7 +184,7 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('global-settings-tab')).toBeVisible();
         });
 
-        test('non-admin can view but not edit global settings', async ({ page }) => {
+        test('non-admin can view but not edit global settings', async ({page}) => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-admin').click();
@@ -196,21 +196,21 @@ test.describe('Settings', () => {
     });
 
     test.describe('About Tab', () => {
-        test.beforeEach(async ({ page }) => {
+        test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-about').click();
         });
 
-        test('can switch to about tab', async ({ page }) => {
+        test('can switch to about tab', async ({page}) => {
             await expect(page.getByTestId('settings-tab-about')).toHaveAttribute('aria-selected', 'true');
         });
 
-        test('shows about tab content', async ({ page }) => {
+        test('shows about tab content', async ({page}) => {
             await expect(page.getByTestId('about-tab')).toBeVisible();
         });
 
-        test('shows app name and version', async ({ page }) => {
+        test('shows app name and version', async ({page}) => {
             await expect(page.getByTestId('about-app-name')).toBeVisible();
             await expect(page.getByTestId('about-app-name')).toContainText('LibreFolio');
             await expect(page.getByTestId('about-version')).toBeVisible();
@@ -218,7 +218,7 @@ test.describe('Settings', () => {
     });
 
     test.describe('Preferences Persistence', () => {
-        test('theme preference persists after page reload', async ({ page }) => {
+        test('theme preference persists after page reload', async ({page}) => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-preferences').click();
@@ -255,7 +255,7 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('settings-tab-preferences')).toHaveAttribute('aria-selected', 'true');
         });
 
-        test('preferences persist after navigating away and back', async ({ page }) => {
+        test('preferences persist after navigating away and back', async ({page}) => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-preferences').click();
@@ -279,7 +279,7 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('preference-theme')).toBeVisible();
         });
 
-        test('language change persists after page goto', async ({ page }) => {
+        test('language change persists after page goto', async ({page}) => {
             await login(page, TEST_USER);
 
             // Go to settings preferences
@@ -298,7 +298,7 @@ test.describe('Settings', () => {
                 await page.waitForTimeout(300);
 
                 // Select Italian if available
-                const italianOption = page.locator('[role="option"], [class*="option"]').filter({ hasText: /Italiano|Italian/i }).first();
+                const italianOption = page.locator('[role="option"], [class*="option"]').filter({hasText: /Italiano|Italian/i}).first();
                 if (await italianOption.isVisible().catch(() => false)) {
                     await italianOption.click();
                     await page.waitForTimeout(500);

@@ -26,14 +26,14 @@
     });
 </script>
 
-<div class="relative" bind:this={menuRef}>
+<div bind:this={menuRef} class="relative">
     <button
-            on:click={toggleMenu}
             class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-gray-600 dark:text-gray-300"
+            on:click={toggleMenu}
             title={$_('help.helpAndSupport')}
     >
         <HelpCircle size={20}/>
-        <ChevronDown size={14} class="transition-transform {isOpen ? 'rotate-180' : ''}"/>
+        <ChevronDown class="transition-transform {isOpen ? 'rotate-180' : ''}" size={14}/>
     </button>
 
     {#if isOpen}

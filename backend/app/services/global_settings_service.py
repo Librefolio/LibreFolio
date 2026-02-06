@@ -49,7 +49,7 @@ async def get_setting_value(session: AsyncSession, key: str, default: Any = None
         if key in GLOBAL_SETTINGS_DEFAULTS:
             return _convert_value(
                 GLOBAL_SETTINGS_DEFAULTS[key]["value"], GLOBAL_SETTINGS_DEFAULTS[key]["type"]
-            )
+                )
         return default
 
     return _convert_value(setting.value, setting.value_type)

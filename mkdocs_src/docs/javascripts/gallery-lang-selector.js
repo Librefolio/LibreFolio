@@ -6,14 +6,14 @@
  *
  * Works together with the gallery pages to switch screenshot languages.
  */
-(function() {
+(function () {
     'use strict';
 
     const LANGUAGES = [
-        { code: 'en', name: 'English', flag: '🇬🇧' },
-        { code: 'it', name: 'Italiano', flag: '🇮🇹' },
-        { code: 'fr', name: 'Français', flag: '🇫🇷' },
-        { code: 'es', name: 'Español', flag: '🇪🇸' }
+        {code: 'en', name: 'English', flag: '🇬🇧'},
+        {code: 'it', name: 'Italiano', flag: '🇮🇹'},
+        {code: 'fr', name: 'Français', flag: '🇫🇷'},
+        {code: 'es', name: 'Español', flag: '🇪🇸'}
     ];
 
     const STORAGE_KEY = 'gallery-lang';
@@ -30,7 +30,7 @@
     function setCurrentLang(lang) {
         localStorage.setItem(STORAGE_KEY, lang);
         // Dispatch custom event for gallery pages to listen
-        window.dispatchEvent(new CustomEvent('gallery-lang-change', { detail: { lang } }));
+        window.dispatchEvent(new CustomEvent('gallery-lang-change', {detail: {lang}}));
     }
 
     function getLangByCode(code) {

@@ -43,7 +43,7 @@ def test_fx_provider_discovery():
 
     assert expected_providers.issubset(
         provider_set
-    ), f"Missing expected FX providers: {expected_providers - provider_set}. Found: {provider_codes}"
+        ), f"Missing expected FX providers: {expected_providers - provider_set}. Found: {provider_codes}"
     assert len(provider_codes) >= 4, f"Expected at least 4 providers, got {len(provider_codes)}"
 
 

@@ -41,7 +41,6 @@ from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.app.db.models import AssetType, IdentifierType
-
 # Import from common and prices modules
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -49,7 +48,7 @@ from backend.app.schemas.common import (
     BaseBulkResponse,
     OldNew,
     Currency,
-)
+    )
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint, FAHistoricalData
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.geo_utils import normalize_country_keys
@@ -197,7 +196,7 @@ class FAInterestRatePeriod(BaseModel):
                 compounding=info.data["compounding"].value,
                 compound_frequency=v.value if v else None,
                 field_name="compound_frequency",
-            )
+                )
         return v
 
 
@@ -258,7 +257,7 @@ class FALateInterestConfig(BaseModel):
                 compounding=info.data["compounding"].value,
                 compound_frequency=v.value if v else None,
                 field_name="compound_frequency",
-            )
+                )
         return v
 
 
@@ -333,12 +332,12 @@ class FAScheduledInvestmentSchedule(BaseModel):
                 raise ValueError(
                     f"Overlapping periods detected: period ending {current.end_date} "
                     f"overlaps with period starting {next_period.start_date}"
-                )
+                    )
             elif days_gap > 1:
                 raise ValueError(
                     f"Gap detected between periods: period ending {current.end_date} "
                     f"and period starting {next_period.start_date} ({days_gap} days gap)"
-                )
+                    )
 
         return sorted_schedule
 
@@ -373,7 +372,7 @@ class BaseDistribution(BaseModel):
     @classmethod
     def _validate_and_normalize_weights(
         cls, weights: dict[str, Decimal], allow_empty: bool = False
-    ) -> dict[str, Decimal]:
+        ) -> dict[str, Decimal]:
         """
         Common validation logic for distribution weights.
 
@@ -427,7 +426,7 @@ class BaseDistribution(BaseModel):
             raise ValueError(
                 f"Distribution weights must sum to approximately 1.0 (±{tolerance}). "
                 f"Current sum: {raw_total} (difference: {abs(raw_total - target)})"
-            )
+                )
 
         # Normalize weights to sum to exactly 1.0, then quantize
         quantized = {}
@@ -449,7 +448,7 @@ class BaseDistribution(BaseModel):
                 raise ValueError(
                     f"Cannot renormalize: adjustment would make weight negative. "
                     f"Key: {min_key}, Original: {quantized[min_key]}, Adjustment: {adjustment}"
-                )
+                    )
 
             quantized[min_key] = adjusted_weight
 
@@ -458,7 +457,7 @@ class BaseDistribution(BaseModel):
         if final_sum != target:
             raise ValueError(
                 f"Internal error: final sum is {final_sum} after renormalization (expected {target})"
-            )
+                )
 
         return quantized
 
@@ -642,7 +641,7 @@ class FAMetadataRefreshResult(BaseModel):
     message: str
     fields_detail: Optional["FAProviderRefreshFieldsDetail"] = Field(
         None, description="Details of refreshed fields with old/new values"
-    )
+        )
     warnings: Optional[List[str]] = None
 
 
@@ -676,13 +675,13 @@ class FAAssetCreateItem(BaseModel):
     currency: str = Field(..., min_length=3, max_length=3, description="Asset currency (ISO 4217)")
     asset_type: Optional[AssetType] = Field(
         None, description="Asset type (STOCK, ETF, BOND, CROWDFUND_LOAN, etc.)"
-    )
+        )
     icon_url: Optional[str] = Field(None, description="URL to asset icon (local or remote)")
 
     # Classification metadata (optional)
     classification_params: Optional[FAClassificationParams] = Field(
         None, description="Asset classification metadata"
-    )
+        )
 
     # Identifier fields (one per IdentifierType) - optional
     identifier_isin: Optional[str] = Field(None, max_length=12, description="ISIN code (12 chars)")
@@ -692,7 +691,7 @@ class FAAssetCreateItem(BaseModel):
     identifier_figi: Optional[str] = Field(None, max_length=12, description="FIGI code (12 chars)")
     identifier_uuid: Optional[str] = Field(
         None, max_length=36, description="UUID for custom assets"
-    )
+        )
     identifier_other: Optional[str] = Field(None, max_length=100, description="Other identifier")
 
     @field_validator("currency")
@@ -767,7 +766,7 @@ class FAAinfoFiltersRequest(BaseModel):
     isin: Optional[str] = Field(None, description="Exact ISIN match (Asset.identifier_isin)")
     ticker: Optional[str] = Field(
         None, description="Exact ticker/symbol match (Asset.identifier_ticker)"
-    )
+        )
     cusip: Optional[str] = Field(None, description="Exact CUSIP match (Asset.identifier_cusip)")
     sedol: Optional[str] = Field(None, description="Exact SEDOL match (Asset.identifier_sedol)")
     figi: Optional[str] = Field(None, description="Exact FIGI match (Asset.identifier_figi)")
@@ -779,7 +778,7 @@ class FAAinfoFiltersRequest(BaseModel):
     # Partial match across ALL identifier columns
     identifier_contains: Optional[str] = Field(
         None, description="Partial match in any identifier field"
-    )
+        )
 
     @field_validator("currency")
     @classmethod
@@ -832,7 +831,7 @@ class FAinfoResponse(BaseModel):
     # Legacy fields for backward compatibility with provider assignment
     identifier: Optional[str] = Field(
         None, description="Primary identifier (from provider assignment)"
-    )
+        )
     identifier_type: Optional[IdentifierType] = Field(None, description="Primary identifier type")
 
 
@@ -879,28 +878,28 @@ class FAAssetPatchItem(BaseModel):
     display_name: Optional[str] = Field(None, description="Update display name")
     currency: Optional[str] = Field(
         None, min_length=3, max_length=3, description="Update currency (ISO 4217)"
-    )
+        )
     asset_type: Optional[AssetType] = Field(
         None, description="Update asset type (STOCK, ETF, BOND, etc.)"
-    )
+        )
     icon_url: Optional[str] = Field(None, description="Update icon URL (None = clear)")
     classification_params: Optional[FAClassificationParams] = Field(
         None, description="Update classification (None = clear)"
-    )
+        )
     active: Optional[bool] = Field(None, description="Update active status")
 
     # Identifier fields (one per IdentifierType)
     identifier_isin: Optional[str] = Field(None, max_length=12, description="Update ISIN code")
     identifier_ticker: Optional[str] = Field(
         None, max_length=20, description="Update ticker symbol"
-    )
+        )
     identifier_cusip: Optional[str] = Field(None, max_length=9, description="Update CUSIP code")
     identifier_sedol: Optional[str] = Field(None, max_length=7, description="Update SEDOL code")
     identifier_figi: Optional[str] = Field(None, max_length=12, description="Update FIGI code")
     identifier_uuid: Optional[str] = Field(None, max_length=36, description="Update UUID")
     identifier_other: Optional[str] = Field(
         None, max_length=100, description="Update other identifier"
-    )
+        )
 
     @field_validator("currency")
     @classmethod
@@ -938,7 +937,7 @@ class FAAssetPatchResult(BaseModel):
     message: str = Field(..., description="Success message or error description")
     updated_fields: Optional[List[OldNew[str | None]]] = Field(
         None, description="List of fields updated: [{info: field, old: old_value, new: new_value}]"
-    )
+        )
 
 
 class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
@@ -985,4 +984,4 @@ __all__ = [
     "FAAssetPatchItem",
     "FABulkAssetPatchResponse",
     "FAAssetPatchResult",
-]
+    ]

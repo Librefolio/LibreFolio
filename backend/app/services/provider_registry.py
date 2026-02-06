@@ -114,7 +114,7 @@ class AbstractProviderRegistry:
                 # Log error but don't stop discovery on single-module errors
                 logger.error(
                     "Error importing provider module", module_name=module_name, error=str(e)
-                )
+                    )
                 continue
         cls._discovery_done = True
 
@@ -190,7 +190,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
                         plugin_code=code,
                         priority=priority,
                         file_path=str(file_path),
-                    )
+                        )
                     return code
             except Exception as e:
                 logger.warning("Error checking plugin can_parse", plugin_code=code, error=str(e))

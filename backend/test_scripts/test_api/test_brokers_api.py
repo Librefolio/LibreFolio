@@ -63,7 +63,7 @@ async def create_test_user(client: httpx.AsyncClient) -> tuple[str, str, Optiona
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-    )
+        )
 
     if resp.status_code != 201:
         return username, email, None
@@ -71,7 +71,7 @@ async def create_test_user(client: httpx.AsyncClient) -> tuple[str, str, Optiona
     # Login
     login_resp = await client.post(
         f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-    )
+        )
 
     session_cookie = login_resp.cookies.get("session")
     if session_cookie:
@@ -84,7 +84,7 @@ async def login_user(client: httpx.AsyncClient, username: str, password: str) ->
     """Login and return session cookie. Also sets cookie on client."""
     resp = await client.post(
         f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
-    )
+        )
     session_cookie = resp.cookies.get("session")
     if session_cookie:
         client.cookies.set("session", session_cookie)
@@ -124,7 +124,7 @@ class TestBrokerCreate:
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 401, f"Expected 401, got {response.status_code}"
             print_success("✓ Got 401 without authentication")
@@ -141,14 +141,14 @@ class TestBrokerCreate:
                 {
                     "name": unique_name("Create Test Broker"),
                     "description": "Created via API test",
-                }
-            ]
+                    }
+                ]
 
             response = await client.post(
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
 
             assert (
                 response.status_code == 200
@@ -175,15 +175,15 @@ class TestBrokerCreate:
                     "initial_balances": [
                         {"code": "EUR", "amount": "5000"},
                         {"code": "USD", "amount": "3000"},
-                    ],
-                }
-            ]
+                        ],
+                    }
+                ]
 
             response = await client.post(
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -211,7 +211,7 @@ class TestBrokerCreate:
                 f"{API_BASE}/brokers",
                 json=payload2,
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -236,14 +236,14 @@ class TestBrokerCreate:
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
             # Check access list
             access_resp = await client.get(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert access_resp.status_code == 200
             access_data = access_resp.json()
@@ -306,14 +306,14 @@ class TestBrokerRead:
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
             # Get by ID
             response = await client.get(
                 f"{API_BASE}/brokers/{broker_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -332,7 +332,7 @@ class TestBrokerRead:
             response = await client.get(
                 f"{API_BASE}/brokers/999999",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 404
 
@@ -351,20 +351,20 @@ class TestBrokerRead:
                 {
                     "name": unique_name("Summary Broker"),
                     "initial_balances": [{"code": "EUR", "amount": "1000"}],
-                }
-            ]
+                    }
+                ]
             create_resp = await client.post(
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
             # Get summary
             response = await client.get(
                 f"{API_BASE}/brokers/{broker_id}/summary",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -399,7 +399,7 @@ class TestBrokerUpdate:
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
             # Update
@@ -408,7 +408,7 @@ class TestBrokerUpdate:
                 f"{API_BASE}/brokers/{broker_id}",
                 json=update_payload,
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -429,7 +429,7 @@ class TestBrokerUpdate:
                 f"{API_BASE}/brokers/999999",
                 json={"description": "Should fail"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -460,7 +460,7 @@ class TestBrokerDelete:
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
             # Delete
@@ -468,7 +468,7 @@ class TestBrokerDelete:
                 f"{API_BASE}/brokers",
                 params={"ids": [broker_id]},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -489,13 +489,13 @@ class TestBrokerDelete:
                 {
                     "name": unique_name("Has TX Broker"),
                     "initial_balances": [{"code": "EUR", "amount": "1000"}],
-                }
-            ]
+                    }
+                ]
             create_resp = await client.post(
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
             # Try to delete without force
@@ -503,7 +503,7 @@ class TestBrokerDelete:
                 f"{API_BASE}/brokers",
                 params={"ids": [broker_id], "force": False},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -525,13 +525,13 @@ class TestBrokerDelete:
                 {
                     "name": unique_name("Force Delete Broker"),
                     "initial_balances": [{"code": "EUR", "amount": "1000"}],
-                }
-            ]
+                    }
+                ]
             create_resp = await client.post(
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
             # Delete with force
@@ -539,7 +539,7 @@ class TestBrokerDelete:
                 f"{API_BASE}/brokers",
                 params={"ids": [broker_id], "force": True},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -569,13 +569,13 @@ class TestBrokerBulkOperations:
                 {"name": unique_name("Bulk Broker 1"), "description": "First"},
                 {"name": unique_name("Bulk Broker 2"), "description": "Second"},
                 {"name": unique_name("Bulk Broker 3"), "description": "Third"},
-            ]
+                ]
 
             response = await client.post(
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -599,20 +599,20 @@ class TestBrokerBulkOperations:
                 f"{API_BASE}/brokers",
                 json=[{"name": first_name}],
                 timeout=TIMEOUT,
-            )
+                )
 
             # Try to create 3 brokers, one with duplicate name
             payload = [
                 {"name": unique_name("New Broker 1")},
                 {"name": first_name},  # Duplicate!
                 {"name": unique_name("New Broker 2")},
-            ]
+                ]
 
             response = await client.post(
                 f"{API_BASE}/brokers",
                 json=payload,
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -641,7 +641,7 @@ class TestBrokerBulkOperations:
                     f"{API_BASE}/brokers",
                     json=[{"name": unique_name(f"Delete Bulk {i}")}],
                     timeout=TIMEOUT,
-                )
+                    )
                 broker_ids.append(resp.json()["results"][0]["broker_id"])
 
             # Delete all 3
@@ -649,7 +649,7 @@ class TestBrokerBulkOperations:
                 f"{API_BASE}/brokers",
                 params={"ids": broker_ids},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -674,21 +674,21 @@ class TestBrokerBulkOperations:
                 f"{API_BASE}/brokers",
                 json=[{"name": name1}],
                 timeout=TIMEOUT,
-            )
+                )
             broker1_id = resp1.json()["results"][0]["broker_id"]
 
             await client.post(
                 f"{API_BASE}/brokers",
                 json=[{"name": name2}],
                 timeout=TIMEOUT,
-            )
+                )
 
             # Try to rename broker1 to broker2's name
             response = await client.patch(
                 f"{API_BASE}/brokers/{broker1_id}",
                 json={"name": name2},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             data = response.json()
@@ -718,7 +718,7 @@ class TestMultipleOwners:
                 f"{API_BASE}/brokers",
                 json=[{"name": unique_name("Multi Owner Broker")}],
                 timeout=TIMEOUT,
-            )
+                )
             broker_id = resp.json()["results"][0]["broker_id"]
 
             # Create user 2 and add as OWNER
@@ -728,9 +728,9 @@ class TestMultipleOwners:
                     "username": unique_username(),
                     "email": f"{unique_username()}@test.com",
                     "password": "TestPass123!",
-                },
+                    },
                 timeout=TIMEOUT,
-            )
+                )
             user2_id = user2_resp.json()["user"]["id"]
 
             # User 1 adds user 2 as OWNER
@@ -738,7 +738,7 @@ class TestMultipleOwners:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "OWNER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # Login user 2
             await client2.post(
@@ -746,9 +746,9 @@ class TestMultipleOwners:
                 json={
                     "username": user2_resp.json()["user"]["username"],
                     "password": "TestPass123!",
-                },
+                    },
                 timeout=TIMEOUT,
-            )
+                )
             client2.cookies.set("session", client2.cookies.get("session"))
 
             # User 2 (also OWNER) can modify broker
@@ -756,7 +756,7 @@ class TestMultipleOwners:
                 f"{API_BASE}/brokers/{broker_id}",
                 json={"description": "Modified by second owner"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             assert response.json()["results"][0]["success"] is True
@@ -765,7 +765,7 @@ class TestMultipleOwners:
             access_resp = await client1.get(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
-            )
+                )
             owners = [a for a in access_resp.json()["accesses"] if a["role"] == "OWNER"]
             assert len(owners) == 2
 
@@ -783,7 +783,7 @@ class TestMultipleOwners:
                 f"{API_BASE}/brokers",
                 json=[{"name": unique_name("Remove Owner Test")}],
                 timeout=TIMEOUT,
-            )
+                )
             broker_id = resp.json()["results"][0]["broker_id"]
 
             # Create and add user 2
@@ -793,22 +793,22 @@ class TestMultipleOwners:
                     "username": unique_username(),
                     "email": f"{unique_username()}@test.com",
                     "password": "TestPass123!",
-                },
+                    },
                 timeout=TIMEOUT,
-            )
+                )
             user2_id = user2_resp.json()["user"]["id"]
 
             await client1.post(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 json={"user_id": user2_id, "role": "OWNER"},
                 timeout=TIMEOUT,
-            )
+                )
 
             # User 1 removes user 2
             response = await client1.delete(
                 f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 200
             assert response.json()["success"] is True
@@ -817,7 +817,7 @@ class TestMultipleOwners:
             access_resp = await client1.get(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
-            )
+                )
             assert access_resp.json()["total"] == 1
 
             print_success("✓ Owner removed another owner successfully")

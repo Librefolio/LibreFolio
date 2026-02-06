@@ -61,9 +61,9 @@ class CSSScraperProvider(AssetSourceProvider):
                     "current_css_selector": ".summary-value strong",
                     "currency": "EUR",
                     "decimal_format": "us",  # English version uses US format
-                },
+                    },
                 "expected_symbol": "https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en",
-            },
+                },
             {
                 "identifier": "https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=it",
                 "identifier_type": IdentifierType.OTHER,
@@ -71,17 +71,17 @@ class CSSScraperProvider(AssetSourceProvider):
                     "current_css_selector": ".summary-value strong",
                     "currency": "EUR",
                     "decimal_format": "eu",  # Italian version uses EU format
-                },
+                    },
                 "expected_symbol": "https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=it",
-            },
-        ]
+                },
+            ]
 
     async def get_current_value(
         self,
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-    ) -> FACurrentValue:
+        ) -> FACurrentValue:
         """
         Fetch current price by scraping URL with CSS selector.
 
@@ -101,7 +101,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 "httpx and beautifulsoup4 not available - install with: pipenv install httpx beautifulsoup4",
                 "NOT_AVAILABLE",
                 {"identifier": identifier},
-            )
+                )
 
         self.validate_params(provider_params)
 
@@ -118,7 +118,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 "User-Agent": user_agent,
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.5",
-            }
+                }
 
             # Merge custom headers from provider_params (custom headers override defaults)
             custom_headers = provider_params.get("headers", {})
@@ -138,7 +138,7 @@ class CSSScraperProvider(AssetSourceProvider):
                     f"Price element not found with selector: {css_selector}",
                     "NOT_FOUND",
                     {"url": url, "selector": css_selector, "status_code": response.status_code},
-                )
+                    )
 
             # Extract and parse price
             price_text = price_element.get_text(strip=True)
@@ -151,7 +151,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 currency=currency,
                 as_of_date=date.today(),
                 source=self.provider_name,
-            )
+                )
 
         except AssetSourceError:
             raise
@@ -163,16 +163,16 @@ class CSSScraperProvider(AssetSourceProvider):
                     "url": url,
                     "status_code": e.response.status_code,
                     "reason": e.response.reason_phrase,
-                },
-            )
+                    },
+                )
         except httpx.RequestError as e:
             raise AssetSourceError(
                 f"Request failed: {e}", "REQUEST_ERROR", {"url": url, "error": str(e)}
-            )
+                )
         except Exception as e:
             raise AssetSourceError(
                 f"Scraping failed: {e}", "SCRAPE_ERROR", {"url": url, "error": str(e)}
-            )
+                )
 
     @property
     def supports_history(self) -> bool:
@@ -186,7 +186,7 @@ class CSSScraperProvider(AssetSourceProvider):
         provider_params: Dict | None,
         start_date: date,
         end_date: date,
-    ) -> FAHistoricalData:
+        ) -> FAHistoricalData:
         """
         Fetch historical prices (NOT IMPLEMENTED for CSS scraper).
 
@@ -207,7 +207,7 @@ class CSSScraperProvider(AssetSourceProvider):
             "Historical data not supported by CSS scraper provider",
             "NOT_IMPLEMENTED",
             {"identifier": identifier, "start_date": str(start_date), "end_date": str(end_date)},
-        )
+            )
 
     @property
     def test_search_query(self) -> str | None:
@@ -233,7 +233,7 @@ class CSSScraperProvider(AssetSourceProvider):
         if not params:
             raise AssetSourceError(
                 "CSS scraper requires provider_params", "MISSING_PARAMS", {"params": params}
-            )
+                )
 
         # Check required params
         required = ["current_css_selector", "currency"]
@@ -243,7 +243,7 @@ class CSSScraperProvider(AssetSourceProvider):
                 f"Missing required params: {', '.join(missing)}",
                 "MISSING_PARAMS",
                 {"missing": missing, "params": params},
-            )
+                )
 
         # Validate decimal_format if present
         if "decimal_format" in params:
@@ -252,7 +252,7 @@ class CSSScraperProvider(AssetSourceProvider):
                     "decimal_format must be 'us' or 'eu'",
                     "INVALID_PARAMS",
                     {"decimal_format": params["decimal_format"]},
-                )
+                    )
 
     # ============================================================================
     # HELPER FUNCTIONS
@@ -305,4 +305,4 @@ class CSSScraperProvider(AssetSourceProvider):
                 f"Failed to parse price: {text}",
                 "PARSE_ERROR",
                 {"text": text, "decimal_format": decimal_format, "error": str(e)},
-            )
+                )

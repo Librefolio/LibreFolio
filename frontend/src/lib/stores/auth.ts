@@ -11,7 +11,7 @@ import {browser} from '$app/environment';
 import {goto} from '$app/navigation';
 import {zodiosApi} from '$lib/api';
 import {debug} from '$lib/debug';
-import type {AuthUser, AuthState} from '$lib/types';
+import type {AuthState, AuthUser} from '$lib/types';
 import {isAxiosError} from 'axios';
 
 // Re-export types for backward compatibility

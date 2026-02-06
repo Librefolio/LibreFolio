@@ -17,11 +17,13 @@ curl -v -X POST http://localhost:8000/api/v1/auth/login \
 ```
 
 This will:
+
 1. Send login credentials
 2. Receive a `Set-Cookie` header with the session token
 3. Save the cookie to `/tmp/cookies.txt`
 
 **Example response:**
+
 ```json
 {
   "user": {
@@ -137,20 +139,20 @@ curl -b /tmp/cookies.txt -O \
 
 ## Useful cURL Flags
 
-| Flag | Description |
-|------|-------------|
-| `-s` | Silent mode (no progress bar) |
-| `-v` | Verbose (show headers) |
-| `-i` | Include response headers |
-| `-X METHOD` | HTTP method (GET, POST, PATCH, DELETE) |
-| `-H "Header: value"` | Add request header |
-| `-d 'data'` | Send request body |
-| `-F "file=@path"` | Send multipart form (file upload) |
-| `-b file` | Send cookies from file |
-| `-c file` | Save cookies to file |
-| `-o file` | Save response to file |
-| `-O` | Save with original filename |
-| `-w "\n%{http_code}"` | Print HTTP status code |
+| Flag                  | Description                            |
+|-----------------------|----------------------------------------|
+| `-s`                  | Silent mode (no progress bar)          |
+| `-v`                  | Verbose (show headers)                 |
+| `-i`                  | Include response headers               |
+| `-X METHOD`           | HTTP method (GET, POST, PATCH, DELETE) |
+| `-H "Header: value"`  | Add request header                     |
+| `-d 'data'`           | Send request body                      |
+| `-F "file=@path"`     | Send multipart form (file upload)      |
+| `-b file`             | Send cookies from file                 |
+| `-c file`             | Save cookies to file                   |
+| `-o file`             | Save response to file                  |
+| `-O`                  | Save with original filename            |
+| `-w "\n%{http_code}"` | Print HTTP status code                 |
 
 ## Test Mode
 

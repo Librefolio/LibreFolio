@@ -6,13 +6,13 @@
  *
  * Now uses Zodios client for type-safe API calls with Zod validation.
  */
-import { writable, get } from 'svelte/store';
-import { browser } from '$app/environment';
-import { zodiosApi } from '$lib/api';
-import type { UserSettings } from '$lib/types';
+import {get, writable} from 'svelte/store';
+import {browser} from '$app/environment';
+import {zodiosApi} from '$lib/api';
+import type {UserSettings} from '$lib/types';
 
 // Re-export type for backward compatibility
-export type { UserSettings } from '$lib/types';
+export type {UserSettings} from '$lib/types';
 
 const defaultSettings: UserSettings = {
     language: 'en',
@@ -24,7 +24,7 @@ const defaultSettings: UserSettings = {
  * Create the user settings store
  */
 function createUserSettingsStore() {
-    const { subscribe, set, update } = writable<UserSettings | null>(null);
+    const {subscribe, set, update} = writable<UserSettings | null>(null);
 
     // Load from localStorage on init
     if (browser) {
@@ -66,10 +66,10 @@ function createUserSettingsStore() {
          */
         async updateSetting(key: keyof UserSettings, value: string): Promise<boolean> {
             try {
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({ [key]: value });
+                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({[key]: value});
 
                 update(current => {
-                    const updated = { ...current, [key]: value } as UserSettings;
+                    const updated = {...current, [key]: value} as UserSettings;
                     if (browser) {
                         localStorage.setItem('user_settings', JSON.stringify(updated));
                     }
@@ -97,7 +97,7 @@ function createUserSettingsStore() {
          * Get current value
          */
         get(): UserSettings | null {
-            return get({ subscribe });
+            return get({subscribe});
         }
     };
 }

@@ -11,10 +11,11 @@ Simple interest is calculated only on the principal amount.
 $$ I = P \times r \times t $$
 
 Where:
--   $I$ = Interest
--   $P$ = Principal
--   $r$ = Annual Interest Rate
--   $t$ = Time (in years, calculated using the Day Count Convention)
+
+- $I$ = Interest
+- $P$ = Principal
+- $r$ = Annual Interest Rate
+- $t$ = Time (in years, calculated using the Day Count Convention)
 
 ## Compound Interest
 
@@ -25,8 +26,9 @@ Compound interest is calculated on the principal amount plus the accumulated int
 $$ A = P \times (1 + \frac{r}{n})^{n \times t} $$
 
 Where:
--   $A$ = Final Amount (Principal + Interest)
--   $P$ = Principal
--   $r$ = Annual Interest Rate
--   $n$ = Number of compounding periods per year
--   $t$ = Time (in years)
+
+- $A$ = Final Amount (Principal + Interest)
+- $P$ = Principal
+- $r$ = Annual Interest Rate
+- $n$ = Number of compounding periods per year
+- $t$ = Time (in years)

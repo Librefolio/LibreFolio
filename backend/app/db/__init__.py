@@ -20,7 +20,7 @@ from backend.app.db.base import (
     FxRate,
     FxCurrencyPairSource,
     AssetProviderAssignment,
-)
+    )
 from backend.app.db.session import get_sync_engine, get_async_engine, get_session_generator
 
 __all__ = [
@@ -44,4 +44,4 @@ __all__ = [
     "FxRate",
     "FxCurrencyPairSource",
     "AssetProviderAssignment",
-]
+    ]

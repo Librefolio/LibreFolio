@@ -23,42 +23,42 @@
  */
 
 // Adapter Svelte 5 custom
-export { createSvelteTable } from './createSvelteTable.svelte.js';
+export {createSvelteTable} from './createSvelteTable.svelte.js';
 
 // Re-export delle funzionalità core da @tanstack/table-core
 export {
-	// Core
-	createTable,
-	// Row Models
-	getCoreRowModel,
-	getFilteredRowModel,
-	getSortedRowModel,
-	getGroupedRowModel,
-	getExpandedRowModel,
-	getPaginationRowModel,
-	getFacetedRowModel,
-	getFacetedUniqueValues,
-	getFacetedMinMaxValues,
-	// Column helpers
-	createColumnHelper,
-	// Types (re-export per comodità)
-	type Table,
-	type Row,
-	type Cell,
-	type Column,
-	type Header,
-	type HeaderGroup,
-	type RowData,
-	type ColumnDef,
-	type TableOptions,
-	type TableState,
-	type SortingState,
-	type PaginationState,
-	type ColumnFiltersState,
-	type VisibilityState,
-	type RowSelectionState,
-	type ExpandedState,
-	type GroupingState,
-	type Updater,
-	type OnChangeFn,
+    // Core
+    createTable,
+    // Row Models
+    getCoreRowModel,
+    getFilteredRowModel,
+    getSortedRowModel,
+    getGroupedRowModel,
+    getExpandedRowModel,
+    getPaginationRowModel,
+    getFacetedRowModel,
+    getFacetedUniqueValues,
+    getFacetedMinMaxValues,
+    // Column helpers
+    createColumnHelper,
+    // Types (re-export per comodità)
+    type Table,
+    type Row,
+    type Cell,
+    type Column,
+    type Header,
+    type HeaderGroup,
+    type RowData,
+    type ColumnDef,
+    type TableOptions,
+    type TableState,
+    type SortingState,
+    type PaginationState,
+    type ColumnFiltersState,
+    type VisibilityState,
+    type RowSelectionState,
+    type ExpandedState,
+    type GroupingState,
+    type Updater,
+    type OnChangeFn,
 } from '@tanstack/table-core';

@@ -5,8 +5,8 @@
  * Derived from Zod schemas in generated.ts.
  */
 
-import { z } from 'zod';
-import { schemas } from '$lib/api/generated';
+import {z} from 'zod';
+import {schemas} from '$lib/api/generated';
 
 // =============================================================================
 // TYPES DERIVED FROM ZOD SCHEMAS
@@ -45,10 +45,10 @@ export type TransactionTypeMetadata = z.infer<typeof schemas.TXTypeMetadata>;
  * Simplified transaction for display in lists.
  */
 export interface TransactionSummary {
-	id: number;
-	type: string;
-	date: string;
-	currency: string;
-	total_amount: number;
-	asset_name?: string;
+    id: number;
+    type: string;
+    date: string;
+    currency: string;
+    total_amount: number;
+    asset_name?: string;
 }

@@ -8,7 +8,7 @@
      * - Auto-positions to avoid viewport overflow
      * - Closes on click outside
      */
-    import { onMount, onDestroy } from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
 
     export let text: string;
     export let position: 'top' | 'bottom' | 'left' | 'right' = 'top';
@@ -102,23 +102,23 @@
 </script>
 
 <div
-    class="tooltip-wrapper"
-    bind:this={triggerElement}
-    on:mouseenter={show}
-    on:mouseleave={hide}
-    on:click={toggle}
-    on:keydown={handleKeydown}
-    role="button"
-    tabindex="0"
+        bind:this={triggerElement}
+        class="tooltip-wrapper"
+        on:click={toggle}
+        on:keydown={handleKeydown}
+        on:mouseenter={show}
+        on:mouseleave={hide}
+        role="button"
+        tabindex="0"
 >
-    <slot />
+    <slot/>
 
     {#if visible}
         <div
-            bind:this={tooltipElement}
-            class="tooltip tooltip-{actualPosition}"
-            style="max-width: {maxWidth};"
-            role="tooltip"
+                bind:this={tooltipElement}
+                class="tooltip tooltip-{actualPosition}"
+                style="max-width: {maxWidth};"
+                role="tooltip"
         >
             {text}
             <div class="tooltip-arrow"></div>

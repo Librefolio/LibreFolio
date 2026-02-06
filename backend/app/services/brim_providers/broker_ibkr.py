@@ -138,7 +138,7 @@ class IBKRBrokerProvider(BRIMProvider):
 
     def parse(
         self, file_path: Path, broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse IBKR CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -197,7 +197,7 @@ class IBKRBrokerProvider(BRIMProvider):
                             "extracted_symbol": None,
                             "extracted_isin": isin,
                             "extracted_name": None,
-                        }
+                            }
 
                         next_fake_id -= 1
 
@@ -226,7 +226,7 @@ class IBKRBrokerProvider(BRIMProvider):
                             ),
                             description=f"IBKR {direction}: {isin}",
                             tags=["import", "ibkr"],
-                        )
+                            )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -255,7 +255,7 @@ class IBKRBrokerProvider(BRIMProvider):
                                 cash=Currency(code=comm_currency, amount=commission),
                                 description=f"IBKR commission: {isin}",
                                 tags=["import", "ibkr", "commission"],
-                            )
+                                )
                             transactions.append(fee_tx)
                         except Exception as e:
                             warnings.append(f"Row {row_num}: error creating fee transaction: {e}")
@@ -274,16 +274,16 @@ class IBKRBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-            )
+                )
             for fake_id, info in extracted_assets.items()
-        }
+            }
 
         logger.info(
             "IBKR file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
             asset_count=len(extracted_assets_typed),
-        )
+            )
 
         return transactions, warnings, extracted_assets_typed
 

@@ -52,7 +52,7 @@ from backend.app.schemas.assets import (
     FAinfoResponse,
     FAAssetDeleteResult,
     FABulkAssetDeleteResponse,
-)
+    )
 from backend.app.schemas.brim import (
     # Constants and helpers
     FAKE_ASSET_ID_BASE,
@@ -74,7 +74,7 @@ from backend.app.schemas.brim import (
     # Parse (import uses POST /transactions)
     BRIMParseRequest,
     BRIMParseResponse,
-)
+    )
 from backend.app.schemas.brokers import (
     BRCreateItem,
     BRReadItem,
@@ -94,7 +94,7 @@ from backend.app.schemas.brokers import (
     BRAccessUpdateRequest,
     BRAccessCreateResponse,
     BRAccessDeleteResponse,
-)
+    )
 from backend.app.schemas.common import (
     Currency,
     BackwardFillInfo,
@@ -103,7 +103,7 @@ from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseDeleteResult,
     BaseBulkDeleteResponse,
-)
+    )
 from backend.app.schemas.fx import (
     FXProviderInfo,
     FXConversionRequest,
@@ -122,7 +122,7 @@ from backend.app.schemas.fx import (
     FXDeletePairSourceResult,
     FXDeletePairSourcesResponse,
     FXCurrenciesResponse,
-)
+    )
 from backend.app.schemas.prices import (
     FAUpsert,
     FAPricePoint,
@@ -131,7 +131,7 @@ from backend.app.schemas.prices import (
     FABulkDeleteResponse,
     FAPriceDeleteResult,
     FAUpsertResult,
-)
+    )
 from backend.app.schemas.provider import (
     FAProviderInfo,
     FABulkAssignResponse,
@@ -141,13 +141,13 @@ from backend.app.schemas.provider import (
     FAProviderAssignmentResult,
     FAProviderRemovalResult,
     FAProviderRefreshFieldsDetail,
-)
+    )
 from backend.app.schemas.refresh import (
     FARefreshItem,
     FABulkRefreshResponse,
     FARefreshResult,
     FXSyncResponse,
-)
+    )
 from backend.app.schemas.transactions import (
     TXCreateItem,
     TXReadItem,
@@ -168,7 +168,7 @@ from backend.app.schemas.transactions import (
     # Shared utilities
     validate_tags_list,
     tags_to_csv,
-)
+    )
 
 __all__ = [
     # Common (base classes)
@@ -299,4 +299,4 @@ __all__ = [
     "BRIMDuplicateReport",
     "BRIMParseRequest",
     "BRIMParseResponse",
-]
+    ]

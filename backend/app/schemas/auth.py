@@ -4,8 +4,6 @@ Authentication Schemas
 Pydantic models for auth API requests/responses.
 """
 
-from datetime import datetime, timezone
-
 from pydantic import BaseModel, EmailStr, Field
 
 from backend.app.utils.datetime_utils import UTCDateTime
@@ -68,7 +66,6 @@ class AuthUserResponse(BaseModel):
     created_at: UTCDateTime
 
     model_config = {"from_attributes": True}
-
 
 
 class AuthLoginResponse(BaseModel):

@@ -49,9 +49,9 @@
         <!-- Back to Login Button -->
         <button
                 class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] flex items-center justify-center space-x-2"
+                data-testid="forgot-back-to-login"
                 on:click={() => dispatch('gotoLogin')}
                 type="button"
-                data-testid="forgot-back-to-login"
         >
             <ArrowLeft size={18}/>
             <span>{$_('auth.backToLogin')}</span>

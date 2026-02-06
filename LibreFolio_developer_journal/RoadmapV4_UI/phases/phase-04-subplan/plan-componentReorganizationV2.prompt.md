@@ -90,23 +90,23 @@
 
 ### File DEPRECATI (Rinominati con prefisso Old - DA CANCELLARE)
 
-| File Originale                | File Rinominato                     | Sostituzione       |
-|-------------------------------|-------------------------------------|--------------------|
-| `FuzzySelect.svelte`          | `OldFuzzySelect.svelte`             | SearchSelect       |
-| `ui/CustomSelect.svelte`      | `ui/OldCustomSelect.svelte`         | SimpleSelect       |
-| `brokers/BrokerSelect.svelte` | `brokers/OldBrokerSelect.svelte`    | BrokerSearchSelect |
+| File Originale                | File Rinominato                  | Sostituzione       |
+|-------------------------------|----------------------------------|--------------------|
+| `FuzzySelect.svelte`          | `OldFuzzySelect.svelte`          | SearchSelect       |
+| `ui/CustomSelect.svelte`      | `ui/OldCustomSelect.svelte`      | SimpleSelect       |
+| `brokers/BrokerSelect.svelte` | `brokers/OldBrokerSelect.svelte` | BrokerSearchSelect |
 
 ---
 
 ## 🧪 Test da Aggiungere (Futuro)
 
-| Test                          | Descrizione                                            |
-|-------------------------------|--------------------------------------------------------|
-| `select-components.spec.ts`   | Test per SimpleSelect e SearchSelect                   |
-| Keyboard navigation           | Frecce su/giù, Enter per selezionare, Escape per chiudere |
-| Inline search mode            | Verifica ricerca inline in ImportPluginSelect          |
-| Auto-position dropdown        | Verifica apertura up/down in base allo spazio          |
-| BrokerSearchSelect            | Test selezione broker in upload modal                  |
+| Test                        | Descrizione                                               |
+|-----------------------------|-----------------------------------------------------------|
+| `select-components.spec.ts` | Test per SimpleSelect e SearchSelect                      |
+| Keyboard navigation         | Frecce su/giù, Enter per selezionare, Escape per chiudere |
+| Inline search mode          | Verifica ricerca inline in ImportPluginSelect             |
+| Auto-position dropdown      | Verifica apertura up/down in base allo spazio             |
+| BrokerSearchSelect          | Test selezione broker in upload modal                     |
 
 ---
 

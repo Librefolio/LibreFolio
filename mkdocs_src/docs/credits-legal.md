@@ -6,17 +6,18 @@ LibreFolio is a labor of love, built to empower individuals with financial data 
 
 ### Core Team
 
-*   **Emanuele Alfano** - *Creator & Lead Developer*
-    *   Concept, Architecture, Backend (FastAPI), Frontend (SvelteKit), and DevOps.
-*   **Nicoleta Alfano** - *Artwork & Design*
-    *   Logo design, color palette, and visual identity.
+* **Emanuele Alfano** - *Creator & Lead Developer*
+    * Concept, Architecture, Backend (FastAPI), Frontend (SvelteKit), and DevOps.
+* **Nicoleta Alfano** - *Artwork & Design*
+    * Logo design, color palette, and visual identity.
 
 ### AI-Assisted Development
 
 This project was developed with the support of advanced AI coding assistants, utilizing a structured **Plan -> Dev -> Test -> Review** methodology.
 
-*   **Methodology**: Every feature starts with a detailed written plan, followed by iterative development, rigorous testing, and review.
-*   **Transparency**: The repository contains the complete history of these plans in the `LibreFolio_developer_journal` folder, serving as a testament to the development process and a resource for other developers.
+* **Methodology**: Every feature starts with a detailed written plan, followed by iterative development, rigorous testing, and review.
+* **Transparency**: The repository contains the complete history of these plans in the `LibreFolio_developer_journal` folder, serving as a testament to the development process and
+  a resource for other developers.
 
 ---
 
@@ -25,10 +26,11 @@ This project was developed with the support of advanced AI coding assistants, ut
 LibreFolio is open-source software licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
 ### What this means for you
-*   ✅ **Use**: You are free to use this software for private or commercial purposes.
-*   ✅ **Modify**: You can modify the source code to suit your needs.
-*   ✅ **Distribute**: You can share copies of the software.
-*   🔄 **Share Alike**: If you modify the software and make it available to others (even over a network), you **must** release your modifications under the same AGPL-3.0 license.
+
+* ✅ **Use**: You are free to use this software for private or commercial purposes.
+* ✅ **Modify**: You can modify the source code to suit your needs.
+* ✅ **Distribute**: You can share copies of the software.
+* 🔄 **Share Alike**: If you modify the software and make it available to others (even over a network), you **must** release your modifications under the same AGPL-3.0 license.
 
 ### Full License Text
 

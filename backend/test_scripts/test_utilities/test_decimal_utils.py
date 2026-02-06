@@ -14,7 +14,7 @@ from backend.app.utils.decimal_utils import (
     truncate_priceHistory,
     truncate_fx_rate,
     parse_decimal_value,
-)
+    )
 
 
 def test_get_model_column_precision_price_history():

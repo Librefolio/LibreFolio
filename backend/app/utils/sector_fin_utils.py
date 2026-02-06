@@ -71,7 +71,7 @@ class FinancialSector(str, Enum):
             "telecom": cls.TELECOMMUNICATION,  # Alias
             "utilities": cls.UTILITIES,
             "other": cls.OTHER,
-        }
+            }
 
         if normalized_key in mapping:
             return mapping[normalized_key]
@@ -81,7 +81,7 @@ class FinancialSector(str, Enum):
             "Sector not in standard classification",
             original_sector=sector_name,
             normalized_to="Other",
-        )
+            )
         return cls.OTHER
 
     @classmethod

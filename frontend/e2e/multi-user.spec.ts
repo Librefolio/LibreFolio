@@ -1,6 +1,6 @@
-import { test, expect, Browser, BrowserContext, Page } from '@playwright/test';
-import { login } from './fixtures/auth-helpers';
-import { TEST_USER, TEST_USER_2 } from './fixtures/test-users';
+import {Browser, BrowserContext, expect, Page, test} from '@playwright/test';
+import {login} from './fixtures/auth-helpers';
+import {TEST_USER, TEST_USER_2} from './fixtures/test-users';
 
 /**
  * Multi-User Isolation Tests
@@ -16,7 +16,7 @@ test.describe('Multi-User Isolation', () => {
     let page1: Page;
     let page2: Page;
 
-    test.beforeAll(async ({ browser: b }) => {
+    test.beforeAll(async ({browser: b}) => {
         browser = b;
         // Create two separate browser contexts (like incognito windows)
         context1 = await browser.newContext();
@@ -40,7 +40,7 @@ test.describe('Multi-User Isolation', () => {
         const brokerName = `Private Broker ${Date.now()}`;
         await page1.getByTestId('broker-name-input').fill(brokerName);
         await page1.getByTestId('broker-form-submit').click();
-        await expect(page1.getByTestId('broker-modal')).not.toBeVisible({ timeout: 5000 });
+        await expect(page1.getByTestId('broker-modal')).not.toBeVisible({timeout: 5000});
         await expect(page1.getByText(brokerName)).toBeVisible();
 
         // User 2 logs in - should NOT see user1's broker
@@ -58,7 +58,7 @@ test.describe('Multi-User Isolation', () => {
         await expect(page1.getByTestId('broker-modal')).toBeVisible();
         await page1.getByTestId('broker-name-input').fill(sharedName);
         await page1.getByTestId('broker-form-submit').click();
-        await expect(page1.getByTestId('broker-modal')).not.toBeVisible({ timeout: 5000 });
+        await expect(page1.getByTestId('broker-modal')).not.toBeVisible({timeout: 5000});
         await expect(page1.getByText(sharedName)).toBeVisible();
 
         // User 2 tries to use the same name - should FAIL

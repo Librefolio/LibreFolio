@@ -96,19 +96,19 @@ class FAProviderAssignmentItem(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     provider_code: str = Field(
         ..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)"
-    )
+        )
     identifier: str = Field(
         ..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)"
-    )
+        )
     identifier_type: IdentifierType = Field(
         ..., description="Type of identifier (TICKER, ISIN, UUID, OTHER, etc.)"
-    )
+        )
     provider_params: Optional[dict[str, Any]] = Field(
         None, description="Provider-specific configuration (JSON)"
-    )
+        )
     fetch_interval: int = Field(
         1440, description="Refresh frequency in minutes (default: 1440 = 24h)"
-    )
+        )
 
     @field_validator("fetch_interval", mode="before")
     @classmethod
@@ -180,13 +180,13 @@ class FAProviderRefreshFieldsDetail(BaseModel):
     refreshed_fields: List[OldNew[str | None]] = Field(
         ...,
         description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.",
-    )
+        )
     missing_data_fields: List[str] = Field(
         ..., description="Fields provider couldn't fetch (no data available)"
-    )
+        )
     ignored_fields: List[str] = Field(
         ..., description="Fields ignored (not requested when using field selection)"
-    )
+        )
 
 
 class FAProviderAssignmentResult(BaseModel):
@@ -199,7 +199,7 @@ class FAProviderAssignmentResult(BaseModel):
     message: str
     fields_detail: Optional[FAProviderRefreshFieldsDetail] = Field(
         None, description="Field-level refresh details (for refresh operations)"
-    )
+        )
 
 
 class FABulkAssignResponse(BaseBulkResponse[FAProviderAssignmentResult]):
@@ -249,7 +249,7 @@ class FAProviderSearchResultItem(BaseModel):
     identifier: str = Field(..., description="Asset identifier (ISIN, ticker, URL, etc.)")
     identifier_type: IdentifierType = Field(
         ..., description="Type of identifier (ISIN, TICKER, URL, etc.)"
-    )
+        )
     display_name: str = Field(..., description="Human-readable asset name")
     provider_code: str = Field(..., description="Provider that returned this result")
     currency: Optional[str] = Field(None, description="Asset currency if known")
@@ -270,4 +270,4 @@ class FAProviderSearchResponse(BaseModel):
     providers_queried: List[str] = Field(..., description="Provider codes that were queried")
     providers_with_errors: List[str] = Field(
         default_factory=list, description="Providers that returned errors"
-    )
+        )

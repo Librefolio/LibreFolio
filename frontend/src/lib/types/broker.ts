@@ -5,8 +5,8 @@
  * Derived from Zod schemas in generated.ts.
  */
 
-import { z } from 'zod';
-import { schemas } from '$lib/api/generated';
+import {z} from 'zod';
+import {schemas} from '$lib/api/generated';
 
 // =============================================================================
 // TYPES DERIVED FROM ZOD SCHEMAS
@@ -57,20 +57,20 @@ export type BrokerAccessListResponse = z.infer<typeof schemas.BRAccessListRespon
  * Compatible with BrokerSelect component.
  */
 export interface BrokerInfo {
-	id: number;
-	name: string;
-	/** Optional icon URL for display in dropdowns */
-	icon_url?: string | null;
-	/** Optional portal URL for favicon fallback */
-	portal_url?: string | null;
+    id: number;
+    name: string;
+    /** Optional icon URL for display in dropdowns */
+    icon_url?: string | null;
+    /** Optional portal URL for favicon fallback */
+    portal_url?: string | null;
 }
 
 /**
  * Broker with UI state for interactive components.
  */
 export interface BrokerWithUIState extends Broker {
-	/** Whether this broker is selected in a list */
-	isSelected?: boolean;
-	/** Whether an operation is in progress for this broker */
-	isLoading?: boolean;
+    /** Whether this broker is selected in a list */
+    isSelected?: boolean;
+    /** Whether an operation is in progress for this broker */
+    isLoading?: boolean;
 }

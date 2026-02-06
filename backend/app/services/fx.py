@@ -196,7 +196,7 @@ class FXRateProvider(ABC):
     @abstractmethod
     async def fetch_rates(
         self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from provider API for given date range and currencies.
 
@@ -327,7 +327,7 @@ async def ensure_rates_multi_source(
     currencies: list[str],
     provider_code: str,
     base_currency: str | None = None,
-) -> dict[str, int]:
+    ) -> dict[str, int]:
     """
     Synchronize FX rates using configured provider.
 
@@ -375,7 +375,7 @@ async def ensure_rates_multi_source(
         raise FXServiceError(
             f"Unknown FX provider: {provider_code}. "
             f"Available providers: {', '.join(available) if available else 'none registered'}"
-        )
+            )
 
     # Validate base_currency if specified
     if base_currency is not None:
@@ -383,7 +383,7 @@ async def ensure_rates_multi_source(
             raise ValueError(
                 f"Provider {provider.code} does not support {base_currency} as base. "
                 f"Supported bases: {', '.join(provider.base_currencies)}"
-            )
+                )
 
     actual_base = base_currency if base_currency else provider.base_currency
 
@@ -391,7 +391,7 @@ async def ensure_rates_multi_source(
         f"Syncing FX rates using {provider.name} ({provider.code}) "
         f"with base {actual_base} "
         f"for {len(currencies)} currencies from {date_range[0]} to {date_range[1]}"
-    )
+        )
 
     start_date, end_date = date_range
 
@@ -406,7 +406,7 @@ async def ensure_rates_multi_source(
 
     # Pairs between requested currencies
     for i, curr1 in enumerate(currencies):
-        for curr2 in currencies[i + 1 :]:  # Avoid duplicates, only pairs
+        for curr2 in currencies[i + 1:]:  # Avoid duplicates, only pairs
             # Store alphabetically: smaller currency as base
             if curr1 < curr2:
                 base, quote = curr1, curr2
@@ -419,8 +419,8 @@ async def ensure_rates_multi_source(
                     FxRate.quote == quote,
                     FxRate.date >= start_date,
                     FxRate.date <= end_date,
+                    )
                 )
-            )
 
     # Also include pairs with the base currency (if different from requested currencies)
     if actual_base not in currencies:
@@ -436,13 +436,13 @@ async def ensure_rates_multi_source(
                     FxRate.quote == quote,
                     FxRate.date >= start_date,
                     FxRate.date <= end_date,
+                    )
                 )
-            )
 
     # Create tasks for parallel execution
     fetch_task = asyncio.create_task(
         provider.fetch_rates(date_range, currencies, base_currency=base_currency)
-    )
+        )
 
     if all_pairs_conditions:
         existing_stmt = select(FxRate).where(or_(*all_pairs_conditions))
@@ -459,14 +459,14 @@ async def ensure_rates_multi_source(
             existing_rates = db_result.scalars().all()
             existing_lookup = {
                 (rate.base, rate.quote, rate.date): rate.rate for rate in existing_rates
-            }
+                }
         except Exception as e:
             # If table doesn't exist or other DB error, proceed with empty lookup
             # All rates will be considered new inserts
             logger.warning(
                 f"Could not query existing rates (table may not exist yet): {e}. "
                 f"Proceeding with fresh sync - all rates will be inserted."
-            )
+                )
             rates_by_currency = await fetch_task
             existing_lookup = {}
     else:
@@ -509,7 +509,7 @@ async def ensure_rates_multi_source(
         logger.info(
             f"Found {len(db_only_pairs)} rate(s) in database not returned by API "
             f"(this is normal if API doesn't provide historical data for some pairs)"
-        )
+            )
         # Optional: Log first few examples at debug level
         for base, quote, rate_date in list(db_only_pairs)[:5]:
             logger.debug(f"  DB-only rate: {base}/{quote} on {rate_date}")
@@ -542,7 +542,7 @@ async def ensure_rates_multi_source(
                 changes_by_currency[currency] += 1
                 logger.info(
                     f"Updated rate: {base}/{quote} on {obs_date}: {old_rate_truncated} → {rate_truncated}"
-                )
+                    )
         # else: Same value after truncation, no change to log
 
     total_changed = sum(changes_by_currency.values())
@@ -573,9 +573,9 @@ async def ensure_rates_multi_source(
                     "rate": rate_value,
                     "source": provider.code,
                     "fetched_at": func.current_timestamp(),
-                }
+                    }
                 for obs_date, base, quote, rate_value in normalized_observations
-            ]
+                ]
 
             batch_stmt = insert(FxRate).values(values_list)
             batch_stmt = batch_stmt.on_conflict_do_update(
@@ -584,21 +584,21 @@ async def ensure_rates_multi_source(
                     "rate": batch_stmt.excluded.rate,
                     "source": batch_stmt.excluded.source,
                     "fetched_at": func.current_timestamp(),
-                },
-            )
+                    },
+                )
 
             await session.execute(batch_stmt)
 
             logger.info(
                 f"Synced {currency}: {len(observations)} fetched, " f"{changed_count} changed"
-            )
+                )
 
     await session.commit()
 
     logger.info(
         f"Sync complete: {total_fetched} rates fetched, {total_changed} changed "
         f"from {provider.name} using base {actual_base}"
-    )
+        )
 
     return {
         "provider": provider.code,
@@ -606,7 +606,7 @@ async def ensure_rates_multi_source(
         "total_fetched": total_fetched,
         "total_changed": total_changed,
         "currencies_synced": currencies_synced,
-    }
+        }
 
 
 # ============================================================================
@@ -620,7 +620,7 @@ async def convert(
     to_currency: str,
     as_of_date: date,
     return_rate_info: bool = False,
-) -> Currency | tuple[Currency, date, bool]:
+    ) -> Currency | tuple[Currency, date, bool]:
     """
     Convert a Currency object to another currency.
     This is a convenience wrapper around convert_bulk() for single conversions.
@@ -644,7 +644,7 @@ async def convert(
     # Call bulk version with single item (raise_on_error=True for backward compatibility)
     results, errors = await convert_bulk(
         session, [(amount, to_currency, as_of_date)], raise_on_error=True
-    )
+        )
 
     converted_currency, rate_date, backward_fill_applied = results[0]
 
@@ -657,7 +657,7 @@ async def convert_bulk(
     session,  # AsyncSession
     conversions: list[tuple[Currency, str, date]],  # [(amount_currency, to_currency, date), ...]
     raise_on_error: bool = True,
-) -> tuple[list[tuple[Currency, date, bool] | None], list[str]]:
+    ) -> tuple[list[tuple[Currency, date, bool] | None], list[str]]:
     """
     Convert multiple Currency amounts in a single batch operation.
     Uses unlimited backward-fill: if rate for exact date is not found,
@@ -705,8 +705,8 @@ async def convert_bulk(
                     "to": to_currency,
                     "date": as_of_date,
                     "identity": True,
-                }
-            )
+                    }
+                )
             continue
 
         # Determine alphabetical ordering
@@ -728,8 +728,8 @@ async def convert_bulk(
                 "base": base,
                 "quote": quote,
                 "direct": direct,
-            }
-        )
+                }
+            )
 
         # Group conversions by pair and max date needed
         # We'll fetch the most recent rate for each pair that satisfies all dates
@@ -752,7 +752,7 @@ async def convert_bulk(
             # For each pair, get all rates up to the max date needed
             conditions.append(
                 and_(FxRate.base == base, FxRate.quote == quote, FxRate.date <= info["max_date"])
-            )
+                )
 
         # Single query fetching all rates needed
         stmt = (
@@ -821,7 +821,7 @@ async def convert_bulk(
                 logger.info(
                     f"Using backward-fill: rate for {meta['base']}/{meta['quote']} from {rate_record.date} "
                     f"({days_back} days back, requested: {meta['date']})"
-                )
+                    )
 
             # Apply conversion
             if meta["direct"]:
@@ -851,7 +851,7 @@ async def convert_bulk(
 async def upsert_rates_bulk(
     session,  # AsyncSession
     rates: list[tuple[date, str, str, Decimal, str]],  # [(date, base, quote, rate, source), ...]
-) -> list[tuple[bool, str]]:  # [(success, action), ...]
+    ) -> list[tuple[bool, str]]:  # [(success, action), ...]
     """
     Insert or update multiple FX rates in a single batch operation.
 
@@ -894,7 +894,7 @@ async def upsert_rates_bulk(
     for rate_date, base, quote, _, _ in normalized_rates:
         conditions.append(
             and_(FxRate.date == rate_date, FxRate.base == base, FxRate.quote == quote)
-        )
+            )
 
     # Fetch all existing rates in one query
     stmt = sql_select(FxRate).where(or_(*conditions))
@@ -921,9 +921,9 @@ async def upsert_rates_bulk(
             "rate": rate_value,
             "source": source,
             "fetched_at": func.current_timestamp(),
-        }
+            }
         for rate_date, base, quote, rate_value, source in normalized_rates
-    ]
+        ]
 
     # Single batch INSERT statement (all rates at once)
     batch_insert = insert(FxRate).values(values_list)
@@ -935,8 +935,8 @@ async def upsert_rates_bulk(
             "rate": batch_insert.excluded.rate,
             "source": batch_insert.excluded.source,
             "fetched_at": func.current_timestamp(),
-        },
-    )
+            },
+        )
 
     # Execute single batch statement (replaces N individual executes)
     await session.execute(batch_insert)
@@ -951,7 +951,7 @@ async def delete_rates_bulk(
     deletions: list[
         tuple[str, str, date, date | None]
     ],  # [(from_currency, to_currency, start_date, end_date?), ...]
-) -> list[
+    ) -> list[
     tuple[bool, int, int, str | None]
 ]:  # [(success, existing_count, deleted_count, message), ...]
     """
@@ -1012,7 +1012,7 @@ async def delete_rates_bulk(
                 FxRate.quote == quote,
                 FxRate.date >= start_date,
                 FxRate.date <= end_date,
-            )
+                )
         else:
             # Single date
             condition = and_(FxRate.base == base, FxRate.quote == quote, FxRate.date == start_date)
@@ -1057,14 +1057,14 @@ async def delete_rates_bulk(
 
         # Process in chunks within same transaction
         for i in range(0, len(ids_list), chunk_size):
-            chunk = ids_list[i : i + chunk_size]
+            chunk = ids_list[i: i + chunk_size]
             delete_stmt = sql_delete(FxRate).where(FxRate.id.in_(chunk))
             delete_result = await session.execute(delete_stmt)
             deleted_count_total += delete_result.rowcount
 
         logger.info(
             f"Deleted {deleted_count_total} rate(s) in {(len(ids_list) + chunk_size - 1) // chunk_size} batch(es)"
-        )
+            )
 
     # Build results per deletion request
     results = []

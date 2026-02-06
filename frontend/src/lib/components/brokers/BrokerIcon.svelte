@@ -7,10 +7,10 @@
      * 3. default_import_plugin icon (loads from API to get real icon_url)
      * 4. Briefcase fallback
      */
-    import { onMount } from 'svelte';
-    import { Briefcase } from 'lucide-svelte';
-    import { zodiosApi } from '$lib/api';
-    import { debug } from '$lib/debug';
+    import {onMount} from 'svelte';
+    import {Briefcase} from 'lucide-svelte';
+    import {zodiosApi} from '$lib/api';
+    import {debug} from '$lib/debug';
 
     // Props
     export let iconUrl: string | null | undefined = null;
@@ -21,9 +21,9 @@
 
     // Size mappings
     const sizes = {
-        sm: { container: 'w-6 h-6', icon: 16 },
-        md: { container: 'w-10 h-10', icon: 20 },
-        lg: { container: 'w-16 h-16', icon: 28 }
+        sm: {container: 'w-6 h-6', icon: 16},
+        md: {container: 'w-10 h-10', icon: 20},
+        lg: {container: 'w-16 h-16', icon: 28}
     };
 
     // State
@@ -93,7 +93,7 @@
     }
 
     function resetAttempt() {
-        debug.log('BrokerIcon', 'resetAttempt', { iconUrl, portalUrl, pluginCode });
+        debug.log('BrokerIcon', 'resetAttempt', {iconUrl, portalUrl, pluginCode});
         currentAttempt = 'icon';
         imageLoaded = false;
         currentUrl = computeUrl('icon');
@@ -120,7 +120,7 @@
 
     // Load plugins once on mount
     onMount(async () => {
-        debug.log('BrokerIcon', 'onMount', { iconUrl, portalUrl, pluginCode });
+        debug.log('BrokerIcon', 'onMount', {iconUrl, portalUrl, pluginCode});
         try {
             const plugins = await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get();
             if (Array.isArray(plugins) && pluginCode) {
@@ -160,20 +160,20 @@
     {#if currentUrl && currentAttempt !== 'fallback'}
         {#key imageKey}
             <img
-                bind:this={imgElement}
-                src={currentUrl}
-                alt={altText}
-                class="w-full h-full object-cover"
-                class:opacity-0={!imageLoaded}
-                on:load={handleLoad}
-                on:error={handleError}
+                    bind:this={imgElement}
+                    src={currentUrl}
+                    alt={altText}
+                    class="w-full h-full object-cover"
+                    class:opacity-0={!imageLoaded}
+                    on:load={handleLoad}
+                    on:error={handleError}
             />
         {/key}
     {/if}
 
     {#if !imageLoaded || currentAttempt === 'fallback'}
         <div class="absolute inset-0 flex items-center justify-center">
-            <Briefcase size={sizes[size].icon} class="text-libre-green dark:text-green-400" />
+            <Briefcase size={sizes[size].icon} class="text-libre-green dark:text-green-400"/>
         </div>
     {/if}
 </div>

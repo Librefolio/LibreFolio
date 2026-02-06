@@ -1,5 +1,5 @@
-import { Page, expect } from '@playwright/test';
-import { TEST_USER, type Language } from './test-users';
+import {expect, Page} from '@playwright/test';
+import {type Language, TEST_USER} from './test-users';
 
 /**
  * Login as specified user
@@ -8,7 +8,7 @@ export async function login(page: Page, user = TEST_USER) {
     await page.goto('/');
 
     // Wait for auth check to complete and login form to appear (3s for localhost)
-    await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 3000 });
+    await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
     await expect(page.getByTestId('login-form')).toBeVisible();
 
     // Fill and submit using data-testid
@@ -17,7 +17,7 @@ export async function login(page: Page, user = TEST_USER) {
     await page.getByTestId('login-submit').click();
 
     // Wait for dashboard
-    await expect(page).toHaveURL(/.*dashboard.*/, { timeout: 3000 });
+    await expect(page).toHaveURL(/.*dashboard.*/, {timeout: 3000});
 }
 
 /**
@@ -34,7 +34,7 @@ export async function logout(page: Page) {
  */
 export async function setLanguage(page: Page, lang: Language) {
     // Wait for language selector to be visible
-    await expect(page.getByTestId('language-selector-button')).toBeVisible({ timeout: 3000 });
+    await expect(page.getByTestId('language-selector-button')).toBeVisible({timeout: 3000});
     await page.getByTestId('language-selector-button').click();
 
     // Click the menu item specifically (not any element with that text)
@@ -45,7 +45,7 @@ export async function setLanguage(page: Page, lang: Language) {
         es: 'Español',
     };
     // Use role='menuitem' to be specific and avoid conflicts with other dropdowns
-    await page.getByRole('menuitem', { name: new RegExp(langNames[lang]) }).click();
+    await page.getByRole('menuitem', {name: new RegExp(langNames[lang])}).click();
     await page.waitForTimeout(300); // Wait for i18n update
 }
 
@@ -67,7 +67,7 @@ export async function navigateTo(page: Page, route: string, menuItem?: string) {
     // If menuItem provided, use sidebar navigation
     if (menuItem) {
         await openMobileMenu(page);
-        await page.getByRole('link', { name: new RegExp(menuItem, 'i') }).click();
+        await page.getByRole('link', {name: new RegExp(menuItem, 'i')}).click();
     } else {
         await page.goto(route);
     }

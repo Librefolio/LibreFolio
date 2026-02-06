@@ -68,13 +68,13 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "rewards income": TransactionType.INTEREST,
     "learning reward": TransactionType.INTEREST,
     "convert": TransactionType.BUY,  # Treat as buy of target
-}
+    }
 
 # Types to skip
 SKIP_TYPES = [
     "send",  # Internal crypto transfers
     "receive",  # Internal crypto transfers
-]
+    ]
 
 
 def _parse_coinbase_datetime(value: str) -> Optional[date_type]:
@@ -86,7 +86,7 @@ def _parse_coinbase_datetime(value: str) -> Optional[date_type]:
     formats = [
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d",
-    ]
+        ]
 
     for fmt in formats:
         try:
@@ -167,7 +167,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
                 "asset",
                 "quantity transacted",
                 "price currency",
-            ]
+                ]
             return all(col in first_line for col in required)
 
         except Exception:
@@ -175,7 +175,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
 
     def parse(
         self, file_path: Path, broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse Coinbase CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -232,7 +232,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
                                 "extracted_symbol": asset,
                                 "extracted_isin": None,
                                 "extracted_name": f"{asset} (Crypto)",
-                            }
+                                }
 
                             next_fake_id -= 1
 
@@ -262,7 +262,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=f"{tx_type_raw}: {asset}",
                             tags=["import", "coinbase", "crypto"],
-                        )
+                            )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -282,7 +282,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
                                 cash=Currency(code=currency, amount=-fees),
                                 description=f"Fee: {asset}",
                                 tags=["import", "coinbase", "fee"],
-                            )
+                                )
                             transactions.append(fee_tx)
                         except Exception as e:
                             warnings.append(f"Row {row_num}: error creating fee transaction: {e}")
@@ -301,16 +301,16 @@ class CoinbaseBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-            )
+                )
             for fake_id, info in extracted_assets.items()
-        }
+            }
 
         logger.info(
             "Coinbase file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
             asset_count=len(extracted_assets_typed),
-        )
+            )
 
         return transactions, warnings, extracted_assets_typed
 

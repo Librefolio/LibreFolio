@@ -122,7 +122,7 @@ def get_model_check_constraints() -> Dict[str, List[Tuple[str, CheckColumnConstr
                 # Get SQL expression as string (not normalized here, done during comparison)
                 constraint_sql = sqlglot.expressions.CheckColumnConstraint(
                     this=sqlglot.parse_one(str(constraint.sqltext), dialect="sqlite")
-                )
+                    )
                 check_constraints.append((constraint_name, constraint_sql))
 
         if check_constraints:
@@ -161,7 +161,7 @@ def get_db_check_constraints(table_name: str) -> List[CheckColumnConstraint]:
         result = session.execute(
             text("SELECT sql FROM sqlite_master WHERE type='table' AND name=:table_name"),
             {"table_name": table_name},
-        ).first()
+            ).first()
 
         if not result or not result[0]:
             return []
@@ -169,14 +169,14 @@ def get_db_check_constraints(table_name: str) -> List[CheckColumnConstraint]:
         check_constrain = list(
             sqlglot.parse_one(result[0], dialect="sqlite").find_all(
                 sqlglot.expressions.CheckColumnConstraint
+                )
             )
-        )
         return check_constrain
 
 
 def add_check_constraint_to_table(
     table_name: str, constraint_name: str, constraint_sql: str
-) -> bool:
+    ) -> bool:
     """
     Add CHECK constraint to table by recreating it (SQLite doesn't support ALTER TABLE ADD CONSTRAINT for CHECK).
 
@@ -195,7 +195,7 @@ def add_check_constraint_to_table(
     print(f"      op.execute('''")
     print(
         f"          ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} CHECK ({constraint_sql})"
-    )
+        )
     print(f"      ''')")
     print(f"   OR recreate the table with the constraint included.")
     print()
@@ -204,7 +204,7 @@ def add_check_constraint_to_table(
 
 def check_and_add_missing_constraints(
     auto_fix: bool = False, log_level: LogLevel = LogLevel.DEBUG
-) -> Tuple[bool, List[str]]:
+    ) -> Tuple[bool, List[str]]:
     """
     Check if all CHECK constraints from models exist in database.
 
@@ -249,18 +249,18 @@ def check_and_add_missing_constraints(
                 if show_details:
                     print(
                         f"  ✅  {constraint_name} - PRESENT:\n     {colum_constraints.sql(dialect="sqlite")}"
-                    )
+                        )
             else:
                 missing.append(constraint_full_name)
                 if show_details:
                     print(
                         f"  ❌  {constraint_name} - MISSING:\n     {colum_constraints.sql(dialect="sqlite")}"
-                    )
+                        )
 
                 if auto_fix:
                     add_check_constraint_to_table(
                         table_name, constraint_name, colum_constraints.sql(dialect="sqlite")
-                    )
+                        )
 
         if show_details:
             print()
@@ -298,7 +298,7 @@ def check_and_add_missing_constraints(
                                 print(f"  # For {table_name}.{constraint_name}")
                                 print(
                                     f"  with op.batch_alter_table('{table_name}', schema=None) as batch_op:"
-                                )
+                                    )
                                 print(f"      batch_op.create_check_constraint(")
                                 print(f"          '{constraint_name}',")
                                 print(f"          '{csql}'")
@@ -342,7 +342,7 @@ def main():
             choices=["info", "debug", "verbose"],
             default="debug",
             help="Logging verbosity: info (summary only), debug (details), verbose (with fix instructions)",
-        )
+            )
 
         args = parser.parse_args()
 
@@ -351,7 +351,7 @@ def main():
 
         all_present, missing = check_and_add_missing_constraints(
             auto_fix=args.fix, log_level=log_level
-        )
+            )
 
         if not all_present:
             sys.exit(1)

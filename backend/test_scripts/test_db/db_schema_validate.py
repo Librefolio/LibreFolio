@@ -39,7 +39,7 @@ from backend.app.db.models import (
     AssetType,
     TransactionType,
     UserRole,
-)
+    )
 from backend.alembic.check_constraints_hook import check_and_add_missing_constraints, LogLevel
 
 
@@ -154,7 +154,7 @@ def test_indexes():
         if index_count > 0:
             tables_with_indexes.append(
                 (table_name, index_count, [idx.name for idx in table.indexes])
-            )
+                )
 
     # Verify indexes exist in database
     missing_indexes = []
@@ -267,7 +267,7 @@ def test_check_constraints():
     print("  Verifying constraints exist in database...")
     all_present, missing = check_and_add_missing_constraints(
         auto_fix=False, log_level=LogLevel.VERBOSE
-    )
+        )
 
     assert all_present, (
         f"Missing CHECK constraints: {', '.join(missing)}\n"
@@ -299,7 +299,7 @@ def test_identifier_columns_match_enum():
         FAAssetPatchItem,
         FAinfoResponse,
         FAAinfoFiltersRequest,
-    )
+        )
 
     print("\n  Checking IdentifierType → Schema field mappings:")
 
@@ -310,7 +310,7 @@ def test_identifier_columns_match_enum():
         (FAAssetCreateItem, "identifier_{}", "Create schema field"),
         (FAAssetPatchItem, "identifier_{}", "Patch schema field"),
         (FAinfoResponse, "identifier_{}", "Response schema field"),
-    ]
+        ]
 
     # FAAinfoFiltersRequest uses short names (isin, ticker, etc.)
     # We check that separately with a mapping
@@ -322,7 +322,7 @@ def test_identifier_columns_match_enum():
         "FIGI": "figi",
         "UUID": "uuid",
         "OTHER": "identifier_other",  # OTHER uses identifier_other (partial match)
-    }
+        }
 
     all_missing = []
 

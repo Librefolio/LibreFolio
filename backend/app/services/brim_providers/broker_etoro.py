@@ -65,7 +65,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "interest payment": TransactionType.INTEREST,
     "withdraw request": TransactionType.WITHDRAWAL,
     "deposit": TransactionType.DEPOSIT,
-}
+    }
 
 # Types to skip
 SKIP_TYPES = [
@@ -74,7 +74,7 @@ SKIP_TYPES = [
     "withdraw fee",
     "conversion fee",
     "sdrt",  # UK stamp duty
-]
+    ]
 
 
 def _parse_etoro_date(value: str) -> Optional[date_type]:
@@ -86,7 +86,7 @@ def _parse_etoro_date(value: str) -> Optional[date_type]:
     formats = [
         "%d/%m/%Y %H:%M:%S",
         "%d/%m/%Y",
-    ]
+        ]
 
     for fmt in formats:
         try:
@@ -211,7 +211,7 @@ class EtoroBrokerProvider(BRIMProvider):
 
     def parse(
         self, file_path: Path, broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """Parse eToro CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -262,13 +262,13 @@ class EtoroBrokerProvider(BRIMProvider):
                         TransactionType.BUY,
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
-                    ]
+                        ]
 
                     if asset_required:
                         if not ticker:
                             warnings.append(
                                 f"Row {row_num}: {tx_type.value} requires asset, skipping"
-                            )
+                                )
                             continue
 
                         if ticker in asset_to_fake_id:
@@ -281,7 +281,7 @@ class EtoroBrokerProvider(BRIMProvider):
                                 "extracted_symbol": ticker,
                                 "extracted_isin": None,
                                 "extracted_name": None,
-                            }
+                                }
 
                             next_fake_id -= 1
 
@@ -310,7 +310,7 @@ class EtoroBrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=f"{tx_type_raw}: {details}" if details else tx_type_raw,
                             tags=["import", "etoro"],
-                        )
+                            )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -331,16 +331,16 @@ class EtoroBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-            )
+                )
             for fake_id, info in extracted_assets.items()
-        }
+            }
 
         logger.info(
             "eToro file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
             asset_count=len(extracted_assets_typed),
-        )
+            )
 
         return transactions, warnings, extracted_assets_typed
 

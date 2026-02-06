@@ -100,7 +100,7 @@ TYPE_PATTERNS: Dict[str, Tuple[TransactionType, bool]] = {
     r"comissões": (TransactionType.FEE, True),
     r"aansluitingskosten": (TransactionType.FEE, False),  # Connection fees
     r"connection fee": (TransactionType.FEE, False),
-}
+    }
 
 # Patterns to skip (FX conversions, internal transfers, etc.)
 SKIP_PATTERNS = [
@@ -120,7 +120,7 @@ SKIP_PATTERNS = [
     r"conversion fonds",
     r"corporate action",
     r"courtesy",  # DEGIRO courtesy refunds
-]
+    ]
 
 
 def _parse_degiro_date(value: str) -> Optional[date_type]:
@@ -200,7 +200,7 @@ def _extract_quantity_from_description(description: str) -> Decimal:
         r"(?:koop|verkoop|buy|sell|compra|venta|achat|vente)\s+(\d+(?:[.,]\d+)?)\s*@",
         description,
         re.IGNORECASE,
-    )
+        )
     if match:
         qty_str = match.group(1).replace(",", ".")
         try:
@@ -214,7 +214,7 @@ def _extract_quantity_from_description(description: str) -> Decimal:
         r"(?:koop|verkoop|buy|sell|compra|venta|achat|vente)\s+(\d+(?:[.,]\d+)?)\s+[^@]+@",
         description,
         re.IGNORECASE,
-    )
+        )
     if match:
         qty_str = match.group(1).replace(",", ".")
         try:
@@ -296,7 +296,7 @@ class DegiroBrokerProvider(BRIMProvider):
 
     def parse(
         self, file_path: Path, broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
+        ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
         """
         Parse DEGIRO CSV export file.
 
@@ -346,7 +346,7 @@ class DegiroBrokerProvider(BRIMProvider):
                         if not isin and not product:
                             warnings.append(
                                 f"Row {row_num}: {tx_type.value} requires asset but none found, skipping"
-                            )
+                                )
                             continue
 
                         asset_key = isin if isin else product
@@ -361,7 +361,7 @@ class DegiroBrokerProvider(BRIMProvider):
                                 "extracted_symbol": None,  # DEGIRO doesn't provide symbols
                                 "extracted_isin": isin if isin else None,
                                 "extracted_name": product if product else None,
-                            }
+                                }
 
                             next_fake_id -= 1
 
@@ -401,7 +401,7 @@ class DegiroBrokerProvider(BRIMProvider):
                         if quantity == 0:
                             warnings.append(
                                 f"Row {row_num}: could not extract quantity from '{description}'"
-                            )
+                                )
 
                     # Adjust signs
                     if tx_type == TransactionType.SELL and quantity > 0:
@@ -418,7 +418,7 @@ class DegiroBrokerProvider(BRIMProvider):
                             cash=Currency(code=currency, amount=amount) if amount else None,
                             description=description,
                             tags=["import", "degiro"],
-                        )
+                            )
                         transactions.append(tx)
 
                     except Exception as e:
@@ -439,16 +439,16 @@ class DegiroBrokerProvider(BRIMProvider):
                 extracted_symbol=info.get("extracted_symbol"),
                 extracted_isin=info.get("extracted_isin"),
                 extracted_name=info.get("extracted_name"),
-            )
+                )
             for fake_id, info in extracted_assets.items()
-        }
+            }
 
         logger.info(
             "DEGIRO file parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
             asset_count=len(extracted_assets_typed),
-        )
+            )
 
         return transactions, warnings, extracted_assets_typed
 

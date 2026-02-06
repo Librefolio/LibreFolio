@@ -79,21 +79,21 @@
 <div class={containerClass} style="width: {width}; height: {height};">
     {#if !loaded && !error}
         <img
-            src={placeholderDataUrl}
-            {alt}
-            class="placeholder-img"
+                src={placeholderDataUrl}
+                {alt}
+                class="placeholder-img"
         />
     {/if}
 
     <img
-        bind:this={imgElement}
-        src={src}
-        {alt}
-        on:load={onLoad}
-        on:error={onError}
-        class="actual-img"
-        class:loaded
-        class:hidden={!loaded && !error}
+            {alt}
+            bind:this={imgElement}
+            class="actual-img"
+            class:hidden={!loaded && !error}
+            class:loaded
+            on:error={onError}
+            on:load={onLoad}
+            src={src}
     />
 </div>
 

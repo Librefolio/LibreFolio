@@ -106,7 +106,7 @@ class Settings(BaseSettings):
 
     model_config = ConfigDict(
         env_file=str(PROJECT_ROOT / ".env"), case_sensitive=True, env_file_encoding="utf-8"
-    )
+        )
 
 
 def get_data_dir() -> Path:
@@ -187,8 +187,7 @@ def ensure_data_dirs() -> None:
         data_dir / "broker_reports" / "parsed",
         data_dir / "broker_reports" / "failed",
         data_dir / "logs",
-    ]
+        ]
 
     for dir_path in dirs_to_create:
         dir_path.mkdir(parents=True, exist_ok=True)
-

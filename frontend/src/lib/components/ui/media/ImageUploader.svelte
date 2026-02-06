@@ -10,8 +10,8 @@
      * - Preview before upload
      * - Supports JPEG, PNG, WebP, GIF
      */
-    import { createEventDispatcher } from 'svelte';
-    import { t } from '$lib/i18n';
+    import {createEventDispatcher} from 'svelte';
+    import {t} from '$lib/i18n';
 
     export let accept: string = 'image/jpeg,image/png,image/webp,image/gif';
     export let maxSizeMB: number = 10;
@@ -25,9 +25,9 @@
     }>();
 
     const SIZE_CONFIG = {
-        original: { width: 0, height: 0, label: 'Original' },
-        avatar: { width: 200, height: 200, label: 'Avatar (200×200)' },
-        icon: { width: 50, height: 50, label: 'Icon (50×50)' }
+        original: {width: 0, height: 0, label: 'Original'},
+        avatar: {width: 200, height: 200, label: 'Avatar (200×200)'},
+        icon: {width: 50, height: 50, label: 'Icon (50×50)'}
     };
 
     let selectedSize: ImageSize = 'original';
@@ -67,13 +67,13 @@
         // Validate type
         const validTypes = accept.split(',').map(t => t.trim());
         if (!validTypes.includes(file.type)) {
-            dispatch('error', { message: `Invalid file type. Allowed: ${accept}` });
+            dispatch('error', {message: `Invalid file type. Allowed: ${accept}`});
             return;
         }
 
         // Validate size
         if (file.size > maxSizeMB * 1024 * 1024) {
-            dispatch('error', { message: `File too large. Max: ${maxSizeMB}MB` });
+            dispatch('error', {message: `File too large. Max: ${maxSizeMB}MB`});
             return;
         }
 
@@ -107,7 +107,7 @@
             if (previewUrl) URL.revokeObjectURL(previewUrl);
             previewUrl = URL.createObjectURL(resizedFile);
         } catch (err) {
-            dispatch('error', { message: 'Failed to resize image' });
+            dispatch('error', {message: 'Failed to resize image'});
         }
     }
 
@@ -157,7 +157,7 @@
                     }
 
                     const newName = file.name.replace(/\.[^.]+$/, `.${extension}`);
-                    resolve(new File([blob], newName, { type: mimeType }));
+                    resolve(new File([blob], newName, {type: mimeType}));
                 }, mimeType, 0.9);
             };
 
@@ -172,7 +172,7 @@
 
     function confirmUpload() {
         if (resizedFile) {
-            dispatch('upload', { file: resizedFile, size: selectedSize });
+            dispatch('upload', {file: resizedFile, size: selectedSize});
         }
     }
 
@@ -198,15 +198,15 @@
     {#if !previewUrl}
         <!-- Drop zone -->
         <div
-            class="drop-zone"
-            class:dragging={isDragging}
-            on:dragover={handleDragOver}
-            on:dragleave={handleDragLeave}
-            on:drop={handleDrop}
-            on:click={triggerFileInput}
-            on:keydown={(e) => e.key === 'Enter' && triggerFileInput()}
-            role="button"
-            tabindex="0"
+                class="drop-zone"
+                class:dragging={isDragging}
+                on:dragover={handleDragOver}
+                on:dragleave={handleDragLeave}
+                on:drop={handleDrop}
+                on:click={triggerFileInput}
+                on:keydown={(e) => e.key === 'Enter' && triggerFileInput()}
+                role="button"
+                tabindex="0"
         >
             <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -214,20 +214,20 @@
                 <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
             <p class="drop-text">{$t('uploads.dropOrClick')}</p>
-            <p class="drop-hint">{$t('uploads.maxSize', { values: { size: maxSizeMB } })}</p>
+            <p class="drop-hint">{$t('uploads.maxSize', {values: {size: maxSizeMB}})}</p>
         </div>
 
         <input
-            bind:this={fileInput}
-            type="file"
-            {accept}
-            on:change={handleFileSelect}
-            class="hidden-input"
+                bind:this={fileInput}
+                type="file"
+                {accept}
+                on:change={handleFileSelect}
+                class="hidden-input"
         />
     {:else}
         <!-- Preview -->
         <div class="preview-container">
-            <img src={previewUrl} alt="Preview" class="preview-image" />
+            <img src={previewUrl} alt="Preview" class="preview-image"/>
 
             {#if showSizeSelector}
                 <div class="size-selector">
@@ -236,10 +236,10 @@
                         {#each Object.entries(SIZE_CONFIG) as [key, config]}
                             <label class="size-option">
                                 <input
-                                    type="radio"
-                                    name="imageSize"
-                                    value={key}
-                                    bind:group={selectedSize}
+                                        type="radio"
+                                        name="imageSize"
+                                        value={key}
+                                        bind:group={selectedSize}
                                 />
                                 <span>{config.label}</span>
                             </label>

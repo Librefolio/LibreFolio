@@ -4,11 +4,11 @@
      * Reusable dropdown for selecting import plugins.
      * Uses SearchSelect with broker icons for better UX.
      */
-    import { _ } from '$lib/i18n';
-    import { zodiosApi } from '$lib/api';
-    import { SearchSelect, type SelectOption } from '$lib/components/ui/select';
+    import {_} from '$lib/i18n';
+    import {zodiosApi} from '$lib/api';
+    import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import type { BrimPlugin } from '$lib/types';
+    import type {BrimPlugin} from '$lib/types';
 
     interface Props {
         value?: string;
@@ -70,21 +70,21 @@
 
 <div class="import-plugin-select" data-testid="import-plugin-select">
     <SearchSelect
-        bind:value
-        options={pluginOptions}
-        placeholder={placeholder || $_('brokers.selectPlugin')}
-        {disabled}
-        {loading}
-        inlineSearch={true}
-        onchange={handleChange}
+            bind:value
+            {disabled}
+            inlineSearch={true}
+            {loading}
+            onchange={handleChange}
+            options={pluginOptions}
+            placeholder={placeholder || $_('brokers.selectPlugin')}
     >
         {#snippet item(option)}
             {@const plugin = option.data as BrimPlugin | undefined}
             <div class="flex items-center gap-2">
                 <BrokerIcon
-                    iconUrl={option.icon}
-                    altText={option.label}
-                    size="sm"
+                        iconUrl={option.icon}
+                        altText={option.label}
+                        size="sm"
                 />
                 <div class="min-w-0 flex-1">
                     <div class="text-sm font-medium">{option.label}</div>
@@ -97,9 +97,9 @@
         {#snippet selectedItem(option)}
             <div class="flex items-center gap-2">
                 <BrokerIcon
-                    iconUrl={option.icon}
-                    altText={option.label}
-                    size="sm"
+                        iconUrl={option.icon}
+                        altText={option.label}
+                        size="sm"
                 />
                 <span class="truncate">{option.label}</span>
             </div>

@@ -183,7 +183,7 @@ class TestPluginInterface:
         assert plugin.supported_extensions, "No supported extensions"
         assert all(
             ext.startswith(".") for ext in plugin.supported_extensions
-        ), "Extensions should start with '.'"
+            ), "Extensions should start with '.'"
 
         print(f"✓ {provider_code}: Valid metadata")
 
@@ -223,7 +223,7 @@ class TestPluginInterface:
         if transactions:
             assert isinstance(
                 transactions[0], TXCreateItem
-            ), "Transactions should be TXCreateItem instances"
+                ), "Transactions should be TXCreateItem instances"
 
         print(f"✓ {provider_code}: parse() returns correct types")
 
@@ -286,7 +286,7 @@ class TestPluginInterface:
             assert isinstance(fake_id, int), "Fake ID should be int"
             assert isinstance(
                 info, BRIMExtractedAssetInfo
-            ), f"Asset info should be BRIMExtractedAssetInfo, got {type(info)}"
+                ), f"Asset info should be BRIMExtractedAssetInfo, got {type(info)}"
 
         # Verify consistency: every asset_id in transactions should be in extracted_assets
         # (except None for non-asset transactions like deposits)
@@ -298,7 +298,7 @@ class TestPluginInterface:
 
         print(
             f"✓ {provider_code}: parse() returns {len(assets)} extracted assets, all consistent with transactions"
-        )
+            )
 
     def test_all_parseable_samples_succeed(self, provider_code: str):
         """Verify plugin can parse ALL its compatible sample files without error."""
@@ -373,7 +373,7 @@ class TestAutoDetection:
         assert specific_detections > 0, "No broker-specific plugins detected"
         print(
             f"✓ Specific plugins preferred: {specific_detections} specific, {generic_detections} generic"
-        )
+            )
 
     def test_specific_broker_detection_via_plugin_pattern(self):
         """Verify plugins with test_file_pattern are correctly detected for matching files."""
@@ -418,7 +418,7 @@ class TestGenericCSVPlugin:
         "generic_dates.csv",
         "generic_types.csv",
         "generic_with_assets.csv",
-    ]
+        ]
 
     def test_required_generic_files_exist(self):
         """Verify all required generic sample files exist."""
@@ -438,7 +438,7 @@ class TestGenericCSVPlugin:
         for sample_file in sample_files:
             assert plugin.can_parse(
                 sample_file
-            ), f"Generic plugin should be able to parse {sample_file.name}"
+                ), f"Generic plugin should be able to parse {sample_file.name}"
 
         print(f"✓ Generic plugin can parse all {len(sample_files)} sample files")
 

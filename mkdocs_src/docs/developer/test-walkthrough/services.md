@@ -8,8 +8,8 @@ To ensure that complex business rules (e.g., BRIM parsing logic, asset metadata 
 
 ## Key Tests
 
--   **BRIM Providers**: Tests parsing of sample CSV files for each supported broker.
--   **Asset Metadata**: Tests the logic for merging and patching asset metadata.
+- **BRIM Providers**: Tests parsing of sample CSV files for each supported broker.
+- **Asset Metadata**: Tests the logic for merging and patching asset metadata.
 
 ## Running
 

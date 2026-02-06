@@ -15,7 +15,7 @@ from backend.app.api.v1 import (
     settings,
     system,
     uploads,
-)
+    )
 from backend.app.api.v1.utilities import router as utilities_router
 from backend.app.logging_config import get_logger
 

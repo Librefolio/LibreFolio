@@ -22,13 +22,8 @@
 
 <div class="relative">
     <input
-            {id}
-            data-testid={testId || undefined}
-            type={showPassword ? 'text' : 'password'}
-            bind:value
-            {placeholder}
-            {disabled}
             {autocomplete}
+            bind:value
             class="w-full px-4 py-3 pr-12 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
             class:border-gray-400={!hasError}
             class:border-red-400={hasError}
@@ -36,17 +31,22 @@
             class:focus:border-red-400={hasError}
             class:focus:ring-libre-green={!hasError}
             class:focus:ring-red-400={hasError}
+            data-testid={testId || undefined}
+            {disabled}
+            {id}
             on:blur
             on:input
             on:keydown
+            {placeholder}
+            type={showPassword ? 'text' : 'password'}
     />
     <button
-            type="button"
-            tabindex="-1"
-            on:click={toggleVisibility}
             class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1"
-            title={showPassword ? 'Hide password' : 'Show password'}
             {disabled}
+            on:click={toggleVisibility}
+            tabindex="-1"
+            title={showPassword ? 'Hide password' : 'Show password'}
+            type="button"
     >
         {#if showPassword}
             <EyeOff size={20}/>

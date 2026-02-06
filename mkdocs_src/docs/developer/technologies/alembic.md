@@ -1,34 +1,37 @@
 # Database Migrations (Alembic)
 
-LibreFolio uses **Alembic** to manage database schema changes. Alembic is a lightweight database migration tool for SQLAlchemy that provides a versioning system for your database schema.
+LibreFolio uses **Alembic** to manage database schema changes. Alembic is a lightweight database migration tool for SQLAlchemy that provides a versioning system for your database
+schema.
 
 ## Workflow
 
 The basic workflow for making a schema change is:
 
-1.  **Modify SQLAlchemy Models**: Make changes to your `db/models.py` files (e.g., add a new column, create a new table).
+1. **Modify SQLAlchemy Models**: Make changes to your `db/models.py` files (e.g., add a new column, create a new table).
 
-2.  **Generate a Migration Script**: Run the `dev.sh` command to automatically generate a new migration script.
-    ```bash
-    ./dev.sh db:migrate "Your descriptive message"
-    ```
-    This command compares your SQLAlchemy models to the current state of the database and generates a Python script in `backend/alembic/versions/` that contains the necessary `upgrade()` and `downgrade()` functions.
+2. **Generate a Migration Script**: Run the `dev.sh` command to automatically generate a new migration script.
+   ```bash
+   ./dev.sh db:migrate "Your descriptive message"
+   ```
+   This command compares your SQLAlchemy models to the current state of the database and generates a Python script in `backend/alembic/versions/` that contains the necessary
+   `upgrade()` and `downgrade()` functions.
 
-3.  **Review the Migration Script**: **Always review the generated script.** Alembic is not perfect, especially with SQLite, and may require manual adjustments.
+3. **Review the Migration Script**: **Always review the generated script.** Alembic is not perfect, especially with SQLite, and may require manual adjustments.
 
-4.  **Apply the Migration**: Run the `upgrade` command to apply the changes to your database.
-    ```bash
-    ./dev.sh db:upgrade
-    ```
+4. **Apply the Migration**: Run the `upgrade` command to apply the changes to your database.
+   ```bash
+   ./dev.sh db:upgrade
+   ```
 
 ## SQLite and Alembic Limitations
 
-SQLite has limited support for `ALTER TABLE` statements, which can make schema migrations more complex than with other databases like PostgreSQL. Alembic works around this by using a "batch mode" that:
+SQLite has limited support for `ALTER TABLE` statements, which can make schema migrations more complex than with other databases like PostgreSQL. Alembic works around this by using
+a "batch mode" that:
 
-1.  Creates a new table with the desired schema.
-2.  Copies the data from the old table to the new table.
-3.  Drops the old table.
-4.  Renames the new table to the original name.
+1. Creates a new table with the desired schema.
+2. Copies the data from the old table to the new table.
+3. Drops the old table.
+4. Renames the new table to the original name.
 
 ### The `CHECK` Constraint Problem
 

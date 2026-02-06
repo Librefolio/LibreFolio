@@ -5,8 +5,8 @@
      */
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {zodiosApi, axiosInstance} from '$lib/api';
-    import {FileUp, FileText, RefreshCw, Trash2, ExternalLink} from 'lucide-svelte';
+    import {axiosInstance, zodiosApi} from '$lib/api';
+    import {FileText, FileUp, RefreshCw, Trash2} from 'lucide-svelte';
     import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
     import type {BrimFile} from '$lib/types';
 
@@ -150,21 +150,21 @@
         </div>
         <div class="flex items-center space-x-2">
             <button
-                    onclick={loadFiles}
-                    disabled={loading}
                     class="p-1.5 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded transition-colors disabled:opacity-50"
+                    disabled={loading}
+                    onclick={loadFiles}
                     title="Refresh"
             >
-                <RefreshCw size={16} class={loading ? 'animate-spin' : ''}/>
+                <RefreshCw class={loading ? 'animate-spin' : ''} size={16}/>
             </button>
             <label class="cursor-pointer">
                 <input
-                        type="file"
                         accept=".csv,.xlsx,.xls"
-                        class="hidden"
                         bind:this={fileInputRef}
-                        onchange={handleUpload}
+                        class="hidden"
                         disabled={uploading}
+                        onchange={handleUpload}
+                        type="file"
                 />
                 <span class="flex items-center space-x-1 px-3 py-1.5 bg-libre-green text-white text-sm rounded-lg hover:bg-libre-green/90 transition-colors {uploading ? 'opacity-50 cursor-wait' : ''}">
                     {#if uploading}
@@ -232,14 +232,14 @@
 
 <!-- Delete Confirmation Modal -->
 <ConfirmModal
-    open={showDeleteConfirm}
-    title={$_('common.confirmDelete')}
-    message={$_('uploads.deleteConfirm')}
-    items={pendingDeleteFileName ? [pendingDeleteFileName] : undefined}
-    itemsLabel={$_('uploads.filesToDelete')}
-    confirmText={$_('common.delete')}
-    onConfirm={confirmDelete}
-    onCancel={cancelDelete}
-    danger={true}
+        confirmText={$_('common.delete')}
+        danger={true}
+        items={pendingDeleteFileName ? [pendingDeleteFileName] : undefined}
+        itemsLabel={$_('uploads.filesToDelete')}
+        message={$_('uploads.deleteConfirm')}
+        onCancel={cancelDelete}
+        onConfirm={confirmDelete}
+        open={showDeleteConfirm}
+        title={$_('common.confirmDelete')}
 />
 

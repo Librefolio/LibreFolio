@@ -1,14 +1,14 @@
-import { defineConfig, devices } from '@playwright/test';
+import {defineConfig, devices} from '@playwright/test';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
+import {fileURLToPath} from 'url';
 
 // ES module compatibility for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load .env from project root
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({path: path.resolve(__dirname, '../.env')});
 
 // Use TEST_PORT for E2E tests (server runs in test mode)
 const TEST_PORT = process.env.TEST_PORT || '8001';
@@ -21,12 +21,12 @@ export default defineConfig({
     retries: process.env.CI ? 2 : 0,
     workers: 1,
     reporter: [
-        ['html', { outputFolder: 'playwright-report', open: 'never' }],
+        ['html', {outputFolder: 'playwright-report', open: 'never'}],
         ['list']
     ],
 
     timeout: 30000,  // Test timeout (30s for full test including setup)
-    expect: { timeout: 3000 },  // 3s for localhost assertions
+    expect: {timeout: 3000},  // 3s for localhost assertions
 
     use: {
         baseURL: BASE_URL,
@@ -43,7 +43,7 @@ export default defineConfig({
             name: 'desktop',
             use: {
                 ...devices['Desktop Chrome'],
-                viewport: { width: 1280, height: 720 },
+                viewport: {width: 1280, height: 720},
             },
         },
         {

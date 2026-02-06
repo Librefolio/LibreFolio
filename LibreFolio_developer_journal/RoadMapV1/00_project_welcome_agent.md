@@ -27,15 +27,26 @@ LibreFolio/
 │   │   └── utils/             # Utilities condivise
 │   ├── alembic/               # Migrazioni database
 │   ├── test_scripts/          # Test suite completa
-│   └── data/sqlite/           # Database SQLite
+│   └── data/                  # Dati runtime (separati prod/test)
+│       ├── prod/              # Dati produzione
+│       │   ├── sqlite/app.db
+│       │   ├── broker_reports/{uploaded,parsed,failed}/
+│       │   ├── custom-uploads/
+│       │   └── logs/
+│       └── test/              # Dati test (isolati)
+│           └── (stessa struttura)
 │
 ├── frontend/                   # SvelteKit SPA
 │   ├── src/
 │   │   ├── routes/            # Pagine e routing
 │   │   ├── lib/components/    # Componenti riutilizzabili
+│   │   │   ├── ui/            # Componenti base (select/, input/, media/)
+│   │   │   ├── layout/        # Header, Sidebar, Footer
+│   │   │   ├── settings/      # Settings tabs e componenti
+│   │   │   └── brokers/       # Broker-specific components
 │   │   ├── lib/api/           # Zodios client + OpenAPI types
 │   │   └── lib/i18n/          # Traduzioni (EN, IT, FR, ES)
-│   ├── e2e/                   # Playwright E2E tests
+│   ├── e2e/                   # Playwright E2E tests (67+ test)
 │   └── build/                 # Build statica (servita da FastAPI)
 │
 ├── scripts/                    # CLI tools
@@ -46,11 +57,15 @@ LibreFolio/
 │   └── list_api_endpoints.py  # Lista endpoint API
 │
 ├── mkdocs_src/                 # Documentazione MkDocs
-│   └── docs/gallery/          # Screenshot UI (generati da Playwright)
+│   └── docs/gallery/          # Screenshot UI (224 immagini light/dark)
 │
 ├── dev.py                      # Entry point CLI principale (Python)
 ├── dev.sh                      # Wrapper bash per backward compatibility
 └── LibreFolio_developer_journal/  # Documentazione e roadmap
+    └── RoadmapV4_UI/          # Piano frontend attivo
+        ├── plan-*.md          # Plan attivi
+        └── phases/            # Sotto-plan per fase
+            └── phase-04-subplan/  # 13+ sub-plan completati Phase 4
 ```
 
 ## 🔧 Stack Tecnologico
@@ -88,8 +103,11 @@ LibreFolio/
 6. **Tailwind v4**: Configurazione tramite `@theme {}` in CSS, no file config TS
 7. **Multi-User Broker Access**: Owner/Editor/Viewer roles per condivisione broker
 8. **Zodios API Client**: Tipi derivati da OpenAPI, validazione runtime
+9. **Data Separation prod/test**: Dati completamente isolati tra ambienti
+10. **Svelte 5 Runes**: Componenti nuovi usano $state, $derived, $effect
+11. **E2E Test Gallery**: Screenshot automatici per documentazione (light/dark)
 
-## 📊 Stato Attuale (Febbraio 2026)
+## 📊 Stato Attuale (6 Febbraio 2026)
 
 ### ✅ Backend Completato
 
@@ -100,55 +118,66 @@ LibreFolio/
 - **Asset Providers**: yfinance, JustETF, CSS Scraper, Scheduled Investment
 - **BRIM**: 11 plugin (IBKR, Degiro, Directa, eToro, Coinbase, Revolut, Trading212, etc.)
 - **Broker Access Control**: Multi-user con ruoli Owner/Editor/Viewer
+- **Data Separation**: Cartelle prod/test completamente isolate (`backend/data/prod/`, `backend/data/test/`)
 - **Test Suite**: 8/8 categorie passano (external, db, services, utils, schemas, api, e2e, frontend)
 
-### ✅ Frontend Completato (Phase 0-4)
+### ✅ Frontend Completato (Phase 0-3.5 + gran parte Phase 4)
 
 - **Login/Register/Forgot Password**: Modali funzionanti con animazioni
 - **Dashboard Placeholder**: Struttura base con navigazione
-- **Settings Page**: User preferences + Global settings (admin only)
+- **Settings Page**: User preferences + Global settings (admin only), layout mobile responsive
 - **Broker Management**: Lista, CRUD, dettaglio con holdings/transactions
-- **Files Management**: Upload, lista, BRIM import associato a broker
+- **Files Management**: Upload, lista, BRIM import associato a broker, filtri URL-based
+- **Component Library**: Famiglia Select unificata (BaseDropdown, SimpleSelect, SearchSelect)
 - **Password Strength Meter**: zxcvbn-ts integration
 - **AnimatedBackground**: Onde animate + linee grafici
-- **Design System**: Colori brand (#1a4031 verde, #f5f4ef beige)
-- **i18n**: Supporto EN, IT, FR, ES
+- **Design System**: Colori brand (#1a4031 verde, #f5f4ef beige), dark mode completo
+- **i18n**: Supporto EN, IT, FR, ES con CLI per gestione traduzioni
 - **Mobile Responsive**: Settings e layout ottimizzati per mobile
-- **E2E Tests**: 51 test + 12 gallery screenshot (63 totali)
+- **E2E Tests**: 67+ test Playwright, gallery con 224 screenshot (light/dark)
+- **Zodios API Client**: Type-safe con validazione Zod runtime
 
 ### 🔄 In Corso (Phase 4 finale)
 
-- **Gallery Theme Support**: Screenshot light/dark con auto-switch
-- **Gallery Coverage**: Aggiungere screenshot mancanti (about tab, password modal)
+- **UI Fixes**: Bug scoperti durante test (preferences al login, modal scroll, etc.)
+- **Image Crop Component**: Per upload avatar/icone broker
 
 ### 🔲 Da Implementare (Phase 5+)
 
 - **Phase 5**: FX Management Pages
 - **Phase 6**: Asset Management Pages
-- **Phase 7**: Transaction Management + BRIM Import UI
-- **Phase 8**: Dashboard con grafici e KPIs
-- **Phase 9**: Polish & Responsive
+- **Phase 7**: Transaction Management + BRIM Import UI completa
+- **Phase 8**: Dashboard con grafici ECharts e KPIs
+- **Phase 9**: Polish & Responsive finale
 
 ## 📁 Dove Trovare Cosa
 
-| Cosa cerchi?            | Dove guardare                                        |
-|-------------------------|------------------------------------------------------|
-| **Modelli DB**          | `backend/app/db/models.py`                           |
-| **Schemi API**          | `backend/app/schemas/*.py`                           |
-| **Business Logic**      | `backend/app/services/*.py`                          |
-| **API Endpoints**       | `backend/app/api/v1/*.py`                            |
-| **Provider FX**         | `backend/app/services/fx_providers/`                 |
-| **Provider Asset**      | `backend/app/services/asset_source_providers/`       |
-| **Import Broker**       | `backend/app/services/brim_providers/`               |
-| **Backend Test Suite**  | `backend/test_scripts/`                              |
-| **Frontend Pages**      | `frontend/src/routes/`                               |
-| **Componenti UI**       | `frontend/src/lib/components/`                       |
-| **E2E Tests**           | `frontend/e2e/`                                      |
-| **API Client (Zodios)** | `frontend/src/lib/api/`                              |
-| **CLI Scripts**         | `scripts/`                                           |
-| **Roadmap UI**          | `LibreFolio_developer_journal/RoadmapV4_UI/`         |
-| **Plan attivi**         | `RoadmapV4_UI/plan-*.md` (root)                      |
-| **Plan completati**     | `RoadmapV4_UI/phases/phase-XX-subplan/`              |
+| Cosa cerchi?            | Dove guardare                                             |
+|-------------------------|-----------------------------------------------------------|
+| **Modelli DB**          | `backend/app/db/models.py`                                |
+| **Schemi API**          | `backend/app/schemas/*.py`                                |
+| **Business Logic**      | `backend/app/services/*.py`                               |
+| **API Endpoints**       | `backend/app/api/v1/*.py`                                 |
+| **Config & Data Paths** | `backend/app/config.py` (get_data_dir, etc.)              |
+| **Provider FX**         | `backend/app/services/fx_providers/`                      |
+| **Provider Asset**      | `backend/app/services/asset_source_providers/`            |
+| **Import Broker**       | `backend/app/services/brim_providers/`                    |
+| **Backend Test Suite**  | `backend/test_scripts/`                                   |
+| **Dati Produzione**     | `backend/data/prod/` (sqlite, uploads, logs)              |
+| **Dati Test**           | `backend/data/test/` (isolati, stessa struttura)          |
+| **Frontend Pages**      | `frontend/src/routes/`                                    |
+| **Componenti UI Base**  | `frontend/src/lib/components/ui/`                         |
+| **Componenti Select**   | `frontend/src/lib/components/ui/select/`                  |
+| **Componenti Settings** | `frontend/src/lib/components/settings/`                   |
+| **E2E Tests**           | `frontend/e2e/`                                           |
+| **API Client (Zodios)** | `frontend/src/lib/api/`                                   |
+| **Traduzioni**          | `frontend/src/lib/i18n/locales/`                          |
+| **CLI Scripts**         | `scripts/`                                                |
+| **Roadmap UI**          | `LibreFolio_developer_journal/RoadmapV4_UI/`              |
+| **Plan attivi**         | `RoadmapV4_UI/plan-*.md` (root)                           |
+| **Plan completati**     | `RoadmapV4_UI/phases/phase-04-subplan/`                   |
+| **Phase 4 Summary**     | `RoadmapV4_UI/plan-phase04-summary.md`                    |
+| **Dark Mode Guide**     | `RoadmapV4_UI/phases/phase-04-subplan/GUIDA-DARK-MODE.md` |
 
 ## 🛠️ Comandi Utili - USARE SEMPRE dev.py
 

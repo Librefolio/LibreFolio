@@ -8,18 +8,18 @@ The Asset system in LibreFolio is responsible for managing financial instruments
 
 This is the central service that coordinates all asset-related operations. It handles:
 
--   **Provider Assignment**: Linking an asset to a specific provider (e.g., "AAPL" -> "yfinance").
--   **Price Fetching**: Delegating price requests to the assigned provider.
--   **Backward Filling**: Filling gaps in historical data (e.g., weekends/holidays) with the last known price.
--   **Caching**: Storing fetched prices in the `price_history` table to minimize external API calls.
+- **Provider Assignment**: Linking an asset to a specific provider (e.g., "AAPL" -> "yfinance").
+- **Price Fetching**: Delegating price requests to the assigned provider.
+- **Backward Filling**: Filling gaps in historical data (e.g., weekends/holidays) with the last known price.
+- **Caching**: Storing fetched prices in the `price_history` table to minimize external API calls.
 
 ### 2. `AssetMetadataService`
 
 This service manages the descriptive information about assets.
 
--   **Classification**: Handles `sector_area` and `geographic_area` distributions.
--   **Merging**: Merges metadata fetched from providers with existing user-defined data.
--   **Patching**: Supports partial updates to asset metadata.
+- **Classification**: Handles `sector_area` and `geographic_area` distributions.
+- **Merging**: Merges metadata fetched from providers with existing user-defined data.
+- **Patching**: Supports partial updates to asset metadata.
 
 ### 3. `AssetProviderRegistry`
 

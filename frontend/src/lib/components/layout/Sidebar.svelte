@@ -2,7 +2,7 @@
     import {page} from '$app/stores';
     import {browser} from '$app/environment';
     import {onMount} from 'svelte';
-import {_} from '$lib/i18n';
+    import {_} from '$lib/i18n';
     import {auth} from '$lib/stores/auth';
     import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, X} from 'lucide-svelte';
 

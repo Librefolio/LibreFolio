@@ -53,7 +53,7 @@ class BOEProvider(FXRateProvider):
         "SGD": "XUDLSGS",  # Singapore Dollar spot
         "ZAR": "XUDLZRS",  # South African Rand spot
         "INR": "XUDLBK97",  # Indian Rupee spot
-    }
+        }
 
     @property
     def code(self) -> str:
@@ -89,7 +89,7 @@ class BOEProvider(FXRateProvider):
             "JPY",  # Japanese Yen
             "CHF",  # Swiss Franc
             "AUD",  # Australian Dollar
-        ]
+            ]
 
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -106,7 +106,7 @@ class BOEProvider(FXRateProvider):
 
     async def fetch_rates(
         self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None
-    ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+        ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from BOE API for given date range and currencies.
 
@@ -128,7 +128,7 @@ class BOEProvider(FXRateProvider):
         if base_currency is not None and base_currency != "GBP":
             raise ValueError(
                 f"BOE provider only supports GBP as base currency, got {base_currency}"
-            )
+                )
 
         start_date, end_date = date_range
         results = {}
@@ -156,17 +156,17 @@ class BOEProvider(FXRateProvider):
                 "UsingCodes": "Y",
                 "VPD": "Y",
                 "VFD": "N",
-            }
+                }
 
             try:
                 # BOE requires a proper User-Agent header
                 headers = {
                     "User-Agent": "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)"
-                }
+                    }
 
                 async with httpx.AsyncClient(
                     timeout=30.0, headers=headers, follow_redirects=True
-                ) as client:
+                    ) as client:
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 

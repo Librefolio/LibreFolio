@@ -14,30 +14,30 @@
      * - ?size=min-max - Size range filter
      * - ?date=from,to - Date range filter
      */
-    import { onMount } from 'svelte';
-    import { page } from '$app/stores';
-    import { goto } from '$app/navigation';
-    import { browser } from '$app/environment';
-    import { t } from '$lib/i18n';
-    import { zodiosApi, axiosInstance } from '$lib/api';
+    import {onMount} from 'svelte';
+    import {page} from '$app/stores';
+    import {goto} from '$app/navigation';
+    import {browser} from '$app/environment';
+    import {t} from '$lib/i18n';
+    import {axiosInstance, zodiosApi} from '$lib/api';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
-    import { Download, Trash2, FileText, Image, File as FileIcon, FileSpreadsheet, List, LayoutGrid, X } from 'lucide-svelte';
+    import {Download, File as FileIcon, FileSpreadsheet, FileText, Image, LayoutGrid, List, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
-    import { parseUrlFilters, buildUrlFilters, type UrlFilterConfig } from '$lib/utils/urlFilters';
-    import type { UploadedFile, BrimFile, BrokerInfo, Broker } from '$lib/types';
-    import type { FilterValue } from '$lib/components/table/types';
+    import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
+    import type {BrimFile, Broker, BrokerInfo, UploadedFile} from '$lib/types';
+    import type {FilterValue} from '$lib/components/table/types';
 
     type Tab = 'static' | 'brim';
 
     // URL filter configuration - defines which columns can be filtered via URL
     const urlFilterColumns: UrlFilterConfig[] = [
-        { urlKey: 'filename', type: 'text' },
-        { urlKey: 'broker', type: 'enum' },
-        { urlKey: 'status', type: 'enum' },
-        { urlKey: 'size', type: 'size' },
-        { urlKey: 'date', type: 'date' },
+        {urlKey: 'filename', type: 'text'},
+        {urlKey: 'broker', type: 'enum'},
+        {urlKey: 'status', type: 'enum'},
+        {urlKey: 'size', type: 'size'},
+        {urlKey: 'date', type: 'date'},
     ];
 
 
@@ -209,7 +209,7 @@
             params.set('tab', tab);
 
             const newUrl = `/files?${params.toString()}`;
-            goto(newUrl, { replaceState: true, noScroll: true });
+            goto(newUrl, {replaceState: true, noScroll: true});
         }
     }
 
@@ -230,7 +230,7 @@
     async function loadBrokers() {
         try {
             brokers = await zodiosApi.list_brokers_api_v1_brokers_get() as Broker[];
-            brokerMap = new Map(brokers.map(b => [b.id, { id: b.id, name: b.name }]));
+            brokerMap = new Map(brokers.map(b => [b.id, {id: b.id, name: b.name}]));
             // If no filter selected, select all brokers by default
             if (selectedBrokerIds.size === 0 && brokers.length > 0) {
                 selectedBrokerIds = new Set(brokers.map(b => b.id));
@@ -253,7 +253,7 @@
                 // For BRIM, filter by selected broker IDs
                 const brokerIds = Array.from(selectedBrokerIds);
                 brimFiles = await zodiosApi.list_files_api_v1_brokers_import_files_get({
-                    queries: brokerIds.length > 0 ? { broker_ids: brokerIds } : undefined
+                    queries: brokerIds.length > 0 ? {broker_ids: brokerIds} : undefined
                 }) as BrimFile[];
             }
         } catch (e) {
@@ -287,7 +287,7 @@
     }
 
     async function handleUpload(event: CustomEvent<{ files: globalThis.File[] }>) {
-        const { files } = event.detail;
+        const {files} = event.detail;
 
         try {
             // Upload files sequentially using axios directly (Zodios doesn't handle FormData well)
@@ -307,7 +307,7 @@
 
     // BRIM Upload handlers
     function handleBrimFileSelect(event: CustomEvent<{ files: globalThis.File[] }>) {
-        const { files } = event.detail;
+        const {files} = event.detail;
         pendingBrimFiles = files;
 
         // If no files, close the modal
@@ -518,39 +518,39 @@
             {#if activeTab === 'static' && staticFiles.length > 0}
                 <div class="view-toggle" data-testid="view-mode-toggle">
                     <button
-                        class="view-btn"
-                        class:active={viewMode === 'grid'}
-                        on:click={() => setViewMode('grid')}
-                        title="Grid view"
-                        data-testid="view-mode-grid"
+                            class="view-btn"
+                            class:active={viewMode === 'grid'}
+                            on:click={() => setViewMode('grid')}
+                            title="Grid view"
+                            data-testid="view-mode-grid"
                     >
-                        <LayoutGrid size={18} />
+                        <LayoutGrid size={18}/>
                     </button>
                     <button
-                        class="view-btn"
-                        class:active={viewMode === 'list'}
-                        on:click={() => setViewMode('list')}
-                        title="List view"
-                        data-testid="view-mode-list"
+                            class="view-btn"
+                            class:active={viewMode === 'list'}
+                            on:click={() => setViewMode('list')}
+                            title="List view"
+                            data-testid="view-mode-list"
                     >
-                        <List size={18} />
+                        <List size={18}/>
                     </button>
                 </div>
             {/if}
 
             {#if activeTab === 'static'}
                 <button
-                    class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}"
-                    data-testid="upload-button"
-                    on:click={toggleStaticUploader}
+                        class="btn {showUploader ? 'btn-secondary' : 'btn-primary'}"
+                        data-testid="upload-button"
+                        on:click={toggleStaticUploader}
                 >
                     {showUploader ? $t('common.close') : $t('uploads.upload')}
                 </button>
             {:else if activeTab === 'brim' && brokers.length > 0}
                 <button
-                    class="btn {showBrimUploader ? 'btn-secondary' : 'btn-primary'}"
-                    data-testid="upload-button"
-                    on:click={toggleBrimUploader}
+                        class="btn {showBrimUploader ? 'btn-secondary' : 'btn-primary'}"
+                        data-testid="upload-button"
+                        on:click={toggleBrimUploader}
                 >
                     {showBrimUploader ? $t('common.close') : $t('uploads.upload')}
                 </button>
@@ -561,22 +561,22 @@
     <!-- Tabs -->
     <div class="tabs" role="tablist">
         <button
-            class="tab"
-            class:active={activeTab === 'static'}
-            data-testid="files-tab-static"
-            role="tab"
-            aria-selected={activeTab === 'static'}
-            on:click={() => setActiveTab('static')}
+                aria-selected={activeTab === 'static'}
+                class="tab"
+                class:active={activeTab === 'static'}
+                data-testid="files-tab-static"
+                on:click={() => setActiveTab('static')}
+                role="tab"
         >
             {$t('uploads.staticResources')}
         </button>
         <button
-            class="tab"
-            class:active={activeTab === 'brim'}
-            data-testid="files-tab-brim"
-            role="tab"
-            aria-selected={activeTab === 'brim'}
-            on:click={() => setActiveTab('brim')}
+                aria-selected={activeTab === 'brim'}
+                class="tab"
+                class:active={activeTab === 'brim'}
+                data-testid="files-tab-brim"
+                on:click={() => setActiveTab('brim')}
+                role="tab"
         >
             {$t('uploads.brokerReports')}
         </button>
@@ -587,11 +587,11 @@
     {#if showUploader && activeTab === 'static'}
         <div class="upload-area">
             <FileUploader
-                on:upload={handleUpload}
-                on:change={handleStaticFileChange}
-                on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
-                multiple={true}
-                maxSizeMB={maxUploadSizeMB}
+                    on:upload={handleUpload}
+                    on:change={handleStaticFileChange}
+                    on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
+                    multiple={true}
+                    maxSizeMB={maxUploadSizeMB}
             />
         </div>
     {/if}
@@ -600,11 +600,11 @@
     {#if showBrimUploader && activeTab === 'brim' && !showBrimUploadModal}
         <div class="upload-area brim-upload-area">
             <FileUploader
-                on:change={handleBrimFileSelect}
-                on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
-                multiple={true}
-                maxSizeMB={maxUploadSizeMB}
-                accept=".csv,.xlsx,.xls"
+                    on:change={handleBrimFileSelect}
+                    on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
+                    multiple={true}
+                    maxSizeMB={maxUploadSizeMB}
+                    accept=".csv,.xlsx,.xls"
             />
         </div>
     {/if}
@@ -625,7 +625,7 @@
             <!-- Static Files -->
             {#if staticFiles.length === 0}
                 <div class="empty-state">
-                    <FileIcon size={48} />
+                    <FileIcon size={48}/>
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else if viewMode === 'grid'}
@@ -635,15 +635,15 @@
                             <div class="file-preview">
                                 {#if isImage(file.mime_type)}
                                     <LazyImage
-                                        src={file.url}
-                                        alt={file.original_name}
-                                        placeholder="generic"
-                                        width="100%"
-                                        height="120px"
+                                            src={file.url}
+                                            alt={file.original_name}
+                                            placeholder="generic"
+                                            width="100%"
+                                            height="120px"
                                     />
                                 {:else}
                                     <div class="file-icon">
-                                        <svelte:component this={getFileIcon(file.mime_type, file.original_name)} size={32} />
+                                        <svelte:component this={getFileIcon(file.mime_type, file.original_name)} size={32}/>
                                     </div>
                                 {/if}
                             </div>
@@ -659,19 +659,19 @@
 
                             <div class="file-actions">
                                 <a
-                                    href={`${file.url}?download=true`}
-                                    download={file.original_name}
-                                    class="action-btn"
-                                    title={$t('uploads.download')}
+                                        href={`${file.url}?download=true`}
+                                        download={file.original_name}
+                                        class="action-btn"
+                                        title={$t('uploads.download')}
                                 >
-                                    <Download size={16} />
+                                    <Download size={16}/>
                                 </a>
                                 <button
-                                    class="action-btn danger"
-                                    on:click={() => deleteFile(file.id)}
-                                    title={$t('common.delete')}
+                                        class="action-btn danger"
+                                        on:click={() => deleteFile(file.id)}
+                                        title={$t('common.delete')}
                                 >
-                                    <Trash2 size={16} />
+                                    <Trash2 size={16}/>
                                 </button>
                             </div>
                         </div>
@@ -680,29 +680,29 @@
             {:else}
                 <!-- List View with New DataTable -->
                 <FilesTable
-                    files={staticFiles}
-                    type="static"
-                    onDelete={(id) => deleteFile(id, false)}
-                    {initialFilters}
-                    onFiltersChange={handleFiltersChange}
+                        files={staticFiles}
+                        type="static"
+                        onDelete={(id) => deleteFile(id, false)}
+                        {initialFilters}
+                        onFiltersChange={handleFiltersChange}
                 />
             {/if}
         {:else}
             <!-- BRIM Files -->
             {#if brimFiles.length === 0}
                 <div class="empty-state" data-testid="brim-empty-state">
-                    <FileText size={48} />
+                    <FileText size={48}/>
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else}
                 <!-- BRIM Table with New DataTable -->
                 <FilesTable
-                    files={brimFiles}
-                    type="brim"
-                    onDelete={(id) => deleteFile(id, true)}
-                    brokers={brokerMap}
-                    {initialFilters}
-                    onFiltersChange={handleFiltersChange}
+                        files={brimFiles}
+                        type="brim"
+                        onDelete={(id) => deleteFile(id, true)}
+                        brokers={brokerMap}
+                        {initialFilters}
+                        onFiltersChange={handleFiltersChange}
                 />
             {/if}
         {/if}
@@ -741,7 +741,7 @@
                         closeBrimUploadModal();
                     }
                 }}>
-                    <X size={20} />
+                    <X size={20}/>
                 </button>
             </div>
 
@@ -750,11 +750,11 @@
                 <div class="assign-all-section">
                     <span class="assign-all-label">{$t('uploads.assignAll') || 'Assign all to'}:</span>
                     <BrokerSearchSelect
-                        brokers={brokers}
-                        value={null}
-                        placeholder={$t('uploads.chooseBroker') || '-- Choose broker --'}
-                        dropdownPosition="bottom"
-                        onchange={(brokerId) => {
+                            brokers={brokers}
+                            value={null}
+                            placeholder={$t('uploads.chooseBroker') || '-- Choose broker --'}
+                            dropdownPosition="bottom"
+                            onchange={(brokerId) => {
                             if (brokerId != null) {
                                 assignAllBroker(brokerId);
                             }
@@ -771,15 +771,15 @@
                     {#each pendingBrimFiles as file, index}
                         <div class="file-row">
                             <div class="file-info">
-                                <FileSpreadsheet size={18} class="file-icon" />
+                                <FileSpreadsheet size={18} class="file-icon"/>
                                 <span class="file-name" title={file.name}>{file.name}</span>
                                 <span class="file-size">({formatBytes(file.size)})</span>
                             </div>
                             <BrokerSearchSelect
-                                brokers={brokers}
-                                value={fileBrokerAssignments.get(index) ?? null}
-                                placeholder={$t('uploads.selectBroker') || '-- Select --'}
-                                onchange={(brokerId) => assignFileBroker(index, brokerId)}
+                                    brokers={brokers}
+                                    value={fileBrokerAssignments.get(index) ?? null}
+                                    placeholder={$t('uploads.selectBroker') || '-- Select --'}
+                                    onchange={(brokerId) => assignFileBroker(index, brokerId)}
                             />
                         </div>
                     {/each}
@@ -791,10 +791,10 @@
                     {$t('common.cancel')}
                 </button>
                 <button
-                    class="btn btn-primary"
-                    class:btn-disabled={!canConfirmBrimUpload()}
-                    on:click={confirmBrimUpload}
-                    disabled={!canConfirmBrimUpload()}
+                        class="btn btn-primary"
+                        class:btn-disabled={!canConfirmBrimUpload()}
+                        on:click={confirmBrimUpload}
+                        disabled={!canConfirmBrimUpload()}
                 >
                     {$t('uploads.upload')} ({pendingBrimFiles.length})
                 </button>
@@ -813,7 +813,7 @@
             <div class="modal-header">
                 <h3>{$t('common.confirm')}</h3>
                 <button class="modal-close" on:click={cancelCloseUploader}>
-                    <X size={20} />
+                    <X size={20}/>
                 </button>
             </div>
             <div class="modal-body">
