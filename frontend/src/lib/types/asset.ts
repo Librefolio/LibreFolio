@@ -5,8 +5,8 @@
  * Derived from Zod schemas in generated.ts.
  */
 
-import { z } from 'zod';
-import { schemas } from '$lib/api/generated';
+import {z} from 'zod';
+import {schemas} from '$lib/api/generated';
 
 // =============================================================================
 // TYPES DERIVED FROM ZOD SCHEMAS
@@ -55,16 +55,16 @@ export type PricePoint = z.infer<typeof schemas.FAPricePoint_Output>;
  * Simplified asset info for dropdowns and references.
  */
 export interface AssetBasicInfo {
-	id: number;
-	name: string;
-	symbol?: string;
-	isin?: string;
+    id: number;
+    name: string;
+    symbol?: string;
+    isin?: string;
 }
 
 /**
  * Asset with UI state for interactive components.
  */
 export interface AssetWithUIState extends AssetBasicInfo {
-	isSelected?: boolean;
-	isLoading?: boolean;
+    isSelected?: boolean;
+    isLoading?: boolean;
 }

@@ -137,27 +137,27 @@ mv settings/AboutTab.svelte settings/tabs/AboutTab.svelte
 
 ### File aggiornati
 
-| File | Import aggiornato |
-|------|-------------------|
-| `routes/+page.svelte` | AnimatedBackground → `ui/AnimatedBackground.svelte` |
-| `routes/+error.svelte` | AnimatedBackground → `ui/AnimatedBackground.svelte` |
-| `routes/+page.svelte` | LanguageSelector → `layout/LanguageSelector.svelte` |
-| `layout/Header.svelte` | HelpMenu → `layout/HelpMenu.svelte` |
-| `layout/Header.svelte` | LanguageSelector → `layout/LanguageSelector.svelte` |
-| `routes/(app)/files/+page.svelte` | FileUploader, LazyImage → `ui/media/` |
-| `brokers/BrokerImportFilesModal.svelte` | FileUploader → `ui/media/FileUploader.svelte` |
-| `auth/LoginModal.svelte` | PasswordInput → `ui/input/PasswordInput.svelte` |
-| `auth/RegisterModal.svelte` | PasswordInput, PasswordStrength → `ui/input/` |
-| `settings/PasswordChangeModal.svelte` | PasswordInput, PasswordStrength → `ui/input/` |
-| `routes/(app)/settings/+page.svelte` | Tabs → `settings/tabs/` |
+| File                                    | Import aggiornato                                   |
+|-----------------------------------------|-----------------------------------------------------|
+| `routes/+page.svelte`                   | AnimatedBackground → `ui/AnimatedBackground.svelte` |
+| `routes/+error.svelte`                  | AnimatedBackground → `ui/AnimatedBackground.svelte` |
+| `routes/+page.svelte`                   | LanguageSelector → `layout/LanguageSelector.svelte` |
+| `layout/Header.svelte`                  | HelpMenu → `layout/HelpMenu.svelte`                 |
+| `layout/Header.svelte`                  | LanguageSelector → `layout/LanguageSelector.svelte` |
+| `routes/(app)/files/+page.svelte`       | FileUploader, LazyImage → `ui/media/`               |
+| `brokers/BrokerImportFilesModal.svelte` | FileUploader → `ui/media/FileUploader.svelte`       |
+| `auth/LoginModal.svelte`                | PasswordInput → `ui/input/PasswordInput.svelte`     |
+| `auth/RegisterModal.svelte`             | PasswordInput, PasswordStrength → `ui/input/`       |
+| `settings/PasswordChangeModal.svelte`   | PasswordInput, PasswordStrength → `ui/input/`       |
+| `routes/(app)/settings/+page.svelte`    | Tabs → `settings/tabs/`                             |
 
 ### Bugfix applicati durante la riorganizzazione
 
-| File | Fix |
-|------|-----|
-| `routes/(app)/files/+page.svelte` | BRIM upload: `{ file }` invece di `formData as any` |
+| File                                    | Fix                                                 |
+|-----------------------------------------|-----------------------------------------------------|
+| `routes/(app)/files/+page.svelte`       | BRIM upload: `{ file }` invece di `formData as any` |
 | `brokers/BrokerImportFilesModal.svelte` | BRIM upload: `{ file }` invece di `formData as any` |
-| `brokers/BrokerImportFiles.svelte` | BRIM upload: `{ file }` invece di `formData as any` |
+| `brokers/BrokerImportFiles.svelte`      | BRIM upload: `{ file }` invece di `formData as any` |
 
 ---
 
@@ -182,6 +182,7 @@ mv settings/AboutTab.svelte settings/tabs/AboutTab.svelte
 **Soluzione**: Usare `axiosInstance` direttamente per gli upload file invece di Zodios.
 
 **File modificati:**
+
 - `routes/(app)/files/+page.svelte` - import axiosInstance, uso diretto per upload
 - `brokers/BrokerImportFilesModal.svelte` - stesso fix
 - `brokers/BrokerImportFiles.svelte` - stesso fix
@@ -193,6 +194,7 @@ mv settings/AboutTab.svelte settings/tabs/AboutTab.svelte
 **Soluzione**: Creato nuovo colore `--color-libre-banner` con valore specifico per dark mode.
 
 **File modificati:**
+
 - `app.css` - aggiunto `--color-libre-banner: #1a4031` (light) e `#00834f` (dark)
 - `dashboard/+page.svelte` - usa `libre-banner` per il gradient del welcome banner
 - Semplificato colorClasses per quick actions (classi inline invece di oggetto complesso)
@@ -206,30 +208,36 @@ mv settings/AboutTab.svelte settings/tabs/AboutTab.svelte
 16 test che coprono:
 
 **LanguageSelector (SimpleSelect style)** - 4 test:
+
 - Opens dropdown on click
 - Closes dropdown on click outside
 - Closes dropdown on Escape key
 - Selects language and updates UI
 
 **SearchSelect (Currency Selector in Settings)** - 3 test:
+
 - Currency select opens with search field
 - Currency select shows options in listbox
 - Currency select can close with Escape
 
 **ImportPluginSelect (Broker Form)** - 4 test:
+
 - Plugin select is visible in broker form
 - Plugin select opens dropdown with listbox
 - Plugin select shows search input when opened
 - Plugin select can be closed with Escape
 
 **Global Settings Selects (Admin)** - 2 test:
+
 - Global settings tab loads for admin
 - Global settings has interactive elements
 
 **BrokerSearchSelect (Files Page)** - 1 test:
+
 - Files page loads with tab navigation
 
 **Accessibility** - 2 test:
+
 - Language selector has proper menu role
 - Search select has listbox role when open
 
@@ -507,17 +515,20 @@ test.describe('Broker Form Select Components', () => {
 ## ✅ Checklist Esecuzione
 
 ### Pre-requisiti
+
 - [ ] Tutti i test E2E passano (`./dev.py test front all`)
 - [ ] Build senza errori (`./dev.py front build`)
 - [ ] Check senza warning (`./dev.py front check`)
 
 ### Fase 1: Eliminazione
+
 - [ ] `rm OldFuzzySelect.svelte`
 - [ ] `rm ui/OldCustomSelect.svelte`
 - [ ] `rm brokers/OldBrokerSelect.svelte`
 - [ ] Verifica grep nessun import residuo
 
 ### Fase 2: Spostamenti
+
 - [ ] `mv AnimatedBackground.svelte ui/`
 - [ ] `mv HelpMenu.svelte layout/`
 - [ ] `mv LanguageSelector.svelte layout/`
@@ -526,6 +537,7 @@ test.describe('Broker Form Select Components', () => {
 - [ ] `mkdir settings/tabs && mv *Tab.svelte settings/tabs/`
 
 ### Fase 3: Import Updates
+
 - [ ] Aggiorna import AnimatedBackground
 - [ ] Aggiorna import HelpMenu
 - [ ] Aggiorna import LanguageSelector
@@ -534,6 +546,7 @@ test.describe('Broker Form Select Components', () => {
 - [ ] Aggiorna import Settings Tabs
 
 ### Fase 4: Index Files
+
 - [ ] Crea `ui/index.ts`
 - [ ] Crea `ui/input/index.ts`
 - [ ] Crea `ui/media/index.ts`
@@ -541,11 +554,13 @@ test.describe('Broker Form Select Components', () => {
 - [ ] Crea `settings/tabs/index.ts`
 
 ### Fase 6: Test
+
 - [ ] Crea `e2e/select-components.spec.ts`
 - [ ] Aggiungi test a `settings.spec.ts`
 - [ ] Aggiungi test a `brokers.spec.ts`
 
 ### Post-requisiti
+
 - [ ] `./dev.py front check` → 0 errori, 0 warning
 - [ ] `./dev.py front build` → OK
 - [ ] `./dev.py test front all` → tutti passano

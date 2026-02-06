@@ -8,9 +8,9 @@ To ensure that low-level utilities are robust and handle edge cases correctly.
 
 ## Key Tests
 
--   **Financial Math**: Tests interest calculations, day count conventions, and compounding formulas.
--   **Datetime Utils**: Tests timezone handling and date parsing.
--   **Decimal Utils**: Tests precision handling for financial amounts.
+- **Financial Math**: Tests interest calculations, day count conventions, and compounding formulas.
+- **Datetime Utils**: Tests timezone handling and date parsing.
+- **Decimal Utils**: Tests precision handling for financial amounts.
 
 ## Running
 

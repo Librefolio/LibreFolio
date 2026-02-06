@@ -35,7 +35,7 @@ from backend.app.schemas.assets import (
     FAAssetPatchItem,
     FAClassificationParams,
     FASectorArea,
-)
+    )
 
 logger = get_logger(__name__)
 
@@ -96,15 +96,15 @@ class YahooFinanceProvider(AssetSourceProvider):
                 "identifier_type": IdentifierType.TICKER,
                 "provider_params": None,
                 "expected_symbol": "AAPL",
-            }
-        ]
+                }
+            ]
 
     async def get_current_value(
         self,
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-    ) -> FACurrentValue:
+        ) -> FACurrentValue:
         """
         Fetch current price from Yahoo Finance.
 
@@ -127,14 +127,14 @@ class YahooFinanceProvider(AssetSourceProvider):
                 f"Yahoo Finance only supports TICKER and ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
                 {"identifier": identifier, "identifier_type": identifier_type},
-            )
+                )
 
         if not YFINANCE_AVAILABLE:
             raise AssetSourceError(
                 "yfinance library not available - install with: pipenv install yfinance",
                 "NOT_AVAILABLE",
                 {"identifier": identifier},
-            )
+                )
 
         try:
             ticker = yf.Ticker(identifier)
@@ -149,7 +149,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                         currency=currency,
                         as_of_date=date.today(),
                         source=self.provider_name,
-                    )
+                        )
             except Exception as e:
                 logger.debug(f"fast_info failed for {identifier}, trying history: {e}")
 
@@ -160,7 +160,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                     f"No data available for ticker: {identifier}",
                     "NO_DATA",
                     {"identifier": identifier},
-                )
+                    )
 
             last_row = hist.iloc[-1]
             last_date = hist.index[-1].date()
@@ -178,7 +178,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 currency=currency,
                 as_of_date=last_date,
                 source=self.provider_name,
-            )
+                )
 
         except AssetSourceError:
             raise
@@ -187,7 +187,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 f"Failed to fetch current value for {identifier}: {e}",
                 "FETCH_ERROR",
                 {"identifier": identifier, "error": str(e)},
-            )
+                )
 
     async def get_history_value(
         self,
@@ -196,7 +196,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         provider_params: Dict | None,
         start_date: date,
         end_date: date,
-    ) -> FAHistoricalData:
+        ) -> FAHistoricalData:
         """
         Fetch historical OHLC data from Yahoo Finance.
 
@@ -219,14 +219,14 @@ class YahooFinanceProvider(AssetSourceProvider):
                 f"Yahoo Finance only supports TICKER and ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
                 {"identifier": identifier, "identifier_type": identifier_type},
-            )
+                )
 
         if not YFINANCE_AVAILABLE:
             raise AssetSourceError(
                 "yfinance library not available - install with: pipenv install yfinance",
                 "NOT_AVAILABLE",
                 {"identifier": identifier},
-            )
+                )
 
         try:
             ticker = yf.Ticker(identifier)
@@ -234,14 +234,14 @@ class YahooFinanceProvider(AssetSourceProvider):
             # Fetch history (end+1 because yfinance end is exclusive)
             hist = ticker.history(
                 start=start_date.isoformat(), end=(end_date + timedelta(days=1)).isoformat()
-            )
+                )
 
             if hist.empty:
                 raise AssetSourceError(
                     f"No historical data for ticker: {identifier}",
                     "NO_DATA",
                     {"identifier": identifier, "start": str(start_date), "end": str(end_date)},
-                )
+                    )
 
             # Get currency
             currency = "USD"
@@ -271,8 +271,8 @@ class YahooFinanceProvider(AssetSourceProvider):
                         close=Decimal(str(row["Close"])),
                         volume=int(row["Volume"]) if pd.notna(row["Volume"]) else None,
                         currency=currency,
+                        )
                     )
-                )
 
             return FAHistoricalData(prices=prices, currency=currency, source=self.provider_name)
 
@@ -283,7 +283,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 f"Failed to fetch history for {identifier}: {e}",
                 "FETCH_ERROR",
                 {"identifier": identifier, "error": str(e)},
-            )
+                )
 
     @property
     def test_search_query(self) -> str | None:
@@ -312,7 +312,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 "yfinance library not available - install with: pipenv install yfinance",
                 "NOT_AVAILABLE",
                 {"query": query},
-            )
+                )
 
         # Minimum search length
         if len(query) < self._MIN_SEARCH_CHARS:
@@ -349,9 +349,9 @@ class YahooFinanceProvider(AssetSourceProvider):
                         "currency": currency,
                         "type": quote.get(
                             "quoteType", "Unknown"
-                        ),  # EQUITY, ETF, CRYPTOCURRENCY, etc.
-                    }
-                )
+                            ),  # EQUITY, ETF, CRYPTOCURRENCY, etc.
+                        }
+                    )
 
             # Cache result (TTLCache handles expiration)
             self._search_cache[cache_key] = results
@@ -380,7 +380,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-    ) -> FAAssetPatchItem | None:
+        ) -> FAAssetPatchItem | None:
         """
         Fetch asset metadata from Yahoo Finance.
 
@@ -406,7 +406,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 f"Yahoo Finance only supports TICKER and ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
                 {"identifier": identifier, "identifier_type": identifier_type},
-            )
+                )
 
         if not YFINANCE_AVAILABLE:
             logger.warning(f"yfinance not available, cannot fetch metadata for {identifier}")
@@ -430,7 +430,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 "currency": "OTHER",
                 "future": "OTHER",
                 "option": "OTHER",
-            }
+                }
             asset_type = asset_type_map.get(quote_type, "OTHER")
 
             # Get description (truncate to 500 chars)
@@ -457,7 +457,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 # Convert single sector string to FASectorArea distribution
                 classification_data["sector_area"] = FASectorArea(
                     distribution={sector: Decimal("1.0")}
-                )
+                    )
 
             classification = FAClassificationParams(**classification_data)
 
@@ -470,11 +470,11 @@ class YahooFinanceProvider(AssetSourceProvider):
                 asset_type=asset_type,
                 currency=currency,
                 classification_params=classification,
-            )
+                )
 
             logger.info(
                 f"Fetched metadata from yfinance for {identifier}: asset_type={asset_type}, sector={sector}"
-            )
+                )
             return patch_item
 
         except Exception as e:

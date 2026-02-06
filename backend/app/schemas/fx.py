@@ -43,7 +43,7 @@ from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseBulkDeleteResponse,
     Currency,
-)
+    )
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 
@@ -83,15 +83,15 @@ class FXConversionRequest(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-    )
+        )
 
     from_amount: Currency = Field(..., description="Amount to convert with source currency")
     to_currency: str = Field(
         ..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)"
-    )
+        )
     date_range: DateRangeModel = Field(
         ..., description="Date range for conversion (start required, end optional for single day)"
-    )
+        )
 
     @field_validator("to_currency", mode="before")
     @classmethod
@@ -112,13 +112,13 @@ class FXConversionResult(BaseModel):
     to_amount: Currency = Field(..., description="Converted amount with target currency")
     conversion_date: date_type = Field(
         ..., description="Date requested for conversion (ISO format)"
-    )
+        )
     rate: Optional[Decimal] = Field(None, description="Exchange rate used (if not identity)")
     backward_fill_info: Optional[BackwardFillInfo] = Field(
         None,
         description="Backward-fill info (only present if rate from a different date was used). "
-        "If null, rate_date = conversion_date",
-    )
+                    "If null, rate_date = conversion_date",
+        )
 
     @field_validator("conversion_date", mode="before")
     @classmethod
@@ -149,7 +149,7 @@ class FXUpsertItem(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-    )
+        )
 
     rate_date: date_type = Field(..., description="Date of the rate (ISO format)", alias="date")
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
@@ -211,17 +211,17 @@ class FXDeleteItem(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-    )
+        )
 
     from_currency: str = Field(
         ..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)"
-    )
+        )
     to_currency: str = Field(
         ..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)"
-    )
+        )
     date_range: DateRangeModel = Field(
         ..., description="Date range to delete (start required, end optional for single day)"
-    )
+        )
 
     @field_validator("from_currency", "to_currency", mode="before")
     @classmethod
@@ -263,7 +263,7 @@ class FXPairSourceItem(BaseModel):
 
     model_config = ConfigDict(
         str_strip_whitespace=True,
-    )
+        )
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
@@ -307,13 +307,13 @@ class FXDeletePairSourceItem(BaseModel):
 
     model_config = ConfigDict(
         str_strip_whitespace=True,
-    )
+        )
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
     priority: Optional[int] = Field(
         None, ge=1, description="Priority level (optional, if not provided deletes all priorities)"
-    )
+        )
 
     @field_validator("base", "quote", mode="before")
     @classmethod

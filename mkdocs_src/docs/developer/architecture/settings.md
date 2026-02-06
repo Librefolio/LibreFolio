@@ -8,19 +8,19 @@ Global settings are system-wide configurations that apply to all users. They are
 
 ### Purpose
 
--   To control core application behavior.
--   To configure default values for the entire system.
+- To control core application behavior.
+- To configure default values for the entire system.
 
 ### Implementation
 
--   Global settings are stored in the `global_settings` table in the database.
--   They are managed via the `user_cli.py` script.
--   The `settings_service.py` provides functions to read these settings.
+- Global settings are stored in the `global_settings` table in the database.
+- They are managed via the `user_cli.py` script.
+- The `settings_service.py` provides functions to read these settings.
 
 ### Example Global Settings
 
--   Default currency for the application.
--   Enabled/disabled status of external data providers.
+- Default currency for the application.
+- Enabled/disabled status of external data providers.
 
 ### Managing Global Settings
 
@@ -38,23 +38,24 @@ User settings are preferences specific to each individual user. Each user can mo
 
 ### Purpose
 
--   To allow users to customize their experience.
--   To store user-specific preferences that override global defaults.
+- To allow users to customize their experience.
+- To store user-specific preferences that override global defaults.
 
 ### Implementation
 
--   User settings are stored in the `user_settings` table, linked to a `user_id`.
--   They are managed via the API (`/api/v1/settings`).
--   The `settings_service.py` provides functions to get and set user-specific settings, with a fallback to the global setting if a user-specific one is not defined.
+- User settings are stored in the `user_settings` table, linked to a `user_id`.
+- They are managed via the API (`/api/v1/settings`).
+- The `settings_service.py` provides functions to get and set user-specific settings, with a fallback to the global setting if a user-specific one is not defined.
 
 ### Example User Settings
 
--   The user's preferred display currency for their portfolio.
--   Theme preference (light/dark mode).
--   Dashboard layout preferences.
+- The user's preferred display currency for their portfolio.
+- Theme preference (light/dark mode).
+- Dashboard layout preferences.
 
 ## The Settings Service (`settings_service.py`)
 
 This service acts as the central point for all settings-related operations. It abstracts the two-tiered system, providing a simple interface for the rest of the application.
 
-When a setting is requested for a user, the service first checks if a `UserSetting` exists for that user. If not, it falls back to the corresponding `GlobalSetting`. This provides a clean and flexible way to handle default values and user overrides.
+When a setting is requested for a user, the service first checks if a `UserSetting` exists for that user. If not, it falls back to the corresponding `GlobalSetting`. This provides
+a clean and flexible way to handle default values and user overrides.

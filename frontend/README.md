@@ -62,6 +62,7 @@ You can filter tests using the test description text (from `test('...')` or `tes
 ```
 
 The filter matches against test descriptions:
+
 - `test('login page renders correctly', ...)` → matches "login" or "renders"
 - `test.describe('Authentication', ...)` → matches "Authentication"
 

@@ -4,8 +4,9 @@
      */
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {X, AlertTriangle} from 'lucide-svelte';
+    import {AlertTriangle, X} from 'lucide-svelte';
     import BrokerForm from './BrokerForm.svelte';
+    import {zodiosApi} from '$lib/api';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -29,8 +30,6 @@
         opened_at?: string | null;
     } = {};
 
-
-    import {zodiosApi} from '$lib/api';
 
     let loading = false;
     let error: string | null = null;
@@ -188,23 +187,23 @@
 {#if showDiscardConfirm}
     <!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
     <div
-        class="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
-        on:click={cancelDiscard}
-        on:keydown={(e) => e.key === 'Escape' && cancelDiscard()}
-        role="dialog"
-        aria-modal="true"
-        tabindex="-1"
+            class="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
+            on:click={cancelDiscard}
+            on:keydown={(e) => e.key === 'Escape' && cancelDiscard()}
+            role="dialog"
+            aria-modal="true"
+            tabindex="-1"
     >
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div
-            class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6"
-            role="document"
-            on:click|stopPropagation
-            on:keydown|stopPropagation
+                class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6"
+                role="document"
+                on:click|stopPropagation
+                on:keydown|stopPropagation
         >
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
-                    <AlertTriangle size={20} class="text-amber-600 dark:text-amber-400" />
+                    <AlertTriangle size={20} class="text-amber-600 dark:text-amber-400"/>
                 </div>
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
                     {$_('brokers.discardChanges')}
@@ -215,14 +214,14 @@
             </p>
             <div class="flex justify-end gap-3">
                 <button
-                    on:click={cancelDiscard}
-                    class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                        on:click={cancelDiscard}
+                        class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                 >
                     {$_('brokers.continueEditing')}
                 </button>
                 <button
-                    on:click={confirmDiscard}
-                    class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                        on:click={confirmDiscard}
+                        class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
                 >
                     {$_('brokers.discardAndClose')}
                 </button>

@@ -138,7 +138,7 @@
 
     <!-- Body Section -->
     <div class="p-8 pt-6">
-        <form class="space-y-4" on:submit|preventDefault={handleSubmit} data-testid="register-form">
+        <form class="space-y-4" data-testid="register-form" on:submit|preventDefault={handleSubmit}>
 
             <!-- General Error Message -->
             {#if error}
@@ -150,8 +150,6 @@
             <!-- Username Input -->
             <div>
                 <input
-                        id="register-username"
-                        data-testid="register-username"
                         autocomplete="username"
                         bind:value={username}
                         class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
@@ -161,7 +159,9 @@
                         class:focus:border-red-400={usernameError}
                         class:focus:ring-libre-green={!usernameError}
                         class:focus:ring-red-400={usernameError}
+                        data-testid="register-username"
                         disabled={loading}
+                        id="register-username"
                         on:blur={validateUsername}
                         placeholder={$_('auth.username')}
                         type="text"
@@ -174,8 +174,6 @@
             <!-- Email Input -->
             <div>
                 <input
-                        id="register-email"
-                        data-testid="register-email"
                         autocomplete="email"
                         bind:value={email}
                         class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
@@ -185,7 +183,9 @@
                         class:focus:border-red-400={emailError}
                         class:focus:ring-libre-green={!emailError}
                         class:focus:ring-red-400={emailError}
+                        data-testid="register-email"
                         disabled={loading}
+                        id="register-email"
                         on:blur={validateEmail}
                         placeholder={$_('auth.email')}
                         type="email"
@@ -198,15 +198,15 @@
             <!-- Password Input -->
             <div>
                 <PasswordInput
+                        autocomplete="new-password"
                         bind:value={password}
                         disabled={loading}
-                        placeholder={$_('auth.password')}
-                        autocomplete="new-password"
                         hasError={!!passwordError}
                         on:blur={validatePassword}
+                        placeholder={$_('auth.password')}
                         testId="register-password"
                 />
-                <PasswordStrength {password} />
+                <PasswordStrength {password}/>
                 {#if passwordError}
                     <p class="text-red-600 text-xs mt-1">{passwordError}</p>
                 {/if}
@@ -215,12 +215,12 @@
             <!-- Confirm Password Input -->
             <div>
                 <PasswordInput
+                        autocomplete="new-password"
                         bind:value={confirmPassword}
                         disabled={loading}
-                        placeholder={$_('auth.confirmPassword')}
-                        autocomplete="new-password"
                         hasError={!!confirmPasswordError}
                         on:blur={validateConfirmPassword}
+                        placeholder={$_('auth.confirmPassword')}
                         testId="register-confirm-password"
                 />
                 {#if confirmPasswordError}
@@ -231,9 +231,9 @@
             <!-- Register Button -->
             <button
                     class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                    data-testid="register-submit"
                     disabled={loading}
                     type="submit"
-                    data-testid="register-submit"
             >
                 {#if loading}
                     {$_('common.loading')}

@@ -8,8 +8,8 @@ To ensure that external providers (like Yahoo Finance, ECB, etc.) are reachable 
 
 ## Key Tests
 
--   **FX Providers**: Verifies fetching rates from ECB, FED, etc.
--   **Asset Providers**: Verifies fetching prices from Yahoo Finance, JustETF.
+- **FX Providers**: Verifies fetching rates from ECB, FED, etc.
+- **Asset Providers**: Verifies fetching prices from Yahoo Finance, JustETF.
 
 ## Running
 

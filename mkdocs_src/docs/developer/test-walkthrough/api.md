@@ -9,15 +9,16 @@ To ensure that the API endpoints are reachable, return the correct status codes,
 ## Prerequisites
 
 The backend server must be running in **test mode**:
+
 ```bash
 ./dev.sh server:test
 ```
 
 ## Key Tests
 
--   **Auth**: Login, token refresh, protected routes.
--   **Assets**: Create, read, update, delete assets via API.
--   **Transactions**: Import and manage transactions.
+- **Auth**: Login, token refresh, protected routes.
+- **Assets**: Create, read, update, delete assets via API.
+- **Transactions**: Import and manage transactions.
 
 ## Running
 

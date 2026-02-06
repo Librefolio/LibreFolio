@@ -59,14 +59,14 @@ async def test_fetch_and_persist_single_currency():
             FxRate.quote == "USD",
             FxRate.date >= start_date,
             FxRate.date <= end_date,
-        )
+            )
         result = await session.execute(existing_stmt)
         existing_count = len(result.scalars().all())
 
         # Fetch rates from ECB
         result = await ensure_rates_multi_source(
             session, (start_date, end_date), ["USD"], provider_code="ECB"
-        )
+            )
         synced_count = result["total_changed"]
 
         # Verify rates were persisted
@@ -75,7 +75,7 @@ async def test_fetch_and_persist_single_currency():
             FxRate.quote == "USD",
             FxRate.date >= start_date,
             FxRate.date <= end_date,
-        )
+            )
         result = await session.execute(all_stmt)
         all_rates = result.scalars().all()
 
@@ -110,7 +110,7 @@ async def test_fetch_multiple_currencies():
         # Fetch rates
         result = await ensure_rates_multi_source(
             session, (start_date, end_date), test_currencies, provider_code="ECB"
-        )
+            )
 
         # Check that rates were fetched from ECB (may already exist in DB from previous runs)
         fetched_count = result.get("total_fetched", 0)
@@ -132,7 +132,7 @@ async def test_fetch_multiple_currencies():
                 FxRate.quote == quote,
                 FxRate.date >= start_date,
                 FxRate.date <= end_date,
-            )
+                )
             result = await session.execute(stmt)
             rates = result.scalars().all()
 
@@ -156,7 +156,7 @@ async def test_data_overwrite():
         # Step 1: Fetch real rates first to find a business day with data
         result = await ensure_rates_multi_source(
             session, (start_date, end_date), ["USD"], provider_code="ECB"
-        )
+            )
         fetched_count = result.get("total_fetched", 0)
 
         # Find a date that has real data (either fetched now or already in DB)
@@ -168,7 +168,7 @@ async def test_data_overwrite():
                 FxRate.date >= start_date,
                 FxRate.date <= end_date,
                 FxRate.source == "ECB",
-            )
+                )
             .order_by(FxRate.date.desc())
             .limit(1)
         )
@@ -190,7 +190,7 @@ async def test_data_overwrite():
             rate=Decimal("9.9999"),
             source="TEST",
             fetched_at=func.current_timestamp(),
-        )
+            )
 
         upsert_stmt = stmt.on_conflict_do_update(
             index_elements=["date", "base", "quote"],
@@ -198,8 +198,8 @@ async def test_data_overwrite():
                 "rate": stmt.excluded.rate,
                 "source": stmt.excluded.source,
                 "fetched_at": func.current_timestamp(),
-            },
-        )
+                },
+            )
 
         await session.execute(upsert_stmt)
         await session.commit()
@@ -207,13 +207,13 @@ async def test_data_overwrite():
         # Step 3: Fetch from ECB again (should restore real rate)
         result = await ensure_rates_multi_source(
             session, (test_date, test_date), ["USD"], provider_code="ECB"
-        )
+            )
         refetch_count = result["total_changed"]
 
         # Step 4: Verify rate was restored
         stmt = select(FxRate).where(
             FxRate.base == "EUR", FxRate.quote == "USD", FxRate.date == test_date
-        )
+            )
         result = await session.execute(stmt)
         restored_rate = result.scalars().first()
 
@@ -224,14 +224,14 @@ async def test_data_overwrite():
             if restored_rate.rate == Decimal("9.9999"):
                 pytest.skip(
                     f"ECB has no data for {test_date} (weekend/holiday) - test inconclusive"
-                )
+                    )
             else:
                 pytest.fail("Rate changed but refetch_count=0, unexpected behavior")
 
         # If ECB refetched data, verify it was restored
         assert restored_rate.rate != Decimal(
             "9.9999"
-        ), f"Rate was NOT restored (refetch_count={refetch_count})"
+            ), f"Rate was NOT restored (refetch_count={refetch_count})"
         assert restored_rate.source == "ECB", f"Source was NOT restored: {restored_rate.source}"
 
         # Verify rate is realistic (should be between 0.2 and 1.9 for EUR/USD)
@@ -252,7 +252,7 @@ async def test_idempotent_sync():
         # First sync
         result = await ensure_rates_multi_source(
             session, (start_date, end_date), ["USD"], provider_code="ECB"
-        )
+            )
         synced_1 = result["total_changed"]
 
         # Count rates after first sync
@@ -261,14 +261,14 @@ async def test_idempotent_sync():
             FxRate.quote == "USD",
             FxRate.date >= start_date,
             FxRate.date <= end_date,
-        )
+            )
         result_db = await session.execute(stmt)
         count_1 = len(result_db.scalars().all())
 
         # Second sync (should insert 0 new rates)
         result = await ensure_rates_multi_source(
             session, (start_date, end_date), ["USD"], provider_code="ECB"
-        )
+            )
         synced_2 = result["total_changed"]
 
         # Count rates after second sync
@@ -299,7 +299,7 @@ async def test_rate_inversion_for_alphabetical_ordering():
         # Fetch CHF rate (ECB gives: 1 EUR = X CHF)
         await ensure_rates_multi_source(
             session, (start_date, end_date), ["CHF"], provider_code="ECB"
-        )
+            )
 
         # Query stored rate (should be CHF/EUR with inverted rate)
         stmt = (
@@ -309,7 +309,7 @@ async def test_rate_inversion_for_alphabetical_ordering():
                 FxRate.quote == "EUR",
                 FxRate.date >= start_date,
                 FxRate.date <= end_date,
-            )
+                )
             .order_by(FxRate.date.desc())
             .limit(1)
         )
@@ -330,12 +330,12 @@ async def test_rate_inversion_for_alphabetical_ordering():
         # Verify rate is inverted (CHF/EUR should be > 0.8 since EUR is typically stronger)
         assert stored_rate.rate > Decimal(
             "0.8"
-        ), f"CHF/EUR rate {stored_rate.rate} seems too low (expected > 0.8)"
+            ), f"CHF/EUR rate {stored_rate.rate} seems too low (expected > 0.8)"
 
         # Now test EUR/USD (should NOT be inverted - already in correct order)
         result = await ensure_rates_multi_source(
             session, (start_date, end_date), ["USD"], provider_code="ECB"
-        )
+            )
 
         stmt = (
             select(FxRate)
@@ -344,7 +344,7 @@ async def test_rate_inversion_for_alphabetical_ordering():
                 FxRate.quote == "USD",
                 FxRate.date >= start_date,
                 FxRate.date <= end_date,
-            )
+                )
             .order_by(FxRate.date.desc())
             .limit(1)
         )
@@ -371,7 +371,7 @@ async def test_database_constraints():
         # First, ensure we have a rate
         await ensure_rates_multi_source(
             session, (start_date, end_date), ["USD"], provider_code="ECB"
-        )
+            )
 
         # Query the rate - find the most recent one
         stmt = (
@@ -382,7 +382,7 @@ async def test_database_constraints():
                 FxRate.date >= start_date,
                 FxRate.date <= end_date,
                 FxRate.source == "ECB",
-            )
+                )
             .order_by(FxRate.date.desc())
             .limit(1)
         )
@@ -402,7 +402,7 @@ async def test_database_constraints():
             date=test_date,
             rate=Decimal("1.1234"),  # Different rate, same date/base/quote
             source="TEST",
-        )
+            )
         session.add(duplicate)
 
         with pytest.raises(Exception):  # Should fail due to unique constraint
@@ -418,7 +418,7 @@ async def test_database_constraints():
             date=test_date_check,
             rate=Decimal("0.9"),
             source="TEST",
-        )
+            )
         session.add(invalid)
 
         with pytest.raises(Exception):  # Should fail due to check constraint

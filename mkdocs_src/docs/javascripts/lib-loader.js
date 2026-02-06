@@ -13,7 +13,7 @@
  * MathJax 3 works on all modern browsers without polyfills.
  */
 
-(function() {
+(function () {
     'use strict';
 
     const LIBRARIES = [
@@ -22,7 +22,9 @@
             // Local path - populated by backend/dev.sh at startup
             local: 'javascripts/vendor/mathjax/tex-mml-chtml.js',
             cdn: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
-            test: function() { return typeof MathJax !== 'undefined'; }
+            test: function () {
+                return typeof MathJax !== 'undefined';
+            }
         }
     ];
 

@@ -8,9 +8,9 @@ To ensure the database schema, constraints, and data persistence are working cor
 
 ## Key Tests
 
--   **Schema Validation**: Checks that all tables, columns, and constraints exist as defined in the SQLAlchemy models.
--   **Data Integrity**: Verifies that `CHECK` constraints (e.g., positive quantities) and foreign keys are enforced.
--   **Persistence**: Tests basic CRUD (Create, Read, Update, Delete) operations on models like `Asset`, `Transaction`, etc.
+- **Schema Validation**: Checks that all tables, columns, and constraints exist as defined in the SQLAlchemy models.
+- **Data Integrity**: Verifies that `CHECK` constraints (e.g., positive quantities) and foreign keys are enforced.
+- **Persistence**: Tests basic CRUD (Create, Read, Update, Delete) operations on models like `Asset`, `Transaction`, etc.
 
 ## Running
 

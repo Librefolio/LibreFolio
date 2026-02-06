@@ -59,7 +59,7 @@ def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple
     except AttributeError:
         raise ValueError(
             f"Model {model.__name__} is not a valid SQLModel/SQLAlchemy model (no __table__)"
-        )
+            )
 
     if column_name not in table.columns:
         raise ValueError(f"Column '{column_name}' not found in {model.__name__}")
@@ -72,7 +72,7 @@ def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple
         raise ValueError(
             f"Column '{column_name}' in {model.__name__} is not Numeric type "
             f"(found: {type(column_type).__name__})"
-        )
+            )
 
     precision = column_type.precision
     scale = column_type.scale
@@ -80,7 +80,7 @@ def get_model_column_precision(model: Type[SQLModel], column_name: str) -> Tuple
     if precision is None or scale is None:
         raise ValueError(
             f"Column '{column_name}' in {model.__name__} has undefined precision/scale"
-        )
+            )
 
     return precision, scale
 

@@ -35,7 +35,7 @@ async def test_bulk_refresh_prices_orchestration():
             currency="USD",
             asset_type=AssetType.STOCK,
             active=True,
-        )
+            )
         session.add(asset)
         await session.commit()
         await session.refresh(asset)
@@ -52,10 +52,10 @@ async def test_bulk_refresh_prices_orchestration():
                     identifier_type=IdentifierType.UUID,
                     provider_params={},
                     fetch_interval=1440,  # Optional but added for completeness
-                )
-            ],
+                    )
+                ],
             session,
-        )
+            )
 
         # Execute refresh - expect prices to be inserted
         from backend.app.schemas.common import DateRangeModel
@@ -64,8 +64,8 @@ async def test_bulk_refresh_prices_orchestration():
             FARefreshItem(
                 asset_id=asset.id,
                 date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 3)),
-            )
-        ]
+                )
+            ]
         results = await AssetSourceManager.bulk_refresh_prices(payload, session)
 
         # Verify results

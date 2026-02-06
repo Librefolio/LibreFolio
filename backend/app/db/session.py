@@ -77,7 +77,7 @@ def get_sync_engine() -> Engine:
         db_url,
         echo=False,
         poolclass=NullPool,
-    )
+        )
     return sync_engine
 
 
@@ -116,7 +116,7 @@ def get_async_engine() -> AsyncEngine:
         async_db_url,
         echo=False,
         poolclass=NullPool,  # NullPool for SQLite - each connection is independent
-    )
+        )
     return async_engine
 
 

@@ -156,10 +156,14 @@
     // Filter settings by category
     function getCategoryFields(categoryId: string): (keyof typeof editedValues)[] {
         switch (categoryId) {
-            case 'display': return ['language'];
-            case 'currency': return ['default_currency'];
-            case 'appearance': return ['theme'];
-            default: return ['language', 'default_currency', 'theme'];
+            case 'display':
+                return ['language'];
+            case 'currency':
+                return ['default_currency'];
+            case 'appearance':
+                return ['theme'];
+            default:
+                return ['language', 'default_currency', 'theme'];
         }
     }
 
@@ -269,16 +273,16 @@
 </script>
 
 <SettingsLayout
-    {categories}
-    bind:selectedCategory
-    {hasChanges}
-    hasNonDefaults={false}
-    isLocked={false}
-    showLock={false}
-    title={$_('settings.userPreferences')}
-    on:saveAll={saveAll}
-    on:undoAll={undoAll}
-    on:resetAll={resetAll}
+        bind:selectedCategory
+        {categories}
+        {hasChanges}
+        hasNonDefaults={false}
+        isLocked={false}
+        on:resetAll={resetAll}
+        on:saveAll={saveAll}
+        on:undoAll={undoAll}
+        showLock={false}
+        title={$_('settings.userPreferences')}
 >
     <!-- Success/Error Messages -->
     {#if success}
@@ -299,55 +303,55 @@
         <!-- Language Setting -->
         {#if visibleFields.includes('language')}
             <div data-testid="preference-language">
-            <SettingSelect
-                bind:value={editedValues.language}
-                options={languageOptions}
-                label={$_('settings.language')}
-                hint={$_('settings.languageHint')}
-                isModified={languageModified}
-                isNonDefault={languageNonDefault}
-                isLocked={false}
-                onsave={() => saveField('language')}
-                onundo={() => undoField('language')}
-                onreset={() => resetField('language')}
-            />
+                <SettingSelect
+                        bind:value={editedValues.language}
+                        options={languageOptions}
+                        label={$_('settings.language')}
+                        hint={$_('settings.languageHint')}
+                        isModified={languageModified}
+                        isNonDefault={languageNonDefault}
+                        isLocked={false}
+                        onsave={() => saveField('language')}
+                        onundo={() => undoField('language')}
+                        onreset={() => resetField('language')}
+                />
             </div>
         {/if}
 
         <!-- Default Currency Setting -->
         {#if visibleFields.includes('default_currency')}
             <div data-testid="preference-currency">
-            <SettingCurrency
-                bind:value={editedValues.default_currency}
-                options={currencyOptions}
-                label={$_('settings.defaultCurrency')}
-                hint={$_('settings.defaultCurrencyHint')}
-                isModified={currencyModified}
-                isNonDefault={currencyNonDefault}
-                isLocked={false}
-                loading={currenciesLoading}
-                onsave={() => saveField('default_currency')}
-                onundo={() => undoField('default_currency')}
-                onreset={() => resetField('default_currency')}
-            />
+                <SettingCurrency
+                        bind:value={editedValues.default_currency}
+                        options={currencyOptions}
+                        label={$_('settings.defaultCurrency')}
+                        hint={$_('settings.defaultCurrencyHint')}
+                        isModified={currencyModified}
+                        isNonDefault={currencyNonDefault}
+                        isLocked={false}
+                        loading={currenciesLoading}
+                        onsave={() => saveField('default_currency')}
+                        onundo={() => undoField('default_currency')}
+                        onreset={() => resetField('default_currency')}
+                />
             </div>
         {/if}
 
         <!-- Theme Setting -->
         {#if visibleFields.includes('theme')}
             <div data-testid="preference-theme">
-            <SettingTheme
-                bind:value={editedValues.theme}
-                label={$_('settings.theme')}
-                hint={$_('settings.themeHint')}
-                icon={Palette}
-                isModified={themeModified}
-                isNonDefault={themeNonDefault}
-                isLocked={false}
-                on:save={() => saveField('theme')}
-                on:undo={() => undoField('theme')}
-                on:reset={() => resetField('theme')}
-            />
+                <SettingTheme
+                        bind:value={editedValues.theme}
+                        label={$_('settings.theme')}
+                        hint={$_('settings.themeHint')}
+                        icon={Palette}
+                        isModified={themeModified}
+                        isNonDefault={themeNonDefault}
+                        isLocked={false}
+                        on:save={() => saveField('theme')}
+                        on:undo={() => undoField('theme')}
+                        on:reset={() => resetField('theme')}
+                />
             </div>
         {/if}
     {/if}

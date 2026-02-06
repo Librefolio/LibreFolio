@@ -29,8 +29,8 @@
 
         <!-- Right side - Theme Toggle, Language, Help Menu -->
         <div class="flex items-center space-x-2">
-            <ThemeToggle />
-            <LanguageSelector />
+            <ThemeToggle/>
+            <LanguageSelector/>
             <HelpMenu/>
         </div>
     </div>

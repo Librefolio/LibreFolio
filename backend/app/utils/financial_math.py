@@ -28,7 +28,7 @@ from backend.app.schemas.assets import (
     FALateInterestConfig,
     DayCountConvention,
     CompoundFrequency,
-)
+    )
 
 
 # ============================================================================
@@ -40,7 +40,7 @@ def calculate_day_count_fraction(
     start_date: date_type,
     end_date: date_type,
     convention: DayCountConvention = DayCountConvention.ACT_365,
-) -> Decimal:
+    ) -> Decimal:
     """
     Calculate day fraction using specified day count convention.
 
@@ -202,7 +202,7 @@ def get_compounding_periods_per_year(frequency: CompoundFrequency) -> int:
 
 def calculate_compound_interest(
     principal: Decimal, annual_rate: Decimal, time_fraction: Decimal, frequency: CompoundFrequency
-) -> Decimal:
+    ) -> Decimal:
     """
     Calculate compound interest for a given period.
 
@@ -256,7 +256,7 @@ def calculate_compound_interest(
 
 def calculate_simple_interest(
     principal: Decimal, annual_rate: Decimal, time_fraction: Decimal
-) -> Decimal:
+    ) -> Decimal:
     """
     Calculate simple interest for a given period.
 
@@ -297,7 +297,7 @@ def find_active_period(
     target_date: date_type,
     maturity_date: date_type,
     late_interest: Optional[FALateInterestConfig] = None,
-) -> Optional[FAInterestRatePeriod]:
+    ) -> Optional[FAInterestRatePeriod]:
     """
     Find the active interest rate period for a given date.
 
@@ -348,7 +348,7 @@ def find_active_period(
                     compounding=late_interest.compounding,
                     compound_frequency=late_interest.compound_frequency,
                     day_count=late_interest.day_count,
-                )
+                    )
 
     # Step 3: No applicable period found
     return None

@@ -9,14 +9,14 @@
 
 ## 📊 Stato Attuale dei Test
 
-| Suite              | Test | Status   | Note                                       |
-|--------------------|------|----------|--------------------------------------------|
-| auth.spec.ts       | 17   | ✅ PASS   | +7 test Register/Forgot modals             |
-| settings.spec.ts   | 26   | ✅ PASS   | +13 test Profile edit, Change password, About, Persistence |
-| files.spec.ts      | 14   | ✅ PASS   | +5 test toggle uploader, view mode, upload/clear         |
-| brokers.spec.ts    | 20   | ✅ PASS   | +13 test edit/delete/detail/import modal, CRUD completo   |
-| multi-user.spec.ts | 2    | ✅ PASS   | Test isolamento + unicità nomi             |
-| gallery.spec.ts    | 28   | ✅ PASS   | Light/dark theme, 4 lingue                 |
+| Suite              | Test | Status | Note                                                       |
+|--------------------|------|--------|------------------------------------------------------------|
+| auth.spec.ts       | 17   | ✅ PASS | +7 test Register/Forgot modals                             |
+| settings.spec.ts   | 26   | ✅ PASS | +13 test Profile edit, Change password, About, Persistence |
+| files.spec.ts      | 14   | ✅ PASS | +5 test toggle uploader, view mode, upload/clear           |
+| brokers.spec.ts    | 20   | ✅ PASS | +13 test edit/delete/detail/import modal, CRUD completo    |
+| multi-user.spec.ts | 2    | ✅ PASS | Test isolamento + unicità nomi                             |
+| gallery.spec.ts    | 28   | ✅ PASS | Light/dark theme, 4 lingue                                 |
 
 **Totale**: ~107 test (6/6 suite)
 

@@ -2,7 +2,8 @@
 
 The LibreFolio database is designed using SQLAlchemy with SQLModel. The schema is stored in a single SQLite file (`app.db`).
 
-> 💡 **Tip**: To explore the live database schema interactively (including all constraints and indexes), we recommend using a tool like **DBeaver** or **DB Browser for SQLite** connected to your local `backend/data/sqlite/app.db` file.
+> 💡 **Tip**: To explore the live database schema interactively (including all constraints and indexes), we recommend using a tool like **DBeaver** or **DB Browser for SQLite**
+> connected to your local `backend/data/sqlite/app.db` file.
 
 ## Logical Data Flow
 
@@ -57,7 +58,7 @@ erDiagram
     }
 ```
 
--   **`BROKER_USER_ACCESS`**: The pivot table for the Many-to-Many relationship. It stores the `role` defining permissions.
+- **`BROKER_USER_ACCESS`**: The pivot table for the Many-to-Many relationship. It stores the `role` defining permissions.
 
 ### 2. Broker & Transactions
 
@@ -85,8 +86,8 @@ erDiagram
     }
 ```
 
--   **`TRANSACTION`**: The single source of truth.
-    -   **`related_transaction_id`**: Self-reference for paired operations (Transfers, FX Conversions).
+- **`TRANSACTION`**: The single source of truth.
+    - **`related_transaction_id`**: Self-reference for paired operations (Transfers, FX Conversions).
 
 ### 3. Asset Management
 
@@ -113,8 +114,8 @@ erDiagram
     }
 ```
 
--   **`ASSET`**: Global definition. `classification_params` (JSON) stores metadata like Sector and Geography.
--   **`ASSET_PROVIDER_ASSIGNMENT`**: Decouples the asset from its data source (e.g., "Use Yahoo Finance for AAPL").
+- **`ASSET`**: Global definition. `classification_params` (JSON) stores metadata like Sector and Geography.
+- **`ASSET_PROVIDER_ASSIGNMENT`**: Decouples the asset from its data source (e.g., "Use Yahoo Finance for AAPL").
 
 ### 4. FX Subsystem
 
@@ -140,13 +141,13 @@ erDiagram
     }
 ```
 
--   **`FX_RATE`**: Stores daily rates. Enforces `base < quote` (alphabetical) to prevent duplicates.
--   **`FX_CURRENCY_PAIR_SOURCE`**: Configures which provider (ECB, FED) to use for which pair.
+- **`FX_RATE`**: Stores daily rates. Enforces `base < quote` (alphabetical) to prevent duplicates.
+- **`FX_CURRENCY_PAIR_SOURCE`**: Configures which provider (ECB, FED) to use for which pair.
 
 ## Design Philosophy
 
-1.  **Normalization**: Assets are global; Transactions are broker-specific.
-2.  **Strict Constraints**:
-    -   `CHECK` constraints ensure logical consistency.
-    -   Foreign Keys are enforced (`PRAGMA foreign_keys=ON`).
-3.  **JSON for Flexibility**: Used for `classification_params` and `provider_params` to allow schema-less extension.
+1. **Normalization**: Assets are global; Transactions are broker-specific.
+2. **Strict Constraints**:
+    - `CHECK` constraints ensure logical consistency.
+    - Foreign Keys are enforced (`PRAGMA foreign_keys=ON`).
+3. **JSON for Flexibility**: Used for `classification_params` and `provider_params` to allow schema-less extension.

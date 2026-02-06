@@ -4,9 +4,9 @@
      * Language selector dropdown for header.
      * Uses custom dropdown styling optimized for header placement (minimal, transparent).
      */
-    import { currentLanguage } from '$lib/stores/language';
-    import { LANGUAGE_OPTIONS, type SupportedLocale } from '$lib/i18n';
-    import { ChevronDown } from 'lucide-svelte';
+    import {currentLanguage} from '$lib/stores/language';
+    import {LANGUAGE_OPTIONS, type SupportedLocale} from '$lib/i18n';
+    import {ChevronDown} from 'lucide-svelte';
 
     let isOpen = $state(false);
     let containerRef = $state<HTMLDivElement | null>(null);
@@ -50,26 +50,26 @@
     }
 </script>
 
-<div class="relative" bind:this={containerRef} data-testid="language-selector">
+<div bind:this={containerRef} class="relative" data-testid="language-selector">
     <button
-        onclick={() => isOpen = !isOpen}
-        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all"
-        data-testid="language-selector-button"
+            class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all"
+            data-testid="language-selector-button"
+            onclick={() => isOpen = !isOpen}
     >
         <span class="text-xl">{currentLangInfo.flag}</span>
-        <ChevronDown size={14} class="text-gray-600 dark:text-gray-300 transition-transform {isOpen ? 'rotate-180' : ''}"/>
+        <ChevronDown class="text-gray-600 dark:text-gray-300 transition-transform {isOpen ? 'rotate-180' : ''}" size={14}/>
     </button>
 
     {#if isOpen}
         <div
-            class="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden z-50"
-            role="menu"
+                class="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden z-50"
+                role="menu"
         >
             {#each LANGUAGE_OPTIONS as lang}
                 <button
-                    onclick={() => handleLanguageChange(lang.code)}
-                    role="menuitem"
-                    class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all text-left
+                        onclick={() => handleLanguageChange(lang.code)}
+                        role="menuitem"
+                        class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all text-left
                            {$currentLanguage === lang.code ? 'bg-libre-green/10 dark:bg-libre-green/20' : ''}"
                 >
                     <span class="text-xl">{lang.flag}</span>

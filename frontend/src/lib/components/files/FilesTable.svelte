@@ -9,484 +9,474 @@
   - Use onFiltersChange to sync filter changes back to URL
 -->
 <script lang="ts">
-	import { t } from '$lib/i18n';
-	import { DataTable, type ColumnDef, type RowAction, type BulkAction, type FilterValue } from '$lib/components/table';
-	import {
-		Download,
-		Trash2,
-		FileText,
-		Image,
-		File as FileIcon,
-		FileSpreadsheet,
-		FileJson,
-		FileCode,
-		FileArchive,
-		FileVideo,
-		FileAudio,
-		FileType,
-		Link
-	} from 'lucide-svelte';
-	import type { UploadedFile, BrimFile, BrokerInfo, FileData } from '$lib/types';
-	import { safeNumber } from '$lib/types';
+    import {t} from '$lib/i18n';
+    import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
+    import {Download, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image, Link, Trash2} from 'lucide-svelte';
+    import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
+    import {safeNumber} from '$lib/types';
 
-	interface Props {
-		files: FileData[];
-		type: 'static' | 'brim';
-		onDelete: (id: string) => void;
-		onDeleteMultiple?: (ids: string[]) => void;
-		/** Broker map for BRIM files - key: broker_id, value: broker info */
-		brokers?: Map<number, BrokerInfo>;
-		/** Whether to show broker column (default: true for brim) */
-		showBrokerColumn?: boolean;
-		/** Initial filters from URL params */
-		initialFilters?: Record<string, FilterValue>;
-		/** Called when filters change (for URL sync) */
-		onFiltersChange?: (filters: Record<string, FilterValue>) => void;
-	}
+    interface Props {
+        files: FileData[];
+        type: 'static' | 'brim';
+        onDelete: (id: string) => void;
+        onDeleteMultiple?: (ids: string[]) => void;
+        /** Broker map for BRIM files - key: broker_id, value: broker info */
+        brokers?: Map<number, BrokerInfo>;
+        /** Whether to show broker column (default: true for brim) */
+        showBrokerColumn?: boolean;
+        /** Initial filters from URL params */
+        initialFilters?: Record<string, FilterValue>;
+        /** Called when filters change (for URL sync) */
+        onFiltersChange?: (filters: Record<string, FilterValue>) => void;
+    }
 
-	let { files, type, onDelete, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange }: Props = $props();
+    let {files, type, onDelete, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange}: Props = $props();
 
-	// Helper functions
-	function getFileName(file: FileData): string {
-		return type === 'static' ? (file as UploadedFile).original_name : (file as BrimFile).filename;
-	}
+    // Helper functions
+    function getFileName(file: FileData): string {
+        return type === 'static' ? (file as UploadedFile).original_name : (file as BrimFile).filename;
+    }
 
-	function getFileId(file: FileData): string {
-		return type === 'static' ? (file as UploadedFile).id : (file as BrimFile).file_id;
-	}
+    function getFileId(file: FileData): string {
+        return type === 'static' ? (file as UploadedFile).id : (file as BrimFile).file_id;
+    }
 
-	function getDownloadUrl(file: FileData): string {
-		if (type === 'static') {
-			return `${(file as UploadedFile).url}?download=true`;
-		}
-		return `/api/v1/brokers/import/files/${(file as BrimFile).file_id}/download`;
-	}
+    function getDownloadUrl(file: FileData): string {
+        if (type === 'static') {
+            return `${(file as UploadedFile).url}?download=true`;
+        }
+        return `/api/v1/brokers/import/files/${(file as BrimFile).file_id}/download`;
+    }
 
-	function getFileSize(file: FileData): number {
-		return type === 'static' ? (file as UploadedFile).size_bytes : ((file as BrimFile).size_bytes || 0);
-	}
+    function getFileSize(file: FileData): number {
+        return type === 'static' ? (file as UploadedFile).size_bytes : ((file as BrimFile).size_bytes || 0);
+    }
 
-	function getFileIcon(file: FileData) {
-		const filename = getFileName(file).toLowerCase();
-		const ext = filename.split('.').pop() || '';
+    function getFileIcon(file: FileData) {
+        const filename = getFileName(file).toLowerCase();
+        const ext = filename.split('.').pop() || '';
 
-		if (type === 'static') {
-			const f = file as UploadedFile;
-			const mimeType = f.mime_type || '';
+        if (type === 'static') {
+            const f = file as UploadedFile;
+            const mimeType = f.mime_type || '';
 
-			// Images (png, jpg, jpeg, gif, webp, svg, bmp, ico)
-			if (mimeType.startsWith('image/') ||
-				['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff'].includes(ext)) {
-				return Image;
-			}
+            // Images (png, jpg, jpeg, gif, webp, svg, bmp, ico)
+            if (mimeType.startsWith('image/') ||
+                ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff'].includes(ext)) {
+                return Image;
+            }
 
-			// Videos
-			if (mimeType.startsWith('video/') ||
-				['mp4', 'avi', 'mov', 'mkv', 'webm', 'flv', 'wmv'].includes(ext)) {
-				return FileVideo;
-			}
+            // Videos
+            if (mimeType.startsWith('video/') ||
+                ['mp4', 'avi', 'mov', 'mkv', 'webm', 'flv', 'wmv'].includes(ext)) {
+                return FileVideo;
+            }
 
-			// Audio
-			if (mimeType.startsWith('audio/') ||
-				['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'].includes(ext)) {
-				return FileAudio;
-			}
+            // Audio
+            if (mimeType.startsWith('audio/') ||
+                ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'].includes(ext)) {
+                return FileAudio;
+            }
 
-			// Spreadsheets (csv, xlsx, xls, ods)
-			if (mimeType.includes('spreadsheet') || mimeType.includes('csv') ||
-				['csv', 'xlsx', 'xls', 'ods', 'numbers'].includes(ext)) {
-				return FileSpreadsheet;
-			}
+            // Spreadsheets (csv, xlsx, xls, ods)
+            if (mimeType.includes('spreadsheet') || mimeType.includes('csv') ||
+                ['csv', 'xlsx', 'xls', 'ods', 'numbers'].includes(ext)) {
+                return FileSpreadsheet;
+            }
 
-			// JSON
-			if (mimeType.includes('json') || ext === 'json') {
-				return FileJson;
-			}
+            // JSON
+            if (mimeType.includes('json') || ext === 'json') {
+                return FileJson;
+            }
 
-			// Code files
-			if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'cs', 'go', 'rs',
-				 'rb', 'php', 'swift', 'kt', 'scala', 'html', 'css', 'scss', 'less', 'vue', 'svelte'].includes(ext)) {
-				return FileCode;
-			}
+            // Code files
+            if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'cs', 'go', 'rs',
+                'rb', 'php', 'swift', 'kt', 'scala', 'html', 'css', 'scss', 'less', 'vue', 'svelte'].includes(ext)) {
+                return FileCode;
+            }
 
-			// Archives
-			if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('archive') ||
-				['zip', 'tar', 'gz', 'rar', '7z', 'bz2', 'xz', 'tgz'].includes(ext)) {
-				return FileArchive;
-			}
+            // Archives
+            if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('archive') ||
+                ['zip', 'tar', 'gz', 'rar', '7z', 'bz2', 'xz', 'tgz'].includes(ext)) {
+                return FileArchive;
+            }
 
-			// PDF
-			if (mimeType.includes('pdf') || ext === 'pdf') {
-				return FileType;  // FileType looks like a document with lines
-			}
+            // PDF
+            if (mimeType.includes('pdf') || ext === 'pdf') {
+                return FileType;  // FileType looks like a document with lines
+            }
 
-			// Text/Documents
-			if (mimeType.includes('text') ||
-				['txt', 'md', 'rtf', 'doc', 'docx', 'odt', 'pages'].includes(ext)) {
-				return FileText;
-			}
-		} else {
-			// BRIM files - mainly spreadsheets
-			if (['csv', 'xlsx', 'xls', 'ods'].includes(ext)) return FileSpreadsheet;
-			if (ext === 'json') return FileJson;
-			if (ext === 'txt') return FileText;
-		}
+            // Text/Documents
+            if (mimeType.includes('text') ||
+                ['txt', 'md', 'rtf', 'doc', 'docx', 'odt', 'pages'].includes(ext)) {
+                return FileText;
+            }
+        } else {
+            // BRIM files - mainly spreadsheets
+            if (['csv', 'xlsx', 'xls', 'ods'].includes(ext)) return FileSpreadsheet;
+            if (ext === 'json') return FileJson;
+            if (ext === 'txt') return FileText;
+        }
 
-		return FileIcon;
-	}
+        return FileIcon;
+    }
 
-	function translateStatus(status: string): string {
-		const key = `fileStatus.${status}`;
-		const translated = $t(key);
-		return translated !== key ? translated : status.charAt(0).toUpperCase() + status.slice(1);
-	}
+    function translateStatus(status: string): string {
+        const key = `fileStatus.${status}`;
+        const translated = $t(key);
+        return translated !== key ? translated : status.charAt(0).toUpperCase() + status.slice(1);
+    }
 
-	function getBadgeVariant(status: string): 'default' | 'success' | 'warning' | 'error' | 'info' {
-		switch (status) {
-			case 'parsed': return 'success';
-			case 'uploaded': return 'info';
-			case 'failed': return 'error';
-			default: return 'default';
-		}
-	}
+    function getBadgeVariant(status: string): 'default' | 'success' | 'warning' | 'error' | 'info' {
+        switch (status) {
+            case 'parsed':
+                return 'success';
+            case 'uploaded':
+                return 'info';
+            case 'failed':
+                return 'error';
+            default:
+                return 'default';
+        }
+    }
 
-	function getBrokerName(file: FileData): string {
-		if (type !== 'brim') return '';
-		const brimFile = file as BrimFile;
-		const brokerId = safeNumber(brimFile.target_broker_id);
-		if (!brokerId || !brokers) return '-';
-		const broker = brokers.get(brokerId);
-		// If broker not in map, it belongs to another user (shown to superuser)
-		return broker?.name || `#${brokerId} (${$t('uploads.otherUser') || 'other user'})`;
-	}
+    function getBrokerName(file: FileData): string {
+        if (type !== 'brim') return '';
+        const brimFile = file as BrimFile;
+        const brokerId = safeNumber(brimFile.target_broker_id);
+        if (!brokerId || !brokers) return '-';
+        const broker = brokers.get(brokerId);
+        // If broker not in map, it belongs to another user (shown to superuser)
+        return broker?.name || `#${brokerId} (${$t('uploads.otherUser') || 'other user'})`;
+    }
 
-	// Generate a consistent color based on broker id for visual distinction
-	// Uses HSL color space starting from green (120°) and rotating through hues
-	function getBrokerColor(brokerId: number): { bg: string; text: string; darkBg: string; darkText: string } {
-		// Golden ratio for better distribution
-		const goldenRatio = 0.618033988749895;
-		// Start at green hue (120°), rotate through spectrum
-		const hue = ((brokerId * goldenRatio) % 1) * 360;
-		// Keep saturation and lightness in pleasant ranges
-		const saturation = 35 + (brokerId % 5) * 5; // 35-55%
-		const lightness = 92; // Light background
-		const textLightness = 30; // Dark text
+    // Generate a consistent color based on broker id for visual distinction
+    // Uses HSL color space starting from green (120°) and rotating through hues
+    function getBrokerColor(brokerId: number): { bg: string; text: string; darkBg: string; darkText: string } {
+        // Golden ratio for better distribution
+        const goldenRatio = 0.618033988749895;
+        // Start at green hue (120°), rotate through spectrum
+        const hue = ((brokerId * goldenRatio) % 1) * 360;
+        // Keep saturation and lightness in pleasant ranges
+        const saturation = 35 + (brokerId % 5) * 5; // 35-55%
+        const lightness = 92; // Light background
+        const textLightness = 30; // Dark text
 
-		return {
-			bg: `hsl(${hue}, ${saturation}%, ${lightness}%)`,
-			text: `hsl(${hue}, ${saturation + 10}%, ${textLightness}%)`,
-			darkBg: `hsl(${hue}, ${saturation - 10}%, 20%)`,
-			darkText: `hsl(${hue}, ${saturation}%, 75%)`,
-		};
-	}
+        return {
+            bg: `hsl(${hue}, ${saturation}%, ${lightness}%)`,
+            text: `hsl(${hue}, ${saturation + 10}%, ${textLightness}%)`,
+            darkBg: `hsl(${hue}, ${saturation - 10}%, 20%)`,
+            darkText: `hsl(${hue}, ${saturation}%, 75%)`,
+        };
+    }
 
-	function getBrokerBadgeStyle(file: FileData): string | undefined {
-		if (type !== 'brim') return undefined;
-		const brimFile = file as BrimFile;
-		const brokerId = safeNumber(brimFile.target_broker_id);
-		if (!brokerId) return undefined;
-		const colors = getBrokerColor(brokerId);
-		return `--broker-bg: ${colors.bg}; --broker-text: ${colors.text}; --broker-dark-bg: ${colors.darkBg}; --broker-dark-text: ${colors.darkText};`;
-	}
+    function getBrokerBadgeStyle(file: FileData): string | undefined {
+        if (type !== 'brim') return undefined;
+        const brimFile = file as BrimFile;
+        const brokerId = safeNumber(brimFile.target_broker_id);
+        if (!brokerId) return undefined;
+        const colors = getBrokerColor(brokerId);
+        return `--broker-bg: ${colors.bg}; --broker-text: ${colors.text}; --broker-dark-bg: ${colors.darkBg}; --broker-dark-text: ${colors.darkText};`;
+    }
 
-	// Column definitions
-	function getColumns(): ColumnDef<FileData>[] {
-		const cols: ColumnDef<FileData>[] = [
-			{
-				id: 'filename',
-				urlKey: 'filename',
-				header: () => $t('uploads.fileName'),
-				cell: (row) => ({
-					type: 'icon-text',
-					icon: getFileIcon(row),
-					text: getFileName(row),
-				}),
-				type: 'text',
-				width: 250,
-				getValue: (row) => getFileName(row),
-			},
-		];
+    // Column definitions
+    function getColumns(): ColumnDef<FileData>[] {
+        const cols: ColumnDef<FileData>[] = [
+            {
+                id: 'filename',
+                urlKey: 'filename',
+                header: () => $t('uploads.fileName'),
+                cell: (row) => ({
+                    type: 'icon-text',
+                    icon: getFileIcon(row),
+                    text: getFileName(row),
+                }),
+                type: 'text',
+                width: 250,
+                getValue: (row) => getFileName(row),
+            },
+        ];
 
-		if (type === 'brim') {
-			// Add broker column for BRIM files
-			if (showBrokerColumn && brokers && brokers.size > 0) {
-				cols.push({
-					id: 'broker',
-					urlKey: 'broker',
-					header: () => $t('uploads.broker') || 'Broker',
-					cell: (row) => {
-						const name = getBrokerName(row);
-						if (name === '-') return '-';
-						// Return styled badge for broker
-						return {
-							type: 'badge' as const,
-							text: name,
-							variant: 'default' as const,
-							customStyle: getBrokerBadgeStyle(row),
-						};
-					},
-					type: 'enum',
-					enumOptions: Array.from(brokers.values()).map(b => ({
-						value: String(b.id),
-						label: b.name,
-					})),
-					width: 140,
-					getValue: (row) => String((row as BrimFile).target_broker_id || ''),
-				});
-			}
+        if (type === 'brim') {
+            // Add broker column for BRIM files
+            if (showBrokerColumn && brokers && brokers.size > 0) {
+                cols.push({
+                    id: 'broker',
+                    urlKey: 'broker',
+                    header: () => $t('uploads.broker') || 'Broker',
+                    cell: (row) => {
+                        const name = getBrokerName(row);
+                        if (name === '-') return '-';
+                        // Return styled badge for broker
+                        return {
+                            type: 'badge' as const,
+                            text: name,
+                            variant: 'default' as const,
+                            customStyle: getBrokerBadgeStyle(row),
+                        };
+                    },
+                    type: 'enum',
+                    enumOptions: Array.from(brokers.values()).map(b => ({
+                        value: String(b.id),
+                        label: b.name,
+                    })),
+                    width: 140,
+                    getValue: (row) => String((row as BrimFile).target_broker_id || ''),
+                });
+            }
 
-			cols.push({
-				id: 'status',
-				urlKey: 'status',
-				header: () => $t('uploads.status'),
-				cell: (row) => ({
-					type: 'badge',
-					text: translateStatus((row as BrimFile).status),
-					variant: getBadgeVariant((row as BrimFile).status),
-				}),
-				type: 'enum',
-				enumOptions: [
-					{ value: 'uploaded', label: translateStatus('uploaded') },
-					{ value: 'parsed', label: translateStatus('parsed') },
-					{ value: 'failed', label: translateStatus('failed') },
-				],
-				width: 100,
-				getValue: (row) => (row as BrimFile).status,
-			});
-		}
+            cols.push({
+                id: 'status',
+                urlKey: 'status',
+                header: () => $t('uploads.status'),
+                cell: (row) => ({
+                    type: 'badge',
+                    text: translateStatus((row as BrimFile).status),
+                    variant: getBadgeVariant((row as BrimFile).status),
+                }),
+                type: 'enum',
+                enumOptions: [
+                    {value: 'uploaded', label: translateStatus('uploaded')},
+                    {value: 'parsed', label: translateStatus('parsed')},
+                    {value: 'failed', label: translateStatus('failed')},
+                ],
+                width: 100,
+                getValue: (row) => (row as BrimFile).status,
+            });
+        }
 
-		cols.push(
-			{
-				id: 'size',
-				urlKey: 'size',
-				header: () => $t('uploads.fileSize'),
-				cell: (row) => ({
-					type: 'size',
-					bytes: getFileSize(row),
-				}),
-				type: 'size',
-				width: 100,
-				getValue: (row) => getFileSize(row),
-			},
-			{
-				id: 'date',
-				urlKey: 'date',
-				header: () => $t('uploads.uploadDate'),
-				cell: (row) => ({
-					type: 'date',
-					value: row.uploaded_at,
-					format: 'datetime',
-				}),
-				type: 'date',
-				width: 160,
-				getValue: (row) => row.uploaded_at,
-			}
-		);
+        cols.push(
+            {
+                id: 'size',
+                urlKey: 'size',
+                header: () => $t('uploads.fileSize'),
+                cell: (row) => ({
+                    type: 'size',
+                    bytes: getFileSize(row),
+                }),
+                type: 'size',
+                width: 100,
+                getValue: (row) => getFileSize(row),
+            },
+            {
+                id: 'date',
+                urlKey: 'date',
+                header: () => $t('uploads.uploadDate'),
+                cell: (row) => ({
+                    type: 'date',
+                    value: row.uploaded_at,
+                    format: 'datetime',
+                }),
+                type: 'date',
+                width: 160,
+                getValue: (row) => row.uploaded_at,
+            }
+        );
 
-		return cols;
-	}
+        return cols;
+    }
 
-	// State for copy feedback
-	let copiedFileId = $state<string | null>(null);
-	let copyError = $state<string | null>(null);
+    // State for copy feedback
+    let copiedFileId = $state<string | null>(null);
+    let copyError = $state<string | null>(null);
 
-	// Helper to copy to clipboard with fallback
-	async function copyToClipboard(text: string): Promise<boolean> {
-		// Try modern clipboard API first
-		if (navigator.clipboard && window.isSecureContext) {
-			try {
-				await navigator.clipboard.writeText(text);
-				return true;
-			} catch (err) {
-				console.warn('Clipboard API failed:', err);
-			}
-		}
+    // Helper to copy to clipboard with fallback
+    async function copyToClipboard(text: string): Promise<boolean> {
+        // Try modern clipboard API first
+        if (navigator.clipboard && window.isSecureContext) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } catch (err) {
+                console.warn('Clipboard API failed:', err);
+            }
+        }
 
-		// Fallback for HTTP or older browsers
-		try {
-			const textArea = document.createElement('textarea');
-			textArea.value = text;
-			textArea.style.position = 'fixed';
-			textArea.style.left = '-9999px';
-			textArea.style.top = '-9999px';
-			document.body.appendChild(textArea);
-			textArea.focus();
-			textArea.select();
-			const success = document.execCommand('copy');
-			document.body.removeChild(textArea);
-			return success;
-		} catch (err) {
-			console.error('Fallback copy failed:', err);
-			return false;
-		}
-	}
+        // Fallback for HTTP or older browsers
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.style.top = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const success = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            return success;
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            return false;
+        }
+    }
 
-	// Row actions
-	function getRowActions(): RowAction<FileData>[] {
-		const actions: RowAction<FileData>[] = [];
+    // Row actions
+    function getRowActions(): RowAction<FileData>[] {
+        const actions: RowAction<FileData>[] = [];
 
-		// Copy Link action (only for static files)
-		if (type === 'static') {
-			actions.push({
-				id: 'copyLink',
-				icon: Link,
-				label: () => $t('uploads.copyLink') || 'Copy Link',
-				onClick: async (file) => {
-					const staticFile = file as UploadedFile;
-					// Copy relative URL (path only, for internal use)
-					const url = staticFile.url;
-					const success = await copyToClipboard(url);
-					if (success) {
-						copiedFileId = getFileId(file);
-						copyError = null;
-						// Reset after 2 seconds
-						setTimeout(() => {
-							copiedFileId = null;
-						}, 2000);
-					} else {
-						copyError = 'Copy failed';
-						setTimeout(() => {
-							copyError = null;
-						}, 2000);
-					}
-				},
-			});
-		}
+        // Copy Link action (only for static files)
+        if (type === 'static') {
+            actions.push({
+                id: 'copyLink',
+                icon: Link,
+                label: () => $t('uploads.copyLink') || 'Copy Link',
+                onClick: async (file) => {
+                    const staticFile = file as UploadedFile;
+                    // Copy relative URL (path only, for internal use)
+                    const url = staticFile.url;
+                    const success = await copyToClipboard(url);
+                    if (success) {
+                        copiedFileId = getFileId(file);
+                        copyError = null;
+                        // Reset after 2 seconds
+                        setTimeout(() => {
+                            copiedFileId = null;
+                        }, 2000);
+                    } else {
+                        copyError = 'Copy failed';
+                        setTimeout(() => {
+                            copyError = null;
+                        }, 2000);
+                    }
+                },
+            });
+        }
 
-		// Download action
-		actions.push({
-			id: 'download',
-			icon: Download,
-			label: () => $t('uploads.download'),
-			onClick: (file) => {
-				const link = document.createElement('a');
-				link.href = getDownloadUrl(file);
-				link.download = getFileName(file);
-				document.body.appendChild(link);
-				link.click();
-				document.body.removeChild(link);
-			},
-		});
+        // Download action
+        actions.push({
+            id: 'download',
+            icon: Download,
+            label: () => $t('uploads.download'),
+            onClick: (file) => {
+                const link = document.createElement('a');
+                link.href = getDownloadUrl(file);
+                link.download = getFileName(file);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
+        });
 
-		// Delete action
-		actions.push({
-			id: 'delete',
-			icon: Trash2,
-			label: () => $t('common.delete'),
-			onClick: (file) => onDelete(getFileId(file)),
-			variant: 'danger',
-			requireConfirm: true,
-			confirmMessage: () => $t('uploads.deleteConfirmSingle'),
-		});
+        // Delete action
+        actions.push({
+            id: 'delete',
+            icon: Trash2,
+            label: () => $t('common.delete'),
+            onClick: (file) => onDelete(getFileId(file)),
+            variant: 'danger',
+            requireConfirm: true,
+            confirmMessage: () => $t('uploads.deleteConfirmSingle'),
+        });
 
-		return actions;
-	}
+        return actions;
+    }
 
-	// Bulk actions
-	function getBulkActions(): BulkAction<FileData>[] {
-		return [
-			{
-				id: 'download',
-				icon: Download,
-				label: () => $t('uploads.download'),
-				onClick: (selectedFiles) => {
-					selectedFiles.forEach((file, index) => {
-						setTimeout(() => {
-							const link = document.createElement('a');
-							link.href = getDownloadUrl(file);
-							link.download = getFileName(file);
-							document.body.appendChild(link);
-							link.click();
-							document.body.removeChild(link);
-						}, index * 200);
-					});
-				},
-			},
-			{
-				id: 'delete',
-				icon: Trash2,
-				label: () => $t('common.delete'),
-				onClick: (selectedFiles) => {
-					if (onDeleteMultiple) {
-						onDeleteMultiple(selectedFiles.map(f => getFileId(f)));
-					} else {
-						selectedFiles.forEach(file => onDelete(getFileId(file)));
-					}
-				},
-				variant: 'danger',
-				requireConfirm: true,
-				confirmMessage: (count) => `${$t('uploads.deleteConfirmMultiple')} (${count})`,
-			},
-		];
-	}
+    // Bulk actions
+    function getBulkActions(): BulkAction<FileData>[] {
+        return [
+            {
+                id: 'download',
+                icon: Download,
+                label: () => $t('uploads.download'),
+                onClick: (selectedFiles) => {
+                    selectedFiles.forEach((file, index) => {
+                        setTimeout(() => {
+                            const link = document.createElement('a');
+                            link.href = getDownloadUrl(file);
+                            link.download = getFileName(file);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        }, index * 200);
+                    });
+                },
+            },
+            {
+                id: 'delete',
+                icon: Trash2,
+                label: () => $t('common.delete'),
+                onClick: (selectedFiles) => {
+                    if (onDeleteMultiple) {
+                        onDeleteMultiple(selectedFiles.map(f => getFileId(f)));
+                    } else {
+                        selectedFiles.forEach(file => onDelete(getFileId(file)));
+                    }
+                },
+                variant: 'danger',
+                requireConfirm: true,
+                confirmMessage: (count) => `${$t('uploads.deleteConfirmMultiple')} (${count})`,
+            },
+        ];
+    }
 
-	// Reactive columns (to get translations updated)
-	let columns = $derived(getColumns());
-	let rowActions = $derived(getRowActions());
-	let bulkActions = $derived(getBulkActions());
+    // Reactive columns (to get translations updated)
+    let columns = $derived(getColumns());
+    let rowActions = $derived(getRowActions());
+    let bulkActions = $derived(getBulkActions());
 </script>
 
 <div data-testid="files-table-{type}">
-<DataTable
-	data={files}
-	{columns}
-	getRowId={getFileId}
-	getRowDisplayName={getFileName}
-	storageKey="filesTable_{type}"
-	{rowActions}
-	{bulkActions}
-	emptyMessage={$t('uploads.noFiles')}
-	{initialFilters}
-	{onFiltersChange}
-/>
+    <DataTable
+            {bulkActions}
+            {columns}
+            data={files}
+            emptyMessage={$t('uploads.noFiles')}
+            getRowDisplayName={getFileName}
+            getRowId={getFileId}
+            {initialFilters}
+            {onFiltersChange}
+            {rowActions}
+            storageKey="filesTable_{type}"
+    />
 </div>
 
 <!-- Copy feedback toast -->
 {#if copiedFileId}
-	<div class="copy-toast success" role="status" aria-live="polite">
-		✓ {$t('common.copied') || 'Copied!'}
-	</div>
+    <div class="copy-toast success" role="status" aria-live="polite">
+        ✓ {$t('common.copied') || 'Copied!'}
+    </div>
 {/if}
 {#if copyError}
-	<div class="copy-toast error" role="alert" aria-live="assertive">
-		✗ {copyError}
-	</div>
+    <div class="copy-toast error" role="alert" aria-live="assertive">
+        ✗ {copyError}
+    </div>
 {/if}
 
 <style>
-	.copy-toast {
-		position: fixed;
-		top: 24px;
-		left: 50%;
-		transform: translateX(-50%);
-		padding: 12px 24px;
-		border-radius: 8px;
-		font-size: 14px;
-		font-weight: 500;
-		z-index: 9999;
-		animation: toast-in 0.2s ease-out;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-	}
+    .copy-toast {
+        position: fixed;
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        z-index: 9999;
+        animation: toast-in 0.2s ease-out;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
 
-	.copy-toast.success {
-		background-color: #059669;
-		color: white;
-	}
+    .copy-toast.success {
+        background-color: #059669;
+        color: white;
+    }
 
-	.copy-toast.error {
-		background-color: #dc2626;
-		color: white;
-	}
+    .copy-toast.error {
+        background-color: #dc2626;
+        color: white;
+    }
 
-	@keyframes toast-in {
-		from {
-			opacity: 0;
-			transform: translateX(-50%) translateY(-20px);
-		}
-		to {
-			opacity: 1;
-			transform: translateX(-50%) translateY(0);
-		}
-	}
+    @keyframes toast-in {
+        from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    }
 </style>
 

@@ -5,8 +5,8 @@
  * Derived from Zod schemas in generated.ts.
  */
 
-import { z } from 'zod';
-import { schemas } from '$lib/api/generated';
+import {z} from 'zod';
+import {schemas} from '$lib/api/generated';
 
 // =============================================================================
 // STATIC UPLOAD TYPES (from /uploads endpoints)
@@ -87,7 +87,7 @@ export type FileData = UploadedFile | BrimFile;
  * File with UI state for interactive components.
  */
 export interface FileWithUIState {
-	file: FileData;
-	isSelected?: boolean;
-	isLoading?: boolean;
+    file: FileData;
+    isSelected?: boolean;
+    isLoading?: boolean;
 }

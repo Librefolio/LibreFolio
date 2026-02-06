@@ -6,7 +6,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
+import {fileURLToPath} from 'url';
 
 // ES module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -57,10 +57,10 @@ export const SUPPORTED_LANGUAGES = discoverLanguages();
 
 // Language display info (matches frontend/src/lib/i18n/index.ts)
 export const LANGUAGE_INFO: Record<string, { name: string; flag: string }> = {
-    en: { name: 'English', flag: '🇬🇧' },
-    it: { name: 'Italiano', flag: '🇮🇹' },
-    fr: { name: 'Français', flag: '🇫🇷' },
-    es: { name: 'Español', flag: '🇪🇸' },
+    en: {name: 'English', flag: '🇬🇧'},
+    it: {name: 'Italiano', flag: '🇮🇹'},
+    fr: {name: 'Français', flag: '🇫🇷'},
+    es: {name: 'Español', flag: '🇪🇸'},
     // Add more as needed - tests will still work with any language file present
 };
 

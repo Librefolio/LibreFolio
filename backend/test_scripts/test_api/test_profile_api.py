@@ -42,7 +42,7 @@ async def create_and_login_user(client: httpx.AsyncClient) -> tuple[dict, httpx.
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
         timeout=TIMEOUT,
-    )
+        )
     assert response.status_code == 201, f"Register failed: {response.text}"
     user_data = response.json()["user"]
 
@@ -51,7 +51,7 @@ async def create_and_login_user(client: httpx.AsyncClient) -> tuple[dict, httpx.
         f"{API_BASE}/auth/login",
         json={"username": username, "password": password},
         timeout=TIMEOUT,
-    )
+        )
     assert response.status_code == 200, f"Login failed: {response.text}"
 
     # Create a new client with cookies set
@@ -78,7 +78,7 @@ class TestUpdateProfile:
                     f"{API_BASE}/auth/profile",
                     json={"username": new_username},
                     timeout=TIMEOUT,
-                )
+                    )
 
             assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
@@ -103,7 +103,7 @@ class TestUpdateProfile:
                     f"{API_BASE}/auth/profile",
                     json={"email": new_email},
                     timeout=TIMEOUT,
-                )
+                    )
 
             assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
@@ -128,7 +128,7 @@ class TestUpdateProfile:
                     f"{API_BASE}/auth/profile",
                     json={"username": new_username, "email": new_email},
                     timeout=TIMEOUT,
-                )
+                    )
 
             assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
@@ -149,7 +149,7 @@ class TestUpdateProfile:
                     f"{API_BASE}/auth/profile",
                     json={},
                     timeout=TIMEOUT,
-                )
+                    )
 
             assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
@@ -166,7 +166,7 @@ class TestUpdateProfile:
                 f"{API_BASE}/auth/profile",
                 json={"username": "newname"},
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 401, f"Expected 401, got {response.status_code}: {response.text}"
             print_success("Unauthenticated request rejected")
@@ -184,7 +184,7 @@ class TestUpdateProfile:
                     f"{API_BASE}/auth/profile",
                     json={"username": "ab"},  # min 3 chars
                     timeout=TIMEOUT,
-                )
+                    )
 
             assert response.status_code == 422, f"Expected 422, got {response.status_code}: {response.text}"
             print_success("Short username validation works")
@@ -202,7 +202,7 @@ class TestUpdateProfile:
                     f"{API_BASE}/auth/profile",
                     json={"email": "not-an-email"},
                     timeout=TIMEOUT,
-                )
+                    )
 
             assert response.status_code == 422, f"Expected 422, got {response.status_code}: {response.text}"
             print_success("Invalid email validation works")
@@ -225,7 +225,7 @@ class TestUpdateProfile:
                     f"{API_BASE}/auth/profile",
                     json={"username": user1_data["username"]},
                     timeout=TIMEOUT,
-                )
+                    )
 
             # Clean up auth_client1
             await auth_client1.aclose()
@@ -252,7 +252,7 @@ class TestUpdateProfile:
                     f"{API_BASE}/auth/profile",
                     json={"email": user1_data["email"]},
                     timeout=TIMEOUT,
-                )
+                    )
 
             # Clean up auth_client1
             await auth_client1.aclose()
@@ -279,7 +279,7 @@ class TestDeleteAccount:
                 response = await auth_client.delete(
                     f"{API_BASE}/auth/users/me",
                     timeout=TIMEOUT,
-                )
+                    )
 
             assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
@@ -291,7 +291,7 @@ class TestDeleteAccount:
                     f"{API_BASE}/auth/login",
                     json={"username": user_data["username"], "password": "TestPass123!"},
                     timeout=TIMEOUT,
-                )
+                    )
                 # Should fail - user deleted
                 assert response.status_code == 401, f"User should be deleted, got {response.status_code}"
 
@@ -306,7 +306,7 @@ class TestDeleteAccount:
             response = await client.delete(
                 f"{API_BASE}/auth/users/me",
                 timeout=TIMEOUT,
-            )
+                )
 
             assert response.status_code == 401, f"Expected 401, got {response.status_code}: {response.text}"
             print_success("Unauthenticated delete rejected")
@@ -324,16 +324,15 @@ class TestDeleteAccount:
                 response = await auth_client.delete(
                     f"{API_BASE}/auth/users/me",
                     timeout=TIMEOUT,
-                )
+                    )
                 assert response.status_code == 200
 
                 # Try to use the same session
                 response = await auth_client.get(
                     f"{API_BASE}/auth/me",
                     timeout=TIMEOUT,
-                )
+                    )
                 # Should fail - session should be invalidated
                 assert response.status_code == 401, f"Session should be invalid, got {response.status_code}"
 
             print_success("Session invalidated after account deletion")
-

@@ -150,33 +150,33 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### Plans COMPLETATI (spostati in `phase-04-subplan/`)
 
-| File                                       | Descrizione                                | Status       |
-|--------------------------------------------|--------------------------------------------|--------------|
-| `plan-e2e-test-remediation.md`             | Remediation test E2E (Fase 1 ✅)            | ✅ COMPLETATO |
-| `plan-settings-mobile-gallery.md`          | Settings mobile + Gallery improvements     | ✅ COMPLETATO |
-| `plan-componentReorganizationV2.prompt.md` | Famiglia Select unificata + Svelte 5 runes | ✅ COMPLETATO |
-| `plan-componentReorganizationV3-cleanup.md`| Cleanup + test E2E Select components       | ✅ COMPLETATO |
-| `plan-data-separation.md`                  | Separazione cartelle dati prod/test        | ✅ COMPLETATO |
+| File                                        | Descrizione                                | Status       |
+|---------------------------------------------|--------------------------------------------|--------------|
+| `plan-e2e-test-remediation.md`              | Remediation test E2E (Fase 1 ✅)            | ✅ COMPLETATO |
+| `plan-settings-mobile-gallery.md`           | Settings mobile + Gallery improvements     | ✅ COMPLETATO |
+| `plan-componentReorganizationV2.prompt.md`  | Famiglia Select unificata + Svelte 5 runes | ✅ COMPLETATO |
+| `plan-componentReorganizationV3-cleanup.md` | Cleanup + test E2E Select components       | ✅ COMPLETATO |
+| `plan-data-separation.md`                   | Separazione cartelle dati prod/test        | ✅ COMPLETATO |
 
 ### Reference Docs (in `phases/phase-04-subplan/`)
 
-| File                   | Descrizione                                      | Status          |
-|------------------------|--------------------------------------------------|-----------------|
-| `e2e-test-analysis.md` | Gap analysis test E2E - traccia test completati  | ✅ COMPLETATO    |
+| File                   | Descrizione                                     | Status       |
+|------------------------|-------------------------------------------------|--------------|
+| `e2e-test-analysis.md` | Gap analysis test E2E - traccia test completati | ✅ COMPLETATO |
 
 ### Plans DA IMPLEMENTARE (in `RoadmapV4_UI/`)
 
-| File                                      | Descrizione                                          | Priorità       |
-|-------------------------------------------|------------------------------------------------------|----------------|
-| `plan-ui-fixes.md`                        | Bug UI scoperti durante test data separation         | 🔜 PROSSIMO    |
-| `plan-image-crop.md`                      | Componente crop immagini con cropperjs               | 📋 ALTA        |
-| `plan-frontendDevelopment.prompt.md`      | Linee guida sviluppo frontend                        | Riferimento    |
+| File                                 | Descrizione                                  | Priorità    |
+|--------------------------------------|----------------------------------------------|-------------|
+| `plan-ui-fixes.md`                   | Bug UI scoperti durante test data separation | 🔜 PROSSIMO |
+| `plan-image-crop.md`                 | Componente crop immagini con cropperjs       | 📋 ALTA     |
+| `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend                | Riferimento |
 
 ### Plans ARCHIVIATI (in `phase-04-subplan/`)
 
-| File                               | Descrizione                          | Status           |
-|------------------------------------|--------------------------------------|------------------|
-| `plan-component-reorganization.md` | Piano originale (sostituito da V2)   | 📦 ARCHIVIATO    |
+| File                               | Descrizione                        | Status        |
+|------------------------------------|------------------------------------|---------------|
+| `plan-component-reorganization.md` | Piano originale (sostituito da V2) | 📦 ARCHIVIATO |
 
 ### Plans DA CREARE
 
@@ -275,6 +275,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 **Riferimento**: `plan-ui-fixes.md`
 
 Bug scoperti durante test manuali della data separation:
+
 - User preferences non applicate al login (lingua, tema)
 - Base currency non usata come default in broker creation modal
 - BRIM upload modal: no scroll con molti file
@@ -306,12 +307,12 @@ Bug scoperti durante test manuali della data separation:
 ### 🔜 Prossimi Step
 
 1. **UI Fixes** (`plan-ui-fixes.md`) - ~2h 📋 PROSSIMO
-   - Bug scoperti durante test data separation
-   - User preferences al login, modal scroll, etc.
+    - Bug scoperti durante test data separation
+    - User preferences al login, modal scroll, etc.
 
 2. **Image Crop Component** (`plan-image-crop.md`) - ~2h
-   - Componente crop immagini con cropperjs
-   - Necessario per upload avatar/icone
+    - Componente crop immagini con cropperjs
+    - Necessario per upload avatar/icone
 
 ### Dopo: Phase 5 (FX Management)
 
@@ -319,26 +320,25 @@ Bug scoperti durante test manuali della data separation:
 - Visualizzazione tassi storici
 - Grafici con ECharts
 
-
 ---
 
 ## 📚 Contesto per Agent
 
 Quando si lavora su questa fase, allegare:
 
-| Scenario                   | Files da allegare                                                                          |
-|----------------------------|--------------------------------------------------------------------------------------------|
-| Bug fix generici           | `plan-phase04-summary.md`                                                                  |
-| BRIM/Files                 | `+ phases/phase-04-subplan/plan-brim-multiuser-implementation.md`                          |
-| Tipi/API                   | `+ phases/phase-04-subplan/plan-types-library.md`                                          |
-| Test frontend infra        | `+ phases/phase-04-subplan/plan-frontendTesting.md`                                        |
-| Test remediation           | `+ phases/phase-04-subplan/plan-e2e-test-remediation.md` + `phases/phase-04-subplan/e2e-test-analysis.md` |
-| Settings mobile + gallery  | `+ phases/phase-04-subplan/plan-settings-mobile-gallery.md`                                |
-| **Component Reorganization** | `+ plan-componentReorganizationV2.prompt.md`                                              |
-| Image upload               | `+ plan-image-crop.md`                                                                     |
-| Separazione dati           | `+ plan-data-separation.md`                                                                |
-| i18n CLI                   | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`                                  |
-| Files UX/URL               | `+ phases/phase-04-subplan/plan-files-ux-refactor.md`                                      |
+| Scenario                     | Files da allegare                                                                                         |
+|------------------------------|-----------------------------------------------------------------------------------------------------------|
+| Bug fix generici             | `plan-phase04-summary.md`                                                                                 |
+| BRIM/Files                   | `+ phases/phase-04-subplan/plan-brim-multiuser-implementation.md`                                         |
+| Tipi/API                     | `+ phases/phase-04-subplan/plan-types-library.md`                                                         |
+| Test frontend infra          | `+ phases/phase-04-subplan/plan-frontendTesting.md`                                                       |
+| Test remediation             | `+ phases/phase-04-subplan/plan-e2e-test-remediation.md` + `phases/phase-04-subplan/e2e-test-analysis.md` |
+| Settings mobile + gallery    | `+ phases/phase-04-subplan/plan-settings-mobile-gallery.md`                                               |
+| **Component Reorganization** | `+ plan-componentReorganizationV2.prompt.md`                                                              |
+| Image upload                 | `+ plan-image-crop.md`                                                                                    |
+| Separazione dati             | `+ plan-data-separation.md`                                                                               |
+| i18n CLI                     | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`                                                 |
+| Files UX/URL                 | `+ phases/phase-04-subplan/plan-files-ux-refactor.md`                                                     |
 
 ---
 

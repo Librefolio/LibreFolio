@@ -59,15 +59,15 @@
 </script>
 
 <div
-    role="button"
-    tabindex="0"
-    on:click={handleCardClick}
-    on:keydown={(e) => e.key === 'Enter' && handleCardClick()}
-    data-testid="broker-card-{broker.id}"
-    class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden cursor-pointer
+        class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden cursor-pointer
            transition-all duration-200 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
            focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
-    class:opacity-60={broker.is_active === false}
+        class:opacity-60={broker.is_active === false}
+        data-testid="broker-card-{broker.id}"
+        on:click={handleCardClick}
+        on:keydown={(e) => e.key === 'Enter' && handleCardClick()}
+        role="button"
+        tabindex="0"
 >
     <!-- Header -->
     <div class="p-4 border-b border-gray-100 dark:border-slate-700">
@@ -75,11 +75,11 @@
             <div class="flex items-center gap-3 flex-1 min-w-0">
                 <!-- Broker Icon -->
                 <BrokerIcon
-                    iconUrl={broker.icon_url}
-                    portalUrl={broker.portal_url}
-                    pluginCode={broker.default_import_plugin}
-                    altText={broker.name}
-                    size="md"
+                        altText={broker.name}
+                        iconUrl={broker.icon_url}
+                        pluginCode={broker.default_import_plugin}
+                        portalUrl={broker.portal_url}
+                        size="md"
                 />
 
                 <div class="min-w-0">
@@ -93,18 +93,18 @@
             <!-- Actions (Edit & Delete only) -->
             <div class="flex items-center space-x-1 ml-2">
                 <button
-                        on:click={handleEdit}
                         class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                        title={$_('common.edit')}
                         data-testid="broker-edit-{broker.id}"
+                        on:click={handleEdit}
+                        title={$_('common.edit')}
                 >
                     <Pencil size={18}/>
                 </button>
                 <button
-                        on:click={handleDelete}
                         class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                        title={$_('common.delete')}
                         data-testid="broker-delete-{broker.id}"
+                        on:click={handleDelete}
+                        title={$_('common.delete')}
                 >
                     <Trash2 size={18}/>
                 </button>

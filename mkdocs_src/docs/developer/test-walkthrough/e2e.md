@@ -8,13 +8,13 @@ To ensure that user flows (e.g., logging in, viewing the dashboard) work correct
 
 ## Prerequisites
 
-1.  Backend server running in test mode (`./dev.sh server:test`).
-2.  Frontend built (`./dev.sh fe:build`).
+1. Backend server running in test mode (`./dev.sh server:test`).
+2. Frontend built (`./dev.sh fe:build`).
 
 ## Key Tests
 
--   **Login Flow**: Verifies that a user can log in and is redirected to the dashboard.
--   **Dashboard**: Verifies that the dashboard loads and displays data.
+- **Login Flow**: Verifies that a user can log in and is redirected to the dashboard.
+- **Dashboard**: Verifies that the dashboard loads and displays data.
 
 ## Running
 

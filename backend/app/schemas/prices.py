@@ -39,7 +39,7 @@ from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseBulkDeleteResponse,
     Currency,
-)
+    )
 
 
 # ============================================================================
@@ -70,7 +70,7 @@ class FAPricePoint(BaseModel):
     currency: str = Field(..., description="Currency code (ISO 4217)")
     backward_fill_info: Optional[BackwardFillInfo] = Field(
         None, description="Backward-fill info (only in query results)"
-    )
+        )
 
     @field_validator("currency")
     @classmethod
@@ -152,7 +152,7 @@ class FAAssetDelete(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     date_ranges: List[DateRangeModel] = Field(
         ..., min_length=1, description="List of date ranges to delete"
-    )
+        )
 
 
 class FAPriceDeleteResult(BaseDeleteResult):

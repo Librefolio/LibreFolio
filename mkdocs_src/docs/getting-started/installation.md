@@ -4,10 +4,10 @@ This guide covers setting up a local development environment. For production dep
 
 ## Prerequisites
 
--   **Python 3.11+**
--   **Node.js 18+**
--   **Pipenv** (Python package manager)
--   **Docker** (Optional, for running a clean database)
+- **Python 3.11+**
+- **Node.js 18+**
+- **Pipenv** (Python package manager)
+- **Docker** (Optional, for running a clean database)
 
 ## Setup Instructions
 
@@ -22,9 +22,10 @@ This command installs all Python and Node.js dependencies for both the backend a
 ```
 
 This will:
-1.  Install backend packages via `pipenv`.
-2.  Install frontend packages via `npm`.
-3.  Install Playwright browsers for E2E testing.
+
+1. Install backend packages via `pipenv`.
+2. Install frontend packages via `npm`.
+3. Install Playwright browsers for E2E testing.
 
 ### 2. Initialize the Database
 

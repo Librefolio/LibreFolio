@@ -7,10 +7,11 @@ This section documents the authentication UI components used for login, registra
 The `LoginModal` handles user authentication via username/email and password.
 
 ### Features
--   **Input**: Username or Email field (autofocus).
--   **Password**: Password field with visibility toggle (via `PasswordInput`).
--   **State**: Uses `$lib/stores/auth` to manage loading state and errors.
--   **Navigation**: Emits events to switch to Register or Forgot Password views.
+
+- **Input**: Username or Email field (autofocus).
+- **Password**: Password field with visibility toggle (via `PasswordInput`).
+- **State**: Uses `$lib/stores/auth` to manage loading state and errors.
+- **Navigation**: Emits events to switch to Register or Forgot Password views.
 
 ### Usage
 
@@ -31,13 +32,14 @@ The `LoginModal` handles user authentication via username/email and password.
 The `RegisterModal` handles new user registration with client-side validation.
 
 ### Features
--   **Validation**: Real-time validation for:
-    -   Username (min length)
-    -   Email (format)
-    -   Password (strength rules)
-    -   Confirm Password (match)
--   **Strength Meter**: Integrated `PasswordStrength` component.
--   **Error Handling**: Maps backend errors (e.g., "username taken") to user-friendly messages.
+
+- **Validation**: Real-time validation for:
+    - Username (min length)
+    - Email (format)
+    - Password (strength rules)
+    - Confirm Password (match)
+- **Strength Meter**: Integrated `PasswordStrength` component.
+- **Error Handling**: Maps backend errors (e.g., "username taken") to user-friendly messages.
 
 ### Usage
 
@@ -59,13 +61,14 @@ The `RegisterModal` handles new user registration with client-side validation.
 A visual indicator of password strength using `zxcvbn-ts`.
 
 ### Features
--   **Score**: Calculates a score from 0 (Very Weak) to 4 (Very Strong).
--   **Visual Bar**: Color-coded progress bar (Red -> Orange -> Yellow -> Lime -> Green).
--   **Rules Checklist**: Shows specific requirements:
-    -   Min 8 characters
-    -   Uppercase & Lowercase
-    -   Number
-    -   Special character
+
+- **Score**: Calculates a score from 0 (Very Weak) to 4 (Very Strong).
+- **Visual Bar**: Color-coded progress bar (Red -> Orange -> Yellow -> Lime -> Green).
+- **Rules Checklist**: Shows specific requirements:
+    - Min 8 characters
+    - Uppercase & Lowercase
+    - Number
+    - Special character
 
 ### Usage
 
@@ -84,9 +87,10 @@ A visual indicator of password strength using `zxcvbn-ts`.
 A reusable input component for passwords.
 
 ### Features
--   **Toggle Visibility**: Eye icon to show/hide password.
--   **Styling**: Consistent styling with error state support.
--   **Events**: Forwards `input`, `blur`, `focus` events.
+
+- **Toggle Visibility**: Eye icon to show/hide password.
+- **Styling**: Consistent styling with error state support.
+- **Events**: Forwards `input`, `blur`, `focus` events.
 
 ### Usage
 

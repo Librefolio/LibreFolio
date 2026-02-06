@@ -21,7 +21,7 @@ from backend.app.schemas.assets import (
     FAGeographicArea,
     FAAssetPatchItem,
     FASectorArea,
-)
+    )
 from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 
@@ -51,15 +51,15 @@ class MockProvider(AssetSourceProvider):
                 "identifier_type": IdentifierType.UUID,
                 "provider_params": None,
                 "expected_symbol": "MOCK",
-            }
-        ]
+                }
+            ]
 
     async def get_current_value(
         self,
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-    ) -> FACurrentValue:
+        ) -> FACurrentValue:
         """
         Return fixed mock current value.
 
@@ -72,7 +72,7 @@ class MockProvider(AssetSourceProvider):
             currency="USD",
             as_of_date=date.today(),
             source=self.provider_name,
-        )
+            )
 
     @property
     def supports_history(self) -> bool:
@@ -86,7 +86,7 @@ class MockProvider(AssetSourceProvider):
         provider_params: Dict | None,
         start_date: date,
         end_date: date,
-    ) -> FAHistoricalData:
+        ) -> FAHistoricalData:
         """
         Generate mock historical data.
 
@@ -105,8 +105,8 @@ class MockProvider(AssetSourceProvider):
                     close=Decimal("100.00"),
                     volume=None,  # Mock doesn't provide volume
                     currency="USD",
+                    )
                 )
-            )
             current += timedelta(days=1)
 
         return FAHistoricalData(prices=prices, currency="USD", source=self.provider_name)
@@ -127,8 +127,8 @@ class MockProvider(AssetSourceProvider):
                 "display_name": f"Mock Asset: {query}",
                 "currency": "USD",
                 "type": "MOCK",
-            }
-        ]
+                }
+            ]
 
     def validate_params(self, params: Dict | None) -> None:
         """
@@ -144,7 +144,7 @@ class MockProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None = None,
-    ) -> FAAssetPatchItem | None:
+        ) -> FAAssetPatchItem | None:
         """
         Fetch mock asset metadata for testing.
 
@@ -165,9 +165,9 @@ class MockProvider(AssetSourceProvider):
             short_description=f"Mock test asset {identifier} - type: {identifier_type} - used for testing metadata features",
             geographic_area=FAGeographicArea(
                 distribution={"USA": Decimal("0.6"), "ITA": Decimal("0.4")}
-            ),
-        )
+                ),
+            )
 
         return FAAssetPatchItem(
             asset_id=0, classification_params=classification_params  # Will be set by caller
-        )
+            )

@@ -3,10 +3,10 @@
      * SettingCurrency.svelte - Svelte 5
      * Currency setting with SearchSelect and inline actions
      */
-    import { _ } from '$lib/i18n';
-    import { Save, Undo, RotateCcw } from 'lucide-svelte';
-    import { SearchSelect, type SelectOption } from '$lib/components/ui/select';
-    import type { Component } from 'svelte';
+    import {_} from '$lib/i18n';
+    import {RotateCcw, Save, Undo} from 'lucide-svelte';
+    import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
+    import type {Component} from 'svelte';
 
     interface Props {
         value: string;
@@ -49,8 +49,8 @@
 </script>
 
 <div
-    class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0"
-    data-testid={testId || undefined}
+        class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0"
+        data-testid={testId || undefined}
 >
     <!-- Left: Label and hint -->
     <div class="flex-1 min-w-0">
@@ -73,28 +73,28 @@
             <div class="flex items-center space-x-1">
                 {#if isModified}
                     <button
-                        type="button"
-                        onclick={() => onsave?.()}
-                        class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                        title={$_('common.save')}
+                            type="button"
+                            onclick={() => onsave?.()}
+                            class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                            title={$_('common.save')}
                     >
                         <Save size={14}/>
                     </button>
                     <button
-                        type="button"
-                        onclick={() => onundo?.()}
-                        class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                        title={$_('common.undo')}
+                            type="button"
+                            onclick={() => onundo?.()}
+                            class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                            title={$_('common.undo')}
                     >
                         <Undo size={14}/>
                     </button>
                 {/if}
                 {#if isNonDefault && !isModified}
                     <button
-                        type="button"
-                        onclick={() => onreset?.()}
-                        class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
-                        title={$_('common.reset')}
+                            type="button"
+                            onclick={() => onreset?.()}
+                            class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                            title={$_('common.reset')}
                     >
                         <RotateCcw size={14}/>
                     </button>
@@ -105,12 +105,12 @@
         <!-- SearchSelect for currency - responsive width -->
         <div class="w-48 sm:w-64">
             <SearchSelect
-                bind:value
-                {options}
-                placeholder={$_('settings.selectCurrency')}
-                {loading}
-                disabled={isLocked}
-                onchange={handleChange}
+                    bind:value
+                    disabled={isLocked}
+                    {loading}
+                    onchange={handleChange}
+                    {options}
+                    placeholder={$_('settings.selectCurrency')}
             />
         </div>
     </div>

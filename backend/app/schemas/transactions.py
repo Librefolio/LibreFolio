@@ -17,21 +17,21 @@ These schemas provide strict validation for API input/output.
 
 from __future__ import annotations
 
-from datetime import date as date_type, datetime
+from datetime import date as date_type
 from decimal import Decimal
 from typing import Optional, List, Literal
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from backend.app.db.models import TransactionType, Transaction
-from backend.app.utils.datetime_utils import UTCDateTime
 from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     BaseBulkResponse,
     BaseBulkDeleteResponse,
     BaseDeleteResult,
-)
+    )
+from backend.app.utils.datetime_utils import UTCDateTime
 
 
 # =============================================================================
@@ -101,33 +101,33 @@ class TXCreateItem(BaseModel):
     broker_id: int = Field(..., gt=0, description="Broker ID")
     asset_id: Optional[int] = Field(
         default=None, gt=0, description="Asset ID. NULL for pure cash transactions"
-    )
+        )
 
     type: TransactionType = Field(..., description="Transaction type")
     date: date_type = Field(..., description="Settlement date")
 
     quantity: Decimal = Field(
         default=Decimal("0"), description="Asset quantity delta (+ in, - out)"
-    )
+        )
 
     # Cash movement using Currency class from common.py
     cash: Optional[Currency] = Field(
         default=None, description="Cash movement (code + amount). Required for cash operations."
-    )
+        )
 
     # Temporary linking for bulk create (not persisted)
     link_uuid: Optional[str] = Field(
         default=None,
         max_length=36,
         description="Temporary UUID to link paired transactions (TRANSFER, FX_CONVERSION)",
-    )
+        )
 
     tags: Optional[List[str]] = Field(
         default=None, description="List of tags for filtering/grouping"
-    )
+        )
     description: Optional[str] = Field(
         default=None, max_length=500, description="Transaction notes"
-    )
+        )
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -173,7 +173,7 @@ class TXCreateItem(BaseModel):
             TransactionType.DIVIDEND,
             TransactionType.TRANSFER,
             TransactionType.ADJUSTMENT,
-        }
+            }
         if self.type in asset_required_types and not self.asset_id:
             raise ValueError(f"{self.type.value} requires asset_id")
 
@@ -193,7 +193,7 @@ class TXCreateItem(BaseModel):
             TransactionType.FEE,
             TransactionType.TAX,
             TransactionType.FX_CONVERSION,
-        }
+            }
         if self.type in cash_required_types:
             if self.cash is None:
                 raise ValueError(f"{self.type.value} requires cash (amount + currency)")
@@ -297,7 +297,7 @@ class TXReadItem(BaseModel):
             description=tx.description,
             created_at=tx.created_at,
             updated_at=tx.updated_at,
-        )
+            )
 
 
 # =============================================================================
@@ -488,7 +488,7 @@ class TXTypeMetadata(BaseModel):
     asset_mode: AssetMode = Field(
         ...,
         description="REQUIRED: must have asset_id, OPTIONAL: can have, FORBIDDEN: must not have",
-    )
+        )
     requires_link: bool = Field(..., description="Whether link_uuid is required")
     requires_cash: bool = Field(..., description="Whether cash is required")
 
@@ -510,7 +510,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="+",
         allowed_cash_sign="-",
-    ),
+        ),
     TransactionType.SELL: TXTypeMetadata(
         code="SELL",
         name="Sell",
@@ -521,7 +521,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="-",
         allowed_cash_sign="+",
-    ),
+        ),
     TransactionType.DIVIDEND: TXTypeMetadata(
         code="DIVIDEND",
         name="Dividend",
@@ -532,7 +532,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="+",
-    ),
+        ),
     TransactionType.INTEREST: TXTypeMetadata(
         code="INTEREST",
         name="Interest",
@@ -543,7 +543,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="+",
-    ),
+        ),
     TransactionType.DEPOSIT: TXTypeMetadata(
         code="DEPOSIT",
         name="Deposit",
@@ -554,7 +554,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="+",
-    ),
+        ),
     TransactionType.WITHDRAWAL: TXTypeMetadata(
         code="WITHDRAWAL",
         name="Withdrawal",
@@ -565,7 +565,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="-",
-    ),
+        ),
     TransactionType.FEE: TXTypeMetadata(
         code="FEE",
         name="Fee",
@@ -576,7 +576,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="-",
-    ),
+        ),
     TransactionType.TAX: TXTypeMetadata(
         code="TAX",
         name="Tax",
@@ -587,7 +587,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="-",
-    ),
+        ),
     TransactionType.TRANSFER: TXTypeMetadata(
         code="TRANSFER",
         name="Transfer",
@@ -598,7 +598,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=False,
         allowed_quantity_sign="+/-",
         allowed_cash_sign="0",
-    ),
+        ),
     TransactionType.FX_CONVERSION: TXTypeMetadata(
         code="FX_CONVERSION",
         name="FX Conversion",
@@ -609,7 +609,7 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=True,
         allowed_quantity_sign="0",
         allowed_cash_sign="+/-",
-    ),
+        ),
     TransactionType.ADJUSTMENT: TXTypeMetadata(
         code="ADJUSTMENT",
         name="Adjustment",
@@ -620,5 +620,5 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         requires_cash=False,
         allowed_quantity_sign="+/-",
         allowed_cash_sign="0",
-    ),
-}
+        ),
+    }

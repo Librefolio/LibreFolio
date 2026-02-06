@@ -23,7 +23,7 @@ os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///backend/data/sqlite/test_app.d
 
 from backend.app.services.asset_source_providers.scheduled_investment import (
     ScheduledInvestmentProvider,
-)
+    )
 
 from backend.app.schemas.assets import (
     FAScheduledInvestmentSchedule,
@@ -31,7 +31,7 @@ from backend.app.schemas.assets import (
     CompoundingType,
     DayCountConvention,
     FALateInterestConfig,
-)
+    )
 
 
 # ============================================================================
@@ -53,30 +53,30 @@ async def test_provider_validate_params():
                 "annual_rate": "0.05",
                 "compounding": "SIMPLE",
                 "day_count": "ACT/365",
-            }
-        ],
+                }
+            ],
         "late_interest": {
             "annual_rate": "0.12",
             "grace_period_days": 30,
             "compounding": "SIMPLE",
             "day_count": "ACT/365",
-        },
-    }
+            },
+        }
 
     validated = provider.validate_params(valid_params)
     assert isinstance(
         validated, FAScheduledInvestmentSchedule
-    ), f"Expected FAScheduledInvestmentSchedule, got {type(validated)}"
+        ), f"Expected FAScheduledInvestmentSchedule, got {type(validated)}"
     assert (
         len(validated.schedule) == 1
     ), f"Expected 1 period in schedule, got {len(validated.schedule)}"
     assert validated.schedule[0].annual_rate == Decimal(
         "0.05"
-    ), f"Expected rate 0.05, got {validated.schedule[0].annual_rate}"
+        ), f"Expected rate 0.05, got {validated.schedule[0].annual_rate}"
     assert validated.late_interest is not None, "Late interest should be present"
     assert validated.late_interest.annual_rate == Decimal(
         "0.12"
-    ), f"Expected late rate 0.12, got {validated.late_interest.annual_rate}"
+        ), f"Expected late rate 0.12, got {validated.late_interest.annual_rate}"
 
 
 @pytest.mark.asyncio
@@ -93,18 +93,18 @@ async def test_provider_get_current_value():
                 annual_rate=Decimal("0.05"),
                 compounding=CompoundingType.SIMPLE,
                 day_count=DayCountConvention.ACT_365,
-            )
-        ],
+                )
+            ],
         late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365,
-        ),
-    ).model_dump(mode="json")
+            ),
+        ).model_dump(mode="json")
     params["_transaction_override"] = [
         {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
-    ]
+        ]
 
     # Use identifier "1" for test mode with _transaction_override
     result = await provider.get_current_value("1", IdentifierType.OTHER, params)
@@ -129,18 +129,18 @@ async def test_provider_get_history_value():
                 annual_rate=Decimal("0.05"),
                 compounding=CompoundingType.SIMPLE,
                 day_count=DayCountConvention.ACT_365,
-            )
-        ],
+                )
+            ],
         late_interest=FALateInterestConfig(
             annual_rate=Decimal("0.12"),
             grace_period_days=30,
             compounding=CompoundingType.SIMPLE,
             day_count=DayCountConvention.ACT_365,
-        ),
-    ).model_dump(mode="json")
+            ),
+        ).model_dump(mode="json")
     params["_transaction_override"] = [
         {"type": TransactionType.BUY, "quantity": 1, "price": "10000", "trade_date": "2025-01-01"}
-    ]
+        ]
 
     start = date(2025, 1, 1)
     end = date(2025, 1, 7)
@@ -174,15 +174,15 @@ async def test_provider_private_calculate_value():
                 "annual_rate": "0.05",
                 "compounding": "SIMPLE",
                 "day_count": "ACT/365",
-            }
-        ],
+                }
+            ],
         "late_interest": {
             "annual_rate": "0.12",
             "grace_period_days": 30,
             "compounding": "SIMPLE",
             "day_count": "ACT/365",
-        },
-    }
+            },
+        }
     params = FAScheduledInvestmentSchedule(**params_dict)
 
     # Calculate value for Jan 30, 2025 (29 days from Jan 1)
@@ -196,7 +196,7 @@ async def test_provider_private_calculate_value():
     diff = abs(value - expected_value)
     assert diff < Decimal(
         "0.01"
-    ), f"Value calculation mismatch: expected {expected_value}, got {value}, diff {diff}"
+        ), f"Value calculation mismatch: expected {expected_value}, got {value}, diff {diff}"
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@
 
     <!-- Body Section (Beige) -->
     <div class="p-8 pt-10">
-        <form class="space-y-5" on:submit|preventDefault={handleSubmit} data-testid="login-form">
+        <form class="space-y-5" data-testid="login-form" on:submit|preventDefault={handleSubmit}>
 
             <!-- Success Message (from registration) -->
             {#if successMessage}
@@ -67,10 +67,10 @@
 
             <!-- Password Input -->
             <PasswordInput
+                    autocomplete="current-password"
                     bind:value={password}
                     disabled={$isAuthLoading}
                     placeholder={$_('auth.password')}
-                    autocomplete="current-password"
                     testId="login-password"
             />
 
@@ -78,9 +78,9 @@
             <div class="flex justify-end">
                 <button
                         class="text-xs font-semibold text-libre-dark hover:text-libre-green underline decoration-1 underline-offset-2"
+                        data-testid="goto-forgot"
                         on:click={() => dispatch('gotoForgot')}
                         type="button"
-                        data-testid="goto-forgot"
                 >
                     {$_('auth.forgotPassword')}
                 </button>

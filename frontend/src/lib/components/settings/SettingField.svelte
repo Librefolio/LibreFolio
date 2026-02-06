@@ -1,11 +1,11 @@
 <script lang="ts">
+    import type {ComponentType} from 'svelte';
     /**
      * SettingField.svelte
      * Base component for a single setting field with actions
      */
-    import { createEventDispatcher } from 'svelte';
-    import { _ } from '$lib/i18n';
-    import type { ComponentType } from 'svelte';
+    import {createEventDispatcher} from 'svelte';
+    import {_} from '$lib/i18n';
 
     const dispatch = createEventDispatcher<{
         save: void;
@@ -28,7 +28,7 @@
     <div class="flex items-start justify-between mb-2">
         <div class="flex items-center gap-2 flex-1">
             {#if icon}
-                <svelte:component this={icon} size={18} class="text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                <svelte:component this={icon} size={18} class="text-gray-500 dark:text-gray-400 flex-shrink-0"/>
             {/if}
             <div class="text-sm font-medium text-gray-700 dark:text-gray-200">
                 {label}
@@ -39,20 +39,20 @@
         {#if showActions && isModified && !isLocked && !readonly}
             <div class="flex items-center gap-1">
                 <button
-                    type="button"
-                    on:click={() => dispatch('save')}
-                    class="action-btn save"
-                    title={$_('common.save')}
+                        type="button"
+                        on:click={() => dispatch('save')}
+                        class="action-btn save"
+                        title={$_('common.save')}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"/>
                     </svg>
                 </button>
                 <button
-                    type="button"
-                    on:click={() => dispatch('undo')}
-                    class="action-btn undo"
-                    title={$_('common.undo')}
+                        type="button"
+                        on:click={() => dispatch('undo')}
+                        class="action-btn undo"
+                        title={$_('common.undo')}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 7v6h6"/>
@@ -60,10 +60,10 @@
                     </svg>
                 </button>
                 <button
-                    type="button"
-                    on:click={() => dispatch('reset')}
-                    class="action-btn reset"
-                    title={$_('common.reset')}
+                        type="button"
+                        on:click={() => dispatch('reset')}
+                        class="action-btn reset"
+                        title={$_('common.reset')}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
@@ -81,7 +81,7 @@
 
     <!-- Content Slot -->
     <div class="setting-content">
-        <slot />
+        <slot/>
     </div>
 </div>
 

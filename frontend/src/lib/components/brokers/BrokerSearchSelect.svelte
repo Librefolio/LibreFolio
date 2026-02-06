@@ -5,9 +5,9 @@
   Replaces the old BrokerSelect component.
 -->
 <script lang="ts">
-    import { SearchSelect, type SelectOption } from '$lib/components/ui/select';
+    import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
     import BrokerIcon from './BrokerIcon.svelte';
-    import { _ } from '$lib/i18n';
+    import {_} from '$lib/i18n';
 
     /**
      * Minimum broker info needed for the select component.
@@ -66,24 +66,24 @@
 </script>
 
 <SearchSelect
-    value={stringValue}
-    options={brokerOptions}
-    placeholder={placeholder || $_('uploads.selectBroker')}
-    {disabled}
-    {dropdownPosition}
-    {maxVisibleItems}
-    inlineSearch={true}
-    onchange={handleChange}
+        {disabled}
+        {dropdownPosition}
+        inlineSearch={true}
+        {maxVisibleItems}
+        onchange={handleChange}
+        options={brokerOptions}
+        placeholder={placeholder || $_('uploads.selectBroker')}
+        value={stringValue}
 >
     {#snippet item(option)}
         {@const broker = option.data as BrokerSelectItem}
         <div class="flex items-center gap-2">
             <BrokerIcon
-                iconUrl={broker.icon_url}
-                portalUrl={broker.portal_url}
-                pluginCode={broker.default_import_plugin}
-                altText={broker.name}
-                size="sm"
+                    iconUrl={broker.icon_url}
+                    portalUrl={broker.portal_url}
+                    pluginCode={broker.default_import_plugin}
+                    altText={broker.name}
+                    size="sm"
             />
             <span class="truncate">{broker.name}</span>
         </div>
@@ -92,11 +92,11 @@
         {@const broker = option.data as BrokerSelectItem}
         <div class="flex items-center gap-2">
             <BrokerIcon
-                iconUrl={broker.icon_url}
-                portalUrl={broker.portal_url}
-                pluginCode={broker.default_import_plugin}
-                altText={broker.name}
-                size="sm"
+                    iconUrl={broker.icon_url}
+                    portalUrl={broker.portal_url}
+                    pluginCode={broker.default_import_plugin}
+                    altText={broker.name}
+                    size="sm"
             />
             <span class="truncate">{broker.name}</span>
         </div>
