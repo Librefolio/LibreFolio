@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.v1.router import router as api_v1_router
-from backend.app.config import get_settings, set_test_mode, is_test_mode, PROJECT_ROOT
+from backend.app.config import get_settings, set_test_mode, is_test_mode, PROJECT_ROOT, ensure_data_dirs
 from backend.app.logging_config import configure_logging, get_logger
 
 # Check for test mode via environment variable ONLY
@@ -138,6 +138,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
         test_mode=is_test_mode(),
     )
+
+    # Ensure all data directories exist (prod or test based on mode)
+    ensure_data_dirs()
 
     # Ensure database exists and is migrated
     ensure_database_exists()

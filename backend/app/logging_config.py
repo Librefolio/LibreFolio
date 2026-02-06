@@ -21,12 +21,12 @@ from typing import Any
 import structlog
 from structlog.types import EventDict
 
-from backend.app.config import PROJECT_ROOT
+from backend.app.config import get_data_dir
 
 
 def get_log_directory() -> Path:
-    """Get or create the log directory."""
-    log_dir = PROJECT_ROOT / "backend" / "data" / "logs"
+    """Get or create the log directory based on current environment (prod/test)."""
+    log_dir = get_data_dir() / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
 

@@ -13,17 +13,16 @@ ENV/
 env.bak/
 venv.bak/
 
-# Run time data
-backend/data/sqlite/*.db
-backend/data/sqlite/*.db-shm
-backend/data/sqlite/*.db-wal
-backend/data/broker_reports/failed/*
-backend/data/broker_reports/parsed/*
-backend/data/broker_reports/uploaded/*
-backend/data/custom-uploads/*
+# Old runtime data backups (to be deleted after migration verification)
+backend/data/*_backup/
 
-# Logs
-logs/
+# Run time data - ignore all content, keep structure via .gitkeep
+backend/data/**
+!backend/data/**/
+!backend/data/**/.gitkeep
+
+# Logs (root level only, not in backend/data)
+/logs/
 *.log
 
 # IDE
