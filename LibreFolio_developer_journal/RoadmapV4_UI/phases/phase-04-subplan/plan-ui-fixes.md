@@ -1,7 +1,8 @@
 # Plan: UI Fixes Post Data-Separation
 
 **Creato**: 2026-02-06
-**Stato**: 🔲 TODO
+**Completato**: 2026-02-18
+**Stato**: ✅ DONE
 **Priorità**: Media
 **Dipende da**: Data Separation completata ✅
 
@@ -13,7 +14,7 @@ Durante i test di verifica della migrazione prod/test data separation, sono stat
 
 ## 🐛 Lista Bug
 
-### Bug 1: Preferenze Utente Non Applicate al Login
+### Bug 1: Preferenze Utente Non Applicate al Login ✅ FIXED
 
 **Posizione**: Flusso di login / Gestione lingua
 **Severità**: Media
@@ -46,9 +47,9 @@ Durante i test di verifica della migrazione prod/test data separation, sono stat
 
 ---
 
-### Bug 2: Valuta Base Non Usata nella Modale Creazione Broker
+### Bug 2: Valuta Base Non Usata nella Modale Creazione Broker ✅ FIXED
 
-**Posizione**: `BrokerCreateModal.svelte` - Campo Initial Balance
+**Posizione**: `BrokerForm.svelte` - Campo Initial Balance
 **Severità**: Bassa
 **Descrizione**:
 
@@ -69,9 +70,9 @@ Durante i test di verifica della migrazione prod/test data separation, sono stat
 
 ---
 
-### Bug 3: Modale Upload BRIM - Nessuno Scroll con Molti File
+### Bug 3: Modale Upload BRIM - Nessuno Scroll con Molti File ✅ FIXED
 
-**Posizione**: `BrimUploadModal.svelte`
+**Posizione**: `BrokerImportFilesModal.svelte`
 **Severità**: Media
 **Descrizione**:
 
@@ -94,9 +95,9 @@ Durante i test di verifica della migrazione prod/test data separation, sono stat
 
 ---
 
-### Bug 4: Pagina Files - Colonna Broker Non Auto-Aggiunta
+### Bug 4: Pagina Files - Colonna Broker Non Auto-Aggiunta ✅ FIXED
 
-**Posizione**: `FilesPage.svelte` o `BrimFilesTable.svelte`
+**Posizione**: `FilesTable.svelte`
 **Severità**: Bassa
 **Descrizione**:
 
@@ -128,10 +129,10 @@ Durante i test di verifica della migrazione prod/test data separation, sono stat
 
 ---
 
-## 🏷️ Feature: Sistema di Versioning con Git Tags
+## 🏷️ Feature: Sistema di Versioning con Git Tags ✅ IMPLEMENTED
 
 **Priorità**: Media
-**Stima**: 2-3 ore
+**Completato**: 2026-02-18
 
 ### Obiettivo
 
@@ -292,3 +293,45 @@ curl http://localhost:8000/api/v1/info | jq .version
 - Nessuno è bloccante per la feature data separation
 - Il sistema di versioning è indipendente dai bug e può essere implementato in parallelo
 
+---
+
+## ✅ Riepilogo Implementazione (2026-02-18)
+
+### Bug Fixes
+
+| Bug | File Modificati | Descrizione Fix |
+|-----|-----------------|-----------------|
+| Bug 1 | `auth.py`, `auth.ts`, `settings.ts` | Login response include `user_settings`, frontend applica lingua/tema/valuta e aggiorna store |
+| Bug 2 | `settings.ts`, `globalSettings.ts`, `PreferencesTab.svelte`, `GlobalSettingsTab.svelte`, `+layout.svelte` | Store centralizzati per user/global settings, sync su salvataggio, caricamento all'avvio app |
+| Bug 3 | `BrokerImportFilesModal.svelte` | Fix CSS: `min-height: 0`, `flex-shrink: 0` su header/footer, `overflow-y: auto` su upload area |
+| Bug 4 | `FilesTable.svelte` | Cambiato condizione da `brokers.size > 0` a `brokers.size > 1` |
+
+### Settings Store Architecture (Bug 2 Complete Fix)
+
+**Problema originale**: I settings venivano salvati nel backend ma non nello store locale, quindi i componenti non vedevano i valori aggiornati.
+
+**Soluzione implementata**:
+1. **`userSettings` store** (`settings.ts`): 
+   - `setDirect()` per impostare i valori direttamente (usato dopo login e save)
+   - Caricato in `(app)/+layout.svelte` dopo auth check
+   
+2. **`globalSettings` store** (`globalSettings.ts`): **NUOVO**
+   - Gestisce settings globali (max_file_upload_mb, session_ttl_hours, etc.)
+   - `setDirect()` per bulk update dopo salvataggio
+   - Caricato in `(app)/+layout.svelte` dopo auth check
+   
+3. **PreferencesTab.svelte**: Chiama `userSettings.setDirect()` dopo ogni save
+4. **GlobalSettingsTab.svelte**: Chiama `globalSettings.setDirect()` dopo ogni save
+5. **files/+page.svelte**: Usa `globalSettings.get()` invece di chiamata API
+
+### Feature Versioning
+
+| Componente | File | Descrizione |
+|------------|------|-------------|
+| Backend utility | `backend/app/utils/version.py` | `get_git_version()` con `@lru_cache` |
+| System API | `backend/app/api/v1/system.py` | `/system/info` usa versione git |
+| Startup log | `backend/app/main.py` | Log versione all'avvio |
+| CLI command | `dev.py` | `./dev.py info version` |
+| Frontend injection | `frontend/vite.config.ts` | `__APP_VERSION__` via `define` |
+| Frontend export | `frontend/src/lib/version.ts` | `APP_VERSION` constant |
+| UI display | `frontend/src/lib/components/layout/Sidebar.svelte` | Versione nel footer sidebar |

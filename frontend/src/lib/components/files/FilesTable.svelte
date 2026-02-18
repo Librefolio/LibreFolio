@@ -198,8 +198,9 @@
         ];
 
         if (type === 'brim') {
-            // Add broker column for BRIM files
-            if (showBrokerColumn && brokers && brokers.size > 0) {
+            // Add broker column for BRIM files when user has multiple brokers
+            // Bug 4 fix: Show column based on broker count, not just existence
+            if (showBrokerColumn && brokers && brokers.size > 1) {
                 cols.push({
                     id: 'broker',
                     urlKey: 'broker',

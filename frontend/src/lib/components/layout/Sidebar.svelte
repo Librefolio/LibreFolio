@@ -5,6 +5,7 @@
     import {_} from '$lib/i18n';
     import {auth} from '$lib/stores/auth';
     import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, X} from 'lucide-svelte';
+    import {APP_VERSION} from '$lib/version';
 
     // Mobile sidebar state (exported so parent can control it)
     export let isOpen = false;
@@ -217,5 +218,12 @@
                 <span class="whitespace-nowrap">{$_('auth.logout')}</span>
             {/if}
         </button>
+
+        <!-- Version -->
+        {#if !collapsed}
+            <div class="text-center text-white/40 text-xs pt-2" title="LibreFolio {APP_VERSION}">
+                {APP_VERSION}
+            </div>
+        {/if}
     </div>
 </nav>
