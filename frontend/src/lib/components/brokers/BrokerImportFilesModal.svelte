@@ -324,6 +324,7 @@
         justify-content: space-between;
         padding: 1rem 1.5rem;
         border-bottom: 1px solid #e5e7eb;
+        flex-shrink: 0;
     }
 
     :global(.dark) .modal-header {
@@ -400,6 +401,9 @@
         padding: 1rem 1.5rem;
         border-bottom: 1px solid #e5e7eb;
         background-color: #f9fafb;
+        flex-shrink: 0;
+        max-height: 250px;
+        overflow-y: auto;
     }
 
     :global(.dark) .upload-area {
@@ -424,9 +428,9 @@
 
     .modal-body {
         flex: 1;
-        overflow: auto;
+        overflow-y: auto;
         padding: 1rem 1.5rem;
-        min-height: 300px;
+        min-height: 0; /* Required for flex child to scroll properly */
     }
 
     .loading-state,
@@ -445,6 +449,7 @@
         padding: 0.75rem 1.5rem;
         border-top: 1px solid #e5e7eb;
         background-color: #f9fafb;
+        flex-shrink: 0;
     }
 
     :global(.dark) .modal-footer {

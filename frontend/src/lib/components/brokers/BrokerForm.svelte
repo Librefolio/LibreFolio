@@ -127,6 +127,12 @@
         } finally {
             loadingCurrencies = false;
         }
+
+        // Bug 2 fix: Load user settings if not already available
+        // This ensures base_currency is available for the initial balance selector
+        if (!$userSettings) {
+            await userSettings.load();
+        }
     });
 
     // Validation

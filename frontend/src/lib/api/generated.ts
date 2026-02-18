@@ -3,6 +3,9 @@ import { z } from "zod";
 
 type AuthLoginResponse = {
   user: AuthUserResponse;
+  user_settings?:
+    | ((UserSettingsRead | null) | Array<UserSettingsRead | null>)
+    | undefined;
   message?: /**
    * @default "Login successful"
    */
@@ -15,6 +18,22 @@ type AuthUserResponse = {
   is_active: boolean;
   is_superuser: boolean;
   created_at: string;
+};
+type UserSettingsRead = {
+  /**
+   * Preferred language (en, it, fr, es)
+   */
+  language: string;
+  /**
+   * Base currency for display (ISO 4217)
+   */
+  base_currency: string;
+  /**
+   * UI theme
+   *
+   * @enum light, dark, auto
+   */
+  theme: "light" | "dark" | "auto";
 };
 type AuthMeResponse = {
   user: AuthUserResponse;
@@ -2873,11 +2892,19 @@ const AuthUserResponse: z.ZodType<AuthUserResponse> = z
     created_at: z.string(),
   })
   .passthrough();
+const UserSettingsRead: z.ZodType<UserSettingsRead> = z
+  .object({
+    language: z.string().describe("Preferred language (en, it, fr, es)"),
+    base_currency: z.string().describe("Base currency for display (ISO 4217)"),
+    theme: z.enum(["light", "dark", "auto"]).describe("UI theme"),
+  })
+  .passthrough();
 const AuthLoginResponse: z.ZodType<AuthLoginResponse> = z
   .object({
     user: AuthUserResponse.describe(
       "User info returned after login or from /me endpoint."
     ),
+    user_settings: z.union([UserSettingsRead, z.null()]).optional(),
     message: z.string().optional().default("Login successful"),
   })
   .passthrough();
@@ -2941,13 +2968,6 @@ const UpdateProfileResponse: z.ZodType<UpdateProfileResponse> = z
       "User info returned after login or from /me endpoint."
     ),
     message: z.string().optional().default("Profile updated successfully"),
-  })
-  .passthrough();
-const UserSettingsRead = z
-  .object({
-    language: z.string().describe("Preferred language (en, it, fr, es)"),
-    base_currency: z.string().describe("Base currency for display (ISO 4217)"),
-    theme: z.enum(["light", "dark", "auto"]).describe("UI theme"),
   })
   .passthrough();
 const UserSettingsUpdate = z
@@ -5350,6 +5370,7 @@ const CurrencyNormalizationResponse = z.object({
 export const schemas = {
   AuthLoginRequest,
   AuthUserResponse,
+  UserSettingsRead,
   AuthLoginResponse,
   ValidationError,
   HTTPValidationError,
@@ -5361,7 +5382,6 @@ export const schemas = {
   ChangePasswordResponse,
   UpdateProfileRequest,
   UpdateProfileResponse,
-  UserSettingsRead,
   UserSettingsUpdate,
   GlobalSettingRead,
   GlobalSettingsListResponse,

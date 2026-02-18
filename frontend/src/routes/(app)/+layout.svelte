@@ -5,6 +5,8 @@
     import {i18nLoading, initI18n} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
     import {auth, isAuthenticated, isAuthInitialized} from '$lib/stores/auth';
+    import {userSettings} from '$lib/stores/settings';
+    import {globalSettings} from '$lib/stores/globalSettings';
     import {debug} from '$lib/debug';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';
     import Header from '$lib/components/layout/Header.svelte';
@@ -53,6 +55,13 @@
                 if (!isAuth) {
                     debug.log('AppLayout', 'Not authenticated, redirecting to /');
                     goto('/');
+                } else {
+                    // Load settings stores after successful auth
+                    debug.log('AppLayout', 'Loading user and global settings');
+                    await Promise.all([
+                        userSettings.load(),
+                        globalSettings.load()
+                    ]);
                 }
             } catch (error) {
                 debug.error('AppLayout', 'Auth check failed:', error);

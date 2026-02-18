@@ -20,6 +20,7 @@
     import {browser} from '$app/environment';
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
+    import {globalSettings} from '$lib/stores/globalSettings';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
@@ -214,17 +215,10 @@
     }
 
     async function loadGlobalSettings() {
-        try {
-            const response = await zodiosApi.list_global_settings_api_v1_settings_global_get();
-            const settings = response.settings || [];
-            const maxSizeSetting = settings.find((s: { key: string }) => s.key === 'max_file_upload_mb');
-            if (maxSizeSetting && maxSizeSetting.value) {
-                maxUploadSizeMB = parseInt(maxSizeSetting.value, 10) || 10;
-            }
-        } catch (e) {
-            console.error('Failed to load global settings:', e);
-            // Keep default value
-        }
+        // Use globalSettings store (already loaded by app layout)
+        // Subscribe reactively or get current value
+        const settings = globalSettings.get();
+        maxUploadSizeMB = settings.max_file_upload_mb || 10;
     }
 
     async function loadBrokers() {

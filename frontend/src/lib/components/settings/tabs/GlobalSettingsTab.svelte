@@ -7,6 +7,7 @@
     import {AlertCircle, ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
     import {SearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
+    import {globalSettings} from '$lib/stores/globalSettings';
 
     // Props
     export let canEdit: boolean = false;
@@ -141,6 +142,10 @@
             }
             // Trigger reactivity
             settings = [...settings];
+
+            // Sync globalSettings store
+            syncGlobalSettingsStore();
+
             const label = getSettingLabel(key);
             success = `"${label}" ${$_('settings.savedSuccessfully')}`;
             setTimeout(() => success = null, 3000);
@@ -221,6 +226,9 @@
         isSaving = false;
 
         if (savedLabels.length > 0 && !error) {
+            // Sync globalSettings store
+            syncGlobalSettingsStore();
+
             success = `${$_('settings.savedSuccessfully')}:\n• ${savedLabels.join('\n• ')}`;
             setTimeout(() => success = null, 4000);
         }
@@ -240,6 +248,23 @@
             }
         }
         editedValues = {...editedValues}; // Trigger reactivity
+    }
+
+    /**
+     * Sync current editedValues to the globalSettings store
+     * This ensures other components see the updated values immediately
+     */
+    function syncGlobalSettingsStore() {
+        globalSettings.setDirect({
+            default_language: editedValues['default_language'] || 'en',
+            default_currency: editedValues['default_currency'] || 'EUR',
+            default_theme: editedValues['default_theme'] || 'auto',
+            session_ttl_hours: parseInt(editedValues['session_ttl_hours'] || '24', 10),
+            auto_sync_fx_rates: editedValues['auto_sync_fx_rates'] === 'true',
+            auto_sync_prices: editedValues['auto_sync_prices'] === 'true',
+            price_sync_interval_hours: parseInt(editedValues['price_sync_interval_hours'] || '24', 10),
+            max_file_upload_mb: parseInt(editedValues['max_file_upload_mb'] || '10', 10)
+        });
     }
 
     function getSettingLabel(key: string): string {

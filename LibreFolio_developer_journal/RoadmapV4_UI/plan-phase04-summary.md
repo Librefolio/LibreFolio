@@ -1,8 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 6 Febbraio 2026  
-**Status**: 🔄 IN PROGRESS (Step 4.4 Data Separation completato)
+**Ultimo aggiornamento**: 18 Febbraio 2026  
+**Status**: 🔄 IN PROGRESS (UI Fixes + Versioning completati)
 
 ---
 
@@ -72,6 +72,14 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Tutti i servizi (BRIM, uploads, logging) usano path dinamico
     - Test isolati non inquinano dati produzione
     - Script migrazione `scripts/migrate_data_structure.py`
+
+12. **UI Fixes + Git Versioning** ✅ NUOVO (18 Feb 2026)
+    - Bug 1: User settings applicate al login (lingua, tema, valuta base)
+    - Bug 2: Valuta base usata come default in BrokerForm
+    - Bug 3: Modal BRIM upload scroll corretto
+    - Bug 4: Colonna Broker visibile con 2+ broker
+    - Feature: Git tag versioning (`./dev.py info version`, sidebar, API)
+    - Vedi `phases/phase-04-subplan/plan-ui-fixes.md`
 
 ---
 

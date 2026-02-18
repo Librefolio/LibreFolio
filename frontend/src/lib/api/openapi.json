@@ -4103,6 +4103,16 @@
           "user": {
             "$ref": "#/components/schemas/AuthUserResponse"
           },
+          "user_settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserSettingsRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "message": {
             "type": "string",
             "title": "Message",

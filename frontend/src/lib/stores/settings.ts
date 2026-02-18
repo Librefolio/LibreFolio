@@ -98,6 +98,17 @@ function createUserSettingsStore() {
          */
         get(): UserSettings | null {
             return get({subscribe});
+        },
+
+        /**
+         * Set settings directly (used after login when we already have the data)
+         * This updates both the store and localStorage
+         */
+        setDirect(settings: UserSettings): void {
+            set(settings);
+            if (browser) {
+                localStorage.setItem('user_settings', JSON.stringify(settings));
+            }
         }
     };
 }

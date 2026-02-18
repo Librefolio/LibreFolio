@@ -399,6 +399,20 @@ def cmd_info_api(args):
     return run_pipenv(["python", "scripts/list_api_endpoints.py"])
 
 
+def cmd_info_version(args):
+    """Show application version from git tags."""
+    from backend.app.utils.version import get_version_info
+    version_info = get_version_info()
+    print(f"{Colors.CYAN}LibreFolio {version_info['version']}{Colors.NC}")
+    if version_info['is_dirty']:
+        print(f"  {Colors.YELLOW}(uncommitted changes){Colors.NC}")
+    if version_info['is_release']:
+        print(f"  {Colors.GREEN}Release version{Colors.NC}")
+    else:
+        print(f"  Development version")
+    return 0
+
+
 # =============================================================================
 # MkDocs Commands
 # =============================================================================
@@ -827,6 +841,9 @@ Examples:
 
     info_p = info_sub.add_parser("api", help="List all API endpoints")
     info_p.set_defaults(func=cmd_info_api)
+
+    info_p = info_sub.add_parser("version", help="Show application version")
+    info_p.set_defaults(func=cmd_info_version)
 
     # Format & Lint
     p = subparsers.add_parser("format", help="📦 Format code with black")

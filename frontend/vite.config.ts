@@ -1,8 +1,27 @@
 import {sveltekit} from '@sveltejs/kit/vite';
 import {defineConfig} from 'vite';
+import {execSync} from 'child_process';
+
+/**
+ * Get git version from git describe.
+ * Returns format like 'v1.2.3' or 'v1.2.3-5-gabcdef'
+ */
+function getGitVersion(): string {
+    try {
+        return execSync('git describe --tags --always --dirty')
+            .toString()
+            .trim();
+    } catch {
+        return 'unknown';
+    }
+}
 
 export default defineConfig(({mode}) => ({
     plugins: [sveltekit()],
+    // Inject version at build time
+    define: {
+        __APP_VERSION__: JSON.stringify(getGitVersion()),
+    },
     build: {
         // Debug mode: sourcemaps + no minify for easy debugging
         sourcemap: mode === 'development' ? true : false,

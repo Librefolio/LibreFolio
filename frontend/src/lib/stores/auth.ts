@@ -13,6 +13,8 @@ import {zodiosApi} from '$lib/api';
 import {debug} from '$lib/debug';
 import type {AuthState, AuthUser} from '$lib/types';
 import {isAxiosError} from 'axios';
+import {currentLanguage} from '$lib/stores/language';
+import {userSettings} from '$lib/stores/settings';
 
 // Re-export types for backward compatibility
 export type {AuthUser, AuthState} from '$lib/types';
@@ -54,6 +56,46 @@ function createAuthStore() {
                     error: null,
                     isInitialized: true
                 }));
+
+                // Apply user settings from login response (Bug 1 fix)
+                // Handle potential array type from openapi-zod-client
+                const settings = Array.isArray(response.user_settings)
+                    ? response.user_settings[0]
+                    : response.user_settings;
+
+                if (settings && browser) {
+                    debug.log('AuthStore', 'Applying user settings:', settings);
+
+                    // Apply language preference
+                    if (settings.language) {
+                        currentLanguage.set(settings.language as 'en' | 'it' | 'fr' | 'es');
+                    }
+
+                    // Apply theme preference
+                    if (settings.theme) {
+                        const theme = settings.theme;
+                        if (theme === 'dark') {
+                            document.documentElement.classList.add('dark');
+                            localStorage.setItem('theme', 'dark');
+                        } else if (theme === 'light') {
+                            document.documentElement.classList.remove('dark');
+                            localStorage.setItem('theme', 'light');
+                        } else {
+                            // auto mode - match system preference
+                            localStorage.setItem('theme', 'auto');
+                            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                            if (prefersDark) {
+                                document.documentElement.classList.add('dark');
+                            } else {
+                                document.documentElement.classList.remove('dark');
+                            }
+                        }
+                    }
+
+                    // Cache settings to localStorage for userSettings store
+                    // Bug 2 fix: Also update the store directly so it's available immediately
+                    userSettings.setDirect(settings);
+                }
 
                 return true;
             } catch (error) {
