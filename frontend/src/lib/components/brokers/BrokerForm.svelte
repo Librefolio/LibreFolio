@@ -10,7 +10,8 @@
     import ImportPluginSelect from '$lib/components/ImportPluginSelect.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import {Info, Plus, Trash2} from 'lucide-svelte';
+    import {ImageEditModal} from '$lib/components/ui/media';
+    import {Info, Plus, Trash2, Upload} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
         submit: {
@@ -144,6 +145,27 @@
     // Get user's default currency
     $: defaultCurrency = $userSettings?.base_currency ?? 'EUR';
 
+    // Image edit modal state for broker icon
+    let showIconEditModal = false;
+    let iconEditFile: File | null = null;
+
+    // Handle icon upload completion
+    function handleIconUploadComplete(event: CustomEvent<{url: string; file: File}>) {
+        iconUrl = event.detail.url;
+        showIconEditModal = false;
+        iconEditFile = null;
+    }
+
+    // Handle icon file selection
+    function handleIconFileSelect(event: Event) {
+        const input = event.target as HTMLInputElement;
+        if (input.files && input.files[0]) {
+            iconEditFile = input.files[0];
+            showIconEditModal = true;
+            // Reset input to allow selecting same file again
+            input.value = '';
+        }
+    }
 
     function addBalance() {
         // First balance uses user's default currency, subsequent ones find unused
@@ -282,6 +304,16 @@
                     placeholder={$_('brokers.iconUrlPlaceholder')}
                     type="url"
             />
+            <!-- Upload button for icon -->
+            <label class="flex items-center justify-center w-10 h-10 border dark:border-slate-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" title={$_('uploads.upload')}>
+                <Upload size={18} class="text-gray-500 dark:text-gray-400" />
+                <input
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    on:change={handleIconFileSelect}
+                />
+            </label>
             <!-- Icon preview using BrokerIcon component -->
             <BrokerIcon
                     altText="Preview"
@@ -445,6 +477,16 @@
         </div>
     {/if}
 </form>
+
+<!-- Image Edit Modal for Broker Icon -->
+<ImageEditModal
+    open={showIconEditModal}
+    file={iconEditFile}
+    preset="broker-icon"
+    on:complete={handleIconUploadComplete}
+    on:cancel={() => { showIconEditModal = false; iconEditFile = null; }}
+    on:error={(e) => console.error('Icon upload error:', e.detail.message)}
+/>
 
 <!-- Actions (sempre visibili - fuori dal form scrollabile) -->
 <div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky bottom-0 pb-4 px-4 -mx-4 -mb-4 rounded-b-2xl">

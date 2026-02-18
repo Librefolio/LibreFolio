@@ -395,7 +395,10 @@
     "defaultCurrency": "Default Currency",
     "defaultCurrencyHint": "Currency used by default for new transactions and calculations",
     "themeHint": "Choose your preferred color scheme",
-    "category": "Category"
+    "category": "Category",
+    "categoryProfile": "Profile",
+    "avatar": "Avatar",
+    "avatarHint": "Click to upload a profile picture"
   },
   "uploads": {
     "dropOrClick": "Drop file here or click to browse",
@@ -441,6 +444,13 @@
     "confirmCloseWithPendingFiles": "You have files selected for upload. Are you sure you want to cancel?",
     "pendingUploads": "Pending Uploads",
     "pendingUploadsMessage": "You have files selected for upload. Do you want to discard them?",
-    "filesToUpload": "Files to upload"
+    "filesToUpload": "Files to upload",
+    "editImage": "Edit Image",
+    "editAvatar": "Upload Avatar",
+    "editBrokerIcon": "Upload Broker Icon",
+    "cropAndUpload": "Crop & Upload",
+    "zoom": "Zoom",
+    "aspectRatio": "Aspect Ratio",
+    "outputSize": "Output"
   }
 }

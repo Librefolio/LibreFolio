@@ -10229,6 +10229,18 @@
             ],
             "title": "Theme",
             "description": "UI theme"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url",
+            "description": "URL to user avatar image"
           }
         },
         "type": "object",
@@ -10283,6 +10295,19 @@
               }
             ],
             "title": "Theme"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url",
+            "description": "URL to user avatar image"
           }
         },
         "type": "object",

@@ -4,7 +4,8 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {auth} from '$lib/stores/auth';
-    import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, X} from 'lucide-svelte';
+    import {userSettings} from '$lib/stores/settings';
+    import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, X} from 'lucide-svelte';
     import {APP_VERSION} from '$lib/version';
 
     // Mobile sidebar state (exported so parent can control it)
@@ -53,6 +54,9 @@
     $: activeHref = allNavItems.find(item =>
         currentPath === item.href || currentPath.startsWith(item.href + '/')
     )?.href ?? '';
+
+    // Get avatar URL safely from user settings
+    $: avatarUrl = $userSettings?.avatar_url as string | null | undefined;
 
     async function handleLogout() {
         await auth.logout();
@@ -203,6 +207,37 @@
 
     <!-- Bottom Section -->
     <div class="border-t border-white/10 p-4 space-y-2">
+
+        <!-- User Avatar & Info -->
+        <a
+            href="/settings"
+            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition-colors
+                {collapsed ? 'justify-center' : ''}"
+            title={collapsed ? $auth.user?.username || $_('settings.userPreferences') : ''}
+            on:click={closeSidebar}
+        >
+            {#if avatarUrl}
+                <img
+                    src={avatarUrl}
+                    alt="Avatar"
+                    class="w-8 h-8 rounded-full object-cover border border-white/30 flex-shrink-0"
+                />
+            {:else}
+                <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <User size={16} class="text-white/70" />
+                </div>
+            {/if}
+            {#if !collapsed}
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-white truncate">
+                        {$auth.user?.username || $_('common.user')}
+                    </div>
+                    <div class="text-xs text-white/50 truncate">
+                        {$auth.user?.email || ''}
+                    </div>
+                </div>
+            {/if}
+        </a>
 
         <!-- Logout Button -->
         <button

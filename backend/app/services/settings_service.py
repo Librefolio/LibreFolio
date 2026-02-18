@@ -33,7 +33,10 @@ async def get_user_settings(user_id: int, session: AsyncSession) -> Optional[Use
     settings = result.scalar_one_or_none()
     if settings:
         return UserSettingsRead(
-            language=settings.language, base_currency=settings.base_currency, theme=settings.theme
+            language=settings.language,
+            base_currency=settings.base_currency,
+            theme=settings.theme,
+            avatar_url=settings.avatar_url,
             )
     return None
 
@@ -63,6 +66,7 @@ async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> Us
         language=new_settings.language,
         base_currency=new_settings.base_currency,
         theme=new_settings.theme,
+        avatar_url=new_settings.avatar_url,
         )
 
 
@@ -81,6 +85,7 @@ async def update_user_settings(
             language=updates.language or "en",
             base_currency=updates.base_currency or "EUR",
             theme=updates.theme or "light",
+            avatar_url=updates.avatar_url,
             created_at=utcnow(),
             updated_at=utcnow(),
             )
@@ -93,6 +98,8 @@ async def update_user_settings(
             settings.base_currency = updates.base_currency
         if updates.theme is not None:
             settings.theme = updates.theme
+        if updates.avatar_url is not None:
+            settings.avatar_url = updates.avatar_url
         settings.updated_at = utcnow()
 
     await session.commit()
@@ -101,7 +108,10 @@ async def update_user_settings(
     logger.info("Updated user settings", user_id=user_id)
 
     return UserSettingsRead(
-        language=settings.language, base_currency=settings.base_currency, theme=settings.theme
+        language=settings.language,
+        base_currency=settings.base_currency,
+        theme=settings.theme,
+        avatar_url=settings.avatar_url,
         )
 
 

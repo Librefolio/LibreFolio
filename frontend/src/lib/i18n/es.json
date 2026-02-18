@@ -395,7 +395,10 @@
     "defaultCurrency": "Moneda predeterminada",
     "defaultCurrencyHint": "Moneda utilizada por defecto para nuevas transacciones y cálculos",
     "themeHint": "Elige tu tema preferido",
-    "category": "Categoría"
+    "category": "Categoría",
+    "categoryProfile": "Perfil",
+    "avatar": "Avatar",
+    "avatarHint": "Haz clic para subir una foto de perfil"
   },
   "uploads": {
     "dropOrClick": "Arrastra un archivo aquí o haz clic para explorar",
@@ -441,6 +444,13 @@
     "confirmCloseWithPendingFiles": "Tienes archivos seleccionados para subir. ¿Estás seguro de que quieres cancelar?",
     "pendingUploads": "Subidas pendientes",
     "pendingUploadsMessage": "Tienes archivos seleccionados para subir. ¿Quieres descartarlos?",
-    "filesToUpload": "Archivos para subir"
+    "filesToUpload": "Archivos para subir",
+    "editImage": "Editar Imagen",
+    "editAvatar": "Subir Avatar",
+    "editBrokerIcon": "Subir Icono del Broker",
+    "cropAndUpload": "Recortar y Subir",
+    "zoom": "Zoom",
+    "aspectRatio": "Relación de aspecto",
+    "outputSize": "Salida"
   }
 }
