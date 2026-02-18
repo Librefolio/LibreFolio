@@ -46,6 +46,7 @@
     "@zxcvbn-ts/language-en": "^3.0.2",
     "date-fns": "^4.1.0",
     "lucide-svelte": "^0.559.0",
+    "svelte-easy-crop": "^5.0.0",
     "svelte-i18n": "^4.0.1",
     "zod": "3.24.1"
   }

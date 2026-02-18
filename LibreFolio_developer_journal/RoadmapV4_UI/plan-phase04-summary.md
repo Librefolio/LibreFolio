@@ -2,7 +2,7 @@
 
 **Data creazione**: 30 Gennaio 2026  
 **Ultimo aggiornamento**: 18 Febbraio 2026  
-**Status**: 🔄 IN PROGRESS (UI Fixes + Versioning completati)
+**Status**: 🧪 TESTING (Image Crop in test manuale, File Preview pianificato)
 
 ---
 
@@ -73,12 +73,17 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Test isolati non inquinano dati produzione
     - Script migrazione `scripts/migrate_data_structure.py`
 
-12. **UI Fixes + Git Versioning** ✅ NUOVO (18 Feb 2026)
+12. **UI Fixes + Git Versioning + Settings Stores** ✅ STEP 4.5 (18 Feb 2026)
     - Bug 1: User settings applicate al login (lingua, tema, valuta base)
-    - Bug 2: Valuta base usata come default in BrokerForm
+    - Bug 2: Settings stores centralizzati con sync su salvataggio
+      - `userSettings` store con `setDirect()` per update immediato
+      - `globalSettings` store **NUOVO** per config app-wide
+      - Entrambi caricati in `(app)/+layout.svelte` dopo auth
+      - PreferencesTab/GlobalSettingsTab sincronizzano store dopo save
     - Bug 3: Modal BRIM upload scroll corretto
     - Bug 4: Colonna Broker visibile con 2+ broker
     - Feature: Git tag versioning (`./dev.py info version`, sidebar, API)
+    - Nuovi file: `globalSettings.ts`, `version.py`, `version.ts`
     - Vedi `phases/phase-04-subplan/plan-ui-fixes.md`
 
 ---
@@ -165,6 +170,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | `plan-componentReorganizationV2.prompt.md`  | Famiglia Select unificata + Svelte 5 runes | ✅ COMPLETATO |
 | `plan-componentReorganizationV3-cleanup.md` | Cleanup + test E2E Select components       | ✅ COMPLETATO |
 | `plan-data-separation.md`                   | Separazione cartelle dati prod/test        | ✅ COMPLETATO |
+| `plan-ui-fixes.md`                          | Bug UI + Git versioning                    | ✅ COMPLETATO |
 
 ### Reference Docs (in `phases/phase-04-subplan/`)
 
@@ -172,12 +178,22 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 |------------------------|-------------------------------------------------|--------------|
 | `e2e-test-analysis.md` | Gap analysis test E2E - traccia test completati | ✅ COMPLETATO |
 
-### Plans DA IMPLEMENTARE (in `RoadmapV4_UI/`)
+### Plans COMPLETATI (in `RoadmapV4_UI/`)
+
+| File                             | Descrizione                            | Status       |
+|----------------------------------|----------------------------------------|--------------|
+| `plan-imageCropModal.prompt.md`  | Sistema Image Crop Modal unificato     | 🧪 IN TEST   |
+
+### Plans PIANIFICATI (in `RoadmapV4_UI/`)
+
+| File                             | Descrizione                            | Status       |
+|----------------------------------|----------------------------------------|--------------|
+| `plan-filePreview.prompt.md`     | Sistema preview file inline            | 📋 PIANIFICATO |
+
+### Plans Optional/Low Priority
 
 | File                                 | Descrizione                                  | Priorità    |
 |--------------------------------------|----------------------------------------------|-------------|
-| `plan-ui-fixes.md`                   | Bug UI scoperti durante test data separation | 🔜 PROSSIMO |
-| `plan-image-crop.md`                 | Componente crop immagini con cropperjs       | 📋 ALTA     |
 | `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend                | Riferimento |
 
 ### Plans ARCHIVIATI (in `phase-04-subplan/`)
@@ -278,32 +294,66 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - ✅ Tutti i test passano (8/8 categorie)
 - ✅ Verifica manuale: dati prod/test completamente isolati
 
-### Step 4.5: UI Fixes Post Data-Separation 📋 PROSSIMO
+### Step 4.5: UI Fixes Post Data-Separation ✅ COMPLETATO
 
-**Riferimento**: `plan-ui-fixes.md`
+**Riferimento**: `phases/phase-04-subplan/plan-ui-fixes.md`
 
-Bug scoperti durante test manuali della data separation:
+**Lavoro completato (18 Feb 2026)**:
 
-- User preferences non applicate al login (lingua, tema)
-- Base currency non usata come default in broker creation modal
-- BRIM upload modal: no scroll con molti file
-- Files page: colonna broker non auto-aggiunta
+- ✅ Bug 1: User preferences applicate al login (lingua, tema, valuta)
+- ✅ Bug 2: Settings stores centralizzati (`userSettings` + `globalSettings`)
+- ✅ Bug 3: Modal BRIM upload scroll corretto
+- ✅ Bug 4: Colonna Broker visibile con 2+ broker
+- ✅ Feature: Git tag versioning (`./dev.py info version`, sidebar, API)
 
-### Step 4.6: Image Crop Component 📋 PRIORITÀ ALTA
+### Step 4.6: Image Crop Component 🧪 IN TEST
 
-**Riferimento**: `plan-image-crop.md`
+**Riferimento**: `plan-imageCropModal.prompt.md`
 
-**Priorità**: ALTA - Necessario per upload avatar/icone
+**Lavoro completato (18 Feb 2026)**:
+
+- ✅ Installato `svelte-easy-crop` per crop interattivo
+- ✅ Creato `utils/imageCrop.ts` con presets e utility `getCroppedImage()`
+- ✅ Creato `ImageCropper.svelte` - componente crop puro
+- ✅ Creato `ImageEditModal.svelte` - modale wrapper con upload
+- ✅ Integrazione Files Page: upload immagine → editor → upload
+- ✅ Integrazione Broker Icon: bottone upload → editor con preset 64x64
+- ✅ Integrazione Avatar Utente: sezione in PreferencesTab con preset 200x200
+- ✅ Avatar visibile in Sidebar con link a Settings
+- ✅ Dark mode funzionante
+- ✅ Mobile-friendly (touch gestures supportati)
+
+**Da completare**:
+
+- 🧪 Test manuali in corso
+- 📋 Test E2E da implementare (vedi sezione test nel piano)
+- 📋 Aggiungere `data-testid` ai componenti
 
 ### Step 4.7: MkDocs Dark Mode (30 min) 🔲
 
 ### Step 4.8: GDPR Permissions Analysis (planning only) ⏸️
 
+### Step 4.9: File Preview System 📋 PIANIFICATO
+
+**Riferimento**: `plan-filePreview.prompt.md`
+
+**Obiettivo**: Preview inline dei file senza download completo
+
+**Features pianificate**:
+
+- Preview immagini con selector qualità
+- Preview testo/codice con range righe selezionabile
+- Preview tabelle (CSV/Excel) con DataTable
+- Preview Markdown con rendering HTML
+- Disponibile in Files Page (Static + BRIM) e Broker Detail
+
+**Stima**: ~8h (1 giorno lavorativo)
+
 ---
 
 ## 🎯 Prossimi Passi Immediati
 
-**Phase 4 IN PROGRESS** - Step 4.4 Data Separation completato, restano UI fixes e Image Crop.
+**Phase 4 IN TEST** - Image Crop in verifica manuale, File Preview pianificato
 
 ### ✅ Step Completati
 
@@ -311,16 +361,22 @@ Bug scoperti durante test manuali della data separation:
 2. ✅ **Component Reorganization** (5 Feb 2026) - Famiglia Select, 67+ test E2E
 3. ✅ **Settings Mobile + Gallery** (3 Feb 2026) - Layout responsive, 224 screenshots
 4. ✅ **E2E Test Remediation** (2 Feb 2026) - 51 test, data-testid
+5. ✅ **UI Fixes** (18 Feb 2026) - Bug login/settings, modal scroll, versioning
 
-### 🔜 Prossimi Step
+### 🧪 In Test
 
-1. **UI Fixes** (`plan-ui-fixes.md`) - ~2h 📋 PROSSIMO
-    - Bug scoperti durante test data separation
-    - User preferences al login, modal scroll, etc.
+6. 🧪 **Image Crop Component** (18 Feb 2026) - Test manuali in corso, E2E da scrivere
 
-2. **Image Crop Component** (`plan-image-crop.md`) - ~2h
-    - Componente crop immagini con cropperjs
-    - Necessario per upload avatar/icone
+### 📋 Pianificato
+
+7. 📋 **File Preview System** (`plan-filePreview.prompt.md`) - ~8h
+   - Preview inline per immagini, testo, tabelle, markdown
+   - Disponibile in Files Page e Broker Detail
+
+### 🔲 Optional/Low Priority
+
+- **MkDocs Dark Mode** (`Step 4.7`) - ~30 min
+- **GDPR Permissions Analysis** (`Step 4.8`) - Planning only
 
 ### Dopo: Phase 5 (FX Management)
 

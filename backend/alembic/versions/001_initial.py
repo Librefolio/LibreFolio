@@ -61,6 +61,7 @@ def upgrade() -> None:
                    base_currency VARCHAR(3)  NOT NULL DEFAULT 'EUR',
                    language      VARCHAR(5)  NOT NULL DEFAULT 'en',
                    theme         VARCHAR(20) NOT NULL DEFAULT 'light',
+                   avatar_url    VARCHAR(500) DEFAULT NULL,
                    created_at    DATETIME    NOT NULL,
                    updated_at    DATETIME    NOT NULL,
                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,

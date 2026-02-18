@@ -34,6 +34,12 @@ type UserSettingsRead = {
    * @enum light, dark, auto
    */
   theme: "light" | "dark" | "auto";
+  avatar_url?:
+    | /**
+     * URL to user avatar image
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
 };
 type AuthMeResponse = {
   user: AuthUserResponse;
@@ -2897,6 +2903,10 @@ const UserSettingsRead: z.ZodType<UserSettingsRead> = z
     language: z.string().describe("Preferred language (en, it, fr, es)"),
     base_currency: z.string().describe("Base currency for display (ISO 4217)"),
     theme: z.enum(["light", "dark", "auto"]).describe("UI theme"),
+    avatar_url: z
+      .union([z.string(), z.null()])
+      .describe("URL to user avatar image")
+      .optional(),
   })
   .passthrough();
 const AuthLoginResponse: z.ZodType<AuthLoginResponse> = z
@@ -2975,6 +2985,9 @@ const UserSettingsUpdate = z
     language: z.union([z.string(), z.null()]),
     base_currency: z.union([z.string(), z.null()]),
     theme: z.union([z.enum(["light", "dark", "auto"]), z.null()]),
+    avatar_url: z
+      .union([z.string(), z.null()])
+      .describe("URL to user avatar image"),
   })
   .partial()
   .passthrough();

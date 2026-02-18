@@ -17,7 +17,8 @@ export type {UserSettings} from '$lib/types';
 const defaultSettings: UserSettings = {
     language: 'en',
     base_currency: 'EUR',
-    theme: 'auto'
+    theme: 'auto',
+    avatar_url: null
 };
 
 /**
