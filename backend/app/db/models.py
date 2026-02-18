@@ -280,6 +280,7 @@ class UserSettings(SQLModel, table=True):
     base_currency: str = Field(default="EUR", max_length=3)  # ISO 4217
     language: str = Field(default="en", max_length=5)  # e.g., "en", "it", "fr", "es"
     theme: str = Field(default="light", max_length=20)  # e.g., "light", "dark"
+    avatar_url: Optional[str] = Field(default=None, max_length=500)  # URL to user avatar image
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

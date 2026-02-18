@@ -23,10 +23,12 @@
     import {globalSettings} from '$lib/stores/globalSettings';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
+    import {ImageEditModal} from '$lib/components/ui/media';
     import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
     import {Download, File as FileIcon, FileSpreadsheet, FileText, Image, LayoutGrid, List, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
+    import {isImageFile} from '$lib/utils/imageCrop';
     import type {BrimFile, Broker, BrokerInfo, UploadedFile} from '$lib/types';
     import type {FilterValue} from '$lib/components/table/types';
 
@@ -139,6 +141,10 @@
     let pendingBrimFiles: globalThis.File[] = [];
     // Map of file index -> broker_id for per-file assignment
     let fileBrokerAssignments: Map<number, number | null> = new Map();
+
+    // Image edit modal state
+    let showImageEditModal = false;
+    let imageEditFile: globalThis.File | null = null;
 
     // Confirm modal for closing uploader with pending files
     let showCloseUploaderConfirm = false;
@@ -283,20 +289,70 @@
     async function handleUpload(event: CustomEvent<{ files: globalThis.File[] }>) {
         const {files} = event.detail;
 
+        // Separate images from other files
+        const imageFiles = files.filter(f => isImageFile(f));
+        const otherFiles = files.filter(f => !isImageFile(f));
+
         try {
-            // Upload files sequentially using axios directly (Zodios doesn't handle FormData well)
-            for (const file of files) {
+            // Upload non-image files directly
+            for (const file of otherFiles) {
                 const formData = new FormData();
                 formData.append('file', file);
                 await axiosInstance.post('/api/v1/uploads', formData);
             }
 
-            showUploader = false;
-            pendingStaticFiles = [];  // Reset pending files
-            await loadFiles();
+            // If there are image files, open the editor for the first one
+            // (subsequent images will be handled after the first completes)
+            if (imageFiles.length > 0) {
+                // Store remaining images for later processing
+                pendingImageFiles = imageFiles.slice(1);
+                // Open editor for the first image
+                imageEditFile = imageFiles[0];
+                showImageEditModal = true;
+
+                // If we uploaded some non-image files, refresh the list
+                if (otherFiles.length > 0) {
+                    await loadFiles();
+                }
+            } else {
+                // No images, just close uploader and refresh
+                showUploader = false;
+                pendingStaticFiles = [];
+                await loadFiles();
+            }
         } catch (e) {
             error = e instanceof Error ? e.message : 'Upload failed';
         }
+    }
+
+    // Queue of images waiting to be edited
+    let pendingImageFiles: globalThis.File[] = [];
+
+    // Handle completion of image editing - process next image or finish
+    async function handleImageEditComplete() {
+        showImageEditModal = false;
+        imageEditFile = null;
+
+        // Check if there are more images to process
+        if (pendingImageFiles.length > 0) {
+            const nextImage = pendingImageFiles.shift()!;
+            pendingImageFiles = [...pendingImageFiles]; // trigger reactivity
+            imageEditFile = nextImage;
+            showImageEditModal = true;
+        } else {
+            // All images processed, close uploader and refresh
+            showUploader = false;
+            pendingStaticFiles = [];
+            await loadFiles();
+        }
+    }
+
+    // Handle cancel of image editing
+    function handleImageEditCancel() {
+        showImageEditModal = false;
+        imageEditFile = null;
+        // Clear pending images queue
+        pendingImageFiles = [];
     }
 
     // BRIM Upload handlers
@@ -825,6 +881,18 @@
         </div>
     </div>
 {/if}
+
+<!-- Image Edit Modal -->
+<ImageEditModal
+    open={showImageEditModal}
+    file={imageEditFile}
+    preset="custom"
+    on:complete={handleImageEditComplete}
+    on:cancel={handleImageEditCancel}
+    on:error={(e) => {
+        error = e.detail.message;
+    }}
+/>
 
 <style>
     .files-page {

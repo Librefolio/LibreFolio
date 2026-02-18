@@ -22,6 +22,7 @@ class UserSettingsRead(BaseModel):
     language: str = Field(..., description="Preferred language (en, it, fr, es)")
     base_currency: str = Field(..., description="Base currency for display (ISO 4217)")
     theme: Literal["light", "dark", "auto"] = Field(..., description="UI theme")
+    avatar_url: Optional[str] = Field(None, description="URL to user avatar image")
 
 
 class UserSettingsUpdate(BaseModel):
@@ -30,6 +31,7 @@ class UserSettingsUpdate(BaseModel):
     language: Optional[str] = Field(None, min_length=2, max_length=5)
     base_currency: Optional[str] = Field(None, min_length=3, max_length=3)
     theme: Optional[Literal["light", "dark", "auto"]] = None
+    avatar_url: Optional[str] = Field(None, max_length=500, description="URL to user avatar image")
 
 
 # ============================================================================
