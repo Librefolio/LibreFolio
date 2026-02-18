@@ -4,8 +4,11 @@ Authentication Schemas
 Pydantic models for auth API requests/responses.
 """
 
+from typing import Optional
+
 from pydantic import BaseModel, EmailStr, Field
 
+from backend.app.schemas.settings import UserSettingsRead
 from backend.app.utils.datetime_utils import UTCDateTime
 
 
@@ -72,6 +75,7 @@ class AuthLoginResponse(BaseModel):
     """Response after successful login."""
 
     user: AuthUserResponse
+    user_settings: Optional[UserSettingsRead] = None
     message: str = "Login successful"
 
 

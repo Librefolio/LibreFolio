@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.api.v1.router import router as api_v1_router
 from backend.app.config import get_settings, set_test_mode, is_test_mode, PROJECT_ROOT, ensure_data_dirs
 from backend.app.logging_config import configure_logging, get_logger
+from backend.app.utils.version import get_git_version
 
 # Check for test mode via environment variable ONLY
 # NOTE: Do NOT check sys.argv here - it causes issues when this module is imported
@@ -132,9 +133,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     Handles startup and shutdown events.
     """
     # Startup
+    git_version = get_git_version()
     logger.info(
         "Starting LibreFolio",
-        version=settings.VERSION,
+        version=git_version,
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
         test_mode=is_test_mode(),
         )

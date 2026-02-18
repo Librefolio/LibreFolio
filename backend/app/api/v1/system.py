@@ -14,6 +14,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from backend.app.config import PROJECT_ROOT
+from backend.app.utils.version import get_git_version
 
 router = APIRouter(prefix="/system", tags=["System"])
 
@@ -160,7 +161,7 @@ async def get_system_info() -> SystemInfoResponse:
     Returns app version, Python version, OS details, and dependency versions.
     """
     return SystemInfoResponse(
-        app_version="0.1.0",
+        app_version=get_git_version(),
         python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         os_name=platform.system(),
         os_version=platform.release(),

@@ -1,6 +1,7 @@
 <script lang="ts">
     import {_, LANGUAGE_OPTIONS, type SupportedLocale} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
+    import {userSettings} from '$lib/stores/settings';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
     import {onMount} from 'svelte';
@@ -182,8 +183,20 @@
             if (field === 'language') {
                 currentLanguage.set(editedValues.language as SupportedLocale);
                 await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({language: editedValues.language});
+                // Sync userSettings store
+                userSettings.setDirect({
+                    language: editedValues.language,
+                    base_currency: editedValues.default_currency,
+                    theme: editedValues.theme
+                });
             } else if (field === 'default_currency') {
                 await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({base_currency: editedValues.default_currency});
+                // Sync userSettings store
+                userSettings.setDirect({
+                    language: editedValues.language,
+                    base_currency: editedValues.default_currency,
+                    theme: editedValues.theme
+                });
             } else if (field === 'theme') {
                 localStorage.setItem('librefolio-theme', editedValues.theme === 'auto' ? '' : editedValues.theme);
                 document.documentElement.classList.remove('light', 'dark');
@@ -191,6 +204,12 @@
                     document.documentElement.classList.add(editedValues.theme);
                 }
                 await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({theme: editedValues.theme});
+                // Sync userSettings store
+                userSettings.setDirect({
+                    language: editedValues.language,
+                    base_currency: editedValues.default_currency,
+                    theme: editedValues.theme
+                });
             }
 
             originalValues = {...originalValues, [field]: editedValues[field]};
@@ -248,7 +267,13 @@
                 saved.push($_('settings.theme'));
             }
 
+            // Sync userSettings store after all saves
             if (saved.length > 0) {
+                userSettings.setDirect({
+                    language: editedValues.language,
+                    base_currency: editedValues.default_currency,
+                    theme: editedValues.theme
+                });
                 success = `${$_('settings.savedSuccessfully')}: ${saved.join(', ')}`;
             }
             setTimeout(() => success = null, 4000);
