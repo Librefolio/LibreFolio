@@ -1,12 +1,15 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {auth, currentUser} from '$lib/stores/auth';
+    import {userSettings} from '$lib/stores/settings';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
     import {goto} from '$app/navigation';
     import {debug} from '$lib/debug';
-    import {AlertCircle, Calendar, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User} from 'lucide-svelte';
+    import {AlertCircle, Calendar, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User, Camera} from 'lucide-svelte';
     import PasswordChangeModal from '$lib/components/settings/PasswordChangeModal.svelte';
+    import {ImageEditModal} from '$lib/components/ui/media';
+    import {onMount} from 'svelte';
 
     // Format date for display
     function formatDate(dateStr: string | undefined): string {
@@ -32,6 +35,25 @@
     let showDeleteModal = false;
     let deleteConfirmText = '';
     let deleting = false;
+
+    // Avatar state
+    let showAvatarModal = false;
+    let avatarFile: File | null = null;
+    let originalAvatarUrl: string | null = null;
+    let editedAvatarUrl: string | null = null;
+
+    // Load avatar URL from settings on mount
+    onMount(async () => {
+        try {
+            const settings = await zodiosApi.get_user_settings_endpoint_api_v1_settings_user_get();
+            // avatar_url comes from API - extract string if present
+            const avatarValue = settings.avatar_url;
+            originalAvatarUrl = typeof avatarValue === 'string' ? avatarValue : null;
+            editedAvatarUrl = originalAvatarUrl;
+        } catch (e) {
+            debug.error('ProfileTab', 'Failed to load avatar', e);
+        }
+    });
 
     // Profile editing state
     let saving = false;
@@ -59,7 +81,8 @@
     // Track modifications (separate reactive statements)
     $: usernameModified = editedUsername !== originalUsername;
     $: emailModified = editedEmail !== originalEmail;
-    $: hasAnyChanges = usernameModified || emailModified;
+    $: avatarModified = editedAvatarUrl !== originalAvatarUrl;
+    $: hasAnyChanges = usernameModified || emailModified || avatarModified;
 
     // Check if delete confirmation matches username
     $: canDelete = deleteConfirmText === $currentUser?.username;
@@ -161,6 +184,51 @@
         debug.log('ProfileTab', 'undoAll');
         editedUsername = originalUsername;
         editedEmail = originalEmail;
+        editedAvatarUrl = originalAvatarUrl;
+    }
+
+    // Avatar handlers
+    function handleAvatarFileSelect(event: Event) {
+        const input = event.target as HTMLInputElement;
+        if (input.files && input.files[0]) {
+            avatarFile = input.files[0];
+            showAvatarModal = true;
+        }
+    }
+
+    async function handleAvatarUploadComplete(event: CustomEvent<{url: string; file: File}>) {
+        showAvatarModal = false;
+        avatarFile = null;
+        editedAvatarUrl = event.detail.url;
+        // Save immediately
+        await saveAvatarField();
+    }
+
+    async function saveAvatarField() {
+        saving = true;
+        error = null;
+        successItems = [];
+
+        try {
+            await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({avatar_url: editedAvatarUrl});
+            await auth.checkAuth();
+            originalAvatarUrl = editedAvatarUrl;
+            successItems = [$_('settings.avatar')];
+            setTimeout(() => successItems = [], 3000);
+        } catch (e: unknown) {
+            debug.error('ProfileTab', 'saveAvatarField failed', e);
+            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
+            error = detail || (e instanceof Error ? e.message : $_('settings.updateFailed'));
+            editedAvatarUrl = originalAvatarUrl;
+            setTimeout(() => error = null, 5000);
+        } finally {
+            saving = false;
+        }
+    }
+
+    async function removeAvatar() {
+        editedAvatarUrl = null;
+        await saveAvatarField();
     }
 
     async function handleDeleteAccount() {
@@ -259,6 +327,50 @@
             </ul>
         </div>
     {/if}
+
+    <!-- Avatar Section -->
+    <div class="flex items-center gap-4 pb-4 border-b border-gray-100 dark:border-slate-700" data-testid="profile-avatar">
+        <!-- Avatar Preview -->
+        <div class="relative group">
+            {#if editedAvatarUrl}
+                <img
+                    src={editedAvatarUrl}
+                    alt="Avatar"
+                    class="w-20 h-20 rounded-full object-cover border-2 border-gray-200 dark:border-slate-600"
+                />
+            {:else}
+                <div class="w-20 h-20 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center">
+                    <User size={32} class="text-gray-400 dark:text-slate-500" />
+                </div>
+            {/if}
+            <!-- Upload overlay (only when not locked) -->
+            {#if !isLocked}
+                <label class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                    <Camera size={20} class="text-white" />
+                    <input
+                        type="file"
+                        accept="image/*"
+                        class="hidden"
+                        on:change={handleAvatarFileSelect}
+                    />
+                </label>
+            {/if}
+        </div>
+        <!-- Avatar Info -->
+        <div class="flex-1">
+            <h4 class="font-medium text-gray-900 dark:text-white">{$_('settings.avatar')}</h4>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.avatarHint')}</p>
+            {#if !isLocked && editedAvatarUrl}
+                <button
+                    type="button"
+                    class="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline"
+                    on:click={removeAvatar}
+                >
+                    {$_('common.remove')}
+                </button>
+            {/if}
+        </div>
+    </div>
 
     <!-- Account Fields -->
     <div class="space-y-0">
@@ -586,3 +698,14 @@
         </div>
     </div>
 {/if}
+
+<!-- Avatar Edit Modal -->
+<ImageEditModal
+    open={showAvatarModal}
+    file={avatarFile}
+    preset="avatar"
+    on:complete={handleAvatarUploadComplete}
+    on:cancel={() => { showAvatarModal = false; avatarFile = null; }}
+    on:error={(e) => { error = e.detail.message; }}
+/>
+
