@@ -129,45 +129,16 @@ const croppedCanvas = await selection.$toCanvas({width: 200, height: 200});
 - ✅ Crop salva nel file pending, non fa upload
 - ✅ Click "Carica" → upload diretto dei file (già croppati se editati)
 
-**Struttura ImageEditConfig**:
-```typescript
-interface ImageEditConfig {
-  // Crop area (from cropper.getData())
-  cropX: number;
-  cropY: number;
-  cropWidth: number;
-  cropHeight: number;
-  
-  // Transform
-  rotation: number;  // degrees
-  scaleX: number;    // 1 or -1 (flip H)
-  scaleY: number;    // 1 or -1 (flip V)
-  
-  // Output
-  outputWidth: number | null;
-  outputHeight: number | null;
-  outputFormat: 'png' | 'jpeg' | 'webp';
-  outputQuality: number;
-  
-  // File name
-  outputFileName: string;
-}
-```
-
-### Feature 2: Nome File Editabile
+### Feature 2: Nome File Editabile ✅ COMPLETATA
 
 **Requisito**: Nella modale edit, l'utente può modificare il nome di salvataggio.
 
-**UI**:
-```
-┌─────────────────────────────────────────────────┐
-│ File name: [photo_vacanze.png        ]  [.png ▼]│
-└─────────────────────────────────────────────────┘
-```
-
-- Input text con nome base (senza estensione)
-- Dropdown per formato output (cambia anche estensione)
-- Default: nome file originale
+**Implementato**:
+- ✅ Input per nome file (senza estensione)
+- ✅ Dropdown per formato output (png/jpg/webp)
+- ✅ Nome estratto automaticamente dal file originale
+- ✅ Formato rilevato dal tipo MIME del file
+- ✅ Nome e formato usati durante save/upload
 
 ### Feature 3: Asset Picker Modal (per Avatar, Broker Icon, etc.)
 
@@ -183,9 +154,9 @@ User clicks "Change Avatar"
 ┌─────────────────────────────────────────────────┐
 │  Select Image                           [X]     │
 ├─────────────────────────────────────────────────┤
-│ ○ URL:  [https://example.com/avatar.png    ]   │
-│ ○ Existing: [grid of existing images]          │
-│ ○ Upload new: [Select file...]                 │
+│ ○ URL:  [https://example.com/avatar.png    ]    │
+│ ○ Existing: [grid of existing images]           │
+│ ○ Upload new: [Select file...]                  │
 ├─────────────────────────────────────────────────┤
 │                    [Cancel] [Use Selected]      │
 └─────────────────────────────────────────────────┘

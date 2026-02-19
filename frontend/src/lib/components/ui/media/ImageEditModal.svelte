@@ -53,6 +53,24 @@
     let hasChanges = false;  // Track if user made any changes
     let showCloseConfirm = false;  // Show confirmation dialog
 
+    // File name editing
+    let editedFileName: string = '';
+    let outputFormat: 'png' | 'jpeg' | 'webp' = 'png';
+
+    // Initialize file name when file changes
+    $: if (file && open) {
+        // Extract name without extension
+        const nameParts = file.name.split('.');
+        if (nameParts.length > 1) {
+            nameParts.pop(); // Remove extension
+        }
+        editedFileName = nameParts.join('.');
+        // Get format from file type or default to png
+        if (file.type === 'image/jpeg') outputFormat = 'jpeg';
+        else if (file.type === 'image/webp') outputFormat = 'webp';
+        else outputFormat = 'png';
+    }
+
     // Reset preset when modal opens
     $: if (open) {
         currentPreset = preset;
@@ -150,12 +168,15 @@
                 cropperInstance,
                 config.outputWidth,
                 config.outputHeight,
-                config.outputFormat === 'auto' ? 'png' : config.outputFormat,
+                outputFormat,
                 config.outputQuality
             );
 
-            // Convert to File
-            const croppedFile = blobToFile(blob, file.name);
+            // Build final filename with edited name and format
+            const finalFileName = `${editedFileName || 'image'}.${outputFormat}`;
+
+            // Convert to File with the edited name
+            const croppedFile = blobToFile(blob, finalFileName);
 
             // If uploadOnComplete is false, just return the cropped file
             if (!uploadOnComplete) {
@@ -251,6 +272,32 @@
                     on:change={handleCropperChange}
                 />
 
+                <!-- File name editing -->
+                <div class="filename-editor">
+                    <label class="filename-label" for="filename-input">
+                        {$_('uploads.fileName') || 'File name'}:
+                    </label>
+                    <div class="filename-input-group">
+                        <input
+                            id="filename-input"
+                            type="text"
+                            class="filename-input"
+                            bind:value={editedFileName}
+                            placeholder="image"
+                            on:input={handleCropperChange}
+                        />
+                        <select
+                            class="format-select"
+                            bind:value={outputFormat}
+                            on:change={handleCropperChange}
+                        >
+                            <option value="png">.png</option>
+                            <option value="jpeg">.jpg</option>
+                            <option value="webp">.webp</option>
+                        </select>
+                    </div>
+                </div>
+
                 <!-- Output info -->
                 <div class="output-info">
                     <ImageIcon size={16} class="info-icon" />
@@ -258,7 +305,7 @@
                         {$_('uploads.outputSize') || 'Output'}: {outputInfo}
                     </span>
                     <span class="info-text">
-                        {config.outputFormat === 'auto' ? 'PNG' : config.outputFormat.toUpperCase()}
+                        {outputFormat.toUpperCase()}
                         ({Math.round(config.outputQuality * 100)}%)
                     </span>
                 </div>
@@ -476,6 +523,84 @@
         background: #10b981;
         border-color: #10b981;
         color: white;
+    }
+
+    /* Filename Editor */
+    .filename-editor {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .filename-label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: #374151;
+        white-space: nowrap;
+    }
+
+    :global(.dark) .filename-label {
+        color: #d1d5db;
+    }
+
+    .filename-input-group {
+        display: flex;
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .filename-input {
+        flex: 1;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        border: 1px solid #d1d5db;
+        border-right: none;
+        border-radius: 0.375rem 0 0 0.375rem;
+        background: white;
+        color: #374151;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+
+    .filename-input:focus {
+        border-color: #1a4031;
+    }
+
+    :global(.dark) .filename-input {
+        background: #374151;
+        border-color: #4b5563;
+        color: #f3f4f6;
+    }
+
+    :global(.dark) .filename-input:focus {
+        border-color: #10b981;
+    }
+
+    .format-select {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0 0.375rem 0.375rem 0;
+        background: #f3f4f6;
+        color: #374151;
+        cursor: pointer;
+        outline: none;
+    }
+
+    .format-select:focus {
+        border-color: #1a4031;
+    }
+
+    :global(.dark) .format-select {
+        background: #4b5563;
+        border-color: #4b5563;
+        color: #f3f4f6;
+    }
+
+    :global(.dark) .format-select:focus {
+        border-color: #10b981;
     }
 
     /* Output Info */

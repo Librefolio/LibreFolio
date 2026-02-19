@@ -274,17 +274,55 @@
     }
 
     /**
-     * Rotate image by degrees
-     * Note: cropperjs v2 rotates around the image center which may not align
-     * with selection center. For now, simple rotation is used.
+     * Rotate image around the center of the selection.
+     *
+     * Concept:
+     * - Canvas: Fixed viewport (coordinates 0,0 at top-left)
+     * - Image: Photo that can be moved, rotated, scaled
+     * - Selection: Rectangle drawn on canvas (coordinates relative to canvas)
+     *
+     * When rotating, we need to compensate the translation so the selection
+     * center stays visually in the same position.
      */
     function rotateImage(degrees: number) {
         const img = cropper?.getCropperImage();
+        const sel = cropper?.getCropperSelection();
+        
         if (!img) return;
 
-        // Simple rotation - cropperjs handles the transform
-        img.$rotate(degreesToRadians(degrees));
+        const radians = degreesToRadians(degrees);
 
+        // If there's a visible selection, rotate "around" the selection center
+        // by compensating with a translation
+        if (sel && sel.width > 0 && sel.height > 0) {
+            // 1. Selection center (Canvas coordinates)
+            const selCenterX = sel.x + sel.width / 2;
+            const selCenterY = sel.y + sel.height / 2;
+
+            // 2. Image center (Canvas coordinates)
+            // $getTransform() returns [a, b, c, d, e, f] where e=tx, f=ty
+            const transform = img.$getTransform();
+            const imgCenterX = transform[4];  // e = translation X
+            const imgCenterY = transform[5];  // f = translation Y
+
+            // 3. Vector from Image Center to Selection Center
+            const vecX = selCenterX - imgCenterX;
+            const vecY = selCenterY - imgCenterY;
+
+            // 4. Calculate rotated vector
+            const cos = Math.cos(radians);
+            const sin = Math.sin(radians);
+            const vecX_rotated = vecX * cos - vecY * sin;
+            const vecY_rotated = vecX * sin + vecY * cos;
+
+            // 5. Apply rotation AND position correction
+            // The correction is the difference between original and rotated vector
+            img.$rotate(radians);
+            img.$move(vecX - vecX_rotated, vecY - vecY_rotated);
+        } else {
+            // Fallback: standard rotation around image center
+            img.$rotate(radians);
+        }
 
         // Update rotation state
         currentRotation += degrees;
