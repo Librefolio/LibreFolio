@@ -106,6 +106,23 @@
         }
     }
 
+    /**
+     * Handle mouse wheel for unified zoom
+     * - Wheel up: zoom in (enlarge selection, then zoom image)
+     * - Wheel down: zoom out (shrink selection, then dezoom image)
+     */
+    function handleWheel(event: WheelEvent) {
+        event.preventDefault();
+
+        // deltaY < 0 = wheel up = zoom in
+        // deltaY > 0 = wheel down = zoom out
+        if (event.deltaY < 0) {
+            zoomIn();
+        } else {
+            zoomOut();
+        }
+    }
+
     async function initCropper() {
         // Wait for DOM update
         await tick();
@@ -209,8 +226,42 @@
             // NOTE: Shade overlay is configured via CSS Variables (--theme-color)
             // on cropper-canvas, not via JavaScript setAttribute
 
+            // Function to clamp selection within canvas bounds
+            const clampSelectionToBounds = () => {
+                const canvasRect = cropperCanvas.getBoundingClientRect();
+
+                // Selection must stay within canvas (0,0 to width,height)
+                let x = cropperSelection.x;
+                let y = cropperSelection.y;
+                let w = cropperSelection.width;
+                let h = cropperSelection.height;
+
+                // Clamp position
+                if (x < 0) {
+                    x = 0;
+                    cropperSelection.x = x;
+                }
+                if (y < 0) {
+                    y = 0;
+                    cropperSelection.y = y;
+                }
+                if (x + w > canvasRect.width) {
+                    x = canvasRect.width - w;
+                    if (x < 0) x = 0;
+                    cropperSelection.x = x;
+                }
+                if (y + h > canvasRect.height) {
+                    y = canvasRect.height - h;
+                    if (y < 0) y = 0;
+                    cropperSelection.y = y;
+                }
+            };
+
             // Function to update selection info
             const updateSelectionInfo = () => {
+                // First clamp selection to bounds
+                clampSelectionToBounds();
+
                 cropWidth = Math.round(cropperSelection.width || 0);
                 cropHeight = Math.round(cropperSelection.height || 0);
                 dispatch('change', {
@@ -238,14 +289,14 @@
         return degrees * (Math.PI / 180);
     }
 
-    // Zoom thresholds for unified zoom behavior
-    const MIN_SELECTION_SIZE = 50;  // Minimum selection size in pixels before switching to image zoom
-    const MAX_SELECTION_COVERAGE = 0.95;  // Maximum coverage of canvas before switching to image zoom
+    // Zoom thresholds for unified zoom behavior (percentages)
+    const MIN_SELECTION_COVERAGE = 0.50;  // Minimum 50% coverage before switching to image dezoom
+    const MAX_SELECTION_COVERAGE = 0.90;  // Maximum 90% coverage before switching to image zoom
 
     /**
      * Unified zoom system:
-     * - Zoom IN: first enlarge selection, then zoom image when selection is at max
-     * - Zoom OUT: first shrink selection, then dezoom image when selection is at min
+     * - Zoom IN: first enlarge selection, then zoom image when ANY axis reaches 90%
+     * - Zoom OUT: first shrink selection, then dezoom image when ANY axis reaches 50%
      */
     function zoomIn() {
         const sel = cropper?.getCropperSelection();
@@ -257,13 +308,16 @@
         const canvasRect = canvas.getBoundingClientRect();
         const imgRect = img.getBoundingClientRect();
 
-        // Check if selection is near maximum size (relative to visible image)
-        const selectionCoverageW = sel.width / Math.min(canvasRect.width, imgRect.width);
-        const selectionCoverageH = sel.height / Math.min(canvasRect.height, imgRect.height);
-        const maxCoverage = Math.max(selectionCoverageW, selectionCoverageH);
+        // Use the smaller of canvas and image for bounds
+        const maxW = Math.min(canvasRect.width, imgRect.width);
+        const maxH = Math.min(canvasRect.height, imgRect.height);
 
-        if (maxCoverage >= MAX_SELECTION_COVERAGE) {
-            // Selection at max - zoom the image instead
+        // Coverage per axis
+        const coverageW = sel.width / maxW;
+        const coverageH = sel.height / maxH;
+
+        // If ANY axis is at max coverage, zoom the image
+        if (coverageW >= MAX_SELECTION_COVERAGE || coverageH >= MAX_SELECTION_COVERAGE) {
             img.$zoom(0.1);
             currentZoom += 0.1;
         } else {
@@ -274,15 +328,24 @@
 
     function zoomOut() {
         const sel = cropper?.getCropperSelection();
+        const canvas = cropper?.getCropperCanvas();
         const img = cropper?.getCropperImage();
 
-        if (!sel || !img) return;
+        if (!sel || !canvas || !img) return;
 
-        // Check if selection is at minimum size
-        const minDimension = Math.min(sel.width, sel.height);
+        const canvasRect = canvas.getBoundingClientRect();
+        const imgRect = img.getBoundingClientRect();
 
-        if (minDimension <= MIN_SELECTION_SIZE) {
-            // Selection at min - dezoom the image instead
+        // Use the smaller of canvas and image for bounds
+        const maxW = Math.min(canvasRect.width, imgRect.width);
+        const maxH = Math.min(canvasRect.height, imgRect.height);
+
+        // Coverage per axis
+        const coverageW = sel.width / maxW;
+        const coverageH = sel.height / maxH;
+
+        // If ANY axis is at min coverage, dezoom the image
+        if (coverageW <= MIN_SELECTION_COVERAGE || coverageH <= MIN_SELECTION_COVERAGE) {
             img.$zoom(-0.1);
             currentZoom -= 0.1;
         } else {
@@ -292,7 +355,8 @@
     }
 
     /**
-     * Scale selection around its center while respecting aspect ratio
+     * Scale selection around its center while respecting aspect ratio.
+     * Selection is always constrained to stay within canvas AND image bounds.
      */
     function scaleSelection(factor: number) {
         const sel = cropper?.getCropperSelection();
@@ -304,6 +368,18 @@
         const canvasRect = canvas.getBoundingClientRect();
         const imgRect = img.getBoundingClientRect();
 
+        // Calculate valid bounds (intersection of canvas and image)
+        const imgX = imgRect.left - canvasRect.left;
+        const imgY = imgRect.top - canvasRect.top;
+
+        // Effective bounds: intersection of canvas (0,0 to w,h) and image position
+        const boundsLeft = Math.max(0, imgX);
+        const boundsTop = Math.max(0, imgY);
+        const boundsRight = Math.min(canvasRect.width, imgX + imgRect.width);
+        const boundsBottom = Math.min(canvasRect.height, imgY + imgRect.height);
+        const boundsWidth = boundsRight - boundsLeft;
+        const boundsHeight = boundsBottom - boundsTop;
+
         // Current selection center
         const centerX = sel.x + sel.width / 2;
         const centerY = sel.y + sel.height / 2;
@@ -312,37 +388,31 @@
         let newWidth = sel.width * factor;
         let newHeight = sel.height * factor;
 
-        // Constrain to min size
-        if (newWidth < MIN_SELECTION_SIZE || newHeight < MIN_SELECTION_SIZE) {
+        // Minimum size: 20% of bounds or 30px, whichever is larger
+        const minSize = Math.max(30, Math.min(boundsWidth, boundsHeight) * 0.2);
+        if (newWidth < minSize || newHeight < minSize) {
             return;
         }
 
-        // Constrain to canvas/image bounds
-        const maxWidth = Math.min(canvasRect.width, imgRect.width);
-        const maxHeight = Math.min(canvasRect.height, imgRect.height);
-
-        if (newWidth > maxWidth) {
-            const ratio = maxWidth / newWidth;
-            newWidth = maxWidth;
+        // Maximum size: constrain to bounds
+        if (newWidth > boundsWidth) {
+            const ratio = boundsWidth / newWidth;
+            newWidth = boundsWidth;
             newHeight *= ratio;
         }
-        if (newHeight > maxHeight) {
-            const ratio = maxHeight / newHeight;
-            newHeight = maxHeight;
+        if (newHeight > boundsHeight) {
+            const ratio = boundsHeight / newHeight;
+            newHeight = boundsHeight;
             newWidth *= ratio;
         }
 
-        // Calculate image bounds relative to canvas
-        const imgX = imgRect.left - canvasRect.left;
-        const imgY = imgRect.top - canvasRect.top;
-
-        // New position (centered)
+        // New position (centered on original center)
         let newX = centerX - newWidth / 2;
         let newY = centerY - newHeight / 2;
 
-        // Keep selection within image bounds
-        newX = Math.max(imgX, Math.min(newX, imgX + imgRect.width - newWidth));
-        newY = Math.max(imgY, Math.min(newY, imgY + imgRect.height - newHeight));
+        // Clamp to stay within bounds
+        newX = Math.max(boundsLeft, Math.min(newX, boundsRight - newWidth));
+        newY = Math.max(boundsTop, Math.min(newY, boundsBottom - newHeight));
 
         // Apply new dimensions
         sel.x = newX;
@@ -623,6 +693,7 @@
     <div
         class="crop-wrapper"
         on:mousedown={handleMiddleMouseDown}
+        on:wheel={handleWheel}
         on:contextmenu|preventDefault
     >
         <div class="crop-container" bind:this={containerElement}>
