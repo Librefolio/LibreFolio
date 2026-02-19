@@ -14,8 +14,6 @@
     // Props
     export let imageSrc: string;
     export let aspectRatio: number = 1;  // NaN or 0 = free, 1 = square, 16/9, etc.
-    export let minZoom: number = 1;
-    export let maxZoom: number = 10;
     export let showZoomSlider: boolean = true;
     export let showAspectSelector: boolean = false;
     export let showRotateControls: boolean = true;
@@ -240,29 +238,22 @@
         return degrees * (Math.PI / 180);
     }
 
-    // Track the previous zoom value for delta calculation
-    let previousZoom = 1;
-
-    // Control functions
+    // Control functions - zoom uses relative delta, no artificial limits
     function zoomIn() {
         const img = cropper?.getCropperImage();
         if (img) {
-            const newZoom = Math.min(currentZoom + 0.1, maxZoom);
-            const delta = newZoom - currentZoom;
-            img.$zoom(delta);
-            currentZoom = newZoom;
-            previousZoom = newZoom;
+            // Zoom in by 10% relative
+            img.$zoom(0.1);
+            currentZoom += 0.1;
         }
     }
 
     function zoomOut() {
         const img = cropper?.getCropperImage();
         if (img) {
-            const newZoom = Math.max(currentZoom - 0.1, minZoom);
-            const delta = newZoom - currentZoom;
-            img.$zoom(delta);
-            currentZoom = newZoom;
-            previousZoom = newZoom;
+            // Zoom out by 10% relative - no minimum limit
+            img.$zoom(-0.1);
+            currentZoom -= 0.1;
         }
     }
 

@@ -1,7 +1,11 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {currentUser} from '$lib/stores/auth';
-    import {ArrowRightLeft, BarChart3, Briefcase, Coins, PieChart, TrendingUp, Wallet} from 'lucide-svelte';
+    import {userSettings} from '$lib/stores/settings';
+    import {ArrowRightLeft, BarChart3, Briefcase, Coins, PieChart, TrendingUp, Wallet, User} from 'lucide-svelte';
+
+    // Get avatar URL from settings
+    $: avatarUrl = $userSettings?.avatar_url as string | null | undefined;
 
     // Quick action cards for navigation
     const quickActions = [
@@ -54,10 +58,14 @@
                     </h1>
                     <p class="text-white/80 mt-1">{$_('dashboard.welcomeSubtitle')}</p>
                 </div>
-                <div class="hidden sm:flex items-center justify-center w-16 h-16 bg-white/20 rounded-full">
-					<span class="text-3xl font-bold">
-						{$currentUser.username.charAt(0).toUpperCase()}
-					</span>
+                <div class="hidden sm:flex items-center justify-center w-16 h-16 bg-white/20 rounded-full overflow-hidden">
+                    {#if avatarUrl}
+                        <img src={avatarUrl} alt="Avatar" class="w-full h-full object-cover" />
+                    {:else}
+                        <span class="text-3xl font-bold">
+                            {$currentUser.username.charAt(0).toUpperCase()}
+                        </span>
+                    {/if}
                 </div>
             </div>
         </div>
