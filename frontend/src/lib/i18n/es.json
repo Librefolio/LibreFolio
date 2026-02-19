@@ -38,7 +38,8 @@
     "multipleFiles": "Archivos múltiples permitidos",
     "remove": "Eliminar",
     "discard": "Descartar",
-    "refresh": "Actualizar"
+    "refresh": "Actualizar",
+    "restore": "Restaurar original"
   },
   "table": {
     "rowsPerPage": "Filas por página",
@@ -472,6 +473,11 @@
     "rotation": "Rotación",
     "flip": "Voltear",
     "rotationAppliedOnSave": "Rotación aplicada al guardar",
-    "freeNote": "Usa relación 4:3"
+    "freeNote": "Usa relación 4:3",
+    "resetAll": "Restablecer todo",
+    "crop": "Recortar",
+    "discardChanges": "¿Descartar cambios?",
+    "discardChangesMessage": "Tienes cambios sin guardar. ¿Estás seguro de que quieres cerrar?",
+    "discardAndClose": "Descartar"
   }
 }

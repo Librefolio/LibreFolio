@@ -1,8 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 20 Febbraio 2026  
-**Status**: 🧪 TESTING (Image Crop in debug, File Preview pianificato)
+**Ultimo aggiornamento**: 19 Febbraio 2026  
+**Status**: 🟢 COMPLETATO (Core features, Image Crop funzionante)
 
 ---
 
@@ -52,6 +52,15 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - ~100 test passanti (5/5 suite)
     - Build check automatico prima dei test
     - Gallery screenshot per documentazione (28/28 test pass, ~224 screenshots)
+
+8. **Image Crop Modal** (vedi `plan-imageCropModal.prompt.md`) ✅ NUOVO (19 Feb 2026)
+    - Migrazione da svelte-easy-crop a cropperjs v2
+    - Free crop con maniglie trascinabili (L-shaped)
+    - Rotazione rispetto al centro selezione
+    - Flip H/V, Zoom, Aspect ratio presets
+    - Pulsante Edit/Restore in FileUploader
+    - Conferma chiusura con modifiche non salvate
+    - CSS Variables per Shadow DOM overlay
 
 9. **DB Populate Enhancement** ✅ NUOVO (3 Feb 2026)
     - 6 broker con `brim_plugin_key` e `BrokerUserAccess`

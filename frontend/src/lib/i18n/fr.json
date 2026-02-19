@@ -38,7 +38,8 @@
     "multipleFiles": "Fichiers multiples autorisés",
     "remove": "Supprimer",
     "discard": "Abandonner",
-    "refresh": "Actualiser"
+    "refresh": "Actualiser",
+    "restore": "Restaurer l'original"
   },
   "table": {
     "rowsPerPage": "Lignes par page",
@@ -472,6 +473,11 @@
     "rotation": "Rotation",
     "flip": "Retourner",
     "rotationAppliedOnSave": "Rotation appliquée à l'enregistrement",
-    "freeNote": "Utilise le ratio 4:3"
+    "freeNote": "Utilise le ratio 4:3",
+    "resetAll": "Tout réinitialiser",
+    "crop": "Recadrer",
+    "discardChanges": "Annuler les modifications ?",
+    "discardChangesMessage": "Vous avez des modifications non enregistrées. Voulez-vous vraiment fermer ?",
+    "discardAndClose": "Annuler et fermer"
   }
 }

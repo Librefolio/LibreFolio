@@ -29,9 +29,10 @@
     export let preset: PresetName = 'custom';
     export let customConfig: Partial<ImagePreset> | null = null;
     export let allowPresetChange: boolean = true;  // Allow user to change preset
+    export let uploadOnComplete: boolean = true;   // If false, just return cropped file without uploading
 
     const dispatch = createEventDispatcher<{
-        complete: {url: string; file: File};
+        complete: {url: string | null; file: File};  // url is null when uploadOnComplete=false
         cancel: void;
         error: {message: string};
     }>();
@@ -49,10 +50,14 @@
     let isUploading = false;
     let error: string | null = null;
     let currentPreset: PresetName = preset;
+    let hasChanges = false;  // Track if user made any changes
+    let showCloseConfirm = false;  // Show confirmation dialog
 
     // Reset preset when modal opens
     $: if (open) {
         currentPreset = preset;
+        hasChanges = false;
+        showCloseConfirm = false;
     }
 
     // Computed config from preset + custom overrides
@@ -92,15 +97,37 @@
         dispatch('cancel');
     }
 
+    function requestClose() {
+        // If there are changes, show confirmation
+        if (hasChanges) {
+            showCloseConfirm = true;
+        } else {
+            handleCancel();
+        }
+    }
+
+    function confirmClose() {
+        showCloseConfirm = false;
+        handleCancel();
+    }
+
+    function cancelClose() {
+        showCloseConfirm = false;
+    }
+
+    function handleCropperChange() {
+        hasChanges = true;
+    }
+
     function handleBackdropClick(event: MouseEvent) {
         if (event.target === event.currentTarget) {
-            handleCancel();
+            requestClose();
         }
     }
 
     function handleKeydown(event: KeyboardEvent) {
         if (event.key === 'Escape') {
-            handleCancel();
+            requestClose();
         }
     }
 
@@ -129,6 +156,13 @@
 
             // Convert to File
             const croppedFile = blobToFile(blob, file.name);
+
+            // If uploadOnComplete is false, just return the cropped file
+            if (!uploadOnComplete) {
+                cleanup();
+                dispatch('complete', {url: null, file: croppedFile});
+                return;
+            }
 
             // Upload to backend
             const formData = new FormData();
@@ -179,7 +213,7 @@
                 <button
                     type="button"
                     class="close-btn"
-                    on:click={handleCancel}
+                    on:click={requestClose}
                     title={$_('common.close') || 'Close'}
                 >
                     <X size={20} />
@@ -214,6 +248,7 @@
                     showZoomSlider={true}
                     showRotateControls={true}
                     showAspectSelector={currentPreset === 'custom'}
+                    on:change={handleCropperChange}
                 />
 
                 <!-- Output info -->
@@ -241,7 +276,7 @@
                 <button
                     type="button"
                     class="btn btn-secondary"
-                    on:click={handleCancel}
+                    on:click={requestClose}
                     disabled={isUploading}
                 >
                     {$_('common.cancel') || 'Cancel'}
@@ -257,8 +292,37 @@
                         {$_('common.uploading') || 'Uploading...'}
                     {:else}
                         <Upload size={16} />
-                        {$_('uploads.cropAndUpload') || 'Crop & Upload'}
+                        {#if uploadOnComplete}
+                            {$_('uploads.cropAndUpload') || 'Crop & Upload'}
+                        {:else}
+                            {$_('uploads.crop') || 'Crop'}
+                        {/if}
                     {/if}
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
+
+<!-- Confirmation dialog for closing with unsaved changes -->
+{#if showCloseConfirm}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="confirm-backdrop" on:click|self={cancelClose}>
+        <div class="confirm-dialog">
+            <div class="confirm-header">
+                <span class="confirm-icon">⚠️</span>
+                <h3>{$_('uploads.discardChanges') || 'Discard changes?'}</h3>
+            </div>
+            <p class="confirm-message">
+                {$_('uploads.discardChangesMessage') || 'You have unsaved changes. Are you sure you want to close?'}
+            </p>
+            <div class="confirm-actions">
+                <button class="btn btn-secondary" on:click={cancelClose}>
+                    {$_('common.cancel') || 'Cancel'}
+                </button>
+                <button class="btn btn-warning" on:click={confirmClose}>
+                    {$_('uploads.discardAndClose') || 'Discard'}
                 </button>
             </div>
         </div>
@@ -544,6 +608,79 @@
         to {
             transform: rotate(360deg);
         }
+    }
+
+    /* Confirmation Dialog */
+    .confirm-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: rgba(0, 0, 0, 0.7);
+    }
+
+    .confirm-dialog {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+    }
+
+    :global(.dark) .confirm-dialog {
+        background: #1f2937;
+        border: 1px solid #374151;
+    }
+
+    .confirm-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .confirm-icon {
+        font-size: 1.5rem;
+    }
+
+    .confirm-header h3 {
+        margin: 0;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #d97706;
+    }
+
+    :global(.dark) .confirm-header h3 {
+        color: #fbbf24;
+    }
+
+    .confirm-message {
+        color: #6b7280;
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+    }
+
+    :global(.dark) .confirm-message {
+        color: #9ca3af;
+    }
+
+    .confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+
+    .btn-warning {
+        background: #f59e0b;
+        color: white;
+        border: none;
+    }
+
+    .btn-warning:hover {
+        background: #d97706;
     }
 </style>
 
