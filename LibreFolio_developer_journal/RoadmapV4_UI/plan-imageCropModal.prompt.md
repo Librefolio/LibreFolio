@@ -48,9 +48,9 @@
 | ID | Descrizione | Status |
 |----|-------------|--------|
 | BUG-IC1 | Files Page: serve pulsante edit accanto al file per aprire crop | ✅ |
-| BUG-IC2 | Avatar: dopo cancel, secondo click non apre crop | 🔧 Da verificare |
-| BUG-IC3 | Dashboard: avatar non aggiornato dopo modifica | 🔧 Da verificare |
-| BUG-IC5 | Rimuovi avatar: nessuna conferma "sei sicuro?" | 🔧 Da verificare |
+| BUG-IC2 | Avatar: dopo cancel, secondo click non apre crop | ✅ Fix: reset input via ref |
+| BUG-IC3 | Dashboard: avatar non aggiornato dopo modifica | ✅ Fix: aggiorna userSettings store |
+| BUG-IC5 | Rimuovi avatar: nessuna conferma "sei sicuro?" | ✅ Fix: modale conferma |
 
 ---
 
