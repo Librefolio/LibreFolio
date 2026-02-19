@@ -46,18 +46,20 @@
     let cropWidth = 0;
     let cropHeight = 0;
 
+    // Track last initialized src to avoid re-init loops
+    let lastInitializedSrc: string | null = null;
+
     // Update aspect when prop changes
     $: currentAspect = aspectRatio;
 
-    // Reactive: when imageSrc changes, recreate cropper
-    $: if (imageSrc && containerElement) {
+    // Reactive: when imageSrc changes, recreate cropper (but only if src actually changed)
+    $: if (imageSrc && containerElement && imageSrc !== lastInitializedSrc) {
+        lastInitializedSrc = imageSrc;
         initCropper();
     }
 
     onMount(() => {
-        if (imageSrc && containerElement) {
-            initCropper();
-        }
+        // Initial setup handled by reactive block
     });
 
     onDestroy(() => {
@@ -72,20 +74,65 @@
         // Destroy previous instance if exists
         if (cropper) {
             cropper.destroy();
+            cropper = null;
         }
 
         // Clear container
-        containerElement.innerHTML = '';
+        if (containerElement) {
+            containerElement.innerHTML = '';
+        }
+
+        if (!imageSrc || !containerElement) {
+            return;
+        }
 
         // Determine aspect ratio (0 or NaN = free)
         const effectiveAspect = (currentAspect === 0 || isNaN(currentAspect)) ? NaN : currentAspect;
 
+        // Create image element first (cropperjs v2 needs an element, not a URL)
+        const imgElement = document.createElement('img');
+        imgElement.style.display = 'block';
+        imgElement.style.maxWidth = '100%';
+        imgElement.crossOrigin = 'anonymous';
+
+        // Wait for image to load before creating cropper
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Image load timeout'));
+                }, 10000); // 10 second timeout
+
+                imgElement.onload = () => {
+                    clearTimeout(timeout);
+                    imageWidth = imgElement.naturalWidth;
+                    imageHeight = imgElement.naturalHeight;
+                    resolve();
+                };
+                imgElement.onerror = () => {
+                    clearTimeout(timeout);
+                    reject(new Error('Failed to load image'));
+                };
+
+                // Set src AFTER setting handlers
+                imgElement.src = imageSrc;
+            });
+        } catch (e) {
+            console.error('Image load error:', e);
+            return;
+        }
+
+        // Append image to container
+        containerElement.appendChild(imgElement);
+
+        // Small delay to ensure DOM is ready
+        await new Promise(resolve => setTimeout(resolve, 50));
+
         // Create new Cropper instance with v2 API
-        cropper = new Cropper(imageSrc, {
+        cropper = new Cropper(imgElement, {
             container: containerElement,
         });
 
-        // Wait for image to load
+        // Wait for cropper to be ready
         const cropperImage = cropper.getCropperImage();
         const cropperSelection = cropper.getCropperSelection();
         const cropperCanvas = cropper.getCropperCanvas();
@@ -98,57 +145,95 @@
             cropperSelection.initialCoverage = 0.8;
             cropperSelection.movable = true;
             cropperSelection.resizable = true;
-            cropperSelection.zoomable = true;
+            cropperSelection.zoomable = false;
+            cropperSelection.multiple = false;
+            cropperSelection.keyboard = false;
+            cropperSelection.slottable = false;  // Prevent drawing new selections
 
-            // Configure image
+            // Configure image - allow dragging
             cropperImage.rotatable = true;
             cropperImage.scalable = true;
+            cropperImage.translatable = true;
 
             // Configure canvas
             cropperCanvas.background = true;
+            cropperCanvas.slottable = false;  // Prevent drawing new selections on canvas
 
-            // Listen for changes
-            cropperSelection.addEventListener('change', (e: Event) => {
-                const sel = e.target as any;
-                cropWidth = Math.round(sel.width || 0);
-                cropHeight = Math.round(sel.height || 0);
+            // Change "select" handle to "move" so clicking outside selection moves the image
+            // instead of creating a new selection
+            const selectHandle = cropperCanvas.querySelector('cropper-handle[action="select"]');
+            if (selectHandle) {
+                // Change action from "select" to "move" - this makes the canvas draggable
+                selectHandle.setAttribute('action', 'move');
+            }
+
+            // NOTE: Shade overlay is configured via CSS Variables (--theme-color)
+            // on cropper-canvas, not via JavaScript setAttribute
+
+            // Function to update selection info
+            const updateSelectionInfo = () => {
+                cropWidth = Math.round(cropperSelection.width || 0);
+                cropHeight = Math.round(cropperSelection.height || 0);
                 dispatch('change', {
                     selection: {
-                        x: sel.x || 0,
-                        y: sel.y || 0,
+                        x: cropperSelection.x || 0,
+                        y: cropperSelection.y || 0,
                         width: cropWidth,
                         height: cropHeight
                     }
                 });
-            });
+            };
 
-            // Get natural image dimensions
-            cropperImage.$ready(() => {
-                const img = cropperImage.$image;
-                if (img) {
-                    imageWidth = img.naturalWidth;
-                    imageHeight = img.naturalHeight;
-                }
-            });
+            // Listen for changes (resize, move, etc.)
+            cropperSelection.addEventListener('change', updateSelectionInfo);
+
+            // Initial update after a short delay to let cropperjs initialize
+            setTimeout(updateSelectionInfo, 100);
+
+            // Image dimensions already loaded above
         }
     }
 
+    // Helper: convert degrees to radians
+    function degreesToRadians(degrees: number): number {
+        return degrees * (Math.PI / 180);
+    }
+
+    // Track the previous zoom value for delta calculation
+    let previousZoom = 1;
+
     // Control functions
     function zoomIn() {
-        const cropperCanvas = cropper?.getCropperCanvas();
-        if (cropperCanvas) {
-            currentZoom = Math.min(currentZoom + 0.5, maxZoom);
-            // Zoom is relative in v2, we use scale
-            const img = cropper?.getCropperImage();
-            img?.$zoom(1.5);
+        const img = cropper?.getCropperImage();
+        if (img) {
+            const newZoom = Math.min(currentZoom + 0.1, maxZoom);
+            const delta = newZoom - currentZoom;
+            img.$zoom(delta);
+            currentZoom = newZoom;
+            previousZoom = newZoom;
         }
     }
 
     function zoomOut() {
         const img = cropper?.getCropperImage();
         if (img) {
-            currentZoom = Math.max(currentZoom - 0.5, minZoom);
-            img.$zoom(0.67);  // 1/1.5
+            const newZoom = Math.max(currentZoom - 0.1, minZoom);
+            const delta = newZoom - currentZoom;
+            img.$zoom(delta);
+            currentZoom = newZoom;
+            previousZoom = newZoom;
+        }
+    }
+
+    function handleZoomSliderInput() {
+        const img = cropper?.getCropperImage();
+        if (img) {
+            // Calculate delta from previous value
+            const delta = currentZoom - previousZoom;
+            if (Math.abs(delta) > 0.01) {
+                img.$zoom(delta);
+                previousZoom = currentZoom;
+            }
         }
     }
 
@@ -157,31 +242,50 @@
         if (img) {
             img.$center('contain');
             currentZoom = 1;
+            previousZoom = 1;
         }
     }
 
     function rotateLeft() {
-        const img = cropper?.getCropperImage();
-        if (img) {
-            img.$rotate(-15);
-            currentRotation -= 15;
-            if (currentRotation < -180) currentRotation += 360;
-        }
+        rotateAroundSelectionCenter(-15);
     }
 
     function rotateRight() {
+        rotateAroundSelectionCenter(15);
+    }
+
+    /**
+     * Rotate image around the center of the selection
+     * Technique: translate to origin, rotate, translate back
+     */
+    function rotateAroundSelectionCenter(degrees: number) {
         const img = cropper?.getCropperImage();
-        if (img) {
-            img.$rotate(15);
-            currentRotation += 15;
-            if (currentRotation > 180) currentRotation -= 360;
-        }
+        const sel = cropper?.getCropperSelection();
+        if (!img || !sel) return;
+
+        // Get selection center
+        const centerX = sel.x + sel.width / 2;
+        const centerY = sel.y + sel.height / 2;
+
+        // 1. Translate image so selection center is at origin
+        img.$move(-centerX, -centerY);
+
+        // 2. Rotate around origin (now effectively around selection center)
+        img.$rotate(degreesToRadians(degrees));
+
+        // 3. Translate back
+        img.$move(centerX, centerY);
+
+        // Update rotation state
+        currentRotation += degrees;
+        if (currentRotation > 180) currentRotation -= 360;
+        if (currentRotation < -180) currentRotation += 360;
     }
 
     function resetRotation() {
         // Reset by re-initializing (v2 doesn't have rotateTo)
         currentRotation = 0;
-        initCropper();
+        forceReinit();
     }
 
     function flipH() {
@@ -205,38 +309,59 @@
         currentRotation = 0;
         scaleX = 1;
         scaleY = 1;
-        initCropper();
+        forceReinit();
+    }
+
+    // Force re-initialization of cropper (for reset functions)
+    function forceReinit() {
+        lastInitializedSrc = null;
+        if (imageSrc && containerElement) {
+            lastInitializedSrc = imageSrc;
+            initCropper();
+        }
     }
 
     function selectAspect(value: number) {
         currentAspect = value;
         const sel = cropper?.getCropperSelection();
-        if (sel) {
-            const effectiveAspect = (value === 0 || isNaN(value)) ? NaN : value;
-            sel.aspectRatio = effectiveAspect;
-        }
-    }
+        if (!sel) return;
 
-    function handleZoomSliderChange() {
-        // For slider, we can't directly set zoom in v2, so we work with relative zoom
-        // This is a simplified approach
-        const img = cropper?.getCropperImage();
-        if (img) {
-            // Calculate relative zoom from previous
-            const factor = currentZoom;
-            img.$zoom(factor / (factor - 0.1 || 1));
-        }
-    }
+        const effectiveAspect = (value === 0 || isNaN(value)) ? NaN : value;
 
-    function handleRotationSliderChange() {
-        const img = cropper?.getCropperImage();
-        if (img) {
-            // Reset and apply new rotation
-            const oldRotation = currentRotation;
-            // v2 rotate is relative, so we need to track delta
-            // For now, rotation slider triggers full reset + rotate
-            // This is simplified - full implementation would track matrix
+        // Get current selection dimensions and center
+        const oldWidth = sel.width;
+        const oldHeight = sel.height;
+        const centerX = sel.x + oldWidth / 2;
+        const centerY = sel.y + oldHeight / 2;
+
+        // Calculate current diagonal
+        const oldDiagonal = Math.sqrt(oldWidth * oldWidth + oldHeight * oldHeight);
+
+        // Calculate new dimensions that maintain the same diagonal length
+        let newWidth: number, newHeight: number;
+
+        if (isNaN(effectiveAspect)) {
+            // Free aspect - keep current dimensions
+            newWidth = oldWidth;
+            newHeight = oldHeight;
+        } else {
+            // For aspect ratio r = w/h, and diagonal d:
+            // w^2 + h^2 = d^2
+            // w = r * h
+            // (r*h)^2 + h^2 = d^2
+            // h^2 * (r^2 + 1) = d^2
+            // h = d / sqrt(r^2 + 1)
+            newHeight = oldDiagonal / Math.sqrt(effectiveAspect * effectiveAspect + 1);
+            newWidth = effectiveAspect * newHeight;
         }
+
+        // Calculate new position to keep centered
+        const newX = centerX - newWidth / 2;
+        const newY = centerY - newHeight / 2;
+
+        // Apply new aspect ratio and dimensions
+        sel.aspectRatio = effectiveAspect;
+        sel.$change(newX, newY, newWidth, newHeight);
     }
 
     // Exported methods for parent component
@@ -283,9 +408,38 @@
 </script>
 
 <div class="image-cropper">
-    <!-- Crop Area -->
-    <div class="crop-container" bind:this={containerElement}>
-        <!-- Cropper v2 creates its own DOM structure here -->
+    <!-- Crop Area with controls overlay -->
+    <div class="crop-wrapper">
+        <div class="crop-container" bind:this={containerElement}>
+            <!-- Cropper v2 creates its own DOM structure here -->
+        </div>
+
+        <!-- Controls overlay - right side -->
+        {#if showZoomSlider || showRotateControls}
+            <div class="controls-overlay">
+                {#if showZoomSlider}
+                    <button type="button" class="overlay-btn" on:click={zoomOut} title={$_('uploads.zoomOut') || 'Zoom out'}>
+                        <ZoomOut size={16} />
+                    </button>
+                    <button type="button" class="overlay-btn" on:click={zoomIn} title={$_('uploads.zoomIn') || 'Zoom in'}>
+                        <ZoomIn size={16} />
+                    </button>
+                {/if}
+
+                {#if showRotateControls}
+                    <button type="button" class="overlay-btn" on:click={rotateLeft} title="-15°">
+                        <RotateCcw size={16} />
+                    </button>
+                    <button type="button" class="overlay-btn" on:click={rotateRight} title="+15°">
+                        <RotateCw size={16} />
+                    </button>
+                {/if}
+
+                <button type="button" class="overlay-btn reset" on:click={resetAll} title={$_('uploads.resetAll') || 'Reset All'}>
+                    <RefreshCw size={14} />
+                </button>
+            </div>
+        {/if}
     </div>
 
     <!-- Image Info -->
@@ -300,8 +454,8 @@
         </div>
     </div>
 
-    <!-- Controls -->
-    <div class="controls">
+    <!-- BOTTOM CONTROLS: Preset & Flip -->
+    <div class="bottom-controls">
         <!-- Aspect Ratio Selector -->
         {#if showAspectSelector}
             <div class="control-group">
@@ -321,43 +475,8 @@
             </div>
         {/if}
 
-        <!-- Zoom Controls -->
-        {#if showZoomSlider}
-            <div class="control-group">
-                <span class="control-label">{$_('uploads.zoom') || 'Zoom'}:</span>
-                <div class="control-row">
-                    <button type="button" class="control-btn" on:click={zoomOut} title={$_('uploads.zoomOut') || 'Zoom out'}>
-                        <ZoomOut size={16} />
-                    </button>
-                    <span class="value-display">{currentZoom.toFixed(1)}×</span>
-                    <button type="button" class="control-btn" on:click={zoomIn} title={$_('uploads.zoomIn') || 'Zoom in'}>
-                        <ZoomIn size={16} />
-                    </button>
-                    <button type="button" class="control-btn small" on:click={resetZoom} title={$_('uploads.reset') || 'Reset'}>
-                        <RefreshCw size={12} />
-                    </button>
-                </div>
-            </div>
-        {/if}
-
-        <!-- Rotation & Flip Controls -->
+        <!-- Flip Controls -->
         {#if showRotateControls}
-            <div class="control-group">
-                <span class="control-label">{$_('uploads.rotation') || 'Rotation'}:</span>
-                <div class="control-row">
-                    <button type="button" class="control-btn" on:click={rotateLeft} title="-15°">
-                        <RotateCcw size={16} />
-                    </button>
-                    <span class="value-display">{Math.round(currentRotation)}°</span>
-                    <button type="button" class="control-btn" on:click={rotateRight} title="+15°">
-                        <RotateCw size={16} />
-                    </button>
-                    <button type="button" class="control-btn small" on:click={resetRotation} title={$_('uploads.reset') || 'Reset'}>
-                        <RefreshCw size={12} />
-                    </button>
-                </div>
-            </div>
-
             <div class="control-group">
                 <span class="control-label">{$_('uploads.flip') || 'Flip'}:</span>
                 <div class="control-row">
@@ -381,11 +500,6 @@
                         <FlipVertical size={16} />
                         <span class="btn-label">V</span>
                     </button>
-                    <div class="separator"></div>
-                    <button type="button" class="control-btn reset" on:click={resetAll} title={$_('uploads.resetAll') || 'Reset All'}>
-                        <RotateCcw size={14} />
-                        <span class="btn-label">{$_('uploads.resetAll') || 'Reset All'}</span>
-                    </button>
                 </div>
             </div>
         {/if}
@@ -398,6 +512,62 @@
         flex-direction: column;
         gap: 1rem;
         width: 100%;
+    }
+
+    /* Crop wrapper with overlay controls */
+    .crop-wrapper {
+        position: relative;
+        width: 100%;
+    }
+
+    /* Controls overlay - positioned on right side of image */
+    .controls-overlay {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        z-index: 10;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 0.25rem;
+        border-radius: 0.375rem;
+    }
+
+    .overlay-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 0.25rem;
+        background: rgba(255, 255, 255, 0.9);
+        color: #374151;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .overlay-btn:hover {
+        background: white;
+        color: #1a4031;
+    }
+
+    .overlay-btn.reset {
+        background: rgba(239, 68, 68, 0.9);
+        color: white;
+    }
+
+    .overlay-btn.reset:hover {
+        background: #dc2626;
+    }
+
+    /* Bottom controls - Preset & Flip */
+    .bottom-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 0.5rem;
     }
 
     .crop-container {
@@ -456,13 +626,6 @@
 
     :global(.dark) .info-value {
         color: #e5e7eb;
-    }
-
-    .controls {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        padding: 0.5rem;
     }
 
     .control-group {
@@ -555,12 +718,6 @@
         transition: all 0.15s;
     }
 
-    .control-btn.small {
-        min-width: 24px;
-        height: 24px;
-        padding: 0 0.25rem;
-    }
-
     .control-btn:hover {
         border-color: #1a4031;
         color: #1a4031;
@@ -570,17 +727,6 @@
         background: #1a4031;
         border-color: #1a4031;
         color: white;
-    }
-
-    .control-btn.reset {
-        background: #fef2f2;
-        border-color: #fecaca;
-        color: #dc2626;
-    }
-
-    .control-btn.reset:hover {
-        background: #fee2e2;
-        border-color: #f87171;
     }
 
     :global(.dark) .control-btn {
@@ -600,47 +746,149 @@
         color: white;
     }
 
-    :global(.dark) .control-btn.reset {
-        background: #450a0a;
-        border-color: #7f1d1d;
-        color: #f87171;
-    }
-
     .btn-label {
         font-size: 0.75rem;
     }
 
-    .value-display {
-        font-size: 0.75rem;
-        font-weight: 500;
-        font-family: monospace;
-        color: #6b7280;
-        min-width: 3rem;
-        text-align: center;
+
+
+    /* ==========================================================================
+       CROPPERJS V2 - CLEAN CORNER HANDLES STYLE (like reference image)
+       Solo linee bianche agli angoli, niente punti o quadrati
+       ========================================================================== */
+
+    /* Configurazione Variabili Globali per Cropper v2 */
+    .crop-container :global(cropper-canvas) {
+        /* Questa è la chiave per l'overlay scuro - usa CSS Variables */
+        --theme-color: rgba(0, 0, 0, 0.5);
+        --cropper-backdrop-color: rgba(0, 0, 0, 0.3);
     }
 
-    :global(.dark) .value-display {
-        color: #9ca3af;
+    /* Hide ALL default cropper visual elements that we don't want */
+    .crop-container :global(cropper-handle) {
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
     }
 
-    .separator {
-        width: 1px;
-        height: 20px;
-        background: #d1d5db;
-        margin: 0 0.25rem;
+    /* Hide any default blue points/dots */
+    .crop-container :global(cropper-handle)::before,
+    .crop-container :global(cropper-handle)::after {
+        display: none !important;
     }
 
-    :global(.dark) .separator {
-        background: #4b5563;
+    /* Hide crosshair if present */
+    .crop-container :global(cropper-crosshair) {
+        display: none !important;
     }
 
-    /* Cropperjs v2 dark mode overrides */
+    /* Selection box - white outline, TRANSPARENT inside (show original image) */
+    .crop-container :global(cropper-selection) {
+        --cropper-selection-outline-width: 2px;
+        --cropper-selection-outline-color: rgba(255, 255, 255, 0.9);
+        outline: 2px solid rgba(255, 255, 255, 0.9) !important;
+        outline-offset: -1px;
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+
+    /* Make sure selection area shows the image clearly (no overlay) */
+    .crop-container :global(cropper-selection)::before,
+    .crop-container :global(cropper-selection)::after {
+        display: none !important;
+    }
+
+
+    /* Corner handles - L-shaped white lines */
+    .crop-container :global(cropper-handle[action="nw-resize"]) {
+        width: 20px !important;
+        height: 20px !important;
+        background: transparent !important;
+        border-top: 3px solid white !important;
+        border-left: 3px solid white !important;
+        border-right: none !important;
+        border-bottom: none !important;
+    }
+
+    .crop-container :global(cropper-handle[action="ne-resize"]) {
+        width: 20px !important;
+        height: 20px !important;
+        background: transparent !important;
+        border-top: 3px solid white !important;
+        border-right: 3px solid white !important;
+        border-left: none !important;
+        border-bottom: none !important;
+    }
+
+    .crop-container :global(cropper-handle[action="sw-resize"]) {
+        width: 20px !important;
+        height: 20px !important;
+        background: transparent !important;
+        border-bottom: 3px solid white !important;
+        border-left: 3px solid white !important;
+        border-top: none !important;
+        border-right: none !important;
+    }
+
+    .crop-container :global(cropper-handle[action="se-resize"]) {
+        width: 20px !important;
+        height: 20px !important;
+        background: transparent !important;
+        border-bottom: 3px solid white !important;
+        border-right: 3px solid white !important;
+        border-top: none !important;
+        border-left: none !important;
+    }
+
+    /* Side handles - thin white lines */
+    .crop-container :global(cropper-handle[action="n-resize"]),
+    .crop-container :global(cropper-handle[action="s-resize"]) {
+        width: 40px !important;
+        height: 3px !important;
+        background-color: white !important;
+        border: none !important;
+        border-radius: 0 !important;
+    }
+
+    .crop-container :global(cropper-handle[action="e-resize"]),
+    .crop-container :global(cropper-handle[action="w-resize"]) {
+        width: 3px !important;
+        height: 40px !important;
+        background-color: white !important;
+        border: none !important;
+        border-radius: 0 !important;
+    }
+
+    /* Grid lines inside selection - subtle */
+    .crop-container :global(cropper-grid) {
+        opacity: 0.3;
+    }
+
+    /* ==========================================================================
+       DARK MODE OVERRIDES
+       ========================================================================== */
+
     :global(.dark) .crop-container :global(cropper-canvas) {
-        --cropper-backdrop-color: rgba(0, 0, 0, 0.7);
-        --cropper-outline-color: rgba(16, 185, 129, 0.75);
+        --theme-color: rgba(0, 0, 0, 0.7);
+        --cropper-backdrop-color: rgba(0, 0, 0, 0.8);
     }
 
     :global(.dark) .crop-container :global(cropper-selection) {
-        --cropper-selection-outline-color: #10b981;
+        --cropper-selection-outline-color: rgba(255, 255, 255, 0.9);
+        outline-color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+
+    /* Dark mode handles - keep white, no green */
+    :global(.dark) .crop-container :global(cropper-handle) {
+        background-color: transparent !important;
+        border-color: white !important;
+    }
+
+    :global(.dark) .crop-container :global(cropper-handle[action="n-resize"]),
+    :global(.dark) .crop-container :global(cropper-handle[action="s-resize"]),
+    :global(.dark) .crop-container :global(cropper-handle[action="e-resize"]),
+    :global(.dark) .crop-container :global(cropper-handle[action="w-resize"]) {
+        background-color: white !important;
     }
 </style>

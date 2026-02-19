@@ -38,7 +38,8 @@
     "multipleFiles": "Multiple files allowed",
     "remove": "Remove",
     "discard": "Discard",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "restore": "Restore original"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -472,6 +473,11 @@
     "rotation": "Rotation",
     "flip": "Flip",
     "rotationAppliedOnSave": "Rotation will be applied on save",
-    "freeNote": "Uses 4:3 ratio"
+    "freeNote": "Uses 4:3 ratio",
+    "resetAll": "Reset All",
+    "crop": "Crop",
+    "discardChanges": "Discard changes?",
+    "discardChangesMessage": "You have unsaved changes. Are you sure you want to close?",
+    "discardAndClose": "Discard"
   }
 }
