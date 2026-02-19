@@ -140,6 +140,16 @@ const croppedCanvas = await selection.$toCanvas({width: 200, height: 200});
 - ✅ Formato rilevato dal tipo MIME del file
 - ✅ Nome e formato usati durante save/upload
 
+### Feature 2.5: Sistema Zoom Unificato ✅ COMPLETATA
+
+**Requisito**: Zoom con rotellina prima modifica selezione, poi immagine.
+
+**Implementato**:
+- ✅ Zoom IN: prima ingrandisce selezione, quando ≥95% coverage → zooma immagine
+- ✅ Zoom OUT: prima rimpicciolisce selezione, quando ≤50px → dezooma immagine
+- ✅ Maniglie sempre visibili
+- ✅ `scaleSelection()` scala selezione mantenendo aspect ratio e bounds
+
 ### Feature 3: Asset Picker Modal (per Avatar, Broker Icon, etc.)
 
 **Requisito**: Modale intermedia che permette di:
