@@ -145,6 +145,8 @@
     // Image edit modal state
     let showImageEditModal = false;
     let imageEditFile: globalThis.File | null = null;
+    let imageEditFileIndex: number | null = null;  // Index in pendingStaticFiles for replacement
+    let fileUploaderRef: FileUploader;  // Reference to FileUploader for replacing files
 
     // Confirm modal for closing uploader with pending files
     let showCloseUploaderConfirm = false;
@@ -289,37 +291,18 @@
     async function handleUpload(event: CustomEvent<{ files: globalThis.File[] }>) {
         const {files} = event.detail;
 
-        // Separate images from other files
-        const imageFiles = files.filter(f => isImageFile(f));
-        const otherFiles = files.filter(f => !isImageFile(f));
-
         try {
-            // Upload non-image files directly
-            for (const file of otherFiles) {
+            // Upload ALL files directly (user should use Edit button to crop before upload)
+            for (const file of files) {
                 const formData = new FormData();
                 formData.append('file', file);
                 await axiosInstance.post('/api/v1/uploads', formData);
             }
 
-            // If there are image files, open the editor for the first one
-            // (subsequent images will be handled after the first completes)
-            if (imageFiles.length > 0) {
-                // Store remaining images for later processing
-                pendingImageFiles = imageFiles.slice(1);
-                // Open editor for the first image
-                imageEditFile = imageFiles[0];
-                showImageEditModal = true;
-
-                // If we uploaded some non-image files, refresh the list
-                if (otherFiles.length > 0) {
-                    await loadFiles();
-                }
-            } else {
-                // No images, just close uploader and refresh
-                showUploader = false;
-                pendingStaticFiles = [];
-                await loadFiles();
-            }
+            // Close uploader and refresh
+            showUploader = false;
+            pendingStaticFiles = [];
+            await loadFiles();
         } catch (e) {
             error = e instanceof Error ? e.message : 'Upload failed';
         }
@@ -329,7 +312,22 @@
     let pendingImageFiles: globalThis.File[] = [];
 
     // Handle completion of image editing - process next image or finish
-    async function handleImageEditComplete() {
+    async function handleImageEditComplete(event: CustomEvent<{url: string | null; file: File}>) {
+        const { file: croppedFile } = event.detail;
+
+        // Case 1: Edit from button (not during upload flow)
+        if (imageEditFileIndex !== null) {
+            // Replace the file in the pending list with the cropped version
+            fileUploaderRef?.replaceFile(imageEditFileIndex, croppedFile);
+
+            // Close modal and reset state
+            showImageEditModal = false;
+            imageEditFile = null;
+            imageEditFileIndex = null;
+            return;
+        }
+
+        // Case 2: During upload flow - image was already uploaded by ImageEditModal
         showImageEditModal = false;
         imageEditFile = null;
 
@@ -347,10 +345,19 @@
         }
     }
 
+    // Handle edit image button click from FileUploader
+    function handleEditImage(event: CustomEvent<{ file: globalThis.File; index: number }>) {
+        const { file, index } = event.detail;
+        imageEditFile = file;
+        imageEditFileIndex = index;
+        showImageEditModal = true;
+    }
+
     // Handle cancel of image editing
     function handleImageEditCancel() {
         showImageEditModal = false;
         imageEditFile = null;
+        imageEditFileIndex = null;
         // Clear pending images queue
         pendingImageFiles = [];
     }
@@ -637,8 +644,10 @@
     {#if showUploader && activeTab === 'static'}
         <div class="upload-area">
             <FileUploader
+                    bind:this={fileUploaderRef}
                     on:upload={handleUpload}
                     on:change={handleStaticFileChange}
+                    on:editImage={handleEditImage}
                     on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
                     multiple={true}
                     maxSizeMB={maxUploadSizeMB}
@@ -887,6 +896,7 @@
     open={showImageEditModal}
     file={imageEditFile}
     preset="custom"
+    uploadOnComplete={imageEditFileIndex === null}
     on:complete={handleImageEditComplete}
     on:cancel={handleImageEditCancel}
     on:error={(e) => {

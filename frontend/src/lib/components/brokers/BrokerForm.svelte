@@ -150,8 +150,10 @@
     let iconEditFile: File | null = null;
 
     // Handle icon upload completion
-    function handleIconUploadComplete(event: CustomEvent<{url: string; file: File}>) {
-        iconUrl = event.detail.url;
+    function handleIconUploadComplete(event: CustomEvent<{url: string | null; file: File}>) {
+        if (event.detail.url) {
+            iconUrl = event.detail.url;
+        }
         showIconEditModal = false;
         iconEditFile = null;
     }

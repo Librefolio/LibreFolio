@@ -1,46 +1,56 @@
 # Piano Aggiornato: Image Crop Modal System
 
 **Data**: 18 Febbraio 2026  
-**Ultimo Aggiornamento**: 19 Febbraio 2026  
-**Status**: 🔧 FIX IN CORSO (feedback utente ricevuto)  
+**Ultimo Aggiornamento**: 19 Febbraio 2026 (ore 16:45)  
+**Status**: 🟢 COMPLETATO - Core feature funzionanti  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
 
 ---
 
-## 🐛 Bug & Fix da Test Manuali (19 Feb 2026)
+## ✅ Stato Attuale (19 Feb 2026)
 
-### Bug Critici
+### Core Features - COMPLETATE ✅
+- ✅ Migrazione a cropperjs v2 (Web Components)
+- ✅ Free crop con maniglie trascinabili (L-shaped white corners)
+- ✅ Rotazione rispetto al centro selezione (trasla-ruota-trasla)
+- ✅ Zoom pulsanti funzionanti
+- ✅ Flip H/V funzionanti
+- ✅ Aspect ratio change centrato con diagonale preservata
+- ✅ CSS maniglie: linee bianche agli angoli, niente punti blu
+- ✅ Dark mode: maniglie bianche, no verde
+- ✅ Traduzioni complete (crop, discardChanges, etc.)
+- ✅ **Overlay scuro fix**: CSS Variables (`--theme-color`) su `cropper-canvas`
+- ✅ **Drag immagine fuori selezione**: handle "select" → "move"
 
-| ID | Descrizione | Priorità | Status |
-|----|-------------|----------|--------|
-| BUG-IC1 | Files Page: modal crop NON si apre dopo drag, serve pulsante edit accanto al file | Alta | 🔧 |
-| BUG-IC2 | Avatar: dopo cancel, secondo click non apre crop (input file non resettato) | Alta | 🔧 |
-| BUG-IC3 | Dashboard: avatar non aggiornato dopo modifica (solo sidebar e profile) | Media | 🔧 |
-| BUG-IC4 | Rotazione: salva con trasparenza ai bordi invece di crop dopo rotate | Media | 🔧 |
-| BUG-IC5 | Rimuovi avatar: nessuna conferma "sei sicuro?" | Bassa | 🔧 |
+### FileUploader - COMPLETATO ✅
+- ✅ **Pulsante Edit** - icona matita per immagini
+- ✅ **Pulsante Restore** - annulla modifiche (prima della matita)
+- ✅ **File editati evidenziati** - bordo blu e sfondo leggero
+- ✅ **replaceFile()** - sostituisce file croppati con reattività corretta
+- ✅ **uploadOnComplete prop** - ImageEditModal può croppare senza uploadare
 
-### UX Improvements Richiesti
-
-| ID | Descrizione | Priorità | Status |
-|----|-------------|----------|--------|
-| UX-IC1 | Preset: rimuovere "Original", tenere Avatar(200), Icon(64), Custom | Alta | 🔧 |
-| UX-IC2 | Custom: permettere aspect ratio libero con maniglie trascinabili | Alta | ⏳ (difficile) |
-| UX-IC3 | Box info: tabella 2 righe (originale → scala → output editabile) | Alta | 🔧 |
-| UX-IC4 | Zoom: minimo 1x, max = pixel asse più corto | Media | 🔧 |
-| UX-IC5 | Rotazione: mostrare preview CSS ruotato (non solo al save) | Media | 🔧 |
-| UX-IC6 | Reset separati: uno per zoom, uno per rotation (oltre al globale) | Bassa | 🔧 |
-| UX-IC7 | Asset picker: modale intermedia con URL esterno O file esistenti O upload | Alta | ⏳ |
-| UX-IC8 | Settings burger: link diretto a Preferences invece di generico Settings | Bassa | 🔧 |
+### ImageEditModal - COMPLETATO ✅
+- ✅ **Testo pulsante dinamico** - "Crop" o "Crop & Upload"
+- ✅ **Controlli in overlay** - zoom/rotation/reset nel riquadro a destra
+- ✅ **Reset singolo** - solo 1 reset nell'overlay
+- ✅ **Conferma chiusura** - dialogo arancione se ci sono modifiche non salvate
+- ✅ Rimosso preset "Original" (solo avatar, broker-icon, custom)
 
 ### Note Tecniche
+- **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
+- **Reattività Svelte**: Usare espressioni inline nel template, non funzioni
+- **Rotazione pivot**: Tecnica trasla-ruota-trasla per ruotare rispetto al centro selezione
 
-- **UX-IC2 (Free aspect)**: svelte-easy-crop NON supporta maniglie trascinabili.
-  - **Decisione**: Migrare a **cropperjs** che supporta:
-    - Free crop con maniglie trascinabili
-    - Rotazione live preview
-    - Flip
-    - Zoom
-    - API più matura e feature-complete
+---
+
+## 🐛 Bug Risolti
+
+| ID | Descrizione | Status |
+|----|-------------|--------|
+| BUG-IC1 | Files Page: serve pulsante edit accanto al file per aprire crop | ✅ |
+| BUG-IC2 | Avatar: dopo cancel, secondo click non apre crop | 🔧 Da verificare |
+| BUG-IC3 | Dashboard: avatar non aggiornato dopo modifica | 🔧 Da verificare |
+| BUG-IC5 | Rimuovi avatar: nessuna conferma "sei sicuro?" | 🔧 Da verificare |
 
 ---
 
@@ -106,17 +116,18 @@ const croppedCanvas = await selection.$toCanvas({width: 200, height: 200});
 
 ## 📝 NUOVE FEATURE RICHIESTE (19 Feb 2026)
 
-### Feature 1: Pulsante Edit nella Lista File (Files Page)
+### Feature 1: Pulsante Edit nella Lista File (Files Page) ✅ COMPLETATA
 
 **Requisito**: Dopo drag&drop file immagine, nella lista pending appare un pulsante edit (matita) accanto alla dimensione. Cliccandolo si apre ImageEditModal.
 
-**Comportamento**:
-1. Utente trascina file immagini in upload area
-2. File appaiono nella lista con: `[nome] [size] [✏️ edit]`
-3. Click su edit → apre ImageEditModal per quel file
-4. Le configurazioni (crop, rotate, zoom, output size) vengono salvate in un oggetto `ImageEditConfig`
-5. Se utente clicca di nuovo edit, riparte dalla config salvata
-6. Click su "Carica" → applica tutte le config e fa upload
+**Implementato**:
+- ✅ Pulsante matita (Pencil) per file immagine
+- ✅ Pulsante restore (RefreshCw) per file editati - PRIMA della matita
+- ✅ File editati evidenziati con bordo blu
+- ✅ Ordine: `[icona] [nome] [🔄 restore?] [✏️ edit] [size] [✕ remove]`
+- ✅ Click edit → apre ImageEditModal con `uploadOnComplete=false`
+- ✅ Crop salva nel file pending, non fa upload
+- ✅ Click "Carica" → upload diretto dei file (già croppati se editati)
 
 **Struttura ImageEditConfig**:
 ```typescript

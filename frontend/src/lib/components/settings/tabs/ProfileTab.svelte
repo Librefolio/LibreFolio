@@ -204,12 +204,14 @@
         avatarFile = null;
     }
 
-    async function handleAvatarUploadComplete(event: CustomEvent<{url: string; file: File}>) {
+    async function handleAvatarUploadComplete(event: CustomEvent<{url: string | null; file: File}>) {
         showAvatarModal = false;
         avatarFile = null;
-        editedAvatarUrl = event.detail.url;
-        // Save immediately
-        await saveAvatarField();
+        if (event.detail.url) {
+            editedAvatarUrl = event.detail.url;
+            // Save immediately
+            await saveAvatarField();
+        }
     }
 
     async function saveAvatarField() {

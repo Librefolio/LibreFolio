@@ -10,7 +10,8 @@
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {t} from '$lib/i18n';
-    import {AlertTriangle, File as FileIcon, Upload, X} from 'lucide-svelte';
+    import {AlertTriangle, File as FileIcon, Upload, X, Pencil, ImageIcon, RefreshCw} from 'lucide-svelte';
+    import {isImageFile} from '$lib/utils/imageCrop';
 
     export let maxSizeMB: number = 10;
     export let multiple: boolean = true;
@@ -32,10 +33,13 @@
         upload: { files: File[] };
         error: { message: string };
         change: { files: File[] };  // Emitted when files are selected/changed
+        editImage: { file: File; index: number };  // Emitted when user wants to edit an image
     }>();
 
     let isDragging = false;
     let selectedFiles: File[] = [];
+    let originalFiles: Record<number, File> = {};  // Store original files for restore (object for reactivity)
+    let editedIndices: number[] = [];  // Track which files have been edited (array for reactivity)
     let fileInput: HTMLInputElement;
     let errors: string[] = [];
 
@@ -142,6 +146,59 @@
     function openFileBrowser() {
         fileInput?.click();
     }
+
+    function editImage(file: File, index: number) {
+        dispatch('editImage', { file, index });
+    }
+
+    // Public method to replace a file at a specific index (used after crop)
+    export function replaceFile(index: number, newFile: File) {
+        console.log('[FileUploader] replaceFile called', { index, newFile: newFile.name });
+        if (index >= 0 && index < selectedFiles.length) {
+            // Save original file for restore (only if not already edited)
+            if (!(index in originalFiles)) {
+                originalFiles = { ...originalFiles, [index]: selectedFiles[index] };
+                console.log('[FileUploader] Saved original file', { index, originalName: selectedFiles[index].name });
+            }
+            // Mark as edited - create new array to trigger reactivity
+            if (!editedIndices.includes(index)) {
+                editedIndices = [...editedIndices, index];
+                console.log('[FileUploader] Added to editedIndices', { editedIndices });
+            }
+
+            // Replace file in selectedFiles
+            selectedFiles = [
+                ...selectedFiles.slice(0, index),
+                newFile,
+                ...selectedFiles.slice(index + 1)
+            ];
+            console.log('[FileUploader] Updated selectedFiles', { count: selectedFiles.length });
+            dispatch('change', { files: selectedFiles });
+        }
+    }
+
+    // Restore a file to its original state
+    function restoreFile(index: number) {
+        const original = originalFiles[index];
+        if (original) {
+            selectedFiles = [
+                ...selectedFiles.slice(0, index),
+                original,
+                ...selectedFiles.slice(index + 1)
+            ];
+            // Remove from originalFiles
+            const { [index]: _, ...rest } = originalFiles;
+            originalFiles = rest;
+            // Remove from editedIndices
+            editedIndices = editedIndices.filter(i => i !== index);
+            dispatch('change', { files: selectedFiles });
+        }
+    }
+
+    // Check if a file has been edited
+    function isEdited(index: number): boolean {
+        return editedIndices.includes(index);
+    }
 </script>
 
 <div class="file-uploader" data-testid="file-uploader">
@@ -179,10 +236,34 @@
             </p>
         {:else}
             <div class="selected-files">
-                {#each selectedFiles as file, index}
-                    <div class="file-item">
-                        <FileIcon size={16}/>
+                {#each selectedFiles as file, index (file.name + index)}
+                    <div class="file-item" class:edited={editedIndices.includes(index)}>
+                        {#if isImageFile(file)}
+                            <ImageIcon size={16} class="file-icon image"/>
+                        {:else}
+                            <FileIcon size={16} class="file-icon"/>
+                        {/if}
                         <span class="file-name">{file.name}</span>
+                        {#if editedIndices.includes(index)}
+                            <button
+                                    type="button"
+                                    class="restore-btn"
+                                    on:click|stopPropagation={() => restoreFile(index)}
+                                    title={$t('common.restore') || 'Restore original'}
+                            >
+                                <RefreshCw size={14}/>
+                            </button>
+                        {/if}
+                        {#if isImageFile(file)}
+                            <button
+                                    type="button"
+                                    class="edit-btn"
+                                    on:click|stopPropagation={() => editImage(file, index)}
+                                    title={$t('common.edit') || 'Edit'}
+                            >
+                                <Pencil size={14}/>
+                            </button>
+                        {/if}
                         <span class="file-size">{formatFileSize(file.size)}</span>
                         <button
                                 type="button"
@@ -320,6 +401,14 @@
         flex-shrink: 0;
     }
 
+    .file-item :global(svg.image) {
+        color: #3b82f6;
+    }
+
+    :global(.dark) .file-item :global(svg.image) {
+        color: #60a5fa;
+    }
+
     .file-name {
         flex: 1;
         font-size: 0.8125rem;
@@ -339,7 +428,20 @@
         flex-shrink: 0;
     }
 
-    .remove-btn {
+    /* Edited file indicator */
+    .file-item.edited {
+        border-color: #3b82f6;
+        background: #eff6ff;
+    }
+
+    :global(.dark) .file-item.edited {
+        border-color: #60a5fa;
+        background: #1e3a5f;
+    }
+
+    .edit-btn,
+    .remove-btn,
+    .restore-btn {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -353,6 +455,16 @@
         transition: all 0.15s;
     }
 
+    .edit-btn:hover {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    :global(.dark) .edit-btn:hover {
+        background: #1e3a5f;
+        color: #60a5fa;
+    }
+
     .remove-btn:hover {
         background: #fee2e2;
         color: #dc2626;
@@ -361,6 +473,16 @@
     :global(.dark) .remove-btn:hover {
         background: #7f1d1d;
         color: #fecaca;
+    }
+
+    .restore-btn:hover {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    :global(.dark) .restore-btn:hover {
+        background: #451a03;
+        color: #fbbf24;
     }
 
     .errors {
