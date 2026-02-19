@@ -145,10 +145,13 @@ const croppedCanvas = await selection.$toCanvas({width: 200, height: 200});
 **Requisito**: Zoom con rotellina prima modifica selezione, poi immagine.
 
 **Implementato**:
-- ✅ Zoom IN: prima ingrandisce selezione, quando ≥95% coverage → zooma immagine
-- ✅ Zoom OUT: prima rimpicciolisce selezione, quando ≤50px → dezooma immagine
+- ✅ Zoom IN: prima ingrandisce selezione, quando QUALUNQUE asse ≥90% → zooma immagine
+- ✅ Zoom OUT: prima rimpicciolisce selezione, quando QUALUNQUE asse ≤50% → dezooma immagine
+- ✅ Rotellina mouse intercettata con `on:wheel={handleWheel}`
+- ✅ Soglie basate su percentuale per asse (non pixel assoluti)
+- ✅ Selezione sempre clampata dentro canvas bounds
+- ✅ `scaleSelection()` rispetta bounds = intersezione canvas ∩ image
 - ✅ Maniglie sempre visibili
-- ✅ `scaleSelection()` scala selezione mantenendo aspect ratio e bounds
 
 ### Feature 3: Asset Picker Modal (per Avatar, Broker Icon, etc.)
 
