@@ -451,6 +451,27 @@
     "cropAndUpload": "Crop & Upload",
     "zoom": "Zoom",
     "aspectRatio": "Aspect Ratio",
-    "outputSize": "Output"
+    "outputSize": "Output",
+    "presetAvatar": "Avatar (200×200)",
+    "presetIcon": "Icon (64×64)",
+    "presetOriginal": "Original size",
+    "presetCustom": "Custom",
+    "outputPreset": "Output preset",
+    "keepOriginal": "Keep original",
+    "free": "Free",
+    "originalSize": "Original",
+    "selection": "Selection",
+    "transform": "Transform",
+    "rotateLeft": "Rotate left",
+    "rotateRight": "Rotate right",
+    "flipHorizontal": "Flip horizontal",
+    "flipVertical": "Flip vertical",
+    "reset": "Reset",
+    "inputSize": "Input Size",
+    "selectionSize": "Selection",
+    "rotation": "Rotation",
+    "flip": "Flip",
+    "rotationAppliedOnSave": "Rotation will be applied on save",
+    "freeNote": "Uses 4:3 ratio"
   }
 }

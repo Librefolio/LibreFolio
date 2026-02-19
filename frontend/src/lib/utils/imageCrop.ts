@@ -21,7 +21,7 @@ export interface ImagePreset {
     titleKey: string;         // i18n key for modal title
 }
 
-export type PresetName = 'avatar' | 'broker-icon' | 'custom';
+export type PresetName = 'avatar' | 'broker-icon' | 'original' | 'custom';
 
 // =============================================================================
 // PRESETS
@@ -44,11 +44,19 @@ export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
         outputQuality: 0.9,
         titleKey: 'uploads.editBrokerIcon',
     },
-    custom: {
+    original: {
         aspectRatio: 0,           // Free aspect ratio
-        outputWidth: null,        // Keep original (max 2000)
+        outputWidth: null,        // Keep original dimensions
         outputHeight: null,
         outputFormat: 'auto',     // Keep original format
+        outputQuality: 0.95,      // High quality
+        titleKey: 'uploads.editImage',
+    },
+    custom: {
+        aspectRatio: 0,           // Free aspect ratio
+        outputWidth: null,        // User can set
+        outputHeight: null,
+        outputFormat: 'auto',
         outputQuality: 0.85,
         titleKey: 'uploads.editImage',
     }
@@ -73,6 +81,7 @@ export function createImage(url: string): Promise<HTMLImageElement> {
 
 /**
  * Get the cropped image as a Blob
+ * Supports rotation and flip transformations
  */
 export async function getCroppedImage(
     imageSrc: string,
@@ -80,7 +89,10 @@ export async function getCroppedImage(
     outputWidth: number | null = null,
     outputHeight: number | null = null,
     format: 'png' | 'jpeg' | 'webp' | 'auto' = 'png',
-    quality: number = 0.9
+    quality: number = 0.9,
+    rotation: number = 0,
+    flipH: boolean = false,
+    flipV: boolean = false
 ): Promise<Blob> {
     const image = await createImage(imageSrc);
     const canvas = document.createElement('canvas');
@@ -116,21 +128,45 @@ export async function getCroppedImage(
         finalHeight = Math.round(finalHeight * scale);
     }
 
-    canvas.width = finalWidth;
-    canvas.height = finalHeight;
+    // For rotations of 90 or 270 degrees, swap dimensions
+    const isRotated90or270 = Math.abs(rotation % 180) === 90;
+    if (isRotated90or270) {
+        canvas.width = finalHeight;
+        canvas.height = finalWidth;
+    } else {
+        canvas.width = finalWidth;
+        canvas.height = finalHeight;
+    }
 
-    // Draw the cropped image
+    // Apply transformations
+    ctx.save();
+
+    // Move to center of canvas
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+
+    // Apply rotation
+    ctx.rotate((rotation * Math.PI) / 180);
+
+    // Apply flip
+    ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+
+    // Draw image centered
+    const drawWidth = isRotated90or270 ? finalHeight : finalWidth;
+    const drawHeight = isRotated90or270 ? finalWidth : finalHeight;
+
     ctx.drawImage(
         image,
         pixelCrop.x,
         pixelCrop.y,
         pixelCrop.width,
         pixelCrop.height,
-        0,
-        0,
-        finalWidth,
-        finalHeight
+        -drawWidth / 2,
+        -drawHeight / 2,
+        drawWidth,
+        drawHeight
     );
+
+    ctx.restore();
 
     // Determine output MIME type
     let mimeType: string;

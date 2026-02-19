@@ -451,6 +451,27 @@
     "cropAndUpload": "Ritaglia e Carica",
     "zoom": "Zoom",
     "aspectRatio": "Proporzioni",
-    "outputSize": "Dimensione"
+    "outputSize": "Dimensione",
+    "presetAvatar": "Avatar (200×200)",
+    "presetIcon": "Icona (64×64)",
+    "presetOriginal": "Dimensioni originali",
+    "presetCustom": "Personalizzato",
+    "outputPreset": "Preset output",
+    "keepOriginal": "Mantieni originale",
+    "free": "Libero",
+    "originalSize": "Originale",
+    "selection": "Selezione",
+    "transform": "Trasforma",
+    "rotateLeft": "Ruota a sinistra",
+    "rotateRight": "Ruota a destra",
+    "flipHorizontal": "Capovolgi orizzontale",
+    "flipVertical": "Capovolgi verticale",
+    "reset": "Reimposta",
+    "inputSize": "Dimensioni Originali",
+    "selectionSize": "Selezione",
+    "rotation": "Rotazione",
+    "flip": "Capovolgi",
+    "rotationAppliedOnSave": "Rotazione applicata al salvataggio",
+    "freeNote": "Usa rapporto 4:3"
   }
 }

@@ -1,8 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 18 Febbraio 2026  
-**Status**: 🧪 TESTING (Image Crop in test manuale, File Preview pianificato)
+**Ultimo aggiornamento**: 20 Febbraio 2026  
+**Status**: 🧪 TESTING (Image Crop in debug, File Preview pianificato)
 
 ---
 
@@ -85,6 +85,16 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Feature: Git tag versioning (`./dev.py info version`, sidebar, API)
     - Nuovi file: `globalSettings.ts`, `version.py`, `version.ts`
     - Vedi `phases/phase-04-subplan/plan-ui-fixes.md`
+
+13. **Image Crop Modal** 🧪 IN DEBUG (20 Feb 2026)
+    - `ImageCropper.svelte` con zoom (0.5x-10x), rotation slider (-180°/+180°), flip H/V
+    - `ImageEditModal.svelte` wrapper con preset (avatar 200×200, broker-icon 64×64, original, custom)
+    - `imageCrop.ts` utility con `getCroppedImage()` supporta rotazione/flip
+    - Avatar spostato da PreferencesTab a ProfileTab (editabile in edit mode)
+    - Avatar rimosso da PreferencesTab (deduplica)
+    - i18n keys aggiunte per tutte le label (zoom, rotation, flip, inputSize, etc.)
+    - Limitazioni note: svelte-easy-crop non supporta rotation live preview (applicata solo al save)
+    - Vedi `plan-image-crop.md`
 
 ---
 

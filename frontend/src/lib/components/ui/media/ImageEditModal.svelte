@@ -5,12 +5,14 @@
   - Wraps ImageCropper with modal UI
   - Preset configurations for different use cases
   - Handles upload to backend and returns URL
-  - Supports avatar, broker-icon, and custom presets
+  - Supports avatar, broker-icon, original, and custom presets
+  - Rotation and flip support
+  - Shows output dimensions and compression ratio
 -->
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {X, Upload, Loader2} from 'lucide-svelte';
+    import {X, Upload, Loader2, ImageIcon} from 'lucide-svelte';
     import {axiosInstance} from '$lib/api';
     import ImageCropper from './ImageCropper.svelte';
     import {
@@ -26,6 +28,7 @@
     export let file: File | null = null;
     export let preset: PresetName = 'custom';
     export let customConfig: Partial<ImagePreset> | null = null;
+    export let allowPresetChange: boolean = true;  // Allow user to change preset
 
     const dispatch = createEventDispatcher<{
         complete: {url: string; file: File};
@@ -33,16 +36,30 @@
         error: {message: string};
     }>();
 
+    // Available presets for selector
+    const presetOptions: Array<{value: PresetName; labelKey: string}> = [
+        {value: 'avatar', labelKey: 'uploads.presetAvatar'},
+        {value: 'broker-icon', labelKey: 'uploads.presetIcon'},
+        {value: 'original', labelKey: 'uploads.presetOriginal'},
+        {value: 'custom', labelKey: 'uploads.presetCustom'},
+    ];
+
     // Internal state
     let imageSrc: string | null = null;
     let cropper: ImageCropper;
     let isUploading = false;
     let error: string | null = null;
+    let currentPreset: PresetName = preset;
+
+    // Reset preset when modal opens
+    $: if (open) {
+        currentPreset = preset;
+    }
 
     // Computed config from preset + custom overrides
     $: config = customConfig
-        ? {...IMAGE_PRESETS[preset], ...customConfig}
-        : IMAGE_PRESETS[preset];
+        ? {...IMAGE_PRESETS[currentPreset], ...customConfig}
+        : IMAGE_PRESETS[currentPreset];
 
     // Load image when file changes
     $: if (file && open) {
@@ -97,18 +114,24 @@
             return;
         }
 
+        // Get transform state from cropper
+        const transform = cropper?.getTransform?.() || {rotation: 0, flipH: false, flipV: false};
+
         isUploading = true;
         error = null;
 
         try {
-            // Get cropped image blob
+            // Get cropped image blob with transformations
             const blob = await getCroppedImage(
                 imageSrc,
                 croppedAreaPixels,
                 config.outputWidth,
                 config.outputHeight,
                 config.outputFormat === 'auto' ? 'png' : config.outputFormat,
-                config.outputQuality
+                config.outputQuality,
+                transform.rotation,
+                transform.flipH,
+                transform.flipV
             );
 
             // Convert to File
@@ -117,7 +140,7 @@
             // Upload to backend
             const formData = new FormData();
             formData.append('file', croppedFile);
-            formData.append('description', `Cropped image (${preset})`);
+            formData.append('description', `Cropped image (${currentPreset})`);
 
             const response = await axiosInstance.post('/api/v1/uploads', formData);
 
@@ -143,6 +166,11 @@
 
     // Get translated title
     $: modalTitle = $_(config.titleKey) || $_('uploads.editImage') || 'Edit Image';
+
+    // Compute output info
+    $: outputInfo = config.outputWidth && config.outputHeight
+        ? `${config.outputWidth}×${config.outputHeight}px`
+        : $_('uploads.keepOriginal') || 'Original size';
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -167,23 +195,43 @@
 
             <!-- Body -->
             <div class="modal-body">
+                <!-- Preset Selector -->
+                {#if allowPresetChange}
+                    <div class="preset-selector">
+                        <span class="preset-label">{$_('uploads.outputPreset') || 'Output'}:</span>
+                        <div class="preset-buttons">
+                            {#each presetOptions as opt}
+                                <button
+                                    type="button"
+                                    class="preset-btn"
+                                    class:active={currentPreset === opt.value}
+                                    on:click={() => currentPreset = opt.value}
+                                >
+                                    {$_(opt.labelKey) || opt.value}
+                                </button>
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
+
                 <ImageCropper
                     bind:this={cropper}
                     {imageSrc}
                     aspectRatio={config.aspectRatio}
                     showZoomSlider={true}
-                    showAspectSelector={preset === 'custom'}
+                    showRotateControls={true}
+                    showAspectSelector={currentPreset === 'custom' || currentPreset === 'original'}
                 />
 
-                <!-- Preview info -->
-                <div class="preview-info">
-                    {#if config.outputWidth && config.outputHeight}
-                        <span class="info-badge">
-                            {$_('uploads.outputSize') || 'Output'}: {config.outputWidth}×{config.outputHeight}px
-                        </span>
-                    {/if}
-                    <span class="info-badge">
+                <!-- Output info -->
+                <div class="output-info">
+                    <ImageIcon size={16} class="info-icon" />
+                    <span class="info-text">
+                        {$_('uploads.outputSize') || 'Output'}: {outputInfo}
+                    </span>
+                    <span class="info-text">
                         {config.outputFormat === 'auto' ? 'PNG' : config.outputFormat.toUpperCase()}
+                        ({Math.round(config.outputQuality * 100)}%)
                     </span>
                 </div>
 
@@ -308,28 +356,105 @@
         min-height: 0;
     }
 
-    .preview-info {
+    /* Preset Selector */
+    .preset-selector {
         display: flex;
-        gap: 0.5rem;
-        margin-top: 1rem;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
         flex-wrap: wrap;
     }
 
-    .info-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.25rem 0.75rem;
-        font-size: 0.75rem;
+    .preset-label {
+        font-size: 0.875rem;
         font-weight: 500;
-        background: #f3f4f6;
         color: #4b5563;
-        border-radius: 9999px;
     }
 
-    :global(.dark) .info-badge {
-        background: #374151;
+    :global(.dark) .preset-label {
         color: #9ca3af;
     }
+
+    .preset-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .preset-btn {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        background: white;
+        color: #374151;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .preset-btn:hover {
+        border-color: #1a4031;
+        color: #1a4031;
+    }
+
+    .preset-btn.active {
+        background: #1a4031;
+        border-color: #1a4031;
+        color: white;
+    }
+
+    :global(.dark) .preset-btn {
+        background: #374151;
+        border-color: #4b5563;
+        color: #d1d5db;
+    }
+
+    :global(.dark) .preset-btn:hover {
+        border-color: #10b981;
+        color: #10b981;
+    }
+
+    :global(.dark) .preset-btn.active {
+        background: #10b981;
+        border-color: #10b981;
+        color: white;
+    }
+
+    /* Output Info */
+    .output-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 1rem;
+        padding: 0.75rem 1rem;
+        background: #f3f4f6;
+        border-radius: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    :global(.dark) .output-info {
+        background: #374151;
+    }
+
+    .output-info :global(.info-icon) {
+        color: #6b7280;
+        flex-shrink: 0;
+    }
+
+    :global(.dark) .output-info :global(.info-icon) {
+        color: #9ca3af;
+    }
+
+    .info-text {
+        font-size: 0.75rem;
+        color: #4b5563;
+    }
+
+    :global(.dark) .info-text {
+        color: #9ca3af;
+    }
+
 
     .error-message {
         margin-top: 1rem;

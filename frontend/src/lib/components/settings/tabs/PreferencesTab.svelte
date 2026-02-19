@@ -6,13 +6,12 @@
     import {isAxiosError} from 'axios';
     import {onMount} from 'svelte';
     import {debug} from '$lib/debug';
-    import {Coins, Globe, Palette, User} from 'lucide-svelte';
+    import {Coins, Globe, Palette} from 'lucide-svelte';
     import type {SelectOption} from '$lib/components/ui/select';
     import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
     import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
     import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
     import SettingTheme from '$lib/components/settings/SettingTheme.svelte';
-    import {ImageEditModal} from '$lib/components/ui/media';
 
     interface CurrencyInfo {
         code: string;
@@ -28,7 +27,6 @@
     }
 
     const categories: Category[] = [
-        {id: 'profile', icon: User, labelKey: 'settings.categoryProfile'},
         {id: 'display', icon: Globe, labelKey: 'settings.categoryDisplay'},
         {id: 'currency', icon: Coins, labelKey: 'settings.categoryCurrency'},
         {id: 'appearance', icon: Palette, labelKey: 'settings.categoryAppearance'},
@@ -38,8 +36,7 @@
     const FALLBACK_DEFAULTS = {
         language: 'en',
         default_currency: 'EUR',
-        theme: 'auto' as 'light' | 'dark' | 'auto',
-        avatar_url: null as string | null
+        theme: 'auto' as 'light' | 'dark' | 'auto'
     };
 
     // Global defaults (loaded from server's global settings)
@@ -57,9 +54,6 @@
     let success: string | null = null;
     let selectedCategory: string = '';
 
-    // Avatar upload modal state
-    let showAvatarModal = false;
-    let avatarFile: File | null = null;
 
     // Currency options for FuzzySelect
     let currencyOptions: SelectOption[] = [];
@@ -94,8 +88,7 @@
             globalDefaults = {
                 language: settingsMap['default_language'] || FALLBACK_DEFAULTS.language,
                 default_currency: settingsMap['default_currency'] || FALLBACK_DEFAULTS.default_currency,
-                theme: (settingsMap['default_theme'] as 'light' | 'dark' | 'auto') || FALLBACK_DEFAULTS.theme,
-                avatar_url: null  // No global default for avatar
+                theme: (settingsMap['default_theme'] as 'light' | 'dark' | 'auto') || FALLBACK_DEFAULTS.theme
             };
             debug.log('PreferencesTab', 'globalDefaults set to', globalDefaults);
         } catch (e) {
@@ -112,13 +105,10 @@
             const response = await zodiosApi.get_user_settings_endpoint_api_v1_settings_user_get();
 
             debug.log('PreferencesTab', 'loadSettings response', response);
-            // avatar_url can come as string | null | undefined from API
-            const avatarUrl = typeof response.avatar_url === 'string' ? response.avatar_url : null;
             originalValues = {
                 language: response.language || $currentLanguage,
                 default_currency: response.base_currency || 'EUR',
-                theme: response.theme || getStoredTheme(),
-                avatar_url: avatarUrl
+                theme: response.theme || getStoredTheme()
             };
             editedValues = {...originalValues};
         } catch (e) {
@@ -156,22 +146,19 @@
     $: languageModified = editedValues.language !== originalValues.language;
     $: currencyModified = editedValues.default_currency !== originalValues.default_currency;
     $: themeModified = editedValues.theme !== originalValues.theme;
-    $: avatarModified = editedValues.avatar_url !== originalValues.avatar_url;
 
     // Check if a field is non-default (compared to global defaults)
     $: languageNonDefault = originalValues.language !== globalDefaults.language;
     $: currencyNonDefault = originalValues.default_currency !== globalDefaults.default_currency;
     $: themeNonDefault = originalValues.theme !== globalDefaults.theme;
-    $: avatarNonDefault = originalValues.avatar_url !== null;
 
     // Check if any field is modified
-    $: hasChanges = languageModified || currencyModified || themeModified || avatarModified;
+    $: hasChanges = languageModified || currencyModified || themeModified;
 
     // Filter settings by category
+    // Avatar is always shown at the top, regardless of category selection
     function getCategoryFields(categoryId: string): (keyof typeof editedValues)[] {
         switch (categoryId) {
-            case 'profile':
-                return ['avatar_url'];
             case 'display':
                 return ['language'];
             case 'currency':
@@ -179,13 +166,13 @@
             case 'appearance':
                 return ['theme'];
             default:
-                return ['avatar_url', 'language', 'default_currency', 'theme'];
+                return ['language', 'default_currency', 'theme'];
         }
     }
 
-    // Get visible fields
+    // Get visible fields (avatar is always visible, handled separately in template)
     $: visibleFields = selectedCategory === ''
-        ? ['avatar_url', 'language', 'default_currency', 'theme'] as const
+        ? ['language', 'default_currency', 'theme'] as const
         : getCategoryFields(selectedCategory) as (keyof typeof editedValues)[];
 
     // Single field actions
@@ -195,24 +182,14 @@
         success = null;
 
         try {
-            if (field === 'avatar_url') {
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({avatar_url: editedValues.avatar_url});
-                // Sync userSettings store
-                userSettings.setDirect({
-                    language: editedValues.language,
-                    base_currency: editedValues.default_currency,
-                    theme: editedValues.theme,
-                    avatar_url: editedValues.avatar_url
-                });
-            } else if (field === 'language') {
+            if (field === 'language') {
                 currentLanguage.set(editedValues.language as SupportedLocale);
                 await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({language: editedValues.language});
                 // Sync userSettings store
                 userSettings.setDirect({
                     language: editedValues.language,
                     base_currency: editedValues.default_currency,
-                    theme: editedValues.theme,
-                    avatar_url: editedValues.avatar_url
+                    theme: editedValues.theme
                 });
             } else if (field === 'default_currency') {
                 await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({base_currency: editedValues.default_currency});
@@ -220,8 +197,7 @@
                 userSettings.setDirect({
                     language: editedValues.language,
                     base_currency: editedValues.default_currency,
-                    theme: editedValues.theme,
-                    avatar_url: editedValues.avatar_url
+                    theme: editedValues.theme
                 });
             } else if (field === 'theme') {
                 localStorage.setItem('librefolio-theme', editedValues.theme === 'auto' ? '' : editedValues.theme);
@@ -234,8 +210,7 @@
                 userSettings.setDirect({
                     language: editedValues.language,
                     base_currency: editedValues.default_currency,
-                    theme: editedValues.theme,
-                    avatar_url: editedValues.avatar_url
+                    theme: editedValues.theme
                 });
             }
 
@@ -294,20 +269,12 @@
                 saved.push($_('settings.theme'));
             }
 
-            // Save avatar if modified
-            if (avatarModified) {
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({avatar_url: editedValues.avatar_url});
-                originalValues.avatar_url = editedValues.avatar_url;
-                saved.push($_('settings.avatar'));
-            }
-
             // Sync userSettings store after all saves
             if (saved.length > 0) {
                 userSettings.setDirect({
                     language: editedValues.language,
                     base_currency: editedValues.default_currency,
-                    theme: editedValues.theme,
-                    avatar_url: editedValues.avatar_url
+                    theme: editedValues.theme
                 });
                 success = `${$_('settings.savedSuccessfully')}: ${saved.join(', ')}`;
             }
@@ -329,29 +296,6 @@
 
     function resetAll() {
         editedValues = {...globalDefaults};
-    }
-
-    // Avatar handlers
-    function handleAvatarFileSelect(event: Event) {
-        const input = event.target as HTMLInputElement;
-        if (input.files && input.files[0]) {
-            avatarFile = input.files[0];
-            showAvatarModal = true;
-            input.value = '';
-        }
-    }
-
-    function handleAvatarUploadComplete(event: CustomEvent<{url: string; file: File}>) {
-        editedValues.avatar_url = event.detail.url;
-        showAvatarModal = false;
-        avatarFile = null;
-        // Auto-save avatar
-        saveField('avatar_url');
-    }
-
-    function removeAvatar() {
-        editedValues.avatar_url = null;
-        saveField('avatar_url');
     }
 </script>
 
@@ -383,51 +327,6 @@
     {#if isLoading}
         <div class="text-center py-8 text-gray-500 dark:text-gray-400">{$_('common.loading')}</div>
     {:else}
-        <!-- Avatar Setting -->
-        {#if visibleFields.includes('avatar_url')}
-            <div data-testid="preference-avatar" class="setting-row p-4 border rounded-lg mb-4 dark:border-slate-700">
-                <div class="flex items-center gap-4">
-                    <!-- Avatar Preview -->
-                    <div class="relative group">
-                        {#if editedValues.avatar_url}
-                            <img
-                                src={editedValues.avatar_url}
-                                alt="Avatar"
-                                class="w-20 h-20 rounded-full object-cover border-2 border-gray-200 dark:border-slate-600"
-                            />
-                        {:else}
-                            <div class="w-20 h-20 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center">
-                                <User size={32} class="text-gray-400 dark:text-slate-500" />
-                            </div>
-                        {/if}
-                        <!-- Upload overlay -->
-                        <label class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
-                            <span class="text-white text-xs">{$_('common.change')}</span>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                class="hidden"
-                                on:change={handleAvatarFileSelect}
-                            />
-                        </label>
-                    </div>
-                    <!-- Avatar Info -->
-                    <div class="flex-1">
-                        <h4 class="font-medium text-gray-900 dark:text-white">{$_('settings.avatar')}</h4>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.avatarHint')}</p>
-                        {#if editedValues.avatar_url}
-                            <button
-                                type="button"
-                                class="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline"
-                                on:click={removeAvatar}
-                            >
-                                {$_('common.remove')}
-                            </button>
-                        {/if}
-                    </div>
-                </div>
-            </div>
-        {/if}
 
         <!-- Language Setting -->
         {#if visibleFields.includes('language')}
@@ -486,12 +385,3 @@
     {/if}
 </SettingsLayout>
 
-<!-- Avatar Edit Modal -->
-<ImageEditModal
-    open={showAvatarModal}
-    file={avatarFile}
-    preset="avatar"
-    on:complete={handleAvatarUploadComplete}
-    on:cancel={() => { showAvatarModal = false; avatarFile = null; }}
-    on:error={(e) => { error = e.detail.message; }}
-/>
