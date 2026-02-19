@@ -1,8 +1,255 @@
 # Piano Aggiornato: Image Crop Modal System
 
 **Data**: 18 Febbraio 2026  
-**Status**: 🧪 IN TEST (implementazione completata, test manuali ed E2E in corso)  
+**Ultimo Aggiornamento**: 19 Febbraio 2026  
+**Status**: 🔧 FIX IN CORSO (feedback utente ricevuto)  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
+
+---
+
+## 🐛 Bug & Fix da Test Manuali (19 Feb 2026)
+
+### Bug Critici
+
+| ID | Descrizione | Priorità | Status |
+|----|-------------|----------|--------|
+| BUG-IC1 | Files Page: modal crop NON si apre dopo drag, serve pulsante edit accanto al file | Alta | 🔧 |
+| BUG-IC2 | Avatar: dopo cancel, secondo click non apre crop (input file non resettato) | Alta | 🔧 |
+| BUG-IC3 | Dashboard: avatar non aggiornato dopo modifica (solo sidebar e profile) | Media | 🔧 |
+| BUG-IC4 | Rotazione: salva con trasparenza ai bordi invece di crop dopo rotate | Media | 🔧 |
+| BUG-IC5 | Rimuovi avatar: nessuna conferma "sei sicuro?" | Bassa | 🔧 |
+
+### UX Improvements Richiesti
+
+| ID | Descrizione | Priorità | Status |
+|----|-------------|----------|--------|
+| UX-IC1 | Preset: rimuovere "Original", tenere Avatar(200), Icon(64), Custom | Alta | 🔧 |
+| UX-IC2 | Custom: permettere aspect ratio libero con maniglie trascinabili | Alta | ⏳ (difficile) |
+| UX-IC3 | Box info: tabella 2 righe (originale → scala → output editabile) | Alta | 🔧 |
+| UX-IC4 | Zoom: minimo 1x, max = pixel asse più corto | Media | 🔧 |
+| UX-IC5 | Rotazione: mostrare preview CSS ruotato (non solo al save) | Media | 🔧 |
+| UX-IC6 | Reset separati: uno per zoom, uno per rotation (oltre al globale) | Bassa | 🔧 |
+| UX-IC7 | Asset picker: modale intermedia con URL esterno O file esistenti O upload | Alta | ⏳ |
+| UX-IC8 | Settings burger: link diretto a Preferences invece di generico Settings | Bassa | 🔧 |
+
+### Note Tecniche
+
+- **UX-IC2 (Free aspect)**: svelte-easy-crop NON supporta maniglie trascinabili.
+  - **Decisione**: Migrare a **cropperjs** che supporta:
+    - Free crop con maniglie trascinabili
+    - Rotazione live preview
+    - Flip
+    - Zoom
+    - API più matura e feature-complete
+
+---
+
+## 🔄 MIGRAZIONE A CROPPERJS v2 ✅ COMPLETATA (19 Feb 2026)
+
+### Motivazione
+
+`svelte-easy-crop` ha limitazioni significative:
+- ❌ No maniglie trascinabili per free crop
+- ❌ No rotazione live preview (solo al save)
+- ❌ No prop `rotation` diretta
+
+`cropperjs v2` offre:
+- ✅ Free crop con resize handles
+- ✅ Rotazione live con preview
+- ✅ Flip orizzontale/verticale
+- ✅ Zoom con limiti configurabili
+- ✅ API Web Components moderna
+- ✅ Touch-friendly
+- ✅ CSS built-in (no external stylesheet)
+
+### Cambiamenti Effettuati
+
+1. **Disinstallato** `svelte-easy-crop`
+2. **Installato** `cropperjs@^2.1.0`
+3. **Riscritto** `ImageCropper.svelte` per API v2:
+   - Usa `new Cropper(imageSrc, {container: element})`
+   - Metodi: `getCropperImage().$rotate()`, `$scale()`, `$zoom()`
+   - Metodi: `getCropperSelection().$toCanvas()`, `aspectRatio`
+   - CSS integrato nei Web Components
+4. **Aggiornato** `imageCrop.ts`:
+   - `getCroppedImageFromCropper()` usa `selection.$toCanvas()`
+   - Rimosso vecchio `getCroppedImage()` con canvas manuale
+5. **Rimosso** preset `original` (solo avatar, broker-icon, custom)
+
+### API Cropperjs v2 - Riferimento
+
+```typescript
+// Inizializzazione
+const cropper = new Cropper(imageSrc, {container: element});
+
+// Ottenere componenti
+const image = cropper.getCropperImage();      // CropperImage
+const selection = cropper.getCropperSelection(); // CropperSelection  
+const canvas = cropper.getCropperCanvas();    // CropperCanvas
+
+// Trasformazioni immagine (relative)
+image.$rotate(15);           // Ruota di 15 gradi
+image.$scale(-1, 1);         // Flip H
+image.$zoom(1.5);            // Zoom 50%
+image.$center('contain');    // Centra immagine
+
+// Selection properties
+selection.aspectRatio = 1;   // 1:1 (NaN = free)
+selection.movable = true;
+selection.resizable = true;  // Abilita maniglie!
+
+// Ottenere canvas croppato
+const croppedCanvas = await selection.$toCanvas({width: 200, height: 200});
+```
+
+---
+
+## 📝 NUOVE FEATURE RICHIESTE (19 Feb 2026)
+
+### Feature 1: Pulsante Edit nella Lista File (Files Page)
+
+**Requisito**: Dopo drag&drop file immagine, nella lista pending appare un pulsante edit (matita) accanto alla dimensione. Cliccandolo si apre ImageEditModal.
+
+**Comportamento**:
+1. Utente trascina file immagini in upload area
+2. File appaiono nella lista con: `[nome] [size] [✏️ edit]`
+3. Click su edit → apre ImageEditModal per quel file
+4. Le configurazioni (crop, rotate, zoom, output size) vengono salvate in un oggetto `ImageEditConfig`
+5. Se utente clicca di nuovo edit, riparte dalla config salvata
+6. Click su "Carica" → applica tutte le config e fa upload
+
+**Struttura ImageEditConfig**:
+```typescript
+interface ImageEditConfig {
+  // Crop area (from cropper.getData())
+  cropX: number;
+  cropY: number;
+  cropWidth: number;
+  cropHeight: number;
+  
+  // Transform
+  rotation: number;  // degrees
+  scaleX: number;    // 1 or -1 (flip H)
+  scaleY: number;    // 1 or -1 (flip V)
+  
+  // Output
+  outputWidth: number | null;
+  outputHeight: number | null;
+  outputFormat: 'png' | 'jpeg' | 'webp';
+  outputQuality: number;
+  
+  // File name
+  outputFileName: string;
+}
+```
+
+### Feature 2: Nome File Editabile
+
+**Requisito**: Nella modale edit, l'utente può modificare il nome di salvataggio.
+
+**UI**:
+```
+┌─────────────────────────────────────────────────┐
+│ File name: [photo_vacanze.png        ]  [.png ▼]│
+└─────────────────────────────────────────────────┘
+```
+
+- Input text con nome base (senza estensione)
+- Dropdown per formato output (cambia anche estensione)
+- Default: nome file originale
+
+### Feature 3: Asset Picker Modal (per Avatar, Broker Icon, etc.)
+
+**Requisito**: Modale intermedia che permette di:
+1. Inserire URL esterno
+2. Selezionare da file esistenti sul server
+3. Uploadare nuovo file (→ apre ImageEditModal)
+
+**Flusso**:
+```
+User clicks "Change Avatar"
+       ↓
+┌─────────────────────────────────────────────────┐
+│  Select Image                           [X]     │
+├─────────────────────────────────────────────────┤
+│ ○ URL:  [https://example.com/avatar.png    ]   │
+│ ○ Existing: [grid of existing images]          │
+│ ○ Upload new: [Select file...]                 │
+├─────────────────────────────────────────────────┤
+│                    [Cancel] [Use Selected]      │
+└─────────────────────────────────────────────────┘
+```
+
+**Comportamento**:
+- Se URL → ritorna `{ type: 'url', url: '...' }`
+- Se Existing → ritorna `{ type: 'existing', url: '...' }`
+- Se Upload → apre ImageEditModal, poi ritorna `{ type: 'upload', url: '...', config: ImageEditConfig }`
+
+Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
+
+### Feature 4: Output Size Editabile con Scala
+
+**Requisito**: Box info mostra dimensioni con fattore di scala e output editabile.
+
+**UI**:
+```
+┌───────────────────────────────────────────────────────────┐
+│ Original: 1920 × 1080 px                                  │
+│ Selection: 800 × 800 px  → ×0.25 → Output: [200] × [200]  │
+└───────────────────────────────────────────────────────────┘
+```
+
+- Output width/height sono input editabili
+- Quando si modifica uno, l'altro si ricalcola mantenendo aspect ratio (se locked)
+- Fattore scala = output / selection
+- Preset (Avatar, Icon) forzano i valori output
+
+---
+
+## 🔧 Piano Fix Aggiornato (Ordine Implementazione)
+
+### Fase 1: Migrazione cropperjs (PRIORITÀ MASSIMA)
+
+1. Disinstallare svelte-easy-crop, installare cropperjs
+2. Riscrivere `ImageCropper.svelte` con cropperjs
+3. Aggiornare `getCroppedImage` per usare cropper API
+4. Aggiornare `ImageEditModal.svelte` per nuovi controlli
+5. Test: rotazione live, free crop con maniglie, flip
+
+### Fase 2: Edit nella Lista File
+
+6. Modificare lista file pending in Files page
+7. Aggiungere pulsante edit (matita) per immagini
+8. Creare tipo `ImageEditConfig`
+9. Salvare config per file, riapplicare su re-edit
+10. Applicare config durante upload
+
+### Fase 3: Nome File Editabile
+
+11. Aggiungere input nome file in ImageEditModal
+12. Dropdown formato output (png/jpeg/webp)
+13. Rinominare file durante upload
+
+### Fase 4: Output Size Editabile
+
+14. Nuova UI tabella dimensioni con scale factor
+15. Input editabili per output width/height
+16. Ricalcolo automatico con aspect ratio lock
+
+### Fase 5: Asset Picker Modal
+
+17. Creare `AssetPickerModal.svelte`
+18. Tab URL esterno
+19. Tab file esistenti (fetch da API /uploads)
+20. Tab upload nuovo (integra ImageEditModal)
+21. Integrare in Avatar, BrokerIcon
+
+### Fase 6: Bug Fix Rimanenti
+
+22. BUG-IC2: Reset input file (già fixato)
+23. BUG-IC3: Avatar in Dashboard
+24. BUG-IC5: Conferma rimozione avatar
+25. UX-IC8: Link Settings → Preferences
 
 ---
 

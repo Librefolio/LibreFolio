@@ -87,14 +87,14 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Vedi `phases/phase-04-subplan/plan-ui-fixes.md`
 
 13. **Image Crop Modal** 🧪 IN DEBUG (20 Feb 2026)
-    - `ImageCropper.svelte` con zoom (0.5x-10x), rotation slider (-180°/+180°), flip H/V
-    - `ImageEditModal.svelte` wrapper con preset (avatar 200×200, broker-icon 64×64, original, custom)
-    - `imageCrop.ts` utility con `getCroppedImage()` supporta rotazione/flip
+    - Migrazione da `svelte-easy-crop` a **cropperjs v2** (Web Components) ✅
+    - `ImageCropper.svelte` con zoom, rotation LIVE, flip H/V, free crop con maniglie
+    - `ImageEditModal.svelte` wrapper con preset (avatar 200×200, broker-icon 64×64, custom)
+    - `imageCrop.ts` utility con `getCroppedImageFromCropper()` usa `$toCanvas()`
     - Avatar spostato da PreferencesTab a ProfileTab (editabile in edit mode)
-    - Avatar rimosso da PreferencesTab (deduplica)
-    - i18n keys aggiunte per tutte le label (zoom, rotation, flip, inputSize, etc.)
-    - Limitazioni note: svelte-easy-crop non supporta rotation live preview (applicata solo al save)
-    - Vedi `plan-image-crop.md`
+    - Preset ridotti: rimosso "Original", tenuti Avatar/Icon/Custom
+    - i18n keys aggiunte per tutte le label
+    - Vedi `plan-imageCropModal.prompt.md`
 
 ---
 

@@ -17,7 +17,7 @@
     import ImageCropper from './ImageCropper.svelte';
     import {
         IMAGE_PRESETS,
-        getCroppedImage,
+        getCroppedImageFromCropper,
         blobToFile,
         type PresetName,
         type ImagePreset
@@ -36,11 +36,10 @@
         error: {message: string};
     }>();
 
-    // Available presets for selector
+    // Available presets for selector (removed 'original' per user feedback)
     const presetOptions: Array<{value: PresetName; labelKey: string}> = [
         {value: 'avatar', labelKey: 'uploads.presetAvatar'},
         {value: 'broker-icon', labelKey: 'uploads.presetIcon'},
-        {value: 'original', labelKey: 'uploads.presetOriginal'},
         {value: 'custom', labelKey: 'uploads.presetCustom'},
     ];
 
@@ -108,30 +107,24 @@
     async function handleUpload() {
         if (!imageSrc || !file) return;
 
-        const croppedAreaPixels = cropper?.getCroppedAreaPixels();
-        if (!croppedAreaPixels) {
-            error = 'Please select a crop area';
+        // Get cropper instance
+        const cropperInstance = cropper?.getCropper?.();
+        if (!cropperInstance) {
+            error = 'Cropper not ready';
             return;
         }
-
-        // Get transform state from cropper
-        const transform = cropper?.getTransform?.() || {rotation: 0, flipH: false, flipV: false};
 
         isUploading = true;
         error = null;
 
         try {
-            // Get cropped image blob with transformations
-            const blob = await getCroppedImage(
-                imageSrc,
-                croppedAreaPixels,
+            // Get cropped image blob using cropperjs
+            const blob = await getCroppedImageFromCropper(
+                cropperInstance,
                 config.outputWidth,
                 config.outputHeight,
                 config.outputFormat === 'auto' ? 'png' : config.outputFormat,
-                config.outputQuality,
-                transform.rotation,
-                transform.flipH,
-                transform.flipV
+                config.outputQuality
             );
 
             // Convert to File
@@ -220,7 +213,7 @@
                     aspectRatio={config.aspectRatio}
                     showZoomSlider={true}
                     showRotateControls={true}
-                    showAspectSelector={currentPreset === 'custom' || currentPreset === 'original'}
+                    showAspectSelector={currentPreset === 'custom'}
                 />
 
                 <!-- Output info -->
