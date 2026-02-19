@@ -243,36 +243,7 @@
 
             <!-- Body -->
             <div class="modal-body">
-                <!-- Preset Selector -->
-                {#if allowPresetChange}
-                    <div class="preset-selector">
-                        <span class="preset-label">{$_('uploads.outputPreset') || 'Output'}:</span>
-                        <div class="preset-buttons">
-                            {#each presetOptions as opt}
-                                <button
-                                    type="button"
-                                    class="preset-btn"
-                                    class:active={currentPreset === opt.value}
-                                    on:click={() => currentPreset = opt.value}
-                                >
-                                    {$_(opt.labelKey) || opt.value}
-                                </button>
-                            {/each}
-                        </div>
-                    </div>
-                {/if}
-
-                <ImageCropper
-                    bind:this={cropper}
-                    {imageSrc}
-                    aspectRatio={config.aspectRatio}
-                    showZoomSlider={true}
-                    showRotateControls={true}
-                    showAspectSelector={currentPreset === 'custom'}
-                    on:change={handleCropperChange}
-                />
-
-                <!-- File name editing -->
+                <!-- File name editing - at the very top -->
                 <div class="filename-editor">
                     <label class="filename-label" for="filename-input">
                         {$_('uploads.fileName') || 'File name'}:
@@ -298,7 +269,18 @@
                     </div>
                 </div>
 
-                <!-- Output info -->
+                <!-- Cropper -->
+                <ImageCropper
+                    bind:this={cropper}
+                    {imageSrc}
+                    aspectRatio={config.aspectRatio}
+                    showZoomSlider={true}
+                    showRotateControls={true}
+                    showAspectSelector={currentPreset === 'custom'}
+                    on:change={handleCropperChange}
+                />
+
+                <!-- Output info - contains selection info -->
                 <div class="output-info">
                     <ImageIcon size={16} class="info-icon" />
                     <span class="info-text">
@@ -309,6 +291,25 @@
                         ({Math.round(config.outputQuality * 100)}%)
                     </span>
                 </div>
+
+                <!-- Preset Selector - below info block -->
+                {#if allowPresetChange}
+                    <div class="preset-selector">
+                        <span class="preset-label">{$_('uploads.outputPreset') || 'Output preset'}:</span>
+                        <div class="preset-buttons">
+                            {#each presetOptions as opt}
+                                <button
+                                    type="button"
+                                    class="preset-btn"
+                                    class:active={currentPreset === opt.value}
+                                    on:click={() => currentPreset = opt.value}
+                                >
+                                    {$_(opt.labelKey) || opt.value}
+                                </button>
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
 
                 <!-- Error message -->
                 {#if error}
@@ -530,7 +531,7 @@
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        margin-top: 1rem;
+        margin-bottom: 1rem;
         flex-wrap: wrap;
     }
 

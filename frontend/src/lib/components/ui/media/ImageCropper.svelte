@@ -238,23 +238,121 @@
         return degrees * (Math.PI / 180);
     }
 
-    // Control functions - zoom uses relative delta, no artificial limits
+    // Zoom thresholds for unified zoom behavior
+    const MIN_SELECTION_SIZE = 50;  // Minimum selection size in pixels before switching to image zoom
+    const MAX_SELECTION_COVERAGE = 0.95;  // Maximum coverage of canvas before switching to image zoom
+
+    /**
+     * Unified zoom system:
+     * - Zoom IN: first enlarge selection, then zoom image when selection is at max
+     * - Zoom OUT: first shrink selection, then dezoom image when selection is at min
+     */
     function zoomIn() {
+        const sel = cropper?.getCropperSelection();
+        const canvas = cropper?.getCropperCanvas();
         const img = cropper?.getCropperImage();
-        if (img) {
-            // Zoom in by 10% relative
+
+        if (!sel || !canvas || !img) return;
+
+        const canvasRect = canvas.getBoundingClientRect();
+        const imgRect = img.getBoundingClientRect();
+
+        // Check if selection is near maximum size (relative to visible image)
+        const selectionCoverageW = sel.width / Math.min(canvasRect.width, imgRect.width);
+        const selectionCoverageH = sel.height / Math.min(canvasRect.height, imgRect.height);
+        const maxCoverage = Math.max(selectionCoverageW, selectionCoverageH);
+
+        if (maxCoverage >= MAX_SELECTION_COVERAGE) {
+            // Selection at max - zoom the image instead
             img.$zoom(0.1);
             currentZoom += 0.1;
+        } else {
+            // Enlarge selection by 10%
+            scaleSelection(1.1);
         }
     }
 
     function zoomOut() {
+        const sel = cropper?.getCropperSelection();
         const img = cropper?.getCropperImage();
-        if (img) {
-            // Zoom out by 10% relative - no minimum limit
+
+        if (!sel || !img) return;
+
+        // Check if selection is at minimum size
+        const minDimension = Math.min(sel.width, sel.height);
+
+        if (minDimension <= MIN_SELECTION_SIZE) {
+            // Selection at min - dezoom the image instead
             img.$zoom(-0.1);
             currentZoom -= 0.1;
+        } else {
+            // Shrink selection by 10%
+            scaleSelection(0.9);
         }
+    }
+
+    /**
+     * Scale selection around its center while respecting aspect ratio
+     */
+    function scaleSelection(factor: number) {
+        const sel = cropper?.getCropperSelection();
+        const canvas = cropper?.getCropperCanvas();
+        const img = cropper?.getCropperImage();
+
+        if (!sel || !canvas || !img) return;
+
+        const canvasRect = canvas.getBoundingClientRect();
+        const imgRect = img.getBoundingClientRect();
+
+        // Current selection center
+        const centerX = sel.x + sel.width / 2;
+        const centerY = sel.y + sel.height / 2;
+
+        // New dimensions
+        let newWidth = sel.width * factor;
+        let newHeight = sel.height * factor;
+
+        // Constrain to min size
+        if (newWidth < MIN_SELECTION_SIZE || newHeight < MIN_SELECTION_SIZE) {
+            return;
+        }
+
+        // Constrain to canvas/image bounds
+        const maxWidth = Math.min(canvasRect.width, imgRect.width);
+        const maxHeight = Math.min(canvasRect.height, imgRect.height);
+
+        if (newWidth > maxWidth) {
+            const ratio = maxWidth / newWidth;
+            newWidth = maxWidth;
+            newHeight *= ratio;
+        }
+        if (newHeight > maxHeight) {
+            const ratio = maxHeight / newHeight;
+            newHeight = maxHeight;
+            newWidth *= ratio;
+        }
+
+        // Calculate image bounds relative to canvas
+        const imgX = imgRect.left - canvasRect.left;
+        const imgY = imgRect.top - canvasRect.top;
+
+        // New position (centered)
+        let newX = centerX - newWidth / 2;
+        let newY = centerY - newHeight / 2;
+
+        // Keep selection within image bounds
+        newX = Math.max(imgX, Math.min(newX, imgX + imgRect.width - newWidth));
+        newY = Math.max(imgY, Math.min(newY, imgY + imgRect.height - newHeight));
+
+        // Apply new dimensions
+        sel.x = newX;
+        sel.y = newY;
+        sel.width = newWidth;
+        sel.height = newHeight;
+
+        // Update display info
+        cropWidth = Math.round(newWidth);
+        cropHeight = Math.round(newHeight);
     }
 
     function resetZoom() {
@@ -263,6 +361,13 @@
             img.$center('contain');
             currentZoom = 1;
         }
+        // Also reset selection to 80% coverage
+        setTimeout(() => {
+            const sel = cropper?.getCropperSelection();
+            if (sel) {
+                sel.$center();
+            }
+        }, 50);
     }
 
     function rotateLeft() {
@@ -276,51 +381,55 @@
     /**
      * Rotate image around the center of the selection.
      *
-     * Concept:
-     * - Canvas: Fixed viewport (coordinates 0,0 at top-left)
-     * - Image: Photo that can be moved, rotated, scaled
-     * - Selection: Rectangle drawn on canvas (coordinates relative to canvas)
+     * The challenge: cropperjs rotates around the image's visual center,
+     * but we want to rotate around the selection center.
      *
-     * When rotating, we need to compensate the translation so the selection
-     * center stays visually in the same position.
+     * Solution: Use the cropper-image element's bounding rect directly
+     * (it IS the visible image area) to find the visual center.
      */
     function rotateImage(degrees: number) {
         const img = cropper?.getCropperImage();
         const sel = cropper?.getCropperSelection();
-        
-        if (!img) return;
+        const canvas = cropper?.getCropperCanvas();
+        if (!img || !canvas) return;
 
         const radians = degreesToRadians(degrees);
 
-        // If there's a visible selection, rotate "around" the selection center
-        // by compensating with a translation
         if (sel && sel.width > 0 && sel.height > 0) {
-            // 1. Selection center (Canvas coordinates)
+            // Get the actual visual bounds of canvas
+            const canvasRect = canvas.getBoundingClientRect();
+
+            // The cropper-image element itself represents the transformed image
+            // Its bounding rect gives us the visual bounds after all transforms
+            const imgRect = img.getBoundingClientRect();
+
+            // Image center in canvas coordinates (relative to canvas top-left)
+            const imgCenterX = (imgRect.left + imgRect.width / 2) - canvasRect.left;
+            const imgCenterY = (imgRect.top + imgRect.height / 2) - canvasRect.top;
+
+            // Selection center in canvas coordinates
             const selCenterX = sel.x + sel.width / 2;
             const selCenterY = sel.y + sel.height / 2;
 
-            // 2. Image center (Canvas coordinates)
-            // $getTransform() returns [a, b, c, d, e, f] where e=tx, f=ty
-            const transform = img.$getTransform();
-            const imgCenterX = transform[4];  // e = translation X
-            const imgCenterY = transform[5];  // f = translation Y
+            // Vector from image center (pivot) to selection center
+            const dx = selCenterX - imgCenterX;
+            const dy = selCenterY - imgCenterY;
 
-            // 3. Vector from Image Center to Selection Center
-            const vecX = selCenterX - imgCenterX;
-            const vecY = selCenterY - imgCenterY;
-
-            // 4. Calculate rotated vector
+            // After rotation, this vector becomes:
             const cos = Math.cos(radians);
             const sin = Math.sin(radians);
-            const vecX_rotated = vecX * cos - vecY * sin;
-            const vecY_rotated = vecX * sin + vecY * cos;
+            const dxRotated = dx * cos - dy * sin;
+            const dyRotated = dx * sin + dy * cos;
 
-            // 5. Apply rotation AND position correction
-            // The correction is the difference between original and rotated vector
+            // Compensation needed to keep selection center fixed
+            const compensateX = dx - dxRotated;
+            const compensateY = dy - dyRotated;
+
+            // Apply rotation then translation
             img.$rotate(radians);
-            img.$move(vecX - vecX_rotated, vecY - vecY_rotated);
+            img.$move(compensateX, compensateY);
         } else {
-            // Fallback: standard rotation around image center
+            // No selection - simple rotation
             img.$rotate(radians);
         }
 
@@ -357,7 +466,60 @@
         currentRotation = 0;
         scaleX = 1;
         scaleY = 1;
-        forceReinit();
+
+        // Reset image transform and selection
+        const img = cropper?.getCropperImage();
+        const sel = cropper?.getCropperSelection();
+        const canvas = cropper?.getCropperCanvas();
+
+        if (img && sel && canvas) {
+            // Reset image to initial state
+            img.$resetTransform();
+            img.$center('contain');
+
+            // Wait for transform to settle, then position selection on the image
+            setTimeout(() => {
+                // Get the image's bounding box in canvas space
+                // The cropper-image element itself represents the transformed image
+                const imgRect = img.getBoundingClientRect();
+                const canvasRect = canvas.getBoundingClientRect();
+
+                // Calculate image position relative to canvas
+                const imgX = imgRect.left - canvasRect.left;
+                const imgY = imgRect.top - canvasRect.top;
+                const imgW = imgRect.width;
+                const imgH = imgRect.height;
+
+                if (isNaN(currentAspect) || currentAspect === 0) {
+                    // Free aspect - selection covers full image
+                    sel.x = imgX;
+                    sel.y = imgY;
+                    sel.width = imgW;
+                    sel.height = imgH;
+                } else {
+                    // Fixed aspect - center on image with 80% coverage
+                    const coverage = 0.8;
+                    // Calculate max size that fits in image with aspect ratio
+                    let newW, newH;
+                    if (imgW / imgH > currentAspect) {
+                        // Image wider than aspect - height limited
+                        newH = imgH * coverage;
+                        newW = newH * currentAspect;
+                    } else {
+                        // Image taller than aspect - width limited
+                        newW = imgW * coverage;
+                        newH = newW / currentAspect;
+                    }
+                    sel.x = imgX + (imgW - newW) / 2;
+                    sel.y = imgY + (imgH - newH) / 2;
+                    sel.width = newW;
+                    sel.height = newH;
+                }
+            }, 100);
+        } else {
+            // Fallback: full re-init
+            forceReinit();
+        }
     }
 
     // Force re-initialization of cropper (for reset functions)
