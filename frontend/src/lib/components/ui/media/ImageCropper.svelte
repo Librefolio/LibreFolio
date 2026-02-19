@@ -1,22 +1,21 @@
 <!--
   ImageCropper - Interactive image cropping component
 
-  Uses svelte-easy-crop for crop functionality.
-  Supports zoom, rotation, flip, aspect ratio selection, and real-time preview.
-  Note: Rotation is applied during final crop processing, not in live preview.
+  Uses cropperjs v2 (Web Components) for full-featured crop functionality.
+  Supports zoom, rotation (live preview), flip, aspect ratio selection, free crop with handles.
 -->
 <script lang="ts">
-    import {createEventDispatcher} from 'svelte';
-    import Cropper from 'svelte-easy-crop';
-    import type {CropArea} from 'svelte-easy-crop';
+    import {createEventDispatcher, onMount, onDestroy, tick} from 'svelte';
+    import Cropper from 'cropperjs';
+    // Note: cropperjs v2 uses Web Components, CSS is built-in
     import {_} from '$lib/i18n';
-    import {ZoomIn, ZoomOut, RotateCcw, FlipHorizontal, FlipVertical, Minus, Plus} from 'lucide-svelte';
+    import {ZoomIn, ZoomOut, RotateCcw, RotateCw, FlipHorizontal, FlipVertical, RefreshCw} from 'lucide-svelte';
 
     // Props
     export let imageSrc: string;
-    export let aspectRatio: number = 1;  // 0 = free (uses 4:3), 1 = square, 16/9, etc.
-    export let minZoom: number = 0.5;
-    export let maxZoom: number = 10;  // Allow very aggressive zoom
+    export let aspectRatio: number = 1;  // NaN or 0 = free, 1 = square, 16/9, etc.
+    export let minZoom: number = 1;
+    export let maxZoom: number = 10;
     export let showZoomSlider: boolean = true;
     export let showAspectSelector: boolean = false;
     export let showRotateControls: boolean = true;
@@ -29,133 +28,277 @@
     ];
 
     const dispatch = createEventDispatcher<{
-        cropcomplete: {percent: CropArea; pixels: CropArea};
+        change: {selection: {x: number; y: number; width: number; height: number}};
     }>();
 
     // Internal state
-    let crop = {x: 0, y: 0};
-    let zoom = 1;
-    let rotation = 0;  // -180 to +180 degrees
-    let flipH = false;
-    let flipV = false;
+    let containerElement: HTMLDivElement;
+    let cropper: Cropper | null = null;
     let currentAspect = aspectRatio;
-    let croppedAreaPixels: CropArea | null = null;
+    let currentZoom = 1;
+    let currentRotation = 0;
+    let scaleX = 1;
+    let scaleY = 1;
 
     // Image dimensions for info display
     let imageWidth = 0;
     let imageHeight = 0;
+    let cropWidth = 0;
+    let cropHeight = 0;
 
     // Update aspect when prop changes
     $: currentAspect = aspectRatio;
 
-    // Effective aspect for cropper (Free uses 4:3 as svelte-easy-crop doesn't support true free)
-    $: effectiveAspect = currentAspect === 0 ? 4/3 : currentAspect;
-
-    // Load image dimensions
-    $: if (imageSrc) {
-        const img = new Image();
-        img.onload = () => {
-            imageWidth = img.naturalWidth;
-            imageHeight = img.naturalHeight;
-        };
-        img.src = imageSrc;
+    // Reactive: when imageSrc changes, recreate cropper
+    $: if (imageSrc && containerElement) {
+        initCropper();
     }
 
-    // Handler for crop complete - use oncropcomplete prop format
-    function handleCropComplete(event: {percent: CropArea; pixels: CropArea}) {
-        croppedAreaPixels = event.pixels;
-        dispatch('cropcomplete', event);
+    onMount(() => {
+        if (imageSrc && containerElement) {
+            initCropper();
+        }
+    });
+
+    onDestroy(() => {
+        cropper?.destroy();
+        cropper = null;
+    });
+
+    async function initCropper() {
+        // Wait for DOM update
+        await tick();
+
+        // Destroy previous instance if exists
+        if (cropper) {
+            cropper.destroy();
+        }
+
+        // Clear container
+        containerElement.innerHTML = '';
+
+        // Determine aspect ratio (0 or NaN = free)
+        const effectiveAspect = (currentAspect === 0 || isNaN(currentAspect)) ? NaN : currentAspect;
+
+        // Create new Cropper instance with v2 API
+        cropper = new Cropper(imageSrc, {
+            container: containerElement,
+        });
+
+        // Wait for image to load
+        const cropperImage = cropper.getCropperImage();
+        const cropperSelection = cropper.getCropperSelection();
+        const cropperCanvas = cropper.getCropperCanvas();
+
+        if (cropperImage && cropperSelection && cropperCanvas) {
+            // Configure selection
+            if (!isNaN(effectiveAspect)) {
+                cropperSelection.aspectRatio = effectiveAspect;
+            }
+            cropperSelection.initialCoverage = 0.8;
+            cropperSelection.movable = true;
+            cropperSelection.resizable = true;
+            cropperSelection.zoomable = true;
+
+            // Configure image
+            cropperImage.rotatable = true;
+            cropperImage.scalable = true;
+
+            // Configure canvas
+            cropperCanvas.background = true;
+
+            // Listen for changes
+            cropperSelection.addEventListener('change', (e: Event) => {
+                const sel = e.target as any;
+                cropWidth = Math.round(sel.width || 0);
+                cropHeight = Math.round(sel.height || 0);
+                dispatch('change', {
+                    selection: {
+                        x: sel.x || 0,
+                        y: sel.y || 0,
+                        width: cropWidth,
+                        height: cropHeight
+                    }
+                });
+            });
+
+            // Get natural image dimensions
+            cropperImage.$ready(() => {
+                const img = cropperImage.$image;
+                if (img) {
+                    imageWidth = img.naturalWidth;
+                    imageHeight = img.naturalHeight;
+                }
+            });
+        }
     }
 
-    function resetAll() {
-        zoom = 1;
-        rotation = 0;
-        flipH = false;
-        flipV = false;
-        crop = {x: 0, y: 0};
-    }
-
+    // Control functions
     function zoomIn() {
-        zoom = Math.min(zoom + 0.5, maxZoom);
+        const cropperCanvas = cropper?.getCropperCanvas();
+        if (cropperCanvas) {
+            currentZoom = Math.min(currentZoom + 0.5, maxZoom);
+            // Zoom is relative in v2, we use scale
+            const img = cropper?.getCropperImage();
+            img?.$zoom(1.5);
+        }
     }
 
     function zoomOut() {
-        zoom = Math.max(zoom - 0.5, minZoom);
+        const img = cropper?.getCropperImage();
+        if (img) {
+            currentZoom = Math.max(currentZoom - 0.5, minZoom);
+            img.$zoom(0.67);  // 1/1.5
+        }
     }
 
-    function rotateBy(degrees: number) {
-        let newRotation = rotation + degrees;
-        // Clamp to -180 to +180
-        if (newRotation > 180) newRotation = -180 + (newRotation - 180);
-        if (newRotation < -180) newRotation = 180 + (newRotation + 180);
-        rotation = newRotation;
+    function resetZoom() {
+        const img = cropper?.getCropperImage();
+        if (img) {
+            img.$center('contain');
+            currentZoom = 1;
+        }
     }
 
-    function toggleFlipH() {
-        flipH = !flipH;
+    function rotateLeft() {
+        const img = cropper?.getCropperImage();
+        if (img) {
+            img.$rotate(-15);
+            currentRotation -= 15;
+            if (currentRotation < -180) currentRotation += 360;
+        }
     }
 
-    function toggleFlipV() {
-        flipV = !flipV;
+    function rotateRight() {
+        const img = cropper?.getCropperImage();
+        if (img) {
+            img.$rotate(15);
+            currentRotation += 15;
+            if (currentRotation > 180) currentRotation -= 360;
+        }
+    }
+
+    function resetRotation() {
+        // Reset by re-initializing (v2 doesn't have rotateTo)
+        currentRotation = 0;
+        initCropper();
+    }
+
+    function flipH() {
+        const img = cropper?.getCropperImage();
+        if (img) {
+            scaleX = scaleX === 1 ? -1 : 1;
+            img.$scale(scaleX, scaleY);
+        }
+    }
+
+    function flipV() {
+        const img = cropper?.getCropperImage();
+        if (img) {
+            scaleY = scaleY === 1 ? -1 : 1;
+            img.$scale(scaleX, scaleY);
+        }
+    }
+
+    function resetAll() {
+        currentZoom = 1;
+        currentRotation = 0;
+        scaleX = 1;
+        scaleY = 1;
+        initCropper();
     }
 
     function selectAspect(value: number) {
         currentAspect = value;
+        const sel = cropper?.getCropperSelection();
+        if (sel) {
+            const effectiveAspect = (value === 0 || isNaN(value)) ? NaN : value;
+            sel.aspectRatio = effectiveAspect;
+        }
     }
 
-    // Export method for parent to get crop area
-    export function getCroppedAreaPixels(): CropArea | null {
-        return croppedAreaPixels;
+    function handleZoomSliderChange() {
+        // For slider, we can't directly set zoom in v2, so we work with relative zoom
+        // This is a simplified approach
+        const img = cropper?.getCropperImage();
+        if (img) {
+            // Calculate relative zoom from previous
+            const factor = currentZoom;
+            img.$zoom(factor / (factor - 0.1 || 1));
+        }
     }
 
-    // Export rotation and flip state for crop processing
-    export function getTransform(): {rotation: number; flipH: boolean; flipV: boolean} {
-        return {rotation, flipH, flipV};
+    function handleRotationSliderChange() {
+        const img = cropper?.getCropperImage();
+        if (img) {
+            // Reset and apply new rotation
+            const oldRotation = currentRotation;
+            // v2 rotate is relative, so we need to track delta
+            // For now, rotation slider triggers full reset + rotate
+            // This is simplified - full implementation would track matrix
+        }
     }
 
-    // Export image dimensions
+    // Exported methods for parent component
+    export function getCropper(): Cropper | null {
+        return cropper;
+    }
+
+    export async function getCroppedCanvas(options?: {width?: number; height?: number}): Promise<HTMLCanvasElement | null> {
+        const sel = cropper?.getCropperSelection();
+        if (!sel) return null;
+        try {
+            return await sel.$toCanvas(options);
+        } catch {
+            return null;
+        }
+    }
+
+    export function getSelection(): {x: number; y: number; width: number; height: number} | null {
+        const sel = cropper?.getCropperSelection();
+        if (!sel) return null;
+        return {
+            x: sel.x,
+            y: sel.y,
+            width: sel.width,
+            height: sel.height
+        };
+    }
+
     export function getImageDimensions(): {width: number; height: number} {
         return {width: imageWidth, height: imageHeight};
     }
 
-    // Re-export CropArea type for consumers
-    export type {CropArea};
+    export function getCropDimensions(): {width: number; height: number} {
+        return {width: cropWidth, height: cropHeight};
+    }
+
+    export function getTransform(): {rotation: number; scaleX: number; scaleY: number} {
+        return {
+            rotation: currentRotation,
+            scaleX,
+            scaleY
+        };
+    }
 </script>
 
 <div class="image-cropper">
     <!-- Crop Area -->
-    <div class="crop-container">
-        <div class="cropper-wrapper" style="transform: scaleX({flipH ? -1 : 1}) scaleY({flipV ? -1 : 1})">
-            <Cropper
-                image={imageSrc}
-                bind:crop
-                bind:zoom
-                aspect={effectiveAspect}
-                {minZoom}
-                {maxZoom}
-                oncropcomplete={handleCropComplete}
-                showGrid={true}
-                cropShape="rect"
-            />
-        </div>
-
-        <!-- Rotation indicator overlay (when rotation != 0) -->
-        {#if rotation !== 0}
-            <div class="rotation-indicator">
-                {$_('uploads.rotationAppliedOnSave') || 'Rotation applied on save'}: {rotation}°
-            </div>
-        {/if}
+    <div class="crop-container" bind:this={containerElement}>
+        <!-- Cropper v2 creates its own DOM structure here -->
     </div>
 
     <!-- Image Info -->
-    {#if imageWidth && imageHeight}
-        <div class="image-info">
-            <span class="info-text">{$_('uploads.inputSize') || 'Input Size'}: {imageWidth}×{imageHeight}px</span>
-            {#if croppedAreaPixels}
-                <span class="info-text">{$_('uploads.selectionSize') || 'Selection'}: {Math.round(croppedAreaPixels.width)}×{Math.round(croppedAreaPixels.height)}px</span>
-            {/if}
+    <div class="image-info">
+        <div class="info-row">
+            <span class="info-label">{$_('uploads.inputSize') || 'Input'}:</span>
+            <span class="info-value">{imageWidth} × {imageHeight} px</span>
         </div>
-    {/if}
+        <div class="info-row">
+            <span class="info-label">{$_('uploads.selectionSize') || 'Selection'}:</span>
+            <span class="info-value">{cropWidth} × {cropHeight} px</span>
+        </div>
+    </div>
 
     <!-- Controls -->
     <div class="controls">
@@ -175,9 +318,6 @@
                         </button>
                     {/each}
                 </div>
-                {#if currentAspect === 0}
-                    <span class="aspect-note">({$_('uploads.freeNote') || 'Uses 4:3'})</span>
-                {/if}
             </div>
         {/if}
 
@@ -189,18 +329,13 @@
                     <button type="button" class="control-btn" on:click={zoomOut} title={$_('uploads.zoomOut') || 'Zoom out'}>
                         <ZoomOut size={16} />
                     </button>
-                    <input
-                        type="range"
-                        class="slider"
-                        min={minZoom}
-                        max={maxZoom}
-                        step={0.1}
-                        bind:value={zoom}
-                    />
+                    <span class="value-display">{currentZoom.toFixed(1)}×</span>
                     <button type="button" class="control-btn" on:click={zoomIn} title={$_('uploads.zoomIn') || 'Zoom in'}>
                         <ZoomIn size={16} />
                     </button>
-                    <span class="value-display">{zoom.toFixed(1)}x</span>
+                    <button type="button" class="control-btn small" on:click={resetZoom} title={$_('uploads.reset') || 'Reset'}>
+                        <RefreshCw size={12} />
+                    </button>
                 </div>
             </div>
         {/if}
@@ -210,39 +345,46 @@
             <div class="control-group">
                 <span class="control-label">{$_('uploads.rotation') || 'Rotation'}:</span>
                 <div class="control-row">
-                    <button type="button" class="control-btn" on:click={() => rotateBy(-15)} title="-15°">
-                        <Minus size={16} />
+                    <button type="button" class="control-btn" on:click={rotateLeft} title="-15°">
+                        <RotateCcw size={16} />
                     </button>
-                    <input
-                        type="range"
-                        class="slider rotation-slider"
-                        min={-180}
-                        max={180}
-                        step={1}
-                        bind:value={rotation}
-                    />
-                    <button type="button" class="control-btn" on:click={() => rotateBy(15)} title="+15°">
-                        <Plus size={16} />
+                    <span class="value-display">{Math.round(currentRotation)}°</span>
+                    <button type="button" class="control-btn" on:click={rotateRight} title="+15°">
+                        <RotateCw size={16} />
                     </button>
-                    <span class="value-display">{rotation}°</span>
+                    <button type="button" class="control-btn small" on:click={resetRotation} title={$_('uploads.reset') || 'Reset'}>
+                        <RefreshCw size={12} />
+                    </button>
                 </div>
             </div>
 
             <div class="control-group">
                 <span class="control-label">{$_('uploads.flip') || 'Flip'}:</span>
                 <div class="control-row">
-                    <button type="button" class="control-btn" class:active={flipH} on:click={toggleFlipH} title={$_('uploads.flipHorizontal') || 'Flip horizontal'}>
+                    <button
+                        type="button"
+                        class="control-btn"
+                        class:active={scaleX === -1}
+                        on:click={flipH}
+                        title={$_('uploads.flipHorizontal') || 'Flip horizontal'}
+                    >
                         <FlipHorizontal size={16} />
                         <span class="btn-label">H</span>
                     </button>
-                    <button type="button" class="control-btn" class:active={flipV} on:click={toggleFlipV} title={$_('uploads.flipVertical') || 'Flip vertical'}>
+                    <button
+                        type="button"
+                        class="control-btn"
+                        class:active={scaleY === -1}
+                        on:click={flipV}
+                        title={$_('uploads.flipVertical') || 'Flip vertical'}
+                    >
                         <FlipVertical size={16} />
                         <span class="btn-label">V</span>
                     </button>
                     <div class="separator"></div>
-                    <button type="button" class="control-btn reset" on:click={resetAll} title={$_('uploads.reset') || 'Reset'}>
+                    <button type="button" class="control-btn reset" on:click={resetAll} title={$_('uploads.resetAll') || 'Reset All'}>
                         <RotateCcw size={14} />
-                        <span class="btn-label">{$_('uploads.reset') || 'Reset'}</span>
+                        <span class="btn-label">{$_('uploads.resetAll') || 'Reset All'}</span>
                     </button>
                 </div>
             </div>
@@ -267,38 +409,23 @@
         overflow: hidden;
     }
 
-    .cropper-wrapper {
-        width: 100%;
-        height: 100%;
-    }
-
     @media (min-width: 640px) {
         .crop-container {
             height: 400px;
         }
     }
 
-    /* Rotation indicator overlay */
-    .rotation-indicator {
-        position: absolute;
-        bottom: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.75);
-        color: #fbbf24;
-        font-size: 0.75rem;
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        pointer-events: none;
-        z-index: 10;
+    /* Cropperjs v2 container styles */
+    .crop-container :global(cropper-canvas) {
+        width: 100%;
+        height: 100%;
     }
 
     .image-info {
         display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        justify-content: center;
-        padding: 0.5rem;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.75rem;
         background: #f3f4f6;
         border-radius: 0.375rem;
     }
@@ -307,14 +434,28 @@
         background: #374151;
     }
 
-    .info-text {
+    .info-row {
+        display: flex;
+        justify-content: space-between;
         font-size: 0.75rem;
+    }
+
+    .info-label {
         color: #6b7280;
+        font-weight: 500;
+    }
+
+    .info-value {
+        color: #374151;
         font-family: monospace;
     }
 
-    :global(.dark) .info-text {
+    :global(.dark) .info-label {
         color: #9ca3af;
+    }
+
+    :global(.dark) .info-value {
+        color: #e5e7eb;
     }
 
     .controls {
@@ -397,44 +538,6 @@
         color: white;
     }
 
-    .aspect-note {
-        font-size: 0.75rem;
-        color: #9ca3af;
-        font-style: italic;
-    }
-
-    /* Slider */
-    .slider {
-        flex: 1;
-        min-width: 80px;
-        height: 6px;
-        border-radius: 3px;
-        background: #e5e7eb;
-        appearance: none;
-        cursor: pointer;
-    }
-
-    .rotation-slider {
-        min-width: 100px;
-    }
-
-    .slider::-webkit-slider-thumb {
-        appearance: none;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #1a4031;
-        cursor: pointer;
-    }
-
-    :global(.dark) .slider {
-        background: #4b5563;
-    }
-
-    :global(.dark) .slider::-webkit-slider-thumb {
-        background: #10b981;
-    }
-
     /* Control buttons */
     .control-btn {
         display: flex;
@@ -450,6 +553,12 @@
         color: #6b7280;
         cursor: pointer;
         transition: all 0.15s;
+    }
+
+    .control-btn.small {
+        min-width: 24px;
+        height: 24px;
+        padding: 0 0.25rem;
     }
 
     .control-btn:hover {
@@ -524,5 +633,14 @@
     :global(.dark) .separator {
         background: #4b5563;
     }
-</style>
 
+    /* Cropperjs v2 dark mode overrides */
+    :global(.dark) .crop-container :global(cropper-canvas) {
+        --cropper-backdrop-color: rgba(0, 0, 0, 0.7);
+        --cropper-outline-color: rgba(16, 185, 129, 0.75);
+    }
+
+    :global(.dark) .crop-container :global(cropper-selection) {
+        --cropper-selection-outline-color: #10b981;
+    }
+</style>
