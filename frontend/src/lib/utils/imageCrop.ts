@@ -1,19 +1,42 @@
 /**
  * Image Crop Utilities
  *
- * Presets and helper functions for image cropping.
+ * Presets and helper functions for image cropping with cropperjs v2.
  */
 
-// Re-export CropArea from svelte-easy-crop for type consistency
-export type {CropArea} from 'svelte-easy-crop';
-import type {CropArea} from 'svelte-easy-crop';
+import type Cropper from 'cropperjs';
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
+/**
+ * Configuration for image editing, saved per-file for re-editing
+ */
+export interface ImageEditConfig {
+    // Crop area
+    cropX: number;
+    cropY: number;
+    cropWidth: number;
+    cropHeight: number;
+
+    // Transform
+    rotation: number;    // degrees
+    scaleX: number;      // 1 or -1 (flip H)
+    scaleY: number;      // 1 or -1 (flip V)
+
+    // Output
+    outputWidth: number | null;
+    outputHeight: number | null;
+    outputFormat: 'png' | 'jpeg' | 'webp';
+    outputQuality: number;  // 0-1
+
+    // File name
+    outputFileName: string;
+}
+
 export interface ImagePreset {
-    aspectRatio: number;      // 0 = free, 1 = square, 16/9, etc.
+    aspectRatio: number;      // 0 or NaN = free, 1 = square, 16/9, etc.
     outputWidth: number | null;
     outputHeight: number | null;
     outputFormat: 'png' | 'jpeg' | 'webp' | 'auto';
@@ -21,7 +44,7 @@ export interface ImagePreset {
     titleKey: string;         // i18n key for modal title
 }
 
-export type PresetName = 'avatar' | 'broker-icon' | 'original' | 'custom';
+export type PresetName = 'avatar' | 'broker-icon' | 'custom';
 
 // =============================================================================
 // PRESETS
@@ -44,20 +67,12 @@ export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
         outputQuality: 0.9,
         titleKey: 'uploads.editBrokerIcon',
     },
-    original: {
-        aspectRatio: 0,           // Free aspect ratio
-        outputWidth: null,        // Keep original dimensions
-        outputHeight: null,
-        outputFormat: 'auto',     // Keep original format
-        outputQuality: 0.95,      // High quality
-        titleKey: 'uploads.editImage',
-    },
     custom: {
-        aspectRatio: 0,           // Free aspect ratio
+        aspectRatio: 0,           // Free aspect ratio (NaN in cropperjs)
         outputWidth: null,        // User can set
         outputHeight: null,
         outputFormat: 'auto',
-        outputQuality: 0.85,
+        outputQuality: 0.9,
         titleKey: 'uploads.editImage',
     }
 };
@@ -67,119 +82,40 @@ export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
 // =============================================================================
 
 /**
- * Create an image element from a source URL
+ * Get cropped image from cropperjs v2 instance as Blob
+ * Uses CropperSelection.$toCanvas() method
  */
-export function createImage(url: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-        const image = new Image();
-        image.addEventListener('load', () => resolve(image));
-        image.addEventListener('error', (error) => reject(error));
-        image.setAttribute('crossOrigin', 'anonymous');
-        image.src = url;
-    });
-}
-
-/**
- * Get the cropped image as a Blob
- * Supports rotation and flip transformations
- */
-export async function getCroppedImage(
-    imageSrc: string,
-    pixelCrop: CropArea,
+export async function getCroppedImageFromCropper(
+    cropper: Cropper,
     outputWidth: number | null = null,
     outputHeight: number | null = null,
     format: 'png' | 'jpeg' | 'webp' | 'auto' = 'png',
-    quality: number = 0.9,
-    rotation: number = 0,
-    flipH: boolean = false,
-    flipV: boolean = false
+    quality: number = 0.9
 ): Promise<Blob> {
-    const image = await createImage(imageSrc);
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    const selection = cropper.getCropperSelection();
 
-    if (!ctx) {
-        throw new Error('No 2d context');
+    if (!selection) {
+        throw new Error('No crop selection available');
     }
 
-    // Determine output dimensions
-    let finalWidth = pixelCrop.width;
-    let finalHeight = pixelCrop.height;
+    // Build canvas options
+    const canvasOptions: {width?: number; height?: number} = {};
+    if (outputWidth) canvasOptions.width = outputWidth;
+    if (outputHeight) canvasOptions.height = outputHeight;
 
-    if (outputWidth && outputHeight) {
-        finalWidth = outputWidth;
-        finalHeight = outputHeight;
-    } else if (outputWidth) {
-        // Scale proportionally
-        const ratio = outputWidth / pixelCrop.width;
-        finalWidth = outputWidth;
-        finalHeight = Math.round(pixelCrop.height * ratio);
-    } else if (outputHeight) {
-        const ratio = outputHeight / pixelCrop.height;
-        finalHeight = outputHeight;
-        finalWidth = Math.round(pixelCrop.width * ratio);
+    // Get cropped canvas from selection
+    const canvas = await selection.$toCanvas(canvasOptions);
+
+    if (!canvas) {
+        throw new Error('Failed to get cropped canvas');
     }
-
-    // Limit max dimensions
-    const maxDimension = 2000;
-    if (finalWidth > maxDimension || finalHeight > maxDimension) {
-        const scale = maxDimension / Math.max(finalWidth, finalHeight);
-        finalWidth = Math.round(finalWidth * scale);
-        finalHeight = Math.round(finalHeight * scale);
-    }
-
-    // For rotations of 90 or 270 degrees, swap dimensions
-    const isRotated90or270 = Math.abs(rotation % 180) === 90;
-    if (isRotated90or270) {
-        canvas.width = finalHeight;
-        canvas.height = finalWidth;
-    } else {
-        canvas.width = finalWidth;
-        canvas.height = finalHeight;
-    }
-
-    // Apply transformations
-    ctx.save();
-
-    // Move to center of canvas
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-
-    // Apply rotation
-    ctx.rotate((rotation * Math.PI) / 180);
-
-    // Apply flip
-    ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-
-    // Draw image centered
-    const drawWidth = isRotated90or270 ? finalHeight : finalWidth;
-    const drawHeight = isRotated90or270 ? finalWidth : finalHeight;
-
-    ctx.drawImage(
-        image,
-        pixelCrop.x,
-        pixelCrop.y,
-        pixelCrop.width,
-        pixelCrop.height,
-        -drawWidth / 2,
-        -drawHeight / 2,
-        drawWidth,
-        drawHeight
-    );
-
-    ctx.restore();
 
     // Determine output MIME type
-    let mimeType: string;
-    if (format === 'auto') {
-        // Try to detect from original, default to PNG
-        mimeType = 'image/png';
-    } else {
-        mimeType = `image/${format}`;
-    }
+    const mimeType = format === 'auto' ? 'image/png' : `image/${format}`;
 
     return new Promise((resolve, reject) => {
         canvas.toBlob(
-            (blob) => {
+            (blob: Blob | null) => {
                 if (blob) {
                     resolve(blob);
                 } else {
@@ -190,6 +126,38 @@ export async function getCroppedImage(
             quality
         );
     });
+}
+
+/**
+ * Create ImageEditConfig from cropperjs v2 selection state
+ */
+export function createImageEditConfig(
+    cropper: Cropper,
+    fileName: string,
+    outputWidth: number | null = null,
+    outputHeight: number | null = null,
+    outputFormat: 'png' | 'jpeg' | 'webp' = 'png',
+    outputQuality: number = 0.9,
+    rotation: number = 0,
+    scaleX: number = 1,
+    scaleY: number = 1
+): ImageEditConfig {
+    const selection = cropper.getCropperSelection();
+
+    return {
+        cropX: selection?.x || 0,
+        cropY: selection?.y || 0,
+        cropWidth: selection?.width || 0,
+        cropHeight: selection?.height || 0,
+        rotation,
+        scaleX,
+        scaleY,
+        outputWidth,
+        outputHeight,
+        outputFormat,
+        outputQuality,
+        outputFileName: fileName,
+    };
 }
 
 /**
@@ -231,4 +199,13 @@ export const SUPPORTED_IMAGE_TYPES = [
  */
 export function isSupportedImageType(mimeType: string): boolean {
     return SUPPORTED_IMAGE_TYPES.includes(mimeType);
+}
+
+/**
+ * Get default output filename from original file
+ */
+export function getDefaultOutputFileName(originalName: string, format: 'png' | 'jpeg' | 'webp'): string {
+    const baseName = originalName.replace(/\.[^.]+$/, '');
+    const ext = format === 'jpeg' ? 'jpg' : format;
+    return `${baseName}.${ext}`;
 }

@@ -41,6 +41,7 @@
     let avatarFile: File | null = null;
     let originalAvatarUrl: string | null = null;
     let editedAvatarUrl: string | null = null;
+    let avatarInputRef: HTMLInputElement | null = null;
 
     // Load avatar URL from settings on mount
     onMount(async () => {
@@ -194,6 +195,13 @@
             avatarFile = input.files[0];
             showAvatarModal = true;
         }
+        // Reset input value so same file can be selected again
+        input.value = '';
+    }
+
+    function handleAvatarModalCancel() {
+        showAvatarModal = false;
+        avatarFile = null;
     }
 
     async function handleAvatarUploadComplete(event: CustomEvent<{url: string; file: File}>) {
@@ -705,7 +713,7 @@
     file={avatarFile}
     preset="avatar"
     on:complete={handleAvatarUploadComplete}
-    on:cancel={() => { showAvatarModal = false; avatarFile = null; }}
+    on:cancel={handleAvatarModalCancel}
     on:error={(e) => { error = e.detail.message; }}
 />
 
