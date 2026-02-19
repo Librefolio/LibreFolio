@@ -399,7 +399,9 @@
     "category": "Catégorie",
     "categoryProfile": "Profil",
     "avatar": "Avatar",
-    "avatarHint": "Cliquez pour télécharger une photo de profil"
+    "avatarHint": "Cliquez pour télécharger une photo de profil",
+    "removeAvatarTitle": "Supprimer l'avatar ?",
+    "removeAvatarMessage": "Êtes-vous sûr de vouloir supprimer votre avatar ?"
   },
   "uploads": {
     "dropOrClick": "Déposer un fichier ici ou cliquer pour parcourir",

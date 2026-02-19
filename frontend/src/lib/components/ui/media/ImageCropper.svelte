@@ -58,6 +58,11 @@
         initCropper();
     }
 
+    // Middle mouse button drag state
+    let isMiddleDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
     onMount(() => {
         // Initial setup handled by reactive block
     });
@@ -65,7 +70,43 @@
     onDestroy(() => {
         cropper?.destroy();
         cropper = null;
+        // Cleanup event listeners
+        document.removeEventListener('mousemove', handleMiddleMouseMove);
+        document.removeEventListener('mouseup', handleMiddleMouseUp);
     });
+
+    // Middle mouse button handlers for panning
+    function handleMiddleMouseDown(event: MouseEvent) {
+        if (event.button === 1) {  // Middle button
+            event.preventDefault();
+            isMiddleDragging = true;
+            lastMouseX = event.clientX;
+            lastMouseY = event.clientY;
+            document.addEventListener('mousemove', handleMiddleMouseMove);
+            document.addEventListener('mouseup', handleMiddleMouseUp);
+        }
+    }
+
+    function handleMiddleMouseMove(event: MouseEvent) {
+        if (!isMiddleDragging) return;
+
+        const img = cropper?.getCropperImage();
+        if (img) {
+            const deltaX = event.clientX - lastMouseX;
+            const deltaY = event.clientY - lastMouseY;
+            img.$move(deltaX, deltaY);
+            lastMouseX = event.clientX;
+            lastMouseY = event.clientY;
+        }
+    }
+
+    function handleMiddleMouseUp(event: MouseEvent) {
+        if (event.button === 1) {
+            isMiddleDragging = false;
+            document.removeEventListener('mousemove', handleMiddleMouseMove);
+            document.removeEventListener('mouseup', handleMiddleMouseUp);
+        }
+    }
 
     async function initCropper() {
         // Wait for DOM update
@@ -225,56 +266,34 @@
         }
     }
 
-    function handleZoomSliderInput() {
-        const img = cropper?.getCropperImage();
-        if (img) {
-            // Calculate delta from previous value
-            const delta = currentZoom - previousZoom;
-            if (Math.abs(delta) > 0.01) {
-                img.$zoom(delta);
-                previousZoom = currentZoom;
-            }
-        }
-    }
-
     function resetZoom() {
         const img = cropper?.getCropperImage();
         if (img) {
             img.$center('contain');
             currentZoom = 1;
-            previousZoom = 1;
         }
     }
 
     function rotateLeft() {
-        rotateAroundSelectionCenter(-15);
+        rotateImage(-15);
     }
 
     function rotateRight() {
-        rotateAroundSelectionCenter(15);
+        rotateImage(15);
     }
 
     /**
-     * Rotate image around the center of the selection
-     * Technique: translate to origin, rotate, translate back
+     * Rotate image by degrees
+     * Note: cropperjs v2 rotates around the image center which may not align
+     * with selection center. For now, simple rotation is used.
      */
-    function rotateAroundSelectionCenter(degrees: number) {
+    function rotateImage(degrees: number) {
         const img = cropper?.getCropperImage();
-        const sel = cropper?.getCropperSelection();
-        if (!img || !sel) return;
+        if (!img) return;
 
-        // Get selection center
-        const centerX = sel.x + sel.width / 2;
-        const centerY = sel.y + sel.height / 2;
-
-        // 1. Translate image so selection center is at origin
-        img.$move(-centerX, -centerY);
-
-        // 2. Rotate around origin (now effectively around selection center)
+        // Simple rotation - cropperjs handles the transform
         img.$rotate(degreesToRadians(degrees));
 
-        // 3. Translate back
-        img.$move(centerX, centerY);
 
         // Update rotation state
         currentRotation += degrees;
@@ -409,7 +428,12 @@
 
 <div class="image-cropper">
     <!-- Crop Area with controls overlay -->
-    <div class="crop-wrapper">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        class="crop-wrapper"
+        on:mousedown={handleMiddleMouseDown}
+        on:contextmenu|preventDefault
+    >
         <div class="crop-container" bind:this={containerElement}>
             <!-- Cropper v2 creates its own DOM structure here -->
         </div>

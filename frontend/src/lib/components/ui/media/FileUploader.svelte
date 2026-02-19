@@ -153,17 +153,14 @@
 
     // Public method to replace a file at a specific index (used after crop)
     export function replaceFile(index: number, newFile: File) {
-        console.log('[FileUploader] replaceFile called', { index, newFile: newFile.name });
         if (index >= 0 && index < selectedFiles.length) {
             // Save original file for restore (only if not already edited)
             if (!(index in originalFiles)) {
                 originalFiles = { ...originalFiles, [index]: selectedFiles[index] };
-                console.log('[FileUploader] Saved original file', { index, originalName: selectedFiles[index].name });
             }
             // Mark as edited - create new array to trigger reactivity
             if (!editedIndices.includes(index)) {
                 editedIndices = [...editedIndices, index];
-                console.log('[FileUploader] Added to editedIndices', { editedIndices });
             }
 
             // Replace file in selectedFiles
@@ -172,7 +169,6 @@
                 newFile,
                 ...selectedFiles.slice(index + 1)
             ];
-            console.log('[FileUploader] Updated selectedFiles', { count: selectedFiles.length });
             dispatch('change', { files: selectedFiles });
         }
     }
