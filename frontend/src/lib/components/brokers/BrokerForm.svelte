@@ -10,7 +10,7 @@
     import ImportPluginSelect from '$lib/components/ImportPluginSelect.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import {ImageEditModal} from '$lib/components/ui/media';
+    import {ImageEditModal, AssetPickerModal} from '$lib/components/ui/media';
     import {Info, Plus, Trash2, Upload} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
@@ -149,6 +149,9 @@
     let showIconEditModal = false;
     let iconEditFile: File | null = null;
 
+    // Asset picker modal state
+    let showAssetPicker = false;
+
     // Handle icon upload completion
     function handleIconUploadComplete(event: CustomEvent<{url: string | null; file: File}>) {
         if (event.detail.url) {
@@ -158,7 +161,20 @@
         iconEditFile = null;
     }
 
-    // Handle icon file selection
+    // Handle asset picker selection
+    function handleAssetPickerSelect(event: CustomEvent<{url: string}>) {
+        iconUrl = event.detail.url;
+        showAssetPicker = false;
+    }
+
+    // Handle asset picker upload (user chose to upload a new file)
+    function handleAssetPickerUpload(event: CustomEvent<{file: File}>) {
+        iconEditFile = event.detail.file;
+        showAssetPicker = false;
+        showIconEditModal = true;
+    }
+
+    // Handle icon file selection (from hidden input when picker triggers upload)
     function handleIconFileSelect(event: Event) {
         const input = event.target as HTMLInputElement;
         if (input.files && input.files[0]) {
@@ -306,16 +322,15 @@
                     placeholder={$_('brokers.iconUrlPlaceholder')}
                     type="url"
             />
-            <!-- Upload button for icon -->
-            <label class="flex items-center justify-center w-10 h-10 border dark:border-slate-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" title={$_('uploads.upload')}>
+            <!-- Upload button for icon (opens AssetPickerModal) -->
+            <button
+                type="button"
+                class="flex items-center justify-center w-10 h-10 border dark:border-slate-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                title={$_('uploads.selectAsset') || 'Select Image'}
+                on:click={() => showAssetPicker = true}
+            >
                 <Upload size={18} class="text-gray-500 dark:text-gray-400" />
-                <input
-                    type="file"
-                    accept="image/*"
-                    class="hidden"
-                    on:change={handleIconFileSelect}
-                />
-            </label>
+            </button>
             <!-- Icon preview using BrokerIcon component -->
             <BrokerIcon
                     altText="Preview"
@@ -488,6 +503,16 @@
     on:complete={handleIconUploadComplete}
     on:cancel={() => { showIconEditModal = false; iconEditFile = null; }}
     on:error={(e) => console.error('Icon upload error:', e.detail.message)}
+/>
+
+<!-- Asset Picker Modal for Broker Icon -->
+<AssetPickerModal
+    open={showAssetPicker}
+    title={$_('uploads.selectIcon') || 'Select Icon'}
+    filterImages={true}
+    on:select={handleAssetPickerSelect}
+    on:upload={handleAssetPickerUpload}
+    on:cancel={() => showAssetPicker = false}
 />
 
 <!-- Actions (sempre visibili - fuori dal form scrollabile) -->

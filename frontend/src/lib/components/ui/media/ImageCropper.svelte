@@ -286,6 +286,8 @@
                         height: cropHeight
                     }
                 });
+                // Update ellipse overlay position
+                updateEllipseOverlay();
             };
 
             // Listen for changes (resize, move, etc.)
@@ -703,8 +705,24 @@
     export function getCurrentAspect(): number {
         return currentAspect;
     }
+
     // Preview ellipse overlay
     export let showPreviewEllipse: boolean = false;
+
+    // Ellipse overlay position (tracks selection in crop-container coordinates)
+    let ellipseStyle = '';
+
+    // Update ellipse overlay position to match selection
+    function updateEllipseOverlay() {
+        if (!showPreviewEllipse) { ellipseStyle = ''; return; }
+        const sel = cropper?.getCropperSelection();
+        if (!sel) { ellipseStyle = ''; return; }
+        ellipseStyle = `left:${sel.x}px;top:${sel.y}px;width:${sel.width}px;height:${sel.height}px;`;
+    }
+
+    // React to showPreviewEllipse changes + selection changes
+    $: if (showPreviewEllipse) updateEllipseOverlay();
+    $: if (cropWidth || cropHeight) updateEllipseOverlay();
 
 </script>
 
@@ -721,10 +739,9 @@
             <!-- Cropper v2 creates its own DOM structure here -->
         </div>
 
-        <!-- Preview ellipse overlay on selection - uses CSS to overlay on cropper-selection -->
-        <!-- This is handled via CSS on the cropper-selection element when active -->
-        {#if showPreviewEllipse}
-            <div class="ellipse-active"></div>
+        <!-- Ellipse preview overlay: a real DOM element positioned over the selection -->
+        {#if showPreviewEllipse && ellipseStyle}
+            <div class="ellipse-overlay" style={ellipseStyle}></div>
         {/if}
 
         <!-- Controls overlay - right side -->
@@ -824,20 +841,11 @@
         margin: 0.125rem auto;
     }
 
-    /* Preview ellipse - when .ellipse-active is present, apply ellipse overlay to selection */
-    .ellipse-active {
-        display: none; /* Hidden element, used as a CSS flag via sibling selectors */
-    }
-
-    /* The ellipse circle guide line on the selection */
-    .crop-wrapper:has(.ellipse-active) :global(cropper-selection)::after {
-        content: '';
+    /* Ellipse preview overlay - positioned real DOM element on top of crop-container */
+    .ellipse-overlay {
         position: absolute;
-        inset: 0;
         border-radius: 50%;
-        /* Dark overlay OUTSIDE the circle, inside the selection rectangle */
         box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
-        /* White circle border for visibility */
         border: 2px solid rgba(255, 255, 255, 0.5);
         pointer-events: none;
         z-index: 5;

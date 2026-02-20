@@ -1,8 +1,8 @@
 # Piano Aggiornato: Image Crop Modal System
 
 **Data**: 18 Febbraio 2026  
-**Ultimo Aggiornamento**: 20 Febbraio 2026 (ore 12:30)  
-**Status**: 🟢 COMPLETATO - Core feature + FileEditModal + Grid View  
+**Ultimo Aggiornamento**: 20 Febbraio 2026 (ore 13:10)  
+**Status**: 🟡 IN PROGRESS - Feature 6 (AssetPickerModal) in corso  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
 
 ---
@@ -78,6 +78,26 @@
 - ✅ **Drag fuori modale**: mousedown tracking per prevenire false close durante trascinamento
 - ✅ **CSS cleanup**: rimossi stili inutilizzati (.overlay-btn.reset)
 - ✅ **TODO riorganizzati**: `TODO_FUTURI.md` pulito, `TODO_Completati.md` creato, appunti utente documentati
+
+### UI Polish Round 4 ✅ (20 Feb 2026 ore 13:10)
+- ✅ **Colonne swap corretto**: LEFT = info+output+scale, RIGHT = preset+aspect ratio
+- ✅ **Scale allineato con Y di output**: spacer 52px allineato con secondo dim-input
+- ✅ **Ellipse fix completo**: JS-based overlay (div reale posizionato sopra la selezione), non più CSS :has()
+- ✅ **Auto-resetAll al primo edit**: `needsInit` flag per allineare selezione/size all'apertura modale
+- ✅ **Drag fuori modale fix v2**: traccia `mouseDownTarget` per distinguere drag da click backdrop
+- ✅ **resetAll esportato**: funzione accessibile da ImageEditModal via `cropper?.resetAll?.()`
+- ✅ **Reset rimosso da overlay**: solo nel header modale
+
+### Feature 6: AssetPickerModal 🟡 IN PROGRESS (20 Feb 2026)
+- ✅ **AssetPickerModal creato** — modale con 3 tab: Existing, URL, Upload
+- ✅ **Tab Existing**: griglia/lista con search, view toggle, selezione singola, doppio click conferma
+- ✅ **Tab URL**: input con validazione, preview immagine con LazyImage
+- ✅ **Tab Upload**: trigger file input hidden, dispatch 'upload' event per genitore
+- ✅ **Integrato in BrokerForm**: bottone icona → AssetPickerModal → URL o ImageEditModal
+- ✅ **Integrato in ProfileTab**: click avatar → AssetPickerModal → URL o ImageEditModal
+- ✅ **Traduzioni i18n**: selectAsset, existingFiles, fromUrl, uploadNew, imageUrl, useSelected, selectIcon, selectAvatar
+- ✅ **A11y compliant**: tabindex=-1, label for/id, 0 errori 0 warnings
+- 🔲 Test manuale e raffinamento UI
 
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
