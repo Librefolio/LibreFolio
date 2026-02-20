@@ -39,7 +39,8 @@
     "remove": "Remove",
     "discard": "Discard",
     "refresh": "Refresh",
-    "restore": "Restore original"
+    "restore": "Restore original",
+    "type": "Type"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -483,6 +484,7 @@
     "discardAndClose": "Discard",
     "editFile": "Edit File",
     "rename": "Rename",
-    "renameAndUpload": "Rename & Upload"
+    "renameAndUpload": "Rename & Upload",
+    "quality": "Quality"
   }
 }

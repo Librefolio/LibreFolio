@@ -707,6 +707,9 @@
             scaleY
         };
     }
+    // Preview ellipse overlay
+    export let showPreviewEllipse: boolean = false;
+
 </script>
 
 <div class="image-cropper">
@@ -721,6 +724,12 @@
         <div class="crop-container" bind:this={containerElement}>
             <!-- Cropper v2 creates its own DOM structure here -->
         </div>
+
+        <!-- Preview ellipse overlay on selection - uses CSS to overlay on cropper-selection -->
+        <!-- This is handled via CSS on the cropper-selection element when active -->
+        {#if showPreviewEllipse}
+            <div class="ellipse-active"></div>
+        {/if}
 
         <!-- Controls overlay - right side -->
         {#if showZoomSlider || showRotateControls}
@@ -741,7 +750,18 @@
                     <button type="button" class="overlay-btn" on:click={rotateRight} title="+15°">
                         <RotateCw size={16} />
                     </button>
+
+                    <div class="overlay-separator"></div>
+
+                    <button type="button" class="overlay-btn" class:active={scaleX === -1} on:click={flipH} title={$_('uploads.flipHorizontal') || 'Flip H'}>
+                        <FlipHorizontal size={16} />
+                    </button>
+                    <button type="button" class="overlay-btn" class:active={scaleY === -1} on:click={flipV} title={$_('uploads.flipVertical') || 'Flip V'}>
+                        <FlipVertical size={16} />
+                    </button>
                 {/if}
+
+                <div class="overlay-separator"></div>
 
                 <button type="button" class="overlay-btn reset" on:click={resetAll} title={$_('uploads.resetAll') || 'Reset All'}>
                     <RefreshCw size={14} />
@@ -762,56 +782,24 @@
         </div>
     </div>
 
-    <!-- BOTTOM CONTROLS: Preset & Flip -->
-    <div class="bottom-controls">
-        <!-- Aspect Ratio Selector -->
-        {#if showAspectSelector}
-            <div class="control-group">
-                <span class="control-label">{$_('uploads.aspectRatio') || 'Aspect Ratio'}:</span>
-                <div class="aspect-buttons">
-                    {#each aspectOptions as opt}
-                        <button
-                            type="button"
-                            class="aspect-btn"
-                            class:active={currentAspect === opt.value}
-                            on:click={() => selectAspect(opt.value)}
-                        >
-                            {opt.label}
-                        </button>
-                    {/each}
-                </div>
-            </div>
-        {/if}
-
-        <!-- Flip Controls -->
-        {#if showRotateControls}
-            <div class="control-group">
-                <span class="control-label">{$_('uploads.flip') || 'Flip'}:</span>
-                <div class="control-row">
+    <!-- Aspect Ratio Selector (shown externally when needed) -->
+    {#if showAspectSelector}
+        <div class="aspect-section">
+            <span class="control-label">{$_('uploads.aspectRatio') || 'Aspect Ratio'}:</span>
+            <div class="aspect-buttons">
+                {#each aspectOptions as opt}
                     <button
                         type="button"
-                        class="control-btn"
-                        class:active={scaleX === -1}
-                        on:click={flipH}
-                        title={$_('uploads.flipHorizontal') || 'Flip horizontal'}
+                        class="aspect-btn"
+                        class:active={currentAspect === opt.value}
+                        on:click={() => selectAspect(opt.value)}
                     >
-                        <FlipHorizontal size={16} />
-                        <span class="btn-label">H</span>
+                        {opt.label}
                     </button>
-                    <button
-                        type="button"
-                        class="control-btn"
-                        class:active={scaleY === -1}
-                        on:click={flipV}
-                        title={$_('uploads.flipVertical') || 'Flip vertical'}
-                    >
-                        <FlipVertical size={16} />
-                        <span class="btn-label">V</span>
-                    </button>
-                </div>
+                {/each}
             </div>
-        {/if}
-    </div>
+        </div>
+    {/if}
 </div>
 
 <style>
@@ -870,11 +858,47 @@
         background: #dc2626;
     }
 
-    /* Bottom controls - Preset & Flip */
-    .bottom-controls {
+    .overlay-btn.active {
+        background: rgba(16, 185, 129, 0.9);
+        color: white;
+    }
+
+    .overlay-btn.active:hover {
+        background: #059669;
+    }
+
+    .overlay-separator {
+        width: 24px;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.3);
+        margin: 0.125rem auto;
+    }
+
+    /* Preview ellipse - when .ellipse-active is present, apply ellipse mask to selection */
+    .ellipse-active {
+        display: none; /* Hidden element, used as a CSS flag via sibling selectors */
+    }
+
+    .crop-wrapper:has(.ellipse-active) :global(cropper-selection) {
+        border-radius: 50%;
+        overflow: hidden;
+    }
+
+    .crop-wrapper:has(.ellipse-active) :global(cropper-selection)::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+        pointer-events: none;
+    }
+
+    /* Aspect ratio section */
+    .aspect-section {
         display: flex;
-        flex-direction: column;
+        align-items: center;
         gap: 0.75rem;
+        flex-wrap: wrap;
         padding: 0.5rem;
     }
 
@@ -936,13 +960,6 @@
         color: #e5e7eb;
     }
 
-    .control-group {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-    }
-
     .control-label {
         font-size: 0.875rem;
         font-weight: 500;
@@ -954,13 +971,6 @@
         color: #9ca3af;
     }
 
-    .control-row {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        flex: 1;
-        flex-wrap: wrap;
-    }
 
     /* Aspect Selector */
     .aspect-buttons {
@@ -1009,54 +1019,6 @@
         color: white;
     }
 
-    /* Control buttons */
-    .control-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.25rem;
-        min-width: 32px;
-        height: 32px;
-        padding: 0 0.5rem;
-        border-radius: 0.375rem;
-        border: 1px solid #d1d5db;
-        background: white;
-        color: #6b7280;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .control-btn:hover {
-        border-color: #1a4031;
-        color: #1a4031;
-    }
-
-    .control-btn.active {
-        background: #1a4031;
-        border-color: #1a4031;
-        color: white;
-    }
-
-    :global(.dark) .control-btn {
-        background: #374151;
-        border-color: #4b5563;
-        color: #9ca3af;
-    }
-
-    :global(.dark) .control-btn:hover {
-        border-color: #10b981;
-        color: #10b981;
-    }
-
-    :global(.dark) .control-btn.active {
-        background: #10b981;
-        border-color: #10b981;
-        color: white;
-    }
-
-    .btn-label {
-        font-size: 0.75rem;
-    }
 
 
 

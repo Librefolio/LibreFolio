@@ -5,14 +5,14 @@
   - Wraps ImageCropper with modal UI
   - Preset configurations for different use cases
   - Handles upload to backend and returns URL
-  - Supports avatar, broker-icon, original, and custom presets
-  - Rotation and flip support
-  - Shows output dimensions and compression ratio
+  - Editable output size with scale factor
+  - Preview ellipse overlay for circular crops
+  - Quality control for JPEG/WebP
 -->
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {X, Upload, Loader2, ImageIcon} from 'lucide-svelte';
+    import {X, Upload, Loader2, Eye, EyeOff, RefreshCw, Lock} from 'lucide-svelte';
     import {axiosInstance} from '$lib/api';
     import ImageCropper from './ImageCropper.svelte';
     import {
@@ -28,16 +28,15 @@
     export let file: File | null = null;
     export let preset: PresetName = 'custom';
     export let customConfig: Partial<ImagePreset> | null = null;
-    export let allowPresetChange: boolean = true;  // Allow user to change preset
-    export let uploadOnComplete: boolean = true;   // If false, just return cropped file without uploading
+    export let allowPresetChange: boolean = true;
+    export let uploadOnComplete: boolean = true;
 
     const dispatch = createEventDispatcher<{
-        complete: {url: string | null; file: File};  // url is null when uploadOnComplete=false
+        complete: {url: string | null; file: File};
         cancel: void;
         error: {message: string};
     }>();
 
-    // Available presets for selector (removed 'original' per user feedback)
     const presetOptions: Array<{value: PresetName; labelKey: string}> = [
         {value: 'avatar', labelKey: 'uploads.presetAvatar'},
         {value: 'broker-icon', labelKey: 'uploads.presetIcon'},
@@ -50,38 +49,71 @@
     let isUploading = false;
     let error: string | null = null;
     let currentPreset: PresetName = preset;
-    let hasChanges = false;  // Track if user made any changes
-    let showCloseConfirm = false;  // Show confirmation dialog
+    let hasChanges = false;
+    let showCloseConfirm = false;
 
     // File name editing
     let editedFileName: string = '';
     let outputFormat: 'png' | 'jpeg' | 'webp' = 'png';
+    let outputQuality: number = 90; // 0-100, displayed as %
 
-    // Initialize file name when file changes
+    // Output size (editable)
+    let outputWidth: number | null = null;
+    let outputHeight: number | null = null;
+
+    // Selection dimensions (from cropper)
+    let selectionWidth: number = 0;
+    let selectionHeight: number = 0;
+
+    // Preview ellipse
+    let showEllipsePreview: boolean = false;
+
+    // Initialize when file changes
     $: if (file && open) {
-        // Extract name without extension
         const nameParts = file.name.split('.');
-        if (nameParts.length > 1) {
-            nameParts.pop(); // Remove extension
-        }
+        if (nameParts.length > 1) nameParts.pop();
         editedFileName = nameParts.join('.');
-        // Get format from file type or default to png
         if (file.type === 'image/jpeg') outputFormat = 'jpeg';
         else if (file.type === 'image/webp') outputFormat = 'webp';
         else outputFormat = 'png';
     }
 
-    // Reset preset when modal opens
+    // Reset state when modal opens
     $: if (open) {
         currentPreset = preset;
         hasChanges = false;
         showCloseConfirm = false;
+        // Auto-enable ellipse for avatar/icon, disable for custom
+        showEllipsePreview = preset === 'avatar' || preset === 'broker-icon';
     }
 
-    // Computed config from preset + custom overrides
+    // Computed config from preset
     $: config = customConfig
         ? {...IMAGE_PRESETS[currentPreset], ...customConfig}
         : IMAGE_PRESETS[currentPreset];
+
+    // Update output size when preset changes
+    $: {
+        if (config.outputWidth && config.outputHeight) {
+            outputWidth = config.outputWidth;
+            outputHeight = config.outputHeight;
+        } else {
+            // Custom: use selection size initially (null = selection size)
+            outputWidth = null;
+            outputHeight = null;
+        }
+        outputQuality = Math.round(config.outputQuality * 100);
+    }
+
+    // Computed scale factor
+    $: scaleFactor = (() => {
+        if (!outputWidth || !selectionWidth || selectionWidth === 0) return null;
+        return outputWidth / selectionWidth;
+    })();
+
+    // Effective output (what will actually be produced)
+    $: effectiveOutputWidth = outputWidth || selectionWidth;
+    $: effectiveOutputHeight = outputHeight || selectionHeight;
 
     // Load image when file changes
     $: if (file && open) {
@@ -94,9 +126,7 @@
     }
 
     function loadImage(f: File) {
-        if (imageSrc) {
-            URL.revokeObjectURL(imageSrc);
-        }
+        if (imageSrc) URL.revokeObjectURL(imageSrc);
         imageSrc = URL.createObjectURL(f);
         error = null;
     }
@@ -116,7 +146,6 @@
     }
 
     function requestClose() {
-        // If there are changes, show confirmation
         if (hasChanges) {
             showCloseConfirm = true;
         } else {
@@ -133,8 +162,12 @@
         showCloseConfirm = false;
     }
 
-    function handleCropperChange() {
+    function handleCropperChange(e: CustomEvent<{selection: {width: number; height: number}}>) {
         hasChanges = true;
+        if (e.detail?.selection) {
+            selectionWidth = Math.round(e.detail.selection.width);
+            selectionHeight = Math.round(e.detail.selection.height);
+        }
     }
 
     function handleBackdropClick(event: MouseEvent) {
@@ -149,10 +182,65 @@
         }
     }
 
+    // Output size editing - keep aspect ratio
+    function handleOutputWidthChange(e: Event) {
+        const val = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(val) || val <= 0) return;
+
+        // Cap at selection size (scale <= 1)
+        const w = Math.min(val, selectionWidth || val);
+        outputWidth = w;
+
+        // Recalculate height maintaining aspect ratio
+        if (selectionWidth > 0 && selectionHeight > 0) {
+            const ratio = selectionWidth / selectionHeight;
+            outputHeight = Math.round(w / ratio);
+        }
+        hasChanges = true;
+    }
+
+    function handleOutputHeightChange(e: Event) {
+        const val = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(val) || val <= 0) return;
+
+        const h = Math.min(val, selectionHeight || val);
+        outputHeight = h;
+
+        if (selectionWidth > 0 && selectionHeight > 0) {
+            const ratio = selectionWidth / selectionHeight;
+            outputWidth = Math.round(h * ratio);
+        }
+        hasChanges = true;
+    }
+
+    function handleScaleChange(e: Event) {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        if (isNaN(val) || val <= 0 || val > 1) return;
+
+        outputWidth = Math.round(selectionWidth * val);
+        outputHeight = Math.round(selectionHeight * val);
+        hasChanges = true;
+    }
+
+    function incrementQuality() {
+        outputQuality = Math.min(100, outputQuality + 10);
+        hasChanges = true;
+    }
+
+    function decrementQuality() {
+        outputQuality = Math.max(10, outputQuality - 10);
+        hasChanges = true;
+    }
+
+    function selectPreset(p: PresetName) {
+        currentPreset = p;
+        showEllipsePreview = p === 'avatar' || p === 'broker-icon';
+        hasChanges = true;
+    }
+
     async function handleUpload() {
         if (!imageSrc || !file) return;
 
-        // Get cropper instance
         const cropperInstance = cropper?.getCropper?.();
         if (!cropperInstance) {
             error = 'Cropper not ready';
@@ -163,46 +251,36 @@
         error = null;
 
         try {
-            // Get cropped image blob using cropperjs
             const blob = await getCroppedImageFromCropper(
                 cropperInstance,
-                config.outputWidth,
-                config.outputHeight,
+                outputWidth,
+                outputHeight,
                 outputFormat,
-                config.outputQuality
+                outputQuality / 100
             );
 
-            // Build final filename with edited name and format
-            const finalFileName = `${editedFileName || 'image'}.${outputFormat}`;
-
-            // Convert to File with the edited name
+            const finalFileName = `${editedFileName || 'image'}.${outputFormat === 'jpeg' ? 'jpg' : outputFormat}`;
             const croppedFile = blobToFile(blob, finalFileName);
 
-            // If uploadOnComplete is false, just return the cropped file
             if (!uploadOnComplete) {
                 cleanup();
                 dispatch('complete', {url: null, file: croppedFile});
                 return;
             }
 
-            // Upload to backend
             const formData = new FormData();
             formData.append('file', croppedFile);
             formData.append('description', `Cropped image (${currentPreset})`);
 
             const response = await axiosInstance.post('/api/v1/uploads', formData);
-
-            // Get URL from response
             const uploadedUrl = response.data.file?.url || response.data.url;
 
             if (!uploadedUrl) {
                 throw new Error('No URL in upload response');
             }
 
-            // Success - dispatch complete event
             cleanup();
             dispatch('complete', {url: uploadedUrl, file: croppedFile});
-
         } catch (err) {
             console.error('Upload failed:', err);
             error = err instanceof Error ? err.message : 'Upload failed';
@@ -212,16 +290,10 @@
         }
     }
 
-    // Get translated title
     $: modalTitle = $_(config.titleKey) || $_('uploads.editImage') || 'Edit Image';
-
-    // Compute output info
-    $: outputInfo = config.outputWidth && config.outputHeight
-        ? `${config.outputWidth}×${config.outputHeight}px`
-        : $_('uploads.keepOriginal') || 'Original size';
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window on:keydown={open ? handleKeydown : undefined} />
 
 {#if open && imageSrc}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -231,19 +303,23 @@
             <!-- Header -->
             <div class="modal-header">
                 <h2 id="modal-title" class="modal-title">{modalTitle}</h2>
-                <button
-                    type="button"
-                    class="close-btn"
-                    on:click={requestClose}
-                    title={$_('common.close') || 'Close'}
-                >
-                    <X size={20} />
-                </button>
+                <div class="header-actions">
+                    {#if hasChanges}
+                        <button type="button" class="header-btn reset" on:click={() => cropper?.resetAll?.()}
+                                title={$_('uploads.resetAll') || 'Reset All'}>
+                            <RefreshCw size={16} />
+                        </button>
+                    {/if}
+                    <button type="button" class="header-btn" on:click={requestClose}
+                            title={$_('common.close') || 'Close'}>
+                        <X size={20} />
+                    </button>
+                </div>
             </div>
 
             <!-- Body -->
             <div class="modal-body">
-                <!-- File name editing - at the very top -->
+                <!-- File name editing - top -->
                 <div class="filename-editor">
                     <label class="filename-label" for="filename-input">
                         {$_('uploads.fileName') || 'File name'}:
@@ -255,13 +331,10 @@
                             class="filename-input"
                             bind:value={editedFileName}
                             placeholder="image"
-                            on:input={handleCropperChange}
+                            on:input={() => hasChanges = true}
                         />
-                        <select
-                            class="format-select"
-                            bind:value={outputFormat}
-                            on:change={handleCropperChange}
-                        >
+                        <select class="format-select" bind:value={outputFormat}
+                                on:change={() => hasChanges = true}>
                             <option value="png">.png</option>
                             <option value="jpeg">.jpg</option>
                             <option value="webp">.webp</option>
@@ -269,72 +342,114 @@
                     </div>
                 </div>
 
-                <!-- Cropper -->
-                <ImageCropper
-                    bind:this={cropper}
-                    {imageSrc}
-                    aspectRatio={config.aspectRatio}
-                    showZoomSlider={true}
-                    showRotateControls={true}
-                    showAspectSelector={currentPreset === 'custom'}
-                    on:change={handleCropperChange}
-                />
-
-                <!-- Output info - contains selection info -->
-                <div class="output-info">
-                    <ImageIcon size={16} class="info-icon" />
-                    <span class="info-text">
-                        {$_('uploads.outputSize') || 'Output'}: {outputInfo}
-                    </span>
-                    <span class="info-text">
-                        {outputFormat.toUpperCase()}
-                        ({Math.round(config.outputQuality * 100)}%)
-                    </span>
+                <!-- Cropper with ellipse preview -->
+                <div class="cropper-section">
+                    <ImageCropper
+                        bind:this={cropper}
+                        {imageSrc}
+                        aspectRatio={config.aspectRatio}
+                        showZoomSlider={true}
+                        showRotateControls={true}
+                        showAspectSelector={currentPreset === 'custom'}
+                        showPreviewEllipse={showEllipsePreview}
+                        on:change={handleCropperChange}
+                    />
+                    <!-- Ellipse preview toggle -->
+                    <button type="button" class="ellipse-toggle"
+                            class:active={showEllipsePreview}
+                            on:click={() => showEllipsePreview = !showEllipsePreview}
+                            title={showEllipsePreview ? 'Hide preview' : 'Show preview'}>
+                        {#if showEllipsePreview}
+                            <Eye size={16} />
+                        {:else}
+                            <EyeOff size={16} />
+                        {/if}
+                    </button>
                 </div>
 
-                <!-- Preset Selector - below info block -->
-                {#if allowPresetChange}
-                    <div class="preset-selector">
-                        <span class="preset-label">{$_('uploads.outputPreset') || 'Output preset'}:</span>
-                        <div class="preset-buttons">
-                            {#each presetOptions as opt}
-                                <button
-                                    type="button"
-                                    class="preset-btn"
-                                    class:active={currentPreset === opt.value}
-                                    on:click={() => currentPreset = opt.value}
-                                >
-                                    {$_(opt.labelKey) || opt.value}
-                                </button>
-                            {/each}
+                <!-- === BOTTOM PANEL === -->
+                <div class="bottom-panel">
+                    <!-- Row 1: Output Preset -->
+                    {#if allowPresetChange}
+                        <div class="panel-row">
+                            <span class="panel-label">{$_('uploads.outputPreset') || 'Preset'}:</span>
+                            <div class="preset-buttons">
+                                {#each presetOptions as opt}
+                                    <button type="button" class="preset-btn"
+                                            class:active={currentPreset === opt.value}
+                                            on:click={() => selectPreset(opt.value)}>
+                                        {$_(opt.labelKey) || opt.value}
+                                    </button>
+                                {/each}
+                            </div>
                         </div>
-                    </div>
-                {/if}
+                    {/if}
 
-                <!-- Error message -->
-                {#if error}
-                    <div class="error-message">
-                        {error}
+                    <!-- Row 2: Output Dimensions -->
+                    <div class="panel-row dimensions-row">
+                        <span class="panel-label">{$_('uploads.outputSize') || 'Output'}:</span>
+                        <div class="dimensions-group">
+                            {#if currentPreset === 'custom'}
+                                <input type="number" class="dim-input" min="1"
+                                       max={selectionWidth || 9999}
+                                       value={effectiveOutputWidth}
+                                       on:change={handleOutputWidthChange} />
+                                <span class="dim-sep">×</span>
+                                <input type="number" class="dim-input" min="1"
+                                       max={selectionHeight || 9999}
+                                       value={effectiveOutputHeight}
+                                       on:change={handleOutputHeightChange} />
+                                <span class="dim-unit">px</span>
+                                <Lock size={12} class="dim-lock" />
+                            {:else}
+                                <span class="dim-fixed">{effectiveOutputWidth} × {effectiveOutputHeight} px</span>
+                            {/if}
+                        </div>
+                        <!-- Scale factor -->
+                        {#if scaleFactor !== null}
+                            <div class="scale-group">
+                                <span class="scale-label">×</span>
+                                {#if currentPreset === 'custom'}
+                                    <input type="number" class="scale-input"
+                                           min="0.01" max="1" step="0.01"
+                                           value={scaleFactor.toFixed(2)}
+                                           on:change={handleScaleChange} />
+                                {:else}
+                                    <span class="scale-fixed">{scaleFactor.toFixed(2)}</span>
+                                {/if}
+                            </div>
+                        {/if}
                     </div>
+
+                    <!-- Row 3: Aspect ratio (only for custom) -->
+                    <!-- Note: aspect ratio buttons are rendered by ImageCropper when showAspectSelector=true -->
+
+                    <!-- Row 4: Format & Quality -->
+                    {#if outputFormat !== 'png'}
+                        <div class="panel-row">
+                            <span class="panel-label">{$_('uploads.quality') || 'Quality'}:</span>
+                            <div class="quality-spinner">
+                                <button type="button" class="spin-btn" on:click={decrementQuality}>−</button>
+                                <span class="quality-value">{outputQuality}%</span>
+                                <button type="button" class="spin-btn" on:click={incrementQuality}>+</button>
+                            </div>
+                        </div>
+                    {/if}
+                </div>
+
+                {#if error}
+                    <div class="error-message">{error}</div>
                 {/if}
             </div>
 
             <!-- Footer -->
             <div class="modal-footer">
-                <button
-                    type="button"
-                    class="btn btn-secondary"
-                    on:click={requestClose}
-                    disabled={isUploading}
-                >
+                <button type="button" class="btn btn-secondary" on:click={requestClose}
+                        disabled={isUploading}>
                     {$_('common.cancel') || 'Cancel'}
                 </button>
-                <button
-                    type="button"
-                    class="btn btn-primary"
-                    on:click={handleUpload}
-                    disabled={isUploading}
-                >
+                <button type="button" class="btn btn-primary" on:click={handleUpload}
+                        disabled={isUploading}>
                     {#if isUploading}
                         <Loader2 size={16} class="animate-spin" />
                         {$_('common.uploading') || 'Uploading...'}
@@ -406,18 +521,17 @@
         border: 1px solid #374151;
     }
 
+    /* Header */
     .modal-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 1rem 1.5rem;
+        padding: 0.75rem 1.25rem;
         border-bottom: 1px solid #e5e7eb;
         flex-shrink: 0;
     }
 
-    :global(.dark) .modal-header {
-        border-bottom-color: #374151;
-    }
+    :global(.dark) .modal-header { border-bottom-color: #374151; }
 
     .modal-title {
         font-size: 1.125rem;
@@ -426,11 +540,15 @@
         margin: 0;
     }
 
-    :global(.dark) .modal-title {
-        color: #f3f4f6;
+    :global(.dark) .modal-title { color: #f3f4f6; }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
     }
 
-    .close-btn {
+    .header-btn {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -444,86 +562,32 @@
         transition: all 0.15s;
     }
 
-    .close-btn:hover {
+    .header-btn:hover {
         background: #f3f4f6;
         color: #374151;
     }
 
-    :global(.dark) .close-btn:hover {
-        background: #374151;
-        color: #d1d5db;
+    .header-btn.reset {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
     }
 
+    .header-btn.reset:hover {
+        background: rgba(239, 68, 68, 0.2);
+        color: #dc2626;
+    }
+
+    :global(.dark) .header-btn:hover { background: #374151; color: #d1d5db; }
+
+    /* Body */
     .modal-body {
         flex: 1;
         overflow-y: auto;
-        padding: 1.5rem;
+        padding: 1rem 1.25rem;
         min-height: 0;
-    }
-
-    /* Preset Selector */
-    .preset-selector {
         display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 0.75rem;
-        margin-bottom: 1rem;
-        flex-wrap: wrap;
-    }
-
-    .preset-label {
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: #4b5563;
-    }
-
-    :global(.dark) .preset-label {
-        color: #9ca3af;
-    }
-
-    .preset-buttons {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-    }
-
-    .preset-btn {
-        padding: 0.375rem 0.75rem;
-        font-size: 0.75rem;
-        font-weight: 500;
-        border: 1px solid #d1d5db;
-        border-radius: 0.375rem;
-        background: white;
-        color: #374151;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .preset-btn:hover {
-        border-color: #1a4031;
-        color: #1a4031;
-    }
-
-    .preset-btn.active {
-        background: #1a4031;
-        border-color: #1a4031;
-        color: white;
-    }
-
-    :global(.dark) .preset-btn {
-        background: #374151;
-        border-color: #4b5563;
-        color: #d1d5db;
-    }
-
-    :global(.dark) .preset-btn:hover {
-        border-color: #10b981;
-        color: #10b981;
-    }
-
-    :global(.dark) .preset-btn.active {
-        background: #10b981;
-        border-color: #10b981;
-        color: white;
     }
 
     /* Filename Editor */
@@ -531,7 +595,6 @@
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        margin-bottom: 1rem;
         flex-wrap: wrap;
     }
 
@@ -542,9 +605,7 @@
         white-space: nowrap;
     }
 
-    :global(.dark) .filename-label {
-        color: #d1d5db;
-    }
+    :global(.dark) .filename-label { color: #d1d5db; }
 
     .filename-input-group {
         display: flex;
@@ -554,8 +615,8 @@
 
     .filename-input {
         flex: 1;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.875rem;
+        padding: 0.375rem 0.625rem;
+        font-size: 0.8125rem;
         border: 1px solid #d1d5db;
         border-right: none;
         border-radius: 0.375rem 0 0 0.375rem;
@@ -565,23 +626,14 @@
         transition: border-color 0.15s;
     }
 
-    .filename-input:focus {
-        border-color: #1a4031;
-    }
+    .filename-input:focus { border-color: #1a4031; }
 
-    :global(.dark) .filename-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
-    }
-
-    :global(.dark) .filename-input:focus {
-        border-color: #10b981;
-    }
+    :global(.dark) .filename-input { background: #374151; border-color: #4b5563; color: #f3f4f6; }
+    :global(.dark) .filename-input:focus { border-color: #10b981; }
 
     .format-select {
-        padding: 0.5rem 0.75rem;
-        font-size: 0.875rem;
+        padding: 0.375rem 0.625rem;
+        font-size: 0.8125rem;
         border: 1px solid #d1d5db;
         border-radius: 0 0.375rem 0.375rem 0;
         background: #f3f4f6;
@@ -590,57 +642,198 @@
         outline: none;
     }
 
-    .format-select:focus {
-        border-color: #1a4031;
+    :global(.dark) .format-select { background: #4b5563; border-color: #4b5563; color: #f3f4f6; }
+
+    /* Cropper section with eye toggle */
+    .cropper-section {
+        position: relative;
     }
 
-    :global(.dark) .format-select {
-        background: #4b5563;
-        border-color: #4b5563;
-        color: #f3f4f6;
+    .ellipse-toggle {
+        position: absolute;
+        bottom: 0.5rem;
+        right: 0.5rem;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 0.25rem;
+        background: rgba(0, 0, 0, 0.5);
+        color: rgba(255, 255, 255, 0.7);
+        cursor: pointer;
+        transition: all 0.15s;
     }
 
-    :global(.dark) .format-select:focus {
-        border-color: #10b981;
+    .ellipse-toggle:hover { background: rgba(0, 0, 0, 0.7); color: white; }
+    .ellipse-toggle.active { background: rgba(16, 185, 129, 0.8); color: white; }
+    .ellipse-toggle.active:hover { background: rgba(16, 185, 129, 1); }
+
+    /* ========= BOTTOM PANEL ========= */
+    .bottom-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        background: #f3f4f6;
+        border-radius: 0.5rem;
     }
 
-    /* Output Info */
-    .output-info {
+    :global(.dark) .bottom-panel { background: #1a2332; }
+
+    .panel-row {
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        margin-top: 1rem;
-        padding: 0.75rem 1rem;
-        background: #f3f4f6;
-        border-radius: 0.5rem;
         flex-wrap: wrap;
     }
 
-    :global(.dark) .output-info {
-        background: #374151;
-    }
-
-    .output-info :global(.info-icon) {
-        color: #6b7280;
-        flex-shrink: 0;
-    }
-
-    :global(.dark) .output-info :global(.info-icon) {
-        color: #9ca3af;
-    }
-
-    .info-text {
+    .panel-label {
         font-size: 0.75rem;
-        color: #4b5563;
+        font-weight: 500;
+        color: #6b7280;
+        min-width: 55px;
     }
 
-    :global(.dark) .info-text {
-        color: #9ca3af;
+    :global(.dark) .panel-label { color: #9ca3af; }
+
+    /* Preset buttons */
+    .preset-buttons {
+        display: flex;
+        gap: 0.375rem;
+        flex-wrap: wrap;
     }
 
+    .preset-btn {
+        padding: 0.25rem 0.625rem;
+        font-size: 0.6875rem;
+        font-weight: 500;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        background: white;
+        color: #374151;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
 
+    .preset-btn:hover { border-color: #1a4031; color: #1a4031; }
+    .preset-btn.active { background: #1a4031; border-color: #1a4031; color: white; }
+
+    :global(.dark) .preset-btn { background: #374151; border-color: #4b5563; color: #d1d5db; }
+    :global(.dark) .preset-btn:hover { border-color: #10b981; color: #10b981; }
+    :global(.dark) .preset-btn.active { background: #10b981; border-color: #10b981; color: white; }
+
+    /* Dimensions row */
+    .dimensions-row { flex-wrap: wrap; }
+
+    .dimensions-group {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .dim-input {
+        width: 60px;
+        padding: 0.25rem 0.375rem;
+        font-size: 0.75rem;
+        font-family: monospace;
+        border: 1px solid #d1d5db;
+        border-radius: 0.25rem;
+        background: white;
+        color: #374151;
+        text-align: center;
+        outline: none;
+    }
+
+    .dim-input:focus { border-color: #1a4031; }
+
+    :global(.dark) .dim-input { background: #374151; border-color: #4b5563; color: #f3f4f6; }
+    :global(.dark) .dim-input:focus { border-color: #10b981; }
+
+    .dim-sep { color: #9ca3af; font-size: 0.75rem; }
+    .dim-unit { font-size: 0.6875rem; color: #9ca3af; }
+
+    .dim-lock, :global(.dim-lock) { color: #9ca3af; margin-left: 0.25rem; }
+
+    .dim-fixed { font-size: 0.75rem; font-family: monospace; color: #374151; }
+    :global(.dark) .dim-fixed { color: #e5e7eb; }
+
+    .scale-group {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-left: auto;
+    }
+
+    .scale-label { font-size: 0.6875rem; color: #9ca3af; }
+
+    .scale-input {
+        width: 48px;
+        padding: 0.25rem 0.25rem;
+        font-size: 0.75rem;
+        font-family: monospace;
+        border: 1px solid #d1d5db;
+        border-radius: 0.25rem;
+        background: white;
+        color: #374151;
+        text-align: center;
+        outline: none;
+    }
+
+    .scale-input:focus { border-color: #1a4031; }
+
+    :global(.dark) .scale-input { background: #374151; border-color: #4b5563; color: #f3f4f6; }
+
+    .scale-fixed { font-size: 0.75rem; font-family: monospace; color: #6b7280; }
+    :global(.dark) .scale-fixed { color: #9ca3af; }
+
+    /* Quality spinner */
+    .quality-spinner {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        overflow: hidden;
+    }
+
+    :global(.dark) .quality-spinner { border-color: #4b5563; }
+
+    .spin-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: #f3f4f6;
+        color: #374151;
+        cursor: pointer;
+        font-size: 0.875rem;
+        font-weight: 600;
+        transition: all 0.1s;
+    }
+
+    .spin-btn:hover { background: #e5e7eb; }
+
+    :global(.dark) .spin-btn { background: #374151; color: #d1d5db; }
+    :global(.dark) .spin-btn:hover { background: #4b5563; }
+
+    .quality-value {
+        padding: 0 0.5rem;
+        font-size: 0.75rem;
+        font-family: monospace;
+        color: #374151;
+        min-width: 40px;
+        text-align: center;
+    }
+
+    :global(.dark) .quality-value { color: #e5e7eb; }
+
+    /* Error */
     .error-message {
-        margin-top: 1rem;
         padding: 0.75rem 1rem;
         background-color: #fef2f2;
         border: 1px solid #fecaca;
@@ -654,20 +847,18 @@
         border-color: rgba(220, 38, 38, 0.3);
     }
 
+    /* Footer */
     .modal-footer {
         display: flex;
         justify-content: flex-end;
         gap: 0.75rem;
-        padding: 1rem 1.5rem;
+        padding: 0.75rem 1.25rem;
         border-top: 1px solid #e5e7eb;
         background: #f9fafb;
         flex-shrink: 0;
     }
 
-    :global(.dark) .modal-footer {
-        background: #111827;
-        border-top-color: #374151;
-    }
+    :global(.dark) .modal-footer { background: #111827; border-top-color: #374151; }
 
     .btn {
         display: inline-flex;
@@ -682,59 +873,20 @@
         transition: all 0.15s;
     }
 
-    .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .btn-primary {
-        background: #1a4031;
-        color: white;
-    }
+    .btn-primary { background: #1a4031; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #143326; }
+    :global(.dark) .btn-primary { background: #10b981; }
+    :global(.dark) .btn-primary:hover:not(:disabled) { background: #059669; }
 
-    .btn-primary:hover:not(:disabled) {
-        background: #143326;
-    }
+    .btn-secondary { background: #e5e7eb; color: #374151; }
+    .btn-secondary:hover:not(:disabled) { background: #d1d5db; }
+    :global(.dark) .btn-secondary { background: #374151; color: #d1d5db; }
+    :global(.dark) .btn-secondary:hover:not(:disabled) { background: #4b5563; }
 
-    :global(.dark) .btn-primary {
-        background: #10b981;
-    }
-
-    :global(.dark) .btn-primary:hover:not(:disabled) {
-        background: #059669;
-    }
-
-    .btn-secondary {
-        background: #e5e7eb;
-        color: #374151;
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-        background: #d1d5db;
-    }
-
-    :global(.dark) .btn-secondary {
-        background: #374151;
-        color: #d1d5db;
-    }
-
-    :global(.dark) .btn-secondary:hover:not(:disabled) {
-        background: #4b5563;
-    }
-
-    /* Animate spin for loader */
-    :global(.animate-spin) {
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        from {
-            transform: rotate(0deg);
-        }
-        to {
-            transform: rotate(360deg);
-        }
-    }
+    :global(.animate-spin) { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     /* Confirmation Dialog */
     .confirm-backdrop {
@@ -756,10 +908,7 @@
         box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
     }
 
-    :global(.dark) .confirm-dialog {
-        background: #1f2937;
-        border: 1px solid #374151;
-    }
+    :global(.dark) .confirm-dialog { background: #1f2937; border: 1px solid #374151; }
 
     .confirm-header {
         display: flex;
@@ -768,9 +917,7 @@
         margin-bottom: 0.75rem;
     }
 
-    .confirm-icon {
-        font-size: 1.5rem;
-    }
+    .confirm-icon { font-size: 1.5rem; }
 
     .confirm-header h3 {
         margin: 0;
@@ -779,9 +926,7 @@
         color: #d97706;
     }
 
-    :global(.dark) .confirm-header h3 {
-        color: #fbbf24;
-    }
+    :global(.dark) .confirm-header h3 { color: #fbbf24; }
 
     .confirm-message {
         color: #6b7280;
@@ -789,9 +934,7 @@
         line-height: 1.5;
     }
 
-    :global(.dark) .confirm-message {
-        color: #9ca3af;
-    }
+    :global(.dark) .confirm-message { color: #9ca3af; }
 
     .confirm-actions {
         display: flex;
@@ -799,14 +942,13 @@
         gap: 0.75rem;
     }
 
-    .btn-warning {
-        background: #f59e0b;
-        color: white;
-        border: none;
-    }
+    .btn-warning { background: #f59e0b; color: white; border: none; }
+    .btn-warning:hover { background: #d97706; }
 
-    .btn-warning:hover {
-        background: #d97706;
+    /* Mobile responsive */
+    @media (max-width: 480px) {
+        .dimensions-row { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+        .scale-group { margin-left: 0; }
     }
 </style>
 
