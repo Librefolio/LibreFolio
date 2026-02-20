@@ -8,7 +8,7 @@
     import {debug} from '$lib/debug';
     import {AlertCircle, Calendar, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User, Camera} from 'lucide-svelte';
     import PasswordChangeModal from '$lib/components/settings/PasswordChangeModal.svelte';
-    import {ImageEditModal} from '$lib/components/ui/media';
+    import {ImageEditModal, AssetPickerModal} from '$lib/components/ui/media';
     import {onMount} from 'svelte';
 
     // Format date for display
@@ -42,6 +42,7 @@
     let originalAvatarUrl: string | null = null;
     let editedAvatarUrl: string | null = null;
     let avatarInputRef: HTMLInputElement | null = null;
+    let showAvatarPicker = false;
 
     // Load avatar URL from settings on mount
     onMount(async () => {
@@ -218,6 +219,19 @@
         }
     }
 
+    // Asset picker handlers for avatar
+    async function handleAvatarPickerSelect(event: CustomEvent<{url: string}>) {
+        showAvatarPicker = false;
+        editedAvatarUrl = event.detail.url;
+        await saveAvatarField();
+    }
+
+    function handleAvatarPickerUpload(event: CustomEvent<{file: File}>) {
+        showAvatarPicker = false;
+        avatarFile = event.detail.file;
+        showAvatarModal = true;
+    }
+
     async function saveAvatarField() {
         saving = true;
         error = null;
@@ -377,18 +391,14 @@
                     <User size={32} class="text-gray-400 dark:text-slate-500" />
                 </div>
             {/if}
-            <!-- Upload overlay (only when not locked) -->
+            <!-- Upload overlay (only when not locked) - opens AssetPickerModal -->
             {#if !isLocked}
-                <label class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"
+                     on:click={() => showAvatarPicker = true}>
                     <Camera size={20} class="text-white" />
-                    <input
-                        bind:this={avatarInputRef}
-                        type="file"
-                        accept="image/*"
-                        class="hidden"
-                        on:change={handleAvatarFileSelect}
-                    />
-                </label>
+                </div>
             {/if}
         </div>
         <!-- Avatar Info -->
@@ -777,5 +787,15 @@
     on:complete={handleAvatarUploadComplete}
     on:cancel={handleAvatarModalCancel}
     on:error={(e) => { error = e.detail.message; }}
+/>
+
+<!-- Avatar Asset Picker -->
+<AssetPickerModal
+    open={showAvatarPicker}
+    title={$_('settings.selectAvatar') || 'Select Avatar'}
+    filterImages={true}
+    on:select={handleAvatarPickerSelect}
+    on:upload={handleAvatarPickerUpload}
+    on:cancel={() => showAvatarPicker = false}
 />
 

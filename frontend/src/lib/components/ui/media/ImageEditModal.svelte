@@ -82,6 +82,9 @@
     // Current aspect ratio for aspect buttons
     let currentAspect: number = 1;
 
+    // Track first initialization to auto-resetAll
+    let needsInit: boolean = true;
+
     // Initialize when file changes
     $: if (file && open) {
         const nameParts = file.name.split('.');
@@ -98,6 +101,7 @@
         hasChanges = false;
         showCloseConfirm = false;
         showEllipsePreview = preset === 'avatar' || preset === 'broker-icon';
+        needsInit = true;
     }
 
     // Computed config from preset
@@ -156,7 +160,6 @@
     function cancelClose() { showCloseConfirm = false; }
 
     function handleCropperChange(e: CustomEvent<{selection: {width: number; height: number}}>) {
-        hasChanges = true;
         if (e.detail?.selection) {
             selectionWidth = Math.round(e.detail.selection.width);
             selectionHeight = Math.round(e.detail.selection.height);
@@ -164,22 +167,38 @@
         // Sync image dimensions from cropper
         const dims = cropper?.getImageDimensions?.();
         if (dims) { imageWidth = dims.width; imageHeight = dims.height; }
+
+        // Auto-resetAll on first init to align selection properly
+        if (needsInit && cropper?.resetAll) {
+            needsInit = false;
+            // Small delay to let cropper finish its initial setup
+            setTimeout(() => {
+                cropper?.resetAll?.();
+                hasChanges = false;  // Reset the changes flag after init
+            }, 200);
+            return;
+        }
+
+        hasChanges = true;
     }
 
-    // Track if mouse was pressed inside modal (to prevent false backdrop clicks during drag)
-    let mouseDownInsideModal = false;
+    // Track if mouse was pressed inside modal content (to prevent false backdrop clicks during drag)
+    let mouseDownTarget: EventTarget | null = null;
 
     function handleBackdropMouseDown(event: MouseEvent) {
-        // Check if mouse down is on the backdrop itself (not inside modal)
-        mouseDownInsideModal = event.target !== event.currentTarget;
+        mouseDownTarget = event.target;
     }
 
     function handleBackdropClick(event: MouseEvent) {
-        // Only trigger close if BOTH mousedown and mouseup were on the backdrop
-        if (event.target === event.currentTarget && !mouseDownInsideModal) {
+        // Only close if BOTH mousedown and mouseup/click happened on the backdrop itself
+        // This prevents the warning from showing when dragging from inside modal to outside
+        const clickedOnBackdrop = event.target === event.currentTarget;
+        const mouseDownOnBackdrop = mouseDownTarget === event.currentTarget;
+        mouseDownTarget = null;
+
+        if (clickedOnBackdrop && mouseDownOnBackdrop) {
             requestClose();
         }
-        mouseDownInsideModal = false;
     }
 
     function handleKeydown(event: KeyboardEvent) {
@@ -362,40 +381,7 @@
 
                 <!-- === BOTTOM PANEL (2 columns) === -->
                 <div class="bottom-panel">
-                    <!-- Left column: Preset + Aspect ratio -->
-                    <div class="panel-col">
-                        {#if allowPresetChange}
-                            <div class="panel-row">
-                                <span class="panel-label">{$_('uploads.outputPreset') || 'Preset'}:</span>
-                                <div class="preset-buttons">
-                                    {#each presetOptions as opt}
-                                        <button type="button" class="preset-btn"
-                                                class:active={currentPreset === opt.value}
-                                                on:click={() => selectPreset(opt.value)}>
-                                            {$_(opt.labelKey) || opt.value}
-                                        </button>
-                                    {/each}
-                                </div>
-                            </div>
-                        {/if}
-
-                        {#if currentPreset === 'custom'}
-                            <div class="panel-row">
-                                <span class="panel-label">{$_('uploads.aspectRatio') || 'Ratio'}:</span>
-                                <div class="aspect-buttons">
-                                    {#each aspectOptions as opt}
-                                        <button type="button" class="aspect-btn"
-                                                class:active={currentAspect === opt.value}
-                                                on:click={() => selectAspectRatio(opt.value)}>
-                                            {opt.label}
-                                        </button>
-                                    {/each}
-                                </div>
-                            </div>
-                        {/if}
-                    </div>
-
-                    <!-- Right column: Info (Input/Selection) + Output/Scale -->
+                    <!-- Left column: Info (Input/Selection) + Output/Scale -->
                     <div class="panel-col">
                         <div class="panel-row info-row">
                             <span class="panel-label">{$_('uploads.inputSize') || 'Input'}:</span>
@@ -426,6 +412,8 @@
                         <div class="panel-row">
                             <span class="panel-label">{$_('uploads.scale') || 'Scale'}:</span>
                             <div class="scale-group">
+                                <!-- Spacer to align with the Y (second) dim-input -->
+                                <span class="scale-spacer"></span>
                                 <span class="scale-x">×</span>
                                 <input type="number" class="scale-input"
                                        min="0.01" max="1" step="0.01"
@@ -433,6 +421,39 @@
                                        on:input={handleScaleInput} />
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Right column: Preset + Aspect ratio -->
+                    <div class="panel-col">
+                        {#if allowPresetChange}
+                            <div class="panel-row">
+                                <span class="panel-label">{$_('uploads.outputPreset') || 'Preset'}:</span>
+                                <div class="preset-buttons">
+                                    {#each presetOptions as opt}
+                                        <button type="button" class="preset-btn"
+                                                class:active={currentPreset === opt.value}
+                                                on:click={() => selectPreset(opt.value)}>
+                                            {$_(opt.labelKey) || opt.value}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+                        {/if}
+
+                        {#if currentPreset === 'custom'}
+                            <div class="panel-row">
+                                <span class="panel-label">{$_('uploads.aspectRatio') || 'Ratio'}:</span>
+                                <div class="aspect-buttons">
+                                    {#each aspectOptions as opt}
+                                        <button type="button" class="aspect-btn"
+                                                class:active={currentAspect === opt.value}
+                                                on:click={() => selectAspectRatio(opt.value)}>
+                                            {opt.label}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+                        {/if}
                     </div>
                 </div>
 
@@ -649,6 +670,7 @@
 
     /* Scale */
     .scale-group { display: flex; align-items: center; gap: 0.25rem; }
+    .scale-spacer { width: 52px; /* matches dim-input width */ display: inline-block; }
     .scale-x { font-size: 0.625rem; color: #9ca3af; }
 
     .scale-input {

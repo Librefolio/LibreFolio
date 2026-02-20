@@ -402,7 +402,8 @@
     "avatar": "Avatar",
     "avatarHint": "Click to upload a profile picture",
     "removeAvatarTitle": "Remove avatar?",
-    "removeAvatarMessage": "Are you sure you want to remove your avatar?"
+    "removeAvatarMessage": "Are you sure you want to remove your avatar?",
+    "selectAvatar": "Select Avatar"
   },
   "uploads": {
     "dropOrClick": "Drop file here or click to browse",
@@ -487,6 +488,13 @@
     "renameAndUpload": "Rename & Upload",
     "quality": "Quality",
     "editIcon": "Upload Icon",
-    "scale": "Scale"
+    "scale": "Scale",
+    "selectAsset": "Select Image",
+    "existingFiles": "Existing",
+    "fromUrl": "URL",
+    "uploadNew": "Upload",
+    "imageUrl": "Image URL",
+    "useSelected": "Use Selected",
+    "selectIcon": "Select Icon"
   }
 }

@@ -402,7 +402,8 @@
     "avatar": "Avatar",
     "avatarHint": "Haz clic para subir una foto de perfil",
     "removeAvatarTitle": "¿Eliminar avatar?",
-    "removeAvatarMessage": "¿Estás seguro de que quieres eliminar tu avatar?"
+    "removeAvatarMessage": "¿Estás seguro de que quieres eliminar tu avatar?",
+    "selectAvatar": "Seleccionar Avatar"
   },
   "uploads": {
     "dropOrClick": "Arrastra un archivo aquí o haz clic para explorar",
@@ -487,6 +488,13 @@
     "renameAndUpload": "Renombrar y subir",
     "quality": "Calidad",
     "editIcon": "Subir Icono",
-    "scale": "Escala"
+    "scale": "Escala",
+    "selectAsset": "Seleccionar Imagen",
+    "existingFiles": "Existentes",
+    "fromUrl": "URL",
+    "uploadNew": "Subir",
+    "imageUrl": "URL de la Imagen",
+    "useSelected": "Usar Seleccionado",
+    "selectIcon": "Seleccionar Icono"
   }
 }
