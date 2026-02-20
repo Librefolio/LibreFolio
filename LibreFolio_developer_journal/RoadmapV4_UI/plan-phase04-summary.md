@@ -105,8 +105,10 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - **FileEditModal.svelte** per rename file non-immagine prima dell'upload ✅ (20 Feb)
     - **Bug freeze fix**: $change() atomico + clampDepth guard + requestAnimationFrame ✅ (20 Feb)
     - **FileUploader** edit button per tutti i file (non solo immagini) ✅ (20 Feb)
+    - **Bottom Panel Redesign**: output size editabile, scale factor, quality spinner, preview ellisse ✅ (20 Feb)
+    - **Flip nell'overlay**: spostato accanto a zoom/rotate con separatore ✅ (20 Feb)
     - i18n keys aggiunte per tutte le label ✅
-    - Feature rimanenti: Asset Picker Modal, Output Size editabile
+    - Feature rimanenti: Grid View improvements (F5), Asset Picker Modal (F6)
     - Vedi `plan-imageCropModal.prompt.md`
 
 ---

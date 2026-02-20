@@ -53,6 +53,16 @@
 - ✅ **Usato** `cropperSelection.$change()` atomico anziché proprietà singole
 - ✅ **Threshold** 0.5px per evitare micro-clamping inutile
 
+### Bottom Panel Redesign + Output Size ✅ (20 Feb 2026)
+- ✅ **Output size editabile** — input width/height interdipendenti con aspect ratio
+- ✅ **Scale factor editabile** — range 0.01-1.00, ricalcola output automaticamente
+- ✅ **Quality spinner** — solo per JPEG/WebP, step ±10%, range 10-100%
+- ✅ **Preview ellisse** — Eye toggle, auto-on per avatar/icon, auto-off per custom
+- ✅ **Flip spostato nell'overlay** — accanto a zoom/rotate/reset, con separatore
+- ✅ **Bottom panel compatto** — preset → output/scale → aspect ratio (se custom) → quality
+- ✅ **Filename in cima** — coerente in ImageEditModal e FileEditModal
+- ✅ **Format selector** — .png/.jpg/.webp integrato nell'area filename
+
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
 - **Reattività Svelte**: Usare espressioni inline nel template, non funzioni
@@ -201,7 +211,7 @@ User clicks "Change Avatar"
 
 Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 
-### Feature 4: Output Size Editabile con Scala
+### Feature 4: Output Size Editabile con Scala ✅ IMPLEMENTATA (20 Feb 2026)
 
 **Requisito**: Box info mostra dimensioni con fattore di scala e output editabile.
 
@@ -218,61 +228,164 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 - Fattore scala = output / selection
 - Preset (Avatar, Icon) forzano i valori output
 
+**Redesign bottom panel (ImageEditModal)**:
+La parte bassa della modale (sotto il cropper) deve essere ripensata per una UX più compatta e user-friendly.
+Attualmente ci sono vari blocchi separati (info, output, preset) che occupano troppo spazio verticale.
+
+Proposta layout bottom panel:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ FILE NAME                                                       │
+│ [filename________________] [.png ▼]                             │
+├─────────────────────────────────────────────────────────────────┤
+│ DIMENSIONS              │ OUTPUT PRESET                         │
+│ Input:  1920 × 1080 px  │ [Avatar(200)] [Icon(64)] [Custom]    │
+│ Select:  800 ×  800 px  │                                      │
+│ Output: [200] × [200] 🔒│ FORMAT & QUALITY                     │
+│ Scale:  ×0.25           │ [PNG] [JPG] [WEBP]  Quality: [90%]   │
+├─────────────────────────────────────────────────────────────────┤
+│ ASPECT RATIO (solo se custom)                                   │
+│ [1:1] [16:9] [4:3] [3:4] [Free]                                │
+├─────────────────────────────────────────────────────────────────┤
+│ FLIP                                                            │
+│ [↔ H] [↕ V]                                                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+- Il filename editor rimane in cima alla modale (prima del cropper) ✅ già fatto
+- Le dimensioni sono in una griglia compatta 2 colonne
+- Output width/height sono input inline editabili con lock aspect ratio
+- Il fattore di scala si calcola automaticamente: output/selection
+- Preset selector e format/quality sulla destra della stessa riga
+- Aspect ratio e flip rimangono in basso, compatti
+- Su mobile tutto diventa 1 colonna
+
+### Feature 5: Miglioramenti Grid View Files Page
+
+**Requisito**: La grid view nella Files Page ha diverse inconsistenze con la table view:
+
+**Bug/Mancanze da correggere**:
+
+1. **Azioni mancanti**: La grid card non ha "Copy Link", la table sì
+2. **Design azioni**: Il cestino non è rosso in grid (è `danger` ma manca l'effetto visivo senza hover)
+3. **Layout card**: Attualmente sono 2 righe (nome+meta, azioni). Devono essere 3 righe:
+   - **Riga 1 - Titolo**: nome file (troncato con ellipsis)
+   - **Riga 2 - Metadati**: size • data • user (se multi-utente)
+   - **Riga 3 - Azioni**: allineate a destra, stesse della tabella (download, copy link, delete)
+4. **Search in grid mode**: Campo di ricerca per nome file sopra la griglia
+5. **Filtro utente**: Se ci sono più utenti registrati, mostrare colonna utente e filtro dropdown
+   - In table: nuova colonna "Uploaded by" (come la colonna Broker in BRIM)
+   - In grid: filtro dropdown accanto al search
+   - Filtro solo frontend (nessuna restrizione backend per utente)
+
+**File coinvolti**:
+- `frontend/src/routes/(app)/files/+page.svelte` — grid view template + filtri
+- `frontend/src/lib/components/files/FilesTable.svelte` — aggiungere colonna user se multi-utente
+- Backend: l'API `/api/v1/uploads` già restituisce `user_id` nei metadati
+- Necessario: endpoint per lista utenti o estrazione utenti unici dai file
+
+**Riutilizzo codice esistente**:
+- Riutilizzare lo stesso pattern filtri di `FilesTable` (tipo colonna enum, `urlFilters`)
+- Riutilizzare `BrokerSearchSelect` come pattern per UserFilter dropdown
+
+### Feature 6: Asset Picker Modal - Existing Files Browser
+
+**Requisito**: Quando nell'Asset Picker Modal (Feature 3) si sceglie "Existing", deve aprirsi una modale che mostra fondamentalmente il tab Static di files/, con:
+
+1. **Switch tabella/griglia** — come in files page
+2. **Ricerca per nome** — campo search, filtro client-side
+3. **Preview immagini in griglia** — LazyImage con img_preview
+4. **Click per selezionare** — ritorna URL del file selezionato
+
+**Implementazione**:
+- Creare `StaticFileBrowser.svelte` componente riutilizzabile
+- Usato sia dentro AssetPickerModal che potenzialmente in altri contesti
+- Accetta prop `filterMimeTypes?: string[]` per filtrare solo immagini (o solo CSV, etc.)
+- Emette evento `select: { file: UploadedFile }` quando un file viene selezionato
+- Include sia la modalità griglia (con LazyImage) che la modalità tabella (con DataTable)
+
+**UI**:
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Select existing file                                   [X]  │
+├──────────────────────────────────────────────────────────────┤
+│ 🔍 [Search by name...            ]  [User ▼]  [☰] [⊞]     │
+├──────────────────────────────────────────────────────────────┤
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐             │
+│  │ img │  │ img │  │ img │  │ img │  │ img │              │
+│  │ 📸  │  │ 📸  │  │ 📸  │  │ 📸  │  │ 📸  │              │
+│  │name │  │name │  │name │  │name │  │name │              │
+│  └─────┘  └─────┘  └─────┘  └─────┘  └─────┘             │
+│                                                              │
+│  ┌─────┐  ┌─────┐  ┌─────┐                                 │
+│  │ img │  │ img │  │ img │                                  │
+│  │ 📸  │  │ 📸  │  │ 📸  │                                  │
+│  │name │  │name │  │name │                                  │
+│  └─────┘  └─────┘  └─────┘                                 │
+├──────────────────────────────────────────────────────────────┤
+│                               [Cancel]  [Use Selected]      │
+└──────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## 🔧 Piano Fix Aggiornato (Ordine Implementazione)
 
-### Fase 1: Migrazione cropperjs (PRIORITÀ MASSIMA)
+### Fase 1: Migrazione cropperjs ✅ COMPLETATA
+### Fase 2: Edit nella Lista File ✅ COMPLETATA  
+### Fase 3: Nome File Editabile + FileEditModal ✅ COMPLETATA
+### Fase 2.5: Zoom Unificato ✅ COMPLETATA
+### Bug Fix: Freeze selezione ✅ COMPLETATA
 
-1. Disinstallare svelte-easy-crop, installare cropperjs
-2. Riscrivere `ImageCropper.svelte` con cropperjs
-3. Aggiornare `getCroppedImage` per usare cropper API
-4. Aggiornare `ImageEditModal.svelte` per nuovi controlli
-5. Test: rotazione live, free crop con maniglie, flip
+### Fase 4: Output Size Editabile + Bottom Panel Redesign ✅ COMPLETATA
 
-### Fase 2: Edit nella Lista File
+14. ✅ Riprogettato bottom panel di ImageEditModal con layout compatto
+15. ✅ Input editabili per output width/height (interdiendenti con aspect ratio)
+16. ✅ Icona Lock per indicare che aspect ratio è bloccato
+17. ✅ Scale factor calcolato e editabile (0.01-1.00)
+18. ✅ Preset forzano output (Avatar 200px, Icon 64px), custom permette editing
+19. ✅ Format selector in filename area + quality spinner (solo JPEG/WebP)
+20. ✅ Preview ellisse (Eye toggle) — auto-on per avatar/icon, auto-off per custom
+21. ✅ Flip spostato nell'overlay immagine (accanto zoom/rotate)
+22. ✅ Responsive: 1 colonna su mobile
 
-6. Modificare lista file pending in Files page
-7. Aggiungere pulsante edit (matita) per immagini
-8. Creare tipo `ImageEditConfig`
-9. Salvare config per file, riapplicare su re-edit
-10. Applicare config durante upload
+### Fase 5: Grid View Improvements + User Filter 📋
 
-### Fase 3: Nome File Editabile
+21. Grid card layout 3 righe: titolo, metadati, azioni
+22. Aggiungere "Copy Link" alle azioni nella grid
+23. Cestino rosso consistente in grid e tabella
+24. Search per nome in grid mode (input sopra la griglia)
+25. Filtro utente: colonna in tabella + dropdown in grid (se multi-utente)
+26. Riutilizzare pattern filtri da FilesTable/urlFilters
+27. Filtro frontend-only (nessuna restrizione backend)
 
-11. Aggiungere input nome file in ImageEditModal
-12. Dropdown formato output (png/jpeg/webp)
-13. Rinominare file durante upload
+### Fase 6: Asset Picker Modal 📋
 
-### Fase 4: Output Size Editabile
+28. Creare `AssetPickerModal.svelte` con 3 tab (URL / Existing / Upload)
+29. Tab URL: input + preview LazyImage
+30. Tab Existing: Creare `StaticFileBrowser.svelte` (griglia/tabella, search, filtri)
+31. Tab Upload: apre ImageEditModal, ritorna URL
+32. Integrare in Avatar (ProfileTab) e BrokerIcon (BrokerForm)
 
-14. Nuova UI tabella dimensioni con scale factor
-15. Input editabili per output width/height
-16. Ricalcolo automatico con aspect ratio lock
+### Fase 7: Bug Fix Rimanenti ✅ COMPLETATA
 
-### Fase 5: Asset Picker Modal
-
-17. Creare `AssetPickerModal.svelte`
-18. Tab URL esterno
-19. Tab file esistenti (fetch da API /uploads)
-20. Tab upload nuovo (integra ImageEditModal)
-21. Integrare in Avatar, BrokerIcon
-
-### Fase 6: Bug Fix Rimanenti
-
-22. BUG-IC2: Reset input file (già fixato)
-23. BUG-IC3: Avatar in Dashboard
-24. BUG-IC5: Conferma rimozione avatar
-25. UX-IC8: Link Settings → Preferences
+33. ✅ BUG-IC2: Reset input file
+34. ✅ BUG-IC3: Avatar in Dashboard
+35. ✅ BUG-IC5: Conferma rimozione avatar
+36. ✅ BUG-IC6: Freeze selezione oltre bordo
 
 ---
 
 ## 🎯 Obiettivo Rivisto
 
-Creare un **sistema modale unificato** per upload e editing di immagini, con:
+Creare un **sistema modale unificato** per upload e editing di file, con:
 
-- Crop interattivo (svelte-easy-crop)
-- Preset configurabili per caso d'uso
+- Crop interattivo (cropperjs v2 Web Components)
+- Preset configurabili per caso d'uso (avatar, icon, custom)
+- Rename per qualsiasi tipo di file (FileEditModal)
+- Asset Picker per selezionare da URL/file esistenti/upload nuovo
+- Output Size editabile con scale factor
+- Grid view migliorata con filtri utente e search
 - Integrazione con endpoint upload esistente
 - Ritorno URL risorsa al chiamante
 
