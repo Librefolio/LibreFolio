@@ -1,13 +1,13 @@
 # Piano Aggiornato: Image Crop Modal System
 
 **Data**: 18 Febbraio 2026  
-**Ultimo Aggiornamento**: 19 Febbraio 2026 (ore 16:45)  
-**Status**: 🟢 COMPLETATO - Core feature funzionanti  
+**Ultimo Aggiornamento**: 20 Febbraio 2026 (ore 10:45)  
+**Status**: 🟢 COMPLETATO - Core feature + FileEditModal  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
 
 ---
 
-## ✅ Stato Attuale (19 Feb 2026)
+## ✅ Stato Attuale (20 Feb 2026)
 
 ### Core Features - COMPLETATE ✅
 - ✅ Migrazione a cropperjs v2 (Web Components)
@@ -23,10 +23,11 @@
 - ✅ **Drag immagine fuori selezione**: handle "select" → "move"
 
 ### FileUploader - COMPLETATO ✅
-- ✅ **Pulsante Edit** - icona matita per immagini
+- ✅ **Pulsante Edit immagini** - icona matita per immagini → apre ImageEditModal
+- ✅ **Pulsante Edit file** - icona matita per non-immagini → apre FileEditModal
 - ✅ **Pulsante Restore** - annulla modifiche (prima della matita)
 - ✅ **File editati evidenziati** - bordo blu e sfondo leggero
-- ✅ **replaceFile()** - sostituisce file croppati con reattività corretta
+- ✅ **replaceFile()** - sostituisce file croppati/rinominati con reattività corretta
 - ✅ **uploadOnComplete prop** - ImageEditModal può croppare senza uploadare
 
 ### ImageEditModal - COMPLETATO ✅
@@ -36,10 +37,27 @@
 - ✅ **Conferma chiusura** - dialogo arancione se ci sono modifiche non salvate
 - ✅ Rimosso preset "Original" (solo avatar, broker-icon, custom)
 
+### FileEditModal - COMPLETATO ✅ (20 Feb 2026)
+- ✅ **Modale per file non-immagine** - rename file prima dell'upload
+- ✅ **Input nome file + estensione** - estensione mostrata come badge non editabile
+- ✅ **Info file** - mostra size e type del file originale
+- ✅ **Stessa API di ImageEditModal** - events complete/cancel/error
+- ✅ **Conferma chiusura** - dialogo arancione se ci sono modifiche
+- ✅ **uploadOnComplete prop** - può rinominare senza uploadare
+- ✅ **Integrato in files page** - FileUploader dispatcha editFile, files page gestisce
+- ✅ **Traduzioni i18n** - uploads.editFile, uploads.rename, uploads.renameAndUpload
+
+### Bug Fix: Freeze selezione oltre bordo ✅ (20 Feb 2026)
+- ✅ **Sostituito** `queueMicrotask` con `requestAnimationFrame` per guard release
+- ✅ **Aggiunto** `clampDepth` counter come safety valve (max 2)
+- ✅ **Usato** `cropperSelection.$change()` atomico anziché proprietà singole
+- ✅ **Threshold** 0.5px per evitare micro-clamping inutile
+
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
 - **Reattività Svelte**: Usare espressioni inline nel template, non funzioni
 - **Rotazione pivot**: Tecnica trasla-ruota-trasla per ruotare rispetto al centro selezione
+- **Anti-freeze**: `isClamping` + `clampDepth` + `$change()` atomico + `requestAnimationFrame`
 
 ---
 
@@ -51,6 +69,7 @@
 | BUG-IC2 | Avatar: dopo cancel, secondo click non apre crop | ✅ Fix: reset input via ref |
 | BUG-IC3 | Dashboard: avatar non aggiornato dopo modifica | ✅ Fix: aggiorna userSettings store + avatar in dashboard |
 | BUG-IC5 | Rimuovi avatar: nessuna conferma "sei sicuro?" | ✅ Fix: modale conferma |
+| BUG-IC6 | FREEZE: selezione oltre bordo canvas causa infinite loop | ✅ Fix: $change() atomico + clampDepth + requestAnimationFrame |
 
 ---
 

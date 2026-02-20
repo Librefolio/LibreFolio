@@ -34,6 +34,7 @@
         error: { message: string };
         change: { files: File[] };  // Emitted when files are selected/changed
         editImage: { file: File; index: number };  // Emitted when user wants to edit an image
+        editFile: { file: File; index: number };   // Emitted when user wants to edit a non-image file
     }>();
 
     let isDragging = false;
@@ -151,6 +152,10 @@
         dispatch('editImage', { file, index });
     }
 
+    function editFile(file: File, index: number) {
+        dispatch('editFile', { file, index });
+    }
+
     // Public method to replace a file at a specific index (used after crop)
     export function replaceFile(index: number, newFile: File) {
         if (index >= 0 && index < selectedFiles.length) {
@@ -256,6 +261,15 @@
                                     class="edit-btn"
                                     on:click|stopPropagation={() => editImage(file, index)}
                                     title={$t('common.edit') || 'Edit'}
+                            >
+                                <Pencil size={14}/>
+                            </button>
+                        {:else}
+                            <button
+                                    type="button"
+                                    class="edit-btn"
+                                    on:click|stopPropagation={() => editFile(file, index)}
+                                    title={$t('uploads.rename') || 'Rename'}
                             >
                                 <Pencil size={14}/>
                             </button>

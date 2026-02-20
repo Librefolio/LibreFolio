@@ -47,6 +47,9 @@
     // Track last initialized src to avoid re-init loops
     let lastInitializedSrc: string | null = null;
 
+    // Guard against infinite event loop from clamping
+    let isClamping = false;
+
     // Update aspect when prop changes
     $: currentAspect = aspectRatio;
 
@@ -226,40 +229,59 @@
             // NOTE: Shade overlay is configured via CSS Variables (--theme-color)
             // on cropper-canvas, not via JavaScript setAttribute
 
-            // Function to clamp selection within canvas bounds
+            // Function to clamp selection within canvas bounds (uses atomic $change)
+            let clampDepth = 0;
             const clampSelectionToBounds = () => {
-                const canvasRect = cropperCanvas.getBoundingClientRect();
+                if (isClamping || clampDepth > 2) return; // Prevent infinite loop + safety valve
+                clampDepth++;
 
-                // Selection must stay within canvas (0,0 to width,height)
+                const canvasRect = cropperCanvas.getBoundingClientRect();
+                if (canvasRect.width === 0 || canvasRect.height === 0) {
+                    clampDepth--;
+                    return;
+                }
+
                 let x = cropperSelection.x;
                 let y = cropperSelection.y;
                 let w = cropperSelection.width;
                 let h = cropperSelection.height;
 
+                // Clamp dimensions to canvas size
+                if (w > canvasRect.width) w = canvasRect.width;
+                if (h > canvasRect.height) h = canvasRect.height;
+
                 // Clamp position
-                if (x < 0) {
-                    x = 0;
-                    cropperSelection.x = x;
-                }
-                if (y < 0) {
-                    y = 0;
-                    cropperSelection.y = y;
-                }
-                if (x + w > canvasRect.width) {
-                    x = canvasRect.width - w;
-                    if (x < 0) x = 0;
-                    cropperSelection.x = x;
-                }
-                if (y + h > canvasRect.height) {
-                    y = canvasRect.height - h;
-                    if (y < 0) y = 0;
-                    cropperSelection.y = y;
+                if (x < 0) x = 0;
+                if (y < 0) y = 0;
+                if (x + w > canvasRect.width) x = Math.max(0, canvasRect.width - w);
+                if (y + h > canvasRect.height) y = Math.max(0, canvasRect.height - h);
+
+                // Check if anything actually changed
+                const needsUpdate =
+                    Math.abs(x - cropperSelection.x) > 0.5 ||
+                    Math.abs(y - cropperSelection.y) > 0.5 ||
+                    Math.abs(w - cropperSelection.width) > 0.5 ||
+                    Math.abs(h - cropperSelection.height) > 0.5;
+
+                if (needsUpdate) {
+                    // Use atomic $change to avoid triggering multiple change events
+                    isClamping = true;
+                    cropperSelection.$change(x, y, w, h);
+                    // Release guard after the frame settles
+                    requestAnimationFrame(() => {
+                        isClamping = false;
+                        clampDepth = 0;
+                    });
+                } else {
+                    clampDepth--;
                 }
             };
 
             // Function to update selection info
             const updateSelectionInfo = () => {
-                // First clamp selection to bounds
+                if (isClamping) return; // Skip if clamping is in progress
+
+                // Update display values first
                 clampSelectionToBounds();
 
                 cropWidth = Math.round(cropperSelection.width || 0);

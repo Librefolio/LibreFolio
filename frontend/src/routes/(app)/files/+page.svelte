@@ -23,7 +23,7 @@
     import {globalSettings} from '$lib/stores/globalSettings';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
-    import {ImageEditModal} from '$lib/components/ui/media';
+    import {ImageEditModal, FileEditModal} from '$lib/components/ui/media';
     import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
     import {Download, File as FileIcon, FileSpreadsheet, FileText, Image, LayoutGrid, List, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
@@ -147,6 +147,11 @@
     let imageEditFile: globalThis.File | null = null;
     let imageEditFileIndex: number | null = null;  // Index in pendingStaticFiles for replacement
     let fileUploaderRef: FileUploader;  // Reference to FileUploader for replacing files
+
+    // File edit modal state (for non-image files)
+    let showFileEditModal = false;
+    let fileEditFile: globalThis.File | null = null;
+    let fileEditFileIndex: number | null = null;
 
     // Confirm modal for closing uploader with pending files
     let showCloseUploaderConfirm = false;
@@ -360,6 +365,35 @@
         imageEditFileIndex = null;
         // Clear pending images queue
         pendingImageFiles = [];
+    }
+
+    // Handle edit file (non-image) button click from FileUploader
+    function handleEditFile(event: CustomEvent<{ file: globalThis.File; index: number }>) {
+        const { file, index } = event.detail;
+        fileEditFile = file;
+        fileEditFileIndex = index;
+        showFileEditModal = true;
+    }
+
+    // Handle completion of file editing (rename)
+    function handleFileEditComplete(event: CustomEvent<{url: string | null; file: File}>) {
+        const { file: renamedFile } = event.detail;
+
+        if (fileEditFileIndex !== null) {
+            // Replace the file in the pending list with the renamed version
+            fileUploaderRef?.replaceFile(fileEditFileIndex, renamedFile);
+        }
+
+        showFileEditModal = false;
+        fileEditFile = null;
+        fileEditFileIndex = null;
+    }
+
+    // Handle cancel of file editing
+    function handleFileEditCancel() {
+        showFileEditModal = false;
+        fileEditFile = null;
+        fileEditFileIndex = null;
     }
 
     // BRIM Upload handlers
@@ -648,6 +682,7 @@
                     on:upload={handleUpload}
                     on:change={handleStaticFileChange}
                     on:editImage={handleEditImage}
+                    on:editFile={handleEditFile}
                     on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
                     multiple={true}
                     maxSizeMB={maxUploadSizeMB}
@@ -899,6 +934,18 @@
     uploadOnComplete={imageEditFileIndex === null}
     on:complete={handleImageEditComplete}
     on:cancel={handleImageEditCancel}
+    on:error={(e) => {
+        error = e.detail.message;
+    }}
+/>
+
+<!-- File Edit Modal (non-image files) -->
+<FileEditModal
+    open={showFileEditModal}
+    file={fileEditFile}
+    uploadOnComplete={fileEditFileIndex === null}
+    on:complete={handleFileEditComplete}
+    on:cancel={handleFileEditCancel}
     on:error={(e) => {
         error = e.detail.message;
     }}
