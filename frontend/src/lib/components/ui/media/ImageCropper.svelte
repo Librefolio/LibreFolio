@@ -15,15 +15,7 @@
     export let imageSrc: string;
     export let aspectRatio: number = 1;  // NaN or 0 = free, 1 = square, 16/9, etc.
     export let showZoomSlider: boolean = true;
-    export let showAspectSelector: boolean = false;
     export let showRotateControls: boolean = true;
-    export let aspectOptions: Array<{value: number; label: string}> = [
-        {value: 1, label: '1:1'},
-        {value: 16/9, label: '16:9'},
-        {value: 4/3, label: '4:3'},
-        {value: 3/4, label: '3:4'},
-        {value: 0, label: $_('uploads.free') || 'Free'}
-    ];
 
     const dispatch = createEventDispatcher<{
         change: {selection: {x: number; y: number; width: number; height: number}};
@@ -623,7 +615,7 @@
         }
     }
 
-    function selectAspect(value: number) {
+    export function selectAspect(value: number) {
         currentAspect = value;
         const sel = cropper?.getCropperSelection();
         if (!sel) return;
@@ -707,6 +699,10 @@
             scaleY
         };
     }
+
+    export function getCurrentAspect(): number {
+        return currentAspect;
+    }
     // Preview ellipse overlay
     export let showPreviewEllipse: boolean = false;
 
@@ -769,37 +765,6 @@
             </div>
         {/if}
     </div>
-
-    <!-- Image Info -->
-    <div class="image-info">
-        <div class="info-row">
-            <span class="info-label">{$_('uploads.inputSize') || 'Input'}:</span>
-            <span class="info-value">{imageWidth} × {imageHeight} px</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">{$_('uploads.selectionSize') || 'Selection'}:</span>
-            <span class="info-value">{cropWidth} × {cropHeight} px</span>
-        </div>
-    </div>
-
-    <!-- Aspect Ratio Selector (shown externally when needed) -->
-    {#if showAspectSelector}
-        <div class="aspect-section">
-            <span class="control-label">{$_('uploads.aspectRatio') || 'Aspect Ratio'}:</span>
-            <div class="aspect-buttons">
-                {#each aspectOptions as opt}
-                    <button
-                        type="button"
-                        class="aspect-btn"
-                        class:active={currentAspect === opt.value}
-                        on:click={() => selectAspect(opt.value)}
-                    >
-                        {opt.label}
-                    </button>
-                {/each}
-            </div>
-        </div>
-    {/if}
 </div>
 
 <style>
@@ -893,14 +858,6 @@
         pointer-events: none;
     }
 
-    /* Aspect ratio section */
-    .aspect-section {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-        padding: 0.5rem;
-    }
 
     .crop-container {
         position: relative;
@@ -921,102 +878,6 @@
     .crop-container :global(cropper-canvas) {
         width: 100%;
         height: 100%;
-    }
-
-    .image-info {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        padding: 0.75rem;
-        background: #f3f4f6;
-        border-radius: 0.375rem;
-    }
-
-    :global(.dark) .image-info {
-        background: #374151;
-    }
-
-    .info-row {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.75rem;
-    }
-
-    .info-label {
-        color: #6b7280;
-        font-weight: 500;
-    }
-
-    .info-value {
-        color: #374151;
-        font-family: monospace;
-    }
-
-    :global(.dark) .info-label {
-        color: #9ca3af;
-    }
-
-    :global(.dark) .info-value {
-        color: #e5e7eb;
-    }
-
-    .control-label {
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: #4b5563;
-        min-width: 70px;
-    }
-
-    :global(.dark) .control-label {
-        color: #9ca3af;
-    }
-
-
-    /* Aspect Selector */
-    .aspect-buttons {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-    }
-
-    .aspect-btn {
-        padding: 0.375rem 0.75rem;
-        font-size: 0.75rem;
-        font-weight: 500;
-        border: 1px solid #d1d5db;
-        border-radius: 0.375rem;
-        background: white;
-        color: #374151;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .aspect-btn:hover {
-        border-color: #1a4031;
-        color: #1a4031;
-    }
-
-    .aspect-btn.active {
-        background: #1a4031;
-        border-color: #1a4031;
-        color: white;
-    }
-
-    :global(.dark) .aspect-btn {
-        background: #374151;
-        border-color: #4b5563;
-        color: #d1d5db;
-    }
-
-    :global(.dark) .aspect-btn:hover {
-        border-color: #10b981;
-        color: #10b981;
-    }
-
-    :global(.dark) .aspect-btn.active {
-        background: #10b981;
-        border-color: #10b981;
-        color: white;
     }
 
 

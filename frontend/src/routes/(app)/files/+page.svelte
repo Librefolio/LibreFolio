@@ -25,7 +25,7 @@
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import {ImageEditModal, FileEditModal} from '$lib/components/ui/media';
     import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
-    import {Download, File as FileIcon, FileSpreadsheet, FileText, Image, LayoutGrid, List, Trash2, X} from 'lucide-svelte';
+    import {Check, Copy, Download, File as FileIcon, FileSpreadsheet, FileText, Image, LayoutGrid, Link2, List, Search, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import {isImageFile} from '$lib/utils/imageCrop';
@@ -147,6 +147,34 @@
     let imageEditFile: globalThis.File | null = null;
     let imageEditFileIndex: number | null = null;  // Index in pendingStaticFiles for replacement
     let fileUploaderRef: FileUploader;  // Reference to FileUploader for replacing files
+
+    // Grid search & copy
+    let gridSearchQuery: string = '';
+    let copiedFileId: string | null = null;
+
+    // Filter static files for grid search
+    $: filteredStaticFiles = gridSearchQuery && viewMode === 'grid'
+        ? staticFiles.filter(f => f.original_name.toLowerCase().includes(gridSearchQuery.toLowerCase()))
+        : staticFiles;
+
+    // Clipboard helper for grid view
+    async function copyFileLink(file: UploadedFile) {
+        const fullUrl = `${window.location.origin}${file.url}`;
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(fullUrl);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = fullUrl;
+                ta.style.position = 'fixed'; ta.style.left = '-9999px';
+                document.body.appendChild(ta); ta.focus(); ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+            copiedFileId = file.id;
+            setTimeout(() => { copiedFileId = null; }, 2000);
+        } catch { /* ignore */ }
+    }
 
     // File edit modal state (for non-image files)
     let showFileEditModal = false;
@@ -723,54 +751,90 @@
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else if viewMode === 'grid'}
-                <div class="file-grid">
-                    {#each staticFiles as file}
-                        <div class="file-card">
-                            <div class="file-preview">
-                                {#if isImage(file.mime_type)}
-                                    <LazyImage
-                                            src={file.url}
-                                            alt={file.original_name}
-                                            placeholder="generic"
-                                            width="100%"
-                                            height="120px"
-                                    />
-                                {:else}
-                                    <div class="file-icon">
-                                        <svelte:component this={getFileIcon(file.mime_type, file.original_name)} size={32}/>
-                                    </div>
-                                {/if}
-                            </div>
-
-                            <div class="file-info">
-                                <span class="file-name" title={file.original_name}>
-                                    {file.original_name}
-                                </span>
-                                <span class="file-meta">
-                                    {formatBytes(file.size_bytes)} • {formatDate(file.uploaded_at)}
-                                </span>
-                            </div>
-
-                            <div class="file-actions">
-                                <a
-                                        href={`${file.url}?download=true`}
-                                        download={file.original_name}
-                                        class="action-btn"
-                                        title={$t('uploads.download')}
-                                >
-                                    <Download size={16}/>
-                                </a>
-                                <button
-                                        class="action-btn danger"
-                                        on:click={() => deleteFile(file.id)}
-                                        title={$t('common.delete')}
-                                >
-                                    <Trash2 size={16}/>
-                                </button>
-                            </div>
-                        </div>
-                    {/each}
+                <!-- Grid search bar -->
+                <div class="grid-search">
+                    <Search size={16} class="grid-search-icon" />
+                    <input
+                        type="text"
+                        class="grid-search-input"
+                        placeholder={$t('common.search') || 'Search...'}
+                        bind:value={gridSearchQuery}
+                    />
+                    {#if gridSearchQuery}
+                        <button class="grid-search-clear" on:click={() => gridSearchQuery = ''}>
+                            <X size={14} />
+                        </button>
+                    {/if}
                 </div>
+
+                {#if filteredStaticFiles.length === 0}
+                    <div class="empty-state">
+                        <Search size={32}/>
+                        <p>{$t('common.noResults') || 'No results'}</p>
+                    </div>
+                {:else}
+                    <div class="file-grid">
+                        {#each filteredStaticFiles as file}
+                            <div class="file-card">
+                                <div class="file-preview">
+                                    {#if isImage(file.mime_type)}
+                                        <LazyImage
+                                                src={file.url}
+                                                alt={file.original_name}
+                                                placeholder="generic"
+                                                width="100%"
+                                                height="120px"
+                                        />
+                                    {:else}
+                                        <div class="file-icon">
+                                            <svelte:component this={getFileIcon(file.mime_type, file.original_name)} size={32}/>
+                                        </div>
+                                    {/if}
+                                </div>
+
+                                <!-- Row 1: Title -->
+                                <div class="card-title" title={file.original_name}>
+                                    {file.original_name}
+                                </div>
+
+                                <!-- Row 2: Metadata -->
+                                <div class="card-meta">
+                                    {formatBytes(file.size_bytes)} • {formatDate(file.uploaded_at)}
+                                </div>
+
+                                <!-- Row 3: Actions (aligned right, same as table) -->
+                                <div class="card-actions">
+                                    <a
+                                            href={`${file.url}?download=true`}
+                                            download={file.original_name}
+                                            class="action-btn"
+                                            title={$t('uploads.download') || 'Download'}
+                                    >
+                                        <Download size={14}/>
+                                    </a>
+                                    <button
+                                            class="action-btn"
+                                            on:click={() => copyFileLink(file)}
+                                            title={$t('uploads.copyLink') || 'Copy Link'}
+                                    >
+                                        {#if copiedFileId === file.id}
+                                            <Check size={14} class="text-green-500"/>
+                                        {:else}
+                                            <Link2 size={14}/>
+                                        {/if}
+                                    </button>
+                                    <button
+                                            class="action-btn danger"
+                                            on:click={() => deleteFile(file.id)}
+                                            title={$t('common.delete') || 'Delete'}
+                                    >
+                                        <Trash2 size={14}/>
+                                    </button>
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
             {:else}
                 <!-- List View with New DataTable -->
                 <FilesTable
@@ -1186,47 +1250,65 @@
         color: #9ca3af;
     }
 
-    .file-info {
-        padding: 0.75rem;
+    /* Grid search */
+    .grid-search {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        background: white;
+        margin-bottom: 0.75rem;
     }
+    :global(.dark) .grid-search { background: #1f2937; border-color: #374151; }
+    :global(.grid-search-icon) { color: #9ca3af; flex-shrink: 0; }
+    .grid-search-input {
+        flex: 1; border: none; outline: none; background: transparent;
+        font-size: 0.875rem; color: #374151;
+    }
+    :global(.dark) .grid-search-input { color: #f3f4f6; }
+    .grid-search-clear {
+        display: flex; align-items: center; justify-content: center;
+        width: 20px; height: 20px; border: none; background: #e5e7eb;
+        border-radius: 50%; color: #6b7280; cursor: pointer;
+    }
+    :global(.dark) .grid-search-clear { background: #374151; color: #9ca3af; }
 
-    .file-name {
-        display: block;
-        font-size: 0.875rem;
+    /* Card 3-row layout */
+    .card-title {
+        padding: 0.5rem 0.75rem 0;
+        font-size: 0.8125rem;
         font-weight: 500;
         color: #1f2937;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    :global(.dark) .card-title { color: #f3f4f6; }
 
-    :global(.dark) .file-name {
-        color: #f3f4f6;
-    }
-
-    .file-meta {
-        display: block;
-        font-size: 0.75rem;
+    .card-meta {
+        padding: 0.125rem 0.75rem;
+        font-size: 0.6875rem;
         color: #6b7280;
-        margin-top: 0.25rem;
     }
+    :global(.dark) .card-meta { color: #9ca3af; }
 
-    :global(.dark) .file-meta {
-        color: #9ca3af;
-    }
-
-    .file-actions {
+    .card-actions {
         display: flex;
-        gap: 0.5rem;
-        padding: 0 0.75rem 0.75rem;
+        justify-content: flex-end;
+        gap: 0.25rem;
+        padding: 0.375rem 0.5rem;
+        border-top: 1px solid #f3f4f6;
     }
+    :global(.dark) .card-actions { border-top-color: #374151; }
 
     .action-btn {
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 32px;
-        height: 32px;
+        width: 28px;
+        height: 28px;
         border: 1px solid #e5e7eb;
         border-radius: 0.375rem;
         background: white;
@@ -1250,6 +1332,15 @@
     :global(.dark) .action-btn:hover {
         background: #4b5563;
         color: #f3f4f6;
+    }
+
+    .action-btn.danger {
+        color: #dc2626;
+        border-color: #fecaca;
+    }
+    :global(.dark) .action-btn.danger {
+        color: #fca5a5;
+        border-color: rgba(220, 38, 38, 0.3);
     }
 
     .action-btn.danger:hover {

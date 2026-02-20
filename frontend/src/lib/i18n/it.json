@@ -456,8 +456,8 @@
     "zoom": "Zoom",
     "aspectRatio": "Proporzioni",
     "outputSize": "Dimensione",
-    "presetAvatar": "Avatar (200×200)",
-    "presetIcon": "Icona (64×64)",
+    "presetAvatar": "Avatar",
+    "presetIcon": "Icona",
     "presetOriginal": "Dimensioni originali",
     "presetCustom": "Personalizzato",
     "outputPreset": "Preset output",
@@ -485,6 +485,8 @@
     "editFile": "Modifica File",
     "rename": "Rinomina",
     "renameAndUpload": "Rinomina e Carica",
-    "quality": "Qualità"
+    "quality": "Qualità",
+    "editIcon": "Carica Icona",
+    "scale": "Scala"
   }
 }
