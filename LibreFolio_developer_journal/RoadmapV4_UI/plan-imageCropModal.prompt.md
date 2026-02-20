@@ -1,8 +1,8 @@
 # Piano Aggiornato: Image Crop Modal System
 
 **Data**: 18 Febbraio 2026  
-**Ultimo Aggiornamento**: 20 Febbraio 2026 (ore 10:45)  
-**Status**: 🟢 COMPLETATO - Core feature + FileEditModal  
+**Ultimo Aggiornamento**: 20 Febbraio 2026 (ore 12:30)  
+**Status**: 🟢 COMPLETATO - Core feature + FileEditModal + Grid View  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
 
 ---
@@ -67,6 +67,17 @@
 - ✅ **Live update output** — `on:input` anziché `on:change`
 - ✅ **Titolo generico Icon** — "Upload Icon" riusabile per qualsiasi contesto
 - ✅ **0 errori, 0 warnings** — svelte-check pulito
+
+### UI Polish Round 3 ✅ (20 Feb 2026 ore 12:30)
+- ✅ **Ellipse overlay fix**: box-shadow 9999px per coprire l'area fuori il cerchio nella selezione
+- ✅ **Maniglie visibili con ellisse**: le handle rimangono operative sopra l'overlay circolare
+- ✅ **Eye toggle in alto a sinistra**: spostato da bottom-left a top-left
+- ✅ **Bottom panel swap colonne**: LEFT = preset + aspect ratio, RIGHT = input/selection + output/scale
+- ✅ **Scale input più largo**: 56px per migliore usabilità
+- ✅ **Reset all funzionante**: `resetAll()` esportato da ImageCropper, rimosso dall'overlay (solo header)
+- ✅ **Drag fuori modale**: mousedown tracking per prevenire false close durante trascinamento
+- ✅ **CSS cleanup**: rimossi stili inutilizzati (.overlay-btn.reset)
+- ✅ **TODO riorganizzati**: `TODO_FUTURI.md` pulito, `TODO_Completati.md` creato, appunti utente documentati
 
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati

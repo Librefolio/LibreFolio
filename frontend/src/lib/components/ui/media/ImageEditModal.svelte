@@ -166,8 +166,20 @@
         if (dims) { imageWidth = dims.width; imageHeight = dims.height; }
     }
 
+    // Track if mouse was pressed inside modal (to prevent false backdrop clicks during drag)
+    let mouseDownInsideModal = false;
+
+    function handleBackdropMouseDown(event: MouseEvent) {
+        // Check if mouse down is on the backdrop itself (not inside modal)
+        mouseDownInsideModal = event.target !== event.currentTarget;
+    }
+
     function handleBackdropClick(event: MouseEvent) {
-        if (event.target === event.currentTarget) requestClose();
+        // Only trigger close if BOTH mousedown and mouseup were on the backdrop
+        if (event.target === event.currentTarget && !mouseDownInsideModal) {
+            requestClose();
+        }
+        mouseDownInsideModal = false;
     }
 
     function handleKeydown(event: KeyboardEvent) {
@@ -276,7 +288,7 @@
 {#if open && imageSrc}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-backdrop" on:click={handleBackdropClick}>
+    <div class="modal-backdrop" on:mousedown={handleBackdropMouseDown} on:click={handleBackdropClick}>
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
             <!-- Header -->
             <div class="modal-header">
@@ -350,7 +362,7 @@
 
                 <!-- === BOTTOM PANEL (2 columns) === -->
                 <div class="bottom-panel">
-                    <!-- Left column: Preset + Output + Scale -->
+                    <!-- Left column: Preset + Aspect ratio -->
                     <div class="panel-col">
                         {#if allowPresetChange}
                             <div class="panel-row">
@@ -366,6 +378,33 @@
                                 </div>
                             </div>
                         {/if}
+
+                        {#if currentPreset === 'custom'}
+                            <div class="panel-row">
+                                <span class="panel-label">{$_('uploads.aspectRatio') || 'Ratio'}:</span>
+                                <div class="aspect-buttons">
+                                    {#each aspectOptions as opt}
+                                        <button type="button" class="aspect-btn"
+                                                class:active={currentAspect === opt.value}
+                                                on:click={() => selectAspectRatio(opt.value)}>
+                                            {opt.label}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+                        {/if}
+                    </div>
+
+                    <!-- Right column: Info (Input/Selection) + Output/Scale -->
+                    <div class="panel-col">
+                        <div class="panel-row info-row">
+                            <span class="panel-label">{$_('uploads.inputSize') || 'Input'}:</span>
+                            <span class="info-value">{imageWidth} × {imageHeight} px</span>
+                        </div>
+                        <div class="panel-row info-row">
+                            <span class="panel-label">{$_('uploads.selectionSize') || 'Selection'}:</span>
+                            <span class="info-value">{selectionWidth} × {selectionHeight} px</span>
+                        </div>
 
                         <div class="panel-row">
                             <span class="panel-label">{$_('uploads.outputSize') || 'Output'}:</span>
@@ -393,33 +432,6 @@
                                        value={scaleFactor.toFixed(2)}
                                        on:input={handleScaleInput} />
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Right column: Aspect ratio (custom only) + Selection info -->
-                    <div class="panel-col">
-                        {#if currentPreset === 'custom'}
-                            <div class="panel-row">
-                                <span class="panel-label">{$_('uploads.aspectRatio') || 'Ratio'}:</span>
-                                <div class="aspect-buttons">
-                                    {#each aspectOptions as opt}
-                                        <button type="button" class="aspect-btn"
-                                                class:active={currentAspect === opt.value}
-                                                on:click={() => selectAspectRatio(opt.value)}>
-                                            {opt.label}
-                                        </button>
-                                    {/each}
-                                </div>
-                            </div>
-                        {/if}
-
-                        <div class="panel-row info-row">
-                            <span class="panel-label">{$_('uploads.inputSize') || 'Input'}:</span>
-                            <span class="info-value">{imageWidth} × {imageHeight} px</span>
-                        </div>
-                        <div class="panel-row info-row">
-                            <span class="panel-label">{$_('uploads.selectionSize') || 'Selection'}:</span>
-                            <span class="info-value">{selectionWidth} × {selectionHeight} px</span>
                         </div>
                     </div>
                 </div>
@@ -571,7 +583,7 @@
     .cropper-section { position: relative; }
 
     .ellipse-toggle {
-        position: absolute; bottom: 0.5rem; left: 0.5rem; z-index: 10;
+        position: absolute; top: 0.5rem; left: 0.5rem; z-index: 10;
         display: flex; align-items: center; justify-content: center;
         width: 30px; height: 30px; border: none; border-radius: 0.25rem;
         background: rgba(0, 0, 0, 0.5); color: rgba(255, 255, 255, 0.7);
@@ -640,7 +652,7 @@
     .scale-x { font-size: 0.625rem; color: #9ca3af; }
 
     .scale-input {
-        width: 44px; padding: 0.1875rem 0.25rem; font-size: 0.6875rem; font-family: monospace;
+        width: 56px; padding: 0.1875rem 0.25rem; font-size: 0.6875rem; font-family: monospace;
         border: 1px solid #d1d5db; border-radius: 0.25rem;
         background: white; color: #374151; text-align: center; outline: none;
     }
