@@ -480,6 +480,9 @@
     "crop": "Crop",
     "discardChanges": "Discard changes?",
     "discardChangesMessage": "You have unsaved changes. Are you sure you want to close?",
-    "discardAndClose": "Discard"
+    "discardAndClose": "Discard",
+    "editFile": "Edit File",
+    "rename": "Rename",
+    "renameAndUpload": "Rename & Upload"
   }
 }

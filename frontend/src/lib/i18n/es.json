@@ -480,6 +480,9 @@
     "crop": "Recortar",
     "discardChanges": "¿Descartar cambios?",
     "discardChangesMessage": "Tienes cambios sin guardar. ¿Estás seguro de que quieres cerrar?",
-    "discardAndClose": "Descartar"
+    "discardAndClose": "Descartar",
+    "editFile": "Editar archivo",
+    "rename": "Renombrar",
+    "renameAndUpload": "Renombrar y subir"
   }
 }

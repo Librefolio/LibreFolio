@@ -480,6 +480,9 @@
     "crop": "Recadrer",
     "discardChanges": "Annuler les modifications ?",
     "discardChangesMessage": "Vous avez des modifications non enregistrées. Voulez-vous vraiment fermer ?",
-    "discardAndClose": "Annuler et fermer"
+    "discardAndClose": "Annuler et fermer",
+    "editFile": "Modifier le fichier",
+    "rename": "Renommer",
+    "renameAndUpload": "Renommer et télécharger"
   }
 }
