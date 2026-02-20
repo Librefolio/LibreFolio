@@ -39,7 +39,8 @@
     "remove": "Eliminar",
     "discard": "Descartar",
     "refresh": "Actualizar",
-    "restore": "Restaurar original"
+    "restore": "Restaurar original",
+    "type": "Tipo"
   },
   "table": {
     "rowsPerPage": "Filas por página",
@@ -483,6 +484,7 @@
     "discardAndClose": "Descartar",
     "editFile": "Editar archivo",
     "rename": "Renombrar",
-    "renameAndUpload": "Renombrar y subir"
+    "renameAndUpload": "Renombrar y subir",
+    "quality": "Calidad"
   }
 }

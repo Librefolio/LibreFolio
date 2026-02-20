@@ -39,7 +39,8 @@
     "remove": "Rimuovi",
     "discard": "Scarta",
     "refresh": "Aggiorna",
-    "restore": "Ripristina originale"
+    "restore": "Ripristina originale",
+    "type": "Tipo"
   },
   "table": {
     "rowsPerPage": "Righe per pagina",
@@ -483,6 +484,7 @@
     "discardAndClose": "Annulla e chiudi",
     "editFile": "Modifica File",
     "rename": "Rinomina",
-    "renameAndUpload": "Rinomina e Carica"
+    "renameAndUpload": "Rinomina e Carica",
+    "quality": "Qualità"
   }
 }

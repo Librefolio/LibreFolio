@@ -10,7 +10,7 @@
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {X, Check, Loader2, FileIcon} from 'lucide-svelte';
+    import {X, Check, Loader2, FileIcon, RefreshCw} from 'lucide-svelte';
     import {axiosInstance} from '$lib/api';
 
     // Props
@@ -33,6 +33,7 @@
     // File name editing
     let editedBaseName: string = '';
     let fileExtension: string = '';
+    let originalBaseName: string = '';  // For restore
 
     // Initialize when file changes
     $: if (file && open) {
@@ -44,9 +45,15 @@
             editedBaseName = file.name;
             fileExtension = '';
         }
+        originalBaseName = editedBaseName;
         hasChanges = false;
         showCloseConfirm = false;
         error = null;
+    }
+
+    function restoreOriginal() {
+        editedBaseName = originalBaseName;
+        hasChanges = false;
     }
 
     function handleCancel() {
@@ -139,29 +146,31 @@
                     <FileIcon size={20} />
                     {$_('uploads.editFile') || 'Edit File'}
                 </h2>
-                <button
-                    type="button"
-                    class="close-btn"
-                    on:click={requestClose}
-                    title={$_('common.close') || 'Close'}
-                >
-                    <X size={20} />
-                </button>
+                <div class="header-actions">
+                    {#if hasChanges}
+                        <button
+                            type="button"
+                            class="restore-btn"
+                            on:click={restoreOriginal}
+                            title={$_('uploads.resetAll') || 'Reset All'}
+                        >
+                            <RefreshCw size={16} />
+                        </button>
+                    {/if}
+                    <button
+                        type="button"
+                        class="close-btn"
+                        on:click={requestClose}
+                        title={$_('common.close') || 'Close'}
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
             </div>
 
             <!-- Body -->
             <div class="modal-body">
-                <!-- File info -->
-                <div class="file-info-row">
-                    <span class="info-label">{$_('uploads.fileSize') || 'Size'}:</span>
-                    <span class="info-value">{formatSize(file.size)}</span>
-                </div>
-                <div class="file-info-row">
-                    <span class="info-label">{$_('common.type') || 'Type'}:</span>
-                    <span class="info-value">{file.type || 'unknown'}</span>
-                </div>
-
-                <!-- File name editing -->
+                <!-- File name editing - top (consistent with ImageEditModal) -->
                 <div class="filename-editor">
                     <label class="filename-label" for="file-edit-name">
                         {$_('uploads.fileName') || 'File name'}:
@@ -177,6 +186,16 @@
                         />
                         <span class="file-extension">{fileExtension}</span>
                     </div>
+                </div>
+
+                <!-- File info (metadata below) -->
+                <div class="file-info-row">
+                    <span class="info-label">{$_('uploads.fileSize') || 'Size'}:</span>
+                    <span class="info-value">{formatSize(file.size)}</span>
+                </div>
+                <div class="file-info-row">
+                    <span class="info-label">{$_('common.type') || 'Type'}:</span>
+                    <span class="info-value">{file.type || 'unknown'}</span>
                 </div>
 
                 <!-- Error -->
@@ -289,6 +308,31 @@
 
     :global(.dark) .modal-header {
         border-bottom-color: #374151;
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .restore-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 0.5rem;
+        border: none;
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .restore-btn:hover {
+        background: rgba(239, 68, 68, 0.2);
+        color: #dc2626;
     }
 
     .modal-title {

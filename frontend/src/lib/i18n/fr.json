@@ -39,7 +39,8 @@
     "remove": "Supprimer",
     "discard": "Abandonner",
     "refresh": "Actualiser",
-    "restore": "Restaurer l'original"
+    "restore": "Restaurer l'original",
+    "type": "Type"
   },
   "table": {
     "rowsPerPage": "Lignes par page",
@@ -483,6 +484,7 @@
     "discardAndClose": "Annuler et fermer",
     "editFile": "Modifier le fichier",
     "rename": "Renommer",
-    "renameAndUpload": "Renommer et télécharger"
+    "renameAndUpload": "Renommer et télécharger",
+    "quality": "Qualité"
   }
 }
