@@ -545,7 +545,7 @@
         }
     }
 
-    function resetAll() {
+    export function resetAll() {
         currentZoom = 1;
         currentRotation = 0;
         scaleX = 1;
@@ -756,12 +756,6 @@
                         <FlipVertical size={16} />
                     </button>
                 {/if}
-
-                <div class="overlay-separator"></div>
-
-                <button type="button" class="overlay-btn reset" on:click={resetAll} title={$_('uploads.resetAll') || 'Reset All'}>
-                    <RefreshCw size={14} />
-                </button>
             </div>
         {/if}
     </div>
@@ -814,15 +808,6 @@
         color: #1a4031;
     }
 
-    .overlay-btn.reset {
-        background: rgba(239, 68, 68, 0.9);
-        color: white;
-    }
-
-    .overlay-btn.reset:hover {
-        background: #dc2626;
-    }
-
     .overlay-btn.active {
         background: rgba(16, 185, 129, 0.9);
         color: white;
@@ -839,23 +824,23 @@
         margin: 0.125rem auto;
     }
 
-    /* Preview ellipse - when .ellipse-active is present, apply ellipse mask to selection */
+    /* Preview ellipse - when .ellipse-active is present, apply ellipse overlay to selection */
     .ellipse-active {
         display: none; /* Hidden element, used as a CSS flag via sibling selectors */
     }
 
-    .crop-wrapper:has(.ellipse-active) :global(cropper-selection) {
-        border-radius: 50%;
-        overflow: hidden;
-    }
-
+    /* The ellipse circle guide line on the selection */
     .crop-wrapper:has(.ellipse-active) :global(cropper-selection)::after {
         content: '';
         position: absolute;
         inset: 0;
         border-radius: 50%;
-        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+        /* Dark overlay OUTSIDE the circle, inside the selection rectangle */
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+        /* White circle border for visibility */
+        border: 2px solid rgba(255, 255, 255, 0.5);
         pointer-events: none;
+        z-index: 5;
     }
 
 
