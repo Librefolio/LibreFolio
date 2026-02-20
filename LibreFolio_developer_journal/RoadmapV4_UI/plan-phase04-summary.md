@@ -107,8 +107,11 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - **FileUploader** edit button per tutti i file (non solo immagini) ✅ (20 Feb)
     - **Bottom Panel Redesign**: output size editabile, scale factor, quality spinner, preview ellisse ✅ (20 Feb)
     - **Flip nell'overlay**: spostato accanto a zoom/rotate con separatore ✅ (20 Feb)
+    - **Feature 4 Fix**: 2-column layout, aspect ratio nel panel, quality su filename row, preset → selectAspect ✅ (20 Feb)
+    - **Feature 5 Grid View**: 3-row cards, copy link, red delete, search bar ✅ (20 Feb)
+    - **Titolo Icon generico**: "Upload Icon" riusabile per asset/forex/etc ✅ (20 Feb)
     - i18n keys aggiunte per tutte le label ✅
-    - Feature rimanenti: Grid View improvements (F5), Asset Picker Modal (F6)
+    - Feature rimanenti: User Filter (deferred - needs backend API), Asset Picker Modal (F6)
     - Vedi `plan-imageCropModal.prompt.md`
 
 ---

@@ -65,7 +65,7 @@ export const IMAGE_PRESETS: Record<PresetName, ImagePreset> = {
         outputHeight: 64,
         outputFormat: 'png',
         outputQuality: 0.9,
-        titleKey: 'uploads.editBrokerIcon',
+        titleKey: 'uploads.editIcon',
     },
     custom: {
         aspectRatio: 0,           // Free aspect ratio (NaN in cropperjs)

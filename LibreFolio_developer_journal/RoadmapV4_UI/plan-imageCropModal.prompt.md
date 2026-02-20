@@ -54,14 +54,19 @@
 - ✅ **Threshold** 0.5px per evitare micro-clamping inutile
 
 ### Bottom Panel Redesign + Output Size ✅ (20 Feb 2026)
+- ✅ **2-column CSS Grid layout** — sinistra: preset/output/scale, destra: ratio/info
 - ✅ **Output size editabile** — input width/height interdipendenti con aspect ratio
-- ✅ **Scale factor editabile** — range 0.01-1.00, ricalcola output automaticamente
-- ✅ **Quality spinner** — solo per JPEG/WebP, step ±10%, range 10-100%
-- ✅ **Preview ellisse** — Eye toggle, auto-on per avatar/icon, auto-off per custom
-- ✅ **Flip spostato nell'overlay** — accanto a zoom/rotate/reset, con separatore
-- ✅ **Bottom panel compatto** — preset → output/scale → aspect ratio (se custom) → quality
-- ✅ **Filename in cima** — coerente in ImageEditModal e FileEditModal
-- ✅ **Format selector** — .png/.jpg/.webp integrato nell'area filename
+- ✅ **Scale factor sempre visibile** — range 0.01-1.00, ricalcola output automaticamente
+- ✅ **Quality sulla riga filename** — spinner solo per JPEG/WebP, step ±10%
+- ✅ **Preview ellisse** — Eye toggle su SINISTRA, auto-on per avatar/icon
+- ✅ **Flip nell'overlay** — accanto a zoom/rotate/reset, con separatore
+- ✅ **Aspect ratio nel panel** — colonna destra, solo per custom preset
+- ✅ **Rimossa sezione Input/Selection** — assorbita nel bottom panel
+- ✅ **Preset senza dimensioni** — solo "Avatar", "Icon", "Custom"
+- ✅ **Preset chiama cropper.selectAspect()** — selezione cambia aspect ratio
+- ✅ **Live update output** — `on:input` anziché `on:change`
+- ✅ **Titolo generico Icon** — "Upload Icon" riusabile per qualsiasi contesto
+- ✅ **0 errori, 0 warnings** — svelte-check pulito
 
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
@@ -213,52 +218,34 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 
 ### Feature 4: Output Size Editabile con Scala ✅ IMPLEMENTATA (20 Feb 2026)
 
-**Requisito**: Box info mostra dimensioni con fattore di scala e output editabile.
+**Requisito**: Bottom panel compatto a 2 colonne con tutte le info di output editabili.
 
-**UI**:
+**Layout finale implementato**:
 ```
-┌───────────────────────────────────────────────────────────┐
-│ Original: 1920 × 1080 px                                  │
-│ Selection: 800 × 800 px  → ×0.25 → Output: [200] × [200]  │
-└───────────────────────────────────────────────────────────┘
-```
-
-- Output width/height sono input editabili
-- Quando si modifica uno, l'altro si ricalcola mantenendo aspect ratio (se locked)
-- Fattore scala = output / selection
-- Preset (Avatar, Icon) forzano i valori output
-
-**Redesign bottom panel (ImageEditModal)**:
-La parte bassa della modale (sotto il cropper) deve essere ripensata per una UX più compatta e user-friendly.
-Attualmente ci sono vari blocchi separati (info, output, preset) che occupano troppo spazio verticale.
-
-Proposta layout bottom panel:
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ FILE NAME                                                       │
-│ [filename________________] [.png ▼]                             │
-├─────────────────────────────────────────────────────────────────┤
-│ DIMENSIONS              │ OUTPUT PRESET                         │
-│ Input:  1920 × 1080 px  │ [Avatar(200)] [Icon(64)] [Custom]    │
-│ Select:  800 ×  800 px  │                                      │
-│ Output: [200] × [200] 🔒│ FORMAT & QUALITY                     │
-│ Scale:  ×0.25           │ [PNG] [JPG] [WEBP]  Quality: [90%]   │
-├─────────────────────────────────────────────────────────────────┤
-│ ASPECT RATIO (solo se custom)                                   │
-│ [1:1] [16:9] [4:3] [3:4] [Free]                                │
-├─────────────────────────────────────────────────────────────────┤
-│ FLIP                                                            │
-│ [↔ H] [↕ V]                                                    │
-└─────────────────────────────────────────────────────────────────┘
+[filename_______________] [.png ▼] [−90%+]    ← quality solo per JPEG/WebP
+╔═══════════════════════════╦══════════════════════════════╗
+║ LEFT COLUMN               ║ RIGHT COLUMN                 ║
+║ Preset: [Avatar] [Icon]   ║ Ratio: [1:1] [16:9] ... Free║ ← solo custom
+║        [Custom]            ║                              ║
+║ Output: [200] × [200] px 🔒║ Input:  1920 × 1080 px      ║
+║ Scale:  ×[0.25]           ║ Selection: 800 × 800 px     ║
+╚═══════════════════════════╩══════════════════════════════╝
 ```
 
-- Il filename editor rimane in cima alla modale (prima del cropper) ✅ già fatto
-- Le dimensioni sono in una griglia compatta 2 colonne
-- Output width/height sono input inline editabili con lock aspect ratio
-- Il fattore di scala si calcola automaticamente: output/selection
-- Preset selector e format/quality sulla destra della stessa riga
-- Aspect ratio e flip rimangono in basso, compatti
-- Su mobile tutto diventa 1 colonna
+**Cambiamenti chiave (20 Feb 2026 - fix round 2)**:
+- ✅ Rimossa sezione "Input/Selection" standalone — assorbita nel panel destro
+- ✅ Aspect ratio DENTRO il bottom panel (colonna destra), non fuori
+- ✅ 2 colonne CSS Grid — sinistra: preset/output/scale, destra: ratio/info
+- ✅ Quality sulla stessa riga del filename (non nel panel)
+- ✅ Scale SEMPRE visibile (non solo quando output diverso da selection)
+- ✅ Output aggiornamento LIVE con `on:input` anziché `on:change`
+- ✅ Ellisse toggle a SINISTRA dell'immagine (opposto ai controlli)
+- ✅ Preset senza dimensioni nel label (solo "Avatar", "Icon", "Custom")
+- ✅ Preset cambia aspect ratio del cropper (`cropper.selectAspect()`)
+- ✅ Titolo broker-icon generico → "Upload Icon" (riusabile per asset, forex, etc.)
+- ✅ Rimosso `showAspectSelector` prop dal ImageCropper (gestito da ImageEditModal)
+- ✅ `selectAspect()` e `getCurrentAspect()` esportate da ImageCropper
+- ✅ Responsive: 1 colonna su mobile (<520px)
 
 ### Feature 5: Miglioramenti Grid View Files Page
 
@@ -349,15 +336,19 @@ Proposta layout bottom panel:
 21. ✅ Flip spostato nell'overlay immagine (accanto zoom/rotate)
 22. ✅ Responsive: 1 colonna su mobile
 
-### Fase 5: Grid View Improvements + User Filter 📋
+### Fase 5: Grid View Improvements + User Filter 🟡 IN PROGRESS
 
-21. Grid card layout 3 righe: titolo, metadati, azioni
-22. Aggiungere "Copy Link" alle azioni nella grid
-23. Cestino rosso consistente in grid e tabella
-24. Search per nome in grid mode (input sopra la griglia)
-25. Filtro utente: colonna in tabella + dropdown in grid (se multi-utente)
-26. Riutilizzare pattern filtri da FilesTable/urlFilters
-27. Filtro frontend-only (nessuna restrizione backend)
+> ⚠️ **Spostata prima di Asset Picker** perché Feature 6 (Asset Picker → Existing) dipende dal componente StaticFileBrowser che richiede le migliorie alla grid.
+
+21. ✅ Grid card layout 3 righe: titolo, metadati, azioni (aligned right)
+22. ✅ Aggiunto "Copy Link" alle azioni nella grid (con feedback ✓ verde)
+23. ✅ Cestino rosso consistente in grid e tabella (rosso di default, non solo hover)
+24. ✅ Search per nome in grid mode (input con icona lente + clear)
+25. ⏳ Filtro utente: **DEFERRED** — richiede endpoint `/api/v1/users` backend (non esiste)
+    - L'UploadedFile ha `uploaded_by_user_id` ma non c'è modo di risolverlo in username
+    - Da implementare quando si aggiunge un'API admin user list
+26. ✅ Riutilizzato pattern clipboard da FilesTable per copyFileLink
+27. N/A Filtro frontend-only — deferred con punto 25
 
 ### Fase 6: Asset Picker Modal 📋
 
@@ -366,6 +357,8 @@ Proposta layout bottom panel:
 30. Tab Existing: Creare `StaticFileBrowser.svelte` (griglia/tabella, search, filtri)
 31. Tab Upload: apre ImageEditModal, ritorna URL
 32. Integrare in Avatar (ProfileTab) e BrokerIcon (BrokerForm)
+
+> ⚠️ Feature 3 (ora Fase 6) spostata dopo Feature 5 perché il tab "Existing" si basa sul componente `StaticFileBrowser` che viene creato/migliorato in Fase 5.
 
 ### Fase 7: Bug Fix Rimanenti ✅ COMPLETATA
 
