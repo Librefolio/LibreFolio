@@ -480,6 +480,9 @@
     "crop": "Ritaglia",
     "discardChanges": "Annullare le modifiche?",
     "discardChangesMessage": "Hai modifiche non salvate. Sei sicuro di voler chiudere?",
-    "discardAndClose": "Annulla e chiudi"
+    "discardAndClose": "Annulla e chiudi",
+    "editFile": "Modifica File",
+    "rename": "Rinomina",
+    "renameAndUpload": "Rinomina e Carica"
   }
 }

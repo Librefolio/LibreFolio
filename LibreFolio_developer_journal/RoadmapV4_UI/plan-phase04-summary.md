@@ -1,8 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 19 Febbraio 2026  
-**Status**: 🟢 COMPLETATO (Core features, Image Crop funzionante)
+**Ultimo aggiornamento**: 20 Febbraio 2026  
+**Status**: 🟢 COMPLETATO (Core features, Image Crop + FileEdit funzionanti)
 
 ---
 
@@ -97,12 +97,16 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 13. **Image Crop Modal** 🧪 IN DEBUG (20 Feb 2026)
     - Migrazione da `svelte-easy-crop` a **cropperjs v2** (Web Components) ✅
-    - `ImageCropper.svelte` con zoom, rotation LIVE, flip H/V, free crop con maniglie
-    - `ImageEditModal.svelte` wrapper con preset (avatar 200×200, broker-icon 64×64, custom)
-    - `imageCrop.ts` utility con `getCroppedImageFromCropper()` usa `$toCanvas()`
-    - Avatar spostato da PreferencesTab a ProfileTab (editabile in edit mode)
-    - Preset ridotti: rimosso "Original", tenuti Avatar/Icon/Custom
-    - i18n keys aggiunte per tutte le label
+    - `ImageCropper.svelte` con zoom, rotation LIVE, flip H/V, free crop con maniglie ✅
+    - `ImageEditModal.svelte` wrapper con preset (avatar 200×200, broker-icon 64×64, custom) ✅
+    - `imageCrop.ts` utility con `getCroppedImageFromCropper()` usa `$toCanvas()` ✅
+    - Avatar spostato da PreferencesTab a ProfileTab (editabile in edit mode) ✅
+    - Preset ridotti: rimosso "Original", tenuti Avatar/Icon/Custom ✅
+    - **FileEditModal.svelte** per rename file non-immagine prima dell'upload ✅ (20 Feb)
+    - **Bug freeze fix**: $change() atomico + clampDepth guard + requestAnimationFrame ✅ (20 Feb)
+    - **FileUploader** edit button per tutti i file (non solo immagini) ✅ (20 Feb)
+    - i18n keys aggiunte per tutte le label ✅
+    - Feature rimanenti: Asset Picker Modal, Output Size editabile
     - Vedi `plan-imageCropModal.prompt.md`
 
 ---
@@ -201,7 +205,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 | File                             | Descrizione                            | Status       |
 |----------------------------------|----------------------------------------|--------------|
-| `plan-imageCropModal.prompt.md`  | Sistema Image Crop Modal unificato     | 🧪 IN TEST   |
+| `plan-imageCropModal.prompt.md`  | Sistema Image Crop Modal unificato     | 🧪 IN TEST (Feature 3+4 rimanenti) |
 
 ### Plans PIANIFICATI (in `RoadmapV4_UI/`)
 
@@ -329,24 +333,29 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 **Riferimento**: `plan-imageCropModal.prompt.md`
 
-**Lavoro completato (18 Feb 2026)**:
+**Lavoro completato (18-20 Feb 2026)**:
 
-- ✅ Installato `svelte-easy-crop` per crop interattivo
-- ✅ Creato `utils/imageCrop.ts` con presets e utility `getCroppedImage()`
-- ✅ Creato `ImageCropper.svelte` - componente crop puro
-- ✅ Creato `ImageEditModal.svelte` - modale wrapper con upload
+- ✅ Installato `cropperjs v2` per crop interattivo (Web Components)
+- ✅ Creato `utils/imageCrop.ts` con presets e utility `getCroppedImageFromCropper()`
+- ✅ Creato `ImageCropper.svelte` - componente crop puro (zoom, rotate, flip, free crop)
+- ✅ Creato `ImageEditModal.svelte` - modale wrapper con upload e rename
+- ✅ Creato `FileEditModal.svelte` - modale per rename file non-immagine (20 Feb)
 - ✅ Integrazione Files Page: upload immagine → editor → upload
+- ✅ FileUploader: edit button per tutti i file (immagini + non-immagini) (20 Feb)
 - ✅ Integrazione Broker Icon: bottone upload → editor con preset 64x64
-- ✅ Integrazione Avatar Utente: sezione in PreferencesTab con preset 200x200
+- ✅ Integrazione Avatar Utente: sezione in ProfileTab con preset 200x200
 - ✅ Avatar visibile in Sidebar con link a Settings
 - ✅ Dark mode funzionante
+- ✅ Bug fix: freeze selezione oltre bordo ($change atomico + guard) (20 Feb)
 - ✅ Mobile-friendly (touch gestures supportati)
 
 **Da completare**:
 
+- 📋 Feature 3: Asset Picker Modal (scegli da URL/file esistenti/upload nuovo)
+- 📋 Feature 4: Output Size editabile (input width/height con scale factor)
+- 📋 Miglioramenti grid view files page
 - 🧪 Test manuali in corso
-- 📋 Test E2E da implementare (vedi sezione test nel piano)
-- 📋 Aggiungere `data-testid` ai componenti
+- 📋 Test E2E da implementare
 
 ### Step 4.7: MkDocs Dark Mode (30 min) 🔲
 
@@ -372,7 +381,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ## 🎯 Prossimi Passi Immediati
 
-**Phase 4 IN TEST** - Image Crop in verifica manuale, File Preview pianificato
+**Phase 4 IN TEST** - Image Crop + FileEdit funzionanti, Asset Picker e Output Size da implementare
 
 ### ✅ Step Completati
 
@@ -384,13 +393,14 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### 🧪 In Test
 
-6. 🧪 **Image Crop Component** (18 Feb 2026) - Test manuali in corso, E2E da scrivere
+6. 🧪 **Image Crop Component** (18-20 Feb 2026) - Core funzionante, fix freeze, FileEditModal aggiunto
 
 ### 📋 Pianificato
 
-7. 📋 **File Preview System** (`plan-filePreview.prompt.md`) - ~8h
-   - Preview inline per immagini, testo, tabelle, markdown
-   - Disponibile in Files Page e Broker Detail
+7. 📋 **Asset Picker Modal** - Scegli immagine da URL/file esistenti/upload nuovo
+8. 📋 **Output Size editabile** - Input width/height con scale factor in ImageEditModal
+9. 📋 **Grid View improvements** - Azioni uniformi, filtro utente, search nome
+10. 📋 **File Preview System** (`plan-filePreview.prompt.md`) - ~8h
 
 ### 🔲 Optional/Low Priority
 
