@@ -203,7 +203,7 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 |---|-----------|-----------|-------------|----------|--------|
 | 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta | 🔲 TODO |
 | 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta | ✅ FATTO (`utils/upload.ts`) |
-| 3 | **formatBytes() centralizzato** | ~15 righe | Minima | 🟡 Media | ✅ FATTO (`utils/upload.ts`) |
+| 3 | **formatBytes() centralizzato** | ~60 righe (7 copie) | Minima | 🟡 Media | ✅ FATTO (`utils/upload.ts` con i18n via `get(_)`) |
 | 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media | 🔲 TODO |
 | 5 | **FileGrid.svelte** estratto | ~80 righe | Media | 🟢 Bassa | 🔲 TODO |
 | 6 | **DataTable single-select mode** | n/a (new feature) | Media | 🔴 Alta | ✅ FATTO |
@@ -247,7 +247,7 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 
 | Pattern | Occorrenze | Note |
 |---------|-----------|------|
-| **formatBytes i18n** | 3 (DataTable, DataTableColumnFilter, files/+page) | Usa `$t()` store — serviva funzione che accetta translator come parametro |
+| ~~**formatBytes i18n**~~ | ~~3~~ → 0 | ✅ Completamente eliminato — unica implementazione in `utils/upload.ts` con `get(_)` |
 | **Error banner pattern** | 4+ componenti | `{#if error}<div class="error-banner">...` |
 | **Loading spinner** | 4+ componenti | Pattern `{#if loading}<div class="loading">...` |
 

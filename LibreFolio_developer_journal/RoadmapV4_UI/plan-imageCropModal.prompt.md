@@ -167,10 +167,13 @@
 - ✅ **FilesTable icon alignment**: `.cell-icon-box` 32×32 centrato, allinea icone SVG con thumbnail immagini
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
-### Refactoring Round 11 ✅ (23 Feb 2026 — BRIM rename + URL fix + analysis)
-- ✅ **BRIM file rename**: aggiunto `FileEditModal` + handler `editFile` in `BrokerImportFilesModal` e nel BRIM FileUploader in `files/+page.svelte`
-- ✅ **URL preview ellisse fix**: forzata `max-height: 250px` sull'immagine con `object-fit: contain`, cerchio ridotto a `min(70%, 160px)` con `aspect-ratio: 1`
-- ✅ **Analisi duplicazione Round 3**: identificati 4 pattern principali risolvibili con ModalBase.svelte (~550 righe), 3 pattern medi secondari
+### Refactoring Round 11 ✅ (23 Feb 2026 — formatBytes i18n + BRIM rename + cleanup)
+- ✅ **`formatBytes()` i18n**: riscritto in `utils/upload.ts` con `get(_)` da svelte/store — usa `filter.bytes`, `filter.kilobytes`, `filter.megabytes`, `filter.gigabytes` per traduzioni (es. FR: o, Ko, Mo, Go)
+- ✅ **TUTTE le copie di formatBytes/formatSize/formatFileSize rimosse**: DataTable, DataTableColumnFilter, files/+page, BrokerImportFiles, FileEditModal, FileUploader — ora tutto importa da `utils/upload.ts`
+- ✅ **BRIM file rename (files/ assign broker modal)**: aggiunto pulsante Pencil per rinominare ogni file BRIM prima dell'upload, con `FileEditModal` — `handleFileEditComplete` distingue contesto static vs BRIM
+- ✅ **BRIM file rename (BrokerImportFilesModal)**: aggiunto `FileEditModal` + handler `editFile`
+- ✅ **FileEditModal z-index**: aumentato da 50 a 60 per renderlo visibile sopra altre modali
+- ✅ **URL preview ellisse**: LazyImage container centrato con `width: auto`, immagine con `display: block`
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### Note Tecniche
