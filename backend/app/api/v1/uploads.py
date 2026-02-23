@@ -9,6 +9,7 @@ Security:
 - File size is checked against global settings
 """
 
+import time
 from typing import Annotated, Optional
 
 import structlog
@@ -38,6 +39,81 @@ from backend.app.services.static_uploads import (
     )
 
 logger = structlog.get_logger(__name__)
+
+# In-memory cache for image preview thumbnails
+# Key: (file_id, "WxH"), Value: (bytes, mime_type, timestamp)
+_preview_cache: dict[tuple[str, str], tuple[bytes, str, float]] = {}
+_preview_cache_current_bytes: int = 0
+_PREVIEW_CACHE_TTL = 3600  # 1 hour
+# Max cache size in bytes — configured via Settings (PREVIEW_CACHE_MAX_MB in .env, default 50MB)
+_PREVIEW_CACHE_MAX_BYTES: int = 50 * 1024 * 1024  # Updated at first use from settings
+
+
+def _ensure_cache_config() -> None:
+    """Lazily load cache max bytes from settings (avoids import at module level)."""
+    global _PREVIEW_CACHE_MAX_BYTES
+    try:
+        from backend.app.config import get_settings
+        _PREVIEW_CACHE_MAX_BYTES = get_settings().PREVIEW_CACHE_MAX_MB * 1024 * 1024
+    except Exception:
+        pass  # Keep default
+
+
+def _get_cached_preview(file_id: str, size_key: str) -> tuple[bytes, str] | None:
+    """Get cached preview if still valid."""
+    global _preview_cache_current_bytes
+    key = (file_id, size_key)
+    entry = _preview_cache.get(key)
+    if entry is None:
+        return None
+    image_bytes, mime, ts = entry
+    if time.time() - ts > _PREVIEW_CACHE_TTL:
+        _preview_cache_current_bytes -= len(image_bytes)
+        del _preview_cache[key]
+        return None
+    return image_bytes, mime
+
+
+_cache_config_loaded = False
+
+
+def _set_cached_preview(file_id: str, size_key: str, image_bytes: bytes, mime: str) -> None:
+    """Store preview in cache, evicting oldest entries if over size limit."""
+    global _preview_cache_current_bytes, _cache_config_loaded
+    if not _cache_config_loaded:
+        _ensure_cache_config()
+        _cache_config_loaded = True
+
+    entry_size = len(image_bytes)
+
+    # Don't cache entries larger than 10% of max cache size
+    if entry_size > _PREVIEW_CACHE_MAX_BYTES * 0.1:
+        return
+
+    # Evict expired entries first
+    now = time.time()
+    expired = [k for k, (_, _, ts) in _preview_cache.items() if now - ts > _PREVIEW_CACHE_TTL]
+    for k in expired:
+        _preview_cache_current_bytes -= len(_preview_cache[k][0])
+        del _preview_cache[k]
+
+    # Evict oldest until we have room
+    while _preview_cache_current_bytes + entry_size > _PREVIEW_CACHE_MAX_BYTES and _preview_cache:
+        oldest_key = min(_preview_cache, key=lambda k: _preview_cache[k][2])
+        _preview_cache_current_bytes -= len(_preview_cache[oldest_key][0])
+        del _preview_cache[oldest_key]
+
+    _preview_cache[(file_id, size_key)] = (image_bytes, mime, now)
+    _preview_cache_current_bytes += entry_size
+
+
+def invalidate_preview_cache(file_id: str) -> None:
+    """Remove all cached previews for a file (call on delete/update)."""
+    global _preview_cache_current_bytes
+    keys_to_remove = [k for k in _preview_cache if k[0] == file_id]
+    for k in keys_to_remove:
+        _preview_cache_current_bytes -= len(_preview_cache[k][0])
+        del _preview_cache[k]
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
@@ -181,6 +257,9 @@ async def delete_file(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete file")
 
+    # Invalidate any cached preview thumbnails
+    invalidate_preview_cache(file_id)
+
     logger.info("File deleted via API", file_id=file_id, user_id=current_user.id)
 
     return UploadDeleteResponse(
@@ -268,41 +347,52 @@ async def serve_file(
                 detail="Invalid img_preview format. Expected: WIDTHxHEIGHT (e.g., 200x200)"
                 )
 
-        # Generate resized image in async executor (non-blocking)
-        try:
-            import asyncio
-            from concurrent.futures import ProcessPoolExecutor
-
-            def resize_image_sync(file_path_str: str, max_w: int, max_h: int) -> bytes:
-                """Synchronous image resize function to run in separate process"""
-                from PIL import Image
-                import io
-
-                # Open image
-                img = Image.open(file_path_str)
-
-                # Calculate resize dimensions (maintain aspect ratio, use most restrictive dimension)
-                width, height = img.size
-                ratio = min(max_w / width, max_h / height)
-
-                if ratio < 1:  # Only resize if image is larger
-                    new_width = int(width * ratio)
-                    new_height = int(height * ratio)
-                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-                # Save to bytes
-                output = io.BytesIO()
-                img_format = img.format or "PNG"
-                img.save(output, format=img_format, quality=85, optimize=True)
-                return output.getvalue()
-
-            # Run resize in process pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            with ProcessPoolExecutor() as executor:
-                image_bytes = await loop.run_in_executor(executor, resize_image_sync, str(file_path), max_width, max_height)
-
+        # Check cache first
+        size_key = f"{max_width}x{max_height}"
+        cached = _get_cached_preview(file_id, size_key)
+        if cached:
+            image_bytes, cached_mime = cached
             from fastapi.responses import StreamingResponse
             import io
+            return StreamingResponse(
+                io.BytesIO(image_bytes),
+                media_type=cached_mime,
+                headers={"Cache-Control": "public, max-age=3600"}
+                )
+
+        # Generate resized image (synchronous - Pillow is fast for simple resizes)
+        try:
+            from PIL import Image
+            import io
+
+            img = Image.open(file_path)
+
+            # Calculate resize dimensions (maintain aspect ratio, use most restrictive dimension)
+            orig_width, orig_height = img.size
+            ratio = min(max_width / orig_width, max_height / orig_height)
+
+            if ratio >= 1:
+                # Requested size >= original — serve file directly, no processing needed
+                return FileResponse(
+                    path=file_path,
+                    media_type=mime_type,
+                    headers={"Cache-Control": "public, max-age=3600"}
+                    )
+
+            new_width = int(orig_width * ratio)
+            new_height = int(orig_height * ratio)
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+            # Save to bytes
+            output = io.BytesIO()
+            img_format = img.format or "PNG"
+            img.save(output, format=img_format, quality=85, optimize=True)
+            image_bytes = output.getvalue()
+
+            # Store in cache
+            _set_cached_preview(file_id, size_key, image_bytes, mime_type)
+
+            from fastapi.responses import StreamingResponse
 
             return StreamingResponse(
                 io.BytesIO(image_bytes),

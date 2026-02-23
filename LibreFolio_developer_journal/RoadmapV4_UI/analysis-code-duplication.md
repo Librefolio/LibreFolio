@@ -1,6 +1,7 @@
 # Analisi Duplicazione Codice - Frontend Media Components
 
 **Data**: 23 Febbraio 2026
+**Ultimo Aggiornamento**: 23 Febbraio 2026 (Round 2)
 **Analisi su**: `frontend/src/lib/components/ui/media/`, modals correlate, `files/+page.svelte`
 
 ---
@@ -198,13 +199,33 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 
 ## 📋 Priorità Refactoring
 
-| # | Intervento | Risparmio | Complessità | Priorità |
-|---|-----------|-----------|-------------|----------|
-| 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta |
-| 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta |
-| 3 | **formatBytes() centralizzato** | ~15 righe | Minima | 🟡 Media |
-| 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media |
-| 5 | **FileGrid.svelte** estratto | ~80 righe | Media | 🟢 Bassa |
+| # | Intervento | Risparmio | Complessità | Priorità | Status |
+|---|-----------|-----------|-------------|----------|--------|
+| 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta | 🔲 TODO |
+| 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta | 🔲 TODO |
+| 3 | **formatBytes() centralizzato** | ~15 righe | Minima | 🟡 Media | 🔲 TODO |
+| 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media | 🔲 TODO |
+| 5 | **FileGrid.svelte** estratto | ~80 righe | Media | 🟢 Bassa | 🔲 TODO |
+| 6 | **DataTable single-select mode** | n/a (new feature) | Media | 🔴 Alta | ✅ FATTO |
+| 7 | **DataTable ImageCell type** | n/a (new feature) | Bassa | 🔴 Alta | ✅ FATTO |
+| 8 | **DataTable in AssetPicker** | ~100 righe | Media | 🔴 Alta | 🔲 TODO |
+| 9 | **Preview img_preview cache backend** | n/a (perf) | Bassa | 🔴 Alta | ✅ FATTO (size-based 50MB) |
+| 10 | **img_preview everywhere** | ~5 righe | Minima | 🟡 Media | ✅ FATTO |
+| 11 | **svelte:component deprecation** | ~1 riga | Minima | 🟡 Media | ✅ FATTO |
+| 12 | **FilesTable image alignment** | ~5 righe CSS | Minima | 🟡 Media | ✅ FATTO |
+| 13 | **AssetPicker URL ellipse** | ~15 righe CSS | Bassa | 🟡 Media | ✅ FATTO |
+
+### Feedback Utente (23 Feb 2026)
+- **DataTable**: evolverla per supportare `selectionMode: 'single'` (click riga = seleziona, no checkbox) ✅
+- **ImageCell**: aggiungere tipo cella con preview thumbnail + fallback icona ✅
+- **AssetPicker**: usare DataTable con single-select per la lista file (TODO)
+- **Griglia AssetPicker vs Files**: devono usare lo stesso componente base (TODO — FileGrid.svelte)
+- **Preview ovunque**: usare `?img_preview=` per risparmiare banda ✅
+- **Cache backend**: size-based 50MB (parametrico da .env PREVIEW_CACHE_MAX_MB), TTL 1h ✅
+- **svelte:component deprecation**: sostituito con componente dinamico Svelte 5 ✅
+- **FilesTable alignment**: immagini/icone centrate, nomi allineati a sinistra in colonna ✅
+- **AssetPicker URL ellipse**: crop 1:1 dal centro con border-radius, non più box-shadow ✅
+- **Backend img_preview >= original**: serve file direttamente senza processamento ✅
 
 ---
 

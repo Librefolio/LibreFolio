@@ -121,6 +121,16 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - **Preview thumbnail nel picker**: `?img_preview=` per grid/lista ✅
     - **Code cleanup**: rimosso codice morto (6 funzioni, 1 import) ✅
     - **Analisi duplicazione**: report in `analysis-code-duplication.md` ✅
+    - **Backend img_preview cache**: TTL 1h, size-based 50MB (parametrico), invalidazione su delete ✅
+    - **Backend img_preview fix**: ProcessPoolExecutor → resize sincrono (fix pickle error) ✅
+    - **Backend img_preview >= original**: serve FileResponse diretto senza processamento ✅
+    - **DataTable single-select**: `selectionMode='single'`, `onRowClick`, `onRowDoubleClick` ✅
+    - **DataTable ImageCell**: thumbnail con fallback icona + testo opzionale ✅
+    - **DataTable svelte:component fix**: deprecation warning risolto (Svelte 5 runes) ✅
+    - **FilesTable thumbnail**: immagini mostrano preview 48x48 invece di icona ✅
+    - **FilesTable alignment**: immagini centrate, nomi allineati a sinistra in colonna ✅
+    - **Files grid bandwidth**: `?img_preview=240x240` per griglia file ✅
+    - **AssetPicker URL ellipse**: crop 1:1 dal centro con border-radius 50% ✅
     - i18n keys aggiunte per tutte le label ✅
     - 42 test E2E pianificati (vedi `plan-imageCropModal.prompt.md`)
     - Vedi `plan-imageCropModal.prompt.md`

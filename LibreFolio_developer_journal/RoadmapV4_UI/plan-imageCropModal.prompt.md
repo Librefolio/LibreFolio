@@ -134,6 +134,27 @@
 - ✅ **Analisi duplicazione codice**: report completo in `analysis-code-duplication.md`
 - ✅ **0 errori, 0 warnings** — svelte-check pulito
 
+### Refactoring Round 8 ✅ (23 Feb 2026)
+- ✅ **Backend img_preview cache**: in-memory con TTL 1h, max 200 entries, invalidazione su delete
+- ✅ **Backend img_preview fix**: rimosso ProcessPoolExecutor (non può pickle funzioni locali), resize sincrono diretto
+- ✅ **Fix resetAll custom**: niente dezoom, selezione esattamente sull'immagine
+- ✅ **DataTable `selectionMode` prop**: 'multi' (default checkbox), 'single' (click riga), 'none'
+- ✅ **DataTable `ImageCell` type**: thumbnail con fallback icona, testo opzionale, circle mode
+- ✅ **DataTable `onRowClick`/`onRowDoubleClick` props**: per single-select e conferma diretta
+- ✅ **DataTable `selectedRowId` prop**: controllo esterno della selezione singola
+- ✅ **FilesTable thumbnail**: immagini mostrano preview 48x48 invece di icona generica
+- ✅ **Files grid `?img_preview=240x240`**: griglia in files/ usa thumbnail ridotti
+- ✅ **Analisi duplicazione aggiornata**: 10 interventi prioritizzati con status
+
+### Refactoring Round 9 ✅ (23 Feb 2026 — post-commit cleanup)
+- ✅ **Fix `svelte:component` deprecation**: sostituito con `{@const FallbackIcon = ...}` dinamico (Svelte 5 runes)
+- ✅ **Backend cache size-based**: da count-based (200 entries) a size-based (default 50MB, parametrico da `PREVIEW_CACHE_MAX_MB` in `.env`)
+- ✅ **Backend img_preview >= original**: se dimensione richiesta ≥ originale, serve `FileResponse` diretto (no Pillow, no cache)
+- ✅ **Config**: aggiunto `PREVIEW_CACHE_MAX_MB` a `Settings` model + `.env`
+- ✅ **AssetPicker URL ellisse fix**: wrapper quadrato 200×200 con `border-radius: 50%` + `object-fit: cover` — crop 1:1 dal centro
+- ✅ **FilesTable alignment**: `min-width: 32px` su `.cell-image` per allineare thumbnail, `text-align: left` su label
+- ✅ **0 errori, 0 warnings** — svelte-check + build puliti
+
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
 - **Reattività Svelte**: Usare espressioni inline nel template, non funzioni
