@@ -12,11 +12,12 @@
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {ExternalLink, FileUp, RefreshCw, X} from 'lucide-svelte';
-    import {fade, scale} from 'svelte/transition';
+    import {fade} from 'svelte/transition';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal} from '$lib/components/ui/media';
     import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import type {BrimFile} from '$lib/types';
 
     interface Props {
@@ -168,36 +169,16 @@
     function cancelClose() {
         showCloseConfirm = false;
     }
-
-    function handleBackdropClick(event: MouseEvent) {
-        if (event.target === event.currentTarget) {
-            tryClose();
-        }
-    }
-
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape') {
-            tryClose();
-        }
-    }
 </script>
 
-<svelte:window onkeydown={handleKeydown}/>
 
-{#if open}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-            class="modal-backdrop"
-            data-testid="import-files-modal"
-            onclick={handleBackdropClick}
-            transition:fade={{ duration: 150 }}
-    >
-        <div
-                class="modal-content"
-                transition:scale={{ duration: 200, start: 0.95 }}
-                onclick={(e) => e.stopPropagation()}
-        >
+<ModalBase
+    {open}
+    zIndex={50}
+    maxWidth="900px"
+    onRequestClose={tryClose}
+    testId="import-files-modal"
+>
             <!-- Header with title and link -->
             <div class="modal-header">
                 <div class="flex items-center gap-2">
@@ -298,9 +279,7 @@
                     </button>
                 </div>
             </div>
-        </div>
-    </div>
-{/if}
+</ModalBase>
 
 <!-- File Rename Modal (for BRIM files) -->
 {#if editingFile}
@@ -327,33 +306,7 @@
 />
 
 <style>
-    .modal-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 50;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: rgba(0, 0, 0, 0.5);
-        padding: 1rem;
-    }
-
-    .modal-content {
-        background: white;
-        border-radius: 1rem;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-        width: 100%;
-        max-width: 900px;
-        max-height: 85vh;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    :global(.dark) .modal-content {
-        background: #1f2937;
-        border: 1px solid #374151;
-    }
+    /* Backdrop and modal-content styles handled by ModalBase */
 
     .modal-header {
         display: flex;

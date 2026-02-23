@@ -3,9 +3,9 @@
     import {browser} from '$app/environment';
     import {goto} from '$app/navigation';
     import AnimatedBackground from '$lib/components/ui/AnimatedBackground.svelte';
-    import LoginModal from '$lib/components/auth/LoginModal.svelte';
-    import RegisterModal from '$lib/components/auth/RegisterModal.svelte';
-    import ForgotPasswordModal from '$lib/components/auth/ForgotPasswordModal.svelte';
+    import LoginCard from '$lib/components/auth/LoginCard.svelte';
+    import RegisterCard from '$lib/components/auth/RegisterCard.svelte';
+    import ForgotPasswordCard from '$lib/components/auth/ForgotPasswordCard.svelte';
     import LanguageSelector from '$lib/components/layout/LanguageSelector.svelte';
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
     import {auth} from '$lib/stores/auth';
@@ -77,18 +77,18 @@
             <ThemeToggle/>
         </div>
 
-        <!-- Modal Container - Cambio istantaneo senza transizione -->
+        <!-- Card Container - Cambio istantaneo senza transizione -->
         {#if currentView === 'login'}
-            <LoginModal
+            <LoginCard
                     {redirectTo}
                     {successMessage}
                     on:gotoRegister={handleGotoRegister}
                     on:gotoForgot={handleGotoForgot}
             />
         {:else if currentView === 'register'}
-            <RegisterModal on:gotoLogin={handleGotoLogin}/>
+            <RegisterCard on:gotoLogin={handleGotoLogin}/>
         {:else if currentView === 'forgot-password'}
-            <ForgotPasswordModal on:gotoLogin={handleGotoLoginSimple}/>
+            <ForgotPasswordCard on:gotoLogin={handleGotoLoginSimple}/>
         {/if}
     </div>
 {/if}
