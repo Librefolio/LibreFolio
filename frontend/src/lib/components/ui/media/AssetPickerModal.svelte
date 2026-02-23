@@ -56,13 +56,21 @@
 
     $: modalTitle = title || $_('uploads.selectAsset') || 'Select Image';
 
-    // Validate URL
+    // Validate URL - accept absolute URLs, relative paths, and any non-empty trimmed input
     $: {
-        try {
-            new URL(urlInput);
-            urlValid = urlInput.length > 0;
-        } catch {
+        const trimmed = urlInput.trim();
+        if (trimmed.length === 0) {
             urlValid = false;
+        } else if (trimmed.startsWith('/') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+            urlValid = true;
+        } else {
+            try {
+                new URL(trimmed);
+                urlValid = true;
+            } catch {
+                // Accept any non-empty string as a potential path/URL
+                urlValid = trimmed.length > 0;
+            }
         }
     }
 
@@ -152,6 +160,11 @@
 
     function isImage(mime: string): boolean {
         return mime?.startsWith('image/') ?? false;
+    }
+
+    /** Get thumbnail URL for an image file using backend preview endpoint */
+    function getPreviewUrl(file: UploadedFile, size: string = '80x80'): string {
+        return `${file.url}?img_preview=${size}`;
     }
 
     function formatBytes(bytes: number): string {
@@ -265,7 +278,7 @@
                                          on:dblclick={confirmSelection}>
                                         <div class="grid-preview">
                                             {#if isImage(file.mime_type)}
-                                                <LazyImage src={file.url} alt={file.original_name}
+                                                <LazyImage src={getPreviewUrl(file, '120x120')} alt={file.original_name}
                                                            placeholder="generic" width="100%" height="80px" />
                                             {:else}
                                                 <div class="grid-icon">
@@ -296,7 +309,7 @@
                                          on:dblclick={confirmSelection}>
                                         <div class="list-thumb">
                                             {#if isImage(file.mime_type)}
-                                                <LazyImage src={file.url} alt={file.original_name}
+                                                <LazyImage src={getPreviewUrl(file, '60x60')} alt={file.original_name}
                                                            placeholder="generic" width="40px" height="40px" />
                                             {:else}
                                                 <FileIcon size={20} />

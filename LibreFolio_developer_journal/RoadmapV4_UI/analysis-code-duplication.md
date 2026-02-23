@@ -1,0 +1,219 @@
+# Analisi Duplicazione Codice - Frontend Media Components
+
+**Data**: 23 Febbraio 2026
+**Analisi su**: `frontend/src/lib/components/ui/media/`, modals correlate, `files/+page.svelte`
+
+---
+
+## 📊 Inventario Componenti Analizzati
+
+| File | Righe | Ruolo |
+|------|-------|-------|
+| `ImageCropper.svelte` | ~1020 | Core crop engine (cropperjs v2 wrapper) |
+| `ImageEditModal.svelte` | ~749 | Modal wrapper per crop immagini |
+| `FileEditModal.svelte` | ~584 | Modal wrapper per rename file non-immagine |
+| `AssetPickerModal.svelte` | ~573 | Modal picker (URL/Existing/Upload) |
+| `FileUploader.svelte` | ~583 | Drag & drop file upload con pending list |
+| `ImageUploader.svelte` | ~300 | **LEGACY** — vecchio uploader immagini (non più usato attivamente) |
+| `LazyImage.svelte` | ~132 | Lazy loading immagini con placeholder |
+| `files/+page.svelte` | ~1634 | Pagina Files con upload integration |
+| `BrokerImportFilesModal.svelte` | ~483 | Modal import file BRIM |
+| `BrokerForm.svelte` | ~560 | Form broker con icon picker |
+| `ProfileTab.svelte` | ~807 | Tab profilo con avatar picker |
+| `imageCrop.ts` | ~211 | Utility presets + getCroppedImageFromCropper() |
+
+---
+
+## 🔴 Duplicazione ALTA (stessi pattern implementati 3+ volte)
+
+### 1. Pattern "Modal con Conferma Chiusura"
+
+**Implementato in**: `ImageEditModal`, `FileEditModal`, `BrokerImportFilesModal`, `files/+page.svelte` (2 modali inline)
+
+**Codice duplicato** (~70 righe × 5 implementazioni = ~350 righe):
+```
+- showCloseConfirm state variable
+- requestClose() → if hasChanges → show confirm
+- confirmClose() → hide confirm → close
+- cancelClose() → hide confirm
+- handleBackdropClick()
+- handleKeydown(Escape)
+- Confirm dialog HTML (⚠️ icon, message, Cancel/Discard buttons)
+- Confirm dialog CSS (backdrop, dialog, header, actions, btn-warning)
+```
+
+**Proposta**: Creare un **`ModalBase.svelte`** che gestisca:
+- Backdrop con click-to-close
+- Escape key handling
+- Close confirmation dialog (opzionale, attivato da prop `hasChanges`)
+- Header con titolo + azioni destra (slot)
+- Body (slot)
+- Footer (slot)
+- Animazione apertura/chiusura
+
+**Risparmio stimato**: ~250 righe + consistenza garantita
+
+---
+
+### 2. Pattern "Upload File al Backend"
+
+**Implementato in**: `ImageEditModal.handleUpload()`, `FileEditModal.handleConfirm()`, `files/+page.svelte` (uploadFilesNow + handleDirectUpload), `BrokerImportFilesModal`
+
+**Codice duplicato** (~20 righe × 4-5 implementazioni = ~100 righe):
+```typescript
+const formData = new FormData();
+formData.append('file', file);
+const response = await axiosInstance.post('/api/v1/uploads', formData);
+const uploadedUrl = response.data.file?.url || response.data.url;
+if (!uploadedUrl) throw new Error('No URL in upload response');
+```
+
+**Proposta**: Creare utility **`uploadFile(file: File): Promise<UploadedFile>`** in `utils/uploadApi.ts` che centralizzi:
+- Costruzione FormData
+- POST request
+- Estrazione URL da risposta
+- Error handling
+
+**Risparmio stimato**: ~60 righe + single point of failure/change
+
+---
+
+### 3. Pattern "CSS Stili Modal"
+
+**Implementato in**: `ImageEditModal`, `FileEditModal`, `AssetPickerModal`, `BrokerImportFilesModal`, `files/+page.svelte`
+
+**CSS duplicato** (~80 righe × 5 = ~400 righe):
+```css
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; ... }
+.modal-content { background: white; border-radius: 1rem; ... }
+:global(.dark) .modal-content { background: #1f2937; ... }
+.modal-header { display: flex; align-items: center; justify-content: space-between; ... }
+.modal-footer { display: flex; justify-content: flex-end; ... }
+.btn { display: inline-flex; align-items: center; ... }
+.btn-primary { background: #1a4031; color: white; }
+.btn-secondary { background: #e5e7eb; ... }
+```
+
+**Proposta**: Se `ModalBase.svelte` viene creato, tutto il CSS modale va lì. In alternativa, creare un file CSS condiviso `styles/modal.css` importato dai vari componenti.
+
+**Risparmio stimato**: ~300 righe CSS
+
+---
+
+### 4. Pattern "formatBytes / formatSize"
+
+**Implementato in**: `AssetPickerModal.formatBytes()`, `FileEditModal.formatSize()`, `FilesTable` (nel DataTable formatter), `files/+page.svelte`
+
+**Codice duplicato**: Stessa funzione con nomi diversi (~5 righe × 4 = ~20 righe)
+
+**Proposta**: Già esiste logica simile altrove. Consolidare in **`utils/format.ts`** con:
+```typescript
+export function formatBytes(bytes: number): string { ... }
+```
+
+**Risparmio stimato**: minimo in righe (~15), alto in consistenza
+
+---
+
+## 🟡 Duplicazione MEDIA (pattern simili ma con differenze significative)
+
+### 5. ImageEditModal vs FileEditModal
+
+**Sono modali con la stessa struttura**, ma:
+- `ImageEditModal` ha il cropper, bottom panel, ellipse, zoom/rotate
+- `FileEditModal` ha solo rename + metadata display
+
+**Ciò che condividono**:
+- Props: `open`, `file`, `uploadOnComplete`
+- Events: `complete`, `cancel`, `error`
+- Logica: `requestClose`, `confirmClose`, `cancelClose`, backdrop click, escape
+- CSS: header, footer, buttons, confirm dialog (~200 righe)
+- Upload flow: FormData + POST
+
+**Proposta alternativa a ModalBase**: Creare `FileEditModal` come caso semplificato che **usa ImageEditModal** con un prop `mode: 'image' | 'file'` dove in mode `file` non mostra il cropper ma solo filename + metadata. 
+
+**Pro**: Un solo componente  
+**Contro**: ImageEditModal è già 749 righe, aggiungere condizionali lo complicherebbe
+
+**Raccomandazione**: Meglio il **`ModalBase.svelte`** approach — mantiene separazione responsabilità.
+
+---
+
+### 6. AssetPickerModal — List View vs FilesTable
+
+**Problema**: Il tab "Existing" nella `AssetPickerModal` ha una lista/griglia custom con HTML+CSS inline, mentre `FilesTable.svelte` wrappa `DataTable` con tutte le funzionalità (sort, filter, pagination).
+
+**Differenze**:
+- AssetPickerModal list è **selezione singola** (click per selezionare, doppio click conferma)
+- FilesTable è **multi-azione** (delete, download, copy link, bulk actions)
+- AssetPickerModal non ha bisogno di pagination/sort
+
+**Proposta**: Non unificare forzatamente — il caso d'uso è abbastanza diverso. Però si potrebbe:
+1. Estrarre una **`FileGrid.svelte`** riutilizzabile per la vista griglia con:
+   - Props: files, selectedId, onSelect, onDoubleClick
+   - Slot per azioni card
+2. Usarla sia in `AssetPickerModal` che in `files/+page.svelte` (grid mode)
+
+---
+
+### 7. Profile Avatar Upload vs Broker Icon Upload (BrokerForm + ProfileTab)
+
+**Sono quasi identici**:
+```
+1. showAssetPicker = true → AssetPickerModal
+2. handleAssetPickerSelect → set URL
+3. handleAssetPickerUpload → show ImageEditModal
+4. handleImageEditComplete → set URL + upload
+5. handleImageEditCancel → reopen picker
+```
+
+**Codice duplicato**: ~80 righe di handler identici in entrambi i componenti.
+
+**Proposta**: Creare un **custom hook / action** `useImagePicker(options)` che restituisce:
+```typescript
+const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
+    preset: 'avatar',
+    initialUrl: existingUrl,
+    onComplete: (url) => saveAvatar(url),
+});
+```
+
+**Ma attenzione**: in Svelte 4 non ci sono composables come in Vue/React. Si potrebbe:
+- Creare un **`ImagePickerWrapper.svelte`** componente che incapsula tutto il flusso
+- Props: preset, initialUrl, circularPreview
+- Events: change (new URL), remove
+- Internamente gestisce AssetPickerModal + ImageEditModal + conferma
+
+**Risparmio stimato**: ~120 righe + meno bug nei flussi paralleli
+
+---
+
+## 🟢 Duplicazione BASSA (accettabile)
+
+### 8. `isImageFile()` — usata in pochi posti, importata da `imageCrop.ts` ✅
+### 9. `LazyImage` — usata ovunque, componente singolo ✅
+### 10. `DataTable` pattern — riutilizzato via composizione ✅
+
+---
+
+## 📋 Priorità Refactoring
+
+| # | Intervento | Risparmio | Complessità | Priorità |
+|---|-----------|-----------|-------------|----------|
+| 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta |
+| 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta |
+| 3 | **formatBytes() centralizzato** | ~15 righe | Minima | 🟡 Media |
+| 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media |
+| 5 | **FileGrid.svelte** estratto | ~80 righe | Media | 🟢 Bassa |
+
+---
+
+## 🏁 Raccomandazione
+
+Il refactoring **non è urgente** data la fase embrionale del progetto, ma diventa importante prima di aggiungere nuove modali (Phase 5-6-7 hanno FX, Asset e Transaction management pages, ognuna con le proprie modali).
+
+**Ordine suggerito**:
+1. Creare `ModalBase.svelte` (impatta tutte le modali future)
+2. Creare `uploadFile()` utility (impatta tutti gli upload)
+3. I due punti precedenti possono essere fatti come sub-plan dedicato tra Phase 4 e Phase 5
+

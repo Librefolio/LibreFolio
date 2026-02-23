@@ -95,7 +95,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Nuovi file: `globalSettings.ts`, `version.py`, `version.ts`
     - Vedi `phases/phase-04-subplan/plan-ui-fixes.md`
 
-13. **Image Crop Modal** ✅ COMPLETATO (20 Feb 2026)
+13. **Image Crop Modal** ✅ COMPLETATO (23 Feb 2026)
     - Migrazione da `svelte-easy-crop` a **cropperjs v2** (Web Components) ✅
     - `ImageCropper.svelte` con zoom, rotation LIVE, flip H/V, free crop con maniglie ✅
     - `ImageEditModal.svelte` wrapper con preset (avatar 200×200, broker-icon 64×64, custom) ✅
@@ -114,6 +114,13 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - **Cancel upload → reopen picker**: annullando ImageEditModal riapre AssetPicker ✅
     - **Active clamping**: pointerdown/up + RAF loop per selezione sempre nei bounds ✅
     - **Zoom unificato**: + riduce selezione → zooma sfondo, - ingrandisce → dezooma ✅
+    - **Fix URL validation**: path relativi/locali accettati nel picker ✅
+    - **Remove icon button**: link rosso in BrokerForm per cancellare icona ✅
+    - **Fix resetAll**: free → dezoom 5%, fixed → max-fit centrato ✅
+    - **Chrome wheel warning fix**: listener con `{ passive: false }` ✅
+    - **Preview thumbnail nel picker**: `?img_preview=` per grid/lista ✅
+    - **Code cleanup**: rimosso codice morto (6 funzioni, 1 import) ✅
+    - **Analisi duplicazione**: report in `analysis-code-duplication.md` ✅
     - i18n keys aggiunte per tutte le label ✅
     - 42 test E2E pianificati (vedi `plan-imageCropModal.prompt.md`)
     - Vedi `plan-imageCropModal.prompt.md`
