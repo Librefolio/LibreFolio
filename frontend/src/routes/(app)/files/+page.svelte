@@ -20,13 +20,13 @@
     import {browser} from '$app/environment';
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {uploadFile} from '$lib/utils/upload';
+    import {uploadFile, formatBytes} from '$lib/utils/upload';
     import {globalSettings} from '$lib/stores/globalSettings';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import {ImageEditModal, FileEditModal} from '$lib/components/ui/media';
     import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
-    import {Check, Copy, Download, File as FileIcon, FileSpreadsheet, FileText, Image, LayoutGrid, Link2, List, Search, Trash2, X} from 'lucide-svelte';
+    import {Check, Copy, Download, File as FileIcon, FileSpreadsheet, FileText, Image, LayoutGrid, Link2, List, Pencil, Search, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import {isImageFile} from '$lib/utils/imageCrop';
@@ -407,8 +407,14 @@
         const { file: renamedFile } = event.detail;
 
         if (fileEditFileIndex !== null) {
-            // Replace the file in the pending list with the renamed version
-            fileUploaderRef?.replaceFile(fileEditFileIndex, renamedFile);
+            if (activeTab === 'brim' && fileEditFileIndex < pendingBrimFiles.length) {
+                // BRIM context: replace in pendingBrimFiles
+                pendingBrimFiles[fileEditFileIndex] = renamedFile;
+                pendingBrimFiles = [...pendingBrimFiles]; // Trigger reactivity
+            } else {
+                // Static context: replace in FileUploader
+                fileUploaderRef?.replaceFile(fileEditFileIndex, renamedFile);
+            }
         }
 
         showFileEditModal = false;
@@ -583,18 +589,6 @@
         }
     }
 
-    function formatBytes(bytes: number): string {
-        if (bytes === 0) return '0 ' + ($t('filter.bytes') || 'B');
-        const k = 1024;
-        const sizes = [
-            $t('filter.bytes') || 'B',
-            $t('filter.kilobytes') || 'KB',
-            $t('filter.megabytes') || 'MB',
-            $t('filter.gigabytes') || 'GB'
-        ];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    }
 
     function formatDate(dateStr: string): string {
         return new Date(dateStr).toLocaleDateString(undefined, {
@@ -930,6 +924,18 @@
                         <div class="file-row">
                             <div class="file-info">
                                 <FileSpreadsheet size={18} class="file-icon"/>
+                                <button
+                                    type="button"
+                                    class="brim-edit-btn"
+                                    title={$t('uploads.rename') || 'Rename'}
+                                    on:click={() => {
+                                        fileEditFileIndex = index;
+                                        fileEditFile = file;
+                                        showFileEditModal = true;
+                                    }}
+                                >
+                                    <Pencil size={12}/>
+                                </button>
                                 <span class="file-name" title={file.name}>{file.name}</span>
                                 <span class="file-size">({formatBytes(file.size)})</span>
                             </div>
@@ -1595,6 +1601,27 @@
 
     :global(.dark) .file-info :global(svg) {
         color: #9ca3af;
+    }
+
+    .brim-edit-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.25rem;
+        border: none;
+        background: transparent;
+        color: #9ca3af;
+        cursor: pointer;
+        border-radius: 0.25rem;
+        flex-shrink: 0;
+    }
+    .brim-edit-btn:hover {
+        color: #1a4031;
+        background: rgba(26, 64, 49, 0.1);
+    }
+    :global(.dark) .brim-edit-btn:hover {
+        color: #a7f3d0;
+        background: rgba(167, 243, 208, 0.1);
     }
 
     .file-row .file-name {

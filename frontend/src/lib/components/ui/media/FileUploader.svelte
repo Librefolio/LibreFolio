@@ -12,6 +12,7 @@
     import {t} from '$lib/i18n';
     import {AlertTriangle, File as FileIcon, Upload, X, Pencil, ImageIcon, RefreshCw} from 'lucide-svelte';
     import {isImageFile} from '$lib/utils/imageCrop';
+    import {formatBytes} from '$lib/utils/upload';
 
     export let maxSizeMB: number = 10;
     export let multiple: boolean = true;
@@ -138,11 +139,6 @@
         }
     }
 
-    function formatFileSize(bytes: number): string {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    }
 
     function openFileBrowser() {
         fileInput?.click();
@@ -274,7 +270,7 @@
                                 <Pencil size={14}/>
                             </button>
                         {/if}
-                        <span class="file-size">{formatFileSize(file.size)}</span>
+                        <span class="file-size">{formatBytes(file.size)}</span>
                         <button
                                 type="button"
                                 class="remove-btn"

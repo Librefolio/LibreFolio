@@ -11,6 +11,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {t} from '$lib/i18n';
+    import {formatBytes} from '$lib/utils/upload';
     import {Check, RotateCcw, Search, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import type {ColumnType, EnumOption, FilterValue} from './types';
@@ -172,17 +173,6 @@
         return Math.round((logVal - logMin) / (logMax - logMin) * 100);
     }
 
-    // Format bytes for display
-    function formatBytes(bytes: number): string {
-        const gb = $t('filter.gigabytes') || 'GB';
-        const mb = $t('filter.megabytes') || 'MB';
-        const kb = $t('filter.kilobytes') || 'KB';
-        const b = $t('filter.bytes') || 'B';
-        if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} ${gb}`;
-        if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} ${mb}`;
-        if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} ${kb}`;
-        return `${bytes} ${b}`;
-    }
 
     // Update bytes from input change
     function updateSizeMinFromInput() {
