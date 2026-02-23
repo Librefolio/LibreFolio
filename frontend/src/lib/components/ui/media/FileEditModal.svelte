@@ -132,7 +132,7 @@
         onRequestClose={requestClose}
     >
         <!-- Header -->
-        <div class="modal-header">
+        <div class="modal-header" data-testid="file-edit-modal">
             <h2 class="modal-title">
                 <FileIcon size={20} />
                 {$_('uploads.editFile') || 'Edit File'}
@@ -212,6 +212,7 @@
                 class="btn btn-primary"
                 on:click={handleConfirm}
                 disabled={isUploading}
+                data-testid="file-edit-confirm"
             >
                 {#if isUploading}
                     <Loader2 size={16} class="animate-spin" />

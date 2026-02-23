@@ -2,7 +2,7 @@
 
 **Data**: 18 Febbraio 2026  
 **Ultimo Aggiornamento**: 23 Febbraio 2026  
-**Status**: 🟢 COMPLETATO — Tutte le feature + fix + cleanup + analisi duplicazione. Test E2E da scrivere.  
+**Status**: 🟢 COMPLETATO — Tutte le feature + fix + cleanup + analisi duplicazione + data-testid. 42 test E2E da scrivere.  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
 
 ---
@@ -207,6 +207,12 @@
 - ✅ **Grid view mantenuta**: la griglia con LazyImage resta come alternativa
 - ✅ **Rimossi ~40 righe CSS**: `.file-list`, `.list-item`, `.list-thumb`, `.list-info`, `.list-name`, `.list-meta`, `.list-check` eliminati
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
+
+### Refactoring Round 15 ✅ (23 Feb 2026 — data-testid + plan update)
+- ✅ **data-testid aggiunti**: 27 attributi su tutti i componenti nuovi (ImageEditModal, ImageCropper, FileEditModal, AssetPickerModal, FileUploader, ProfileTab, BrokerForm, Sidebar)
+- ✅ **ImagePickerWrapper status**: marcato come COMPLETATO nell'analisi duplicazione (usato in BrokerForm + ProfileTab)
+- ✅ **Piano phase04-summary aggiornato**: Step 4.6 da "IN TEST" a "COMPLETATO", prossimi passi rivisti
+- ✅ **0 errori, 0 warnings** — svelte-check pulito
 
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
@@ -1106,6 +1112,7 @@ test.describe('Files Page - Grid View', () => {
 - [x] Cancel upload → riapre AssetPickerModal
 - [x] initialUrl pre-popola campo URL
 - [x] Selezione contenuta nei bounds del canvas
+- [x] 27 data-testid aggiunti ai componenti nuovi (pronti per i 42 test E2E)
 - [ ] 42 test E2E da implementare (pianificati sopra)
 
 ---

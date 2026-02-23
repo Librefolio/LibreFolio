@@ -223,7 +223,7 @@
     maxWidth="600px"
     onRequestClose={close}
 >
-        <div class="picker-modal-inner" role="dialog" aria-modal="true" tabindex="-1">
+        <div class="picker-modal-inner" role="dialog" aria-modal="true" tabindex="-1" data-testid="asset-picker-modal">
             <!-- Header -->
             <div class="picker-header">
                 <h2 class="picker-title">{modalTitle}</h2>
@@ -235,17 +235,20 @@
             <!-- Tabs -->
             <div class="picker-tabs">
                 <button type="button" class="tab-btn" class:active={activeTab === 'existing'}
-                        on:click={() => activeTab = 'existing'}>
+                        on:click={() => activeTab = 'existing'}
+                        data-testid="asset-picker-existing-tab">
                     <FolderOpen size={14} />
                     {$_('uploads.existingFiles') || 'Existing'}
                 </button>
                 <button type="button" class="tab-btn" class:active={activeTab === 'url'}
-                        on:click={() => activeTab = 'url'}>
+                        on:click={() => activeTab = 'url'}
+                        data-testid="asset-picker-url-tab">
                     <Link size={14} />
                     {$_('uploads.fromUrl') || 'URL'}
                 </button>
                 <button type="button" class="tab-btn" class:active={activeTab === 'upload'}
-                        on:click={handleUploadClick}>
+                        on:click={handleUploadClick}
+                        data-testid="asset-picker-upload-tab">
                     <Upload size={14} />
                     {$_('uploads.uploadNew') || 'Upload'}
                 </button>
@@ -283,7 +286,8 @@
                             <div class="search-box">
                                 <Search size={14} />
                                 <input type="text" class="search-input" bind:value={searchQuery}
-                                       placeholder={$_('common.search') || 'Search...'} />
+                                       placeholder={$_('common.search') || 'Search...'}
+                                       data-testid="asset-picker-search" />
                                 {#if searchQuery}
                                     <button type="button" class="search-clear" on:click={() => searchQuery = ''}>
                                         <X size={12} />
@@ -377,7 +381,8 @@
                     {$_('common.cancel') || 'Cancel'}
                 </button>
                 <button type="button" class="btn btn-primary" on:click={confirmSelection}
-                        disabled={(activeTab === 'url' && !urlValid) || (activeTab === 'existing' && !selectedFile)}>
+                        disabled={(activeTab === 'url' && !urlValid) || (activeTab === 'existing' && !selectedFile)}
+                        data-testid="asset-picker-confirm">
                     {$_('uploads.useSelected') || 'Use Selected'}
                 </button>
             </div>

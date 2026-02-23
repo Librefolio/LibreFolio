@@ -242,7 +242,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 | File                             | Descrizione                            | Status       |
 |----------------------------------|----------------------------------------|--------------|
-| `plan-imageCropModal.prompt.md`  | Sistema Image Crop Modal unificato     | 🧪 IN TEST (Feature 3+4 rimanenti) |
+| `plan-imageCropModal.prompt.md`  | Sistema Image Crop Modal unificato     | ✅ COMPLETATO (42 E2E test da scrivere) |
 
 ### Plans PIANIFICATI (in `RoadmapV4_UI/`)
 
@@ -366,33 +366,38 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - ✅ Bug 4: Colonna Broker visibile con 2+ broker
 - ✅ Feature: Git tag versioning (`./dev.py info version`, sidebar, API)
 
-### Step 4.6: Image Crop Component 🧪 IN TEST
+### Step 4.6: Image Crop Component ✅ COMPLETATO
 
 **Riferimento**: `plan-imageCropModal.prompt.md`
 
-**Lavoro completato (18-20 Feb 2026)**:
+**Lavoro completato (18-23 Feb 2026)**:
 
 - ✅ Installato `cropperjs v2` per crop interattivo (Web Components)
 - ✅ Creato `utils/imageCrop.ts` con presets e utility `getCroppedImageFromCropper()`
 - ✅ Creato `ImageCropper.svelte` - componente crop puro (zoom, rotate, flip, free crop)
 - ✅ Creato `ImageEditModal.svelte` - modale wrapper con upload e rename
-- ✅ Creato `FileEditModal.svelte` - modale per rename file non-immagine (20 Feb)
+- ✅ Creato `FileEditModal.svelte` - modale per rename file non-immagine
+- ✅ Creato `AssetPickerModal.svelte` - modale picker (URL/Existing/Upload) con DataTable single-select
+- ✅ Creato `ImagePickerWrapper.svelte` - wrapper che incapsula flusso AssetPicker + ImageEditModal
+- ✅ Creato `ModalBase.svelte` - componente base per tutte le 10 modali del progetto
 - ✅ Integrazione Files Page: upload immagine → editor → upload
-- ✅ FileUploader: edit button per tutti i file (immagini + non-immagini) (20 Feb)
-- ✅ Integrazione Broker Icon: bottone upload → editor con preset 64x64
-- ✅ Integrazione Avatar Utente: sezione in ProfileTab con preset 200x200
+- ✅ FileUploader: edit button per tutti i file (immagini + non-immagini)
+- ✅ Integrazione Broker Icon: click icona → AssetPicker → editor con preset 64x64
+- ✅ Integrazione Avatar Utente: ProfileTab con AssetPicker → preset 200x200
 - ✅ Avatar visibile in Sidebar con link a Settings
 - ✅ Dark mode funzionante
-- ✅ Bug fix: freeze selezione oltre bordo ($change atomico + guard) (20 Feb)
+- ✅ Bug fix: freeze selezione oltre bordo ($change atomico + guard)
 - ✅ Mobile-friendly (touch gestures supportati)
+- ✅ Backend preview cache (size-based 50MB, TTL 1h)
+- ✅ Auth components rinominati (Modal→Card per LoginCard, RegisterCard, ForgotPasswordCard)
+- ✅ Analisi duplicazione codice (3 round, 14/15 task completati)
+- ✅ `formatBytes()` centralizzato e i18n-aware
+- ✅ `uploadFile()` utility centralizzata
 
 **Da completare**:
 
-- 📋 Feature 3: Asset Picker Modal (scegli da URL/file esistenti/upload nuovo)
-- 📋 Feature 4: Output Size editabile (input width/height con scale factor)
-- 📋 Miglioramenti grid view files page
-- 🧪 Test manuali in corso
-- 📋 Test E2E da implementare
+- 📋 42 test E2E da implementare (pianificati in `plan-imageCropModal.prompt.md`)
+- ✅ data-testid aggiunti a tutti i componenti nuovi (27 attributi)
 
 ### Step 4.7: MkDocs Dark Mode (30 min) 🔲
 
@@ -418,7 +423,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ## 🎯 Prossimi Passi Immediati
 
-**Phase 4 IN TEST** - Image Crop + FileEdit funzionanti, Asset Picker e Output Size da implementare
+**Phase 4 COMPLETATA** - Tutte le feature implementate. Test E2E da scrivere.
 
 ### ✅ Step Completati
 
@@ -427,17 +432,12 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 3. ✅ **Settings Mobile + Gallery** (3 Feb 2026) - Layout responsive, 224 screenshots
 4. ✅ **E2E Test Remediation** (2 Feb 2026) - 51 test, data-testid
 5. ✅ **UI Fixes** (18 Feb 2026) - Bug login/settings, modal scroll, versioning
-
-### 🧪 In Test
-
-6. 🧪 **Image Crop Component** (18-20 Feb 2026) - Core funzionante, fix freeze, FileEditModal aggiunto
+6. ✅ **Image Crop Component** (18-23 Feb 2026) - Crop, FileEditModal, AssetPicker, ModalBase, ImagePickerWrapper, code dedup
 
 ### 📋 Pianificato
 
-7. 📋 **Asset Picker Modal** - Scegli immagine da URL/file esistenti/upload nuovo
-8. 📋 **Output Size editabile** - Input width/height con scale factor in ImageEditModal
-9. 📋 **Grid View improvements** - Azioni uniformi, filtro utente, search nome
-10. 📋 **File Preview System** (`plan-filePreview.prompt.md`) - ~8h
+7. 📋 **Image Crop E2E Tests** - 42 test pianificati, data-testid da aggiungere
+8. 📋 **File Preview System** (`plan-filePreview.prompt.md`) - ~8h
 
 ### 🔲 Optional/Low Priority
 

@@ -10,7 +10,7 @@
     import ImportPluginSelect from '$lib/components/ImportPluginSelect.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import {ImageEditModal, AssetPickerModal} from '$lib/components/ui/media';
+    import {ImagePickerWrapper} from '$lib/components/ui/media';
     import {Info, Plus, Trash2, Upload} from 'lucide-svelte';
 
     const dispatch = createEventDispatcher<{
@@ -145,48 +145,12 @@
     // Get user's default currency
     $: defaultCurrency = $userSettings?.base_currency ?? 'EUR';
 
-    // Image edit modal state for broker icon
-    let showIconEditModal = false;
-    let iconEditFile: File | null = null;
+    // Image picker state (uses ImagePickerWrapper)
+    let showImagePicker = false;
 
-    // Asset picker modal state
-    let showAssetPicker = false;
-
-    // Handle icon upload completion
-    function handleIconUploadComplete(event: CustomEvent<{url: string | null; file: File}>) {
-        if (event.detail.url) {
-            iconUrl = event.detail.url;
-        }
-        showIconEditModal = false;
-        iconEditFile = null;
-        // Close the asset picker too (it was hidden during upload)
-        showAssetPicker = false;
-    }
-
-    // Handle asset picker selection
-    function handleAssetPickerSelect(event: CustomEvent<{url: string}>) {
-        const url = event.detail.url;
-        // Never set '__upload__' as icon URL
-        if (url && url !== '__upload__') {
-            iconUrl = url;
-        }
-        showAssetPicker = false;
-    }
-
-    // Handle asset picker upload (user chose to upload a new file)
-    function handleAssetPickerUpload(event: CustomEvent<{file: File}>) {
-        iconEditFile = event.detail.file;
-        // Hide picker temporarily but don't close it
-        showAssetPicker = false;
-        showIconEditModal = true;
-    }
-
-    // Handle icon edit modal cancel - re-open asset picker
-    function handleIconEditCancel() {
-        showIconEditModal = false;
-        iconEditFile = null;
-        // Re-open the asset picker so user can try again
-        showAssetPicker = true;
+    function handleImagePickerChange(event: CustomEvent<{url: string}>) {
+        iconUrl = event.detail.url;
+        showImagePicker = false;
     }
 
 
@@ -324,8 +288,9 @@
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="icon-picker-trigger group relative cursor-pointer"
-                 on:click={() => showAssetPicker = true}
-                 title={$_('uploads.selectIcon') || 'Select Icon'}>
+                 on:click={() => showImagePicker = true}
+                 title={$_('uploads.selectIcon') || 'Select Icon'}
+                 data-testid="broker-icon-trigger">
                 <BrokerIcon
                         altText="Icon"
                         iconUrl={iconUrl}
@@ -505,26 +470,16 @@
     {/if}
 </form>
 
-<!-- Image Edit Modal for Broker Icon -->
-<ImageEditModal
-    open={showIconEditModal}
-    file={iconEditFile}
-    preset="broker-icon"
-    on:complete={handleIconUploadComplete}
-    on:cancel={handleIconEditCancel}
-    on:error={(e: CustomEvent<{message: string}>) => console.error('Icon upload error:', e.detail.message)}
-/>
-
-<!-- Asset Picker Modal for Broker Icon -->
-<AssetPickerModal
-    open={showAssetPicker}
+<!-- Image Picker (AssetPicker + ImageEditModal combined) -->
+<ImagePickerWrapper
+    open={showImagePicker}
     title={$_('uploads.selectIcon') || 'Select Icon'}
-    filterImages={true}
+    preset="broker-icon"
     initialUrl={iconUrl}
     circularPreview={true}
-    on:select={handleAssetPickerSelect}
-    on:upload={handleAssetPickerUpload}
-    on:cancel={() => showAssetPicker = false}
+    filterImages={true}
+    on:change={handleImagePickerChange}
+    on:cancel={() => showImagePicker = false}
 />
 
 <!-- Actions (sempre visibili - fuori dal form scrollabile) -->

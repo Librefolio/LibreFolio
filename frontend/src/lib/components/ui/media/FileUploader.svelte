@@ -247,6 +247,7 @@
                                     class="restore-btn"
                                     on:click|stopPropagation={() => restoreFile(index)}
                                     title={$t('common.restore') || 'Restore original'}
+                                    data-testid="file-restore-btn"
                             >
                                 <RefreshCw size={14}/>
                             </button>
@@ -257,6 +258,7 @@
                                     class="edit-btn"
                                     on:click|stopPropagation={() => editImage(file, index)}
                                     title={$t('common.edit') || 'Edit'}
+                                    data-testid="file-edit-btn"
                             >
                                 <Pencil size={14}/>
                             </button>
@@ -266,6 +268,7 @@
                                     class="edit-btn"
                                     on:click|stopPropagation={() => editFile(file, index)}
                                     title={$t('uploads.rename') || 'Rename'}
+                                    data-testid="file-edit-btn"
                             >
                                 <Pencil size={14}/>
                             </button>

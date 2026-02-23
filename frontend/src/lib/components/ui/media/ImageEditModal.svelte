@@ -281,14 +281,15 @@
     onRequestClose={requestClose}
     noTransition={false}
 >
-        <div class="modal-content-inner" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-content-inner" role="dialog" aria-modal="true" aria-labelledby="modal-title" data-testid="image-edit-modal">
             <!-- Header -->
             <div class="modal-header">
                 <h2 id="modal-title" class="modal-title">{modalTitle}</h2>
                 <div class="header-actions">
                     {#if hasChanges}
                         <button type="button" class="header-btn reset" on:click={() => cropper?.resetAll?.()}
-                                title={$_('uploads.resetAll') || 'Reset All'}>
+                                title={$_('uploads.resetAll') || 'Reset All'}
+                                data-testid="image-edit-reset">
                             <RefreshCw size={16} />
                         </button>
                     {/if}
@@ -310,6 +311,7 @@
                             bind:value={editedFileName}
                             placeholder="image"
                             on:input={() => hasChanges = true}
+                            data-testid="image-edit-filename"
                         />
                         <select class="format-select" bind:value={outputFormat}
                                 on:change={() => hasChanges = true}>
@@ -333,7 +335,8 @@
                     <button type="button" class="ellipse-toggle"
                             class:active={showEllipsePreview}
                             on:click={() => showEllipsePreview = !showEllipsePreview}
-                            title={showEllipsePreview ? 'Hide preview' : 'Show preview'}>
+                            title={showEllipsePreview ? 'Hide preview' : 'Show preview'}
+                            data-testid="image-edit-ellipse-toggle">
                         {#if showEllipsePreview}
                             <Eye size={16} />
                         {:else}
@@ -438,11 +441,13 @@
             <!-- Footer -->
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" on:click={requestClose}
-                        disabled={isUploading}>
+                        disabled={isUploading}
+                        data-testid="image-edit-cancel">
                     {$_('common.cancel') || 'Cancel'}
                 </button>
                 <button type="button" class="btn btn-primary" on:click={handleUpload}
-                        disabled={isUploading}>
+                        disabled={isUploading}
+                        data-testid="image-edit-confirm">
                     {#if isUploading}
                         <Loader2 size={16} class="animate-spin" />
                         {$_('common.uploading') || 'Uploading...'}

@@ -204,8 +204,8 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 | 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta | ✅ FATTO (TUTTE 10 modali migrate: FileEditModal, ConfirmModal, BrokerImportFilesModal, PasswordChangeModal, files/+page ×2, BrokerModal, ImageEditModal, AssetPickerModal, DeleteBrokerDialog, CashTransactionModal) |
 | 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta | ✅ FATTO (`utils/upload.ts`) |
 | 3 | **formatBytes() centralizzato** | ~60 righe (7 copie) | Minima | 🟡 Media | ✅ FATTO (`utils/upload.ts` con i18n via `get(_)`) |
-| 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media | 🔲 TODO |
-| 5 | **FileGrid.svelte** estratto | ~80 righe | Media | 🟢 Bassa | 🔲 TODO |
+| 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media | ✅ FATTO (incapsula AssetPickerModal + ImageEditModal, usato in BrokerForm + ProfileTab) |
+| 5 | **FileGrid.svelte** estratto | ~80 righe | Media | 🟢 Bassa | 🔲 TODO (deferred — griglia AssetPicker e files/ abbastanza diverse da non giustificare componente comune ora) |
 | 6 | **DataTable single-select mode** | n/a (new feature) | Media | 🔴 Alta | ✅ FATTO |
 | 7 | **DataTable ImageCell type** | n/a (new feature) | Bassa | 🔴 Alta | ✅ FATTO |
 | 8 | **DataTable in AssetPicker** | ~100 righe | Media | 🔴 Alta | ✅ FATTO (list view usa DataTable single-select, rimosso HTML/CSS custom) |
@@ -262,7 +262,7 @@ Il refactoring **ModalBase.svelte** è completato al 100% — tutte le 10 modali
 2. ✅ ~~Creare `ModalBase.svelte`~~ — FATTO (TUTTE 10 modali migrate)
 3. ✅ ~~Migrare modali rimanenti~~ — FATTO (BrokerModal, ImageEditModal, AssetPickerModal, DeleteBrokerDialog, CashTransactionModal)
 4. ✅ ~~Usare DataTable nel tab Existing di AssetPickerModal~~ — FATTO (single-select, ImageCell, SizeCell)
-5. Creare ImagePickerWrapper.svelte per deduplicare flusso avatar/icon (media priority)
-6. Estrarre FileGrid.svelte per condividere griglia tra files/ e AssetPicker (bassa priority)
-7. Task 5 e 6 possono essere completati come sub-plan dedicato tra Phase 4 e Phase 5
+5. ✅ ~~Creare ImagePickerWrapper.svelte~~ — FATTO (deduplicato flusso avatar/icon, usato in BrokerForm + ProfileTab)
+6. Estrarre FileGrid.svelte per condividere griglia tra files/ e AssetPicker (bassa priority — deferred)
+7. Task 6 può essere completato come sub-plan dedicato tra Phase 4 e Phase 5
 
