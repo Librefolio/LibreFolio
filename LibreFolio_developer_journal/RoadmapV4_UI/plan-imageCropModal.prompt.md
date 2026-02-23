@@ -167,6 +167,12 @@
 - ✅ **FilesTable icon alignment**: `.cell-icon-box` 32×32 centrato, allinea icone SVG con thumbnail immagini
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
+### Refactoring Round 11 ✅ (23 Feb 2026 — BRIM rename + URL fix + analysis)
+- ✅ **BRIM file rename**: aggiunto `FileEditModal` + handler `editFile` in `BrokerImportFilesModal` e nel BRIM FileUploader in `files/+page.svelte`
+- ✅ **URL preview ellisse fix**: forzata `max-height: 250px` sull'immagine con `object-fit: contain`, cerchio ridotto a `min(70%, 160px)` con `aspect-ratio: 1`
+- ✅ **Analisi duplicazione Round 3**: identificati 4 pattern principali risolvibili con ModalBase.svelte (~550 righe), 3 pattern medi secondari
+- ✅ **0 errori, 0 warnings** — svelte-check + build puliti
+
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
 - **Reattività Svelte**: Usare espressioni inline nel template, non funzioni

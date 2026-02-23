@@ -420,6 +420,17 @@
         overflow: hidden;
     }
 
+    /* Force the LazyImage container and img to respect max-height */
+    .url-preview-img-wrapper :global(.lazy-image-container) {
+        max-height: 250px;
+    }
+    .url-preview-img-wrapper :global(img) {
+        max-height: 250px;
+        width: auto;
+        max-width: 100%;
+        object-fit: contain;
+    }
+
     .url-preview-circle-overlay {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
@@ -428,8 +439,8 @@
     /* Circle cutout: shows original image inside, dark overlay outside */
     .url-preview-circle-overlay::before {
         content: '';
-        /* Use the smaller of container width/height to make a perfect inscribed circle */
-        width: min(80%, 180px); height: min(80%, 180px);
+        /* 70% of the smaller dimension ensures the circle fits inside the image */
+        width: min(70%, 160px); aspect-ratio: 1;
         border-radius: 50%;
         box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
         border: 2px solid rgba(255, 255, 255, 0.6);

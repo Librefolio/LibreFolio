@@ -130,9 +130,15 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - **FilesTable thumbnail**: immagini mostrano preview 48x48 invece di icona ✅
     - **FilesTable alignment**: immagini centrate, nomi allineati a sinistra in colonna ✅
     - **Files grid bandwidth**: `?img_preview=240x240` per griglia file ✅
-    - **AssetPicker URL ellipse**: crop 1:1 dal centro con border-radius 50% ✅
+    - **AssetPicker URL ellipse**: full image con box-shadow overlay scuro fuori cerchio ✅
+    - **Backend PreviewCache class**: classe pubblica con `get/put/invalidate`, size-based (50MB from Settings) ✅
+    - **`uploadFile()` utility**: `utils/upload.ts` centralizzata, rimossi 3 duplicati FormData ✅
+    - **`formatBytes()` centralizzato**: in `utils/upload.ts`, rimossi 2 duplicati ✅
+    - **BRIM file rename**: FileEditModal in BrokerImportFilesModal + BRIM uploader in files/ ✅
+    - **DataTable cell-icon-box**: 32×32 wrapper SVG allineato con thumbnail immagini ✅
     - i18n keys aggiunte per tutte le label ✅
     - 42 test E2E pianificati (vedi `plan-imageCropModal.prompt.md`)
+    - Analisi duplicazione in `analysis-code-duplication.md` (3 round, 13 task completati)
     - Vedi `plan-imageCropModal.prompt.md`
 
 ---

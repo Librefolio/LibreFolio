@@ -1,7 +1,7 @@
 # Analisi Duplicazione Codice - Frontend Media Components
 
 **Data**: 23 Febbraio 2026
-**Ultimo Aggiornamento**: 23 Febbraio 2026 (Round 2)
+**Ultimo Aggiornamento**: 23 Febbraio 2026 (Round 3 — post dedup)
 **Analisi su**: `frontend/src/lib/components/ui/media/`, modals correlate, `files/+page.svelte`
 
 ---
@@ -223,18 +223,43 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 - **Preview ovunque**: usare `?img_preview=` per risparmiare banda ✅
 - **Cache backend**: size-based 50MB (parametrico da .env PREVIEW_CACHE_MAX_MB), TTL 1h ✅
 - **svelte:component deprecation**: sostituito con componente dinamico Svelte 5 ✅
-- **FilesTable alignment**: immagini/icone centrate, nomi allineati a sinistra in colonna ✅
-- **AssetPicker URL ellipse**: crop 1:1 dal centro con border-radius, non più box-shadow ✅
+- **FilesTable alignment**: immagini/icone centrate, nomi allineati a sinistra in colonna (cell-icon-box) ✅
+- **AssetPicker URL ellipse**: full image con box-shadow overlay ✅
 - **Backend img_preview >= original**: serve file direttamente senza processamento ✅
+- **BRIM file rename**: aggiunto FileEditModal al BrokerImportFilesModal e al BRIM uploader in files/ ✅
+
+---
+
+## 🔭 Ulteriori Ottimizzazioni Identificate (Round 3)
+
+### Duplicazione ALTA — da affrontare prima di Phase 5
+
+| Pattern | Occorrenze | Note |
+|---------|-----------|------|
+| **Modal backdrop CSS** | 6 componenti (ConfirmModal, BrokerModal, BrokerImportFilesModal, FileEditModal, ImageEditModal, files/+page.svelte) | Stessi stili `.modal-backdrop` + `.modal-content` copiati |
+| **handleKeydown (Escape)** | 8+ componenti | Pattern identico `if (event.key === 'Escape')` |
+| **Backdrop click handler** | 6 componenti | `event.target === event.currentTarget → close()` |
+| **fade/scale transitions** | 6 componenti | `transition:fade={{ duration: 150 }}` + `transition:scale={{ duration: 200, start: 0.95 }}` |
+
+→ Tutto risolvibile con **ModalBase.svelte** (task #1, ~550 righe risparmiate)
+
+### Duplicazione MEDIA — nice to have
+
+| Pattern | Occorrenze | Note |
+|---------|-----------|------|
+| **formatBytes i18n** | 3 (DataTable, DataTableColumnFilter, files/+page) | Usa `$t()` store — serviva funzione che accetta translator come parametro |
+| **Error banner pattern** | 4+ componenti | `{#if error}<div class="error-banner">...` |
+| **Loading spinner** | 4+ componenti | Pattern `{#if loading}<div class="loading">...` |
 
 ---
 
 ## 🏁 Raccomandazione
 
-Il refactoring **non è urgente** data la fase embrionale del progetto, ma diventa importante prima di aggiungere nuove modali (Phase 5-6-7 hanno FX, Asset e Transaction management pages, ognuna con le proprie modali).
+Il prossimo passo di refactoring più impattante è **ModalBase.svelte**, che eliminerebbe ~550 righe di codice duplicato e standardizzerebbe il comportamento di tutte le modali (Escape, backdrop click, transitions, dark mode). Questo va fatto **prima di Phase 5** (FX Management) perché ogni nuova pagina avrà le sue modali.
 
 **Ordine suggerito**:
-1. Creare `ModalBase.svelte` (impatta tutte le modali future)
-2. Creare `uploadFile()` utility (impatta tutti gli upload)
-3. I due punti precedenti possono essere fatti come sub-plan dedicato tra Phase 4 e Phase 5
+1. ✅ ~~Creare `uploadFile()` utility~~ — FATTO in `utils/upload.ts`
+2. Creare `ModalBase.svelte` (impatta tutte le modali future)
+3. Usare DataTable nel tab Existing di AssetPickerModal
+4. Questi possono essere fatti come sub-plan dedicato tra Phase 4 e Phase 5
 
