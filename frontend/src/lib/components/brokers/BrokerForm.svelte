@@ -189,16 +189,6 @@
         showAssetPicker = true;
     }
 
-    // Handle icon file selection (from hidden input when picker triggers upload)
-    function handleIconFileSelect(event: Event) {
-        const input = event.target as HTMLInputElement;
-        if (input.files && input.files[0]) {
-            iconEditFile = input.files[0];
-            showIconEditModal = true;
-            // Reset input to allow selecting same file again
-            input.value = '';
-        }
-    }
 
     function addBalance() {
         // First balance uses user's default currency, subsequent ones find unused
@@ -351,6 +341,13 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400">{$_('brokers.iconUrlHint')}</p>
                 {#if iconUrl}
                     <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={iconUrl}>{iconUrl}</p>
+                    <button
+                        type="button"
+                        class="mt-1 text-xs text-red-600 dark:text-red-400 hover:underline"
+                        on:click={() => iconUrl = ''}
+                    >
+                        {$_('common.remove')}
+                    </button>
                 {/if}
             </div>
         </div>
