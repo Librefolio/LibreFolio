@@ -38,9 +38,11 @@
     let editedBaseName: string = '';
     let fileExtension: string = '';
     let originalBaseName: string = '';  // For restore
+    let initializedForFile: File | null = null;  // Track which file we've initialized for
 
-    // Initialize when file changes
-    $: if (file && open) {
+    // Initialize when file changes (not on every re-render)
+    $: if (file && open && file !== initializedForFile) {
+        initializedForFile = file;
         const parts = file.name.split('.');
         if (parts.length > 1) {
             fileExtension = '.' + parts.pop()!;
@@ -53,6 +55,11 @@
         hasChanges = false;
         showCloseConfirm = false;
         error = null;
+    }
+
+    // Reset tracking when modal closes
+    $: if (!open) {
+        initializedForFile = null;
     }
 
     function restoreOriginal() {
@@ -277,15 +284,15 @@
         height: 32px;
         border-radius: 0.5rem;
         border: none;
-        background: rgba(239, 68, 68, 0.1);
-        color: #ef4444;
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .restore-btn:hover {
-        background: rgba(239, 68, 68, 0.2);
-        color: #dc2626;
+        background: rgba(245, 158, 11, 0.2);
+        color: #d97706;
     }
 
     .modal-title {

@@ -512,7 +512,7 @@
     preset="broker-icon"
     on:complete={handleIconUploadComplete}
     on:cancel={handleIconEditCancel}
-    on:error={(e) => console.error('Icon upload error:', e.detail.message)}
+    on:error={(e: CustomEvent<{message: string}>) => console.error('Icon upload error:', e.detail.message)}
 />
 
 <!-- Asset Picker Modal for Broker Icon -->

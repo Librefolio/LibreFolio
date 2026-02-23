@@ -790,7 +790,7 @@
     preset="avatar"
     on:complete={handleAvatarUploadComplete}
     on:cancel={handleAvatarModalCancel}
-    on:error={(e) => { error = e.detail.message; }}
+    on:error={(e: CustomEvent<{message: string}>) => { error = e.detail.message; }}
 />
 
 <!-- Avatar Asset Picker -->
