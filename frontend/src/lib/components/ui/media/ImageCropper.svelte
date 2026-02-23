@@ -720,7 +720,7 @@
 
 </script>
 
-<div class="image-cropper">
+<div class="image-cropper" data-testid="image-cropper">
     <!-- Crop Area with controls overlay -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -742,28 +742,28 @@
         {#if showZoomSlider || showRotateControls}
             <div class="controls-overlay">
                 {#if showZoomSlider}
-                    <button type="button" class="overlay-btn" on:click={zoomOut} title={$_('uploads.zoomOut') || 'Zoom out'}>
+                    <button type="button" class="overlay-btn" on:click={zoomOut} title={$_('uploads.zoomOut') || 'Zoom out'} data-testid="cropper-zoom-out">
                         <ZoomOut size={16} />
                     </button>
-                    <button type="button" class="overlay-btn" on:click={zoomIn} title={$_('uploads.zoomIn') || 'Zoom in'}>
+                    <button type="button" class="overlay-btn" on:click={zoomIn} title={$_('uploads.zoomIn') || 'Zoom in'} data-testid="cropper-zoom-in">
                         <ZoomIn size={16} />
                     </button>
                 {/if}
 
                 {#if showRotateControls}
-                    <button type="button" class="overlay-btn" on:click={rotateLeft} title="-15°">
+                    <button type="button" class="overlay-btn" on:click={rotateLeft} title="-15°" data-testid="cropper-rotate-left">
                         <RotateCcw size={16} />
                     </button>
-                    <button type="button" class="overlay-btn" on:click={rotateRight} title="+15°">
+                    <button type="button" class="overlay-btn" on:click={rotateRight} title="+15°" data-testid="cropper-rotate-right">
                         <RotateCw size={16} />
                     </button>
 
                     <div class="overlay-separator"></div>
 
-                    <button type="button" class="overlay-btn" class:active={scaleX === -1} on:click={flipH} title={$_('uploads.flipHorizontal') || 'Flip H'}>
+                    <button type="button" class="overlay-btn" class:active={scaleX === -1} on:click={flipH} title={$_('uploads.flipHorizontal') || 'Flip H'} data-testid="cropper-flip-h">
                         <FlipHorizontal size={16} />
                     </button>
-                    <button type="button" class="overlay-btn" class:active={scaleY === -1} on:click={flipV} title={$_('uploads.flipVertical') || 'Flip V'}>
+                    <button type="button" class="overlay-btn" class:active={scaleY === -1} on:click={flipV} title={$_('uploads.flipVertical') || 'Flip V'} data-testid="cropper-flip-v">
                         <FlipVertical size={16} />
                     </button>
                 {/if}

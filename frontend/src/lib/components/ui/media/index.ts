@@ -6,3 +6,4 @@ export {default as ImageUploader} from './ImageUploader.svelte';
 export {default as ImageCropper} from './ImageCropper.svelte';
 export {default as ImageEditModal} from './ImageEditModal.svelte';
 export {default as AssetPickerModal} from './AssetPickerModal.svelte';
+export {default as ImagePickerWrapper} from './ImagePickerWrapper.svelte';

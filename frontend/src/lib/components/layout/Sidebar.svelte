@@ -215,6 +215,7 @@
                 {collapsed ? 'justify-center' : ''}"
             title={collapsed ? $auth.user?.username || $_('settings.userPreferences') : ''}
             on:click={closeSidebar}
+            data-testid="sidebar-user-avatar"
         >
             {#if avatarUrl}
                 <img

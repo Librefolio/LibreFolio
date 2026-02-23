@@ -8,7 +8,7 @@
     import {debug} from '$lib/debug';
     import {AlertCircle, Calendar, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User, Camera} from 'lucide-svelte';
     import PasswordChangeModal from '$lib/components/settings/PasswordChangeModal.svelte';
-    import {ImageEditModal, AssetPickerModal} from '$lib/components/ui/media';
+    import {ImagePickerWrapper} from '$lib/components/ui/media';
     import {onMount} from 'svelte';
 
     // Format date for display
@@ -37,11 +37,8 @@
     let deleting = false;
 
     // Avatar state
-    let showAvatarModal = false;
-    let avatarFile: File | null = null;
     let originalAvatarUrl: string | null = null;
     let editedAvatarUrl: string | null = null;
-    let avatarInputRef: HTMLInputElement | null = null;
     let showAvatarPicker = false;
 
     // Load avatar URL from settings on mount
@@ -189,52 +186,13 @@
         editedAvatarUrl = originalAvatarUrl;
     }
 
-    // Avatar handlers
-    function handleAvatarFileSelect(event: Event) {
-        const input = event.target as HTMLInputElement;
-        if (input.files && input.files[0]) {
-            avatarFile = input.files[0];
-            showAvatarModal = true;
-        }
-        // Reset input value so same file can be selected again
-        input.value = '';
-    }
-
-    async function handleAvatarUploadComplete(event: CustomEvent<{url: string | null; file: File}>) {
-        showAvatarModal = false;
-        avatarFile = null;
-        // Close the asset picker too (it was hidden during upload)
+    // Avatar change handler (from ImagePickerWrapper)
+    async function handleAvatarChange(event: CustomEvent<{url: string}>) {
         showAvatarPicker = false;
-        if (event.detail.url) {
-            editedAvatarUrl = event.detail.url;
-            // Save immediately
-            await saveAvatarField();
-        }
-    }
-
-    function handleAvatarModalCancel() {
-        showAvatarModal = false;
-        avatarFile = null;
-        // Re-open the asset picker so user can try again
-        showAvatarPicker = true;
-    }
-
-    // Asset picker handlers for avatar
-    async function handleAvatarPickerSelect(event: CustomEvent<{url: string}>) {
-        const url = event.detail.url;
-        // Never set '__upload__' as avatar URL
-        if (!url || url === '__upload__') return;
-        showAvatarPicker = false;
-        editedAvatarUrl = url;
+        editedAvatarUrl = event.detail.url;
         await saveAvatarField();
     }
 
-    function handleAvatarPickerUpload(event: CustomEvent<{file: File}>) {
-        // Hide picker temporarily but don't close it
-        showAvatarPicker = false;
-        avatarFile = event.detail.file;
-        showAvatarModal = true;
-    }
 
     async function saveAvatarField() {
         saving = true;
@@ -400,7 +358,8 @@
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"
-                     on:click={() => showAvatarPicker = true}>
+                     on:click={() => showAvatarPicker = true}
+                     data-testid="profile-avatar">
                     <Camera size={20} class="text-white" />
                 </div>
             {/if}
@@ -414,6 +373,7 @@
                     type="button"
                     class="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline"
                     on:click={requestRemoveAvatar}
+                    data-testid="avatar-remove-btn"
                 >
                     {$_('common.remove')}
                 </button>
@@ -783,25 +743,14 @@
     </div>
 {/if}
 
-<!-- Avatar Edit Modal -->
-<ImageEditModal
-    open={showAvatarModal}
-    file={avatarFile}
-    preset="avatar"
-    on:complete={handleAvatarUploadComplete}
-    on:cancel={handleAvatarModalCancel}
-    on:error={(e: CustomEvent<{message: string}>) => { error = e.detail.message; }}
-/>
-
-<!-- Avatar Asset Picker -->
-<AssetPickerModal
+<!-- Avatar Image Picker (AssetPicker + ImageEditModal combined) -->
+<ImagePickerWrapper
     open={showAvatarPicker}
     title={$_('settings.selectAvatar') || 'Select Avatar'}
-    filterImages={true}
+    preset="avatar"
     initialUrl={editedAvatarUrl || ''}
     circularPreview={true}
-    on:select={handleAvatarPickerSelect}
-    on:upload={handleAvatarPickerUpload}
+    filterImages={true}
+    on:change={handleAvatarChange}
     on:cancel={() => showAvatarPicker = false}
 />
-
