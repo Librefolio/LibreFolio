@@ -40,80 +40,87 @@ from backend.app.services.static_uploads import (
 
 logger = structlog.get_logger(__name__)
 
-# In-memory cache for image preview thumbnails
-# Key: (file_id, "WxH"), Value: (bytes, mime_type, timestamp)
-_preview_cache: dict[tuple[str, str], tuple[bytes, str, float]] = {}
-_preview_cache_current_bytes: int = 0
-_PREVIEW_CACHE_TTL = 3600  # 1 hour
-# Max cache size in bytes — configured via Settings (PREVIEW_CACHE_MAX_MB in .env, default 50MB)
-_PREVIEW_CACHE_MAX_BYTES: int = 50 * 1024 * 1024  # Updated at first use from settings
+
+class PreviewCache:
+    """
+    In-memory LRU cache for image preview thumbnails.
+
+    Size-limited (default 50MB, configurable via PREVIEW_CACHE_MAX_MB in .env).
+    TTL-based eviction (1 hour).
+
+    NOTE: This cache is per-process. With multiple uvicorn workers,
+    each worker maintains its own independent cache. For a single-worker
+    deployment (recommended for LibreFolio), this is optimal.
+    """
+
+    TTL = 3600  # 1 hour
+
+    def __init__(self):
+        # Key: (file_id, "WxH"), Value: (bytes, mime_type, timestamp)
+        self.entries: dict[tuple[str, str], tuple[bytes, str, float]] = {}
+        self.current_bytes: int = 0
+        self.max_bytes: int = 50 * 1024 * 1024  # Default 50MB, loaded from settings on first write
+        self.config_loaded: bool = False
+
+    def load_config(self) -> None:
+        """Load max cache size from application settings."""
+        if self.config_loaded:
+            return
+        try:
+            from backend.app.config import get_settings
+            self.max_bytes = get_settings().PREVIEW_CACHE_MAX_MB * 1024 * 1024
+        except Exception:
+            pass  # Keep default
+        self.config_loaded = True
+
+    def get(self, file_id: str, size_key: str) -> tuple[bytes, str] | None:
+        """Get cached preview if still valid."""
+        key = (file_id, size_key)
+        entry = self.entries.get(key)
+        if entry is None:
+            return None
+        image_bytes, mime, ts = entry
+        if time.time() - ts > self.TTL:
+            self.current_bytes -= len(image_bytes)
+            del self.entries[key]
+            return None
+        return image_bytes, mime
+
+    def put(self, file_id: str, size_key: str, image_bytes: bytes, mime: str) -> None:
+        """Store preview in cache, evicting oldest entries if over size limit."""
+        self.load_config()
+        entry_size = len(image_bytes)
+
+        # Don't cache entries larger than 10% of max cache size
+        if entry_size > self.max_bytes * 0.1:
+            return
+
+        # Evict expired entries first
+        now = time.time()
+        expired = [k for k, (_, _, ts) in self.entries.items() if now - ts > self.TTL]
+        for k in expired:
+            self.current_bytes -= len(self.entries[k][0])
+            del self.entries[k]
+
+        # Evict oldest until we have room
+        while self.current_bytes + entry_size > self.max_bytes and self.entries:
+            oldest_key = min(self.entries, key=lambda k: self.entries[k][2])
+            self.current_bytes -= len(self.entries[oldest_key][0])
+            del self.entries[oldest_key]
+
+        self.entries[(file_id, size_key)] = (image_bytes, mime, now)
+        self.current_bytes += entry_size
+
+    def invalidate(self, file_id: str) -> None:
+        """Remove all cached previews for a file (call on delete/update)."""
+        keys_to_remove = [k for k in self.entries if k[0] == file_id]
+        for k in keys_to_remove:
+            self.current_bytes -= len(self.entries[k][0])
+            del self.entries[k]
 
 
-def _ensure_cache_config() -> None:
-    """Lazily load cache max bytes from settings (avoids import at module level)."""
-    global _PREVIEW_CACHE_MAX_BYTES
-    try:
-        from backend.app.config import get_settings
-        _PREVIEW_CACHE_MAX_BYTES = get_settings().PREVIEW_CACHE_MAX_MB * 1024 * 1024
-    except Exception:
-        pass  # Keep default
-
-
-def _get_cached_preview(file_id: str, size_key: str) -> tuple[bytes, str] | None:
-    """Get cached preview if still valid."""
-    global _preview_cache_current_bytes
-    key = (file_id, size_key)
-    entry = _preview_cache.get(key)
-    if entry is None:
-        return None
-    image_bytes, mime, ts = entry
-    if time.time() - ts > _PREVIEW_CACHE_TTL:
-        _preview_cache_current_bytes -= len(image_bytes)
-        del _preview_cache[key]
-        return None
-    return image_bytes, mime
-
-
-_cache_config_loaded = False
-
-
-def _set_cached_preview(file_id: str, size_key: str, image_bytes: bytes, mime: str) -> None:
-    """Store preview in cache, evicting oldest entries if over size limit."""
-    global _preview_cache_current_bytes, _cache_config_loaded
-    if not _cache_config_loaded:
-        _ensure_cache_config()
-        _cache_config_loaded = True
-
-    entry_size = len(image_bytes)
-
-    # Don't cache entries larger than 10% of max cache size
-    if entry_size > _PREVIEW_CACHE_MAX_BYTES * 0.1:
-        return
-
-    # Evict expired entries first
-    now = time.time()
-    expired = [k for k, (_, _, ts) in _preview_cache.items() if now - ts > _PREVIEW_CACHE_TTL]
-    for k in expired:
-        _preview_cache_current_bytes -= len(_preview_cache[k][0])
-        del _preview_cache[k]
-
-    # Evict oldest until we have room
-    while _preview_cache_current_bytes + entry_size > _PREVIEW_CACHE_MAX_BYTES and _preview_cache:
-        oldest_key = min(_preview_cache, key=lambda k: _preview_cache[k][2])
-        _preview_cache_current_bytes -= len(_preview_cache[oldest_key][0])
-        del _preview_cache[oldest_key]
-
-    _preview_cache[(file_id, size_key)] = (image_bytes, mime, now)
-    _preview_cache_current_bytes += entry_size
-
-
-def invalidate_preview_cache(file_id: str) -> None:
-    """Remove all cached previews for a file (call on delete/update)."""
-    global _preview_cache_current_bytes
-    keys_to_remove = [k for k in _preview_cache if k[0] == file_id]
-    for k in keys_to_remove:
-        _preview_cache_current_bytes -= len(_preview_cache[k][0])
-        del _preview_cache[k]
+# Singleton cache instance
+preview_cache = PreviewCache()
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
@@ -258,7 +265,7 @@ async def delete_file(
         raise HTTPException(status_code=500, detail="Failed to delete file")
 
     # Invalidate any cached preview thumbnails
-    invalidate_preview_cache(file_id)
+    preview_cache.invalidate(file_id)
 
     logger.info("File deleted via API", file_id=file_id, user_id=current_user.id)
 
@@ -349,7 +356,7 @@ async def serve_file(
 
         # Check cache first
         size_key = f"{max_width}x{max_height}"
-        cached = _get_cached_preview(file_id, size_key)
+        cached = preview_cache.get(file_id, size_key)
         if cached:
             image_bytes, cached_mime = cached
             from fastapi.responses import StreamingResponse
@@ -390,7 +397,7 @@ async def serve_file(
             image_bytes = output.getvalue()
 
             # Store in cache
-            _set_cached_preview(file_id, size_key, image_bytes, mime_type)
+            preview_cache.put(file_id, size_key, image_bytes, mime_type)
 
             from fastapi.responses import StreamingResponse
 

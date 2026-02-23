@@ -12,6 +12,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
+    import {formatBytes} from '$lib/utils/upload';
     import {X, Link, FolderOpen, Upload, Search, LayoutGrid, List, Check, File as FileIcon} from 'lucide-svelte';
     import LazyImage from './LazyImage.svelte';
     import type {UploadedFile} from '$lib/types';
@@ -166,12 +167,6 @@
     function getPreviewUrl(file: UploadedFile, size: string = '80x80'): string {
         return `${file.url}?img_preview=${size}`;
     }
-
-    function formatBytes(bytes: number): string {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    }
 </script>
 
 <svelte:window on:keydown={open ? handleKeydown : undefined} />
@@ -221,10 +216,9 @@
                         <p class="url-hint">{$_('uploads.urlHint') || 'Enter a remote URL or a local path from Files'}</p>
                         {#if urlInput && urlValid}
                             <div class="url-preview" class:circular={circularPreview}>
-                                <div class="url-preview-img-wrapper" class:square={circularPreview}>
+                                <div class="url-preview-img-wrapper">
                                     <LazyImage src={urlInput} alt="Preview" placeholder="generic"
-                                               width={circularPreview ? "200px" : "100%"}
-                                               height={circularPreview ? "200px" : "auto"} />
+                                               width="100%" height="auto" />
                                     {#if circularPreview}
                                         <div class="url-preview-circle-overlay"></div>
                                     {/if}
@@ -426,29 +420,20 @@
         overflow: hidden;
     }
 
-    .url-preview-img-wrapper.square {
-        width: 200px; height: 200px;
-        border-radius: 50%;
-        margin: 0 auto;
-    }
-
-    /* Force LazyImage inside square wrapper to cover the area */
-    .url-preview-img-wrapper.square :global(img) {
-        width: 200px !important;
-        height: 200px !important;
-        object-fit: cover;
-    }
-
     .url-preview-circle-overlay {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
         pointer-events: none;
     }
+    /* Circle cutout: shows original image inside, dark overlay outside */
     .url-preview-circle-overlay::before {
         content: '';
-        width: 100%; height: 100%;
+        /* Use the smaller of container width/height to make a perfect inscribed circle */
+        width: min(80%, 180px); height: min(80%, 180px);
         border-radius: 50%;
-        border: 2px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+        border: 2px solid rgba(255, 255, 255, 0.6);
+        flex-shrink: 0;
     }
 
     .url-hint {

@@ -827,7 +827,9 @@
                                 {:else if cellContent && typeof cellContent === 'object' && 'type' in cellContent}
                                     {#if cellContent.type === 'icon-text'}
                                         <div class="cell-icon-text">
-                                            <cellContent.icon size={16} class={cellContent.iconClass || ''}/>
+                                            <div class="cell-icon-box">
+                                                <cellContent.icon size={16} class={cellContent.iconClass || ''}/>
+                                            </div>
                                             <span>{cellContent.text}</span>
                                         </div>
                                     {:else if cellContent.type === 'badge'}
@@ -1363,7 +1365,22 @@
 
     .cell-icon-text :global(svg) {
         flex-shrink: 0;
-        min-width: 20px;
+    }
+
+    /* Fixed-size box for icon, matches .cell-image dimensions for column alignment */
+    .cell-icon-box {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        color: #94a3b8;
+    }
+
+    :global(.dark) .cell-icon-box {
+        color: #64748b;
     }
 
     .cell-icon-text span {
