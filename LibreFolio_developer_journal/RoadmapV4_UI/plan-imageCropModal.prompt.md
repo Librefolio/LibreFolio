@@ -2,7 +2,7 @@
 
 **Data**: 18 Febbraio 2026  
 **Ultimo Aggiornamento**: 23 Febbraio 2026  
-**Status**: 🟢 COMPLETATO — Tutte le feature + fix + cleanup + analisi duplicazione + data-testid. 42 test E2E da scrivere.  
+**Status**: 🟢 COMPLETATO — Tutte le feature + fix + cleanup + analisi duplicazione + FileGrid + data-testid + 42 test E2E scritti.  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
 
 ---
@@ -207,6 +207,14 @@
 - ✅ **Grid view mantenuta**: la griglia con LazyImage resta come alternativa
 - ✅ **Rimossi ~40 righe CSS**: `.file-list`, `.list-item`, `.list-thumb`, `.list-info`, `.list-name`, `.list-meta`, `.list-check` eliminati
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
+
+### Refactoring Round 16 ✅ (23 Feb 2026 — FileGrid extraction)
+- ✅ **FileGrid.svelte creato**: componente griglia parametrizzato con mode (browse/select), cardSize (compact/full), showActions, selectedFileId
+- ✅ **Integrato in files/ page**: sostituisce ~120 righe di markup inline + ~100 righe CSS
+- ✅ **Integrato in AssetPickerModal**: sostituisce ~30 righe di markup inline + ~40 righe CSS
+- ✅ **Cleanup files/ page**: rimossi import orfani (Check, Copy, Download, Image, Link2, LazyImage, isImageFile), rimosse funzioni (copyFileLink, isImage, getFileIcon), rimossi state variables (gridSearchQuery, copiedFileId, filteredStaticFiles)
+- ✅ **Analisi duplicazione COMPLETATA**: 6/6 task finiti
+- ✅ **0 errori, 0 warnings** — svelte-check pulito
 
 ### Refactoring Round 15 ✅ (23 Feb 2026 — data-testid + plan update)
 - ✅ **data-testid aggiunti**: 27 attributi su tutti i componenti nuovi (ImageEditModal, ImageCropper, FileEditModal, AssetPickerModal, FileUploader, ProfileTab, BrokerForm, Sidebar)
@@ -1113,7 +1121,7 @@ test.describe('Files Page - Grid View', () => {
 - [x] initialUrl pre-popola campo URL
 - [x] Selezione contenuta nei bounds del canvas
 - [x] 27 data-testid aggiunti ai componenti nuovi (pronti per i 42 test E2E)
-- [ ] 42 test E2E da implementare (pianificati sopra)
+- [x] 42 test E2E implementati in `e2e/image-crop.spec.ts` (7 suite: upload, controls, edge cases, picker, avatar, dark mode, grid)
 
 ---
 

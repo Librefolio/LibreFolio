@@ -13,8 +13,9 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {formatBytes} from '$lib/utils/upload';
-    import {X, Link, FolderOpen, Upload, Search, LayoutGrid, List, Check, File as FileIcon, Image} from 'lucide-svelte';
+    import {X, Link, FolderOpen, Upload, Search, LayoutGrid, List, File as FileIcon} from 'lucide-svelte';
     import LazyImage from './LazyImage.svelte';
+    import FileGrid from '$lib/components/files/FileGrid.svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {DataTable} from '$lib/components/table';
     import type {ColumnDef} from '$lib/components/table';
@@ -316,35 +317,17 @@
                                     : ($_('uploads.noFiles') || 'No files')}
                             </div>
                         {:else if existingViewMode === 'grid'}
-                            <div class="file-grid">
-                                {#each filteredFiles as file}
-                                    <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                    <div class="grid-item" class:selected={selectedFile?.id === file.id}
-                                         on:click={() => selectExistingFile(file)}
-                                         on:dblclick={confirmSelection}>
-                                        <div class="grid-preview">
-                                            {#if isImage(file.mime_type)}
-                                                <LazyImage src={getPreviewUrl(file, '120x120')} alt={file.original_name}
-                                                           placeholder="generic" width="100%" height="80px" />
-                                            {:else}
-                                                <div class="grid-icon">
-                                                    <FileIcon size={24} />
-                                                </div>
-                                            {/if}
-                                            {#if selectedFile?.id === file.id}
-                                                <div class="selected-badge">
-                                                    <Check size={14} />
-                                                </div>
-                                            {/if}
-                                        </div>
-                                        <div class="grid-name" title={file.original_name}>
-                                            {file.original_name}
-                                        </div>
-                                        <div class="grid-meta">{formatBytes(file.size_bytes)}</div>
-                                    </div>
-                                {/each}
-                            </div>
+                            <FileGrid
+                                files={filteredFiles}
+                                mode="select"
+                                cardSize="compact"
+                                showSearch={false}
+                                showActions={false}
+                                selectedFileId={selectedFile?.id || null}
+                                previewSize="120x120"
+                                on:select={(e) => selectExistingFile(e.detail.file)}
+                                on:dblselect={() => confirmSelection()}
+                            />
                         {:else}
                             <!-- List/table view using DataTable -->
                             <div class="list-table-wrapper">
@@ -538,44 +521,7 @@
         padding: 2rem; color: #9ca3af; font-size: 0.875rem;
     }
 
-    /* Grid view */
-    .file-grid {
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-        gap: 0.5rem;
-    }
-    .grid-item {
-        border: 2px solid transparent; border-radius: 0.5rem;
-        overflow: hidden; cursor: pointer; transition: all 0.15s;
-        background: #f9fafb;
-    }
-    .grid-item:hover { border-color: #d1d5db; }
-    .grid-item.selected { border-color: #1a4031; background: #f0fdf4; }
-    :global(.dark) .grid-item { background: #1a2332; }
-    :global(.dark) .grid-item:hover { border-color: #4b5563; }
-    :global(.dark) .grid-item.selected { border-color: #10b981; background: rgba(16, 185, 129, 0.1); }
-
-    .grid-preview {
-        position: relative; height: 80px;
-        display: flex; align-items: center; justify-content: center;
-        background: #f3f4f6; overflow: hidden;
-    }
-    :global(.dark) .grid-preview { background: #374151; }
-    .grid-icon { color: #9ca3af; }
-    .selected-badge {
-        position: absolute; top: 0.25rem; right: 0.25rem;
-        width: 20px; height: 20px; border-radius: 50%;
-        background: #1a4031; color: white;
-        display: flex; align-items: center; justify-content: center;
-    }
-    :global(.dark) .selected-badge { background: #10b981; }
-    .grid-name {
-        padding: 0.25rem 0.375rem 0; font-size: 0.6875rem; font-weight: 500;
-        color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    :global(.dark) .grid-name { color: #e5e7eb; }
-    .grid-meta {
-        padding: 0 0.375rem 0.25rem; font-size: 0.5625rem; color: #9ca3af;
-    }
+    /* Grid view — now handled by FileGrid component */
 
     /* List view (DataTable) */
     .list-table-wrapper {
