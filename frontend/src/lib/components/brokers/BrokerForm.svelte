@@ -159,19 +159,34 @@
         }
         showIconEditModal = false;
         iconEditFile = null;
+        // Close the asset picker too (it was hidden during upload)
+        showAssetPicker = false;
     }
 
     // Handle asset picker selection
     function handleAssetPickerSelect(event: CustomEvent<{url: string}>) {
-        iconUrl = event.detail.url;
+        const url = event.detail.url;
+        // Never set '__upload__' as icon URL
+        if (url && url !== '__upload__') {
+            iconUrl = url;
+        }
         showAssetPicker = false;
     }
 
     // Handle asset picker upload (user chose to upload a new file)
     function handleAssetPickerUpload(event: CustomEvent<{file: File}>) {
         iconEditFile = event.detail.file;
+        // Hide picker temporarily but don't close it
         showAssetPicker = false;
         showIconEditModal = true;
+    }
+
+    // Handle icon edit modal cancel - re-open asset picker
+    function handleIconEditCancel() {
+        showIconEditModal = false;
+        iconEditFile = null;
+        // Re-open the asset picker so user can try again
+        showAssetPicker = true;
     }
 
     // Handle icon file selection (from hidden input when picker triggers upload)
@@ -309,38 +324,36 @@
         />
     </div>
 
-    <!-- Icon URL -->
+    <!-- Icon -->
     <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="broker-icon">
+        <span class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {$_('brokers.iconUrl')}
-        </label>
+        </span>
         <div class="flex items-center gap-3">
-            <input
-                    bind:value={iconUrl}
-                    class="flex-1 px-3 py-2 border dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
-                    id="broker-icon"
-                    placeholder={$_('brokers.iconUrlPlaceholder')}
-                    type="url"
-            />
-            <!-- Upload button for icon (opens AssetPickerModal) -->
-            <button
-                type="button"
-                class="flex items-center justify-center w-10 h-10 border dark:border-slate-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-                title={$_('uploads.selectAsset') || 'Select Image'}
-                on:click={() => showAssetPicker = true}
-            >
-                <Upload size={18} class="text-gray-500 dark:text-gray-400" />
-            </button>
-            <!-- Icon preview using BrokerIcon component -->
-            <BrokerIcon
-                    altText="Preview"
-                    iconUrl={iconUrl}
-                    pluginCode={defaultImportPlugin}
-                    portalUrl={portalUrl}
-                    size="md"
-            />
+            <!-- Clickable Icon Preview - opens AssetPickerModal -->
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="icon-picker-trigger group relative cursor-pointer"
+                 on:click={() => showAssetPicker = true}
+                 title={$_('uploads.selectIcon') || 'Select Icon'}>
+                <BrokerIcon
+                        altText="Icon"
+                        iconUrl={iconUrl}
+                        pluginCode={defaultImportPlugin}
+                        portalUrl={portalUrl}
+                        size="lg"
+                />
+                <div class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <Upload size={16} class="text-white" />
+                </div>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-xs text-gray-500 dark:text-gray-400">{$_('brokers.iconUrlHint')}</p>
+                {#if iconUrl}
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={iconUrl}>{iconUrl}</p>
+                {/if}
+            </div>
         </div>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('brokers.iconUrlHint')}</p>
     </div>
 
     <!-- Account Status: Opened At + Is Active Toggle (same row) -->
@@ -501,7 +514,7 @@
     file={iconEditFile}
     preset="broker-icon"
     on:complete={handleIconUploadComplete}
-    on:cancel={() => { showIconEditModal = false; iconEditFile = null; }}
+    on:cancel={handleIconEditCancel}
     on:error={(e) => console.error('Icon upload error:', e.detail.message)}
 />
 
@@ -510,6 +523,8 @@
     open={showAssetPicker}
     title={$_('uploads.selectIcon') || 'Select Icon'}
     filterImages={true}
+    initialUrl={iconUrl}
+    circularPreview={true}
     on:select={handleAssetPickerSelect}
     on:upload={handleAssetPickerUpload}
     on:cancel={() => showAssetPicker = false}

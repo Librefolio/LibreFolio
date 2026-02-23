@@ -66,7 +66,12 @@
         // Cleanup event listeners
         document.removeEventListener('mousemove', handleMiddleMouseMove);
         document.removeEventListener('mouseup', handleMiddleMouseUp);
+        document.removeEventListener('pointerup', stopActiveClamping);
+        document.removeEventListener('pointercancel', stopActiveClamping);
     });
+
+    // Placeholder for active clamping cleanup (set in initCropper)
+    let stopActiveClamping: () => void = () => {};
 
     // Middle mouse button handlers for panning
     function handleMiddleMouseDown(event: MouseEvent) {
@@ -223,6 +228,8 @@
 
             // Function to clamp selection within canvas bounds (uses atomic $change)
             let clampDepth = 0;
+            let clampRAF: number | null = null;
+
             const clampSelectionToBounds = () => {
                 if (isClamping || clampDepth > 2) return; // Prevent infinite loop + safety valve
                 clampDepth++;
@@ -233,27 +240,31 @@
                     return;
                 }
 
+                // Use canvas bounds as the constraint area
+                const maxW = canvasRect.width;
+                const maxH = canvasRect.height;
+
                 let x = cropperSelection.x;
                 let y = cropperSelection.y;
                 let w = cropperSelection.width;
                 let h = cropperSelection.height;
 
                 // Clamp dimensions to canvas size
-                if (w > canvasRect.width) w = canvasRect.width;
-                if (h > canvasRect.height) h = canvasRect.height;
+                if (w > maxW) w = maxW;
+                if (h > maxH) h = maxH;
 
-                // Clamp position
+                // Clamp position - ensure selection stays entirely within canvas
                 if (x < 0) x = 0;
                 if (y < 0) y = 0;
-                if (x + w > canvasRect.width) x = Math.max(0, canvasRect.width - w);
-                if (y + h > canvasRect.height) y = Math.max(0, canvasRect.height - h);
+                if (x + w > maxW) x = Math.max(0, maxW - w);
+                if (y + h > maxH) y = Math.max(0, maxH - h);
 
-                // Check if anything actually changed
+                // Check if anything actually changed (tight threshold)
                 const needsUpdate =
-                    Math.abs(x - cropperSelection.x) > 0.5 ||
-                    Math.abs(y - cropperSelection.y) > 0.5 ||
-                    Math.abs(w - cropperSelection.width) > 0.5 ||
-                    Math.abs(h - cropperSelection.height) > 0.5;
+                    Math.abs(x - cropperSelection.x) > 0.1 ||
+                    Math.abs(y - cropperSelection.y) > 0.1 ||
+                    Math.abs(w - cropperSelection.width) > 0.1 ||
+                    Math.abs(h - cropperSelection.height) > 0.1;
 
                 if (needsUpdate) {
                     // Use atomic $change to avoid triggering multiple change events
@@ -268,6 +279,34 @@
                     clampDepth--;
                 }
             };
+
+            // Active clamping during pointer interaction (prevents visible overflow)
+            let isPointerActive = false;
+            const startActiveClamp = () => {
+                isPointerActive = true;
+                const loop = () => {
+                    if (!isPointerActive) return;
+                    clampSelectionToBounds();
+                    clampRAF = requestAnimationFrame(loop);
+                };
+                loop();
+            };
+            const stopActiveClamp = () => {
+                isPointerActive = false;
+                if (clampRAF) {
+                    cancelAnimationFrame(clampRAF);
+                    clampRAF = null;
+                }
+                // One final clamp
+                clampSelectionToBounds();
+            };
+
+            // Listen for pointer events on selection to actively clamp during drag
+            cropperSelection.addEventListener('pointerdown', startActiveClamp);
+            document.addEventListener('pointerup', stopActiveClamp);
+            document.addEventListener('pointercancel', stopActiveClamp);
+            // Save reference for cleanup
+            stopActiveClamping = stopActiveClamp;
 
             // Function to update selection info
             const updateSelectionInfo = () => {
@@ -311,8 +350,8 @@
 
     /**
      * Unified zoom system:
-     * - Zoom IN: first enlarge selection, then zoom image when ANY axis reaches 90%
-     * - Zoom OUT: first shrink selection, then dezoom image when ANY axis reaches 50%
+     * - Zoom IN (+): first SHRINK selection (crop tighter), then zoom image when selection is at minimum
+     * - Zoom OUT (-): first ENLARGE selection (crop wider), then dezoom image when selection is at maximum
      */
     function zoomIn() {
         const sel = cropper?.getCropperSelection();
@@ -332,13 +371,13 @@
         const coverageW = sel.width / maxW;
         const coverageH = sel.height / maxH;
 
-        // If ANY axis is at max coverage, zoom the image
-        if (coverageW >= MAX_SELECTION_COVERAGE || coverageH >= MAX_SELECTION_COVERAGE) {
+        // If ANY axis is at min coverage, zoom the image (enlarge background)
+        if (coverageW <= MIN_SELECTION_COVERAGE || coverageH <= MIN_SELECTION_COVERAGE) {
             img.$zoom(0.1);
             currentZoom += 0.1;
         } else {
-            // Enlarge selection by 10%
-            scaleSelection(1.1);
+            // Shrink selection by 10% (crop tighter)
+            scaleSelection(0.9);
         }
     }
 
@@ -360,13 +399,13 @@
         const coverageW = sel.width / maxW;
         const coverageH = sel.height / maxH;
 
-        // If ANY axis is at min coverage, dezoom the image
-        if (coverageW <= MIN_SELECTION_COVERAGE || coverageH <= MIN_SELECTION_COVERAGE) {
+        // If ANY axis is at max coverage, dezoom the image (shrink background)
+        if (coverageW >= MAX_SELECTION_COVERAGE || coverageH >= MAX_SELECTION_COVERAGE) {
             img.$zoom(-0.1);
             currentZoom -= 0.1;
         } else {
-            // Shrink selection by 10%
-            scaleSelection(0.9);
+            // Enlarge selection by 10% (crop wider)
+            scaleSelection(1.1);
         }
     }
 
@@ -577,11 +616,14 @@
                 const imgH = imgRect.height;
 
                 if (isNaN(currentAspect) || currentAspect === 0) {
-                    // Free aspect - selection covers full image
-                    sel.x = imgX;
-                    sel.y = imgY;
-                    sel.width = imgW;
-                    sel.height = imgH;
+                    // Free aspect - selection covers 95% of image (slight margin visible)
+                    const coverage = 0.95;
+                    const newW = imgW * coverage;
+                    const newH = imgH * coverage;
+                    sel.x = imgX + (imgW - newW) / 2;
+                    sel.y = imgY + (imgH - newH) / 2;
+                    sel.width = newW;
+                    sel.height = newH;
                 } else {
                     // Fixed aspect - center on image with 80% coverage
                     const coverage = 0.8;
@@ -790,6 +832,8 @@
     .crop-wrapper {
         position: relative;
         width: 100%;
+        overflow: hidden;
+        border-radius: 0.5rem;
     }
 
     /* Controls overlay - positioned on right side of image */

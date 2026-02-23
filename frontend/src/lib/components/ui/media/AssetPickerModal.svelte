@@ -21,6 +21,10 @@
     export let title: string = '';
     /** Filter to only show images in the existing tab */
     export let filterImages: boolean = true;
+    /** Pre-populate URL input with existing value */
+    export let initialUrl: string = '';
+    /** Show circular preview overlay (for avatars/icons) */
+    export let circularPreview: boolean = false;
 
     const dispatch = createEventDispatcher<{
         select: {url: string};
@@ -43,6 +47,7 @@
 
     // Upload state
     let uploadInput: HTMLInputElement;
+    let lastTabBeforeUpload: TabType = 'existing';
 
     // Computed
     $: filteredFiles = searchQuery
@@ -70,6 +75,15 @@
     $: if (open) {
         selectedFile = null;
         searchQuery = '';
+        // Set URL input and tab based on initialUrl
+        urlInput = initialUrl || '';
+        if (initialUrl) {
+            // Has existing URL → go to URL tab
+            activeTab = 'url';
+        } else {
+            // No existing URL → go to existing files tab
+            activeTab = 'existing';
+        }
     }
 
     async function loadExistingFiles() {
@@ -114,14 +128,12 @@
         const file = input.files[0];
         input.value = ''; // Reset input
 
-        // Dispatch a special event so the parent can open ImageEditModal
-        dispatch('select', {url: '__upload__'});
-        // Actually, we need a different approach: dispatch upload event with the file
-        // The parent component will handle opening ImageEditModal
-        close();
+        // Remember which tab was active before upload
+        lastTabBeforeUpload = activeTab;
 
-        // We use a custom event approach - dispatch with file attached
-        // Parent will check if url === '__upload__' and use the file
+        // Dispatch upload event with the file - parent handles ImageEditModal
+        // Do NOT dispatch 'select' with '__upload__' - that contaminates the URL
+        // Do NOT close the picker - parent will hide it temporarily
         (dispatch as any)('upload', {file});
     }
 
@@ -193,10 +205,16 @@
                         <label class="url-label" for="asset-url-input">{$_('uploads.imageUrl') || 'Image URL'}</label>
                         <input type="url" id="asset-url-input" class="url-input" bind:value={urlInput}
                                placeholder="https://example.com/image.png" />
+                        <p class="url-hint">{$_('uploads.urlHint') || 'Enter a remote URL or a local path from Files'}</p>
                         {#if urlInput && urlValid}
-                            <div class="url-preview">
-                                <LazyImage src={urlInput} alt="Preview" placeholder="generic"
-                                           width="100%" height="200px" />
+                            <div class="url-preview" class:circular={circularPreview}>
+                                <div class="url-preview-img-wrapper">
+                                    <LazyImage src={urlInput} alt="Preview" placeholder="generic"
+                                               width="100%" height="auto" />
+                                    {#if circularPreview}
+                                        <div class="url-preview-circle-overlay"></div>
+                                    {/if}
+                                </div>
                             </div>
                         {/if}
                     </div>
@@ -383,9 +401,33 @@
     :global(.dark) .url-input:focus { border-color: #10b981; }
     .url-preview {
         border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden;
-        max-height: 200px;
+        max-height: 250px; display: flex; align-items: center; justify-content: center;
+        background: #f9fafb;
     }
-    :global(.dark) .url-preview { border-color: #374151; }
+    :global(.dark) .url-preview { border-color: #374151; background: #1a2332; }
+
+    .url-preview-img-wrapper {
+        position: relative; width: 100%; max-height: 250px;
+        display: flex; align-items: center; justify-content: center;
+        overflow: hidden;
+    }
+
+    .url-preview-circle-overlay {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .url-preview-circle-overlay::before {
+        content: '';
+        width: min(80%, 200px); height: min(80%, 200px);
+        border-radius: 50%;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+        border: 2px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .url-hint {
+        font-size: 0.6875rem; color: #9ca3af; margin-top: 0.25rem; font-style: italic;
+    }
+    :global(.dark) .url-hint { color: #6b7280; }
 
     /* Existing tab */
     .existing-section { display: flex; flex-direction: column; gap: 0.5rem; }

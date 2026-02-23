@@ -495,6 +495,7 @@
     "uploadNew": "Subir",
     "imageUrl": "URL de la Imagen",
     "useSelected": "Usar Seleccionado",
-    "selectIcon": "Seleccionar Icono"
+    "selectIcon": "Seleccionar Icono",
+    "urlHint": "Introduce una URL remota o una ruta local desde Archivos"
   }
 }

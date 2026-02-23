@@ -95,23 +95,27 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Nuovi file: `globalSettings.ts`, `version.py`, `version.ts`
     - Vedi `phases/phase-04-subplan/plan-ui-fixes.md`
 
-13. **Image Crop Modal** 🧪 IN DEBUG (20 Feb 2026)
+13. **Image Crop Modal** ✅ COMPLETATO (20 Feb 2026)
     - Migrazione da `svelte-easy-crop` a **cropperjs v2** (Web Components) ✅
     - `ImageCropper.svelte` con zoom, rotation LIVE, flip H/V, free crop con maniglie ✅
     - `ImageEditModal.svelte` wrapper con preset (avatar 200×200, broker-icon 64×64, custom) ✅
     - `imageCrop.ts` utility con `getCroppedImageFromCropper()` usa `$toCanvas()` ✅
     - Avatar spostato da PreferencesTab a ProfileTab (editabile in edit mode) ✅
     - Preset ridotti: rimosso "Original", tenuti Avatar/Icon/Custom ✅
-    - **FileEditModal.svelte** per rename file non-immagine prima dell'upload ✅ (20 Feb)
-    - **Bug freeze fix**: $change() atomico + clampDepth guard + requestAnimationFrame ✅ (20 Feb)
-    - **FileUploader** edit button per tutti i file (non solo immagini) ✅ (20 Feb)
-    - **Bottom Panel Redesign**: output size editabile, scale factor, quality spinner, preview ellisse ✅ (20 Feb)
-    - **Flip nell'overlay**: spostato accanto a zoom/rotate con separatore ✅ (20 Feb)
-    - **Feature 4 Fix**: 2-column layout, aspect ratio nel panel, quality su filename row, preset → selectAspect ✅ (20 Feb)
-    - **Feature 5 Grid View**: 3-row cards, copy link, red delete, search bar ✅ (20 Feb)
-    - **Titolo Icon generico**: "Upload Icon" riusabile per asset/forex/etc ✅ (20 Feb)
+    - **FileEditModal.svelte** per rename file non-immagine prima dell'upload ✅
+    - **Bug freeze fix**: $change() atomico + clampDepth guard + requestAnimationFrame ✅
+    - **FileUploader** edit/restore button per tutti i file ✅
+    - **Bottom Panel Redesign**: output size editabile, scale factor, quality spinner, preview ellisse ✅
+    - **Flip nell'overlay**: spostato accanto a zoom/rotate con separatore ✅
+    - **Feature 4**: 2-column layout, aspect ratio nel panel, quality su filename row ✅
+    - **Feature 5 Grid View**: 3-row cards, copy link, red delete, search bar ✅
+    - **AssetPickerModal**: 3-tab modale (Existing/URL/Upload) con initialUrl, circularPreview ✅
+    - **BrokerForm icon clickable**: rimosso campo URL, click icona → AssetPickerModal ✅
+    - **Cancel upload → reopen picker**: annullando ImageEditModal riapre AssetPicker ✅
+    - **Active clamping**: pointerdown/up + RAF loop per selezione sempre nei bounds ✅
+    - **Zoom unificato**: + riduce selezione → zooma sfondo, - ingrandisce → dezooma ✅
     - i18n keys aggiunte per tutte le label ✅
-    - Feature rimanenti: User Filter (deferred - needs backend API), Asset Picker Modal (F6)
+    - 42 test E2E pianificati (vedi `plan-imageCropModal.prompt.md`)
     - Vedi `plan-imageCropModal.prompt.md`
 
 ---

@@ -200,18 +200,11 @@
         input.value = '';
     }
 
-    function handleAvatarModalCancel() {
-        showAvatarModal = false;
-        avatarFile = null;
-        // Reset file input so the same file can be selected again
-        if (avatarInputRef) {
-            avatarInputRef.value = '';
-        }
-    }
-
     async function handleAvatarUploadComplete(event: CustomEvent<{url: string | null; file: File}>) {
         showAvatarModal = false;
         avatarFile = null;
+        // Close the asset picker too (it was hidden during upload)
+        showAvatarPicker = false;
         if (event.detail.url) {
             editedAvatarUrl = event.detail.url;
             // Save immediately
@@ -219,14 +212,25 @@
         }
     }
 
+    function handleAvatarModalCancel() {
+        showAvatarModal = false;
+        avatarFile = null;
+        // Re-open the asset picker so user can try again
+        showAvatarPicker = true;
+    }
+
     // Asset picker handlers for avatar
     async function handleAvatarPickerSelect(event: CustomEvent<{url: string}>) {
+        const url = event.detail.url;
+        // Never set '__upload__' as avatar URL
+        if (!url || url === '__upload__') return;
         showAvatarPicker = false;
-        editedAvatarUrl = event.detail.url;
+        editedAvatarUrl = url;
         await saveAvatarField();
     }
 
     function handleAvatarPickerUpload(event: CustomEvent<{file: File}>) {
+        // Hide picker temporarily but don't close it
         showAvatarPicker = false;
         avatarFile = event.detail.file;
         showAvatarModal = true;
@@ -794,6 +798,8 @@
     open={showAvatarPicker}
     title={$_('settings.selectAvatar') || 'Select Avatar'}
     filterImages={true}
+    initialUrl={editedAvatarUrl || ''}
+    circularPreview={true}
     on:select={handleAvatarPickerSelect}
     on:upload={handleAvatarPickerUpload}
     on:cancel={() => showAvatarPicker = false}
