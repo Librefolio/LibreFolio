@@ -396,8 +396,10 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 **Da completare**:
 
-- 📋 42 test E2E da implementare (pianificati in `plan-imageCropModal.prompt.md`)
+- ✅ 42 test E2E implementati in `e2e/image-crop.spec.ts`
 - ✅ data-testid aggiunti a tutti i componenti nuovi (27 attributi)
+- ✅ FileGrid.svelte estratto e condiviso tra files/ e AssetPicker
+- ✅ Analisi duplicazione completata (6/6 task)
 
 ### Step 4.7: MkDocs Dark Mode (30 min) 🔲
 
