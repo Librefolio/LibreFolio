@@ -55,6 +55,7 @@ export type {
     SizeCell,
     LinkCell,
     CustomCell,
+    ImageCell,
     // Column definition
     ColumnDef,
     ColumnType,

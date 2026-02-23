@@ -609,16 +609,11 @@
                 const imgH = imgRect.height;
 
                 if (isNaN(currentAspect) || currentAspect === 0) {
-                    // Free aspect: selection EXACTLY on image, then dezoom image for visible border
+                    // Free aspect: selection EXACTLY on image, no extra margin
                     sel.x = imgX;
                     sel.y = imgY;
                     sel.width = imgW;
                     sel.height = imgH;
-
-                    // Dezoom image slightly so the border/transparency is visible around it
-                    setTimeout(() => {
-                        img.$zoom(-0.05); // 5% dezoom
-                    }, 50);
                 } else {
                     // Fixed aspect: max size that fits in image, centered
                     let newW, newH;

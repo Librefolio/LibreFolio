@@ -221,9 +221,10 @@
                         <p class="url-hint">{$_('uploads.urlHint') || 'Enter a remote URL or a local path from Files'}</p>
                         {#if urlInput && urlValid}
                             <div class="url-preview" class:circular={circularPreview}>
-                                <div class="url-preview-img-wrapper">
+                                <div class="url-preview-img-wrapper" class:square={circularPreview}>
                                     <LazyImage src={urlInput} alt="Preview" placeholder="generic"
-                                               width="100%" height="auto" />
+                                               width={circularPreview ? "200px" : "100%"}
+                                               height={circularPreview ? "200px" : "auto"} />
                                     {#if circularPreview}
                                         <div class="url-preview-circle-overlay"></div>
                                     {/if}
@@ -425,15 +426,28 @@
         overflow: hidden;
     }
 
+    .url-preview-img-wrapper.square {
+        width: 200px; height: 200px;
+        border-radius: 50%;
+        margin: 0 auto;
+    }
+
+    /* Force LazyImage inside square wrapper to cover the area */
+    .url-preview-img-wrapper.square :global(img) {
+        width: 200px !important;
+        height: 200px !important;
+        object-fit: cover;
+    }
+
     .url-preview-circle-overlay {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
+        pointer-events: none;
     }
     .url-preview-circle-overlay::before {
         content: '';
-        width: min(80%, 200px); height: min(80%, 200px);
+        width: 100%; height: 100%;
         border-radius: 50%;
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
         border: 2px solid rgba(255, 255, 255, 0.5);
     }
 
