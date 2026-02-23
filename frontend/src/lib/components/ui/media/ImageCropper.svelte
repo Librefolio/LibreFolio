@@ -9,7 +9,7 @@
     import Cropper from 'cropperjs';
     // Note: cropperjs v2 uses Web Components, CSS is built-in
     import {_} from '$lib/i18n';
-    import {ZoomIn, ZoomOut, RotateCcw, RotateCw, FlipHorizontal, FlipVertical, RefreshCw} from 'lucide-svelte';
+    import {ZoomIn, ZoomOut, RotateCcw, RotateCw, FlipHorizontal, FlipVertical} from 'lucide-svelte';
 
     // Props
     export let imageSrc: string;
@@ -23,6 +23,7 @@
 
     // Internal state
     let containerElement: HTMLDivElement;
+    let cropWrapperElement: HTMLDivElement;
     let cropper: Cropper | null = null;
     let currentAspect = aspectRatio;
     let currentZoom = 1;
@@ -57,13 +58,20 @@
     let lastMouseY = 0;
 
     onMount(() => {
-        // Initial setup handled by reactive block
+        // Register wheel listener with passive: false to allow preventDefault()
+        // This avoids Chrome's "Added non-passive event listener to scroll-blocking 'wheel' event" warning
+        if (cropWrapperElement) {
+            cropWrapperElement.addEventListener('wheel', handleWheel, { passive: false });
+        }
     });
 
     onDestroy(() => {
         cropper?.destroy();
         cropper = null;
         // Cleanup event listeners
+        if (cropWrapperElement) {
+            cropWrapperElement.removeEventListener('wheel', handleWheel);
+        }
         document.removeEventListener('mousemove', handleMiddleMouseMove);
         document.removeEventListener('mouseup', handleMiddleMouseUp);
         document.removeEventListener('pointerup', stopActiveClamping);
@@ -270,13 +278,17 @@
                     // Use atomic $change to avoid triggering multiple change events
                     isClamping = true;
                     cropperSelection.$change(x, y, w, h);
-                    // Release guard after the frame settles
+                    // Release guard after the frame settles, then update overlay
                     requestAnimationFrame(() => {
                         isClamping = false;
                         clampDepth = 0;
+                        // Update ellipse overlay after clamping
+                        updateEllipseOverlay();
                     });
                 } else {
                     clampDepth--;
+                    // Still update ellipse overlay to stay in sync
+                    updateEllipseOverlay();
                 }
             };
 
@@ -480,20 +492,6 @@
         cropHeight = Math.round(newHeight);
     }
 
-    function resetZoom() {
-        const img = cropper?.getCropperImage();
-        if (img) {
-            img.$center('contain');
-            currentZoom = 1;
-        }
-        // Also reset selection to 80% coverage
-        setTimeout(() => {
-            const sel = cropper?.getCropperSelection();
-            if (sel) {
-                sel.$center();
-            }
-        }, 50);
-    }
 
     function rotateLeft() {
         rotateImage(-15);
@@ -564,11 +562,6 @@
         if (currentRotation < -180) currentRotation += 360;
     }
 
-    function resetRotation() {
-        // Reset by re-initializing (v2 doesn't have rotateTo)
-        currentRotation = 0;
-        forceReinit();
-    }
 
     function flipH() {
         const img = cropper?.getCropperImage();
@@ -616,26 +609,26 @@
                 const imgH = imgRect.height;
 
                 if (isNaN(currentAspect) || currentAspect === 0) {
-                    // Free aspect - selection covers 95% of image (slight margin visible)
-                    const coverage = 0.95;
-                    const newW = imgW * coverage;
-                    const newH = imgH * coverage;
-                    sel.x = imgX + (imgW - newW) / 2;
-                    sel.y = imgY + (imgH - newH) / 2;
-                    sel.width = newW;
-                    sel.height = newH;
+                    // Free aspect: selection EXACTLY on image, then dezoom image for visible border
+                    sel.x = imgX;
+                    sel.y = imgY;
+                    sel.width = imgW;
+                    sel.height = imgH;
+
+                    // Dezoom image slightly so the border/transparency is visible around it
+                    setTimeout(() => {
+                        img.$zoom(-0.05); // 5% dezoom
+                    }, 50);
                 } else {
-                    // Fixed aspect - center on image with 80% coverage
-                    const coverage = 0.8;
-                    // Calculate max size that fits in image with aspect ratio
+                    // Fixed aspect: max size that fits in image, centered
                     let newW, newH;
                     if (imgW / imgH > currentAspect) {
                         // Image wider than aspect - height limited
-                        newH = imgH * coverage;
+                        newH = imgH;
                         newW = newH * currentAspect;
                     } else {
                         // Image taller than aspect - width limited
-                        newW = imgW * coverage;
+                        newW = imgW;
                         newH = newW / currentAspect;
                     }
                     sel.x = imgX + (imgW - newW) / 2;
@@ -707,46 +700,10 @@
         return cropper;
     }
 
-    export async function getCroppedCanvas(options?: {width?: number; height?: number}): Promise<HTMLCanvasElement | null> {
-        const sel = cropper?.getCropperSelection();
-        if (!sel) return null;
-        try {
-            return await sel.$toCanvas(options);
-        } catch {
-            return null;
-        }
-    }
-
-    export function getSelection(): {x: number; y: number; width: number; height: number} | null {
-        const sel = cropper?.getCropperSelection();
-        if (!sel) return null;
-        return {
-            x: sel.x,
-            y: sel.y,
-            width: sel.width,
-            height: sel.height
-        };
-    }
-
     export function getImageDimensions(): {width: number; height: number} {
         return {width: imageWidth, height: imageHeight};
     }
 
-    export function getCropDimensions(): {width: number; height: number} {
-        return {width: cropWidth, height: cropHeight};
-    }
-
-    export function getTransform(): {rotation: number; scaleX: number; scaleY: number} {
-        return {
-            rotation: currentRotation,
-            scaleX,
-            scaleY
-        };
-    }
-
-    export function getCurrentAspect(): number {
-        return currentAspect;
-    }
 
     // Preview ellipse overlay
     export let showPreviewEllipse: boolean = false;
@@ -773,8 +730,8 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="crop-wrapper"
+        bind:this={cropWrapperElement}
         on:mousedown={handleMiddleMouseDown}
-        on:wheel={handleWheel}
         on:contextmenu|preventDefault
     >
         <div class="crop-container" bind:this={containerElement}>

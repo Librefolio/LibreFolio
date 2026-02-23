@@ -1,8 +1,8 @@
 # Piano Aggiornato: Image Crop Modal System
 
 **Data**: 18 Febbraio 2026  
-**Ultimo Aggiornamento**: 20 Febbraio 2026 (ore 19:00)  
-**Status**: 🟢 COMPLETATO — Tutte le feature implementate, test E2E da scrivere  
+**Ultimo Aggiornamento**: 23 Febbraio 2026  
+**Status**: 🟢 COMPLETATO — Tutte le feature + fix + cleanup + analisi duplicazione. Test E2E da scrivere.  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
 
 ---
@@ -120,6 +120,19 @@
 - ✅ **Threshold clamping stretto**: 0.1px di threshold per prevenire micro-leak
 - ✅ **Rimozione duplicato**: rimossa vecchia `handleAvatarModalCancel` duplicata in ProfileTab
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
+
+### UI Polish Round 7 ✅ (23 Feb 2026)
+- ✅ **Fix URL validation**: AssetPickerModal accetta URL relativi, path locali, e qualsiasi input non-vuoto
+- ✅ **Pulsante "Use Selected" funzionante**: ora si abilita correttamente per URL e path locali
+- ✅ **Pulsante "Remove icon" in BrokerForm**: link rosso sotto l'URL icona per cancellare
+- ✅ **Fix resetAll free mode**: selezione = esattamente immagine, poi dezoom 5% per mostrare bordo
+- ✅ **Fix resetAll fixed aspect**: selezione = massima dimensione possibile, centrata sull'immagine (no 80% coverage)
+- ✅ **Fix Chrome wheel warning**: listener registrato con `{ passive: false }` via JS diretto (non `on:wheel`)
+- ✅ **Fix ellisse bloccata ai bordi**: `updateEllipseOverlay()` chiamata anche dopo clamping (sia needsUpdate che else)
+- ✅ **Preview immagini nel picker**: usa `?img_preview=120x120` per grid e `60x60` per lista
+- ✅ **Cleanup unused code**: rimosso `RefreshCw` import, `resetZoom`, `resetRotation`, `getCroppedCanvas`, `getSelection`, `getCropDimensions`, `getTransform`, `getCurrentAspect`, `handleIconFileSelect`
+- ✅ **Analisi duplicazione codice**: report completo in `analysis-code-duplication.md`
+- ✅ **0 errori, 0 warnings** — svelte-check pulito
 
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
