@@ -10,6 +10,7 @@
     import {AlertCircle, Check, X} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -96,28 +97,16 @@
             isSubmitting = false;
         }
     }
-
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape') {
-            handleClose();
-        }
-    }
 </script>
 
-<svelte:window on:keydown={handleKeydown}/>
-
-{#if isOpen}
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <!-- Backdrop -->
-    <div
-            class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            on:click|self={handleClose}
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-    >
-        <!-- Modal -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md" data-testid="password-change-modal">
+<ModalBase
+    open={isOpen}
+    zIndex={50}
+    maxWidth="md"
+    onRequestClose={handleClose}
+    testId="password-change-modal"
+>
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full" data-testid="password-change-modal">
             <!-- Header -->
             <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -221,5 +210,4 @@
                 </button>
             </div>
         </div>
-    </div>
-{/if}
+</ModalBase>

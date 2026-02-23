@@ -7,6 +7,7 @@
     import {AlertTriangle, X} from 'lucide-svelte';
     import BrokerForm from './BrokerForm.svelte';
     import {zodiosApi} from '$lib/api';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -117,33 +118,20 @@
     function cancelDiscard() {
         showDiscardConfirm = false;
     }
-
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape' && !loading) {
-            handleClose();
-        }
-    }
 </script>
 
-{#if isOpen}
-    <!-- Backdrop -->
-    <div
-            class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            on:click={handleClose}
-            on:keydown={handleKeydown}
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-    >
-        <!-- Modal -->
+<ModalBase
+    open={isOpen}
+    zIndex={50}
+    maxWidth="lg"
+    closeOnEscape={!loading}
+    closeOnBackdropClick={!loading}
+    onRequestClose={handleClose}
+    testId="broker-modal"
+>
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div
-                class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
-                data-testid="broker-modal"
-                role="dialog"
-                tabindex="-1"
-                on:click|stopPropagation
-                on:keydown|stopPropagation
+                class="flex flex-col max-h-[85vh]"
                 on:input={handleFormChange}
         >
             <!-- Header (sticky top) -->
@@ -180,27 +168,16 @@
                 </div>
             </div>
         </div>
-    </div>
-{/if}
+</ModalBase>
 
 <!-- Discard Changes Confirmation Modal -->
-{#if showDiscardConfirm}
-    <!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
-    <div
-            class="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
-            on:click={cancelDiscard}
-            on:keydown={(e) => e.key === 'Escape' && cancelDiscard()}
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-    >
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <div
-                class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6"
-                role="document"
-                on:click|stopPropagation
-                on:keydown|stopPropagation
-        >
+<ModalBase
+    open={showDiscardConfirm}
+    zIndex={60}
+    maxWidth="sm"
+    onRequestClose={cancelDiscard}
+>
+        <div class="p-6">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
                     <AlertTriangle size={20} class="text-amber-600 dark:text-amber-400"/>
@@ -227,5 +204,4 @@
                 </button>
             </div>
         </div>
-    </div>
-{/if}
+</ModalBase>

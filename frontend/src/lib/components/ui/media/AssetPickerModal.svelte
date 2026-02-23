@@ -13,8 +13,11 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {formatBytes} from '$lib/utils/upload';
-    import {X, Link, FolderOpen, Upload, Search, LayoutGrid, List, Check, File as FileIcon} from 'lucide-svelte';
+    import {X, Link, FolderOpen, Upload, Search, LayoutGrid, List, Check, File as FileIcon, Image} from 'lucide-svelte';
     import LazyImage from './LazyImage.svelte';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import {DataTable} from '$lib/components/table';
+    import type {ColumnDef} from '$lib/components/table';
     import type {UploadedFile} from '$lib/types';
 
     // Props
@@ -151,14 +154,6 @@
         dispatch('cancel');
     }
 
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape') close();
-    }
-
-    function handleBackdropClick(event: MouseEvent) {
-        if (event.target === event.currentTarget) close();
-    }
-
     function isImage(mime: string): boolean {
         return mime?.startsWith('image/') ?? false;
     }
@@ -167,15 +162,68 @@
     function getPreviewUrl(file: UploadedFile, size: string = '80x80'): string {
         return `${file.url}?img_preview=${size}`;
     }
+
+    // DataTable columns for list view
+    const listColumns: ColumnDef<UploadedFile>[] = [
+        {
+            id: 'filename',
+            header: () => $_('uploads.fileName') || 'Name',
+            cell: (row) => {
+                if (isImage(row.mime_type)) {
+                    return {
+                        type: 'image' as const,
+                        src: `${row.url}?img_preview=48x48`,
+                        alt: row.original_name,
+                        text: row.original_name,
+                        fallbackIcon: Image,
+                        size: 32,
+                    };
+                }
+                return {
+                    type: 'icon-text' as const,
+                    icon: FileIcon,
+                    text: row.original_name,
+                };
+            },
+            type: 'text',
+            width: 250,
+            getValue: (row) => row.original_name,
+        },
+        {
+            id: 'size',
+            header: () => $_('uploads.size') || 'Size',
+            cell: (row) => ({type: 'size' as const, bytes: row.size_bytes}),
+            type: 'size',
+            width: 90,
+            getValue: (row) => row.size_bytes,
+        },
+        {
+            id: 'type',
+            header: () => $_('common.type') || 'Type',
+            cell: (row) => row.mime_type || '-',
+            type: 'text',
+            width: 120,
+            getValue: (row) => row.mime_type || '',
+        },
+    ];
+
+    function handleRowClick(row: UploadedFile) {
+        selectedFile = row;
+    }
+
+    function handleRowDoubleClick(row: UploadedFile) {
+        selectedFile = row;
+        confirmSelection();
+    }
 </script>
 
-<svelte:window on:keydown={open ? handleKeydown : undefined} />
-
-{#if open}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="picker-backdrop" on:click={handleBackdropClick}>
-        <div class="picker-modal" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+<ModalBase
+    {open}
+    zIndex={50}
+    maxWidth="600px"
+    onRequestClose={close}
+>
+        <div class="picker-modal-inner" role="dialog" aria-modal="true" tabindex="-1">
             <!-- Header -->
             <div class="picker-header">
                 <h2 class="picker-title">{modalTitle}</h2>
@@ -294,31 +342,29 @@
                                 {/each}
                             </div>
                         {:else}
-                            <!-- List/table view -->
-                            <div class="file-list">
-                                {#each filteredFiles as file}
-                                    <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                    <div class="list-item" class:selected={selectedFile?.id === file.id}
-                                         on:click={() => selectExistingFile(file)}
-                                         on:dblclick={confirmSelection}>
-                                        <div class="list-thumb">
-                                            {#if isImage(file.mime_type)}
-                                                <LazyImage src={getPreviewUrl(file, '60x60')} alt={file.original_name}
-                                                           placeholder="generic" width="40px" height="40px" />
-                                            {:else}
-                                                <FileIcon size={20} />
-                                            {/if}
-                                        </div>
-                                        <div class="list-info">
-                                            <span class="list-name">{file.original_name}</span>
-                                            <span class="list-meta">{formatBytes(file.size_bytes)} • {file.mime_type}</span>
-                                        </div>
-                                        {#if selectedFile?.id === file.id}
-                                            <Check size={16} class="list-check" />
-                                        {/if}
-                                    </div>
-                                {/each}
+                            <!-- List/table view using DataTable -->
+                            <div class="list-table-wrapper">
+                                <DataTable
+                                    data={filteredFiles}
+                                    columns={listColumns}
+                                    getRowId={(row) => row.id}
+                                    storageKey="asset-picker-list"
+                                    enableSelection={true}
+                                    selectionMode="single"
+                                    selectedRowId={selectedFile?.id || null}
+                                    onRowClick={handleRowClick}
+                                    onRowDoubleClick={handleRowDoubleClick}
+                                    enableActions={false}
+                                    enableSorting={true}
+                                    enableColumnFilters={false}
+                                    enableColumnResize={false}
+                                    enablePagination={false}
+                                    enableColumnVisibility={false}
+                                    emptyMessage={searchQuery
+                                        ? ($_('common.noResults') || 'No results')
+                                        : ($_('uploads.noFiles') || 'No files')}
+                                    isLoading={loadingFiles}
+                                />
                             </div>
                         {/if}
                     </div>
@@ -336,23 +382,14 @@
                 </button>
             </div>
         </div>
-    </div>
-{/if}
+</ModalBase>
 
 <style>
-    .picker-backdrop {
-        position: fixed; inset: 0; z-index: 50;
-        display: flex; align-items: center; justify-content: center;
-        background: rgba(0, 0, 0, 0.5);
-    }
-
-    .picker-modal {
-        background: white; border-radius: 0.75rem;
-        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
-        max-width: 640px; width: 95%; max-height: 80vh;
+    /* Backdrop handled by ModalBase */
+    .picker-modal-inner {
         display: flex; flex-direction: column;
+        max-height: 80vh; overflow: hidden;
     }
-    :global(.dark) .picker-modal { background: #1f2937; border: 1px solid #374151; }
 
     /* Header */
     .picker-header {
@@ -535,33 +572,15 @@
         padding: 0 0.375rem 0.25rem; font-size: 0.5625rem; color: #9ca3af;
     }
 
-    /* List view */
-    .file-list { display: flex; flex-direction: column; gap: 0.25rem; }
-    .list-item {
-        display: flex; align-items: center; gap: 0.5rem;
-        padding: 0.375rem 0.5rem; border: 2px solid transparent;
-        border-radius: 0.375rem; cursor: pointer; transition: all 0.15s;
+    /* List view (DataTable) */
+    .list-table-wrapper {
+        max-height: 320px; overflow-y: auto;
+        border: 1px solid #e5e7eb; border-radius: 0.375rem;
     }
-    .list-item:hover { background: #f3f4f6; }
-    .list-item.selected { border-color: #1a4031; background: #f0fdf4; }
-    :global(.dark) .list-item:hover { background: #1a2332; }
-    :global(.dark) .list-item.selected { border-color: #10b981; background: rgba(16, 185, 129, 0.1); }
-
-    .list-thumb {
-        flex-shrink: 0; width: 40px; height: 40px; border-radius: 0.25rem;
-        overflow: hidden; background: #f3f4f6;
-        display: flex; align-items: center; justify-content: center; color: #9ca3af;
-    }
-    :global(.dark) .list-thumb { background: #374151; }
-    .list-info { flex: 1; min-width: 0; }
-    .list-name {
-        display: block; font-size: 0.8125rem; font-weight: 500; color: #374151;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    :global(.dark) .list-name { color: #e5e7eb; }
-    .list-meta { display: block; font-size: 0.6875rem; color: #9ca3af; }
-    :global(.list-check) { color: #1a4031; flex-shrink: 0; }
-    :global(.dark .list-check) { color: #10b981; }
+    :global(.dark) .list-table-wrapper { border-color: #374151; }
+    /* Make DataTable compact inside picker */
+    .list-table-wrapper :global(.table-container) { max-height: none !important; }
+    .list-table-wrapper :global(.table-header) { display: none; }
 
     /* Footer */
     .picker-footer {

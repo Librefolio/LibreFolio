@@ -5,6 +5,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {AlertTriangle, X} from 'lucide-svelte';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
     const dispatch = createEventDispatcher<{
         confirm: { force: boolean };
@@ -28,36 +29,19 @@
             dispatch('cancel');
         }
     }
-
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape' && !loading) {
-            handleCancel();
-        }
-    }
 </script>
 
-{#if isOpen}
-    <!-- Backdrop -->
-    <div
-            class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            on:click={handleCancel}
-            on:keydown={handleKeydown}
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-    >
-        <!-- Modal -->
-        <div
-                class="bg-white rounded-2xl shadow-xl w-full max-w-md"
-                role="dialog"
-                tabindex="-1"
-                on:click|stopPropagation
-                on:click|stopPropagation
-                on:keydown|stopPropagation
-                data-testid="delete-broker-dialog"
-        >
+<ModalBase
+    open={isOpen}
+    zIndex={60}
+    maxWidth="md"
+    closeOnEscape={!loading}
+    closeOnBackdropClick={!loading}
+    onRequestClose={handleCancel}
+    testId="delete-broker-dialog"
+>
             <!-- Header -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-100">
+            <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
                 <div class="flex items-center space-x-2 text-red-600">
                     <AlertTriangle size={24}/>
                     <h2 class="text-xl font-semibold">{$_('brokers.deleteBroker')}</h2>
@@ -65,7 +49,7 @@
                 <button
                         on:click={handleCancel}
                         disabled={loading}
-                        class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                        class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
                 >
                     <X size={20}/>
                 </button>
@@ -74,26 +58,26 @@
             <!-- Content -->
             <div class="p-4">
                 {#if hasTransactions}
-                    <p class="text-gray-700 mb-4">
+                    <p class="text-gray-700 dark:text-gray-300 mb-4">
                         {$_('brokers.confirmDeleteWithTransactions', {values: {count: transactionCount}})}
                     </p>
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-sm">
+                    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-amber-800 dark:text-amber-300 text-sm">
                         <strong>{brokerName}</strong> has {transactionCount} transaction(s).
                     </div>
                 {:else}
-                    <p class="text-gray-700">
+                    <p class="text-gray-700 dark:text-gray-300">
                         {$_('brokers.confirmDelete')}
                     </p>
-                    <p class="mt-2 font-medium text-gray-800">{brokerName}</p>
+                    <p class="mt-2 font-medium text-gray-800 dark:text-gray-200">{brokerName}</p>
                 {/if}
             </div>
 
             <!-- Actions -->
-            <div class="flex items-center justify-end space-x-3 p-4 border-t border-gray-100">
+            <div class="flex items-center justify-end space-x-3 p-4 border-t border-gray-100 dark:border-slate-700">
                 <button
                         on:click={handleCancel}
                         disabled={loading}
-                        class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                         data-testid="delete-broker-cancel"
                 >
                     {$_('common.cancel')}
@@ -118,7 +102,4 @@
                     </button>
                 {/if}
             </div>
-        </div>
-    </div>
-{/if}
-
+</ModalBase>

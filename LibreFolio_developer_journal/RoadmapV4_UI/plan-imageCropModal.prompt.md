@@ -177,12 +177,35 @@
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### Refactoring Round 12 ✅ (23 Feb 2026 — ModalBase + z-index system)
-- ✅ **ModalBase.svelte creato**: componente base per tutte le modali — gestisce backdrop, click-outside, Escape (con stopPropagation per stacking), focus, transitions, z-index parametrico, dark mode
-- ✅ **FileEditModal migrato a ModalBase**: rimossi ~100 righe di boilerplate (backdrop, keydown window listener, z-index CSS). Confirm dialog interno usa ModalBase(zIndex+10)
+- ✅ **ModalBase.svelte creato**: componente base per tutte le modali — gestisce backdrop, click-outside, Escape (con stopPropagation per stacking), focus (once-only), transitions, z-index parametrico, dark mode, maxWidth con preset map
+- ✅ **FileEditModal migrato a ModalBase**: rimossi ~100 righe di boilerplate. Confirm dialog interno usa ModalBase(zIndex+10)
 - ✅ **ConfirmModal migrato a ModalBase**: rimossi ~50 righe. Aggiunto `zIndex` prop (default 60)
+- ✅ **BrokerImportFilesModal migrato a ModalBase**: rimossi backdrop/keydown/z-index CSS
+- ✅ **PasswordChangeModal migrato a ModalBase**: rimossi backdrop/keydown/window listener
+- ✅ **files/+page.svelte modali migrate a ModalBase**: BRIM upload modal + confirm close modal
 - ✅ **Z-index system standardizzato**: layer 50→60→70 (10 in 10). Rimossi z-index 100, 1000, 1010, 9999
-- ✅ **Fix keyboard input nelle modali stackate**: `on:keydown|stopPropagation` su ModalBase backdrop previene che le modali sottostanti intercettino i tasti digitati negli input
-- ✅ **BRIM rename pencil position**: spostato dopo il nome file e prima della size (icona → nome → matita → size)
+- ✅ **Fix keyboard input nelle modali stackate**: `on:keydown|stopPropagation` su ModalBase backdrop + focus once-only (previene focus stealing da input)
+- ✅ **Fix FileEditModal rename**: reactive init con `initializedForFile` tracking previene re-init durante editing
+- ✅ **BRIM rename pencil position**: spostato dopo il nome file e prima della size
+
+### Refactoring Round 13 ✅ (23 Feb 2026 — Complete ModalBase migration + auth rename)
+- ✅ **BrokerModal migrato a ModalBase**: rimossi backdrop/keydown proprietari
+- ✅ **ImageEditModal migrato a ModalBase**: usa ModalBase per backdrop e conferma chiusura
+- ✅ **AssetPickerModal migrato a ModalBase**: rimosso backdrop/keydown custom
+- ✅ **DeleteBrokerDialog migrato a ModalBase**: conferma cancellazione broker
+- ✅ **CashTransactionModal migrato a ModalBase**: transazioni cash nel broker detail
+- ✅ **TUTTE 10 modali ora usano ModalBase**: migrazione completa
+- ✅ **Auth components rinominati**: LoginModal→LoginCard, RegisterModal→RegisterCard, ForgotPasswordModal→ForgotPasswordCard (sono card, non modali)
+- ✅ **Restore button color**: giallo/arancione (#d97706) di default in FileUploader (era grigio come gli altri bottoni)
+- ✅ **Fix ImageEditModal script tag**: premature `</script>` rimosso (causato da crash IDE)
+- ✅ **0 errori, 0 warnings** — svelte-check + build puliti
+
+### Refactoring Round 14 ✅ (23 Feb 2026 — DataTable in AssetPicker)
+- ✅ **AssetPickerModal list view**: sostituita lista custom HTML/CSS con DataTable `selectionMode='single'`
+- ✅ **Colonne DataTable**: filename (ImageCell con preview per immagini), size (SizeCell), type (text)
+- ✅ **Single-select**: click riga = seleziona, doppio click = conferma
+- ✅ **Grid view mantenuta**: la griglia con LazyImage resta come alternativa
+- ✅ **Rimossi ~40 righe CSS**: `.file-list`, `.list-item`, `.list-thumb`, `.list-info`, `.list-name`, `.list-meta`, `.list-check` eliminati
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### Note Tecniche

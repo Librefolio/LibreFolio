@@ -15,6 +15,7 @@
     import {X, Upload, Loader2, Eye, EyeOff, RefreshCw, Lock} from 'lucide-svelte';
     import {uploadFile} from '$lib/utils/upload';
     import ImageCropper from './ImageCropper.svelte';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {
         IMAGE_PRESETS,
         getCroppedImageFromCropper,
@@ -182,30 +183,6 @@
         hasChanges = true;
     }
 
-    // Track if mouse was pressed inside modal content (to prevent false backdrop clicks during drag)
-    let mouseDownTarget: EventTarget | null = null;
-
-    function handleBackdropMouseDown(event: MouseEvent) {
-        mouseDownTarget = event.target;
-    }
-
-    function handleBackdropClick(event: MouseEvent) {
-        // Only close if BOTH mousedown and mouseup/click happened on the backdrop itself
-        // This prevents the warning from showing when dragging from inside modal to outside
-        const clickedOnBackdrop = event.target === event.currentTarget;
-        const mouseDownOnBackdrop = mouseDownTarget === event.currentTarget;
-        mouseDownTarget = null;
-
-        if (clickedOnBackdrop && mouseDownOnBackdrop) {
-            requestClose();
-        }
-    }
-
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape') requestClose();
-    }
-
-    // Output size editing - live with on:input
     function handleOutputWidthInput(e: Event) {
         const val = parseInt((e.target as HTMLInputElement).value);
         if (isNaN(val) || val <= 0) return;
@@ -297,13 +274,14 @@
     $: modalTitle = $_(config.titleKey) || $_('uploads.editImage') || 'Edit Image';
 </script>
 
-<svelte:window on:keydown={open ? handleKeydown : undefined} />
-
-{#if open && imageSrc}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-backdrop" on:mousedown={handleBackdropMouseDown} on:click={handleBackdropClick}>
-        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+<ModalBase
+    open={open && !!imageSrc}
+    zIndex={50}
+    maxWidth="800px"
+    onRequestClose={requestClose}
+    noTransition={false}
+>
+        <div class="modal-content-inner" role="dialog" aria-modal="true" aria-labelledby="modal-title">
             <!-- Header -->
             <div class="modal-header">
                 <h2 id="modal-title" class="modal-title">{modalTitle}</h2>
@@ -365,7 +343,7 @@
 
                     <ImageCropper
                         bind:this={cropper}
-                        {imageSrc}
+                        imageSrc={imageSrc || ''}
                         aspectRatio={config.aspectRatio}
                         showZoomSlider={true}
                         showRotateControls={true}
@@ -479,14 +457,15 @@
                 </button>
             </div>
         </div>
-    </div>
-{/if}
+</ModalBase>
 
 <!-- Confirmation dialog for closing with unsaved changes -->
-{#if showCloseConfirm}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="confirm-backdrop" on:click|self={cancelClose}>
+<ModalBase
+    open={showCloseConfirm}
+    zIndex={60}
+    maxWidth="sm"
+    onRequestClose={cancelClose}
+>
         <div class="confirm-dialog">
             <div class="confirm-header">
                 <span class="confirm-icon">⚠️</span>
@@ -504,23 +483,14 @@
                 </button>
             </div>
         </div>
-    </div>
-{/if}
+</ModalBase>
 
 <style>
-    .modal-backdrop {
-        position: fixed; inset: 0; z-index: 50;
-        display: flex; align-items: center; justify-content: center;
-        background-color: rgba(0, 0, 0, 0.6); padding: 1rem;
-    }
-
-    .modal-content {
-        background: white; border-radius: 1rem;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-        width: 100%; max-width: 640px; max-height: 90vh;
+    /* Backdrop and outer modal-content handled by ModalBase */
+    .modal-content-inner {
         display: flex; flex-direction: column; overflow: hidden;
+        max-height: 90vh;
     }
-    :global(.dark) .modal-content { background: #1f2937; border: 1px solid #374151; }
 
     /* Header */
     .modal-header {
@@ -540,8 +510,8 @@
         border: none; background: transparent; color: #6b7280; cursor: pointer; transition: all 0.15s;
     }
     .header-btn:hover { background: #f3f4f6; color: #374151; }
-    .header-btn.reset { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
-    .header-btn.reset:hover { background: rgba(239, 68, 68, 0.2); color: #dc2626; }
+    .header-btn.reset { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .header-btn.reset:hover { background: rgba(245, 158, 11, 0.2); color: #d97706; }
     :global(.dark) .header-btn:hover { background: #374151; color: #d1d5db; }
 
     /* Body */
@@ -714,15 +684,10 @@
     :global(.animate-spin) { animation: spin 1s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    /* Confirmation Dialog */
-    .confirm-backdrop {
-        position: fixed; inset: 0; z-index: 100;
-        display: flex; align-items: center; justify-content: center;
-        background-color: rgba(0, 0, 0, 0.7);
-    }
+    /* Confirmation Dialog — backdrop handled by ModalBase */
     .confirm-dialog {
         background: white; border-radius: 0.75rem; padding: 1.5rem;
-        max-width: 400px; width: 90%; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+        width: 100%;
     }
     :global(.dark) .confirm-dialog { background: #1f2937; border: 1px solid #374151; }
     .confirm-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }

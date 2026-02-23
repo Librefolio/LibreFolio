@@ -54,14 +54,34 @@
 
     // Ref for backdrop focus
     let backdropEl: HTMLDivElement;
+    let hasFocusedOnOpen = false;
 
-    // Focus the backdrop when modal opens so keyboard events are captured
-    $: if (open && backdropEl) {
+    // Focus the backdrop ONCE when modal opens so keyboard events are captured
+    $: if (open && backdropEl && !hasFocusedOnOpen) {
+        hasFocusedOnOpen = true;
         tick().then(() => backdropEl?.focus());
     }
 
+    // Reset when modal closes
+    $: if (!open) {
+        hasFocusedOnOpen = false;
+    }
+
+    // Track mousedown target to prevent false backdrop clicks during drag
+    let mouseDownTarget: EventTarget | null = null;
+
+    function handleBackdropMouseDown(event: MouseEvent) {
+        mouseDownTarget = event.target;
+    }
+
     function handleBackdropClick(event: MouseEvent) {
-        if (closeOnBackdropClick && event.target === event.currentTarget) {
+        // Only close if BOTH mousedown and mouseup/click happened on the backdrop
+        // This prevents closing when user drags from inside modal to outside
+        const clickedOnBackdrop = event.target === event.currentTarget;
+        const mouseDownOnBackdrop = mouseDownTarget === event.currentTarget;
+        mouseDownTarget = null;
+
+        if (closeOnBackdropClick && clickedOnBackdrop && mouseDownOnBackdrop) {
             onRequestClose();
         }
     }
@@ -82,6 +102,7 @@
             style="z-index: {zIndex};"
             bind:this={backdropEl}
             tabindex="-1"
+            on:mousedown={handleBackdropMouseDown}
             on:click={handleBackdropClick}
             on:keydown|stopPropagation={handleKeydown}
             role="dialog"
@@ -102,6 +123,7 @@
             style="z-index: {zIndex};"
             bind:this={backdropEl}
             tabindex="-1"
+            on:mousedown={handleBackdropMouseDown}
             on:click={handleBackdropClick}
             on:keydown|stopPropagation={handleKeydown}
             role="dialog"

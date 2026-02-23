@@ -201,14 +201,14 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 
 | # | Intervento | Risparmio | Complessità | Priorità | Status |
 |---|-----------|-----------|-------------|----------|--------|
-| 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta | ✅ FATTO (creato + FileEditModal, ConfirmModal migrati) |
+| 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta | ✅ FATTO (TUTTE 10 modali migrate: FileEditModal, ConfirmModal, BrokerImportFilesModal, PasswordChangeModal, files/+page ×2, BrokerModal, ImageEditModal, AssetPickerModal, DeleteBrokerDialog, CashTransactionModal) |
 | 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta | ✅ FATTO (`utils/upload.ts`) |
 | 3 | **formatBytes() centralizzato** | ~60 righe (7 copie) | Minima | 🟡 Media | ✅ FATTO (`utils/upload.ts` con i18n via `get(_)`) |
 | 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media | 🔲 TODO |
 | 5 | **FileGrid.svelte** estratto | ~80 righe | Media | 🟢 Bassa | 🔲 TODO |
 | 6 | **DataTable single-select mode** | n/a (new feature) | Media | 🔴 Alta | ✅ FATTO |
 | 7 | **DataTable ImageCell type** | n/a (new feature) | Bassa | 🔴 Alta | ✅ FATTO |
-| 8 | **DataTable in AssetPicker** | ~100 righe | Media | 🔴 Alta | 🔲 TODO |
+| 8 | **DataTable in AssetPicker** | ~100 righe | Media | 🔴 Alta | ✅ FATTO (list view usa DataTable single-select, rimosso HTML/CSS custom) |
 | 9 | **Preview img_preview cache backend** | n/a (perf) | Bassa | 🔴 Alta | ✅ FATTO (PreviewCache class, size-based) |
 | 10 | **img_preview everywhere** | ~5 righe | Minima | 🟡 Media | ✅ FATTO |
 | 11 | **svelte:component deprecation** | ~1 riga | Minima | 🟡 Media | ✅ FATTO |
@@ -218,7 +218,7 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 ### Feedback Utente (23 Feb 2026)
 - **DataTable**: evolverla per supportare `selectionMode: 'single'` (click riga = seleziona, no checkbox) ✅
 - **ImageCell**: aggiungere tipo cella con preview thumbnail + fallback icona ✅
-- **AssetPicker**: usare DataTable con single-select per la lista file (TODO)
+- **AssetPicker**: usare DataTable con single-select per la lista file ✅ FATTO
 - **Griglia AssetPicker vs Files**: devono usare lo stesso componente base (TODO — FileGrid.svelte)
 - **Preview ovunque**: usare `?img_preview=` per risparmiare banda ✅
 - **Cache backend**: size-based 50MB (parametrico da .env PREVIEW_CACHE_MAX_MB), TTL 1h ✅
@@ -255,12 +255,14 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 
 ## 🏁 Raccomandazione
 
-Il refactoring **ModalBase.svelte** è completato — FileEditModal e ConfirmModal migrati, con z-index standardizzato (50→60→70) e keyboard event isolation per modali stackate. Le prossime modali da migrare sono BrokerModal, ImageEditModal, AssetPickerModal, BrokerImportFilesModal. Ogni nuova pagina (Phase 5+) userà ModalBase direttamente.
+Il refactoring **ModalBase.svelte** è completato al 100% — tutte le 10 modali del progetto sono migrate. Z-index standardizzato (50→60→70) e keyboard event isolation per modali stackate. I componenti auth (Login, Register, ForgotPassword) sono stati rinominati da "Modal" a "Card" per rispecchiare la loro natura. Ogni nuova pagina (Phase 5+) userà ModalBase direttamente.
 
-**Ordine suggerito**:
+**Ordine suggerito per gli ultimi task**:
 1. ✅ ~~Creare `uploadFile()` utility~~ — FATTO in `utils/upload.ts`
-2. ✅ ~~Creare `ModalBase.svelte`~~ — FATTO (FileEditModal, ConfirmModal migrati)
-3. Migrare modali rimanenti: BrokerModal, ImageEditModal, AssetPickerModal, BrokerImportFilesModal
-4. Usare DataTable nel tab Existing di AssetPickerModal (FileGrid extraction)
-5. Questi possono essere completati come sub-plan dedicato tra Phase 4 e Phase 5
+2. ✅ ~~Creare `ModalBase.svelte`~~ — FATTO (TUTTE 10 modali migrate)
+3. ✅ ~~Migrare modali rimanenti~~ — FATTO (BrokerModal, ImageEditModal, AssetPickerModal, DeleteBrokerDialog, CashTransactionModal)
+4. ✅ ~~Usare DataTable nel tab Existing di AssetPickerModal~~ — FATTO (single-select, ImageCell, SizeCell)
+5. Creare ImagePickerWrapper.svelte per deduplicare flusso avatar/icon (media priority)
+6. Estrarre FileGrid.svelte per condividere griglia tra files/ e AssetPicker (bassa priority)
+7. Task 5 e 6 possono essere completati come sub-plan dedicato tra Phase 4 e Phase 5
 

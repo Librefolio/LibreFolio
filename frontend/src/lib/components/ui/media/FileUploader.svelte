@@ -446,8 +446,7 @@
     }
 
     .edit-btn,
-    .remove-btn,
-    .restore-btn {
+    .remove-btn {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -459,6 +458,24 @@
         color: #94a3b8;
         cursor: pointer;
         transition: all 0.15s;
+    }
+
+    .restore-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border: none;
+        border-radius: 4px;
+        background: transparent;
+        color: #d97706;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    :global(.dark) .restore-btn {
+        color: #fbbf24;
     }
 
     .edit-btn:hover {

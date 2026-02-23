@@ -25,6 +25,7 @@
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import {ImageEditModal, FileEditModal} from '$lib/components/ui/media';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
     import {Check, Copy, Download, File as FileIcon, FileSpreadsheet, FileText, Image, LayoutGrid, Link2, List, Pencil, Search, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
@@ -862,10 +863,10 @@
 </div>
 
 <!-- BRIM Upload Modal with per-file broker assignment -->
-{#if showBrimUploadModal}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-backdrop" on:click={() => {
+<ModalBase
+    open={showBrimUploadModal}
+    zIndex={50}
+    onRequestClose={() => {
         if (pendingBrimFiles.length > 0) {
             showCloseUploaderConfirm = true;
             closeUploaderCallback = () => {
@@ -876,9 +877,10 @@
         } else {
             closeBrimUploadModal();
         }
-    }}>
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="modal-content upload-modal" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+    }}
+    contentClass="upload-modal"
+    maxWidth="600px"
+>
             <div class="modal-header">
                 <h3>{$t('uploads.assignBrokers') || 'Assign Brokers'}</h3>
                 <button class="modal-close" on:click={() => {
@@ -963,17 +965,15 @@
                     {$t('uploads.upload')} ({pendingBrimFiles.length})
                 </button>
             </div>
-        </div>
-    </div>
-{/if}
+</ModalBase>
 
 <!-- Confirm close uploader modal -->
-{#if showCloseUploaderConfirm}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-backdrop" on:click={cancelCloseUploader}>
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="modal-content" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+<ModalBase
+    open={showCloseUploaderConfirm}
+    zIndex={60}
+    maxWidth="sm"
+    onRequestClose={cancelCloseUploader}
+>
             <div class="modal-header">
                 <h3>{$t('common.confirm')}</h3>
                 <button class="modal-close" on:click={cancelCloseUploader}>
@@ -992,9 +992,7 @@
                     {$t('common.confirm')}
                 </button>
             </div>
-        </div>
-    </div>
-{/if}
+</ModalBase>
 
 <!-- Image Edit Modal -->
 <ImageEditModal
@@ -1004,7 +1002,7 @@
     uploadOnComplete={imageEditFileIndex === null}
     on:complete={handleImageEditComplete}
     on:cancel={handleImageEditCancel}
-    on:error={(e) => {
+    on:error={(e: CustomEvent<{message: string}>) => {
         error = e.detail.message;
     }}
 />
@@ -1361,31 +1359,7 @@
         border-color: rgba(220, 38, 38, 0.4);
     }
 
-    /* Modal styles */
-    .modal-backdrop {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 50;
-    }
-
-    .modal-content {
-        background: white;
-        border-radius: 0.75rem;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-        max-width: 400px;
-        width: 90%;
-    }
-
-    :global(.dark) .modal-content {
-        background: #1f2937;
-    }
+    /* Modal styles — backdrop/content now handled by ModalBase */
 
     .modal-header {
         display: flex;
@@ -1505,9 +1479,8 @@
         background: #9ca3af !important;
     }
 
-    /* BRIM Upload Modal Styles */
-    .upload-modal {
-        max-width: 600px;
+    /* BRIM Upload Modal Styles — class applied via ModalBase contentClass */
+    :global(.upload-modal) {
         width: 95%;
         max-height: 80vh;
         min-height: 350px;

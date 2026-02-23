@@ -1,8 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 20 Febbraio 2026  
-**Status**: 🟢 COMPLETATO (Core features, Image Crop + FileEdit funzionanti)
+**Ultimo aggiornamento**: 23 Febbraio 2026  
+**Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename. Test E2E da scrivere.)
 
 ---
 
@@ -136,6 +136,11 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - **`formatBytes()` centralizzato**: in `utils/upload.ts`, rimossi 2 duplicati ✅
     - **BRIM file rename**: FileEditModal in BrokerImportFilesModal + BRIM uploader in files/ ✅
     - **DataTable cell-icon-box**: 32×32 wrapper SVG allineato con thumbnail immagini ✅
+    - **ModalBase.svelte**: componente base per TUTTE le modali — backdrop, click-outside, Escape, focus, transitions, z-index parametrico ✅
+    - **TUTTE 10 modali migrate a ModalBase**: FileEditModal, ConfirmModal, BrokerImportFilesModal, PasswordChangeModal, files/+page ×2, BrokerModal, ImageEditModal, AssetPickerModal, DeleteBrokerDialog, CashTransactionModal ✅
+    - **Auth componenti rinominati**: LoginModal→LoginCard, RegisterModal→RegisterCard, ForgotPasswordModal→ForgotPasswordCard (sono card, non modali) ✅
+    - **Z-index standardizzato**: layer 50→60→70 (incrementi di 10). Rimossi z-index 100, 1000, 1010, 9999 ✅
+    - **AssetPickerModal DataTable**: list view sostituita con DataTable single-select (ImageCell + SizeCell), rimossi ~40 righe CSS custom ✅
     - i18n keys aggiunte per tutte le label ✅
     - 42 test E2E pianificati (vedi `plan-imageCropModal.prompt.md`)
     - Analisi duplicazione in `analysis-code-duplication.md` (3 round, 13 task completati)

@@ -7,6 +7,7 @@
     import {zodiosApi} from '$lib/api';
     import {X} from 'lucide-svelte';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -95,35 +96,19 @@
             dispatch('close');
         }
     }
-
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape' && !loading) {
-            handleClose();
-        }
-    }
 </script>
 
-{#if isOpen}
-    <!-- Backdrop -->
-    <div
-            class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            on:click={handleClose}
-            on:keydown={handleKeydown}
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-    >
-        <!-- Modal -->
-        <div
-                class="bg-white rounded-2xl shadow-xl w-full max-w-md"
-                role="dialog"
-                tabindex="-1"
-                on:click|stopPropagation
-                on:keydown|stopPropagation
-        >
+<ModalBase
+    open={isOpen}
+    zIndex={50}
+    maxWidth="md"
+    closeOnEscape={!loading}
+    closeOnBackdropClick={!loading}
+    onRequestClose={handleClose}
+>
             <!-- Header -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-100">
-                <h2 class="text-xl font-semibold text-gray-800">
+            <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
                     {type === 'DEPOSIT' ? $_('brokers.deposit') : $_('brokers.withdraw')}
                 </h2>
                 <button
@@ -220,7 +205,5 @@
                     </button>
                 </div>
             </form>
-        </div>
-    </div>
-{/if}
+</ModalBase>
 
