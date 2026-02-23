@@ -722,6 +722,7 @@
         <div class="upload-area brim-upload-area">
             <FileUploader
                     on:change={handleBrimFileSelect}
+                    on:editFile={handleEditFile}
                     on:error={(e: CustomEvent<{ message: string }>) => error = e.detail.message}
                     multiple={true}
                     maxSizeMB={maxUploadSizeMB}

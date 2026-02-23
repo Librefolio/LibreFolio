@@ -15,6 +15,7 @@
     import {fade, scale} from 'svelte/transition';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
+    import {FileEditModal} from '$lib/components/ui/media';
     import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
     import type {BrimFile} from '$lib/types';
 
@@ -41,6 +42,11 @@
     // Pending files tracking for close confirmation
     let pendingFiles = $state<globalThis.File[]>([]);
     let showCloseConfirm = $state(false);
+
+    // File edit (rename) state
+    let editingFile = $state<File | null>(null);
+    let editingFileIndex = $state<number>(-1);
+    let showFileEdit = $state(false);
 
     // Load files when modal opens or brokerId changes
     $effect(() => {
@@ -125,9 +131,28 @@
         }
     }
 
+    // File rename handlers
+    function handleEditFile(event: CustomEvent<{ file: File; index: number }>) {
+        editingFile = event.detail.file;
+        editingFileIndex = event.detail.index;
+        showFileEdit = true;
+    }
+
+    function handleFileEditComplete(event: CustomEvent<{ url: string | null; file: File }>) {
+        const { file: renamedFile } = event.detail;
+        // Replace file in pending list with renamed version
+        if (editingFileIndex >= 0 && editingFileIndex < pendingFiles.length) {
+            pendingFiles[editingFileIndex] = renamedFile;
+            pendingFiles = [...pendingFiles]; // Trigger reactivity
+        }
+        showFileEdit = false;
+        editingFile = null;
+    }
+
     function tryClose() {
         if (pendingFiles.length > 0) {
             showCloseConfirm = true;
+
         } else {
             onClose();
         }
@@ -205,6 +230,7 @@
                     <FileUploader
                             on:upload={handleUpload}
                             on:change={handleFileChange}
+                            on:editFile={handleEditFile}
                             on:error={(e) => error = e.detail.message}
                             multiple={true}
                             accept=".csv,.xlsx,.xls"
@@ -274,6 +300,17 @@
             </div>
         </div>
     </div>
+{/if}
+
+<!-- File Rename Modal (for BRIM files) -->
+{#if editingFile}
+    <FileEditModal
+            file={editingFile}
+            open={showFileEdit}
+            uploadOnComplete={false}
+            on:complete={handleFileEditComplete}
+            on:cancel={() => { showFileEdit = false; editingFile = null; }}
+    />
 {/if}
 
 <!-- Close Confirmation Modal (warning style, not danger) -->
