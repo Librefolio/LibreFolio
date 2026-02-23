@@ -104,9 +104,10 @@ class Settings(BaseSettings):
     # CORS (for frontend development)
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
-    model_config = ConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"), case_sensitive=True, env_file_encoding="utf-8"
-        )
+    # Image Preview Cache
+    PREVIEW_CACHE_MAX_MB: int = 50  # Max size in MB for in-memory thumbnail cache
+
+    model_config = ConfigDict(env_file=str(PROJECT_ROOT / ".env"), case_sensitive=True, env_file_encoding="utf-8")
 
 
 def get_data_dir() -> Path:

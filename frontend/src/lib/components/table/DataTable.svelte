@@ -13,7 +13,7 @@
 <script generics="T" lang="ts">
     import {onMount} from 'svelte';
     import {t} from '$lib/i18n';
-    import {Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter} from 'lucide-svelte';
+    import {Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon} from 'lucide-svelte';
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableToolbar from './DataTableToolbar.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
@@ -26,8 +26,12 @@
         getRowId: (row: T) => string;
         storageKey: string;
         enableSelection?: boolean;
+        selectionMode?: 'multi' | 'single' | 'none';
         selectionColumnWidth?: string;
         onSelectionChange?: (selectedIds: string[]) => void;
+        selectedRowId?: string | null;
+        onRowClick?: (row: T) => void;
+        onRowDoubleClick?: (row: T) => void;
         enableActions?: boolean;
         actionsColumnWidth?: string;
         rowActions?: RowAction<T>[];
@@ -54,8 +58,12 @@
         getRowId,
         storageKey,
         enableSelection = true,
+        selectionMode = 'multi',
         selectionColumnWidth = '48px',
         onSelectionChange,
+        selectedRowId = null,
+        onRowClick,
+        onRowDoubleClick,
         enableActions = true,
         actionsColumnWidth = '100px',
         rowActions = [],
@@ -73,6 +81,11 @@
         onFiltersChange,
         initialFilters,
     }: Props = $props();
+
+    // Derived: effective selection mode
+    let effectiveSelectionMode = $derived(
+        !enableSelection ? 'none' : selectionMode
+    );
 
     // ============ State ============
 
@@ -420,14 +433,42 @@
     }
 
     function toggleRowSelection(rowId: string) {
-        const newSelection = {...rowSelection};
-        if (newSelection[rowId]) {
-            delete newSelection[rowId];
+        if (effectiveSelectionMode === 'single') {
+            // Single select: toggle or replace
+            const wasSelected = rowSelection[rowId];
+            rowSelection = wasSelected ? {} : {[rowId]: true};
         } else {
-            newSelection[rowId] = true;
+            // Multi select: toggle individual
+            const newSelection = {...rowSelection};
+            if (newSelection[rowId]) {
+                delete newSelection[rowId];
+            } else {
+                newSelection[rowId] = true;
+            }
+            rowSelection = newSelection;
         }
-        rowSelection = newSelection;
         onSelectionChange?.(Object.keys(rowSelection).filter(id => rowSelection[id]));
+    }
+
+    // Sync external selectedRowId prop (for single mode controlled by parent)
+    $effect(() => {
+        if (effectiveSelectionMode === 'single' && selectedRowId !== undefined && selectedRowId !== null) {
+            const currentSelected = Object.keys(rowSelection).find(id => rowSelection[id]);
+            if (currentSelected !== selectedRowId) {
+                rowSelection = {[selectedRowId]: true};
+            }
+        }
+    });
+
+    function handleRowClick(row: T) {
+        if (effectiveSelectionMode === 'single') {
+            toggleRowSelection(getRowId(row));
+        }
+        onRowClick?.(row);
+    }
+
+    function handleRowDoubleClick(row: T) {
+        onRowDoubleClick?.(row);
     }
 
     function clearAllSelection() {
@@ -638,8 +679,8 @@
         <table class="datatable">
             <thead>
             <tr>
-                <!-- Selection column -->
-                {#if enableSelection}
+                <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
+                {#if effectiveSelectionMode === 'multi'}
                     <th class="th-fixed th-select" style="width: {selectionColumnWidth};">
                         <button type="button" class="checkbox-btn" onclick={toggleAllPageRows}>
                             {#if isAllPageSelected}
@@ -735,7 +776,7 @@
             {#if isLoading}
                 <tr>
                     <td
-                            colspan={visibleColumns.length + (enableSelection ? 1 : 0) + (enableActions ? 1 : 0)}
+                            colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)}
                             class="td-loading"
                     >
                         <div class="loading-spinner"></div>
@@ -745,7 +786,7 @@
             {:else if paginatedData.length === 0}
                 <tr>
                     <td
-                            colspan={visibleColumns.length + (enableSelection ? 1 : 0) + (enableActions ? 1 : 0)}
+                            colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)}
                             class="td-empty"
                     >
                         {emptyMessage || $t('table.noData') || 'No data available'}
@@ -755,14 +796,18 @@
                 {#each paginatedData as row}
                     {@const rowId = getRowId(row)}
                     {@const isSelected = rowSelection[rowId]}
-                    <tr class:selected={isSelected}>
-                        <!-- Selection cell -->
-                        {#if enableSelection}
+                    <tr class:selected={isSelected}
+                        class:clickable={effectiveSelectionMode === 'single' || onRowClick}
+                        onclick={() => handleRowClick(row)}
+                        ondblclick={() => handleRowDoubleClick(row)}
+                    >
+                        <!-- Selection cell (multi mode only - shows checkboxes) -->
+                        {#if effectiveSelectionMode === 'multi'}
                             <td class="td-fixed td-select">
                                 <button
                                         type="button"
                                         class="checkbox-btn"
-                                        onclick={() => toggleRowSelection(rowId)}
+                                        onclick={(e) => { e.stopPropagation(); toggleRowSelection(rowId); }}
                                 >
                                     {#if isSelected}
                                         <Check size={16} class="check-icon checked"/>
@@ -810,6 +855,31 @@
                                     {:else if cellContent.type === 'custom'}
                                         {@const CustomComponent = cellContent.component}
                                         <CustomComponent {...cellContent.props}/>
+                                    {:else if cellContent.type === 'image'}
+                                        <div class="cell-image-text">
+                                            <div class="cell-image" class:circle={cellContent.circle}
+                                                 style="width:{cellContent.size || 32}px;height:{cellContent.size || 32}px;">
+                                                <img
+                                                    src={cellContent.src}
+                                                    alt={cellContent.alt}
+                                                    width={cellContent.size || 32}
+                                                    height={cellContent.size || 32}
+                                                    loading="lazy"
+                                                    onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                                                />
+                                                <span class="image-fallback hidden">
+                                                    {#if cellContent.fallbackIcon}
+                                                        {@const FallbackIcon = cellContent.fallbackIcon}
+                                                        <FallbackIcon size={cellContent.size ? cellContent.size * 0.6 : 20} />
+                                                    {:else}
+                                                        <ImageIcon size={cellContent.size ? cellContent.size * 0.6 : 20} />
+                                                    {/if}
+                                                </span>
+                                            </div>
+                                            {#if cellContent.text}
+                                                <span class="cell-image-label">{cellContent.text}</span>
+                                            {/if}
+                                        </div>
                                     {/if}
                                 {/if}
                             </td>
@@ -1095,6 +1165,26 @@
         background: #1e3a5f;
     }
 
+    tbody tr.clickable {
+        cursor: pointer;
+    }
+
+    tbody tr.clickable:hover {
+        background: #f0fdf4;
+    }
+
+    :global(.dark) tbody tr.clickable:hover {
+        background: #1a2e35;
+    }
+
+    tbody tr.clickable.selected {
+        background: #dcfce7;
+    }
+
+    :global(.dark) tbody tr.clickable.selected {
+        background: #14532d;
+    }
+
     td {
         padding: 0.625rem 0.5rem;
         font-size: 0.875rem;
@@ -1140,6 +1230,62 @@
         background: white;
         height: 230px;
         vertical-align: middle;
+    }
+
+    /* Image cell */
+    .cell-image-text {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .cell-image-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+        text-align: left;
+    }
+
+    .cell-image {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border-radius: 0.25rem;
+        background: #f1f5f9;
+        flex-shrink: 0;
+        /* Fixed size ensures text labels align in a column */
+        min-width: 32px;
+    }
+
+    .cell-image.circle {
+        border-radius: 50%;
+    }
+
+    .cell-image img {
+        object-fit: cover;
+        display: block;
+    }
+
+    .cell-image .image-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+    }
+
+    .cell-image :global(.hidden) {
+        display: none !important;
+    }
+
+    :global(.dark) .cell-image {
+        background: #334155;
+    }
+
+    :global(.dark) .cell-image .image-fallback {
+        color: #64748b;
     }
 
     :global(.dark) .td-empty, :global(.dark) .td-loading {
@@ -1217,7 +1363,7 @@
 
     .cell-icon-text :global(svg) {
         flex-shrink: 0;
-        min-width: 16px;
+        min-width: 20px;
     }
 
     .cell-icon-text span {
@@ -1225,6 +1371,7 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         min-width: 0;
+        text-align: left;
     }
 
     .cell-badge {

@@ -52,6 +52,17 @@
         return type === 'static' ? (file as UploadedFile).size_bytes : ((file as BrimFile).size_bytes || 0);
     }
 
+    function isImageFile(file: FileData): boolean {
+        if (type !== 'static') return false;
+        const f = file as UploadedFile;
+        return f.mime_type?.startsWith('image/') ?? false;
+    }
+
+    function getPreviewUrl(file: FileData): string {
+        const f = file as UploadedFile;
+        return `${f.url}?img_preview=48x48`;
+    }
+
     function getFileIcon(file: FileData) {
         const filename = getFileName(file).toLowerCase();
         const ext = filename.split('.').pop() || '';
@@ -186,11 +197,23 @@
                 id: 'filename',
                 urlKey: 'filename',
                 header: () => $t('uploads.fileName'),
-                cell: (row) => ({
-                    type: 'icon-text',
-                    icon: getFileIcon(row),
-                    text: getFileName(row),
-                }),
+                cell: (row) => {
+                    if (isImageFile(row)) {
+                        return {
+                            type: 'image',
+                            src: getPreviewUrl(row),
+                            alt: getFileName(row),
+                            text: getFileName(row),
+                            fallbackIcon: Image,
+                            size: 32,
+                        };
+                    }
+                    return {
+                        type: 'icon-text',
+                        icon: getFileIcon(row),
+                        text: getFileName(row),
+                    };
+                },
                 type: 'text',
                 width: 250,
                 getValue: (row) => getFileName(row),

@@ -779,7 +779,7 @@
                                 <div class="file-preview">
                                     {#if isImage(file.mime_type)}
                                         <LazyImage
-                                                src={file.url}
+                                                src="{file.url}?img_preview=240x240"
                                                 alt={file.original_name}
                                                 placeholder="generic"
                                                 width="100%"

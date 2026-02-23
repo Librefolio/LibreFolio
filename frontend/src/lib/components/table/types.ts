@@ -72,6 +72,25 @@ export interface CustomCell {
 }
 
 /**
+ * Image thumbnail cell - shows preview with fallback to icon
+ */
+export interface ImageCell {
+    type: 'image';
+    /** Image source URL (use ?img_preview= for thumbnails) */
+    src: string;
+    /** Alt text */
+    alt: string;
+    /** Optional text displayed next to the image */
+    text?: string;
+    /** Fallback icon component (shown if image fails to load) */
+    fallbackIcon?: AnyComponent;
+    /** Size in pixels (default: 32) */
+    size?: number;
+    /** Whether to show as circle (default: false) */
+    circle?: boolean;
+}
+
+/**
  * All possible cell content types
  */
 export type CellContent =
@@ -81,7 +100,8 @@ export type CellContent =
     | DateCell
     | SizeCell
     | LinkCell
-    | CustomCell;
+    | CustomCell
+    | ImageCell;
 
 // ============ Column Definition Types ============
 
@@ -284,11 +304,28 @@ export interface DataTableProps<T> {
     /** Enable row selection (default: true) */
     enableSelection?: boolean;
 
-    /** Selection column width (default: '5%') */
+    /**
+     * Selection mode:
+     * - 'multi': checkbox multi-select (default when enableSelection=true)
+     * - 'single': click row to select one at a time, no checkboxes
+     * - 'none': no selection (same as enableSelection=false)
+     */
+    selectionMode?: 'multi' | 'single' | 'none';
+
+    /** Selection column width (default: '5%') — only used in 'multi' mode */
     selectionColumnWidth?: string;
 
-    /** Called when selection changes */
+    /** Called when selection changes (multi: array of IDs, single: array with 0 or 1 ID) */
     onSelectionChange?: (selectedIds: string[]) => void;
+
+    /** Currently selected row ID (for single mode, controlled from parent) */
+    selectedRowId?: string | null;
+
+    /** Called when a row is clicked (any mode) */
+    onRowClick?: (row: T) => void;
+
+    /** Called when a row is double-clicked */
+    onRowDoubleClick?: (row: T) => void;
 
     // Actions
     /** Enable actions column (default: true) */
