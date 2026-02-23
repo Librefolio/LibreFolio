@@ -176,6 +176,15 @@
 - ✅ **URL preview ellisse**: LazyImage container centrato con `width: auto`, immagine con `display: block`
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
+### Refactoring Round 12 ✅ (23 Feb 2026 — ModalBase + z-index system)
+- ✅ **ModalBase.svelte creato**: componente base per tutte le modali — gestisce backdrop, click-outside, Escape (con stopPropagation per stacking), focus, transitions, z-index parametrico, dark mode
+- ✅ **FileEditModal migrato a ModalBase**: rimossi ~100 righe di boilerplate (backdrop, keydown window listener, z-index CSS). Confirm dialog interno usa ModalBase(zIndex+10)
+- ✅ **ConfirmModal migrato a ModalBase**: rimossi ~50 righe. Aggiunto `zIndex` prop (default 60)
+- ✅ **Z-index system standardizzato**: layer 50→60→70 (10 in 10). Rimossi z-index 100, 1000, 1010, 9999
+- ✅ **Fix keyboard input nelle modali stackate**: `on:keydown|stopPropagation` su ModalBase backdrop previene che le modali sottostanti intercettino i tasti digitati negli input
+- ✅ **BRIM rename pencil position**: spostato dopo il nome file e prima della size (icona → nome → matita → size)
+- ✅ **0 errori, 0 warnings** — svelte-check + build puliti
+
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
 - **Reattività Svelte**: Usare espressioni inline nel template, non funzioni

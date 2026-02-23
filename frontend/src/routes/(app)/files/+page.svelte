@@ -924,6 +924,7 @@
                         <div class="file-row">
                             <div class="file-info">
                                 <FileSpreadsheet size={18} class="file-icon"/>
+                                <span class="file-name" title={file.name}>{file.name}</span>
                                 <button
                                     type="button"
                                     class="brim-edit-btn"
@@ -936,7 +937,6 @@
                                 >
                                     <Pencil size={12}/>
                                 </button>
-                                <span class="file-name" title={file.name}>{file.name}</span>
                                 <span class="file-size">({formatBytes(file.size)})</span>
                             </div>
                             <BrokerSearchSelect
@@ -1372,7 +1372,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 1000;
+        z-index: 50;
     }
 
     .modal-content {

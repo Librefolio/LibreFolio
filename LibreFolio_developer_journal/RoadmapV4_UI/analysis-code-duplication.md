@@ -201,7 +201,7 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 
 | # | Intervento | Risparmio | Complessità | Priorità | Status |
 |---|-----------|-----------|-------------|----------|--------|
-| 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta | 🔲 TODO |
+| 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta | ✅ FATTO (creato + FileEditModal, ConfirmModal migrati) |
 | 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta | ✅ FATTO (`utils/upload.ts`) |
 | 3 | **formatBytes() centralizzato** | ~60 righe (7 copie) | Minima | 🟡 Media | ✅ FATTO (`utils/upload.ts` con i18n via `get(_)`) |
 | 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media | 🔲 TODO |
@@ -255,11 +255,12 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 
 ## 🏁 Raccomandazione
 
-Il prossimo passo di refactoring più impattante è **ModalBase.svelte**, che eliminerebbe ~550 righe di codice duplicato e standardizzerebbe il comportamento di tutte le modali (Escape, backdrop click, transitions, dark mode). Questo va fatto **prima di Phase 5** (FX Management) perché ogni nuova pagina avrà le sue modali.
+Il refactoring **ModalBase.svelte** è completato — FileEditModal e ConfirmModal migrati, con z-index standardizzato (50→60→70) e keyboard event isolation per modali stackate. Le prossime modali da migrare sono BrokerModal, ImageEditModal, AssetPickerModal, BrokerImportFilesModal. Ogni nuova pagina (Phase 5+) userà ModalBase direttamente.
 
 **Ordine suggerito**:
 1. ✅ ~~Creare `uploadFile()` utility~~ — FATTO in `utils/upload.ts`
-2. Creare `ModalBase.svelte` (impatta tutte le modali future)
-3. Usare DataTable nel tab Existing di AssetPickerModal
-4. Questi possono essere fatti come sub-plan dedicato tra Phase 4 e Phase 5
+2. ✅ ~~Creare `ModalBase.svelte`~~ — FATTO (FileEditModal, ConfirmModal migrati)
+3. Migrare modali rimanenti: BrokerModal, ImageEditModal, AssetPickerModal, BrokerImportFilesModal
+4. Usare DataTable nel tab Existing di AssetPickerModal (FileGrid extraction)
+5. Questi possono essere completati come sub-plan dedicato tra Phase 4 e Phase 5
 

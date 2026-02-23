@@ -6,42 +6,37 @@
   - Optional collapsible list of items (e.g., files to delete)
   - Danger variant for destructive actions
   - Dark mode support
+  - Uses ModalBase for consistent modal behavior
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
     import {AlertTriangle, ChevronDown, ChevronUp, X} from 'lucide-svelte';
-    import {fade, scale} from 'svelte/transition';
+    import {fade} from 'svelte/transition';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
     interface Props {
         /** Whether modal is open */
         open: boolean;
-
         /** Modal title */
         title: string;
-
         /** Main message */
         message: string;
-
         /** Optional list of items to show (collapsible) */
         items?: string[];
-
         /** Label for the list section */
         itemsLabel?: string;
-
         /** Confirm button text */
         confirmText?: string;
-
         /** Cancel button text */
         cancelText?: string;
-
         /** Danger mode (red confirm button) */
         danger?: boolean;
-
         /** Called on confirm */
         onConfirm: () => void;
-
         /** Called on cancel/close */
         onCancel: () => void;
+        /** Z-index for stacking (default 60 = above first-level modals) */
+        zIndex?: number;
     }
 
     let {
@@ -55,6 +50,7 @@
         danger = false,
         onConfirm,
         onCancel,
+        zIndex = 60,
     }: Props = $props();
 
     // Auto-show items if there's only 1 (no need for toggle)
@@ -62,132 +58,81 @@
 
     // Reactive: if items.length === 1, always show
     let shouldShowItems = $derived(items.length === 1 || showItems);
-
-    function handleBackdropClick(e: MouseEvent) {
-        if (e.target === e.currentTarget) {
-            onCancel();
-        }
-    }
-
-    function handleKeydown(e: KeyboardEvent) {
-        if (e.key === 'Escape') {
-            onCancel();
-        }
-    }
 </script>
 
-<svelte:window on:keydown={handleKeydown}/>
-
-{#if open}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div
-            class="modal-backdrop"
-            onclick={handleBackdropClick}
-            role="dialog"
-            aria-modal="true"
-            tabindex="-1"
-            transition:fade={{ duration: 150 }}
-    >
-        <div
-                class="modal-content"
-                transition:scale={{ duration: 150, start: 0.95 }}
+<ModalBase
+    {open}
+    {zIndex}
+    maxWidth="max-w-md"
+    onRequestClose={onCancel}
+>
+    <!-- Header -->
+    <div class="modal-header">
+        {#if danger}
+            <AlertTriangle class="text-red-500" size={24}/>
+        {/if}
+        <h2 class="modal-title">{title}</h2>
+        <button
+                type="button"
+                class="close-btn"
+                onclick={onCancel}
+                aria-label="Close"
         >
-            <!-- Header -->
-            <div class="modal-header">
-                {#if danger}
-                    <AlertTriangle class="text-red-500" size={24}/>
-                {/if}
-                <h2 class="modal-title">{title}</h2>
-                <button
-                        type="button"
-                        class="close-btn"
-                        onclick={onCancel}
-                        aria-label="Close"
-                >
-                    <X size={20}/>
-                </button>
-            </div>
-
-            <!-- Body -->
-            <div class="modal-body">
-                <p class="message">{message}</p>
-
-                {#if items.length > 0}
-                    <div class="items-section">
-                        {#if items.length > 1}
-                            <button
-                                    type="button"
-                                    class="items-toggle"
-                                    onclick={() => (showItems = !showItems)}
-                            >
-								<span class="items-label">
-									{itemsLabel || `${items.length} items`}
-								</span>
-                                {#if shouldShowItems}
-                                    <ChevronUp size={16}/>
-                                {:else}
-                                    <ChevronDown size={16}/>
-                                {/if}
-                            </button>
-                        {/if}
-
-                        {#if shouldShowItems}
-                            <ul class="items-list" transition:fade={{ duration: 100 }}>
-                                {#each items as item}
-                                    <li class="item">{item}</li>
-                                {/each}
-                            </ul>
-                        {/if}
-                    </div>
-                {/if}
-            </div>
-
-            <!-- Footer -->
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick={onCancel}>
-                    {cancelText}
-                </button>
-                <button
-                        type="button"
-                        class="btn {danger ? 'btn-danger' : 'btn-primary'}"
-                        onclick={onConfirm}
-                >
-                    {confirmText}
-                </button>
-            </div>
-        </div>
+            <X size={20}/>
+        </button>
     </div>
-{/if}
+
+    <!-- Body -->
+    <div class="modal-body">
+        <p class="message">{message}</p>
+
+        {#if items.length > 0}
+            <div class="items-section">
+                {#if items.length > 1}
+                    <button
+                            type="button"
+                            class="items-toggle"
+                            onclick={() => (showItems = !showItems)}
+                    >
+                        <span class="items-label">
+                            {itemsLabel || `${items.length} items`}
+                        </span>
+                        {#if shouldShowItems}
+                            <ChevronUp size={16}/>
+                        {:else}
+                            <ChevronDown size={16}/>
+                        {/if}
+                    </button>
+                {/if}
+
+                {#if shouldShowItems}
+                    <ul class="items-list" transition:fade={{ duration: 100 }}>
+                        {#each items as item}
+                            <li class="item">{item}</li>
+                        {/each}
+                    </ul>
+                {/if}
+            </div>
+        {/if}
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick={onCancel}>
+            {cancelText}
+        </button>
+        <button
+                type="button"
+                class="btn {danger ? 'btn-danger' : 'btn-primary'}"
+                onclick={onConfirm}
+        >
+            {confirmText}
+        </button>
+    </div>
+</ModalBase>
 
 <style>
-    .modal-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 100;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(2px);
-    }
-
-    .modal-content {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-        max-width: 420px;
-        width: 90%;
-        max-height: 80vh;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-    }
-
-    :global(.dark) .modal-content {
-        background: #1e293b;
-        border: 1px solid #334155;
-    }
+    /* No backdrop styles needed — handled by ModalBase */
 
     .modal-header {
         display: flex;
