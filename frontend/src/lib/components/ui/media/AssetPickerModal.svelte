@@ -420,15 +420,20 @@
         overflow: hidden;
     }
 
-    /* Force the LazyImage container and img to respect max-height */
+    /* Force the LazyImage container to center and respect max-height */
     .url-preview-img-wrapper :global(.lazy-image-container) {
         max-height: 250px;
+        width: auto !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     .url-preview-img-wrapper :global(img) {
         max-height: 250px;
         width: auto;
         max-width: 100%;
         object-fit: contain;
+        display: block;
     }
 
     .url-preview-circle-overlay {
@@ -436,11 +441,11 @@
         display: flex; align-items: center; justify-content: center;
         pointer-events: none;
     }
-    /* Circle cutout: shows original image inside, dark overlay outside */
+    /* Circle cutout: shows original image inside, dark overlay outside.
+       Uses a percentage of the container so it scales with image size. */
     .url-preview-circle-overlay::before {
         content: '';
-        /* 70% of the smaller dimension ensures the circle fits inside the image */
-        width: min(70%, 160px); aspect-ratio: 1;
+        width: min(100%, 200px); aspect-ratio: 1;
         border-radius: 50%;
         box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
         border: 2px solid rgba(255, 255, 255, 0.6);

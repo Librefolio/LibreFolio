@@ -11,7 +11,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {X, Check, Loader2, FileIcon, RefreshCw} from 'lucide-svelte';
-    import {uploadFile} from '$lib/utils/upload';
+    import {uploadFile, formatBytes} from '$lib/utils/upload';
 
     // Props
     export let open: boolean = false;
@@ -183,7 +183,7 @@
                 <!-- File info (metadata below) -->
                 <div class="file-info-row">
                     <span class="info-label">{$_('uploads.fileSize') || 'Size'}:</span>
-                    <span class="info-value">{formatSize(file.size)}</span>
+                    <span class="info-value">{formatBytes(file.size)}</span>
                 </div>
                 <div class="file-info-row">
                     <span class="info-label">{$_('common.type') || 'Type'}:</span>
@@ -254,19 +254,11 @@
     </div>
 {/if}
 
-<script context="module" lang="ts">
-    function formatSize(bytes: number): string {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    }
-</script>
-
 <style>
     .modal-backdrop {
         position: fixed;
         inset: 0;
-        z-index: 50;
+        z-index: 60;
         display: flex;
         align-items: center;
         justify-content: center;

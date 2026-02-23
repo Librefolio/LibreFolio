@@ -5,6 +5,8 @@
  */
 
 import {axiosInstance} from '$lib/api';
+import {get} from 'svelte/store';
+import {_} from '$lib/i18n';
 
 /**
  * Upload a file to the backend static uploads endpoint.
@@ -57,14 +59,25 @@ export async function uploadBrimFile(
 }
 
 /**
- * Format byte sizes into human-readable strings.
+ * Format byte sizes into human-readable strings with i18n-translated units.
+ *
+ * Uses svelte-i18n translation keys: filter.bytes, filter.kilobytes, filter.megabytes, filter.gigabytes.
+ * Works both inside and outside Svelte components via get() from svelte/store.
  *
  * @param bytes - Size in bytes
- * @returns Formatted string (e.g. "1.5 MB")
+ * @returns Formatted string (e.g. "1.5 MB" in EN, "1.5 Mo" in FR)
  */
 export function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    const t = get(_);
+    const b = t('filter.bytes') || 'B';
+    const kb = t('filter.kilobytes') || 'KB';
+    const mb = t('filter.megabytes') || 'MB';
+    const gb = t('filter.gigabytes') || 'GB';
+
+    if (bytes === 0) return `0 ${b}`;
+    if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} ${gb}`;
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} ${mb}`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} ${kb}`;
+    return `${bytes} ${b}`;
 }
 

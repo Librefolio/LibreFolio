@@ -6,7 +6,7 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {formatBytes as formatBytesBase} from '$lib/utils/upload';
+    import {formatBytes} from '$lib/utils/upload';
     import {FileText, FileUp, RefreshCw, Trash2} from 'lucide-svelte';
     import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
     import type {BrimFile} from '$lib/types';
@@ -120,9 +120,9 @@
         });
     }
 
-    function formatBytes(bytes: number | undefined): string {
+    function formatBytesOrDash(bytes: number | undefined): string {
         if (!bytes) return '-';
-        return formatBytesBase(bytes);
+        return formatBytes(bytes);
     }
 
     function getStatusClass(status: string): string {
@@ -203,7 +203,7 @@
                             <div class="flex items-center space-x-2 text-xs text-gray-500">
                                 <span>{formatDate(file.uploaded_at)}</span>
                                 <span>•</span>
-                                <span>{formatBytes(file.size_bytes)}</span>
+                                <span>{formatBytesOrDash(file.size_bytes)}</span>
                                 <span class="px-1.5 py-0.5 rounded text-xs {getStatusClass(file.status)}">
                                     {file.status}
                                 </span>
