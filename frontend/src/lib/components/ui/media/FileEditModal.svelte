@@ -6,17 +6,21 @@
   - Change file extension/format
   - Consistent API with ImageEditModal (same events, same pattern)
   - Fallback modal for files that don't have specialized editors
+  - Uses ModalBase for backdrop/keydown/z-index handling
 -->
 <script lang="ts">
-    import {createEventDispatcher} from 'svelte';
+    import {createEventDispatcher, tick} from 'svelte';
     import {_} from '$lib/i18n';
     import {X, Check, Loader2, FileIcon, RefreshCw} from 'lucide-svelte';
     import {uploadFile, formatBytes} from '$lib/utils/upload';
+    import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
     // Props
     export let open: boolean = false;
     export let file: File | null = null;
     export let uploadOnComplete: boolean = true;
+    /** Z-index for modal stacking (default 60 = second-level modal) */
+    export let zIndex: number = 60;
 
     const dispatch = createEventDispatcher<{
         complete: {url: string | null; file: File};
@@ -77,18 +81,6 @@
         showCloseConfirm = false;
     }
 
-    function handleBackdropClick(event: MouseEvent) {
-        if (event.target === event.currentTarget) {
-            requestClose();
-        }
-    }
-
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape') {
-            requestClose();
-        }
-    }
-
     function handleNameChange() {
         hasChanges = true;
     }
@@ -125,162 +117,139 @@
     }
 </script>
 
-<svelte:window on:keydown={open ? handleKeydown : undefined} />
-
-{#if open && file}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-backdrop" on:click={handleBackdropClick}>
-        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="file-edit-title">
-            <!-- Header -->
-            <div class="modal-header">
-                <h2 id="file-edit-title" class="modal-title">
-                    <FileIcon size={20} />
-                    {$_('uploads.editFile') || 'Edit File'}
-                </h2>
-                <div class="header-actions">
-                    {#if hasChanges}
-                        <button
-                            type="button"
-                            class="restore-btn"
-                            on:click={restoreOriginal}
-                            title={$_('uploads.resetAll') || 'Reset All'}
-                        >
-                            <RefreshCw size={16} />
-                        </button>
-                    {/if}
+{#if file}
+    <ModalBase
+        {open}
+        {zIndex}
+        maxWidth="max-w-md"
+        onRequestClose={requestClose}
+    >
+        <!-- Header -->
+        <div class="modal-header">
+            <h2 class="modal-title">
+                <FileIcon size={20} />
+                {$_('uploads.editFile') || 'Edit File'}
+            </h2>
+            <div class="header-actions">
+                {#if hasChanges}
                     <button
                         type="button"
-                        class="close-btn"
-                        on:click={requestClose}
-                        title={$_('common.close') || 'Close'}
+                        class="restore-btn"
+                        on:click={restoreOriginal}
+                        title={$_('uploads.resetAll') || 'Reset All'}
                     >
-                        <X size={20} />
+                        <RefreshCw size={16} />
                     </button>
-                </div>
-            </div>
-
-            <!-- Body -->
-            <div class="modal-body">
-                <!-- File name editing - top (consistent with ImageEditModal) -->
-                <div class="filename-editor">
-                    <label class="filename-label" for="file-edit-name">
-                        {$_('uploads.fileName') || 'File name'}:
-                    </label>
-                    <div class="filename-input-group">
-                        <input
-                            id="file-edit-name"
-                            type="text"
-                            class="filename-input"
-                            bind:value={editedBaseName}
-                            placeholder="file"
-                            on:input={handleNameChange}
-                        />
-                        <span class="file-extension">{fileExtension}</span>
-                    </div>
-                </div>
-
-                <!-- File info (metadata below) -->
-                <div class="file-info-row">
-                    <span class="info-label">{$_('uploads.fileSize') || 'Size'}:</span>
-                    <span class="info-value">{formatBytes(file.size)}</span>
-                </div>
-                <div class="file-info-row">
-                    <span class="info-label">{$_('common.type') || 'Type'}:</span>
-                    <span class="info-value">{file.type || 'unknown'}</span>
-                </div>
-
-                <!-- Error -->
-                {#if error}
-                    <div class="error-message">{error}</div>
                 {/if}
-            </div>
-
-            <!-- Footer -->
-            <div class="modal-footer">
                 <button
                     type="button"
-                    class="btn btn-secondary"
+                    class="close-btn"
                     on:click={requestClose}
-                    disabled={isUploading}
+                    title={$_('common.close') || 'Close'}
                 >
-                    {$_('common.cancel') || 'Cancel'}
-                </button>
-                <button
-                    type="button"
-                    class="btn btn-primary"
-                    on:click={handleConfirm}
-                    disabled={isUploading}
-                >
-                    {#if isUploading}
-                        <Loader2 size={16} class="animate-spin" />
-                        {$_('common.uploading') || 'Uploading...'}
-                    {:else}
-                        <Check size={16} />
-                        {#if uploadOnComplete}
-                            {$_('uploads.renameAndUpload') || 'Rename & Upload'}
-                        {:else}
-                            {$_('uploads.rename') || 'Rename'}
-                        {/if}
-                    {/if}
+                    <X size={20} />
                 </button>
             </div>
         </div>
-    </div>
+
+        <!-- Body -->
+        <div class="modal-body">
+            <!-- File name editing - top (consistent with ImageEditModal) -->
+            <div class="filename-editor">
+                <label class="filename-label" for="file-edit-name">
+                    {$_('uploads.fileName') || 'File name'}:
+                </label>
+                <div class="filename-input-group">
+                    <!-- svelte-ignore a11y_autofocus -->
+                    <input
+                        id="file-edit-name"
+                        type="text"
+                        class="filename-input"
+                        bind:value={editedBaseName}
+                        placeholder="file"
+                        on:input={handleNameChange}
+                        autofocus
+                    />
+                    <span class="file-extension">{fileExtension}</span>
+                </div>
+            </div>
+
+            <!-- File info (metadata below) -->
+            <div class="file-info-row">
+                <span class="info-label">{$_('uploads.fileSize') || 'Size'}:</span>
+                <span class="info-value">{formatBytes(file.size)}</span>
+            </div>
+            <div class="file-info-row">
+                <span class="info-label">{$_('common.type') || 'Type'}:</span>
+                <span class="info-value">{file.type || 'unknown'}</span>
+            </div>
+
+            <!-- Error -->
+            {#if error}
+                <div class="error-message">{error}</div>
+            {/if}
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer">
+            <button
+                type="button"
+                class="btn btn-secondary"
+                on:click={requestClose}
+                disabled={isUploading}
+            >
+                {$_('common.cancel') || 'Cancel'}
+            </button>
+            <button
+                type="button"
+                class="btn btn-primary"
+                on:click={handleConfirm}
+                disabled={isUploading}
+            >
+                {#if isUploading}
+                    <Loader2 size={16} class="animate-spin" />
+                    {$_('common.uploading') || 'Uploading...'}
+                {:else}
+                    <Check size={16} />
+                    {#if uploadOnComplete}
+                        {$_('uploads.renameAndUpload') || 'Rename & Upload'}
+                    {:else}
+                        {$_('uploads.rename') || 'Rename'}
+                    {/if}
+                {/if}
+            </button>
+        </div>
+    </ModalBase>
 {/if}
 
-<!-- Confirmation dialog -->
-{#if showCloseConfirm}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="confirm-backdrop" on:click|self={cancelClose}>
-        <div class="confirm-dialog">
-            <div class="confirm-header">
-                <span class="confirm-icon">⚠️</span>
-                <h3>{$_('uploads.discardChanges') || 'Discard changes?'}</h3>
-            </div>
-            <p class="confirm-message">
-                {$_('uploads.discardChangesMessage') || 'You have unsaved changes. Are you sure you want to close?'}
-            </p>
-            <div class="confirm-actions">
-                <button class="btn btn-secondary" on:click={cancelClose}>
-                    {$_('common.cancel') || 'Cancel'}
-                </button>
-                <button class="btn btn-warning" on:click={confirmClose}>
-                    {$_('uploads.discardAndClose') || 'Discard'}
-                </button>
-            </div>
+<!-- Confirmation dialog (uses ModalBase at higher z-index) -->
+<ModalBase
+    open={showCloseConfirm}
+    zIndex={zIndex + 10}
+    maxWidth="max-w-sm"
+    onRequestClose={cancelClose}
+>
+    <div class="confirm-content">
+        <div class="confirm-header">
+            <span class="confirm-icon">⚠️</span>
+            <h3>{$_('uploads.discardChanges') || 'Discard changes?'}</h3>
+        </div>
+        <p class="confirm-message">
+            {$_('uploads.discardChangesMessage') || 'You have unsaved changes. Are you sure you want to close?'}
+        </p>
+        <div class="confirm-actions">
+            <button class="btn btn-secondary" on:click={cancelClose}>
+                {$_('common.cancel') || 'Cancel'}
+            </button>
+            <button class="btn btn-warning" on:click={confirmClose}>
+                {$_('uploads.discardAndClose') || 'Discard'}
+            </button>
         </div>
     </div>
-{/if}
+</ModalBase>
 
 <style>
-    .modal-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 60;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: rgba(0, 0, 0, 0.6);
-        padding: 1rem;
-    }
-
-    .modal-content {
-        background: white;
-        border-radius: 1rem;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-        width: 100%;
-        max-width: 460px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    :global(.dark) .modal-content {
-        background: #1f2937;
-        border: 1px solid #374151;
-    }
+    /* No backdrop/modal-content styles needed — handled by ModalBase */
 
     .modal-header {
         display: flex;
@@ -499,29 +468,9 @@
     :global(.animate-spin) { animation: spin 1s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    /* Confirmation Dialog */
-    .confirm-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 100;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: rgba(0, 0, 0, 0.7);
-    }
-
-    .confirm-dialog {
-        background: white;
-        border-radius: 0.75rem;
+    /* Confirmation Dialog Content */
+    .confirm-content {
         padding: 1.5rem;
-        max-width: 400px;
-        width: 90%;
-        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
-    }
-
-    :global(.dark) .confirm-dialog {
-        background: #1f2937;
-        border: 1px solid #374151;
     }
 
     .confirm-header {
