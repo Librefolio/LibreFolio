@@ -495,6 +495,7 @@
     "uploadNew": "Upload",
     "imageUrl": "Image URL",
     "useSelected": "Use Selected",
-    "selectIcon": "Select Icon"
+    "selectIcon": "Select Icon",
+    "urlHint": "Enter a remote URL or a local path from Files"
   }
 }

@@ -1,8 +1,8 @@
 # Piano Aggiornato: Image Crop Modal System
 
 **Data**: 18 Febbraio 2026  
-**Ultimo Aggiornamento**: 20 Febbraio 2026 (ore 13:10)  
-**Status**: 🟡 IN PROGRESS - Feature 6 (AssetPickerModal) in corso  
+**Ultimo Aggiornamento**: 20 Febbraio 2026 (ore 19:00)  
+**Status**: 🟢 COMPLETATO — Tutte le feature implementate, test E2E da scrivere  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
 
 ---
@@ -88,16 +88,38 @@
 - ✅ **resetAll esportato**: funzione accessibile da ImageEditModal via `cropper?.resetAll?.()`
 - ✅ **Reset rimosso da overlay**: solo nel header modale
 
-### Feature 6: AssetPickerModal 🟡 IN PROGRESS (20 Feb 2026)
+### Feature 6: AssetPickerModal ✅ COMPLETATA (20 Feb 2026)
 - ✅ **AssetPickerModal creato** — modale con 3 tab: Existing, URL, Upload
 - ✅ **Tab Existing**: griglia/lista con search, view toggle, selezione singola, doppio click conferma
-- ✅ **Tab URL**: input con validazione, preview immagine con LazyImage
+- ✅ **Tab URL**: input con validazione, preview immagine con LazyImage, cerchio overlay
 - ✅ **Tab Upload**: trigger file input hidden, dispatch 'upload' event per genitore
-- ✅ **Integrato in BrokerForm**: bottone icona → AssetPickerModal → URL o ImageEditModal
+- ✅ **Integrato in BrokerForm**: click icona → AssetPickerModal → URL o ImageEditModal
 - ✅ **Integrato in ProfileTab**: click avatar → AssetPickerModal → URL o ImageEditModal
-- ✅ **Traduzioni i18n**: selectAsset, existingFiles, fromUrl, uploadNew, imageUrl, useSelected, selectIcon, selectAvatar
+- ✅ **Traduzioni i18n**: selectAsset, existingFiles, fromUrl, uploadNew, imageUrl, useSelected, selectIcon, selectAvatar, urlHint
 - ✅ **A11y compliant**: tabindex=-1, label for/id, 0 errori 0 warnings
-- 🔲 Test manuale e raffinamento UI
+
+### UI Polish Round 5 ✅ (20 Feb 2026 ore 18:00)
+- ✅ **Ellipse overlay contenuta**: `overflow: hidden` su `.crop-wrapper` per evitare che box-shadow 9999px copra la modale
+- ✅ **Zoom logic corretta**: + prima riduce selezione poi zooma sfondo, - prima ingrandisce selezione poi dezooma sfondo
+- ✅ **Clamping selezione migliorato**: usa bounds canvas e vincoli più stretti per prevenire overflow
+- ✅ **BrokerForm icon clickable**: click sull'icona apre AssetPickerModal (rimosso campo URL visibile)
+- ✅ **AssetPickerModal initialUrl prop**: pre-popola il campo URL con il valore corrente
+- ✅ **AssetPickerModal circularPreview prop**: overlay cerchio nella preview URL per avatar/icon
+- ✅ **URL preview auto-dimensionata**: max-height 250px, width 100%, centrata
+- ✅ **URL hint text**: "Enter a remote URL or a local path from Files"
+- ✅ **URL mostrata sotto icona in BrokerForm**: testo troncato con tooltip
+
+### UI Polish Round 6 ✅ (20 Feb 2026 ore 19:00)
+- ✅ **Fix `__upload__` contamination**: upload non più dispatcha `select` con URL `__upload__`
+- ✅ **Cancel upload → reopen picker**: cancellando ImageEditModal riapre AssetPickerModal
+- ✅ **Tab iniziale intelligente**: se c'è initialUrl → tab URL, altrimenti → tab Existing
+- ✅ **Reset URL corretto**: urlInput resettato correttamente on open (non on close)
+- ✅ **Filter `__upload__` in parents**: BrokerForm e ProfileTab filtrano `__upload__` dal select handler
+- ✅ **ResetAll con margine**: free mode usa 95% coverage (margine sottile visibile)
+- ✅ **Active clamping durante drag**: `pointerdown`/`pointerup` + `requestAnimationFrame` loop per enforcement continuo
+- ✅ **Threshold clamping stretto**: 0.1px di threshold per prevenire micro-leak
+- ✅ **Rimozione duplicato**: rimossa vecchia `handleAvatarModalCancel` duplicata in ProfileTab
+- ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
@@ -367,7 +389,7 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 21. ✅ Flip spostato nell'overlay immagine (accanto zoom/rotate)
 22. ✅ Responsive: 1 colonna su mobile
 
-### Fase 5: Grid View Improvements + User Filter 🟡 IN PROGRESS
+### Fase 5: Grid View Improvements + User Filter ✅ COMPLETATA (parziale)
 
 > ⚠️ **Spostata prima di Asset Picker** perché Feature 6 (Asset Picker → Existing) dipende dal componente StaticFileBrowser che richiede le migliorie alla grid.
 
@@ -377,19 +399,20 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 24. ✅ Search per nome in grid mode (input con icona lente + clear)
 25. ⏳ Filtro utente: **DEFERRED** — richiede endpoint `/api/v1/users` backend (non esiste)
     - L'UploadedFile ha `uploaded_by_user_id` ma non c'è modo di risolverlo in username
-    - Da implementare quando si aggiunge un'API admin user list
+    - Da implementare quando si aggiunge un'API admin user list (vedi TODO_FUTURI.md)
 26. ✅ Riutilizzato pattern clipboard da FilesTable per copyFileLink
 27. N/A Filtro frontend-only — deferred con punto 25
 
-### Fase 6: Asset Picker Modal 📋
+### Fase 6: Asset Picker Modal ✅ COMPLETATA
 
-28. Creare `AssetPickerModal.svelte` con 3 tab (URL / Existing / Upload)
-29. Tab URL: input + preview LazyImage
-30. Tab Existing: Creare `StaticFileBrowser.svelte` (griglia/tabella, search, filtri)
-31. Tab Upload: apre ImageEditModal, ritorna URL
-32. Integrare in Avatar (ProfileTab) e BrokerIcon (BrokerForm)
-
-> ⚠️ Feature 3 (ora Fase 6) spostata dopo Feature 5 perché il tab "Existing" si basa sul componente `StaticFileBrowser` che viene creato/migliorato in Fase 5.
+28. ✅ Creato `AssetPickerModal.svelte` con 3 tab (URL / Existing / Upload)
+29. ✅ Tab URL: input + preview LazyImage + cerchio overlay + initialUrl + hint
+30. ✅ Tab Existing: griglia/lista con search, view toggle, selezione singola
+31. ✅ Tab Upload: apre ImageEditModal, cancel riapre picker
+32. ✅ Integrato in Avatar (ProfileTab) e BrokerIcon (BrokerForm)
+33. ✅ BrokerForm: icon clickable, rimosso campo URL visibile
+34. ✅ Tab iniziale intelligente: initialUrl → URL, altrimenti → Existing
+35. ✅ Fix `__upload__` contamination nel flusso upload/cancel
 
 ### Fase 7: Bug Fix Rimanenti ✅ COMPLETATA
 
@@ -545,102 +568,404 @@ export const IMAGE_PRESETS = {
 
 ### File da creare: `frontend/e2e/image-crop.spec.ts`
 
-#### Suite: Files Page Image Upload
+> **Prerequisiti test**: Utente autenticato, DB popolato con `./dev.py test db populate --force`
+> **File di test**: Creare cartella `frontend/e2e/fixtures/` con immagini e file di test
+
+#### Suite 1: Files Page — Image Upload Flow (7 test)
 
 ```typescript
-// A1: Upload singola immagine apre ImageEditModal
-test('uploading image opens ImageEditModal', async ({ page }) => {
-  // Navigate to files page
-  // Click upload, select image file
-  // Assert ImageEditModal is visible
-  // Assert crop area is present
-});
+test.describe('Files Page - Image Upload', () => {
+    // A1: Upload singola immagine apre ImageEditModal
+    test('uploading image file opens ImageEditModal', async ({ page }) => {
+        // Navigate to /files, Static tab
+        // Drag-and-drop or select a .jpg file
+        // Assert: ImageEditModal visible (data-testid="image-edit-modal")
+        // Assert: Crop area present (crop-container element)
+        // Assert: Filename input pre-filled with file name
+    });
 
-// A3: Conferma upload salva file
-test('confirming crop uploads image', async ({ page }) => {
-  // Open ImageEditModal with image
-  // Click confirm/upload button
-  // Assert modal closes
-  // Assert new file appears in list
-});
+    // A2: Crop e conferma upload
+    test('crop and upload saves file correctly', async ({ page }) => {
+        // Open ImageEditModal with image
+        // Click "Crop" button (uploadOnComplete=false mode)
+        // Assert: Modal closes
+        // Assert: File appears in pending list with edit indicator
+        // Click "Upload" to upload all pending files
+        // Assert: File appears in files table
+    });
 
-// A4: Cancel chiude senza upload
-test('canceling crop does not upload', async ({ page }) => {
-  // Open ImageEditModal
-  // Click cancel or X
-  // Assert modal closes
-  // Assert no new file in list
-});
+    // A3: Cancel crop non carica file
+    test('canceling crop does not add file', async ({ page }) => {
+        // Open ImageEditModal via image upload
+        // Click Cancel or X
+        // Assert: Modal closes
+        // Assert: No file in pending list
+    });
 
-// A6: Non-image file uploads directly
-test('non-image file uploads without crop modal', async ({ page }) => {
-  // Upload a PDF
-  // Assert ImageEditModal NOT shown
-  // Assert file uploaded directly
+    // A4: Upload file non-immagine skip crop modal
+    test('non-image file uploads directly without crop modal', async ({ page }) => {
+        // Upload a .pdf file
+        // Assert: ImageEditModal NOT shown
+        // Assert: File appears in pending list directly
+    });
+
+    // A5: Edit button apre ImageEditModal per file immagine
+    test('edit button on pending image re-opens ImageEditModal', async ({ page }) => {
+        // Upload image, crop, close modal
+        // Assert: Edit (pencil) icon visible on image file row
+        // Click pencil icon
+        // Assert: ImageEditModal re-opens with previous settings
+    });
+
+    // A6: Restore button annulla modifiche
+    test('restore button reverts file to original', async ({ page }) => {
+        // Upload and edit an image
+        // Assert: Restore (refresh) icon visible
+        // Click restore
+        // Assert: File reverts to original name/content
+        // Assert: Edit indicator disappears
+    });
+
+    // A7: FileEditModal per file non-immagine
+    test('edit button on non-image file opens FileEditModal', async ({ page }) => {
+        // Upload a .txt file
+        // Click pencil icon
+        // Assert: FileEditModal opens (not ImageEditModal)
+        // Change filename
+        // Click confirm
+        // Assert: File shows new name in pending list
+    });
 });
 ```
 
-#### Suite: Broker Icon Upload
+#### Suite 2: ImageEditModal Features (10 test)
 
 ```typescript
-// B1: Upload icona apre modal con aspect ratio 1:1
-test('broker icon upload opens modal with 1:1 ratio', async ({ page }) => {
-  // Open broker create modal
-  // Click icon upload button
-  // Select image
-  // Assert ImageEditModal visible
-  // Assert aspect ratio selector hidden (preset broker-icon)
-});
+test.describe('ImageEditModal - Controls & Settings', () => {
+    // B1: Zoom buttons funzionano
+    test('zoom in/out buttons change selection size', async ({ page }) => {
+        // Open ImageEditModal
+        // Read initial selection dimensions
+        // Click zoom in (+) button
+        // Assert: Selection dimensions decrease (crop tighter)
+        // Click zoom out (-) button
+        // Assert: Selection dimensions increase (crop wider)
+    });
 
-// B2: Conferma icona imposta URL
-test('confirming icon sets icon_url field', async ({ page }) => {
-  // Upload and confirm icon
-  // Assert icon_url input has value
-  // Assert icon preview shows image
+    // B2: Rotation buttons
+    test('rotation buttons rotate image', async ({ page }) => {
+        // Open ImageEditModal
+        // Click rotate right button
+        // Assert: Image visually rotated (transform matrix changed)
+        // Click rotate left button
+        // Assert: Image rotated back
+    });
+
+    // B3: Flip H/V buttons
+    test('flip buttons mirror image', async ({ page }) => {
+        // Open ImageEditModal
+        // Click flip horizontal
+        // Assert: Flip H button has 'active' class
+        // Click flip vertical
+        // Assert: Flip V button has 'active' class
+    });
+
+    // B4: Preset selection changes aspect ratio
+    test('selecting preset changes crop aspect ratio', async ({ page }) => {
+        // Open ImageEditModal with custom preset
+        // Click "Avatar" preset
+        // Assert: Aspect ratio becomes 1:1
+        // Assert: Ellipse preview auto-enabled
+        // Click "Custom" preset
+        // Assert: Aspect ratio buttons visible
+    });
+
+    // B5: Aspect ratio buttons (custom mode)
+    test('aspect ratio buttons in custom mode work', async ({ page }) => {
+        // Open with custom preset
+        // Click "16:9"
+        // Assert: Selection width/height ratio ≈ 16:9
+        // Click "Free"
+        // Assert: Selection is freely resizable
+    });
+
+    // B6: Output size editabile
+    test('output width/height are editable and interdependent', async ({ page }) => {
+        // Open ImageEditModal
+        // Set output width to 100
+        // Assert: Output height auto-calculated based on aspect ratio
+        // Assert: Scale factor updated
+    });
+
+    // B7: Scale factor editabile
+    test('scale factor adjusts output dimensions', async ({ page }) => {
+        // Open ImageEditModal
+        // Change scale to 0.50
+        // Assert: Output width/height = selection * 0.5
+    });
+
+    // B8: Format e Quality
+    test('format selector and quality spinner work', async ({ page }) => {
+        // Open ImageEditModal
+        // Change format to .jpg
+        // Assert: Quality spinner appears
+        // Click + quality button
+        // Assert: Quality increases by 10%
+    });
+
+    // B9: Filename editabile
+    test('filename can be changed', async ({ page }) => {
+        // Open ImageEditModal
+        // Clear filename input, type new name
+        // Click Crop
+        // Assert: Resulting file has new name
+    });
+
+    // B10: Reset All
+    test('reset all restores original state', async ({ page }) => {
+        // Open ImageEditModal
+        // Zoom in, rotate, change preset
+        // Click Reset All (refresh icon in header)
+        // Assert: Image back to original state
+        // Assert: Selection centered on image with slight margin
+    });
 });
 ```
 
-#### Suite: Avatar Upload
+#### Suite 3: ImageEditModal — Confirmation & Edge Cases (4 test)
 
 ```typescript
-// C1: Upload avatar apre modal con preset avatar
-test('avatar upload opens modal with 200x200 preset', async ({ page }) => {
-  // Navigate to settings
-  // Hover avatar, click change
-  // Select image
-  // Assert ImageEditModal visible with avatar preset
-});
+test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
+    // C1: Chiusura con modifiche mostra conferma
+    test('closing with changes shows confirmation dialog', async ({ page }) => {
+        // Open ImageEditModal
+        // Make a change (rotate, zoom, etc.)
+        // Click X or backdrop
+        // Assert: Confirmation dialog visible (orange warning)
+        // Click "Cancel" in dialog
+        // Assert: Modal still open
+        // Click "Discard" in dialog
+        // Assert: Modal closes
+    });
 
-// C2: Avatar visibile dopo salvataggio
-test('avatar appears in settings after upload', async ({ page }) => {
-  // Upload avatar
-  // Assert avatar image visible in profile section
-});
+    // C2: Chiusura senza modifiche non mostra conferma
+    test('closing without changes closes immediately', async ({ page }) => {
+        // Open ImageEditModal
+        // Wait for init (resetAll auto)
+        // Click X or press Escape
+        // Assert: Modal closes without confirmation
+    });
 
-// C3: Avatar in sidebar
-test('avatar appears in sidebar after upload', async ({ page }) => {
-  // Upload avatar
-  // Assert sidebar shows user avatar
-});
+    // C3: Ellipse preview toggle
+    test('eye toggle shows/hides ellipse preview', async ({ page }) => {
+        // Open ImageEditModal
+        // Assert: Eye toggle visible in top-left
+        // Click eye toggle
+        // Assert: Ellipse overlay visible/hidden
+    });
 
-// C4: Remove avatar
-test('removing avatar shows default icon', async ({ page }) => {
-  // With avatar set, click remove
-  // Assert avatar removed, default User icon shown
+    // C4: Selection non esce dal canvas
+    test('selection stays within canvas bounds', async ({ page }) => {
+        // Open ImageEditModal
+        // Try to drag selection to edge
+        // Assert: Selection stays within canvas boundaries
+    });
 });
 ```
 
-#### Suite: Dark Mode
+#### Suite 4: AssetPickerModal (8 test)
 
 ```typescript
-// D1: Modal styling in dark mode
-test('ImageEditModal has correct dark mode styling', async ({ page }) => {
-  // Enable dark mode
-  // Open ImageEditModal
-  // Assert dark background colors
-  // Assert text is light colored
+test.describe('AssetPickerModal', () => {
+    // D1: Apertura da BrokerForm
+    test('clicking broker icon opens AssetPickerModal', async ({ page }) => {
+        // Navigate to /brokers, click Add Broker
+        // Click on the icon area
+        // Assert: AssetPickerModal visible
+        // Assert: Title is "Select Icon"
+    });
+
+    // D2: Tab URL con initialUrl
+    test('URL tab pre-populated when broker has icon', async ({ page }) => {
+        // Edit a broker that has an icon_url
+        // Click icon
+        // Assert: AssetPickerModal opens on URL tab
+        // Assert: URL input contains existing icon URL
+        // Assert: Preview image visible
+    });
+
+    // D3: Tab Existing mostra file immagini
+    test('existing tab shows uploaded image files', async ({ page }) => {
+        // Upload an image file first
+        // Open AssetPickerModal (existing tab)
+        // Assert: Uploaded image visible in grid
+        // Assert: Search input functional
+    });
+
+    // D4: Selezione file da existing
+    test('selecting existing file sets icon URL', async ({ page }) => {
+        // Open AssetPickerModal, existing tab
+        // Click on a file
+        // Assert: File selected (highlighted)
+        // Click "Use Selected"
+        // Assert: Modal closes
+        // Assert: Icon URL updated
+    });
+
+    // D5: URL manuale funziona
+    test('entering URL manually sets icon', async ({ page }) => {
+        // Open AssetPickerModal, URL tab
+        // Type a valid URL
+        // Assert: Preview visible
+        // Click "Use Selected"
+        // Assert: Icon URL set to entered URL
+    });
+
+    // D6: Upload → ImageEditModal → cancel → torna al picker
+    test('canceling upload returns to AssetPickerModal', async ({ page }) => {
+        // Open AssetPickerModal
+        // Click Upload tab, select image
+        // Assert: ImageEditModal opens
+        // Cancel ImageEditModal
+        // Assert: AssetPickerModal re-opens
+    });
+
+    // D7: Upload → ImageEditModal → confirm → chiude tutto
+    test('completing upload sets URL and closes both modals', async ({ page }) => {
+        // Open AssetPickerModal
+        // Upload and crop image
+        // Assert: Both modals close
+        // Assert: Icon URL set to uploaded file URL
+    });
+
+    // D8: Cerchio overlay in URL tab (avatar/icon)
+    test('circular preview overlay visible for avatar/icon context', async ({ page }) => {
+        // Open AssetPickerModal with circularPreview=true (from avatar)
+        // Enter a valid URL
+        // Assert: Circular overlay visible on preview
+    });
 });
 ```
+
+#### Suite 5: Avatar Management (6 test)
+
+```typescript
+test.describe('Avatar - Profile Settings', () => {
+    // E1: Click avatar apre AssetPickerModal
+    test('clicking avatar opens AssetPickerModal', async ({ page }) => {
+        // Navigate to /settings, Profile tab
+        // Unlock edit mode (click pencil)
+        // Hover avatar, click camera overlay
+        // Assert: AssetPickerModal opens with "Select Avatar" title
+    });
+
+    // E2: Upload avatar tramite crop
+    test('uploading and cropping avatar saves it', async ({ page }) => {
+        // Open AssetPickerModal from avatar
+        // Upload new image → crop → confirm
+        // Assert: Avatar visible in Profile section
+        // Assert: Avatar visible in sidebar
+    });
+
+    // E3: Avatar da URL
+    test('setting avatar from URL saves it', async ({ page }) => {
+        // Open AssetPickerModal, URL tab
+        // Enter a valid image URL
+        // Confirm
+        // Assert: Avatar updated
+    });
+
+    // E4: Rimuovi avatar
+    test('removing avatar shows default icon', async ({ page }) => {
+        // With avatar set, click "Remove" link
+        // Assert: Confirmation dialog
+        // Confirm removal
+        // Assert: Default User icon shown
+        // Assert: Sidebar shows default icon
+    });
+
+    // E5: Avatar persiste dopo logout/login
+    test('avatar persists after re-login', async ({ page }) => {
+        // Set avatar
+        // Logout
+        // Login
+        // Assert: Avatar still visible in sidebar
+    });
+
+    // E6: Avatar con preset 1:1
+    test('avatar crop uses 1:1 aspect ratio', async ({ page }) => {
+        // Upload avatar via AssetPickerModal
+        // Assert: ImageEditModal has "Avatar" preset selected
+        // Assert: Aspect ratio locked to 1:1
+        // Assert: Ellipse preview auto-enabled
+    });
+});
+```
+
+#### Suite 6: Dark Mode (3 test)
+
+```typescript
+test.describe('Dark Mode - Image Crop Components', () => {
+    // F1: ImageEditModal dark styling
+    test('ImageEditModal has correct dark mode colors', async ({ page }) => {
+        // Enable dark mode
+        // Open ImageEditModal
+        // Assert: Modal background dark (#1f2937)
+        // Assert: Text is light colored
+        // Assert: Crop handles are white
+    });
+
+    // F2: AssetPickerModal dark styling
+    test('AssetPickerModal dark mode', async ({ page }) => {
+        // Enable dark mode
+        // Open AssetPickerModal
+        // Assert: Dark background
+        // Assert: Tabs have correct active color (green)
+    });
+
+    // F3: FileEditModal dark styling
+    test('FileEditModal dark mode', async ({ page }) => {
+        // Enable dark mode
+        // Open FileEditModal for a non-image file
+        // Assert: Dark background, light text
+    });
+});
+```
+
+#### Suite 7: Grid View Files Page (4 test)
+
+```typescript
+test.describe('Files Page - Grid View', () => {
+    // G1: Grid card layout 3 righe
+    test('grid cards show title, metadata, actions', async ({ page }) => {
+        // Navigate to /files, switch to grid view
+        // Assert: Each card has 3 rows: title, metadata, actions
+        // Assert: Actions include download, copy link, delete
+    });
+
+    // G2: Search funziona in grid
+    test('search filters files in grid view', async ({ page }) => {
+        // Upload multiple files
+        // Switch to grid view
+        // Type in search box
+        // Assert: Only matching files shown
+    });
+
+    // G3: Copy link in grid
+    test('copy link button in grid copies URL', async ({ page }) => {
+        // Click copy link on a grid card
+        // Assert: Clipboard contains file URL
+        // Assert: Brief checkmark feedback shown
+    });
+
+    // G4: Delete in grid rosso
+    test('delete button in grid is red styled', async ({ page }) => {
+        // Assert: Delete icon in grid has red color
+    });
+});
+```
+
+### Totale: ~42 test E2E da creare
 
 ### data-testid da aggiungere
 
@@ -649,12 +974,30 @@ test('ImageEditModal has correct dark mode styling', async ({ page }) => {
 | `ImageEditModal` backdrop | `image-edit-modal` | Identificare modal aperto |
 | `ImageEditModal` confirm btn | `image-edit-confirm` | Click per confermare |
 | `ImageEditModal` cancel btn | `image-edit-cancel` | Click per annullare |
+| `ImageEditModal` reset btn | `image-edit-reset` | Click per reset all |
+| `ImageEditModal` filename input | `image-edit-filename` | Editing nome file |
+| `ImageEditModal` eye toggle | `image-edit-ellipse-toggle` | Toggle preview ellipse |
 | `ImageCropper` container | `image-cropper` | Verificare presenza cropper |
-| `ImageCropper` zoom slider | `image-cropper-zoom` | Interazione zoom |
-| `BrokerForm` icon upload btn | `broker-icon-upload` | Trigger upload icona |
-| `PreferencesTab` avatar area | `avatar-upload-area` | Area cliccabile avatar |
-| `PreferencesTab` avatar remove | `avatar-remove-btn` | Rimuovi avatar |
+| `ImageCropper` zoom in btn | `cropper-zoom-in` | Zoom in |
+| `ImageCropper` zoom out btn | `cropper-zoom-out` | Zoom out |
+| `ImageCropper` rotate left btn | `cropper-rotate-left` | Rotate -15° |
+| `ImageCropper` rotate right btn | `cropper-rotate-right` | Rotate +15° |
+| `ImageCropper` flip h btn | `cropper-flip-h` | Flip horizontal |
+| `ImageCropper` flip v btn | `cropper-flip-v` | Flip vertical |
+| `FileEditModal` backdrop | `file-edit-modal` | Identificare modal aperto |
+| `FileEditModal` confirm btn | `file-edit-confirm` | Click per confermare |
+| `AssetPickerModal` backdrop | `asset-picker-modal` | Identificare modal aperto |
+| `AssetPickerModal` url tab | `asset-picker-url-tab` | Tab URL |
+| `AssetPickerModal` existing tab | `asset-picker-existing-tab` | Tab Existing |
+| `AssetPickerModal` upload tab | `asset-picker-upload-tab` | Tab Upload |
+| `AssetPickerModal` confirm btn | `asset-picker-confirm` | Use Selected |
+| `AssetPickerModal` search input | `asset-picker-search` | Search nel existing |
+| `BrokerForm` icon trigger | `broker-icon-trigger` | Click per aprire picker |
+| `ProfileTab` avatar area | `profile-avatar` | Area cliccabile avatar |
+| `ProfileTab` avatar remove | `avatar-remove-btn` | Rimuovi avatar |
 | `Sidebar` user avatar | `sidebar-user-avatar` | Verificare presenza avatar |
+| `FileUploader` edit btn | `file-edit-btn` | Trigger edit file |
+| `FileUploader` restore btn | `file-restore-btn` | Trigger restore file |
 
 ---
 
@@ -664,11 +1007,19 @@ test('ImageEditModal has correct dark mode styling', async ({ page }) => {
 - [x] Utente può zoom/pan per posizionare crop
 - [x] Preview mostra risultato finale in tempo reale (tramite crop area)
 - [x] Da Files: upload immagine apre editor, poi upload
-- [x] Da Broker: click icona apre editor con preset 64x64, ritorna URL
-- [x] Da Settings: sezione avatar con editor preset 200x200, salva in DB
+- [x] Da Broker: click icona apre AssetPicker → URL/Existing/Upload → ImageEditModal
+- [x] Da Settings: click avatar apre AssetPicker → URL/Existing/Upload → ImageEditModal
 - [x] Avatar visibile in header/sidebar dopo salvataggio
 - [x] Dark mode funziona (già implementato nei componenti)
-- [x] Mobile-friendly (touch gestures - svelte-easy-crop supporta)
+- [x] Mobile-friendly (touch gestures - cropperjs v2 supporta)
+- [x] Ellipse preview per avatar/icon (auto-enable)
+- [x] Output size, scale, quality editabili
+- [x] FileEditModal per rename file non-immagine
+- [x] Grid view con 3 righe, copy link, search
+- [x] Cancel upload → riapre AssetPickerModal
+- [x] initialUrl pre-popola campo URL
+- [x] Selezione contenuta nei bounds del canvas
+- [ ] 42 test E2E da implementare (pianificati sopra)
 
 ---
 

@@ -495,6 +495,7 @@
     "uploadNew": "Téléverser",
     "imageUrl": "URL de l'Image",
     "useSelected": "Utiliser la Sélection",
-    "selectIcon": "Sélectionner une Icône"
+    "selectIcon": "Sélectionner une Icône",
+    "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers"
   }
 }
