@@ -11,7 +11,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {X, Check, Loader2, FileIcon, RefreshCw} from 'lucide-svelte';
-    import {axiosInstance} from '$lib/api';
+    import {uploadFile} from '$lib/utils/upload';
 
     // Props
     export let open: boolean = false;
@@ -112,15 +112,7 @@
             }
 
             // Upload to backend
-            const formData = new FormData();
-            formData.append('file', renamedFile);
-
-            const response = await axiosInstance.post('/api/v1/uploads', formData);
-            const uploadedUrl = response.data.file?.url || response.data.url;
-
-            if (!uploadedUrl) {
-                throw new Error('No URL in upload response');
-            }
+            const uploadedUrl = await uploadFile(renamedFile);
 
             dispatch('complete', {url: uploadedUrl, file: renamedFile});
         } catch (err) {

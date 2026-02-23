@@ -155,6 +155,18 @@
 - ✅ **FilesTable alignment**: `min-width: 32px` su `.cell-image` per allineare thumbnail, `text-align: left` su label
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
+### Refactoring Round 10 ✅ (23 Feb 2026 — dedup + cache class)
+- ✅ **Backend PreviewCache class**: sostituiti metodi privati `_get_cached_preview`/`_set_cached_preview`/`invalidate_preview_cache` con classe `PreviewCache` pubblica, singleton `preview_cache`
+- ✅ **Cache per-process**: documentato che la cache è per-processo (single worker ottimale, multi-worker indipendente)
+- ✅ **Settings integration**: `PreviewCache.load_config()` carica `PREVIEW_CACHE_MAX_MB` dal modello `Settings` al primo `put()`
+- ✅ **`.env.example` aggiornato**: aggiunto `PREVIEW_CACHE_MAX_MB` con documentazione
+- ✅ **`uploadFile()` utility**: creata `utils/upload.ts` con funzione centralizzata — rimossi duplicati da ImageEditModal, FileEditModal, files/+page.svelte
+- ✅ **`formatBytes()` centralizzato**: in `utils/upload.ts` — rimossi duplicati da AssetPickerModal, BrokerImportFiles (le versioni i18n in DataTable/Filter lasciate perché usano traduzioni)
+- ✅ **Dead code cleanup**: rimossi import `axiosInstance` non più usati, rimosso `FormData` dead code
+- ✅ **AssetPicker URL ellisse**: cambiato da crop 1:1 a full-image con box-shadow overlay (mostra parte tagliata)
+- ✅ **FilesTable icon alignment**: `.cell-icon-box` 32×32 centrato, allinea icone SVG con thumbnail immagini
+- ✅ **0 errori, 0 warnings** — svelte-check + build puliti
+
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
 - **Reattività Svelte**: Usare espressioni inline nel template, non funzioni

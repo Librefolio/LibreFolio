@@ -6,6 +6,7 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
+    import {formatBytes as formatBytesBase} from '$lib/utils/upload';
     import {FileText, FileUp, RefreshCw, Trash2} from 'lucide-svelte';
     import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
     import type {BrimFile} from '$lib/types';
@@ -121,9 +122,7 @@
 
     function formatBytes(bytes: number | undefined): string {
         if (!bytes) return '-';
-        if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-        if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${bytes} B`;
+        return formatBytesBase(bytes);
     }
 
     function getStatusClass(status: string): string {

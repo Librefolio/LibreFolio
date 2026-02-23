@@ -13,7 +13,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {X, Upload, Loader2, Eye, EyeOff, RefreshCw, Lock} from 'lucide-svelte';
-    import {axiosInstance} from '$lib/api';
+    import {uploadFile} from '$lib/utils/upload';
     import ImageCropper from './ImageCropper.svelte';
     import {
         IMAGE_PRESETS,
@@ -282,12 +282,7 @@
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('file', croppedFile);
-            formData.append('description', `Cropped image (${currentPreset})`);
-            const response = await axiosInstance.post('/api/v1/uploads', formData);
-            const uploadedUrl = response.data.file?.url || response.data.url;
-            if (!uploadedUrl) throw new Error('No URL in upload response');
+            const uploadedUrl = await uploadFile(croppedFile, `Cropped image (${currentPreset})`);
             cleanup();
             dispatch('complete', {url: uploadedUrl, file: croppedFile});
         } catch (err) {

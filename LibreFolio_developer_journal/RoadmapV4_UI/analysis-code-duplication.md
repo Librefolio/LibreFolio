@@ -202,18 +202,18 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 | # | Intervento | Risparmio | Complessità | Priorità | Status |
 |---|-----------|-----------|-------------|----------|--------|
 | 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta | 🔲 TODO |
-| 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta | 🔲 TODO |
-| 3 | **formatBytes() centralizzato** | ~15 righe | Minima | 🟡 Media | 🔲 TODO |
+| 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta | ✅ FATTO (`utils/upload.ts`) |
+| 3 | **formatBytes() centralizzato** | ~15 righe | Minima | 🟡 Media | ✅ FATTO (`utils/upload.ts`) |
 | 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media | 🔲 TODO |
 | 5 | **FileGrid.svelte** estratto | ~80 righe | Media | 🟢 Bassa | 🔲 TODO |
 | 6 | **DataTable single-select mode** | n/a (new feature) | Media | 🔴 Alta | ✅ FATTO |
 | 7 | **DataTable ImageCell type** | n/a (new feature) | Bassa | 🔴 Alta | ✅ FATTO |
 | 8 | **DataTable in AssetPicker** | ~100 righe | Media | 🔴 Alta | 🔲 TODO |
-| 9 | **Preview img_preview cache backend** | n/a (perf) | Bassa | 🔴 Alta | ✅ FATTO (size-based 50MB) |
+| 9 | **Preview img_preview cache backend** | n/a (perf) | Bassa | 🔴 Alta | ✅ FATTO (PreviewCache class, size-based) |
 | 10 | **img_preview everywhere** | ~5 righe | Minima | 🟡 Media | ✅ FATTO |
 | 11 | **svelte:component deprecation** | ~1 riga | Minima | 🟡 Media | ✅ FATTO |
-| 12 | **FilesTable image alignment** | ~5 righe CSS | Minima | 🟡 Media | ✅ FATTO |
-| 13 | **AssetPicker URL ellipse** | ~15 righe CSS | Bassa | 🟡 Media | ✅ FATTO |
+| 12 | **FilesTable image alignment** | ~5 righe CSS | Minima | 🟡 Media | ✅ FATTO (cell-icon-box) |
+| 13 | **AssetPicker URL ellipse** | ~15 righe CSS | Bassa | 🟡 Media | ✅ FATTO (box-shadow overlay) |
 
 ### Feedback Utente (23 Feb 2026)
 - **DataTable**: evolverla per supportare `selectionMode: 'single'` (click riga = seleziona, no checkbox) ✅

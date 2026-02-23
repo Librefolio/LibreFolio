@@ -20,6 +20,7 @@
     import {browser} from '$app/environment';
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
+    import {uploadFile} from '$lib/utils/upload';
     import {globalSettings} from '$lib/stores/globalSettings';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
@@ -327,9 +328,7 @@
         try {
             // Upload ALL files directly (user should use Edit button to crop before upload)
             for (const file of files) {
-                const formData = new FormData();
-                formData.append('file', file);
-                await axiosInstance.post('/api/v1/uploads', formData);
+                await uploadFile(file);
             }
 
             // Close uploader and refresh
