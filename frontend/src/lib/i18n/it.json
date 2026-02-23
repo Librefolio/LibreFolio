@@ -495,6 +495,7 @@
     "uploadNew": "Carica",
     "imageUrl": "URL Immagine",
     "useSelected": "Usa Selezionato",
-    "selectIcon": "Seleziona Icona"
+    "selectIcon": "Seleziona Icona",
+    "urlHint": "Inserisci un URL remoto o un percorso locale da File"
   }
 }
