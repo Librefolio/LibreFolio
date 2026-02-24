@@ -13,7 +13,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {formatBytes} from '$lib/utils/upload';
-    import {X, Link, FolderOpen, Upload, Search, LayoutGrid, List, File as FileIcon} from 'lucide-svelte';
+    import {X, Link, FolderOpen, Upload, Search, LayoutGrid, List, File as FileIcon, Image as ImageIcon} from 'lucide-svelte';
     import LazyImage from './LazyImage.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
@@ -176,7 +176,7 @@
                         src: `${row.url}?img_preview=48x48`,
                         alt: row.original_name,
                         text: row.original_name,
-                        fallbackIcon: Image,
+                        fallbackIcon: ImageIcon,
                         size: 32,
                     };
                 }

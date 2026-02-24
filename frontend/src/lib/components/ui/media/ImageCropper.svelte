@@ -21,6 +21,23 @@
         change: {selection: {x: number; y: number; width: number; height: number}};
     }>();
 
+    /** Helper to emit current selection state as a 'change' event */
+    function dispatchCurrentChange() {
+        const sel = cropper?.getCropperSelection();
+        if (sel) {
+            cropWidth = Math.round(sel.width || 0);
+            cropHeight = Math.round(sel.height || 0);
+            dispatch('change', {
+                selection: {
+                    x: sel.x || 0,
+                    y: sel.y || 0,
+                    width: cropWidth,
+                    height: cropHeight
+                }
+            });
+        }
+    }
+
     // Internal state
     let containerElement: HTMLDivElement;
     let cropWrapperElement: HTMLDivElement;
@@ -42,6 +59,9 @@
 
     // Guard against infinite event loop from clamping
     let isClamping = false;
+
+    // Ready flag — true when cropper is fully initialized
+    let cropperReady = false;
 
     // Update aspect when prop changes
     $: currentAspect = aspectRatio;
@@ -68,6 +88,7 @@
     onDestroy(() => {
         cropper?.destroy();
         cropper = null;
+        cropperReady = false;
         // Cleanup event listeners
         if (cropWrapperElement) {
             cropWrapperElement.removeEventListener('wheel', handleWheel);
@@ -348,6 +369,7 @@
             setTimeout(updateSelectionInfo, 100);
 
             // Image dimensions already loaded above
+            cropperReady = true;
         }
     }
 
@@ -560,6 +582,9 @@
         currentRotation += degrees;
         if (currentRotation > 180) currentRotation -= 360;
         if (currentRotation < -180) currentRotation += 360;
+
+        // Notify parent of change
+        dispatchCurrentChange();
     }
 
 
@@ -568,6 +593,7 @@
         if (img) {
             scaleX = scaleX === 1 ? -1 : 1;
             img.$scale(scaleX, scaleY);
+            dispatchCurrentChange();
         }
     }
 
@@ -576,6 +602,7 @@
         if (img) {
             scaleY = scaleY === 1 ? -1 : 1;
             img.$scale(scaleX, scaleY);
+            dispatchCurrentChange();
         }
     }
 
@@ -720,7 +747,7 @@
 
 </script>
 
-<div class="image-cropper" data-testid="image-cropper">
+<div class="image-cropper" data-testid="image-cropper" data-cropper-ready={cropperReady || undefined}>
     <!-- Crop Area with controls overlay -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div

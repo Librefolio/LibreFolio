@@ -11,7 +11,7 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
     import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
-    import {Download, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image, Link, Trash2} from 'lucide-svelte';
+    import {Download, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2} from 'lucide-svelte';
     import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
     import {safeNumber} from '$lib/types';
 
@@ -204,7 +204,7 @@
                             src: getPreviewUrl(row),
                             alt: getFileName(row),
                             text: getFileName(row),
-                            fallbackIcon: Image,
+                            fallbackIcon: ImageIcon,
                             size: 32,
                         };
                     }

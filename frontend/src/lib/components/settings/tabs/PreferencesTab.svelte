@@ -12,6 +12,8 @@
     import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
     import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
     import SettingTheme from '$lib/components/settings/SettingTheme.svelte';
+    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
+    import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
 
     interface CurrencyInfo {
         code: string;
@@ -317,15 +319,11 @@
             {success}
         </div>
     {/if}
-    {#if error}
-        <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
-            {error}
-        </div>
-    {/if}
+    <ErrorBanner message={error} className="mb-4" on:dismiss={() => error = ''} />
 
     <!-- Settings Fields -->
     {#if isLoading}
-        <div class="text-center py-8 text-gray-500 dark:text-gray-400">{$_('common.loading')}</div>
+        <LoadingSpinner />
     {:else}
 
         <!-- Language Setting -->

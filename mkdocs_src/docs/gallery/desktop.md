@@ -82,6 +82,14 @@ Securely change your password with strength validation.
     <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Password Change Modal">
 </div>
 
+### Profile
+
+Manage your profile information, avatar, and account settings.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab">
+</div>
+
 ---
 
 ## 📁 Files
@@ -94,12 +102,40 @@ Upload and manage images, logos, and other static files.
     <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab">
 </div>
 
+### Static Resources - Grid View
+
+Browse files visually with image previews in grid layout.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View">
+</div>
+
 ### Broker Reports (BRIM)
 
 Import and manage broker transaction reports.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
+</div>
+
+---
+
+## 🖼️ Media & Upload
+
+### Image Editor
+
+Crop, rotate, zoom and flip images before uploading. Supports presets for avatars and icons.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Image Edit Modal">
+</div>
+
+### File Uploader
+
+Drag-and-drop or browse to upload files. Images open the crop editor, other files can be renamed.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="File Uploader">
 </div>
 
 ---

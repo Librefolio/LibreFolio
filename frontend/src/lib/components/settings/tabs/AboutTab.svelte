@@ -3,6 +3,7 @@
     import {zodiosApi} from '$lib/api';
     import {onMount} from 'svelte';
     import {Check, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Monitor, Scale, Tag} from 'lucide-svelte';
+    import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
 
     const githubUrl = 'https://github.com/Alfystar/LibreFolio';
     const websiteUrl = 'https://librefolio.io'; // Placeholder for now
@@ -154,7 +155,7 @@ Generated: ${new Date().toISOString()}
         </div>
 
         {#if isLoading}
-            <p class="text-gray-500">{$_('common.loading')}</p>
+            <LoadingSpinner />
         {:else if systemInfo}
             <div class="grid grid-cols-2 gap-4 text-sm">
                 <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
