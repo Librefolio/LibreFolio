@@ -86,6 +86,7 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 | `getRowId`            | `(row: T) => string` | **Required** | Function to get unique ID for a row.     |
 | `storageKey`          | `string`             | **Required** | Unique key for localStorage persistence. |
 | `enableSelection`     | `boolean`            | `true`       | Enable row selection checkboxes.         |
+| `selectionMode`       | `'multi' \| 'single'`| `'multi'`    | Multi-select or single-select rows.      |
 | `enableActions`       | `boolean`            | `true`       | Enable row actions column.               |
 | `enableSorting`       | `boolean`            | `true`       | Enable column sorting.                   |
 | `enableColumnFilters` | `boolean`            | `true`       | Enable column filters.                   |
@@ -93,6 +94,8 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 | `defaultPageSize`     | `number`             | `10`         | Initial page size.                       |
 | `rowActions`          | `RowAction<T>[]`     | `[]`         | Actions available for each row.          |
 | `bulkActions`         | `BulkAction<T>[]`    | `[]`         | Actions available for selected rows.     |
+| `onRowClick`          | `(row: T) => void`   | `undefined`  | Callback when a row is clicked.          |
+| `onRowDoubleClick`    | `(row: T) => void`   | `undefined`  | Callback when a row is double-clicked.   |
 
 ## Column Definition (`ColumnDef<T>`)
 
@@ -113,9 +116,10 @@ The `cell` function can return a simple string/number or a structured object:
 
 - **Text**: `string` or `number`
 - **Icon + Text**: `{ type: 'icon-text', icon: Component, text: string }`
+- **Image + Text**: `{ type: 'image-text', src: string, text: string, fallbackIcon?: Component, size?: number }` (thumbnail with fallback, centered in 32×32 box)
 - **Badge**: `{ type: 'badge', text: string, variant: 'success'|'warning'|'error'|'info'|'default' }`
 - **Date**: `{ type: 'date', value: Date, format: 'date'|'datetime'|'relative' }`
-- **Size**: `{ type: 'size', bytes: number }` (Auto-formats to KB/MB/GB)
+- **Size**: `{ type: 'size', bytes: number }` (Auto-formats to KB/MB/GB, i18n-aware)
 - **Link**: `{ type: 'link', text: string, href: string, external: boolean }`
 - **Custom**: `{ type: 'custom', component: Component, props: object }`
 

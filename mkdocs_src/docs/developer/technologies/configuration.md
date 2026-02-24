@@ -17,10 +17,10 @@ cp .env.example .env
     - Default: `8000`
 
 - **`DATABASE_URL`**: The connection string for the main application database.
-    - Default: `sqlite:///./backend/data/sqlite/app.db`
+    - Default: `sqlite:///./backend/data/prod/sqlite/app.db`
 
 - **`TEST_DATABASE_URL`**: The connection string for the test database.
-    - Default: `sqlite:///./backend/data/sqlite/test_app.db`
+    - Default: `sqlite:///./backend/data/test/sqlite/app.db`
 
 - **`SECRET_KEY`**: A secret key used for signing JWTs (JSON Web Tokens) for authentication.
     - **Important**: For production, this should be changed to a long, random, and secret string.
@@ -34,6 +34,19 @@ cp .env.example .env
 
 - **`LIBREFOLIO_TEST_MODE`**: A flag to indicate if the application is running in test mode. This is used internally by the test suite.
     - Set to `1` to enable test mode.
+
+- **`PREVIEW_CACHE_MAX_MB`**: Maximum size (in MB) for the in-memory image preview cache.
+    - Default: `50`
+    - Cached thumbnails are evicted using LRU when limit is reached.
+
+## Data Separation
+
+LibreFolio uses separate data directories for production and test:
+
+- **Production**: `backend/data/prod/` (sqlite, custom-uploads, broker_reports, logs)
+- **Test**: `backend/data/test/` (same structure, completely isolated)
+
+The `get_data_dir()` function in `config.py` automatically selects the correct path based on `LIBREFOLIO_TEST_MODE`.
 
 ## How it Works
 

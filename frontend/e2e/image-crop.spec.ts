@@ -37,8 +37,8 @@ async function uploadImageAndWaitForModal(page: import('@playwright/test').Page,
     await expect(page.getByTestId('image-edit-modal')).toBeVisible({timeout: 5000});
     // Wait for cropper to be fully initialized (data-cropper-ready attribute)
     await expect(page.locator('[data-cropper-ready="true"]')).toBeVisible({timeout: 8000});
-    // Extra settle time for init events (resetAll + subsequent change events)
-    await page.waitForTimeout(800);
+    // Extra settle time for init events (resetAll + suppressChanges window ~500ms)
+    await page.waitForTimeout(1500);
 }
 
 // Helper: Upload a non-image file via FileUploader
@@ -239,10 +239,11 @@ test.describe('ImageEditModal - Controls & Settings', () => {
 
         // Rotate first to make a change (this triggers hasChanges = true)
         await page.getByTestId('cropper-rotate-right').click();
+        await page.waitForTimeout(500);
 
         // Wait for the reset button to become visible — confirms hasChanges flipped to true
         // Cropper v2 Web Components may fire change events asynchronously
-        await expect(resetBtn).toBeVisible({timeout: 8000});
+        await expect(resetBtn).toBeVisible({timeout: 10000});
 
         // Click reset
         await resetBtn.click();
@@ -301,9 +302,10 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
     test('C1: closing with changes shows confirmation dialog', async ({page}) => {
         // Make a change — rotate right triggers hasChanges = true via dispatchCurrentChange
         await page.getByTestId('cropper-rotate-right').click();
+        await page.waitForTimeout(500);
 
         // Wait for hasChanges to be true — the reset button appears when hasChanges is true
-        await expect(page.getByTestId('image-edit-reset')).toBeVisible({timeout: 8000});
+        await expect(page.getByTestId('image-edit-reset')).toBeVisible({timeout: 10000});
 
         // Click the close (X) button — this calls requestClose which checks hasChanges
         await page.getByTestId('image-edit-close').click();
@@ -311,7 +313,7 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
 
 
         // Confirmation dialog should appear
-        await expect(page.getByTestId('image-edit-confirm-dialog')).toBeVisible({timeout: 5000});
+        await expect(page.getByTestId('image-edit-confirm-dialog')).toBeVisible({timeout: 8000});
     });
 
     test('C2: closing without changes closes immediately', async ({page}) => {

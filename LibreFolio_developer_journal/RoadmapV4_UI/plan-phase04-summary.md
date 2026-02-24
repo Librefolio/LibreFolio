@@ -2,7 +2,7 @@
 
 **Data creazione**: 30 Gennaio 2026  
 **Ultimo aggiornamento**: 24 Febbraio 2026  
-**Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename, 42 E2E test verdi, avatar seed, gallery.)
+**Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename, 42 E2E test, avatar seed, gallery, MkDocs dark mode.)
 
 ---
 
@@ -173,7 +173,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | BUG-002 | Table: click badge counter per deselezionare           | ✅         |
 | BUG-003 | BRIM upload: endpoint path corretto                    | ✅         |
 | BUG-004 | FR Bytes: traduzione unità nei filtri                  | ✅         |
-| BUG-005 | MkDocs dark mode CSS                                   | 🔲 TODO   |
+| BUG-005 | MkDocs dark mode CSS                                   | ✅         |
 | BUG-006 | Copy Link con feedback toast                           | ✅         |
 | BUG-007 | Traduzioni broker import files                         | ✅         |
 | BUG-008 | Broker altri utenti GDPR                               | ⏸️ PAUSA  |
@@ -194,11 +194,6 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 ---
 
 ## 📦 Bug/Improvements Pendenti
-
-### 🔲 BUG-005: MkDocs Dark Mode (bassa priorità)
-
-- I CSS della documentazione non sono allineati col frontend
-- Colori simili ma diversi in dark mode
 
 ### ⏸️ BUG-008: Broker Altri Utenti - GDPR Rethink
 
@@ -226,7 +221,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | `plan-files-ux-refactor.md`             | ✅ Refactor UX pagina Files            |
 | `test-remediation-auth-settings.md`     | ✅ Note remediation auth/settings      |
 
-### Plans COMPLETATI (spostati in `phase-04-subplan/`)
+### Plans COMPLETATI (in `phase-04-subplan/`)
 
 | File                                        | Descrizione                                | Status       |
 |---------------------------------------------|--------------------------------------------|--------------|
@@ -236,18 +231,11 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | `plan-componentReorganizationV3-cleanup.md` | Cleanup + test E2E Select components       | ✅ COMPLETATO |
 | `plan-data-separation.md`                   | Separazione cartelle dati prod/test        | ✅ COMPLETATO |
 | `plan-ui-fixes.md`                          | Bug UI + Git versioning                    | ✅ COMPLETATO |
+| `plan-imageCropModal.prompt.md`             | Sistema Image Crop Modal unificato         | ✅ COMPLETATO |
+| `plan-image-crop.md`                        | Piano iniziale Image Crop                  | ✅ COMPLETATO |
+| `analysis-code-duplication.md`              | Analisi e fix duplicazione codice          | ✅ COMPLETATO |
 
 ### Reference Docs (in `phases/phase-04-subplan/`)
-
-| File                   | Descrizione                                     | Status       |
-|------------------------|-------------------------------------------------|--------------|
-| `e2e-test-analysis.md` | Gap analysis test E2E - traccia test completati | ✅ COMPLETATO |
-
-### Plans COMPLETATI (in `RoadmapV4_UI/`)
-
-| File                             | Descrizione                            | Status       |
-|----------------------------------|----------------------------------------|--------------|
-| `plan-imageCropModal.prompt.md`  | Sistema Image Crop Modal unificato     | ✅ COMPLETATO (42 E2E test da scrivere) |
 
 ### Plans PIANIFICATI (in `RoadmapV4_UI/`)
 
@@ -406,7 +394,15 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - ✅ FileGrid.svelte estratto e condiviso tra files/ e AssetPicker
 - ✅ Analisi duplicazione completata (6/6 task)
 
-### Step 4.7: MkDocs Dark Mode (30 min) 🔲
+### Step 4.7: MkDocs Dark Mode ✅ COMPLETATO
+
+**Lavoro completato (24 Feb 2026)**:
+
+- ✅ Dark mode CSS allineato con variabili frontend (slate-900, green-500, etc.)
+- ✅ Gallery screenshot containers con box-shadow corretto in dark mode
+- ✅ Tabelle con header e righe alternate stilizzate per dark mode
+- ✅ Admonitions (tips, notes, warnings) con background dark mode
+- ✅ Gallery markdown con sezioni Media & Upload sia desktop che mobile
 
 ### Step 4.8: GDPR Permissions Analysis (planning only) ⏸️
 
@@ -443,13 +439,13 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### 📋 Pianificato
 
-7. ✅ **Image Crop E2E Tests** - 42 test scritti, 39+ passano, 3 in fix (timing cropper v2)
+7. ✅ **Image Crop E2E Tests** - 42 test scritti, tutti passano
 8. ✅ **Gallery Walkthrough** - Nuove sezioni: Profile, Grid View, Media & Upload. Markdown aggiornati.
 9. 📋 **File Preview System** (`plan-filePreview.prompt.md`) - ~8h
 
 ### 🔲 Optional/Low Priority
 
-- **MkDocs Dark Mode** (`Step 4.7`) - ~30 min
+- ✅ **MkDocs Dark Mode** (`Step 4.7`) - COMPLETATO (24 Feb 2026)
 - **GDPR Permissions Analysis** (`Step 4.8`) - Planning only
 
 ### Dopo: Phase 5 (FX Management)
@@ -473,7 +469,7 @@ Quando si lavora su questa fase, allegare:
 | Test remediation             | `+ phases/phase-04-subplan/plan-e2e-test-remediation.md` + `phases/phase-04-subplan/e2e-test-analysis.md` |
 | Settings mobile + gallery    | `+ phases/phase-04-subplan/plan-settings-mobile-gallery.md`                                               |
 | **Component Reorganization** | `+ plan-componentReorganizationV2.prompt.md`                                                              |
-| Image upload                 | `+ plan-image-crop.md`                                                                                    |
+| Image upload                 | `+ phases/phase-04-subplan/plan-imageCropModal.prompt.md`                         |
 | Separazione dati             | `+ plan-data-separation.md`                                                                               |
 | i18n CLI                     | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`                                                 |
 | Files UX/URL                 | `+ phases/phase-04-subplan/plan-files-ux-refactor.md`                                                     |
@@ -487,5 +483,5 @@ Quando si lavora su questa fase, allegare:
 - [x] `./dev.py i18n audit` - 100% coverage
 - [x] Test funzionale features modificate
 - [x] `./dev.py test front all` - tutti i test passano (7+ suite, 109+ test)
-- [x] `./dev.py test front image-crop` - 42 test (39+ pass, 3 in fix per timing)
+- [x] `./dev.py test front image-crop` - 42 test passanti
 - [x] `./dev.py mkdocs gallery` - tutti gli screenshot generati (34 test, ~280+ screenshots)

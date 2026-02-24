@@ -2,9 +2,12 @@
 
 This section documents the authentication UI components used for login, registration, and password management.
 
-## LoginModal
+!!! note "Card Components (Not Modals)"
+    These components were renamed from `*Modal` to `*Card` (Feb 2026) because they are card-style forms displayed inline on the login page, not modal overlays. They do **not** extend `ModalBase`.
 
-The `LoginModal` handles user authentication via username/email and password.
+## LoginCard
+
+The `LoginCard` handles user authentication via username/email and password.
 
 ### Features
 
@@ -17,19 +20,19 @@ The `LoginModal` handles user authentication via username/email and password.
 
 ```svelte
 <script>
-  import LoginModal from '$lib/components/auth/LoginModal.svelte';
+  import LoginCard from '$lib/components/auth/LoginCard.svelte';
 </script>
 
-<LoginModal
+<LoginCard
   redirectTo="/dashboard"
   on:gotoRegister={() => showRegister = true}
   on:gotoForgot={() => showForgot = true}
 />
 ```
 
-## RegisterModal
+## RegisterCard
 
-The `RegisterModal` handles new user registration with client-side validation.
+The `RegisterCard` handles new user registration with client-side validation.
 
 ### Features
 
@@ -45,10 +48,10 @@ The `RegisterModal` handles new user registration with client-side validation.
 
 ```svelte
 <script>
-  import RegisterModal from '$lib/components/auth/RegisterModal.svelte';
+  import RegisterCard from '$lib/components/auth/RegisterCard.svelte';
 </script>
 
-<RegisterModal
+<RegisterCard
   on:gotoLogin={(e) => {
      showLogin = true;
      successMessage = e.detail.message;
@@ -74,7 +77,7 @@ A visual indicator of password strength using `zxcvbn-ts`.
 
 ```svelte
 <script>
-  import PasswordStrength from '$lib/components/ui/PasswordStrength.svelte';
+  import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
   let password = '';
 </script>
 
@@ -96,7 +99,7 @@ A reusable input component for passwords.
 
 ```svelte
 <script>
-  import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
+  import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
   let password = '';
 </script>
 

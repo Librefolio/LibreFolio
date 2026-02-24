@@ -29,6 +29,30 @@ The `SettingsLayout` component provides the structural shell for all settings ta
 
 Manages user-specific settings (Language, Currency, Theme).
 
+### ProfileTab
+
+Manages user profile information:
+
+- **Avatar**: Editable via `ImagePickerWrapper` → `AssetPickerModal` → crop
+- **Username** and **Email**: Display only
+- **Password change**: Opens `PasswordChangeModal`
+- Edit mode toggle to prevent accidental changes
+
+### GlobalSettingsTab (Admin only)
+
+System-wide configuration with lock toggle:
+
+- Max file upload size
+- Registration toggle
+- Other app-wide settings
+
+### AboutTab
+
+Read-only system information:
+
+- Version (from Git tag)
+- Backend/frontend info
+
 **Logic:**
 
 1. **Load**: Fetches Global Defaults (`/settings/global`) and User Settings (`/settings/user`) in parallel.
@@ -45,9 +69,11 @@ Manages user-specific settings (Language, Currency, Theme).
 
 Each setting type has a specialized component that handles its own UI and events.
 
-- **`SettingSelect`**: Generic dropdown.
-- **`SettingCurrency`**: Searchable currency selector (uses `FuzzySelect`).
+- **`SettingSelect`**: Generic dropdown (uses `SimpleSelect`).
+- **`SettingCurrency`**: Searchable currency selector (uses `SearchSelect`).
 - **`SettingTheme`**: Radio buttons for Light/Dark/Auto theme with visual preview.
+- **`SettingNumber`**: Numeric input with increment/decrement.
+- **`SettingToggle`**: Boolean toggle switch.
 
 **Common Props for Field Components:**
 
