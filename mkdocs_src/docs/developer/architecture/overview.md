@@ -62,10 +62,13 @@ For detailed architectural documentation of specific subsystems, see:
 
 - **[Database Schema](database.md)**: Data models and relationships.
 - **[Users & Brokers](users_and_brokers.md)**: Authentication and multi-user access control.
+- **[Access Control (RBAC)](access_control.md)**: Role-based broker access (Owner/Editor/Viewer).
+- **[Settings System](settings.md)**: User preferences and global settings.
 - **[BRIM Architecture](../backend/brim/architecture.md)**: Broker Report Import Manager.
 - **[Asset Pricing](../backend/assets/architecture.md)**: Asset data fetching and metadata.
 - **[FX Architecture](../backend/fx/architecture.md)**: Foreign Exchange system.
     - See also: **[FX Configuration & Routing](../backend/fx/configuration.md)** for multi-provider setup.
+- **File Upload System**: Static file uploads with image preview cache (50MB, TTL 1h), avatar seeding, and BRIM file management. See `backend/app/services/static_uploads.py`.
 
 ## Request Flow Example: Displaying Portfolio
 
