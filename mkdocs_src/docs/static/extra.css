@@ -9,10 +9,21 @@
     --md-sidebar-width: 12rem;
 }
 
-/* Dark mode overrides */
+/* Dark mode overrides - aligned with frontend html.dark */
 [data-md-color-scheme="slate"] {
-    --md-primary-fg-color: #5a947c; /* Lighter green for dark mode */
-    --md-primary-bg-color: #111111; /* libre-dark */
+    --md-primary-fg-color: #00d681; /* libre-green dark (matches frontend) */
+    --md-primary-bg-color: #0f172a; /* theme-bg-primary (matches frontend) */
+    --md-accent-fg-color: #22c55e; /* theme-accent (matches frontend) */
+    --md-default-bg-color: #0f172a; /* theme-bg-primary */
+    --md-default-bg-color--light: #1e293b; /* theme-bg-secondary */
+    --md-default-bg-color--lighter: #334155; /* theme-bg-tertiary */
+    --md-default-fg-color: #f8fafc; /* theme-text-primary */
+    --md-default-fg-color--light: #cbd5e1; /* theme-text-secondary */
+    --md-default-fg-color--lighter: #94a3b8; /* theme-text-muted */
+    --md-default-fg-color--lightest: #334155; /* theme-border-primary */
+    --md-code-bg-color: #1e293b; /* theme-bg-secondary */
+    --md-code-fg-color: #e2e8f0; /* slate-200 */
+    --md-typeset-a-color: #22c55e; /* theme-accent */
 }
 
 /* --- LAYOUT & WIDTH --- */
@@ -41,6 +52,13 @@
     box-sizing: border-box; /* Include padding in width */
 }
 
+/* Dark mode H1 - softer gradient */
+[data-md-color-scheme="slate"] .md-typeset h1 {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: #00d681;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
 /* --- LEFT SIDEBAR (Navigation) --- */
 
 /* LEVEL 1: Main Sections - Gradient Style, Centered */
@@ -59,6 +77,13 @@
     border-bottom: none;
     text-align: center; /* Centered text */
     display: block; /* Ensure block display for centering */
+}
+
+/* Dark mode Level 1 sections - softer gradient */
+[data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: #00d681 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* LEVEL 2: Sub-sections */
@@ -90,6 +115,11 @@
     border-left: 3px solid var(--md-primary-fg-color);
     padding-left: 0.5rem;
     background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* Dark mode active link */
+[data-md-color-scheme="slate"] .md-nav__item .md-nav__link--active {
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 /* --- RIGHT SIDEBAR (Table of Contents) --- */
@@ -402,6 +432,39 @@
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
     border-color: var(--md-accent-fg-color);
     background-color: var(--md-primary-bg-color); /* Use brand beige on hover */
+}
+
+/* Dark mode card hover */
+[data-md-color-scheme="slate"] .card-link:hover {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    background-color: #1e293b; /* theme-bg-secondary */
+}
+
+/* Dark mode asset icon hover */
+[data-md-color-scheme="slate"] .asset-icon:hover {
+    background-color: #1e293b; /* theme-bg-secondary */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode gallery screenshot containers */
+[data-md-color-scheme="slate"] .screenshot-container {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Dark mode admonitions */
+[data-md-color-scheme="slate"] .md-typeset .admonition,
+[data-md-color-scheme="slate"] .md-typeset details {
+    background-color: #1e293b;
+}
+
+/* Dark mode tables */
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+    background-color: #1e293b;
+    color: #00d681;
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) tr:nth-child(2n) {
+    background-color: rgba(30, 41, 59, 0.5);
 }
 
 /* Icon styling */

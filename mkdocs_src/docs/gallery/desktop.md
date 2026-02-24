@@ -130,6 +130,14 @@ Crop, rotate, zoom and flip images before uploading. Supports presets for avatar
     <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Image Edit Modal">
 </div>
 
+### Asset Picker
+
+Choose an existing file, enter a URL, or upload a new image for broker icons and user avatars.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Asset Picker Modal">
+</div>
+
 ### File Uploader
 
 Drag-and-drop or browse to upload files. Images open the crop editor, other files can be renamed.

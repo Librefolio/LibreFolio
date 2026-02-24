@@ -1,9 +1,9 @@
 # Frontend Development Plan - Index
 
 **Data Creazione**: 9 Gennaio 2026  
-**Versione**: 3.0 (Riorganizzato in fasi separate)  
+**Versione**: 4.0 (Aggiornato con stato completamento fasi)  
 **Target**: Implementazione completa UI per LibreFolio  
-**Status**: 🟢 PHASE 2.5 COMPLETATA - Prossimo: Phase 3 (Layout & Settings)
+**Status**: 🟢 PHASE 4 COMPLETATA - Prossimo: Phase 5 (FX Management)
 
 ---
 
@@ -11,7 +11,8 @@
 
 Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facilitare la navigazione e il tracking del progresso.
 
-**📌 Piano Principale**: [→ plan-frontendDevelopment.prompt.md](../plan-frontendDevelopment.prompt.md)
+**📌 Piano Principale**: [→ plan-frontendDevelopment.prompt.md](../plan-frontendDevelopment.prompt.md)  
+**📌 Phase 4 Summary**: [→ plan-phase04-summary.md](../plan-phase04-summary.md)
 
 ---
 
@@ -23,11 +24,11 @@ Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facil
 | **1**   | [phase-01-foundation.md](./phase-01-foundation.md)                 | i18n, OpenAPI, API Client, Auth Store      | ✅      | 3      |
 | **2**   | [phase-02-backend-auth.md](./phase-02-backend-auth.md)             | Backend Auth: DB, Service, API, CLI, Tests | ✅      | 3      |
 | **2.5** | [phase-02.5-auth-integration.md](./phase-02.5-auth-integration.md) | Integrazione Login + Register (Modali)     | ✅      | 1      |
-| **3**   | [phase-03-layout-settings.md](./phase-03-layout-settings.md)       | Layout Sidebar + Settings Page             | ⏳      | 3      |
-| **4**   | [phase-04-brokers.md](./phase-04-brokers.md)                       | Brokers List, Add/Edit, Detail             | ⏳      | 3      |
+| **3**   | [phase-03-layout-settings.md](./phase-03-layout-settings.md)       | Layout Sidebar + Settings Page             | ✅      | 3      |
+| **4**   | [phase-04-brokers.md](./phase-04-brokers.md)                       | Brokers, Files, Image Crop, ModalBase      | ✅      | 15+    |
 | **5**   | [phase-05-fx.md](./phase-05-fx.md)                                 | FX Currencies, Pair Sources, Sync          | ⏳      | 3      |
 | **6**   | [phase-06-assets.md](./phase-06-assets.md)                         | Assets List, Add/Edit, Detail              | ⏳      | 4      |
-| **7**   | [phase-07-transactions.md](./phase-07-transactions.md)             | Transactions List, Add/Edit, Import        | ⏳      | 5      |
+| **7**   | phase-07-transactions.md                                           | Transactions List, Add/Edit, Import        | ⏳      | 5      |
 | **8**   | [phase-08-dashboard.md](./phase-08-dashboard.md)                   | Dashboard con KPI e Charts                 | ⏳      | 3      |
 | **9**   | [phase-09-polish.md](./phase-09-polish.md)                         | UI Components, Responsive                  | ⏳      | 2      |
 
@@ -117,5 +118,5 @@ Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facil
 - **Design Guide**: `/artwork/Prompt_gemini.md`
 - **Architecture**: `/artwork/Struttura_sicurezza_programma.md`
 - **Backend Roadmap**: `/LibreFolio_developer_journal/RoadmapV3/`
-- **API Endpoints**: `./dev.sh info:api` (60+ endpoints)
+- **API Endpoints**: `./dev.py info api` (84+ endpoints)
 

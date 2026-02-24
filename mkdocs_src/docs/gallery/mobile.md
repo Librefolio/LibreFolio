@@ -123,6 +123,34 @@ Import and manage broker reports.
 
 ---
 
+## 🖼️ Media & Upload
+
+### Image Editor
+
+Crop, rotate, zoom and flip images on mobile. Supports presets for avatars and icons.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Image Edit Modal">
+</div>
+
+### Asset Picker
+
+Choose an existing file, enter a URL, or upload a new image.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Asset Picker Modal">
+</div>
+
+### File Uploader
+
+Drag-and-drop or browse to upload files. Images open the crop editor, other files can be renamed.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="File Uploader">
+</div>
+
+---
+
 ## 🏦 Brokers
 
 ### Broker List

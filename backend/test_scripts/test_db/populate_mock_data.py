@@ -56,6 +56,7 @@ from backend.app.db import (
     AssetType,
     TransactionType,
     User,
+    UserSettings,
     )
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
@@ -863,6 +864,66 @@ def populate_fx_currency_pair_sources(session: Session):
     print(f"\n  📊 Configured {len(eur_pairs)} currency pairs with ECB as provider")
 
 
+def configure_admin_avatar(session: Session):
+    """
+    Set the admin user's avatar to men_01.png from the seeded default avatars.
+
+    The seed_default_avatars() function copies avatar PNGs into custom-uploads/.
+    We call it here to ensure avatars exist even when running without server.
+    Then we find the file_id by scanning metadata JSON files for 'men_01.png'.
+    """
+    print("\n🖼️  Configuring admin avatar...")
+    print("-" * 60)
+
+    # Ensure avatars are seeded (normally happens at server startup)
+    from backend.app.services.static_uploads import seed_default_avatars
+    seeded = seed_default_avatars()
+    if seeded > 0:
+        print(f"  📁 Seeded {seeded} default avatar images")
+
+    admin = session.exec(select(User).where(User.username == "e2e_test_admin")).first()
+    if not admin:
+        print("  ⚠️  Admin user not found, skipping avatar config")
+        return
+
+    # Find men_01.png in uploaded files metadata
+    from backend.app.services.static_uploads import get_uploads_dir
+    uploads_dir = get_uploads_dir()
+    avatar_file_id = None
+
+    for meta_path in uploads_dir.glob("*.json"):
+        try:
+            meta = json.loads(meta_path.read_text())
+            if meta.get("original_name") == "men_01.png":
+                avatar_file_id = meta["id"]
+                break
+        except (json.JSONDecodeError, KeyError):
+            continue
+
+    if not avatar_file_id:
+        print("  ⚠️  men_01.png not found in uploads (seed may not have run)")
+        return
+
+    avatar_url = f"/api/v1/uploads/file/{avatar_file_id}"
+
+    # Find or create UserSettings for admin
+    settings = session.exec(
+        select(UserSettings).where(UserSettings.user_id == admin.id)
+    ).first()
+
+    if settings:
+        settings.avatar_url = avatar_url
+        session.add(settings)
+    else:
+        settings = UserSettings(
+            user_id=admin.id,
+            avatar_url=avatar_url,
+        )
+        session.add(settings)
+
+    print(f"  ✅ Admin avatar set to: {avatar_url}")
+
+
 def main():
     """Populate database with mock data for testing."""
     # Parse arguments
@@ -924,6 +985,7 @@ def main():
             populate_price_history(session)
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
+            configure_admin_avatar(session)
 
             print("\n💾 Committing all data to database...")
             session.commit()
