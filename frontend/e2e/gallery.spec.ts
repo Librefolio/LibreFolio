@@ -266,6 +266,22 @@ test.describe('Gallery Screenshots', () => {
                 await page.waitForTimeout(100);
             });
         });
+
+        test('profile tab - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await navigateTo(page, '/settings');
+                await freezeAnimations(page);
+                const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
+                if (await profileTab.isVisible().catch(() => false)) {
+                    await profileTab.click();
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'settings', 'profile');
+                }
+            });
+        });
     });
 
     test.describe('Files', () => {
@@ -293,6 +309,23 @@ test.describe('Gallery Screenshots', () => {
                 await page.waitForLoadState('networkidle');
                 await freezeAnimations(page);
                 await screenshot(page, viewport, lang, theme, 'files', 'brim-tab');
+            });
+        });
+
+        test('static resources grid view - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/files?tab=static');
+                await page.waitForLoadState('networkidle');
+                await freezeAnimations(page);
+                // Switch to grid view if toggle exists
+                const gridBtn = page.getByTestId('view-mode-grid');
+                if (await gridBtn.isVisible().catch(() => false)) {
+                    await gridBtn.click();
+                    await page.waitForTimeout(500);
+                    await screenshot(page, viewport, lang, theme, 'files', 'static-grid');
+                }
             });
         });
     });
@@ -374,6 +407,117 @@ test.describe('Gallery Screenshots', () => {
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }
+            }
+        });
+    });
+
+    test.describe('Media & Upload', () => {
+        test.beforeEach(async ({page}) => {
+            await login(page, TEST_ADMIN);
+        });
+
+        test('image edit modal - crop view', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const theme of THEMES) {
+                // Navigate fresh each time to avoid leftover modal state
+                await navigateTo(page, '/files');
+                await page.getByTestId('files-tab-static').click();
+                await page.waitForTimeout(300);
+                await setTheme(page, theme);
+                await freezeAnimations(page);
+
+                // Open upload area
+                await page.getByTestId('upload-button').click();
+                await expect(page.getByTestId('file-uploader')).toBeVisible({timeout: 3000});
+
+                // Add an image file via the hidden file input
+                const testImagePath = path.resolve(__dirname, '../static/icons/transactions/buy.png');
+                await page.getByTestId('file-input').setInputFiles(testImagePath);
+
+                // Wait for file to appear in pending list
+                await expect(page.locator('.file-item')).toBeVisible({timeout: 3000});
+
+                // Click the edit (pencil) button on the image file
+                const editBtn = page.getByTestId('file-edit-btn').first();
+                await expect(editBtn).toBeVisible({timeout: 2000});
+                await editBtn.click();
+
+                // Wait for ImageEditModal to appear and cropper to initialize
+                await expect(page.getByTestId('image-edit-modal')).toBeVisible({timeout: 5000});
+                const cropperReady = page.locator('[data-cropper-ready="true"]');
+                await cropperReady.waitFor({state: 'attached', timeout: 8000});
+                await page.waitForTimeout(800);
+
+                await screenshot(page, viewport, 'en', theme, 'media', 'image-edit-modal');
+            }
+        });
+
+        test('asset picker modal - existing files', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            // Go to brokers, open first broker, click icon to open AssetPickerModal
+            await navigateTo(page, '/brokers');
+            await page.waitForTimeout(500);
+
+            for (const theme of THEMES) {
+                await setTheme(page, theme);
+                await freezeAnimations(page);
+
+                const card = page.locator('[data-testid^="broker-card-"]').first();
+                if (await card.isVisible({timeout: 2000}).catch(() => false)) {
+                    await card.click();
+                    await page.waitForLoadState('networkidle');
+                    await page.waitForTimeout(500);
+
+                    // Click edit button to open BrokerModal
+                    const editBtn = page.getByTestId('edit-broker-button');
+                    if (await editBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        await editBtn.click();
+                        await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 3000});
+                        await page.waitForTimeout(300);
+
+                        // Click on broker icon to open AssetPickerModal
+                        const iconTrigger = page.getByTestId('broker-icon-trigger');
+                        if (await iconTrigger.isVisible({timeout: 1000}).catch(() => false)) {
+                            await iconTrigger.click();
+                            const pickerModal = page.getByTestId('asset-picker-modal');
+                            if (await pickerModal.isVisible({timeout: 3000}).catch(() => false)) {
+                                await page.waitForTimeout(500);
+                                await screenshot(page, viewport, 'en', theme, 'media', 'asset-picker-modal');
+                                await page.keyboard.press('Escape');
+                                await page.waitForTimeout(200);
+                            }
+                        }
+
+                        // Close broker modal
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                    }
+
+                    // Go back to brokers list
+                    await navigateTo(page, '/brokers');
+                    await page.waitForTimeout(300);
+                }
+            }
+        });
+
+        test('file upload with pending files', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const theme of THEMES) {
+                await navigateTo(page, '/files');
+                await page.getByTestId('files-tab-static').click();
+                await page.waitForTimeout(300);
+                await setTheme(page, theme);
+                await freezeAnimations(page);
+
+                // Open upload area
+                await page.getByTestId('upload-button').click();
+                await expect(page.getByTestId('file-uploader')).toBeVisible({timeout: 3000});
+                await page.waitForTimeout(300);
+
+                await screenshot(page, viewport, 'en', theme, 'media', 'file-uploader-empty');
             }
         });
     });

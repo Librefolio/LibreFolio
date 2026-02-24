@@ -13,6 +13,7 @@
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {ExternalLink, FileUp, RefreshCw, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
+    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal} from '$lib/components/ui/media';
@@ -227,11 +228,7 @@
             {/if}
 
             <!-- Error Message -->
-            {#if error}
-                <div class="error-message">
-                    {error}
-                </div>
-            {/if}
+            <ErrorBanner message={error} on:dismiss={() => error = ''} />
 
             <!-- Content -->
             <div class="modal-body">
@@ -401,20 +398,6 @@
         border-bottom-color: #374151;
     }
 
-    .error-message {
-        margin: 0.75rem 1.5rem;
-        padding: 0.75rem 1rem;
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
-        border-radius: 0.5rem;
-        color: #dc2626;
-        font-size: 0.875rem;
-    }
-
-    :global(.dark) .error-message {
-        background-color: rgba(220, 38, 38, 0.1);
-        border-color: rgba(220, 38, 38, 0.3);
-    }
 
     .modal-body {
         flex: 1;

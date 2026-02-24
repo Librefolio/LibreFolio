@@ -8,6 +8,7 @@
     import {SearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/globalSettings';
+    import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
 
     // Props
     export let canEdit: boolean = false;
@@ -531,9 +532,7 @@
         {/if}
 
         {#if isLoading}
-            <div class="text-center py-8 text-gray-500">
-                {$_('common.loading')}
-            </div>
+            <LoadingSpinner />
         {:else if settings.length === 0}
             <div class="text-center py-8 text-gray-500">
                 {$_('settings.noGlobalSettings')}

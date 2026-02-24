@@ -160,6 +160,8 @@
     function confirmClose() { showCloseConfirm = false; handleCancel(); }
     function cancelClose() { showCloseConfirm = false; }
 
+    let suppressChanges = false;
+
     function handleCropperChange(e: CustomEvent<{selection: {width: number; height: number}}>) {
         if (e.detail?.selection) {
             selectionWidth = Math.round(e.detail.selection.width);
@@ -172,15 +174,20 @@
         // Auto-resetAll on first init to align selection properly
         if (needsInit && cropper?.resetAll) {
             needsInit = false;
+            suppressChanges = true;
             // Small delay to let cropper finish its initial setup
             setTimeout(() => {
                 cropper?.resetAll?.();
                 hasChanges = false;  // Reset the changes flag after init
+                // Keep suppressing for a bit longer to catch post-resetAll events
+                setTimeout(() => { suppressChanges = false; }, 300);
             }, 200);
             return;
         }
 
-        hasChanges = true;
+        if (!suppressChanges) {
+            hasChanges = true;
+        }
     }
 
     function handleOutputWidthInput(e: Event) {
@@ -294,7 +301,8 @@
                         </button>
                     {/if}
                     <button type="button" class="header-btn" on:click={requestClose}
-                            title={$_('common.close') || 'Close'}>
+                            title={$_('common.close') || 'Close'}
+                            data-testid="image-edit-close">
                         <X size={20} />
                     </button>
                 </div>
@@ -356,7 +364,7 @@
                 </div>
 
                 <!-- === BOTTOM PANEL (2 columns) === -->
-                <div class="bottom-panel">
+                <div class="bottom-panel" data-testid="image-edit-controls-panel">
                     <!-- Left column: Info (Input/Selection) + Output/Scale -->
                     <div class="panel-col">
                         <div class="panel-row info-row">
@@ -471,7 +479,7 @@
     maxWidth="sm"
     onRequestClose={cancelClose}
 >
-        <div class="confirm-dialog">
+         <div class="confirm-dialog" data-testid="image-edit-confirm-dialog">
             <div class="confirm-header">
                 <span class="confirm-icon">⚠️</span>
                 <h3>{$_('uploads.discardChanges') || 'Discard changes?'}</h3>

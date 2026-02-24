@@ -85,6 +85,14 @@ Secure password changes on the go.
     <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Password Change Modal">
 </div>
 
+### Profile
+
+Your profile, avatar, and account settings on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab">
+</div>
+
 ---
 
 ## 📁 Files
@@ -95,6 +103,14 @@ Manage your uploaded files on mobile.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab">
+</div>
+
+### Static Resources - Grid View
+
+Visual file browsing with image previews on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View">
 </div>
 
 ### Broker Reports (BRIM)

@@ -1338,6 +1338,16 @@ def front_select(verbose: bool = False, ui: bool = False, headed: bool = False, 
     return _run_playwright("select-components.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
 
 
+def front_image_crop(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run image crop & media components E2E tests."""
+    print_section("Frontend Image Crop & Media Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("image-crop.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
 def front_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
     """Run all frontend tests (excludes gallery)."""
     print_header("Frontend E2E Tests (Playwright)")
@@ -1352,7 +1362,7 @@ def front_all(verbose: bool = False, ui: bool = False, headed: bool = False, deb
         return False
 
     # Run all specs except gallery
-    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "brokers.spec.ts", "multi-user.spec.ts", "select-components.spec.ts"]
+    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "brokers.spec.ts", "multi-user.spec.ts", "select-components.spec.ts", "image-crop.spec.ts"]
 
     return _run_test_suite(
         suite_name="Frontend E2E Tests",
@@ -2027,6 +2037,14 @@ Note: gallery.spec.ts is NOT included in 'all' - use ./dev.py mkdocs gallery
             "desc": "SimpleSelect, SearchSelect, keyboard navigation",
             "prereq": "Login working",
             "tests": "select-components.spec.ts",
+            },
+        "image-crop": {
+            "func": front_image_crop,
+            "test_names": True,
+            "name": "Image Crop & Media Tests",
+            "desc": "ImageEditModal, AssetPicker, FileGrid, avatar (42 tests)",
+            "prereq": "Login working, uploaded files",
+            "tests": "image-crop.spec.ts",
             },
         "all": {
             "func": front_all,

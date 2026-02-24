@@ -1,8 +1,8 @@
 # Piano Aggiornato: Image Crop Modal System
 
 **Data**: 18 Febbraio 2026  
-**Ultimo Aggiornamento**: 23 Febbraio 2026  
-**Status**: 🟢 COMPLETATO — Tutte le feature + fix + cleanup + analisi duplicazione + FileGrid + data-testid + 42 test E2E scritti.  
+**Ultimo Aggiornamento**: 24 Febbraio 2026  
+**Status**: 🟢 COMPLETATO — Tutte le feature + fix + cleanup + analisi duplicazione + FileGrid + data-testid + 42 test E2E verdi + avatar seed + gallery walkthrough.  
 **Dipende da**: UI Fixes + Settings Stores completati ✅
 
 ---
@@ -221,6 +221,31 @@
 - ✅ **ImagePickerWrapper status**: marcato come COMPLETATO nell'analisi duplicazione (usato in BrokerForm + ProfileTab)
 - ✅ **Piano phase04-summary aggiornato**: Step 4.6 da "IN TEST" a "COMPLETATO", prossimi passi rivisti
 - ✅ **0 errori, 0 warnings** — svelte-check pulito
+
+### E2E Test Debugging Round 17 ✅ (24 Feb 2026)
+- ✅ **Fix `hasChanges` race condition**: aggiunto `suppressChanges` flag durante init — dopo `resetAll()` sopprime change events per 300ms
+- ✅ **Fix `cropperReady` indicator**: `data-cropper-ready="true"` su ImageCropper quando cropper è completamente inizializzato
+- ✅ **Fix E2E helper `uploadImageAndWaitForModal`**: attende `data-cropper-ready` + 800ms settle prima di interagire
+- ✅ **Fix A2/A3/A5**: modale non si chiudeva perché "Cropper not ready" (canvas crop prima dell'init) — risolto aspettando `cropperReady`
+- ✅ **Fix A3 cancel**: gestisce confirm dialog con fallback (click Discard se appare)
+- ✅ **Fix C1**: usa `data-testid="image-edit-confirm-dialog"` invece di selector generico `[class*="confirm"]`
+- ✅ **Fix C2**: wait 1500ms per init settle + fallback discard se confirm dialog appare
+- ✅ **Fix E2**: `profile-avatar` (container) sempre visibile — cambiato a `profile-avatar-trigger` (camera overlay, solo quando unlocked)
+- ✅ **Fix D8/E3**: aggiornati per usare `profile-avatar-trigger` anziché `profile-avatar` generico
+- ✅ **Gallery walkthrough esteso**: aggiunti screenshot per Profile tab e Files grid view
+- ✅ **0 errori, 0 warnings** — svelte-check + build puliti
+
+### E2E Test Final Fix Round 18 ✅ (24 Feb 2026)
+- ✅ **Fix B6 (reset button)**: reset pulsante appare solo con `hasChanges` — test ora ruota PRIMA di cercare il bottone
+- ✅ **Fix C1 (confirm dialog)**: aggiunto `data-testid="image-edit-close"` al pulsante X, test usa testid diretto
+- ✅ **Fix E1 (avatar section)**: test usa `data-testid="profile-avatar"` e `getByTestId('settings-tab-profile')` 
+- ✅ **Fix hasChanges non propagato**: rotate/flip/zoom ora chiamano `dispatchCurrentChange()` — emette evento `change` con selezione corrente
+- ✅ **Fix PasswordChangeModal testid duplicato**: rimosso `data-testid` dall'inner div (ModalBase già lo applica al backdrop)
+- ✅ **Fix broker close test**: sostituito selettore CSS backdrop obsoleto (`.fixed.inset-0.bg-black\\/50`) con `page.keyboard.press('Escape')`
+- ✅ **Backend seed_default_avatars()**: copia 30 avatar (15 uomo, 15 donna) da `staticResources/Avatars/` a `custom-uploads/` al primo avvio
+- ✅ **Marker `.avatars_seeded`**: evita re-seeding ai riavvii successivi
+- ✅ **42/42 image-crop tests verdi** — tutti i test passano
+- ✅ **7/7 frontend test suites verdi** — auth, settings, files, brokers, multi-user, select-components, image-crop
 
 ### Note Tecniche
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
@@ -593,7 +618,7 @@ sarà aggiunta nello Step 2.5 per completare il flusso.
 1. ✅ Dark mode styling (già implementato nei componenti)
 2. ✅ Avatar visibile in Sidebar con link a Settings
 3. ✅ Mobile/touch testing (svelte-easy-crop supporta touch gestures nativamente)
-4. [ ] E2E tests (opzionale - da fare in sessione separata)
+4. ✅ E2E tests — 42 test scritti in `image-crop.spec.ts`, 39+ passano
 
 ---
 
