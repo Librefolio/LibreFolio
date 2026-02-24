@@ -7,9 +7,10 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
-    import {AlertCircle, Check, X} from 'lucide-svelte';
+    import {Check, X} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
+    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
     const dispatch = createEventDispatcher<{
@@ -106,7 +107,7 @@
     onRequestClose={handleClose}
     testId="password-change-modal"
 >
-        <div class="bg-white dark:bg-slate-800 rounded-xl w-full" data-testid="password-change-modal">
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full">
             <!-- Header -->
             <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -123,12 +124,7 @@
 
             <!-- Body -->
             <form on:submit|preventDefault={handleSubmit} class="p-4 space-y-4">
-                {#if error}
-                    <div class="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
-                        <AlertCircle size={16}/>
-                        <span>{error}</span>
-                    </div>
-                {/if}
+                <ErrorBanner message={error} on:dismiss={() => error = ''} />
 
                 {#if success}
                     <div class="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">

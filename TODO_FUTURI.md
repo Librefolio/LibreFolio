@@ -278,3 +278,33 @@ Creare un assistente AI basato su MCP server chiamato "QuarkAI".
 ### Riferimenti
 [Link a documentazione, issue, PR]
 ```
+
+---
+
+## 🖼️ Client-side Image Preview Cache (LazyImage)
+
+**Data aggiunta**: 23 Febbraio 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Media
+
+### Contesto
+
+Quando si passa dalla modalità **griglia** (preview 120x120) alla modalità **lista** (preview 48x48) nella pagina files, il browser fa nuove richieste al backend per le stesse immagini a risoluzione inferiore. Questo succede perché le URL sono diverse (`?img_preview=120x120` vs `?img_preview=48x48`).
+
+Sarebbe più efficiente riutilizzare la risorsa già caricata a risoluzione maggiore e lasciare al browser il ridimensionamento CSS, evitando chiamate network ridondanti.
+
+### Azione Futura
+
+1. Creare un **Map globale** lato client (`imagePreviewCache: Map<fileId, {maxSize: number, objectUrl: string}>`)
+2. Nel componente `LazyImage`, prima di fare fetch, controllare se il fileId è già in cache a risoluzione >= quella richiesta
+3. Se sì, usare l'objectUrl già disponibile e fare `object-fit: cover` CSS
+4. Se no, fare la richiesta normale e salvare in cache
+5. Gestire la pulizia cache con `URL.revokeObjectURL()` quando i componenti vengono distrutti
+6. Eventuale Service Worker per intercettare le richieste `?img_preview=` e servire versioni cached
+
+### Note
+
+- La cache backend (50MB, TTL 1h) già mitiga il problema server-side
+- Questa ottimizzazione è puramente client-side per evitare roundtrip network
+- Valutare l'impatto su memoria del browser se molte immagini sono in griglia
+

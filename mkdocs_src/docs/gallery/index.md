@@ -24,8 +24,10 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
     - **Authentication**: Secure login with password strength meter
     - **Dashboard**: Quick overview of your portfolio
     - **Brokers**: Manage multiple brokerage accounts
-    - **Files**: Upload and manage broker reports
+    - **Files**: Upload and manage broker reports with grid & table views
     - **Settings**: Customize your experience in 4 languages
+    - **Profile**: Avatar management and account settings
+    - **Media & Upload**: Image crop/edit, asset picker, file renaming
 
 ## Language Support
 

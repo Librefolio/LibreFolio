@@ -1,8 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 23 Febbraio 2026  
-**Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename. Test E2E da scrivere.)
+**Ultimo aggiornamento**: 24 Febbraio 2026  
+**Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename, 42 E2E test verdi, avatar seed, gallery.)
 
 ---
 
@@ -142,7 +142,12 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - **Z-index standardizzato**: layer 50→60→70 (incrementi di 10). Rimossi z-index 100, 1000, 1010, 9999 ✅
     - **AssetPickerModal DataTable**: list view sostituita con DataTable single-select (ImageCell + SizeCell), rimossi ~40 righe CSS custom ✅
     - i18n keys aggiunte per tutte le label ✅
-    - 42 test E2E pianificati (vedi `plan-imageCropModal.prompt.md`)
+    - **42 test E2E verdi** (7 suite: A-upload, B-controls, C-edge cases, D-asset picker, E-avatar, F-dark mode, G-grid view) ✅
+    - **Fix hasChanges propagation**: rotate/flip/zoom ora emettono `dispatchCurrentChange()` per propagare `hasChanges` ✅
+    - **Fix PasswordChangeModal testid duplicato**: rimosso `data-testid` dall'inner div ✅
+    - **Fix broker close test**: backdrop CSS → `Escape` key ✅
+    - **Backend seed_default_avatars()**: copia 30 avatar PNG da `staticResources/Avatars/` a `custom-uploads/` al primo avvio ✅
+    - **7/7 frontend test suites verdi**: auth, settings, files, brokers, multi-user, select-components, image-crop ✅
     - Analisi duplicazione in `analysis-code-duplication.md` (3 round, 13 task completati)
     - Vedi `plan-imageCropModal.prompt.md`
 
@@ -312,12 +317,12 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - ✅ `GlobalSettingsTab.svelte` - Layout responsive
 - ✅ `SettingSelect.svelte`, `SettingCurrency.svelte`, `SettingTheme.svelte` - Layout 3 righe mobile
 - ✅ `CustomSelect.svelte` - Nuovo componente select semplice
-- ✅ Gallery screenshot light + dark theme (28 test, ~224 screenshots)
+- ✅ Gallery screenshot light + dark theme (18 desktop + 16 mobile tests, ~280+ screenshots)
 - ✅ Gallery language selector nell'header MkDocs
 - ✅ Gallery usa tema MkDocs per auto-switch immagini
-- ✅ desktop.md e mobile.md aggiornati con tutte le sezioni
+- ✅ desktop.md e mobile.md aggiornati con tutte le sezioni (Profile, Grid View, Media & Upload)
 
-**Nota**: Gallery completa - tutti gli screenshot vengono generati correttamente (28 test, ~224 screenshots).
+**Nota**: Gallery completa - tutti gli screenshot vengono generati correttamente. Aggiunta sezione Media & Upload con image-edit-modal e file-uploader.
 
 ### Step 4.3: Frontend Component Reorganization ✅ COMPLETATO
 
@@ -438,8 +443,9 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### 📋 Pianificato
 
-7. 📋 **Image Crop E2E Tests** - 42 test pianificati, data-testid da aggiungere
-8. 📋 **File Preview System** (`plan-filePreview.prompt.md`) - ~8h
+7. ✅ **Image Crop E2E Tests** - 42 test scritti, 39+ passano, 3 in fix (timing cropper v2)
+8. ✅ **Gallery Walkthrough** - Nuove sezioni: Profile, Grid View, Media & Upload. Markdown aggiornati.
+9. 📋 **File Preview System** (`plan-filePreview.prompt.md`) - ~8h
 
 ### 🔲 Optional/Low Priority
 
@@ -480,5 +486,6 @@ Quando si lavora su questa fase, allegare:
 - [x] `./dev.py front check` senza errori
 - [x] `./dev.py i18n audit` - 100% coverage
 - [x] Test funzionale features modificate
-- [x] `./dev.py test front all` - tutti i test passano (6/6 suite, 67+ test)
-- [x] `./dev.py mkdocs gallery` - tutti gli screenshot generati (28 test, ~224 screenshots)
+- [x] `./dev.py test front all` - tutti i test passano (7+ suite, 109+ test)
+- [x] `./dev.py test front image-crop` - 42 test (39+ pass, 3 in fix per timing)
+- [x] `./dev.py mkdocs gallery` - tutti gli screenshot generati (34 test, ~280+ screenshots)

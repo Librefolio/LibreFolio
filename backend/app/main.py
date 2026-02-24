@@ -144,6 +144,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Ensure all data directories exist (prod or test based on mode)
     ensure_data_dirs()
 
+    # Seed default avatar images on first startup
+    from backend.app.services.static_uploads import seed_default_avatars
+    seeded = seed_default_avatars()
+    if seeded > 0:
+        logger.info(f"Seeded {seeded} default avatar(s) into static resources")
+
     # Ensure database exists and is migrated
     ensure_database_exists()
 

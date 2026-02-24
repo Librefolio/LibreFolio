@@ -17,7 +17,7 @@
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/upload';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
-    import {Check, Copy, Download, File as FileIcon, FileSpreadsheet, FileText, Image, Link2, Search, Trash2, X} from 'lucide-svelte';
+    import {Check, Copy, Download, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Search, Trash2, X} from 'lucide-svelte';
     import type {UploadedFile} from '$lib/types';
 
     // Props
@@ -58,7 +58,7 @@
     }
 
     function getFileIcon(contentType: string, filename?: string) {
-        if (contentType?.startsWith('image/')) return Image;
+        if (contentType?.startsWith('image/')) return ImageIcon;
         if (contentType?.includes('csv') || filename?.endsWith('.csv')) return FileSpreadsheet;
         if (contentType?.includes('text') || contentType?.includes('json')) return FileText;
         return FileIcon;

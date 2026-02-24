@@ -5,6 +5,7 @@
     import {isAxiosError} from 'axios';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
+    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
 
     const dispatch = createEventDispatcher<{
         gotoLogin: { message?: string };
@@ -141,11 +142,7 @@
         <form class="space-y-4" data-testid="register-form" on:submit|preventDefault={handleSubmit}>
 
             <!-- General Error Message -->
-            {#if error}
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg text-sm">
-                    {error}
-                </div>
-            {/if}
+            <ErrorBanner message={error} on:dismiss={() => error = ''} />
 
             <!-- Username Input -->
             <div>

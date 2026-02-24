@@ -248,14 +248,14 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 | Pattern | Occorrenze | Note |
 |---------|-----------|------|
 | ~~**formatBytes i18n**~~ | ~~3~~ → 0 | ✅ Completamente eliminato — unica implementazione in `utils/upload.ts` con `get(_)` |
-| **Error banner pattern** | 4+ componenti | `{#if error}<div class="error-banner">...` |
-| **Loading spinner** | 4+ componenti | Pattern `{#if loading}<div class="loading">...` |
+| ~~**Error banner pattern**~~ | ~~4+~~ → 1 | ✅ `ErrorBanner.svelte` creato e usato in 7 componenti (1 rimasto in files/ con dismiss) |
+| ~~**Loading spinner**~~ | ~~4+~~ → 0 | ✅ `LoadingSpinner.svelte` creato e usato in PreferencesTab, GlobalSettingsTab, AboutTab |
 
 ---
 
 ## 🏁 Raccomandazione
 
-Il refactoring **ModalBase.svelte** è completato al 100% — tutte le 10 modali del progetto sono migrate. Z-index standardizzato (50→60→70) e keyboard event isolation per modali stackate. I componenti auth (Login, Register, ForgotPassword) sono stati rinominati da "Modal" a "Card" per rispecchiare la loro natura. Ogni nuova pagina (Phase 5+) userà ModalBase direttamente.
+Il refactoring **ModalBase.svelte** è completato al 100% — tutte le 10 modali del progetto sono migrate. Z-index standardizzato (50→60→70) e keyboard event isolation per modali stackate. I componenti auth (Login, Register, ForgotPassword) sono stati rinominati da "Modal" a "Card" per rispecchiare la loro natura. **ErrorBanner** e **LoadingSpinner** estratti come componenti riutilizzabili. Ogni nuova pagina (Phase 5+) userà ModalBase, ErrorBanner e LoadingSpinner direttamente.
 
 **Ordine suggerito per gli ultimi task**:
 1. ✅ ~~Creare `uploadFile()` utility~~ — FATTO in `utils/upload.ts`
@@ -264,5 +264,7 @@ Il refactoring **ModalBase.svelte** è completato al 100% — tutte le 10 modali
 4. ✅ ~~Usare DataTable nel tab Existing di AssetPickerModal~~ — FATTO (single-select, ImageCell, SizeCell)
 5. ✅ ~~Creare ImagePickerWrapper.svelte~~ — FATTO (deduplicato flusso avatar/icon, usato in BrokerForm + ProfileTab)
 6. ✅ ~~Estrarre FileGrid.svelte~~ — FATTO (componente parametrizzato usato in files/ page e AssetPickerModal)
-7. Tutti i 6 task completati! Analisi chiusa.
+7. ✅ ~~Creare ErrorBanner.svelte~~ — FATTO (7 componenti migrati)
+8. ✅ ~~Creare LoadingSpinner.svelte~~ — FATTO (3 componenti migrati)
+9. Tutti i 8 task completati! Analisi chiusa.
 

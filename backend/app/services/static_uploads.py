@@ -459,3 +459,61 @@ def get_upload_by_user(file_id: str, user_id: int) -> Optional[UploadFileInfo]:
     if info and info.uploaded_by_user_id == user_id:
         return info
     return None
+
+
+def seed_default_avatars() -> int:
+    """
+    Copy default avatar images from staticResources/Avatars/ into custom-uploads
+    on first startup (when custom-uploads is empty or the marker doesn't exist).
+
+    Uses user_id=0 (system) as the uploader since no real user exists yet.
+
+    Returns:
+        Number of avatar files seeded (0 if already seeded).
+    """
+    from backend.app.config import PROJECT_ROOT
+
+    _ensure_dir()
+    uploads_dir = get_uploads_dir()
+
+    # Marker file to indicate avatars have been seeded
+    marker = uploads_dir / ".avatars_seeded"
+    if marker.exists():
+        return 0
+
+    avatars_src = PROJECT_ROOT / "backend" / "staticResources" / "Avatars"
+    if not avatars_src.exists():
+        logger.warning("Default avatars directory not found", path=str(avatars_src))
+        return 0
+
+    count = 0
+    now = utcnow()
+
+    for avatar_file in sorted(avatars_src.glob("*.png")):
+        content = avatar_file.read_bytes()
+        file_id = str(uuid.uuid4())
+        ext = avatar_file.suffix.lower()
+
+        # Write file
+        dest = uploads_dir / f"{file_id}{ext}"
+        dest.write_bytes(content)
+
+        # Create metadata (user_id=0 = system)
+        metadata = {
+            "id": file_id,
+            "original_name": avatar_file.name,
+            "extension": ext,
+            "mime_type": "image/png",
+            "size_bytes": len(content),
+            "uploaded_at": now.isoformat(),
+            "uploaded_by_user_id": 0,
+            "description": f"Default avatar: {avatar_file.stem}",
+        }
+        _save_metadata(file_id, metadata)
+        count += 1
+
+    # Write marker so we don't re-seed next time
+    marker.write_text(f"Seeded {count} avatars at {now.isoformat()}\n")
+    logger.info("Seeded default avatar images", count=count)
+    return count
+

@@ -9,6 +9,7 @@
     import {formatBytes} from '$lib/utils/upload';
     import {FileText, FileUp, RefreshCw, Trash2} from 'lucide-svelte';
     import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
+    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
     import type {BrimFile} from '$lib/types';
 
     // Props
@@ -178,9 +179,7 @@
         </div>
     </div>
 
-    {#if error}
-        <div class="text-red-600 text-sm mb-3 p-2 bg-red-50 rounded">{error}</div>
-    {/if}
+    <ErrorBanner message={error} className="mb-3" on:dismiss={() => error = ''} />
 
     {#if loading && files.length === 0}
         <div class="flex items-center justify-center py-8 text-gray-400">

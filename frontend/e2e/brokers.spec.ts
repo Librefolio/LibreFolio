@@ -36,9 +36,8 @@ test.describe('Brokers', () => {
             await page.getByTestId('add-broker-button').click();
             await expect(page.getByTestId('broker-modal')).toBeVisible();
 
-            // Click outside modal (backdrop) to close
-            // The modal has a backdrop that closes on click
-            await page.locator('.fixed.inset-0.bg-black\\/50').click({position: {x: 10, y: 10}});
+            // Press Escape to close the modal
+            await page.keyboard.press('Escape');
             await expect(page.getByTestId('broker-modal')).not.toBeVisible();
         });
 

@@ -8,6 +8,7 @@
     import BrokerForm from './BrokerForm.svelte';
     import {zodiosApi} from '$lib/api';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -149,11 +150,7 @@
             </div>
 
             <!-- Error message -->
-            {#if error}
-                <div class="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm shrink-0">
-                    {error}
-                </div>
-            {/if}
+            <ErrorBanner message={error} className="mx-4 mt-4 shrink-0" on:dismiss={() => error = ''} />
 
             <!-- Form (scrollable area with sticky footer inside) -->
             <div class="overflow-y-auto flex-1 min-h-0 scrollbar-hidden">

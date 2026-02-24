@@ -25,6 +25,7 @@
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {ImageEditModal, FileEditModal} from '$lib/components/ui/media';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
     import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Search, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
@@ -695,12 +696,7 @@
     {/if}
 
     <!-- Error message -->
-    {#if error}
-        <div class="error-banner">
-            {error}
-            <button on:click={() => error = null}>×</button>
-        </div>
-    {/if}
+    <ErrorBanner message={error} on:dismiss={() => error = null} />
 
     <!-- Content -->
     <div class="content">
@@ -1057,31 +1053,6 @@
         background: #374151;
     }
 
-    .error-banner {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.75rem 1rem;
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
-        border-radius: 0.375rem;
-        color: #dc2626;
-        margin-bottom: 1rem;
-    }
-
-    :global(.dark) .error-banner {
-        background-color: rgba(220, 38, 38, 0.1);
-        border-color: rgba(220, 38, 38, 0.3);
-        color: #fca5a5;
-    }
-
-    .error-banner button {
-        background: none;
-        border: none;
-        font-size: 1.25rem;
-        cursor: pointer;
-        color: inherit;
-    }
 
     .loading {
         text-align: center;
