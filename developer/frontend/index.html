@@ -25,7 +25,7 @@
     
     
       
-        <title>Overview - LibreFolio Documentation</title>
+        <title>Overview - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3662,43 +3662,50 @@
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│   ├── (app)/        # Authenticated app routes (Dashboard, Brokers, etc.)
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│   │   ├── dashboard/
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   │   ├── brokers/
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│   │   ├── assets/
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│   │   ├── transactions/
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│   │   ├── fx/
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│   │   ├── files/
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   │   └── settings/
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   └── +page.svelte  # Login page (Public)
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>├── lib/
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>│   ├── api/          # API client (generated from OpenAPI)
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│   ├── components/   # Reusable components
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│   │   ├── auth/     # Login/Register modals
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│   │   ├── brokers/  # Broker cards and forms
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│   │   ├── files/    # File management UI
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│   │   ├── layout/   # Sidebar, Header, Shell
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>│   │   ├── settings/ # Settings tabs
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>│   │   ├── table/    # DataTable component suite
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│   │   └── ui/       # Generic UI atoms (Button, Input, etc.)
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>│   ├── i18n/         # Internationalization (EN, IT, FR, ES)
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>│   └── stores/       # Global state (Auth, Theme)
-<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>└── static/           # Static assets
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│   │   │   └── [id]/    # Broker detail page
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│   │   ├── assets/
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│   │   ├── transactions/
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│   │   ├── fx/
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   │   ├── files/
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   │   └── settings/
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│   └── +page.svelte  # Login page (Public)
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>├── lib/
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│   ├── api/          # API client (Zodios, generated from OpenAPI)
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│   ├── components/   # Reusable components
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│   │   ├── auth/     # LoginCard, RegisterCard, ForgotPasswordCard
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│   │   ├── brokers/  # Broker cards, forms, icon, import
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│   │   ├── files/    # FilesTable with DataTable
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>│   │   ├── layout/   # Sidebar, Header, LanguageSelector
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>│   │   ├── settings/ # Settings tabs (Profile, Preferences, Global, About)
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│   │   ├── table/    # DataTable suite (ModalBase, ConfirmModal, etc.)
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>│   │   └── ui/       # Generic UI atoms
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>│   │       ├── input/    # PasswordInput, PasswordStrength
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>│   │       ├── media/    # ImageCropper, ImageEditModal, AssetPickerModal, FileEditModal
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>│   │       └── select/   # BaseDropdown, SimpleSelect, SearchSelect
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>│   ├── i18n/         # Internationalization (EN, IT, FR, ES)
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>│   ├── stores/       # Global state (Auth, Settings, Language)
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>│   ├── types/        # TypeScript type definitions
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>│   └── utils/        # Utilities (imageCrop, upload, urlFilters)
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>├── e2e/              # Playwright E2E tests (7 suites, 109+ tests)
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>└── static/           # Static assets
 </code></pre></div>
 <h2 id="svelte-5-runes">Svelte 5 Runes</h2>
 <p>LibreFolio fully embraces Svelte 5's <strong>Runes</strong> for reactivity, replacing the legacy <code>let</code> and <code>$</code> syntax.</p>
 <h3 id="key-runes-used">Key Runes Used</h3>
 <ul>
 <li><strong><code>$state</code></strong>: Declares reactive state.
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kd">let</span><span class="w"> </span><span class="nx">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">$state</span><span class="p">(</span><span class="mf">0</span><span class="p">);</span>
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kd">let</span><span class="w"> </span><span class="nx">count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">$state</span><span class="p">(</span><span class="mf">0</span><span class="p">);</span>
 </code></pre></div></li>
 <li><strong><code>$derived</code></strong>: Declares derived state (automatically updates when dependencies change).
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">let</span><span class="w"> </span><span class="kr">double</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">$derived</span><span class="p">(</span><span class="nx">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">2</span><span class="p">);</span>
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">let</span><span class="w"> </span><span class="kr">double</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">$derived</span><span class="p">(</span><span class="nx">count</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">2</span><span class="p">);</span>
 </code></pre></div></li>
 <li><strong><code>$effect</code></strong>: Side effects (runs when dependencies change).
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">$effect</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">$effect</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">count</span><span class="p">);</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="p">});</span>
 </code></pre></div></li>
 <li><strong><code>$props</code></strong>: Declares component props.
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">let</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">title</span><span class="p">,</span><span class="w"> </span><span class="nx">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">$props</span><span class="p">();</span>
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">let</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">title</span><span class="p">,</span><span class="w"> </span><span class="nx">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">$props</span><span class="p">();</span>
 </code></pre></div></li>
 </ul>
 <h2 id="documentation-sections">Documentation Sections</h2>
@@ -3724,15 +3731,15 @@
 </tr>
 <tr>
 <td><a href="components/auth/">Authentication</a></td>
-<td>Login, register, password reset modals</td>
+<td>LoginCard, RegisterCard, ForgotPasswordCard</td>
 </tr>
 <tr>
 <td><a href="components/settings/">Settings</a></td>
-<td>User preferences and global settings</td>
+<td>User preferences, profile, and global settings</td>
 </tr>
 <tr>
 <td><a href="components/file-upload/">File Upload</a></td>
-<td>File uploader with preview</td>
+<td>File uploader, image crop, asset picker</td>
 </tr>
 </tbody>
 </table>
@@ -3803,6 +3810,8 @@
         <script src="../../javascripts/dashboard-check.js"></script>
       
         <script src="../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

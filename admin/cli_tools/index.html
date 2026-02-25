@@ -25,7 +25,7 @@
     
     
       
-        <title>CLI Tools - LibreFolio Documentation</title>
+        <title>CLI Tools - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3687,40 +3687,40 @@
 <li><strong><code>./dev.sh fe:build</code></strong>: Builds the frontend for production.</li>
 <li><strong><code>./dev.sh info:mk deploy</code></strong>: Deploys the documentation to GitHub Pages.</li>
 </ul>
-<p>For a full list of commands, run:
+<p>For a full list of commands, run:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>./dev.sh<span class="w"> </span><span class="nb">help</span>
-</code></pre></div></p>
+</code></pre></div>
 <h2 id="user_clipy"><code>user_cli.py</code></h2>
 <p><code>user_cli.py</code> is a Python script for managing users and system settings from the command line. It is executed via <code>pipenv run python user_cli.py &lt;command&gt;</code>.</p>
 <h3 id="user-management">User Management</h3>
 <ul>
 <li>
 <p><strong>Create a Superuser</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>./dev.sh<span class="w"> </span>user:create<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;email&gt;<span class="w"> </span>&lt;password&gt;
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>./dev.sh<span class="w"> </span>user:create<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;email&gt;<span class="w"> </span>&lt;password&gt;
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>Reset a User's Password</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>./dev.sh<span class="w"> </span>user:reset<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;new_password&gt;
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>./dev.sh<span class="w"> </span>user:reset<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;new_password&gt;
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>List All Users</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>./dev.sh<span class="w"> </span>user:list
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>./dev.sh<span class="w"> </span>user:list
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>Promote a User to Admin</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>./dev.sh<span class="w"> </span>user:promote<span class="w"> </span>&lt;username&gt;
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>./dev.sh<span class="w"> </span>user:promote<span class="w"> </span>&lt;username&gt;
 </code></pre></div></p>
 </li>
 </ul>
 <h3 id="system-management">System Management</h3>
 <ul>
 <li><strong>Initialize Global Settings</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>./dev.sh<span class="w"> </span>user:init-settings
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>./dev.sh<span class="w"> </span>user:init-settings
 </code></pre></div>
-    This command populates the database with default global settings if they don't already exist.</li>
+  This command populates the database with default global settings if they don't already exist.</li>
 </ul>
 <h2 id="test_runnerpy"><code>test_runner.py</code></h2>
 <p><code>test_runner.py</code> is the entry point for running the project's test suites. It allows you to run specific tests or groups of tests.</p>
@@ -3728,24 +3728,24 @@
 <ul>
 <li>
 <p><strong>Run all tests</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>./dev.sh<span class="w"> </span><span class="nb">test</span><span class="w"> </span>all
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>./dev.sh<span class="w"> </span><span class="nb">test</span><span class="w"> </span>all
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>Run a specific test group</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>./dev.sh<span class="w"> </span><span class="nb">test</span><span class="w"> </span>db<span class="w"> </span>all<span class="w">  </span><span class="c1"># Run all database tests</span>
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>./dev.sh<span class="w"> </span><span class="nb">test</span><span class="w"> </span>db<span class="w"> </span>all<span class="w">  </span><span class="c1"># Run all database tests</span>
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>Run tests with coverage</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>./dev.sh<span class="w"> </span>test:coverage
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>./dev.sh<span class="w"> </span>test:coverage
 </code></pre></div>
-    This generates an HTML report in the <code>htmlcov/</code> directory.</p>
+  This generates an HTML report in the <code>htmlcov/</code> directory.</p>
 </li>
 </ul>
-<p>For more options, see the test runner's help message:
+<p>For more options, see the test runner's help message:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>./dev.sh<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--help
-</code></pre></div></p>
+</code></pre></div>
 
 
 
@@ -3813,6 +3813,8 @@
         <script src="../../javascripts/dashboard-check.js"></script>
       
         <script src="../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

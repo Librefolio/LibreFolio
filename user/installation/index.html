@@ -25,7 +25,7 @@
     
     
       
-        <title>Installation (Docker) - LibreFolio Documentation</title>
+        <title>Installation (Docker) - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3646,16 +3646,16 @@
 </ul>
 <h2 id="1-download-the-project">1. Download the Project</h2>
 <p>Download the latest release from the <a href="https://github.com/Alfystar/LibreFolio/releases">GitHub Releases</a> page. Unzip the folder.</p>
-<p>Alternatively, you can clone the repository:
+<p>Alternatively, you can clone the repository:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Alfystar/LibreFolio.git
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>LibreFolio
-</code></pre></div></p>
+</code></pre></div>
 <h2 id="2-configure-environment">2. Configure Environment</h2>
 <p>The project uses a <code>.env</code> file for configuration. A sample file is provided.</p>
 <ol>
 <li>
 <p><strong>Copy the example file</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
 </code></pre></div></p>
 </li>
 <li>
@@ -3688,17 +3688,17 @@
 <ol>
 <li>
 <p><strong>Download the latest code</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>git<span class="w"> </span>pull
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>git<span class="w"> </span>pull
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>Rebuild and restart the containers</strong>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker-compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--build
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker-compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--build
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>Apply database migrations</strong> (if any):
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>docker-compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>backend<span class="w"> </span>pipenv<span class="w"> </span>run<span class="w"> </span>alembic<span class="w"> </span>upgrade<span class="w"> </span>head
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>docker-compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>backend<span class="w"> </span>pipenv<span class="w"> </span>run<span class="w"> </span>alembic<span class="w"> </span>upgrade<span class="w"> </span>head
 </code></pre></div></p>
 </li>
 </ol>
@@ -3769,6 +3769,8 @@
         <script src="../../javascripts/dashboard-check.js"></script>
       
         <script src="../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

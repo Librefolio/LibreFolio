@@ -25,7 +25,7 @@
     
     
       
-        <title>DataTable - LibreFolio Documentation</title>
+        <title>DataTable - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3635,6 +3635,10 @@
 
 <h1 id="datatable-component">DataTable Component</h1>
 <p>The <code>DataTable</code> is a powerful, generic table component built with Svelte 5 Runes. It provides a rich set of features similar to Excel or advanced data grids.</p>
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="files" data-name="static-tab" alt="DataTable in Files page" style="width: 100%; display: block;">
+</div>
+
 <h2 id="features">Features</h2>
 <ul>
 <li><strong>Sorting</strong>: Click column headers to sort ASC/DESC.</li>
@@ -3749,6 +3753,12 @@
 <td style="text-align: left;">Enable row selection checkboxes.</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>selectionMode</code></td>
+<td style="text-align: left;"><code>'multi' \| 'single'</code></td>
+<td style="text-align: left;"><code>'multi'</code></td>
+<td style="text-align: left;">Multi-select or single-select rows.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>enableActions</code></td>
 <td style="text-align: left;"><code>boolean</code></td>
 <td style="text-align: left;"><code>true</code></td>
@@ -3789,6 +3799,18 @@
 <td style="text-align: left;"><code>BulkAction&lt;T&gt;[]</code></td>
 <td style="text-align: left;"><code>[]</code></td>
 <td style="text-align: left;">Actions available for selected rows.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>onRowClick</code></td>
+<td style="text-align: left;"><code>(row: T) =&gt; void</code></td>
+<td style="text-align: left;"><code>undefined</code></td>
+<td style="text-align: left;">Callback when a row is clicked.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>onRowDoubleClick</code></td>
+<td style="text-align: left;"><code>(row: T) =&gt; void</code></td>
+<td style="text-align: left;"><code>undefined</code></td>
+<td style="text-align: left;">Callback when a row is double-clicked.</td>
 </tr>
 </tbody>
 </table>
@@ -3849,9 +3871,10 @@
 <ul>
 <li><strong>Text</strong>: <code>string</code> or <code>number</code></li>
 <li><strong>Icon + Text</strong>: <code>{ type: 'icon-text', icon: Component, text: string }</code></li>
+<li><strong>Image + Text</strong>: <code>{ type: 'image-text', src: string, text: string, fallbackIcon?: Component, size?: number }</code> (thumbnail with fallback, centered in 32×32 box)</li>
 <li><strong>Badge</strong>: <code>{ type: 'badge', text: string, variant: 'success'|'warning'|'error'|'info'|'default' }</code></li>
 <li><strong>Date</strong>: <code>{ type: 'date', value: Date, format: 'date'|'datetime'|'relative' }</code></li>
-<li><strong>Size</strong>: <code>{ type: 'size', bytes: number }</code> (Auto-formats to KB/MB/GB)</li>
+<li><strong>Size</strong>: <code>{ type: 'size', bytes: number }</code> (Auto-formats to KB/MB/GB, i18n-aware)</li>
 <li><strong>Link</strong>: <code>{ type: 'link', text: string, href: string, external: boolean }</code></li>
 <li><strong>Custom</strong>: <code>{ type: 'custom', component: Component, props: object }</code></li>
 </ul>
@@ -3929,6 +3952,8 @@
         <script src="../../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

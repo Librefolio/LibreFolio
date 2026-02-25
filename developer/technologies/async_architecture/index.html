@@ -25,7 +25,7 @@
     
     
       
-        <title>Async Architecture - LibreFolio Documentation</title>
+        <title>Async Architecture - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3624,10 +3624,13 @@
 
 
 <h1 id="asynchronous-architecture">Asynchronous Architecture</h1>
-<p>LibreFolio is built from the ground up using an asynchronous architecture to ensure high performance and efficiency, especially when dealing with I/O-bound operations like database queries and external API calls.</p>
+<p>LibreFolio is built from the ground up using an asynchronous architecture to ensure high performance and efficiency, especially when dealing with I/O-bound operations like database
+queries and external API calls.</p>
 <h2 id="why-async">Why Async?</h2>
-<p>A traditional synchronous web server handles one request at a time per worker process. If a request involves waiting for a database query or an external API call, the entire worker process is blocked, unable to handle other requests.</p>
-<p>An <strong>asynchronous</strong> server, on the other hand, can handle multiple requests concurrently within a single process. When a task needs to wait for I/O, the server can switch to another task instead of blocking. This leads to:</p>
+<p>A traditional synchronous web server handles one request at a time per worker process. If a request involves waiting for a database query or an external API call, the entire worker
+process is blocked, unable to handle other requests.</p>
+<p>An <strong>asynchronous</strong> server, on the other hand, can handle multiple requests concurrently within a single process. When a task needs to wait for I/O, the server can switch to
+another task instead of blocking. This leads to:</p>
 <ul>
 <li><strong>Higher Throughput</strong>: The server can handle many more concurrent connections with fewer resources.</li>
 <li><strong>Better Responsiveness</strong>: The application remains responsive even when performing long-running I/O operations.</li>
@@ -3635,7 +3638,8 @@
 </ul>
 <h2 id="implementation-in-librefolio">Implementation in LibreFolio</h2>
 <h3 id="fastapi">FastAPI</h3>
-<p><strong>FastAPI</strong> is an asynchronous web framework by default. All API endpoint functions in LibreFolio are defined with <code>async def</code>, allowing them to be run concurrently by the ASGI server (Uvicorn).</p>
+<p><strong>FastAPI</strong> is an asynchronous web framework by default. All API endpoint functions in LibreFolio are defined with <code>async def</code>, allowing them to be run concurrently by the ASGI
+server (Uvicorn).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/assets&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">AssetRead</span><span class="p">])</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_assets</span><span class="p">(</span><span class="n">session</span><span class="p">:</span> <span class="n">AsyncSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session</span><span class="p">)):</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="c1"># This is an async function</span>
@@ -3654,7 +3658,8 @@
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">scalars</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
 </code></pre></div>
 <h3 id="asynchronous-providers">Asynchronous Providers</h3>
-<p>The provider system for Assets, FX, and BRIM is designed to be asynchronous. Provider methods like <code>get_current_value</code> or <code>fetch_rates</code> are defined as <code>async def</code>, allowing them to perform non-blocking HTTP requests to external APIs.</p>
+<p>The provider system for Assets, FX, and BRIM is designed to be asynchronous. Provider methods like <code>get_current_value</code> or <code>fetch_rates</code> are defined as <code>async def</code>, allowing them to
+perform non-blocking HTTP requests to external APIs.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Example of an async provider method</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">YahooFinanceProvider</span><span class="p">(</span><span class="n">AssetSourceProvider</span><span class="p">):</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_current_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">identifier</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FACurrentValue</span><span class="p">:</span>
@@ -3731,6 +3736,8 @@
         <script src="../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

@@ -25,7 +25,7 @@
     
     
       
-        <title>Advanced Docker - LibreFolio Documentation</title>
+        <title>Advanced Docker - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3714,18 +3714,22 @@
 <h2 id="production-considerations">Production Considerations</h2>
 <p>For a production deployment, you might consider the following changes:</p>
 <h3 id="1-reverse-proxy">1. Reverse Proxy</h3>
-<p>It is highly recommended to run LibreFolio behind a reverse proxy like <strong>Nginx</strong> or <strong>Traefik</strong>. This allows you to:
--   Easily manage SSL/TLS certificates for HTTPS.
--   Serve multiple applications on the same server.
--   Add security headers and rate limiting.</p>
+<p>It is highly recommended to run LibreFolio behind a reverse proxy like <strong>Nginx</strong> or <strong>Traefik</strong>. This allows you to:</p>
+<ul>
+<li>Easily manage SSL/TLS certificates for HTTPS.</li>
+<li>Serve multiple applications on the same server.</li>
+<li>Add security headers and rate limiting.</li>
+</ul>
 <h3 id="2-database-backup">2. Database Backup</h3>
-<p>Since the database is stored in a Docker volume, you should have a strategy for backing it up. You can use a simple <code>cron</code> job to copy the database file from the volume to a safe location.</p>
-<p>Example backup script:
+<p>Since the database is stored in a Docker volume, you should have a strategy for backing it up. You can use a simple <code>cron</code> job to copy the database file from the volume to a safe
+location.</p>
+<p>Example backup script:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="ch">#!/bin/bash</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>docker<span class="w"> </span>cp<span class="w"> </span>librefolio_backend_1:/app/backend/data/sqlite/app.db<span class="w"> </span>/path/to/backups/app.db-<span class="k">$(</span>date<span class="w"> </span>+%F<span class="k">)</span>
-</code></pre></div></p>
+</code></pre></div>
 <h3 id="3-disabling-development-mounts">3. Disabling Development Mounts</h3>
-<p>In a production environment, you may not want to mount the source code directly. You can create a separate <code>docker-compose.prod.yml</code> file that omits the source code volumes and relies solely on the built Docker image.</p>
+<p>In a production environment, you may not want to mount the source code directly. You can create a separate <code>docker-compose.prod.yml</code> file that omits the source code volumes and
+relies solely on the built Docker image.</p>
 
 
 
@@ -3793,6 +3797,8 @@
         <script src="../../javascripts/dashboard-check.js"></script>
       
         <script src="../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

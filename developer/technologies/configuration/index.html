@@ -25,7 +25,7 @@
     
     
       
-        <title>Configuration - LibreFolio Documentation</title>
+        <title>Configuration - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -1531,6 +1531,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-separation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Separation
+      
+    </span>
+  </a>
   
 </li>
       
@@ -3549,6 +3560,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#data-separation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Separation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-it-works" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3580,7 +3602,8 @@
 
 
 <h1 id="configuration">Configuration</h1>
-<p>LibreFolio uses a <code>.env</code> file for configuration, powered by Pydantic's <code>BaseSettings</code>. This allows for easy management of environment variables for both local development and Docker deployments.</p>
+<p>LibreFolio uses a <code>.env</code> file for configuration, powered by Pydantic's <code>BaseSettings</code>. This allows for easy management of environment variables for both local development and
+Docker deployments.</p>
 <h2 id="env-file"><code>.env</code> File</h2>
 <p>The <code>.env</code> file is located at the root of the project. A sample file, <code>.env.example</code>, is provided. To get started, simply copy it:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
@@ -3596,13 +3619,13 @@
 <li>
 <p><strong><code>DATABASE_URL</code></strong>: The connection string for the main application database.</p>
 <ul>
-<li>Default: <code>sqlite:///./backend/data/sqlite/app.db</code></li>
+<li>Default: <code>sqlite:///./backend/data/prod/sqlite/app.db</code></li>
 </ul>
 </li>
 <li>
 <p><strong><code>TEST_DATABASE_URL</code></strong>: The connection string for the test database.</p>
 <ul>
-<li>Default: <code>sqlite:///./backend/data/sqlite/test_app.db</code></li>
+<li>Default: <code>sqlite:///./backend/data/test/sqlite/app.db</code></li>
 </ul>
 </li>
 <li>
@@ -3630,13 +3653,30 @@
 <li>Set to <code>1</code> to enable test mode.</li>
 </ul>
 </li>
+<li>
+<p><strong><code>PREVIEW_CACHE_MAX_MB</code></strong>: Maximum size (in MB) for the in-memory image preview cache.</p>
+<ul>
+<li>Default: <code>50</code></li>
+<li>Cached thumbnails are evicted using LRU when limit is reached.</li>
 </ul>
+</li>
+</ul>
+<h2 id="data-separation">Data Separation</h2>
+<p>LibreFolio uses separate data directories for production and test:</p>
+<ul>
+<li><strong>Production</strong>: <code>backend/data/prod/</code> (sqlite, custom-uploads, broker_reports, logs)</li>
+<li><strong>Test</strong>: <code>backend/data/test/</code> (same structure, completely isolated)</li>
+</ul>
+<p>The <code>get_data_dir()</code> function in <code>config.py</code> automatically selects the correct path based on <code>LIBREFOLIO_TEST_MODE</code>.</p>
 <h2 id="how-it-works">How it Works</h2>
-<p>The settings are loaded into a Pydantic <code>Settings</code> class located in <code>backend/app/config.py</code>. This class automatically reads variables from the <code>.env</code> file and validates their types.</p>
-<p>This approach provides:
--   <strong>Type Safety</strong>: Settings are validated at application startup.
--   <strong>Centralized Configuration</strong>: All settings are defined in one place.
--   <strong>Flexibility</strong>: Settings can be provided via a <code>.env</code> file or as actual environment variables, making it easy to configure in different environments (local, Docker, etc.).</p>
+<p>The settings are loaded into a Pydantic <code>Settings</code> class located in <code>backend/app/config.py</code>. This class automatically reads variables from the <code>.env</code> file and validates their
+types.</p>
+<p>This approach provides:</p>
+<ul>
+<li><strong>Type Safety</strong>: Settings are validated at application startup.</li>
+<li><strong>Centralized Configuration</strong>: All settings are defined in one place.</li>
+<li><strong>Flexibility</strong>: Settings can be provided via a <code>.env</code> file or as actual environment variables, making it easy to configure in different environments (local, Docker, etc.).</li>
+</ul>
 
 
 
@@ -3704,6 +3744,8 @@
         <script src="../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

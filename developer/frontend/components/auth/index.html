@@ -25,7 +25,7 @@
     
     
       
-        <title>Authentication - LibreFolio Documentation</title>
+        <title>Authentication - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -2651,15 +2651,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#loginmodal" class="md-nav__link">
+  <a href="#logincard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        LoginModal
+        LoginCard
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="LoginModal">
+    <nav class="md-nav" aria-label="LoginCard">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2690,15 +2690,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#registermodal" class="md-nav__link">
+  <a href="#registercard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        RegisterModal
+        RegisterCard
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="RegisterModal">
+    <nav class="md-nav" aria-label="RegisterCard">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3638,15 +3638,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#loginmodal" class="md-nav__link">
+  <a href="#logincard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        LoginModal
+        LoginCard
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="LoginModal">
+    <nav class="md-nav" aria-label="LoginCard">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3677,15 +3677,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#registermodal" class="md-nav__link">
+  <a href="#registercard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        RegisterModal
+        RegisterCard
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="RegisterModal">
+    <nav class="md-nav" aria-label="RegisterCard">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3815,8 +3815,16 @@
 
 <h1 id="authentication-components">Authentication Components</h1>
 <p>This section documents the authentication UI components used for login, registration, and password management.</p>
-<h2 id="loginmodal">LoginModal</h2>
-<p>The <code>LoginModal</code> handles user authentication via username/email and password.</p>
+<div class="admonition note">
+<p class="admonition-title">Card Components (Not Modals)</p>
+<p>These components were renamed from <code>*Modal</code> to <code>*Card</code> (Feb 2026) because they are card-style forms displayed inline on the login page, not modal overlays. They do <strong>not</strong> extend <code>ModalBase</code>.</p>
+</div>
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
+    <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; display: block;">
+</div>
+
+<h2 id="logincard">LoginCard</h2>
+<p>The <code>LoginCard</code> handles user authentication via username/email and password.</p>
 <h3 id="features">Features</h3>
 <ul>
 <li><strong>Input</strong>: Username or Email field (autofocus).</li>
@@ -3826,17 +3834,21 @@
 </ul>
 <h3 id="usage">Usage</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&lt;script&gt;
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  import LoginModal from &#39;$lib/components/auth/LoginModal.svelte&#39;;
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  import LoginCard from &#39;$lib/components/auth/LoginCard.svelte&#39;;
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>&lt;/script&gt;
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>&lt;LoginModal
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>&lt;LoginCard
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  redirectTo=&quot;/dashboard&quot;
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  on:gotoRegister={() =&gt; showRegister = true}
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  on:gotoForgot={() =&gt; showForgot = true}
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>/&gt;
 </code></pre></div>
-<h2 id="registermodal">RegisterModal</h2>
-<p>The <code>RegisterModal</code> handles new user registration with client-side validation.</p>
+<h2 id="registercard">RegisterCard</h2>
+<p>The <code>RegisterCard</code> handles new user registration with client-side validation.</p>
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
+    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registration with Password Strength" style="width: 100%; display: block;">
+</div>
+
 <h3 id="features_1">Features</h3>
 <ul>
 <li><strong>Validation</strong>: Real-time validation for:<ul>
@@ -3851,10 +3863,10 @@
 </ul>
 <h3 id="usage_1">Usage</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>&lt;script&gt;
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  import RegisterModal from &#39;$lib/components/auth/RegisterModal.svelte&#39;;
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  import RegisterCard from &#39;$lib/components/auth/RegisterCard.svelte&#39;;
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>&lt;/script&gt;
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>&lt;RegisterModal
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>&lt;RegisterCard
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>  on:gotoLogin={(e) =&gt; {
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>     showLogin = true;
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>     successMessage = e.detail.message;
@@ -3877,7 +3889,7 @@
 </ul>
 <h3 id="usage_2">Usage</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>&lt;script&gt;
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  import PasswordStrength from &#39;$lib/components/ui/PasswordStrength.svelte&#39;;
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  import PasswordStrength from &#39;$lib/components/ui/input/PasswordStrength.svelte&#39;;
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  let password = &#39;&#39;;
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>&lt;/script&gt;
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
@@ -3894,7 +3906,7 @@
 </ul>
 <h3 id="usage_3">Usage</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>&lt;script&gt;
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  import PasswordInput from &#39;$lib/components/ui/PasswordInput.svelte&#39;;
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  import PasswordInput from &#39;$lib/components/ui/input/PasswordInput.svelte&#39;;
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  let password = &#39;&#39;;
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>&lt;/script&gt;
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
@@ -3971,6 +3983,8 @@
         <script src="../../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

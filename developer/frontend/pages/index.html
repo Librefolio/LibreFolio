@@ -25,7 +25,7 @@
     
     
       
-        <title>Pages - LibreFolio Documentation</title>
+        <title>Pages - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -2810,6 +2810,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#broker-detail-brokersid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broker Detail (/brokers/[id])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#files-files" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2833,28 +2844,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#authentication-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Authentication Flow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#data-loading" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Data Loading
-      
-    </span>
-  </a>
   
 </li>
       
@@ -3665,6 +3654,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#broker-detail-brokersid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broker Detail (/brokers/[id])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#files-files" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3691,28 +3691,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#authentication-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Authentication Flow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#data-loading" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Data Loading
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -3734,75 +3712,102 @@
 
 
 <h1 id="frontend-pages">Frontend Pages</h1>
-<p><em>Status: Draft - Pages implemented, documentation in progress</em></p>
+<p><em>Status: Implemented (Feb 2026)</em></p>
 <h2 id="overview">Overview</h2>
-<p>Application pages and routing structure.</p>
+<p>Application pages and routing structure. All authenticated routes are under <code>(app)/</code>.</p>
 <h2 id="page-structure">Page Structure</h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>frontend/src/routes/
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── +page.svelte              # Login page (public)
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── +layout.svelte            # Root layout
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── (app)/                    # Authenticated routes
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   ├── +layout.svelte        # App layout (sidebar, header)
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│   ├── +page.svelte          # Dashboard (redirect)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── +layout.svelte            # Root layout (auth init)
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── +error.svelte             # Error page
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── (app)/                    # Authenticated routes
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│   ├── +layout.svelte        # App layout (sidebar, header, settings init)
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│   ├── dashboard/
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│   │   └── +page.svelte      # Main dashboard
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│   ├── brokers/
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   │   ├── +page.svelte      # Broker list
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   │   └── [id]/
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│   │       └── +page.svelte  # Broker detail
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>│   ├── files/
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│   │   └── +page.svelte      # Files management
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│   └── settings/
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│       └── +page.svelte      # Settings
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│   │       ├── +page.svelte  # Broker detail
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>│   │       └── +page.ts      # Load function
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│   ├── files/
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│   │   └── +page.svelte      # Files management (static + BRIM tabs)
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│   ├── assets/
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│   │   └── +page.svelte      # Assets (placeholder)
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│   ├── transactions/
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>│   │   └── +page.svelte      # Transactions (placeholder)
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>│   ├── fx/
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│   │   └── +page.svelte      # FX Management (placeholder)
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>│   └── settings/
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>│       └── +page.svelte      # Settings (4 tabs)
 </code></pre></div>
 <h2 id="pages">Pages</h2>
 <h3 id="login-page">Login Page (<code>/</code>)</h3>
 <ul>
 <li>Public access</li>
-<li>Login/Register/Forgot Password modals</li>
-<li>Animated background</li>
+<li><strong>LoginCard</strong> / <strong>RegisterCard</strong> / <strong>ForgotPasswordCard</strong> (card-style, not modals)</li>
+<li>Animated background with waves and chart lines</li>
 <li>Redirect to dashboard after login</li>
+<li>User preferences (language, theme) applied on login</li>
 </ul>
 <h3 id="dashboard-dashboard">Dashboard (<code>/dashboard</code>)</h3>
+<div class="screenshot-container" style="margin: 0.5rem 0 1rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
+    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard" style="width: 100%; display: block;">
+</div>
+
 <ul>
-<li>Overview of portfolio</li>
+<li>Overview of portfolio (placeholder)</li>
 <li>Quick stats cards</li>
-<li>Recent activity</li>
-<li><em>(Charts to be implemented)</em></li>
+<li><em>(Charts with ECharts to be implemented in Phase 8)</em></li>
 </ul>
 <h3 id="brokers-brokers">Brokers (<code>/brokers</code>)</h3>
+<div class="screenshot-container" style="margin: 0.5rem 0 1rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
+    <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List" style="width: 100%; display: block;">
+</div>
+
 <ul>
-<li>List of configured brokers</li>
-<li>Add/Edit broker modals</li>
-<li>Broker detail with cash balances</li>
+<li>Grid of broker cards with icons (fallback chain)</li>
+<li>Add/Edit broker via <strong>BrokerModal</strong> (extends ModalBase)</li>
+<li>Broker icon editable by clicking → <strong>AssetPickerModal</strong></li>
+<li>Delete with confirmation dialog</li>
+</ul>
+<h3 id="broker-detail-brokersid">Broker Detail (<code>/brokers/[id]</code>)</h3>
+<ul>
+<li>Header with icon, name, status</li>
+<li>Cash balances with deposit/withdraw</li>
+<li>Holdings table</li>
+<li>Recent transactions</li>
+<li>Import files section (BRIM) with plugin selection</li>
 </ul>
 <h3 id="files-files">Files (<code>/files</code>)</h3>
+<div class="screenshot-container" style="margin: 0.5rem 0 1rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
+    <img class="gallery-img" data-category="files" data-name="static-tab" alt="Files Page" style="width: 100%; display: block;">
+</div>
+
 <ul>
-<li>Two tabs: Static Resources / Broker Reports</li>
-<li>DataTable with sorting, filtering</li>
-<li>Upload interface</li>
-<li>Download/Delete actions</li>
+<li><strong>Two tabs</strong>: Static Resources / Broker Reports (BRIM)</li>
+<li><strong>DataTable</strong> with sorting, filtering, pagination, URL-synced filters</li>
+<li><strong>Grid view</strong> toggle with image previews and search</li>
+<li>Upload interface with:<ul>
+<li>Image files → <strong>ImageEditModal</strong> (crop, rotate, flip)</li>
+<li>Non-image files → <strong>FileEditModal</strong> (rename)</li>
+</ul>
+</li>
+<li>Copy link, download, delete actions</li>
+<li>File thumbnails via <code>?img_preview=</code> API</li>
 </ul>
 <h3 id="settings-settings">Settings (<code>/settings</code>)</h3>
+<div class="screenshot-container" style="margin: 0.5rem 0 1rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
+    <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Settings Page" style="width: 100%; display: block;">
+</div>
+
 <ul>
-<li>Profile management</li>
-<li>User preferences</li>
-<li>Global settings (admin)</li>
-</ul>
-<h2 id="authentication-flow">Authentication Flow</h2>
-<ol>
-<li>User visits any <code>(app)/</code> route</li>
-<li><code>+layout.svelte</code> checks <code>isAuthenticated</code></li>
-<li>If not authenticated, redirect to <code>/</code></li>
-<li>Login page shows modals</li>
-<li>After login, redirect back to intended page</li>
-</ol>
-<h2 id="data-loading">Data Loading</h2>
-<p><em>(To be documented)</em></p>
-<ul>
-<li>Server-side load functions</li>
-<li>Client-side API calls</li>
-<li>Error handling</li>
+<li><strong>4 tabs</strong>: Preferences, Profile, Global (admin), About</li>
+<li><strong>ProfileTab</strong>: Avatar editing via AssetPickerModal, username display</li>
+<li><strong>PreferencesTab</strong>: Language, currency, theme</li>
+<li><strong>GlobalSettingsTab</strong>: Admin-only settings with edit lock</li>
+<li><strong>AboutTab</strong>: Version info (from Git tag), system info</li>
+<li><strong>PasswordChangeModal</strong> from profile</li>
+<li>Mobile responsive with dropdown category selector</li>
 </ul>
 
 
@@ -3871,6 +3876,8 @@
         <script src="../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

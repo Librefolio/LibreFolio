@@ -25,7 +25,7 @@
     
     
       
-        <title>Registry Pattern - LibreFolio Documentation</title>
+        <title>Registry Pattern - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3658,7 +3658,8 @@
 
 
 <h1 id="registry-pattern-and-plugin-system">🧩 Registry Pattern and Plugin System</h1>
-<p>LibreFolio uses a <strong>Registry Pattern</strong> to create a flexible and extensible plugin system. This allows new functionality—such as support for new brokers, asset pricing sources, or FX providers—to be added without modifying the core application code.</p>
+<p>LibreFolio uses a <strong>Registry Pattern</strong> to create a flexible and extensible plugin system. This allows new functionality—such as support for new brokers, asset pricing sources, or
+FX providers—to be added without modifying the core application code.</p>
 <h2 id="how-it-works">How it Works</h2>
 <p>The system is based on three key components:</p>
 <ol>
@@ -3687,11 +3688,14 @@
     end</code></pre>
 <ol>
 <li><strong>Discovery</strong>: When the application starts, the <code>ProviderRegistry</code> scans its designated plugin folder (e.g., <code>backend/app/services/brim_providers/</code>).</li>
-<li><strong>Registration</strong>: As Python imports each plugin file, the <code>@register_provider</code> decorator is executed, adding the plugin class to the registry's internal dictionary, keyed by its unique <code>provider_code</code>.</li>
-<li><strong>Usage</strong>: When the application needs a specific provider, it asks the registry for an instance of it. The registry finds the class by its code and returns an instantiated object.</li>
+<li><strong>Registration</strong>: As Python imports each plugin file, the <code>@register_provider</code> decorator is executed, adding the plugin class to the registry's internal dictionary, keyed by its
+   unique <code>provider_code</code>.</li>
+<li><strong>Usage</strong>: When the application needs a specific provider, it asks the registry for an instance of it. The registry finds the class by its code and returns an instantiated
+   object.</li>
 </ol>
 <h2 id="guide-how-to-create-a-new-plugin">Guide: How to Create a New Plugin</h2>
-<p>This guide walks through creating a new <strong>Asset Source Provider</strong>. The process is nearly identical for <strong>BRIM</strong> and <strong>FX</strong> providers—just use the corresponding base class and registry.</p>
+<p>This guide walks through creating a new <strong>Asset Source Provider</strong>. The process is nearly identical for <strong>BRIM</strong> and <strong>FX</strong> providers—just use the corresponding base class and
+registry.</p>
 <h3 id="step-1-create-the-plugin-file">Step 1: Create the Plugin File</h3>
 <p>Create a new Python file in the appropriate directory:</p>
 <ul>
@@ -3742,7 +3746,8 @@
 <a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>    <span class="c1"># ... and other abstract methods ...</span>
 </code></pre></div>
 <h3 id="step-3-auto-discovery">Step 3: Auto-Discovery</h3>
-<p>That's it! The next time you start the application, the <code>AssetProviderRegistry</code> will automatically discover and register <code>MyNewProvider</code>. It will then be available to be assigned to assets and used for fetching prices.</p>
+<p>That's it! The next time you start the application, the <code>AssetProviderRegistry</code> will automatically discover and register <code>MyNewProvider</code>. It will then be available to be assigned
+to assets and used for fetching prices.</p>
 <p>This plugin-based architecture makes LibreFolio highly extensible and easy to contribute to.</p>
 
 
@@ -3811,6 +3816,8 @@
         <script src="../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

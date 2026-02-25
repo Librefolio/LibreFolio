@@ -25,7 +25,7 @@
     
     
       
-        <title>System Overview - LibreFolio Documentation</title>
+        <title>System Overview - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3655,7 +3655,8 @@
 <p><strong>Database (SQLite)</strong>: A single-file database that stores all user data, including transactions, assets, user settings, and cached data.</p>
 </li>
 <li>
-<p><strong>Provider Plugins</strong>: A system of pluggable modules that abstract the interaction with external data sources. This makes it easy to add support for new brokers, pricing APIs, or FX rate providers without modifying the core application logic.</p>
+<p><strong>Provider Plugins</strong>: A system of pluggable modules that abstract the interaction with external data sources. This makes it easy to add support for new brokers, pricing APIs, or
+   FX rate providers without modifying the core application logic.</p>
 </li>
 </ol>
 <h2 id="key-subsystems">Key Subsystems</h2>
@@ -3663,12 +3664,15 @@
 <ul>
 <li><strong><a href="../database/">Database Schema</a></strong>: Data models and relationships.</li>
 <li><strong><a href="../users_and_brokers/">Users &amp; Brokers</a></strong>: Authentication and multi-user access control.</li>
+<li><strong><a href="../access_control/">Access Control (RBAC)</a></strong>: Role-based broker access (Owner/Editor/Viewer).</li>
+<li><strong><a href="../settings/">Settings System</a></strong>: User preferences and global settings.</li>
 <li><strong><a href="../../backend/brim/architecture/">BRIM Architecture</a></strong>: Broker Report Import Manager.</li>
 <li><strong><a href="../../backend/assets/architecture/">Asset Pricing</a></strong>: Asset data fetching and metadata.</li>
 <li><strong><a href="../../backend/fx/architecture/">FX Architecture</a></strong>: Foreign Exchange system.<ul>
 <li>See also: <strong><a href="../../backend/fx/configuration/">FX Configuration &amp; Routing</a></strong> for multi-provider setup.</li>
 </ul>
 </li>
+<li><strong>File Upload System</strong>: Static file uploads with image preview cache (50MB, TTL 1h), avatar seeding, and BRIM file management. See <code>backend/app/services/static_uploads.py</code>.</li>
 </ul>
 <h2 id="request-flow-example-displaying-portfolio">Request Flow Example: Displaying Portfolio</h2>
 <ol>
@@ -3747,6 +3751,8 @@
         <script src="../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

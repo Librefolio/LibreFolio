@@ -25,7 +25,7 @@
     
     
       
-        <title>Security - LibreFolio Documentation</title>
+        <title>Security - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3774,16 +3774,21 @@
 <li><strong>Simplicity</strong>: Python code doesn't need to know about certificates or keys.</li>
 </ul>
 <h3 id="configuration">Configuration</h3>
-<p>To ensure the application behaves correctly behind a proxy (e.g., generating correct redirect URLs), you must ensure the proxy sets the standard headers:
--   <code>X-Forwarded-For</code>
--   <code>X-Forwarded-Proto</code> (should be <code>https</code>)</p>
-<p>In <code>production</code> mode, ensure the environment variable <code>SESSION_COOKIE_SECURE=True</code> is set in your <code>.env</code> file. This tells the backend to instruct the browser to <em>never</em> send the cookie over plain HTTP.</p>
+<p>To ensure the application behaves correctly behind a proxy (e.g., generating correct redirect URLs), you must ensure the proxy sets the standard headers:</p>
+<ul>
+<li><code>X-Forwarded-For</code></li>
+<li><code>X-Forwarded-Proto</code> (should be <code>https</code>)</li>
+</ul>
+<p>In <code>production</code> mode, ensure the environment variable <code>SESSION_COOKIE_SECURE=True</code> is set in your <code>.env</code> file. This tells the backend to instruct the browser to <em>never</em> send the
+cookie over plain HTTP.</p>
 <h2 id="reporting-a-vulnerability">Reporting a Vulnerability</h2>
 <p>If you discover a security vulnerability, please report it by opening a <strong>GitHub Issue</strong> on the project repository.</p>
-<p>Please provide a detailed description of the vulnerability, including:
--   The steps to reproduce it.
--   The potential impact.
--   Any suggested mitigation.</p>
+<p>Please provide a detailed description of the vulnerability, including:</p>
+<ul>
+<li>The steps to reproduce it.</li>
+<li>The potential impact.</li>
+<li>Any suggested mitigation.</li>
+</ul>
 
 
 
@@ -3851,6 +3856,8 @@
         <script src="../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

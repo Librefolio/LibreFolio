@@ -25,7 +25,7 @@
     
     
       
-        <title>Database Migrations (Alembic) - LibreFolio Documentation</title>
+        <title>Database Migrations (Alembic) - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3614,7 +3614,8 @@
 
 
 <h1 id="database-migrations-alembic">Database Migrations (Alembic)</h1>
-<p>LibreFolio uses <strong>Alembic</strong> to manage database schema changes. Alembic is a lightweight database migration tool for SQLAlchemy that provides a versioning system for your database schema.</p>
+<p>LibreFolio uses <strong>Alembic</strong> to manage database schema changes. Alembic is a lightweight database migration tool for SQLAlchemy that provides a versioning system for your database
+schema.</p>
 <h2 id="workflow">Workflow</h2>
 <p>The basic workflow for making a schema change is:</p>
 <ol>
@@ -3623,21 +3624,23 @@
 </li>
 <li>
 <p><strong>Generate a Migration Script</strong>: Run the <code>dev.sh</code> command to automatically generate a new migration script.
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>./dev.sh<span class="w"> </span>db:migrate<span class="w"> </span><span class="s2">&quot;Your descriptive message&quot;</span>
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>./dev.sh<span class="w"> </span>db:migrate<span class="w"> </span><span class="s2">&quot;Your descriptive message&quot;</span>
 </code></pre></div>
-    This command compares your SQLAlchemy models to the current state of the database and generates a Python script in <code>backend/alembic/versions/</code> that contains the necessary <code>upgrade()</code> and <code>downgrade()</code> functions.</p>
+   This command compares your SQLAlchemy models to the current state of the database and generates a Python script in <code>backend/alembic/versions/</code> that contains the necessary
+   <code>upgrade()</code> and <code>downgrade()</code> functions.</p>
 </li>
 <li>
 <p><strong>Review the Migration Script</strong>: <strong>Always review the generated script.</strong> Alembic is not perfect, especially with SQLite, and may require manual adjustments.</p>
 </li>
 <li>
 <p><strong>Apply the Migration</strong>: Run the <code>upgrade</code> command to apply the changes to your database.
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>./dev.sh<span class="w"> </span>db:upgrade
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>./dev.sh<span class="w"> </span>db:upgrade
 </code></pre></div></p>
 </li>
 </ol>
 <h2 id="sqlite-and-alembic-limitations">SQLite and Alembic Limitations</h2>
-<p>SQLite has limited support for <code>ALTER TABLE</code> statements, which can make schema migrations more complex than with other databases like PostgreSQL. Alembic works around this by using a "batch mode" that:</p>
+<p>SQLite has limited support for <code>ALTER TABLE</code> statements, which can make schema migrations more complex than with other databases like PostgreSQL. Alembic works around this by using
+a "batch mode" that:</p>
 <ol>
 <li>Creates a new table with the desired schema.</li>
 <li>Copies the data from the old table to the new table.</li>
@@ -3741,6 +3744,8 @@
         <script src="../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

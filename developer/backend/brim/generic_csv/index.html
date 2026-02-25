@@ -25,7 +25,7 @@
     
     
       
-        <title>Generic CSV Provider - LibreFolio Documentation</title>
+        <title>Generic CSV Provider - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3646,18 +3646,21 @@
 
 
 <h1 id="case-study-the-generic-csv-provider">Case Study: The Generic CSV Provider</h1>
-<p>The <strong>Generic CSV Provider</strong> (<code>broker_generic_csv</code>) is the fallback import plugin for BRIM. It is designed to be highly flexible and serves as an excellent case study for understanding the BRIM plugin architecture.</p>
+<p>The <strong>Generic CSV Provider</strong> (<code>broker_generic_csv</code>) is the fallback import plugin for BRIM. It is designed to be highly flexible and serves as an excellent case study for
+understanding the BRIM plugin architecture.</p>
 <p>Its primary goal is to parse simple CSV files even if they don't come from a specifically supported broker.</p>
 <h2 id="key-features">Key Features</h2>
 <ul>
-<li><strong>Header Auto-Detection</strong>: It doesn't rely on fixed column names. Instead, it maintains a dictionary of possible header names for each standard field (e.g., <code>date</code> can be "Date", "data", "Trade Date", etc.).</li>
+<li><strong>Header Auto-Detection</strong>: It doesn't rely on fixed column names. Instead, it maintains a dictionary of possible header names for each standard field (e.g., <code>date</code> can be "
+  Date", "data", "Trade Date", etc.).</li>
 <li><strong>Flexible Date Parsing</strong>: It attempts to parse dates using a list of common formats (e.g., <code>YYYY-MM-DD</code>, <code>DD/MM/YYYY</code>, <code>MM/DD/YYYY</code>).</li>
 <li><strong>Flexible Number Parsing</strong>: It can handle both US (<code>1,234.56</code>) and European (<code>1.234,56</code>) number formats.</li>
 <li><strong>Transaction Type Mapping</strong>: It maps common keywords (e.g., "buy", "acquisto", "compra") to the standard <code>TransactionType</code> enum.</li>
 <li><strong>Low Priority</strong>: It has a <code>detection_priority</code> of <code>0</code>, ensuring that more specific, high-confidence plugins are always tried first.</li>
 </ul>
 <h2 id="column-mapping-reference">Column Mapping Reference</h2>
-<p>When creating a CSV file for import (or a new plugin), these are the standard columns that LibreFolio expects. The Generic CSV provider tries to map input columns to these concepts.</p>
+<p>When creating a CSV file for import (or a new plugin), these are the standard columns that LibreFolio expects. The Generic CSV provider tries to map input columns to these
+concepts.</p>
 <table>
 <thead>
 <tr>
@@ -3707,7 +3710,7 @@
 <h2 id="how-it-works-a-deeper-look">How it Works: A Deeper Look</h2>
 <h3 id="1-column-detection-_detect_columns">1. Column Detection (<code>_detect_columns</code>)</h3>
 <p>When the <code>parse()</code> method is called, the first step is to map the CSV's header row to LibreFolio's standard fields.</p>
-<p><div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># A simplified view of the mapping dictionary</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># A simplified view of the mapping dictionary</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">HEADER_MAPPINGS</span> <span class="o">=</span> <span class="p">{</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="s2">&quot;date&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;date&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">,</span> <span class="s2">&quot;settlement_date&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="s2">&quot;tipo&quot;</span><span class="p">,</span> <span class="s2">&quot;operation&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
@@ -3725,7 +3728,7 @@
 <a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>                <span class="k">break</span>
 <a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="k">return</span> <span class="n">column_map</span>
 </code></pre></div>
-This creates a <code>column_map</code> like <code>{'date': 'Data operazione', 'type': 'Tipo operazione'}</code> which is then used to read data from each row.</p>
+<p>This creates a <code>column_map</code> like <code>{'date': 'Data operazione', 'type': 'Tipo operazione'}</code> which is then used to read data from each row.</p>
 <h3 id="2-row-parsing-_parse_row">2. Row Parsing (<code>_parse_row</code>)</h3>
 <p>For each row in the CSV, the <code>_parse_row</code> method is called.</p>
 <ol>
@@ -3736,16 +3739,19 @@ This creates a <code>column_map</code> like <code>{'date': 'Data operazione', 't
 <li><strong>Handle Assets</strong>:<ul>
 <li>It extracts the asset identifier (e.g., "AAPL", "US0378331005").</li>
 <li>It calls <code>_classify_asset_identifier()</code> to make a best guess on whether the identifier is a symbol, ISIN, or name.</li>
-<li>It assigns a consistent <strong>fake asset ID</strong> for each unique asset identifier found in the file. This allows the user to map all "AAPL" transactions to the correct asset in one go during the review step.</li>
+<li>It assigns a consistent <strong>fake asset ID</strong> for each unique asset identifier found in the file. This allows the user to map all "AAPL" transactions to the correct asset in one
+  go during the review step.</li>
 </ul>
 </li>
 </ol>
 <h3 id="3-the-gold-standard-example">3. The "Gold Standard" Example</h3>
-<p>The Generic CSV Provider is the perfect starting point for creating a new, specific broker plugin. You can copy its structure and then:
-1.  Increase the <code>detection_priority</code> to <code>100</code>.
-2.  Add a <code>can_parse()</code> method to reliably detect your specific broker's file format.
-3.  Customize the <code>HEADER_MAPPINGS</code> and <code>TYPE_MAPPINGS</code> to match your broker's specific terminology.
-4.  Refine the parsing logic to handle any quirks of your broker's CSV format.</p>
+<p>The Generic CSV Provider is the perfect starting point for creating a new, specific broker plugin. You can copy its structure and then:</p>
+<ol>
+<li>Increase the <code>detection_priority</code> to <code>100</code>.</li>
+<li>Add a <code>can_parse()</code> method to reliably detect your specific broker's file format.</li>
+<li>Customize the <code>HEADER_MAPPINGS</code> and <code>TYPE_MAPPINGS</code> to match your broker's specific terminology.</li>
+<li>Refine the parsing logic to handle any quirks of your broker's CSV format.</li>
+</ol>
 
 
 
@@ -3813,6 +3819,8 @@ This creates a <code>column_map</code> like <code>{'date': 'Data operazione', 't
         <script src="../../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

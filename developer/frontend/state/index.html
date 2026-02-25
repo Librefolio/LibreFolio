@@ -25,7 +25,7 @@
     
     
       
-        <title>State Management - LibreFolio Documentation</title>
+        <title>State Management - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -2805,10 +2805,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#theme-store" class="md-nav__link">
+  <a href="#settings-store-libstoressettingsts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Theme Store
+        Settings Store ($lib/stores/settings.ts)
       
     </span>
   </a>
@@ -2816,10 +2816,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#preferences-store" class="md-nav__link">
+  <a href="#global-settings-store-libstoresglobalsettingsts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Preferences Store
+        Global Settings Store ($lib/stores/globalSettings.ts)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#language-store-libstoreslanguagets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language Store ($lib/stores/language.ts)
       
     </span>
   </a>
@@ -3599,10 +3610,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#theme-store" class="md-nav__link">
+  <a href="#settings-store-libstoressettingsts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Theme Store
+        Settings Store ($lib/stores/settings.ts)
       
     </span>
   </a>
@@ -3610,10 +3621,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#preferences-store" class="md-nav__link">
+  <a href="#global-settings-store-libstoresglobalsettingsts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Preferences Store
+        Global Settings Store ($lib/stores/globalSettings.ts)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#language-store-libstoreslanguagets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language Store ($lib/stores/language.ts)
       
     </span>
   </a>
@@ -3668,7 +3690,7 @@
 
 
 <h1 id="state-management">State Management</h1>
-<p><em>Status: Draft - To be documented</em></p>
+<p><em>Status: Implemented (Feb 2026)</em></p>
 <h2 id="overview">Overview</h2>
 <p>LibreFolio uses Svelte stores and Svelte 5 runes for state management.</p>
 <h2 id="stores">Stores</h2>
@@ -3678,11 +3700,34 @@
 <li><code>isAuthenticated</code> - Boolean login status</li>
 <li><code>currentUser</code> - User object or null</li>
 <li><code>isAuthInitialized</code> - Loading complete flag</li>
+<li><code>checkAuth()</code> - Validates session cookie against backend</li>
+<li><code>login()</code> / <code>logout()</code> - Auth actions with store updates</li>
 </ul>
-<h3 id="theme-store">Theme Store</h3>
-<p><em>(To be documented)</em></p>
-<h3 id="preferences-store">Preferences Store</h3>
-<p><em>(To be documented)</em></p>
+<h3 id="settings-store-libstoressettingsts">Settings Store (<code>$lib/stores/settings.ts</code>)</h3>
+<p>User preferences store with backend sync:</p>
+<ul>
+<li><code>language</code> - UI language (en, it, fr, es)</li>
+<li><code>theme</code> - Light/dark mode</li>
+<li><code>baseCurrency</code> - Default currency</li>
+<li><code>avatarUrl</code> - User avatar URL</li>
+<li><code>setDirect()</code> - Immediate update without API call (used at login)</li>
+<li>Auto-loads from API after authentication</li>
+</ul>
+<h3 id="global-settings-store-libstoresglobalsettingsts">Global Settings Store (<code>$lib/stores/globalSettings.ts</code>)</h3>
+<p>App-wide configuration (admin-only write):</p>
+<ul>
+<li><code>maxFileUploadMb</code> - Max upload size</li>
+<li><code>allowRegistration</code> - Public registration toggle</li>
+<li>Other system-wide settings</li>
+<li>Loaded in <code>(app)/+layout.svelte</code> after auth check</li>
+</ul>
+<h3 id="language-store-libstoreslanguagets">Language Store (<code>$lib/stores/language.ts</code>)</h3>
+<p>Reactive language management:</p>
+<ul>
+<li>Syncs with user preferences store</li>
+<li>Updates <code>svelte-i18n</code> locale</li>
+<li>Persists to <code>localStorage</code> for non-authenticated pages</li>
+</ul>
 <h2 id="svelte-5-runes">Svelte 5 Runes</h2>
 <p>LibreFolio uses Svelte 5 runes:</p>
 <ul>
@@ -3692,11 +3737,11 @@
 <li><code>$props</code> - Component props</li>
 </ul>
 <h2 id="patterns">Patterns</h2>
-<p><em>(To be documented)</em></p>
 <ul>
-<li>Local vs global state</li>
-<li>Persistence to localStorage</li>
-<li>API synchronization</li>
+<li><strong>Local state</strong>: <code>$state</code> for component-level reactivity</li>
+<li><strong>Global state</strong>: Svelte stores for cross-component data</li>
+<li><strong>API sync</strong>: Settings stores sync with backend on save</li>
+<li><strong>Login init</strong>: User preferences applied immediately at login (<code>setDirect()</code>)</li>
 </ul>
 
 
@@ -3765,6 +3810,8 @@
         <script src="../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

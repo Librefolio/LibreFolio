@@ -25,7 +25,7 @@
     
     
       
-        <title>Architecture - LibreFolio Documentation</title>
+        <title>Architecture - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -3626,7 +3626,8 @@
 <h1 id="fx-architecture">FX Architecture</h1>
 <p>The Foreign Exchange (FX) system is responsible for fetching, storing, and providing exchange rates for currency conversion.</p>
 <h2 id="multi-provider-support">Multi-Provider Support</h2>
-<p>LibreFolio supports multiple FX rate providers (e.g., ECB, FED). This ensures redundancy and allows users to choose the source that best fits their needs (e.g., a US user might prefer FED rates, while a European user prefers ECB).</p>
+<p>LibreFolio supports multiple FX rate providers (e.g., ECB, FED). This ensures redundancy and allows users to choose the source that best fits their needs (e.g., a US user might
+prefer FED rates, while a European user prefers ECB).</p>
 <h3 id="the-fxrateprovider-interface">The <code>FXRateProvider</code> Interface</h3>
 <p>All providers must implement the <code>FXRateProvider</code> abstract base class:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">FXRateProvider</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
@@ -3641,7 +3642,8 @@
 </code></pre></div>
 <h2 id="normalization-and-storage">Normalization and Storage</h2>
 <p>Providers typically return rates relative to a specific base currency (e.g., ECB returns <code>1 EUR = X USD</code>).</p>
-<p>To simplify storage and querying, LibreFolio normalizes all rates before saving them to the database. The rule is: <strong>Base currency is always alphabetically smaller than Quote currency.</strong></p>
+<p>To simplify storage and querying, LibreFolio normalizes all rates before saving them to the database. The rule is: <strong>Base currency is always alphabetically smaller than Quote
+currency.</strong></p>
 <ul>
 <li><strong>Input</strong>: <code>EUR/USD</code> (EUR &lt; USD) -&gt; Stored as <code>base='EUR', quote='USD', rate=1.08</code></li>
 <li><strong>Input</strong>: <code>USD/GBP</code> (USD &gt; GBP) -&gt; Stored as <code>base='GBP', quote='USD', rate=1/0.78</code></li>
@@ -3649,7 +3651,8 @@
 <p>This ensures that we only need to store one rate per pair, and we can easily calculate the inverse if needed.</p>
 <h2 id="priority-system">Priority System</h2>
 <p>When converting currency, the system needs to decide which rate to use if multiple providers have data for the same pair and date.</p>
-<p>Currently, the system allows the user (or admin) to select a <strong>preferred provider</strong> for synchronization. The <code>ensure_rates_multi_source</code> function orchestrates the fetching process using the selected provider.</p>
+<p>Currently, the system allows the user (or admin) to select a <strong>preferred provider</strong> for synchronization. The <code>ensure_rates_multi_source</code> function orchestrates the fetching process
+using the selected provider.</p>
 <h2 id="conversion-logic">Conversion Logic</h2>
 <p>The <code>convert</code> function handles the actual currency conversion:</p>
 <ol>
@@ -3724,6 +3727,8 @@
         <script src="../../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

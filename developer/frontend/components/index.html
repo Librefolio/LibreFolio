@@ -25,7 +25,7 @@
     
     
       
-        <title>Overview - LibreFolio Documentation</title>
+        <title>Overview - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -2640,10 +2640,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#ui-components-libcomponentsui" class="md-nav__link">
+  <a href="#media-components-libcomponentsuimedia" class="md-nav__link">
     <span class="md-ellipsis">
       
-        UI Components (lib/components/ui/)
+        Media Components (lib/components/ui/media/)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#select-components-libcomponentsuiselect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Select Components (lib/components/ui/select/)
       
     </span>
   </a>
@@ -3610,10 +3621,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#ui-components-libcomponentsui" class="md-nav__link">
+  <a href="#media-components-libcomponentsuimedia" class="md-nav__link">
     <span class="md-ellipsis">
       
-        UI Components (lib/components/ui/)
+        Media Components (lib/components/ui/media/)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#select-components-libcomponentsuiselect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Select Components (lib/components/ui/select/)
       
     </span>
   </a>
@@ -3676,43 +3698,63 @@
 <li>DataTablePagination - Sticky pagination balloon</li>
 <li>DataTableToolbar - Bulk actions, column visibility, reorder</li>
 <li>DataTableColumnFilter - Excel-style column filters</li>
-<li>ConfirmModal - Confirmation dialog for destructive actions</li>
+<li><strong>ModalBase</strong> - Base component for ALL modals (backdrop, click-outside, Escape, focus trap, z-index)</li>
+<li>ConfirmModal - Confirmation dialog for destructive actions (uses ModalBase)</li>
 </ul>
 <h3 id="authentication-libcomponentsauth">Authentication (<code>lib/components/auth/</code>)</h3>
 <ul>
-<li><a href="auth/">Auth Components</a> - Login, Register, Forgot Password modals</li>
+<li><a href="auth/">Auth Components</a> - <strong>LoginCard</strong>, <strong>RegisterCard</strong>, <strong>ForgotPasswordCard</strong></li>
 <li>PasswordStrengthMeter - zxcvbn-based password strength indicator</li>
 <li>AnimatedBackground - Animated waves background for login page</li>
 </ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>These were renamed from <code>*Modal</code> to <code>*Card</code> because they are card-style forms, not modals.</p>
+</div>
 <h3 id="settings-libcomponentssettings">Settings (<code>lib/components/settings/</code>)</h3>
 <ul>
 <li><a href="settings/">Settings Components</a> - User preferences and global settings</li>
 <li>SettingsLayout - Two-column layout with sidebar categories</li>
-<li>PreferencesTab - User preference fields</li>
+<li>PreferencesTab - User preference fields (language, currency, theme)</li>
 <li>GlobalSettingsTab - Admin-only global settings</li>
-<li>ProfileTab - User profile management</li>
+<li><strong>ProfileTab</strong> - User profile with avatar (editable via AssetPickerModal)</li>
+<li>AboutTab - System info and version</li>
 </ul>
-<h3 id="ui-components-libcomponentsui">UI Components (<code>lib/components/ui/</code>)</h3>
+<h3 id="media-components-libcomponentsuimedia">Media Components (<code>lib/components/ui/media/</code>)</h3>
 <ul>
 <li><a href="file-upload/">File Upload</a> - Multi-file uploader with validation</li>
+<li><strong>ImageCropper</strong> - cropperjs v2 wrapper (zoom, rotate, flip, free crop)</li>
+<li><strong>ImageEditModal</strong> - Full image editor (presets, output size, format, quality)</li>
+<li><strong>FileEditModal</strong> - File rename modal for non-image files</li>
+<li><strong>AssetPickerModal</strong> - 3-tab picker (Existing files / URL / Upload)</li>
+<li><strong>ImagePickerWrapper</strong> - Wraps AssetPicker + ImageEdit flow</li>
+<li><strong>FileUploader</strong> - Upload area with edit/restore per file</li>
 <li>LazyImage - Image with lazy loading and fallback</li>
-<li>FuzzySelect - Searchable dropdown with fuzzy matching</li>
-<li>Toggle - On/off toggle switch</li>
+<li><strong>FileGrid</strong> - Shared grid component for files page and asset picker</li>
+</ul>
+<h3 id="select-components-libcomponentsuiselect">Select Components (<code>lib/components/ui/select/</code>)</h3>
+<ul>
+<li><strong>BaseDropdown</strong> - Base dropdown with click-outside, keyboard nav, positioning</li>
+<li><strong>SimpleSelect</strong> - Select from options (like native <code>&lt;select&gt;</code>)</li>
+<li><strong>SearchSelect</strong> - Fuzzy search dropdown (replaces old FuzzySelect)</li>
 </ul>
 <h3 id="broker-components-libcomponentsbrokers">Broker Components (<code>lib/components/brokers/</code>)</h3>
 <ul>
 <li>BrokerCard - Broker display card with icon</li>
 <li>BrokerForm - Create/edit broker form</li>
-<li>BrokerIcon - Smart icon with fallback chain</li>
+<li><strong>BrokerIcon</strong> - Smart icon with fallback chain (icon_url → favicon → plugin → Briefcase)</li>
+<li>BrokerImportFilesModal - BRIM file import</li>
+<li>BrokerSearchSelect - Broker selector with search and icons</li>
+<li>DeleteBrokerDialog - Confirmation for broker deletion</li>
 </ul>
 <h2 id="component-guidelines">Component Guidelines</h2>
-<p><em>(To be documented)</em></p>
 <ul>
-<li>Props patterns with Svelte 5 runes</li>
-<li>Event handling with <code>onclick</code> instead of <code>on:click</code></li>
-<li>Styling with Tailwind CSS</li>
-<li>Dark mode support</li>
-<li>Accessibility considerations</li>
+<li><strong>ModalBase</strong>: ALL modals extend <code>ModalBase.svelte</code> with configurable z-index</li>
+<li><strong>Svelte 5 Runes</strong>: Use <code>$state</code>, <code>$derived</code>, <code>$effect</code>, <code>$props</code></li>
+<li><strong>Event handling</strong>: Use <code>onclick</code> instead of <code>on:click</code> (Svelte 5 syntax)</li>
+<li><strong>Styling</strong>: Tailwind CSS utilities + dark mode with <code>dark:</code> prefix</li>
+<li><strong>Accessibility</strong>: Keyboard navigation, ARIA labels, focus management</li>
+<li><strong>i18n</strong>: All user-facing text via <code>$t('key')</code> translation function</li>
 </ul>
 
 
@@ -3781,6 +3823,8 @@
         <script src="../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>

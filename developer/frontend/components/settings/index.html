@@ -25,7 +25,7 @@
     
     
       
-        <title>Settings - LibreFolio Documentation</title>
+        <title>Settings - LibreFolio Docs</title>
       
     
     
@@ -92,7 +92,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-header__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
@@ -105,7 +105,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Documentation
+            LibreFolio Docs
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -475,12 +475,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="LibreFolio Documentation" class="md-nav__button md-logo" aria-label="LibreFolio Documentation" data-md-component="logo">
+    <a href="../../../.." title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Documentation
+    LibreFolio Docs
   </label>
   
     <div class="md-nav__source">
@@ -2713,6 +2713,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#profiletab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProfileTab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#globalsettingstab-admin-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GlobalSettingsTab (Admin only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#abouttab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AboutTab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#field-components" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3577,6 +3610,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#profiletab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProfileTab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#globalsettingstab-admin-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GlobalSettingsTab (Admin only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#abouttab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AboutTab
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#field-components" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3625,47 +3691,91 @@
 
 <h1 id="settings-components">Settings Components</h1>
 <p>This section documents the components used for the Settings pages (User Preferences, Global Settings, Profile).</p>
+<div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 2rem 0;">
+    <div class="screenshot-container" style="flex: 1; min-width: 280px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+        <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences" style="width: 100%; display: block;">
+    </div>
+    <div class="screenshot-container" style="flex: 1; min-width: 280px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+        <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab" style="width: 100%; display: block;">
+    </div>
+</div>
+
 <h2 id="architecture">Architecture</h2>
 <p>The settings system uses a modular architecture based on a common layout and reusable field components.</p>
 <h3 id="settingslayout">SettingsLayout</h3>
 <p>The <code>SettingsLayout</code> component provides the structural shell for all settings tabs.</p>
-<p><strong>Features:</strong>
--   <strong>Two-Column Layout</strong>: Sidebar navigation on the left, content on the right.
--   <strong>Global Actions</strong>: "Save All", "Undo All", "Reset All" buttons in the header.
--   <strong>Lock Toggle</strong>: Optional lock button for admin settings (prevents accidental edits).
--   <strong>Responsive</strong>: Stacks vertically on mobile.</p>
-<p><strong>Props:</strong>
--   <code>categories</code>: Array of <code>{ id, icon, labelKey }</code> for the sidebar.
--   <code>selectedCategory</code>: ID of the currently active category filter.
--   <code>hasChanges</code>: Boolean to show Save/Undo buttons.
--   <code>hasNonDefaults</code>: Boolean to show Reset button.
--   <code>isLocked</code>: Boolean state of the edit lock.</p>
+<p><strong>Features:</strong></p>
+<ul>
+<li><strong>Two-Column Layout</strong>: Sidebar navigation on the left, content on the right.</li>
+<li><strong>Global Actions</strong>: "Save All", "Undo All", "Reset All" buttons in the header.</li>
+<li><strong>Lock Toggle</strong>: Optional lock button for admin settings (prevents accidental edits).</li>
+<li><strong>Responsive</strong>: Stacks vertically on mobile.</li>
+</ul>
+<p><strong>Props:</strong></p>
+<ul>
+<li><code>categories</code>: Array of <code>{ id, icon, labelKey }</code> for the sidebar.</li>
+<li><code>selectedCategory</code>: ID of the currently active category filter.</li>
+<li><code>hasChanges</code>: Boolean to show Save/Undo buttons.</li>
+<li><code>hasNonDefaults</code>: Boolean to show Reset button.</li>
+<li><code>isLocked</code>: Boolean state of the edit lock.</li>
+</ul>
 <h3 id="preferencestab">PreferencesTab</h3>
 <p>Manages user-specific settings (Language, Currency, Theme).</p>
-<p><strong>Logic:</strong>
-1.  <strong>Load</strong>: Fetches Global Defaults (<code>/settings/global</code>) and User Settings (<code>/settings/user</code>) in parallel.
-2.  <strong>State Tracking</strong>:
-    -   <code>originalValues</code>: The values currently saved in the DB.
-    -   <code>editedValues</code>: The values currently in the form inputs.
-    -   <code>globalDefaults</code>: The system-wide default values.
-3.  <strong>Computed States</strong>:
-    -   <code>isModified</code>: <code>editedValues !== originalValues</code> (Shows Save/Undo).
-    -   <code>isNonDefault</code>: <code>originalValues !== globalDefaults</code> (Shows Reset).
-4.  <strong>Persistence</strong>: Saves to <code>/settings/user</code> via <code>PUT</code>.</p>
+<h3 id="profiletab">ProfileTab</h3>
+<p>Manages user profile information:</p>
+<ul>
+<li><strong>Avatar</strong>: Editable via <code>ImagePickerWrapper</code> → <code>AssetPickerModal</code> → crop</li>
+<li><strong>Username</strong> and <strong>Email</strong>: Display only</li>
+<li><strong>Password change</strong>: Opens <code>PasswordChangeModal</code></li>
+<li>Edit mode toggle to prevent accidental changes</li>
+</ul>
+<h3 id="globalsettingstab-admin-only">GlobalSettingsTab (Admin only)</h3>
+<p>System-wide configuration with lock toggle:</p>
+<ul>
+<li>Max file upload size</li>
+<li>Registration toggle</li>
+<li>Other app-wide settings</li>
+</ul>
+<h3 id="abouttab">AboutTab</h3>
+<p>Read-only system information:</p>
+<ul>
+<li>Version (from Git tag)</li>
+<li>Backend/frontend info</li>
+</ul>
+<p><strong>Logic:</strong></p>
+<ol>
+<li><strong>Load</strong>: Fetches Global Defaults (<code>/settings/global</code>) and User Settings (<code>/settings/user</code>) in parallel.</li>
+<li><strong>State Tracking</strong>:<ul>
+<li><code>originalValues</code>: The values currently saved in the DB.</li>
+<li><code>editedValues</code>: The values currently in the form inputs.</li>
+<li><code>globalDefaults</code>: The system-wide default values.</li>
+</ul>
+</li>
+<li><strong>Computed States</strong>:<ul>
+<li><code>isModified</code>: <code>editedValues !== originalValues</code> (Shows Save/Undo).</li>
+<li><code>isNonDefault</code>: <code>originalValues !== globalDefaults</code> (Shows Reset).</li>
+</ul>
+</li>
+<li><strong>Persistence</strong>: Saves to <code>/settings/user</code> via <code>PUT</code>.</li>
+</ol>
 <h3 id="field-components">Field Components</h3>
 <p>Each setting type has a specialized component that handles its own UI and events.</p>
 <ul>
-<li><strong><code>SettingSelect</code></strong>: Generic dropdown.</li>
-<li><strong><code>SettingCurrency</code></strong>: Searchable currency selector (uses <code>FuzzySelect</code>).</li>
+<li><strong><code>SettingSelect</code></strong>: Generic dropdown (uses <code>SimpleSelect</code>).</li>
+<li><strong><code>SettingCurrency</code></strong>: Searchable currency selector (uses <code>SearchSelect</code>).</li>
 <li><strong><code>SettingTheme</code></strong>: Radio buttons for Light/Dark/Auto theme with visual preview.</li>
+<li><strong><code>SettingNumber</code></strong>: Numeric input with increment/decrement.</li>
+<li><strong><code>SettingToggle</code></strong>: Boolean toggle switch.</li>
 </ul>
-<p><strong>Common Props for Field Components:</strong>
--   <code>value</code>: Two-way bound value.
--   <code>label</code>: Field label.
--   <code>hint</code>: Helper text.
--   <code>isModified</code>: Highlights the field if changed.
--   <code>isNonDefault</code>: Shows a "Reset to Default" indicator.
--   <code>isLocked</code>: Disables input.</p>
+<p><strong>Common Props for Field Components:</strong></p>
+<ul>
+<li><code>value</code>: Two-way bound value.</li>
+<li><code>label</code>: Field label.</li>
+<li><code>hint</code>: Helper text.</li>
+<li><code>isModified</code>: Highlights the field if changed.</li>
+<li><code>isNonDefault</code>: Shows a "Reset to Default" indicator.</li>
+<li><code>isLocked</code>: Disables input.</li>
+</ul>
 <h2 id="usage-example">Usage Example</h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&lt;script&gt;
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  import SettingsLayout from &#39;$lib/components/settings/SettingsLayout.svelte&#39;;
@@ -3758,6 +3868,8 @@
         <script src="../../../../javascripts/dashboard-check.js"></script>
       
         <script src="../../../../javascripts/gallery-lang-selector.js"></script>
+      
+        <script src="../../../../javascripts/gallery-img-loader.js"></script>
       
     
   </body>
