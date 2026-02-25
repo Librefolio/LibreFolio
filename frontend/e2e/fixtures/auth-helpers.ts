@@ -33,8 +33,8 @@ export async function logout(page: Page) {
  * Change UI language
  */
 export async function setLanguage(page: Page, lang: Language) {
-    // Wait for language selector to be visible
-    await expect(page.getByTestId('language-selector-button')).toBeVisible({timeout: 3000});
+    // Wait for language selector to be visible (needs longer timeout for SvelteKit hydration after fresh navigation)
+    await expect(page.getByTestId('language-selector-button')).toBeVisible({timeout: 5000});
     await page.getByTestId('language-selector-button').click();
 
     // Click the menu item specifically (not any element with that text)
