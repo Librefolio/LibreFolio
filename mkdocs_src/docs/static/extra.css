@@ -282,6 +282,8 @@
         font-weight: 700 !important;
         text-align: left !important;
         padding: 0.4rem 0.6rem !important;
+        line-height: 1.4 !important;
+        height: auto !important;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
