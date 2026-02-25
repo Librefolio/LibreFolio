@@ -453,11 +453,34 @@ def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
     import subprocess
 
+    list_tests = getattr(args, 'list_tests', False)
     filter_text = getattr(args, 'filter', None)
     desktop_only = getattr(args, 'desktop_only', False)
     mobile_only = getattr(args, 'mobile_only', False)
     no_populate = getattr(args, 'no_populate', False)
 
+    # --list: show available test names and exit
+    if list_tests:
+        gallery_spec = PROJECT_ROOT / "frontend" / "e2e" / "gallery.spec.ts"
+        if not gallery_spec.exists():
+            print_error("gallery.spec.ts not found")
+            return 1
+        import re
+        content = gallery_spec.read_text()
+        current_describe = ""
+        print(f"\n{Colors.CYAN}📸 Available Gallery Tests:{Colors.NC}")
+        print(f"  Use {Colors.YELLOW}./dev.py mkdocs gallery -f \"<text>\"{Colors.NC} to filter\n")
+        for line in content.splitlines():
+            dm = re.search(r"test\.describe\('(.+?)'", line)
+            if dm:
+                current_describe = dm.group(1)
+                print(f"  {Colors.GREEN}▸ {current_describe}{Colors.NC}")
+            tm = re.search(r"test\('(.+?)'", line)
+            if tm:
+                test_name = tm.group(1)
+                print(f"    • {test_name}")
+        print()
+        return 0
     print(Colors.success("Generating gallery screenshots for documentation..."))
     if filter_text:
         print(f"{Colors.YELLOW}Filter: only tests matching '{filter_text}'{Colors.NC}")
@@ -823,6 +846,8 @@ Examples:
     mk_p.set_defaults(func=cmd_mkdocs_deploy)
 
     mk_p = mk_sub.add_parser("gallery", help="Generate gallery screenshots with Playwright")
+    mk_p.add_argument("--list", "-l", action="store_true", dest="list_tests",
+                       help="List available gallery test names (for use with --filter)")
     mk_p.add_argument("--filter", "-f", type=str, default=None,
                        help="Filter: only run tests matching this text (passed as -g to Playwright)")
     mk_p.add_argument("--desktop-only", action="store_true",

@@ -167,11 +167,23 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     border-bottom: none;
     text-align: center; /* Centered text */
-    display: block; /* Ensure block display for centering */
+    display: flex; /* Flex to keep icon inline */
+    align-items: center;
+    justify-content: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.3;
+}
+
+/* Hide the expand/collapse arrow icon inside Level 1 section labels */
+.md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link > .md-nav__icon {
+    display: none !important;
+}
+
+/* Also hide in nested nav contexts (mobile drawer) */
+.md-nav__item--section > label.md-nav__link > .md-nav__icon {
+    display: none !important;
 }
 
 /* Dark mode Level 1 sections - dark background with green accent */
@@ -260,7 +272,12 @@
 /* Mobile sidebar: normalize section title when inside a sub-section */
 /* mkdocs-material shows the current section title large and centered - override */
 @media screen and (max-width: 76.1875em) {
+
+    /* ALL nav titles in mobile drawer: normalize to compact left-aligned with flex row */
     .md-nav--primary .md-nav__title {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.4rem !important;
         font-size: 0.8rem !important;
         font-weight: 700 !important;
         text-align: left !important;
@@ -268,10 +285,50 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        /* Override any large/centered styling from desktop */
+        background: none !important;
+        box-shadow: none !important;
+        text-transform: none !important;
+        letter-spacing: normal !important;
+        justify-content: flex-start !important;
     }
 
-    /* The back arrow label in mobile nav */
+    /* Mobile drawer top title: logo + text on one line */
+    .md-nav--primary > .md-nav__title {
+        padding: 0.5rem 0.6rem !important;
+        max-width: 100%;
+        line-height: 1.4 !important;
+        height: auto !important;
+        color: var(--md-default-fg-color) !important;
+    }
+
+    /* Truncate long site name in mobile drawer */
+    .md-nav--primary > .md-nav__title::after {
+        content: none;
+    }
+
+    /* Logo inside mobile drawer title - keep small, inline */
+    .md-nav--primary > .md-nav__title .md-nav__button.md-logo {
+        display: inline-flex !important;
+        flex-shrink: 0;
+        width: auto !important;
+        height: auto !important;
+        position: static !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .md-nav--primary > .md-nav__title .md-nav__button.md-logo img {
+        width: 1.2rem;
+        height: 1.2rem;
+    }
+
+    /* Back arrow icon in mobile sub-nav titles - override absolute positioning */
     .md-nav--primary .md-nav__title .md-nav__icon {
+        position: static !important;
+        flex-shrink: 0 !important;
+        width: 1.2rem !important;
+        height: 1.2rem !important;
         font-size: inherit;
     }
 
@@ -283,9 +340,11 @@
         line-height: 1.4;
     }
 
-    /* Mobile drawer: current section header shown as back-button bar
-       Override the big gradient section style when it appears in the mobile nav title */
-    .md-nav--primary .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__link {
+    /* Mobile drawer: ALL section and active item links - compact, no gradient, left-aligned */
+    .md-nav--primary .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__link,
+    .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link,
+    .md-nav--primary > .md-nav__list > .md-nav__item--active > .md-nav__link,
+    .md-nav--primary > .md-nav__list > .md-nav__item--nested > .md-nav__link {
         font-size: 0.8rem !important;
         font-weight: 700 !important;
         text-align: left !important;
@@ -294,14 +353,51 @@
         color: var(--md-default-fg-color) !important;
         text-transform: none !important;
         padding: 0.4rem 0.6rem !important;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        justify-content: flex-start !important;
+        border-radius: 0 !important;
+        margin-top: 0.3rem !important;
+        margin-bottom: 0.1rem !important;
+        letter-spacing: normal !important;
+        white-space: normal !important;
+        overflow: visible !important;
     }
 
-    /* Dark mode: same override */
-    [data-md-color-scheme="slate"] .md-nav--primary .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__link {
+    /* Hide the expand/collapse icon arrow in mobile section labels - we handle clicks via the label */
+    .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link > .md-nav__icon {
+        display: none !important;
+    }
+
+    /* Mobile: highlight ACTIVE section item with accent color (green) */
+    .md-nav--primary > .md-nav__list > .md-nav__item--active > .md-nav__link,
+    .md-nav--primary > .md-nav__list > .md-nav__item--active.md-nav__item--section > .md-nav__link {
+        color: var(--md-accent-fg-color) !important;
+    }
+
+    /* Mobile: highlight active leaf link */
+    .md-nav__item .md-nav__link--active {
+        color: var(--md-accent-fg-color) !important;
+        font-weight: 700 !important;
+        border-left: 3px solid var(--md-accent-fg-color);
+    }
+
+    /* Dark mode: mobile drawer section/active links */
+    [data-md-color-scheme="slate"] .md-nav--primary .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__link,
+    [data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link,
+    [data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--active > .md-nav__link,
+    [data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--nested > .md-nav__link {
         color: #cbd5e1 !important;
+    }
+
+    /* Dark mode: active section highlighted in green */
+    [data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--active > .md-nav__link,
+    [data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--active.md-nav__item--section > .md-nav__link {
+        color: #22c55e !important;
+    }
+
+    /* Dark mode: active leaf link */
+    [data-md-color-scheme="slate"] .md-nav__item .md-nav__link--active {
+        color: #22c55e !important;
+        border-left-color: #22c55e;
     }
 }
 

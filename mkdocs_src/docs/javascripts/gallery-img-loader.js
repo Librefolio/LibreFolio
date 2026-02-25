@@ -5,7 +5,7 @@
  * Images use `data-category` and `data-name` attributes, and optionally
  * `data-gallery="desktop|mobile"` (defaults to "desktop").
  *
- * Uses absolute paths from site root for reliability across all pages.
+ * Detects the MkDocs site base path dynamically (works with subpath deploys).
  * Reacts to theme changes (light/dark) and language changes from the gallery selector.
  *
  * Includes fallback: if the requested lang image returns 404, falls back to 'en'.
@@ -14,6 +14,55 @@
     'use strict';
 
     var FALLBACK_LANG = 'en';
+
+    /**
+     * Detect site base path from the current page URL.
+     * MkDocs Material serves pages under site_url (e.g. /LibreFolio/).
+     * We detect the base by finding known path segments in the current URL.
+     *
+     * Known top-level segments in our docs nav:
+     *   gallery/, developer/, user-manual/, admin-manual/, getting-started/,
+     *   tutorials/, financial-theory/, poc-ux/, faq/, ...
+     *
+     * If the current URL is: /LibreFolio/gallery/desktop/
+     * then the base path is: /LibreFolio
+     */
+    function getBasePath() {
+        var pathname = window.location.pathname;
+
+        // Known top-level doc sections that appear right after the base path
+        var knownSegments = [
+            '/gallery/', '/developer/', '/user-manual/', '/admin-manual/',
+            '/getting-started/', '/tutorials/', '/financial-theory/',
+            '/poc-ux/', '/faq/'
+        ];
+
+        for (var i = 0; i < knownSegments.length; i++) {
+            var idx = pathname.indexOf(knownSegments[i]);
+            if (idx >= 0) {
+                // Everything before this segment is the base path
+                return pathname.substring(0, idx);  // e.g. "/LibreFolio" or "" if at root
+            }
+        }
+
+        // Fallback: if we're on the homepage (e.g. /LibreFolio/)
+        // Remove trailing slash and last segment if it looks like a file
+        var clean = pathname.replace(/\/+$/, '');
+        if (clean && !clean.includes('.')) {
+            // Could be the homepage: /LibreFolio → return /LibreFolio
+            return clean;
+        }
+
+        return '';
+    }
+
+    var _basePath = null;
+    function basePath() {
+        if (_basePath === null) {
+            _basePath = getBasePath();
+        }
+        return _basePath;
+    }
 
     function getCurrentLang() {
         return localStorage.getItem('gallery-lang') || 'en';
@@ -25,7 +74,7 @@
     }
 
     function buildSrc(viewport, lang, theme, category, name) {
-        return '/gallery/' + viewport + '/' + lang + '/' + theme + '/' + category + '/' + name + '.png';
+        return basePath() + '/gallery/' + viewport + '/' + lang + '/' + theme + '/' + category + '/' + name + '.png';
     }
 
     function updateImages() {
