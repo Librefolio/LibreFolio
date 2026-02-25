@@ -4251,6 +4251,22 @@
             "$ref": "#/components/schemas/UserRole",
             "description": "Access role",
             "default": "VIEWER"
+          },
+          "share_percentage": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Share Percentage",
+            "description": "Ownership percentage (0-100%). OWNER defaults 100%, EDITOR/VIEWER default 0%",
+            "default": "100"
           }
         },
         "additionalProperties": false,
@@ -4324,6 +4340,12 @@
             "$ref": "#/components/schemas/UserRole",
             "description": "Access role"
           },
+          "share_percentage": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Share Percentage",
+            "description": "Ownership percentage (0-100%) for portfolio aggregation"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At",
@@ -4337,6 +4359,7 @@
           "username",
           "email",
           "role",
+          "share_percentage",
           "created_at"
         ],
         "title": "BRAccessItem",
@@ -4370,6 +4393,24 @@
           "role": {
             "$ref": "#/components/schemas/UserRole",
             "description": "New access role"
+          },
+          "share_percentage": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Percentage",
+            "description": "New ownership percentage (0-100%). If None, not changed."
           }
         },
         "additionalProperties": false,
@@ -4378,7 +4419,7 @@
           "role"
         ],
         "title": "BRAccessUpdateRequest",
-        "description": "Request to update user access role."
+        "description": "Request to update user access role and/or share percentage."
       },
       "BRAssetHolding": {
         "properties": {
@@ -9492,6 +9533,22 @@
             ],
             "title": "Description",
             "description": "Transaction notes"
+          },
+          "cost_basis_override": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Basis Override",
+            "description": "Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis."
           }
         },
         "additionalProperties": false,
@@ -9593,6 +9650,19 @@
             ],
             "title": "Description",
             "description": "Transaction notes"
+          },
+          "cost_basis_override": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Basis Override",
+            "description": "Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis."
           }
         },
         "additionalProperties": false,
@@ -9774,6 +9844,18 @@
             ],
             "title": "Description"
           },
+          "cost_basis_override": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Basis Override"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -9953,6 +10035,22 @@
             ],
             "title": "Description",
             "description": "New description"
+          },
+          "cost_basis_override": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Basis Override",
+            "description": "Frozen cost basis for TRANSFER_IN. Set to override calculated cost basis."
           }
         },
         "additionalProperties": false,

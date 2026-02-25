@@ -375,6 +375,9 @@ class BRAccessItem(BaseModel):
     username: str = Field(..., description="Username")
     email: str = Field(..., description="User email")
     role: UserRole = Field(..., description="Access role")
+    share_percentage: Decimal = Field(
+        ..., description="Ownership percentage (0-100%) for portfolio aggregation"
+    )
     created_at: UTCDateTime = Field(..., description="When access was granted")
 
 
@@ -394,14 +397,26 @@ class BRAccessCreateRequest(BaseModel):
 
     user_id: int = Field(..., gt=0, description="User ID to grant access")
     role: UserRole = Field(default=UserRole.VIEWER, description="Access role")
+    share_percentage: Decimal = Field(
+        default=Decimal("100"),
+        ge=0,
+        le=100,
+        description="Ownership percentage (0-100%). OWNER defaults 100%, EDITOR/VIEWER default 0%",
+    )
 
 
 class BRAccessUpdateRequest(BaseModel):
-    """Request to update user access role."""
+    """Request to update user access role and/or share percentage."""
 
     model_config = ConfigDict(extra="forbid")
 
     role: UserRole = Field(..., description="New access role")
+    share_percentage: Optional[Decimal] = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="New ownership percentage (0-100%). If None, not changed.",
+    )
 
 
 class BRAccessCreateResponse(BaseModel):

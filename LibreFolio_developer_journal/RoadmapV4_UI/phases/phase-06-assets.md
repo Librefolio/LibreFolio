@@ -1,9 +1,26 @@
 # Phase 6: Assets Management
 
 **Status**: ⏳ TODO  
-**Durata**: 4 giorni  
-**Priorità**: P0 (MVP)
-**Dipendenze**: Phase 3
+**Durata**: ~5 giorni (aggiornata)  
+**Priorità**: P0 (MVP)  
+**Dipendenze**: Phase 5 (PriceChartShared), Phase 4.8 (user_role per permessi)
+
+> **📌 Riferimento principale**: [`plan-phase05-to-08-upgrade.md` §5](../plan-phase05-to-08-upgrade.md)
+> Questa sezione è stata **SUPERATA** dal piano aggiornato. Quando si arriva a implementare Phase 6,
+> ripartire da §5 di `plan-phase05-to-08-upgrade.md` che contiene:
+> - **Step 6.1**: Asset list con `DataTable` e filtri URL-based (`urlFilters.ts`)
+> - **Step 6.2**: AssetModal CRUD con `ModalBase`, `ImagePickerWrapper` per icona, smart search multi-provider
+> - **Step 6.3**: AssetDetail con `PriceChartShared` (riusato da Phase 5), `AssetGainLossTable` con metodo selezionabile (PMC formale + FIFO/LIFO analitico) e disclaimer PMC
+> - **Step 6.4**: `AssetMatchingWizard` a 3 step (search DB → search providers → create new) — **CONDIVISO con Phase 7** (BRIM import)
+>
+> **Componenti da riusare (già esistenti da Phase 4)**:
+> `DataTable`, `ModalBase`, `ConfirmModal`, `SearchSelect`, `SimpleSelect`, `ImagePickerWrapper`, `LazyImage`, `urlFilters.ts`
+>
+> **Novità rispetto a questo vecchio plan**:
+> - Gain/loss per transazione con regime fiscale selezionabile (PMC default, FIFO/LIFO analitico)
+> - Disclaimer sempre presente: "I calcoli fiscali usano sempre il Prezzo Medio di Carico"
+> - `AssetMatchingWizard` standalone e riusabile dall'import BRIM (Phase 7)
+> - `user_role` condiziona: VIEWER non può creare/editare asset, EDITOR/OWNER sì
 
 ---
 
@@ -13,16 +30,19 @@ Implementare la gestione completa degli asset: lista con filtri, creazione con s
 
 ---
 
-## ⚠️ Riferimento Phase 9
+## ⚠️ Nota: Plan Originale (Legacy)
 
-Se vengono creati componenti riutilizzabili, seguire le linee guida in [Phase 9: Polish](./phase-09-polish.md) e aggiornare quella fase con i dettagli del componente.
+Il contenuto sotto è il **plan originale** scritto prima delle fasi 4.5–4.8. I componenti UI suggeriti
+(AssetTable, AssetFilters, PriceChart, etc.) andranno **riscritti** usando `DataTable`, `ModalBase`, e gli
+altri componenti unificati creati in Phase 4. Fare riferimento a §5 di `plan-phase05-to-08-upgrade.md`
+per la versione aggiornata.
 
-**Componenti previsti per questa fase**:
+**Componenti previsti per questa fase (aggiornati)**:
 
+- `AssetModal.svelte` - Create/Edit con ModalBase, SearchSelect, ImagePickerWrapper
 - `AssetSearchAutocomplete.svelte` - Ricerca smart multi-provider
-- `PriceChart.svelte` - Chart ECharts per prezzi
-- `Badge.svelte` - Se non già in Phase 9
-- `Pagination.svelte` - Se non già in Phase 9
+- `AssetGainLossTable.svelte` - Gain/loss per transazione con DataTable
+- `AssetMatchingWizard.svelte` - Flow search DB → providers → create (**CONDIVISO con Phase 7**)
 
 ---
 

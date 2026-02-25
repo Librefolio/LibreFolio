@@ -177,6 +177,7 @@ class TransactionService:
                     currency=item.get_currency(),
                     tags=item.get_tags_csv(),
                     description=item.description,
+                    cost_basis_override=item.cost_basis_override,
                     created_at=utcnow(),
                     updated_at=utcnow(),
                     )
@@ -352,6 +353,9 @@ class TransactionService:
 
                 if item.description is not None:
                     tx.description = item.description
+
+                if item.cost_basis_override is not None:
+                    tx.cost_basis_override = item.cost_basis_override
 
                 tx.updated_at = utcnow()
 

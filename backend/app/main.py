@@ -16,7 +16,10 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.v1.router import router as api_v1_router
-from backend.app.config import get_settings, set_test_mode, is_test_mode, PROJECT_ROOT, ensure_data_dirs
+from backend.app.config import (
+    get_settings, set_test_mode, is_test_mode, PROJECT_ROOT, ensure_data_dirs,
+    PROJECT_NAME, API_V1_PREFIX, get_version,
+)
 from backend.app.logging_config import configure_logging, get_logger
 from backend.app.utils.version import get_git_version
 
@@ -176,11 +179,11 @@ async def _initialize_global_settings():
 
 # Create FastAPI app
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
-    docs_url=f"{settings.API_V1_PREFIX}/docs",
-    redoc_url=f"{settings.API_V1_PREFIX}/redoc",
+    title=PROJECT_NAME,
+    version=get_version(),
+    openapi_url=f"{API_V1_PREFIX}/openapi.json",
+    docs_url=f"{API_V1_PREFIX}/docs",
+    redoc_url=f"{API_V1_PREFIX}/redoc",
     lifespan=lifespan,
     )
 
@@ -194,7 +197,7 @@ app.add_middleware(
     )
 
 # Mount API v1 router
-app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
+app.include_router(api_v1_router, prefix=API_V1_PREFIX)
 
 # Serve mkdocs site from FastAPI at /mkdocs if site directory exists, otherwise return placeholder HTML.
 SITE_DIR = PROJECT_ROOT / "mkdocs_src" / "site"
@@ -260,9 +263,9 @@ async def root():
         return FileResponse(FRONTEND_BUILD_DIR / "index.html")
 
     return {
-        "name": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "docs": f"{settings.API_V1_PREFIX}/docs",
+        "name": PROJECT_NAME,
+        "version": get_version(),
+        "docs": f"{API_V1_PREFIX}/docs",
         "frontend": "Not built. Run: ./dev.sh fe:build",
         }
 

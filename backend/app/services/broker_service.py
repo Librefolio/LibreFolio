@@ -140,6 +140,7 @@ class BrokerService:
                     user_id=user_id,
                     broker_id=broker.id,
                     role=UserRole.OWNER,
+                    share_percentage=Decimal("100"),
                     created_at=utcnow(),
                     updated_at=utcnow(),
                     )
@@ -737,6 +738,7 @@ class BrokerService:
                 "username": user.username,
                 "email": user.email,
                 "role": access.role,
+                "share_percentage": access.share_percentage,
                 "created_at": access.created_at,
                 }
             for access, user in rows
@@ -763,6 +765,7 @@ class BrokerService:
         role: UserRole,
         current_user_id: int,
         is_superuser: bool = False,
+        share_percentage: Decimal = Decimal("100"),
         ) -> tuple[bool, str]:
         """
         Add user access to a broker.
@@ -773,6 +776,7 @@ class BrokerService:
             role: Access role
             current_user_id: Current user ID
             is_superuser: If True, skip OWNER check
+            share_percentage: Ownership percentage (0-100%) for portfolio aggregation
 
         Returns:
             Tuple of (success, message)
@@ -807,6 +811,7 @@ class BrokerService:
             user_id=target_user_id,
             broker_id=broker_id,
             role=role,
+            share_percentage=share_percentage,
             created_at=utcnow(),
             updated_at=utcnow(),
             )
@@ -821,9 +826,10 @@ class BrokerService:
         new_role: UserRole,
         current_user_id: int,
         is_superuser: bool = False,
+        share_percentage: Optional[Decimal] = None,
         ) -> tuple[bool, str]:
         """
-        Update user access role.
+        Update user access role and/or share percentage.
 
         Args:
             broker_id: Broker ID
@@ -831,6 +837,7 @@ class BrokerService:
             new_role: New role
             current_user_id: Current user ID
             is_superuser: If True, skip some checks
+            share_percentage: New ownership percentage (None = no change)
 
         Returns:
             Tuple of (success, message)
@@ -867,6 +874,8 @@ class BrokerService:
 
         # Update role
         access.role = new_role
+        if share_percentage is not None:
+            access.share_percentage = share_percentage
         access.updated_at = utcnow()
 
         return True, "Access updated"

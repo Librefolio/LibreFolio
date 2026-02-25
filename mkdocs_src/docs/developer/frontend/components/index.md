@@ -20,7 +20,7 @@ This section documents the reusable UI components in LibreFolio.
 - AnimatedBackground - Animated waves background for login page
 
 !!! note
-    These were renamed from `*Modal` to `*Card` because they are card-style forms, not modals.
+These were renamed from `*Modal` to `*Card` because they are card-style forms, not modals.
 
 ### Settings (`lib/components/settings/`)
 

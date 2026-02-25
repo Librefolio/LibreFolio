@@ -1,8 +1,9 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 25 Febbraio 2026  
-**Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename, 42 E2E test, avatar seed, gallery, MkDocs dark mode, gallery-img-loader fallback.)
+**Ultimo aggiornamento**: 25 Febbraio 2026 (Pre-step 0.01 brokerSharing completato: pulizia .env/config.py, VERSION da git, rimozione campi obsoleti)  
+**Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename, 42 E2E test, avatar seed, gallery, MkDocs dark mode, gallery-img-loader fallback. Schema
+pre-work Phase 5-8 completato. **Prossimo: Phase 4.8 Broker Sharing GUI — Pre-step 0.01 ✅, ora verifica manuale 0.1-0.4** → vedi `plan-brokerSharing.md`)
 
 ---
 
@@ -85,10 +86,10 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 12. **UI Fixes + Git Versioning + Settings Stores** ✅ STEP 4.5 (18 Feb 2026)
     - Bug 1: User settings applicate al login (lingua, tema, valuta base)
     - Bug 2: Settings stores centralizzati con sync su salvataggio
-      - `userSettings` store con `setDirect()` per update immediato
-      - `globalSettings` store **NUOVO** per config app-wide
-      - Entrambi caricati in `(app)/+layout.svelte` dopo auth
-      - PreferencesTab/GlobalSettingsTab sincronizzano store dopo save
+        - `userSettings` store con `setDirect()` per update immediato
+        - `globalSettings` store **NUOVO** per config app-wide
+        - Entrambi caricati in `(app)/+layout.svelte` dopo auth
+        - PreferencesTab/GlobalSettingsTab sincronizzano store dopo save
     - Bug 3: Modal BRIM upload scroll corretto
     - Bug 4: Colonna Broker visibile con 2+ broker
     - Feature: Git tag versioning (`./dev.py info version`, sidebar, API)
@@ -137,7 +138,8 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - **BRIM file rename**: FileEditModal in BrokerImportFilesModal + BRIM uploader in files/ ✅
     - **DataTable cell-icon-box**: 32×32 wrapper SVG allineato con thumbnail immagini ✅
     - **ModalBase.svelte**: componente base per TUTTE le modali — backdrop, click-outside, Escape, focus, transitions, z-index parametrico ✅
-    - **TUTTE 10 modali migrate a ModalBase**: FileEditModal, ConfirmModal, BrokerImportFilesModal, PasswordChangeModal, files/+page ×2, BrokerModal, ImageEditModal, AssetPickerModal, DeleteBrokerDialog, CashTransactionModal ✅
+    - **TUTTE 10 modali migrate a ModalBase**: FileEditModal, ConfirmModal, BrokerImportFilesModal, PasswordChangeModal, files/+page ×2, BrokerModal, ImageEditModal,
+      AssetPickerModal, DeleteBrokerDialog, CashTransactionModal ✅
     - **Auth componenti rinominati**: LoginModal→LoginCard, RegisterModal→RegisterCard, ForgotPasswordModal→ForgotPasswordCard (sono card, non modali) ✅
     - **Z-index standardizzato**: layer 50→60→70 (incrementi di 10). Rimossi z-index 100, 1000, 1010, 9999 ✅
     - **AssetPickerModal DataTable**: list view sostituita con DataTable single-select (ImageCell + SizeCell), rimossi ~40 righe CSS custom ✅
@@ -150,6 +152,15 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - **7/7 frontend test suites verdi**: auth, settings, files, brokers, multi-user, select-components, image-crop ✅
     - Analisi duplicazione in `analysis-code-duplication.md` (3 round, 13 task completati)
     - Vedi `plan-imageCropModal.prompt.md`
+
+14. **Config Cleanup** ✅ NUOVO (25 Feb 2026) — Pre-step 0.01 di `plan-brokerSharing.md`
+    - `.env` e `.env.example` riscritti: rimossi `DATABASE_URL`, `TEST_DATABASE_URL`, `VERSION`, `PROJECT_NAME`, `API_V1_PREFIX`
+    - Struttura `.env` riorganizzata in sezioni Production/Test, `LIBREFOLIO_DATA_DIR` sempre presente
+    - `config.py`: `VERSION`/`PROJECT_NAME`/`API_V1_PREFIX` diventano costanti modulo (non più in `Settings`)
+    - Versione derivata da `get_git_version()` (git tags), coerente con frontend `APP_VERSION`
+    - `main.py`: usa costanti importate da config + `get_version()`
+    - `Settings` model con `extra="ignore"` per env vars non mappate su campi
+    - Fix commenti test con path vecchi (`test_broker_access_api.py`)
 
 ---
 
@@ -239,15 +250,17 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### Plans PIANIFICATI (in `RoadmapV4_UI/`)
 
-| File                             | Descrizione                            | Status       |
-|----------------------------------|----------------------------------------|--------------|
-| `plan-filePreview.prompt.md`     | Sistema preview file inline            | 📋 PIANIFICATO |
+| File                            | Descrizione                                            | Status                         | Rif. 05-08     |
+|---------------------------------|--------------------------------------------------------|--------------------------------|----------------|
+| `plan-brokerSharing.md`         | 🆕 GUI condivisione broker (Phase 4.8)                 | ⏳ TODO — BLOCCANTE per Phase 5 | §3.5, §10, §11 |
+| `plan-phase7b-filePreview.md`   | Sistema preview file inline — **SPOSTATO a Phase 7.5** | ↗️ Spostato fuori Phase 4      | §7 (Phase 7.5) |
+| `plan-phase05-to-08-upgrade.md` | Piano upgrade fasi 5-8 + GDPR/Sharing + Fiscale        | 🟡 IN CORSO (pre-work ✅)       | Master plan    |
 
 ### Plans Optional/Low Priority
 
-| File                                 | Descrizione                                  | Priorità    |
-|--------------------------------------|----------------------------------------------|-------------|
-| `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend                | Riferimento |
+| File                                 | Descrizione                   | Priorità    |
+|--------------------------------------|-------------------------------|-------------|
+| `plan-frontendDevelopment.prompt.md` | Linee guida sviluppo frontend | Riferimento |
 
 ### Plans ARCHIVIATI (in `phase-04-subplan/`)
 
@@ -257,9 +270,9 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### Plans DA CREARE
 
-| Piano                              | Descrizione                          | Priorità |
-|------------------------------------|--------------------------------------|----------|
-| `plan-gdpr-permissions-rethink.md` | Ripensamento permessi GDPR-compliant | P3       |
+| Piano                                  | Descrizione                              | Priorità                                                                           |
+|----------------------------------------|------------------------------------------|------------------------------------------------------------------------------------|
+| ~~`plan-gdpr-permissions-rethink.md`~~ | ~~Ripensamento permessi GDPR-compliant~~ | Coperto da `plan-brokerSharing.md` + sezione 10 di `plan-phase05-to-08-upgrade.md` |
 
 ---
 
@@ -417,21 +430,10 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 ### Step 4.8: GDPR Permissions Analysis (planning only) ⏸️
 
-### Step 4.9: File Preview System 📋 PIANIFICATO
+### ~~Step 4.9: File Preview System~~ → **SPOSTATO a Phase 7.5**
 
-**Riferimento**: `plan-filePreview.prompt.md`
-
-**Obiettivo**: Preview inline dei file senza download completo
-
-**Features pianificate**:
-
-- Preview immagini con selector qualità
-- Preview testo/codice con range righe selezionabile
-- Preview tabelle (CSV/Excel) con DataTable
-- Preview Markdown con rendering HTML
-- Disponibile in Files Page (Static + BRIM) e Broker Detail
-
-**Stima**: ~8h (1 giorno lavorativo)
+> Questo step è stato **spostato fuori da Phase 4** a Phase 7.5 (dopo Transactions).
+> Riferimento: `plan-phase7b-filePreview.md` + `plan-phase05-to-08-upgrade.md` §7
 
 ---
 
@@ -452,18 +454,52 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 7. ✅ **Image Crop E2E Tests** - 42 test scritti, tutti passano
 8. ✅ **Gallery Walkthrough** - Nuove sezioni: Profile, Grid View, Media & Upload. Markdown aggiornati.
-9. 📋 **File Preview System** (`plan-filePreview.prompt.md`) - ~8h
+9. ↗️ **File Preview System** — spostato a Phase 7.5 (`plan-phase7b-filePreview.md`)
 
 ### 🔲 Optional/Low Priority
 
 - ✅ **MkDocs Dark Mode** (`Step 4.7`) - COMPLETATO (24 Feb 2026)
 - **GDPR Permissions Analysis** (`Step 4.8`) - Planning only
 
-### Dopo: Phase 5 (FX Management)
+### Dopo: Phase 4.8 (Broker Sharing GUI) → Phase 5 (FX Management)
 
-- Lista currency pairs
-- Visualizzazione tassi storici
-- Grafici con ECharts
+**Pre-work completato (25 Feb 2026)**:
+
+- ✅ `share_percentage` in `BrokerUserAccess` — per aggregazione portfolio pesata
+- ✅ `cost_basis_override` in `Transaction` — per freeze PMC ai trasferimenti
+- ✅ 16/16 API test passano, 0 errori frontend check, DB prod+test ricreati
+- 📋 `fiscal_preferences` pianificato per Phase 7
+
+**Prossimo task**: Phase 4.8 — Broker Sharing GUI (BLOCCANTE per Phase 5+)
+
+- **PRE-STEP 0**: Verificare schema DB + testare API su Swagger (`/api/v1/docs`) — vedi `plan-brokerSharing.md` §0
+- Creare endpoint `GET /api/v1/users/search` per cercare utenti
+- Aggiungere `avatar_url` a `BRAccessItem`, `user_role` a `BRSummary`
+- Creare `BrokerSharingModal.svelte` con gestione accessi inline
+- Integrare bottone "Share" nella pagina broker detail (solo OWNER)
+- Vedi `plan-brokerSharing.md` per il piano completo
+- **Rif. 05-08**: §3.5 (Sharing GUI), §10 (GDPR Architecture), §11 (Dependency Graph)
+
+**Dopo Phase 4.8**: Installare ECharts e creare `PriceChartShared.svelte` (Phase 5.0)
+
+- **Rif. 05-08**: §4 (Phase 5 — FX Management), §9 (PriceChartShared spec)
+
+Vedi `plan-phase05-to-08-upgrade.md` per il piano completo delle fasi 5-8.
+
+### 📍 Mappa dei riferimenti 05-08 per ogni futura Phase
+
+Quando si arriverà a creare il plan di dettaglio per ogni fase, ripartire dalla sezione corrispondente
+di `plan-phase05-to-08-upgrade.md` come base, adattandola allo stato di arrivo:
+
+| Phase                    | Sezioni in `plan-phase05-to-08-upgrade.md` | Sintesi contenuto                                                                                                                                                                                                                |
+|--------------------------|--------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **4.8 (Broker Sharing)** | §3.5, §10, §11                             | GUI condivisione: search users, BrokerSharingModal, bottone Share, GDPR roles (OWNER/EDITOR/VIEWER), share_percentage per aggregazione                                                                                           |
+| **5.0 (Chart Shared)**   | §4 intro "5.0 Chart Component", §9         | `PriceChartShared.svelte`: ECharts, gradiente opacità per dati stale (`staleDays`), click-to-edit, range selector, dark mode                                                                                                     |
+| **5 (FX)**               | §4 completa                                | CurrencyGrid, FxRateChart, PairSources CRUD con DataTable, FxSyncModal con date range + warning sovrascrittura                                                                                                                   |
+| **6 (Assets)**           | §5 completa                                | Asset list con DataTable, AssetModal CRUD, AssetDetail con PriceChartShared, AssetGainLossTable (PMC + FIFO analitico), AssetMatchingWizard (search DB → providers → create)                                                     |
+| **7 (Transactions)**     | §6 completa                                | Transaction list/CRUD, TransactionModal dinamico per tipo, FiscalRegimeSelect, SellBuyMatchingPanel, CashSplitModal, MultiImportWizard (5-step), ValidateImportButton, Over-Sell Protection, cost_basis_override per TRANSFER_IN |
+| **7.5 (File Preview)**   | §7                                         | Preview inline: immagini, testo/code, CSV/Excel con DataTable, Markdown rendering. Spostata dopo Phase 7 per avere contesto BRIM completo                                                                                        |
+| **8 (Dashboard)**        | §8 completa                                | KPI Cards (NAV/PnL/ROI pesati per share_%), PortfolioChart (investito vs mercato), AssetDualAxisChart (dual Y-axis per-tx gain), AllocationDonut, RecentTransactions, QuickActions. Aggregazione pesata GDPR-compliant           |
 
 ---
 
@@ -480,7 +516,7 @@ Quando si lavora su questa fase, allegare:
 | Test remediation             | `+ phases/phase-04-subplan/plan-e2e-test-remediation.md` + `phases/phase-04-subplan/e2e-test-analysis.md` |
 | Settings mobile + gallery    | `+ phases/phase-04-subplan/plan-settings-mobile-gallery.md`                                               |
 | **Component Reorganization** | `+ plan-componentReorganizationV2.prompt.md`                                                              |
-| Image upload                 | `+ phases/phase-04-subplan/plan-imageCropModal.prompt.md`                         |
+| Image upload                 | `+ phases/phase-04-subplan/plan-imageCropModal.prompt.md`                                                 |
 | Separazione dati             | `+ plan-data-separation.md`                                                                               |
 | i18n CLI                     | `+ phases/phase-04-subplan/plan-i18n-cli-improvements.md`                                                 |
 | Files UX/URL                 | `+ phases/phase-04-subplan/plan-files-ux-refactor.md`                                                     |

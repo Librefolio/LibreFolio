@@ -1,15 +1,25 @@
 # Plan: File Preview System
 
 **Data**: 18 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
+**Status**: 📋 PIANIFICATO → **Spostato a Phase 7.5**  
 **Priorità**: Media  
-**Dipende da**: Image Crop Modal completato ✅
+**Dipende da**: Phase 7 (Transactions) completata, Image Crop Modal completato ✅
+
+> **📌 Riferimento aggiornato**: [`plan-phase05-to-08-upgrade.md` §7](plan-phase05-to-08-upgrade.md)
+> Questo piano è stato **spostato** da Phase 4.9 a Phase 7.5 perché ha più senso dopo che tutte
+> le entità (brokers, assets, transactions, FX) sono disponibili per dare contesto ai file BRIM.
+> Quando si arriva a implementare, aggiornare questo piano per:
+> - Usare `PriceChartShared` per preview serie storiche CSV
+> - Usare `DataTable` per preview tabellari
+> - Usare `ModalBase` per la modale di preview
+> - Integrare in Files page (entrambi i tab) e Broker Detail
 
 ---
 
 ## 🎯 Obiettivo
 
-Implementare un sistema di preview dei file direttamente nell'interfaccia, senza necessità di scaricare l'intero file. La preview deve essere contestuale al tipo di file e accessibile sia dalla pagina Files che dal broker detail (BRIM files).
+Implementare un sistema di preview dei file direttamente nell'interfaccia, senza necessità di scaricare l'intero file. La preview deve essere contestuale al tipo di file e
+accessibile sia dalla pagina Files che dal broker detail (BRIM files).
 
 ---
 
@@ -17,26 +27,26 @@ Implementare un sistema di preview dei file direttamente nell'interfaccia, senza
 
 ### Tipi di File Supportati
 
-| Categoria | Estensioni | Comportamento Preview |
-|-----------|------------|----------------------|
-| **Immagini** | jpg, jpeg, png, gif, webp, svg | Mostra immagine con selector qualità |
-| **Testo** | txt, log, json, xml, yaml, yml | Mostra contenuto con range righe selezionabile |
-| **Markdown** | md, markdown | Rendering markdown nel browser |
-| **Tabellari** | csv, xlsx, xls | Tabella interattiva con range righe |
-| **Codice** | py, js, ts, html, css, sql | Syntax highlighting + range righe |
-| **Binari/Archivi** | zip, tar, gz, pdf, etc. | Solo download (no preview) |
+| Categoria          | Estensioni                     | Comportamento Preview                          |
+|--------------------|--------------------------------|------------------------------------------------|
+| **Immagini**       | jpg, jpeg, png, gif, webp, svg | Mostra immagine con selector qualità           |
+| **Testo**          | txt, log, json, xml, yaml, yml | Mostra contenuto con range righe selezionabile |
+| **Markdown**       | md, markdown                   | Rendering markdown nel browser                 |
+| **Tabellari**      | csv, xlsx, xls                 | Tabella interattiva con range righe            |
+| **Codice**         | py, js, ts, html, css, sql     | Syntax highlighting + range righe              |
+| **Binari/Archivi** | zip, tar, gz, pdf, etc.        | Solo download (no preview)                     |
 
 ### Comportamento UI
 
 1. **Icona/Button Preview**: Visibile solo per file con preview supportata
 2. **Modal Preview**: Si apre al click, con controlli specifici per tipo
 3. **Controlli per Immagini**:
-   - Slider qualità (25%, 50%, 75%, 100%)
-   - Dimensioni originali mostrate
+    - Slider qualità (25%, 50%, 75%, 100%)
+    - Dimensioni originali mostrate
 4. **Controlli per Testo/Tabelle**:
-   - Input "Da riga" e "A riga"
-   - Paginazione o scroll infinito
-   - Conteggio righe totali (se disponibile)
+    - Input "Da riga" e "A riga"
+    - Paginazione o scroll infinito
+    - Conteggio righe totali (se disponibile)
 5. **Markdown**: Toggle raw/rendered
 
 ### Posizioni
@@ -61,6 +71,7 @@ pipenv install markdown      # Markdown to HTML
 ```
 
 **Verifica dipendenze esistenti**:
+
 - `pandas` per CSV/Excel parsing
 - `Pillow` per image preview (già usato)
 
@@ -260,13 +271,13 @@ export interface FilePreviewMetadata {
 
 #### 4.2 Preview Type Components
 
-| Componente | Scopo |
-|------------|-------|
-| `ImagePreview.svelte` | Mostra immagine con zoom/quality slider |
-| `TextPreview.svelte` | Mostra testo con line numbers |
-| `MarkdownPreview.svelte` | Render markdown con toggle raw |
-| `TablePreview.svelte` | Usa DataTable per JSON rows |
-| `CodePreview.svelte` | Syntax highlighting |
+| Componente               | Scopo                                   |
+|--------------------------|-----------------------------------------|
+| `ImagePreview.svelte`    | Mostra immagine con zoom/quality slider |
+| `TextPreview.svelte`     | Mostra testo con line numbers           |
+| `MarkdownPreview.svelte` | Render markdown con toggle raw          |
+| `TablePreview.svelte`    | Usa DataTable per JSON rows             |
+| `CodePreview.svelte`     | Syntax highlighting                     |
 
 #### 4.3 Integrazione FilesTable
 
@@ -363,16 +374,16 @@ test('brim file preview works in broker detail', async ({ page }) => {...});
 
 ## 📊 Stima Tempo
 
-| Step | Tempo | Note |
-|------|-------|------|
-| Step 1: Backend Setup | 30 min | Librerie, config |
-| Step 2: Backend API | 2h | Endpoints, service, schema |
-| Step 3: Frontend Setup | 15 min | Librerie, tipi |
-| Step 4: Frontend Components | 3h | Modal + tipo-specifici |
-| Step 5: Broker Detail | 1h | Integrazione |
-| Step 6: Traduzioni | 15 min | CLI i18n |
-| Step 7: Test E2E | 1h | Playwright |
-| **Totale** | **~8h** | 1 giorno lavorativo |
+| Step                        | Tempo   | Note                       |
+|-----------------------------|---------|----------------------------|
+| Step 1: Backend Setup       | 30 min  | Librerie, config           |
+| Step 2: Backend API         | 2h      | Endpoints, service, schema |
+| Step 3: Frontend Setup      | 15 min  | Librerie, tipi             |
+| Step 4: Frontend Components | 3h      | Modal + tipo-specifici     |
+| Step 5: Broker Detail       | 1h      | Integrazione               |
+| Step 6: Traduzioni          | 15 min  | CLI i18n                   |
+| Step 7: Test E2E            | 1h      | Playwright                 |
+| **Totale**                  | **~8h** | 1 giorno lavorativo        |
 
 ---
 
@@ -380,29 +391,29 @@ test('brim file preview works in broker detail', async ({ page }) => {...});
 
 ### Backend
 
-| File | Azione | Descrizione |
-|------|--------|-------------|
-| `services/file_preview.py` | **Nuovo** | Logica preview per tipo |
-| `schemas/uploads.py` | Modifica | `FilePreviewResponse`, `FilePreviewMetadata` |
-| `api/v1/uploads.py` | Modifica | Endpoint `/files/{id}/preview` |
-| `api/v1/brokers_import.py` | Modifica | Endpoint `/files/{id}/preview` |
-| `config.py` | Modifica | Costanti preview |
+| File                       | Azione    | Descrizione                                  |
+|----------------------------|-----------|----------------------------------------------|
+| `services/file_preview.py` | **Nuovo** | Logica preview per tipo                      |
+| `schemas/uploads.py`       | Modifica  | `FilePreviewResponse`, `FilePreviewMetadata` |
+| `api/v1/uploads.py`        | Modifica  | Endpoint `/files/{id}/preview`               |
+| `api/v1/brokers_import.py` | Modifica  | Endpoint `/files/{id}/preview`               |
+| `config.py`                | Modifica  | Costanti preview                             |
 
 ### Frontend
 
-| File | Azione | Descrizione |
-|------|--------|-------------|
-| `types/preview.ts` | **Nuovo** | Tipi TypeScript |
-| `utils/filePreview.ts` | **Nuovo** | Utility `canPreview()` |
-| `ui/media/FilePreviewModal.svelte` | **Nuovo** | Modal principale |
-| `ui/media/ImagePreview.svelte` | **Nuovo** | Preview immagini |
-| `ui/media/TextPreview.svelte` | **Nuovo** | Preview testo |
-| `ui/media/MarkdownPreview.svelte` | **Nuovo** | Preview markdown |
-| `ui/media/TablePreview.svelte` | **Nuovo** | Preview tabelle |
-| `ui/media/CodePreview.svelte` | **Nuovo** | Preview codice |
-| `files/FilesTable.svelte` | Modifica | Aggiungere bottone preview |
-| `brokers/BrokerImportFiles.svelte` | Modifica | Aggiungere bottone preview |
-| `e2e/file-preview.spec.ts` | **Nuovo** | Test E2E |
+| File                               | Azione    | Descrizione                |
+|------------------------------------|-----------|----------------------------|
+| `types/preview.ts`                 | **Nuovo** | Tipi TypeScript            |
+| `utils/filePreview.ts`             | **Nuovo** | Utility `canPreview()`     |
+| `ui/media/FilePreviewModal.svelte` | **Nuovo** | Modal principale           |
+| `ui/media/ImagePreview.svelte`     | **Nuovo** | Preview immagini           |
+| `ui/media/TextPreview.svelte`      | **Nuovo** | Preview testo              |
+| `ui/media/MarkdownPreview.svelte`  | **Nuovo** | Preview markdown           |
+| `ui/media/TablePreview.svelte`     | **Nuovo** | Preview tabelle            |
+| `ui/media/CodePreview.svelte`      | **Nuovo** | Preview codice             |
+| `files/FilesTable.svelte`          | Modifica  | Aggiungere bottone preview |
+| `brokers/BrokerImportFiles.svelte` | Modifica  | Aggiungere bottone preview |
+| `e2e/file-preview.spec.ts`         | **Nuovo** | Test E2E                   |
 
 ---
 

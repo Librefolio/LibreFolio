@@ -2,8 +2,40 @@
 
 **Status**: ⏳ ONGOING (fatto incrementalmente)  
 **Durata**: 2 giorni (distribuiti)  
-**Priorità**: P2 (Nice-to-have, ma critico per UX)
+**Priorità**: P2 (Nice-to-have, ma critico per UX)  
 **Dipendenze**: Tutte le fasi
+
+> **📌 Riferimento**: [`plan-phase05-to-08-upgrade.md`](../plan-phase05-to-08-upgrade.md) per la visione d'insieme.
+> Molti dei componenti originariamente previsti per questa fase sono stati **già creati** durante Phase 4:
+>
+> **✅ Componenti già implementati**:
+> - `ModalBase.svelte` — wrapper modale unificato con z-index management, close-on-outside, Escape key
+> - `ConfirmModal.svelte` — dialog di conferma con varianti (danger/warning/info)
+> - `DataTable.svelte` — tabella avanzata con sorting, filtering, pagination, column types, image preview
+> - `SearchSelect.svelte` — dropdown con ricerca fuzzy
+> - `SimpleSelect.svelte` — dropdown semplice
+> - `BaseDropdown.svelte` — base per tutti i select
+> - `FileUploader.svelte` — upload multiplo con editing pre-upload
+> - `ImageCropper.svelte` — crop immagini con cropperjs v2
+> - `ImageEditModal.svelte` — editor immagini completo (crop, zoom, rotation, flip, output size)
+> - `FileEditModal.svelte` — editor proprietà file non-immagine
+> - `AssetPickerModal.svelte` — selezione asset da existing/url/upload
+> - `ImagePickerWrapper.svelte` — wrapper per image selection (profilo, icone broker)
+> - `LazyImage.svelte` — immagini lazy con fallback
+> - `Tooltip.svelte` — tooltip riutilizzabile
+> - `PasswordInput.svelte` + `PasswordStrength.svelte` — input password con validazione zxcvbn
+> - `AnimatedBackground.svelte` — sfondo animato per login/register
+> - `ThemeToggle.svelte` — toggle dark/light mode
+> - `ErrorBanner.svelte` — banner errori unificato
+> - `LoadingSpinner.svelte` — spinner di caricamento unificato
+>
+> **🔲 Componenti ancora da implementare (nelle prossime fasi)**:
+> - `Button.svelte` — bottone unificato con varianti (primary/secondary/danger/ghost)
+> - `Badge.svelte` — badge con varianti per tipo/stato
+> - `Card.svelte` — card generica
+> - `DatePicker.svelte` — selezione data avanzata
+> - `Tabs.svelte` — tab component riutilizzabile
+> - `Toast.svelte` — notifiche toast
 
 ---
 

@@ -10,6 +10,7 @@
 ## ✅ Stato Attuale (20 Feb 2026)
 
 ### Core Features - COMPLETATE ✅
+
 - ✅ Migrazione a cropperjs v2 (Web Components)
 - ✅ Free crop con maniglie trascinabili (L-shaped white corners)
 - ✅ Rotazione rispetto al centro selezione (trasla-ruota-trasla)
@@ -23,6 +24,7 @@
 - ✅ **Drag immagine fuori selezione**: handle "select" → "move"
 
 ### FileUploader - COMPLETATO ✅
+
 - ✅ **Pulsante Edit immagini** - icona matita per immagini → apre ImageEditModal
 - ✅ **Pulsante Edit file** - icona matita per non-immagini → apre FileEditModal
 - ✅ **Pulsante Restore** - annulla modifiche (prima della matita)
@@ -31,6 +33,7 @@
 - ✅ **uploadOnComplete prop** - ImageEditModal può croppare senza uploadare
 
 ### ImageEditModal - COMPLETATO ✅
+
 - ✅ **Testo pulsante dinamico** - "Crop" o "Crop & Upload"
 - ✅ **Controlli in overlay** - zoom/rotation/reset nel riquadro a destra
 - ✅ **Reset singolo** - solo 1 reset nell'overlay
@@ -38,6 +41,7 @@
 - ✅ Rimosso preset "Original" (solo avatar, broker-icon, custom)
 
 ### FileEditModal - COMPLETATO ✅ (20 Feb 2026)
+
 - ✅ **Modale per file non-immagine** - rename file prima dell'upload
 - ✅ **Input nome file + estensione** - estensione mostrata come badge non editabile
 - ✅ **Info file** - mostra size e type del file originale
@@ -48,12 +52,14 @@
 - ✅ **Traduzioni i18n** - uploads.editFile, uploads.rename, uploads.renameAndUpload
 
 ### Bug Fix: Freeze selezione oltre bordo ✅ (20 Feb 2026)
+
 - ✅ **Sostituito** `queueMicrotask` con `requestAnimationFrame` per guard release
 - ✅ **Aggiunto** `clampDepth` counter come safety valve (max 2)
 - ✅ **Usato** `cropperSelection.$change()` atomico anziché proprietà singole
 - ✅ **Threshold** 0.5px per evitare micro-clamping inutile
 
 ### Bottom Panel Redesign + Output Size ✅ (20 Feb 2026)
+
 - ✅ **2-column CSS Grid layout** — sinistra: preset/output/scale, destra: ratio/info
 - ✅ **Output size editabile** — input width/height interdipendenti con aspect ratio
 - ✅ **Scale factor sempre visibile** — range 0.01-1.00, ricalcola output automaticamente
@@ -69,6 +75,7 @@
 - ✅ **0 errori, 0 warnings** — svelte-check pulito
 
 ### UI Polish Round 3 ✅ (20 Feb 2026 ore 12:30)
+
 - ✅ **Ellipse overlay fix**: box-shadow 9999px per coprire l'area fuori il cerchio nella selezione
 - ✅ **Maniglie visibili con ellisse**: le handle rimangono operative sopra l'overlay circolare
 - ✅ **Eye toggle in alto a sinistra**: spostato da bottom-left a top-left
@@ -80,6 +87,7 @@
 - ✅ **TODO riorganizzati**: `TODO_FUTURI.md` pulito, `TODO_Completati.md` creato, appunti utente documentati
 
 ### UI Polish Round 4 ✅ (20 Feb 2026 ore 13:10)
+
 - ✅ **Colonne swap corretto**: LEFT = info+output+scale, RIGHT = preset+aspect ratio
 - ✅ **Scale allineato con Y di output**: spacer 52px allineato con secondo dim-input
 - ✅ **Ellipse fix completo**: JS-based overlay (div reale posizionato sopra la selezione), non più CSS :has()
@@ -89,6 +97,7 @@
 - ✅ **Reset rimosso da overlay**: solo nel header modale
 
 ### Feature 6: AssetPickerModal ✅ COMPLETATA (20 Feb 2026)
+
 - ✅ **AssetPickerModal creato** — modale con 3 tab: Existing, URL, Upload
 - ✅ **Tab Existing**: griglia/lista con search, view toggle, selezione singola, doppio click conferma
 - ✅ **Tab URL**: input con validazione, preview immagine con LazyImage, cerchio overlay
@@ -99,6 +108,7 @@
 - ✅ **A11y compliant**: tabindex=-1, label for/id, 0 errori 0 warnings
 
 ### UI Polish Round 5 ✅ (20 Feb 2026 ore 18:00)
+
 - ✅ **Ellipse overlay contenuta**: `overflow: hidden` su `.crop-wrapper` per evitare che box-shadow 9999px copra la modale
 - ✅ **Zoom logic corretta**: + prima riduce selezione poi zooma sfondo, - prima ingrandisce selezione poi dezooma sfondo
 - ✅ **Clamping selezione migliorato**: usa bounds canvas e vincoli più stretti per prevenire overflow
@@ -110,6 +120,7 @@
 - ✅ **URL mostrata sotto icona in BrokerForm**: testo troncato con tooltip
 
 ### UI Polish Round 6 ✅ (20 Feb 2026 ore 19:00)
+
 - ✅ **Fix `__upload__` contamination**: upload non più dispatcha `select` con URL `__upload__`
 - ✅ **Cancel upload → reopen picker**: cancellando ImageEditModal riapre AssetPickerModal
 - ✅ **Tab iniziale intelligente**: se c'è initialUrl → tab URL, altrimenti → tab Existing
@@ -122,6 +133,7 @@
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### UI Polish Round 7 ✅ (23 Feb 2026)
+
 - ✅ **Fix URL validation**: AssetPickerModal accetta URL relativi, path locali, e qualsiasi input non-vuoto
 - ✅ **Pulsante "Use Selected" funzionante**: ora si abilita correttamente per URL e path locali
 - ✅ **Pulsante "Remove icon" in BrokerForm**: link rosso sotto l'URL icona per cancellare
@@ -130,11 +142,13 @@
 - ✅ **Fix Chrome wheel warning**: listener registrato con `{ passive: false }` via JS diretto (non `on:wheel`)
 - ✅ **Fix ellisse bloccata ai bordi**: `updateEllipseOverlay()` chiamata anche dopo clamping (sia needsUpdate che else)
 - ✅ **Preview immagini nel picker**: usa `?img_preview=120x120` per grid e `60x60` per lista
-- ✅ **Cleanup unused code**: rimosso `RefreshCw` import, `resetZoom`, `resetRotation`, `getCroppedCanvas`, `getSelection`, `getCropDimensions`, `getTransform`, `getCurrentAspect`, `handleIconFileSelect`
+- ✅ **Cleanup unused code**: rimosso `RefreshCw` import, `resetZoom`, `resetRotation`, `getCroppedCanvas`, `getSelection`, `getCropDimensions`, `getTransform`, `getCurrentAspect`,
+  `handleIconFileSelect`
 - ✅ **Analisi duplicazione codice**: report completo in `analysis-code-duplication.md`
 - ✅ **0 errori, 0 warnings** — svelte-check pulito
 
 ### Refactoring Round 8 ✅ (23 Feb 2026)
+
 - ✅ **Backend img_preview cache**: in-memory con TTL 1h, max 200 entries, invalidazione su delete
 - ✅ **Backend img_preview fix**: rimosso ProcessPoolExecutor (non può pickle funzioni locali), resize sincrono diretto
 - ✅ **Fix resetAll custom**: niente dezoom, selezione esattamente sull'immagine
@@ -147,6 +161,7 @@
 - ✅ **Analisi duplicazione aggiornata**: 10 interventi prioritizzati con status
 
 ### Refactoring Round 9 ✅ (23 Feb 2026 — post-commit cleanup)
+
 - ✅ **Fix `svelte:component` deprecation**: sostituito con `{@const FallbackIcon = ...}` dinamico (Svelte 5 runes)
 - ✅ **Backend cache size-based**: da count-based (200 entries) a size-based (default 50MB, parametrico da `PREVIEW_CACHE_MAX_MB` in `.env`)
 - ✅ **Backend img_preview >= original**: se dimensione richiesta ≥ originale, serve `FileResponse` diretto (no Pillow, no cache)
@@ -156,28 +171,37 @@
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### Refactoring Round 10 ✅ (23 Feb 2026 — dedup + cache class)
-- ✅ **Backend PreviewCache class**: sostituiti metodi privati `_get_cached_preview`/`_set_cached_preview`/`invalidate_preview_cache` con classe `PreviewCache` pubblica, singleton `preview_cache`
+
+- ✅ **Backend PreviewCache class**: sostituiti metodi privati `_get_cached_preview`/`_set_cached_preview`/`invalidate_preview_cache` con classe `PreviewCache` pubblica, singleton
+  `preview_cache`
 - ✅ **Cache per-process**: documentato che la cache è per-processo (single worker ottimale, multi-worker indipendente)
 - ✅ **Settings integration**: `PreviewCache.load_config()` carica `PREVIEW_CACHE_MAX_MB` dal modello `Settings` al primo `put()`
 - ✅ **`.env.example` aggiornato**: aggiunto `PREVIEW_CACHE_MAX_MB` con documentazione
 - ✅ **`uploadFile()` utility**: creata `utils/upload.ts` con funzione centralizzata — rimossi duplicati da ImageEditModal, FileEditModal, files/+page.svelte
-- ✅ **`formatBytes()` centralizzato**: in `utils/upload.ts` — rimossi duplicati da AssetPickerModal, BrokerImportFiles (le versioni i18n in DataTable/Filter lasciate perché usano traduzioni)
+- ✅ **`formatBytes()` centralizzato**: in `utils/upload.ts` — rimossi duplicati da AssetPickerModal, BrokerImportFiles (le versioni i18n in DataTable/Filter lasciate perché usano
+  traduzioni)
 - ✅ **Dead code cleanup**: rimossi import `axiosInstance` non più usati, rimosso `FormData` dead code
 - ✅ **AssetPicker URL ellisse**: cambiato da crop 1:1 a full-image con box-shadow overlay (mostra parte tagliata)
 - ✅ **FilesTable icon alignment**: `.cell-icon-box` 32×32 centrato, allinea icone SVG con thumbnail immagini
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### Refactoring Round 11 ✅ (23 Feb 2026 — formatBytes i18n + BRIM rename + cleanup)
-- ✅ **`formatBytes()` i18n**: riscritto in `utils/upload.ts` con `get(_)` da svelte/store — usa `filter.bytes`, `filter.kilobytes`, `filter.megabytes`, `filter.gigabytes` per traduzioni (es. FR: o, Ko, Mo, Go)
-- ✅ **TUTTE le copie di formatBytes/formatSize/formatFileSize rimosse**: DataTable, DataTableColumnFilter, files/+page, BrokerImportFiles, FileEditModal, FileUploader — ora tutto importa da `utils/upload.ts`
-- ✅ **BRIM file rename (files/ assign broker modal)**: aggiunto pulsante Pencil per rinominare ogni file BRIM prima dell'upload, con `FileEditModal` — `handleFileEditComplete` distingue contesto static vs BRIM
+
+- ✅ **`formatBytes()` i18n**: riscritto in `utils/upload.ts` con `get(_)` da svelte/store — usa `filter.bytes`, `filter.kilobytes`, `filter.megabytes`, `filter.gigabytes` per
+  traduzioni (es. FR: o, Ko, Mo, Go)
+- ✅ **TUTTE le copie di formatBytes/formatSize/formatFileSize rimosse**: DataTable, DataTableColumnFilter, files/+page, BrokerImportFiles, FileEditModal, FileUploader — ora tutto
+  importa da `utils/upload.ts`
+- ✅ **BRIM file rename (files/ assign broker modal)**: aggiunto pulsante Pencil per rinominare ogni file BRIM prima dell'upload, con `FileEditModal` — `handleFileEditComplete`
+  distingue contesto static vs BRIM
 - ✅ **BRIM file rename (BrokerImportFilesModal)**: aggiunto `FileEditModal` + handler `editFile`
 - ✅ **FileEditModal z-index**: aumentato da 50 a 60 per renderlo visibile sopra altre modali
 - ✅ **URL preview ellisse**: LazyImage container centrato con `width: auto`, immagine con `display: block`
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### Refactoring Round 12 ✅ (23 Feb 2026 — ModalBase + z-index system)
-- ✅ **ModalBase.svelte creato**: componente base per tutte le modali — gestisce backdrop, click-outside, Escape (con stopPropagation per stacking), focus (once-only), transitions, z-index parametrico, dark mode, maxWidth con preset map
+
+- ✅ **ModalBase.svelte creato**: componente base per tutte le modali — gestisce backdrop, click-outside, Escape (con stopPropagation per stacking), focus (once-only), transitions,
+  z-index parametrico, dark mode, maxWidth con preset map
 - ✅ **FileEditModal migrato a ModalBase**: rimossi ~100 righe di boilerplate. Confirm dialog interno usa ModalBase(zIndex+10)
 - ✅ **ConfirmModal migrato a ModalBase**: rimossi ~50 righe. Aggiunto `zIndex` prop (default 60)
 - ✅ **BrokerImportFilesModal migrato a ModalBase**: rimossi backdrop/keydown/z-index CSS
@@ -189,6 +213,7 @@
 - ✅ **BRIM rename pencil position**: spostato dopo il nome file e prima della size
 
 ### Refactoring Round 13 ✅ (23 Feb 2026 — Complete ModalBase migration + auth rename)
+
 - ✅ **BrokerModal migrato a ModalBase**: rimossi backdrop/keydown proprietari
 - ✅ **ImageEditModal migrato a ModalBase**: usa ModalBase per backdrop e conferma chiusura
 - ✅ **AssetPickerModal migrato a ModalBase**: rimosso backdrop/keydown custom
@@ -201,6 +226,7 @@
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### Refactoring Round 14 ✅ (23 Feb 2026 — DataTable in AssetPicker)
+
 - ✅ **AssetPickerModal list view**: sostituita lista custom HTML/CSS con DataTable `selectionMode='single'`
 - ✅ **Colonne DataTable**: filename (ImageCell con preview per immagini), size (SizeCell), type (text)
 - ✅ **Single-select**: click riga = seleziona, doppio click = conferma
@@ -209,20 +235,25 @@
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### Refactoring Round 16 ✅ (23 Feb 2026 — FileGrid extraction)
+
 - ✅ **FileGrid.svelte creato**: componente griglia parametrizzato con mode (browse/select), cardSize (compact/full), showActions, selectedFileId
 - ✅ **Integrato in files/ page**: sostituisce ~120 righe di markup inline + ~100 righe CSS
 - ✅ **Integrato in AssetPickerModal**: sostituisce ~30 righe di markup inline + ~40 righe CSS
-- ✅ **Cleanup files/ page**: rimossi import orfani (Check, Copy, Download, Image, Link2, LazyImage, isImageFile), rimosse funzioni (copyFileLink, isImage, getFileIcon), rimossi state variables (gridSearchQuery, copiedFileId, filteredStaticFiles)
+- ✅ **Cleanup files/ page**: rimossi import orfani (Check, Copy, Download, Image, Link2, LazyImage, isImageFile), rimosse funzioni (copyFileLink, isImage, getFileIcon), rimossi
+  state variables (gridSearchQuery, copiedFileId, filteredStaticFiles)
 - ✅ **Analisi duplicazione COMPLETATA**: 6/6 task finiti
 - ✅ **0 errori, 0 warnings** — svelte-check pulito
 
 ### Refactoring Round 15 ✅ (23 Feb 2026 — data-testid + plan update)
-- ✅ **data-testid aggiunti**: 27 attributi su tutti i componenti nuovi (ImageEditModal, ImageCropper, FileEditModal, AssetPickerModal, FileUploader, ProfileTab, BrokerForm, Sidebar)
+
+- ✅ **data-testid aggiunti**: 27 attributi su tutti i componenti nuovi (ImageEditModal, ImageCropper, FileEditModal, AssetPickerModal, FileUploader, ProfileTab, BrokerForm,
+  Sidebar)
 - ✅ **ImagePickerWrapper status**: marcato come COMPLETATO nell'analisi duplicazione (usato in BrokerForm + ProfileTab)
 - ✅ **Piano phase04-summary aggiornato**: Step 4.6 da "IN TEST" a "COMPLETATO", prossimi passi rivisti
 - ✅ **0 errori, 0 warnings** — svelte-check pulito
 
 ### E2E Test Debugging Round 17 ✅ (24 Feb 2026)
+
 - ✅ **Fix `hasChanges` race condition**: aggiunto `suppressChanges` flag durante init — dopo `resetAll()` sopprime change events per 300ms
 - ✅ **Fix `cropperReady` indicator**: `data-cropper-ready="true"` su ImageCropper quando cropper è completamente inizializzato
 - ✅ **Fix E2E helper `uploadImageAndWaitForModal`**: attende `data-cropper-ready` + 800ms settle prima di interagire
@@ -236,9 +267,10 @@
 - ✅ **0 errori, 0 warnings** — svelte-check + build puliti
 
 ### E2E Test Final Fix Round 18 ✅ (24 Feb 2026)
+
 - ✅ **Fix B6 (reset button)**: reset pulsante appare solo con `hasChanges` — test ora ruota PRIMA di cercare il bottone
 - ✅ **Fix C1 (confirm dialog)**: aggiunto `data-testid="image-edit-close"` al pulsante X, test usa testid diretto
-- ✅ **Fix E1 (avatar section)**: test usa `data-testid="profile-avatar"` e `getByTestId('settings-tab-profile')` 
+- ✅ **Fix E1 (avatar section)**: test usa `data-testid="profile-avatar"` e `getByTestId('settings-tab-profile')`
 - ✅ **Fix hasChanges non propagato**: rotate/flip/zoom ora chiamano `dispatchCurrentChange()` — emette evento `change` con selezione corrente
 - ✅ **Fix PasswordChangeModal testid duplicato**: rimosso `data-testid` dall'inner div (ModalBase già lo applica al backdrop)
 - ✅ **Fix broker close test**: sostituito selettore CSS backdrop obsoleto (`.fixed.inset-0.bg-black\\/50`) con `page.keyboard.press('Escape')`
@@ -248,6 +280,7 @@
 - ✅ **7/7 frontend test suites verdi** — auth, settings, files, brokers, multi-user, select-components, image-crop
 
 ### Note Tecniche
+
 - **CSS Variables per Shadow DOM**: `--theme-color` e `--cropper-backdrop-color` ereditati
 - **Reattività Svelte**: Usare espressioni inline nel template, non funzioni
 - **Rotazione pivot**: Tecnica trasla-ruota-trasla per ruotare rispetto al centro selezione
@@ -257,13 +290,13 @@
 
 ## 🐛 Bug Risolti
 
-| ID | Descrizione | Status |
-|----|-------------|--------|
-| BUG-IC1 | Files Page: serve pulsante edit accanto al file per aprire crop | ✅ |
-| BUG-IC2 | Avatar: dopo cancel, secondo click non apre crop | ✅ Fix: reset input via ref |
-| BUG-IC3 | Dashboard: avatar non aggiornato dopo modifica | ✅ Fix: aggiorna userSettings store + avatar in dashboard |
-| BUG-IC5 | Rimuovi avatar: nessuna conferma "sei sicuro?" | ✅ Fix: modale conferma |
-| BUG-IC6 | FREEZE: selezione oltre bordo canvas causa infinite loop | ✅ Fix: $change() atomico + clampDepth + requestAnimationFrame |
+| ID      | Descrizione                                                     | Status                                                        |
+|---------|-----------------------------------------------------------------|---------------------------------------------------------------|
+| BUG-IC1 | Files Page: serve pulsante edit accanto al file per aprire crop | ✅                                                             |
+| BUG-IC2 | Avatar: dopo cancel, secondo click non apre crop                | ✅ Fix: reset input via ref                                    |
+| BUG-IC3 | Dashboard: avatar non aggiornato dopo modifica                  | ✅ Fix: aggiorna userSettings store + avatar in dashboard      |
+| BUG-IC5 | Rimuovi avatar: nessuna conferma "sei sicuro?"                  | ✅ Fix: modale conferma                                        |
+| BUG-IC6 | FREEZE: selezione oltre bordo canvas causa infinite loop        | ✅ Fix: $change() atomico + clampDepth + requestAnimationFrame |
 
 ---
 
@@ -272,11 +305,13 @@
 ### Motivazione
 
 `svelte-easy-crop` ha limitazioni significative:
+
 - ❌ No maniglie trascinabili per free crop
 - ❌ No rotazione live preview (solo al save)
 - ❌ No prop `rotation` diretta
 
 `cropperjs v2` offre:
+
 - ✅ Free crop con resize handles
 - ✅ Rotazione live con preview
 - ✅ Flip orizzontale/verticale
@@ -290,13 +325,13 @@
 1. **Disinstallato** `svelte-easy-crop`
 2. **Installato** `cropperjs@^2.1.0`
 3. **Riscritto** `ImageCropper.svelte` per API v2:
-   - Usa `new Cropper(imageSrc, {container: element})`
-   - Metodi: `getCropperImage().$rotate()`, `$scale()`, `$zoom()`
-   - Metodi: `getCropperSelection().$toCanvas()`, `aspectRatio`
-   - CSS integrato nei Web Components
+    - Usa `new Cropper(imageSrc, {container: element})`
+    - Metodi: `getCropperImage().$rotate()`, `$scale()`, `$zoom()`
+    - Metodi: `getCropperSelection().$toCanvas()`, `aspectRatio`
+    - CSS integrato nei Web Components
 4. **Aggiornato** `imageCrop.ts`:
-   - `getCroppedImageFromCropper()` usa `selection.$toCanvas()`
-   - Rimosso vecchio `getCroppedImage()` con canvas manuale
+    - `getCroppedImageFromCropper()` usa `selection.$toCanvas()`
+    - Rimosso vecchio `getCroppedImage()` con canvas manuale
 5. **Rimosso** preset `original` (solo avatar, broker-icon, custom)
 
 ### API Cropperjs v2 - Riferimento
@@ -334,6 +369,7 @@ const croppedCanvas = await selection.$toCanvas({width: 200, height: 200});
 **Requisito**: Dopo drag&drop file immagine, nella lista pending appare un pulsante edit (matita) accanto alla dimensione. Cliccandolo si apre ImageEditModal.
 
 **Implementato**:
+
 - ✅ Pulsante matita (Pencil) per file immagine
 - ✅ Pulsante restore (RefreshCw) per file editati - PRIMA della matita
 - ✅ File editati evidenziati con bordo blu
@@ -347,6 +383,7 @@ const croppedCanvas = await selection.$toCanvas({width: 200, height: 200});
 **Requisito**: Nella modale edit, l'utente può modificare il nome di salvataggio.
 
 **Implementato**:
+
 - ✅ Input per nome file (senza estensione)
 - ✅ Dropdown per formato output (png/jpg/webp)
 - ✅ Nome estratto automaticamente dal file originale
@@ -358,6 +395,7 @@ const croppedCanvas = await selection.$toCanvas({width: 200, height: 200});
 **Requisito**: Zoom con rotellina prima modifica selezione, poi immagine.
 
 **Implementato**:
+
 - ✅ Zoom IN: prima ingrandisce selezione, quando QUALUNQUE asse ≥90% → zooma immagine
 - ✅ Zoom OUT: prima rimpicciolisce selezione, quando QUALUNQUE asse ≤50% → dezooma immagine
 - ✅ Rotellina mouse intercettata con `on:wheel={handleWheel}`
@@ -369,11 +407,13 @@ const croppedCanvas = await selection.$toCanvas({width: 200, height: 200});
 ### Feature 3: Asset Picker Modal (per Avatar, Broker Icon, etc.)
 
 **Requisito**: Modale intermedia che permette di:
+
 1. Inserire URL esterno
 2. Selezionare da file esistenti sul server
 3. Uploadare nuovo file (→ apre ImageEditModal)
 
 **Flusso**:
+
 ```
 User clicks "Change Avatar"
        ↓
@@ -389,6 +429,7 @@ User clicks "Change Avatar"
 ```
 
 **Comportamento**:
+
 - Se URL → ritorna `{ type: 'url', url: '...' }`
 - Se Existing → ritorna `{ type: 'existing', url: '...' }`
 - Se Upload → apre ImageEditModal, poi ritorna `{ type: 'upload', url: '...', config: ImageEditConfig }`
@@ -400,6 +441,7 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 **Requisito**: Bottom panel compatto a 2 colonne con tutte le info di output editabili.
 
 **Layout finale implementato**:
+
 ```
 [filename_______________] [.png ▼] [−90%+]    ← quality solo per JPEG/WebP
 ╔═══════════════════════════╦══════════════════════════════╗
@@ -412,6 +454,7 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 ```
 
 **Cambiamenti chiave (20 Feb 2026 - fix round 2)**:
+
 - ✅ Rimossa sezione "Input/Selection" standalone — assorbita nel panel destro
 - ✅ Aspect ratio DENTRO il bottom panel (colonna destra), non fuori
 - ✅ 2 colonne CSS Grid — sinistra: preset/output/scale, destra: ratio/info
@@ -435,22 +478,24 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 1. **Azioni mancanti**: La grid card non ha "Copy Link", la table sì
 2. **Design azioni**: Il cestino non è rosso in grid (è `danger` ma manca l'effetto visivo senza hover)
 3. **Layout card**: Attualmente sono 2 righe (nome+meta, azioni). Devono essere 3 righe:
-   - **Riga 1 - Titolo**: nome file (troncato con ellipsis)
-   - **Riga 2 - Metadati**: size • data • user (se multi-utente)
-   - **Riga 3 - Azioni**: allineate a destra, stesse della tabella (download, copy link, delete)
+    - **Riga 1 - Titolo**: nome file (troncato con ellipsis)
+    - **Riga 2 - Metadati**: size • data • user (se multi-utente)
+    - **Riga 3 - Azioni**: allineate a destra, stesse della tabella (download, copy link, delete)
 4. **Search in grid mode**: Campo di ricerca per nome file sopra la griglia
 5. **Filtro utente**: Se ci sono più utenti registrati, mostrare colonna utente e filtro dropdown
-   - In table: nuova colonna "Uploaded by" (come la colonna Broker in BRIM)
-   - In grid: filtro dropdown accanto al search
-   - Filtro solo frontend (nessuna restrizione backend per utente)
+    - In table: nuova colonna "Uploaded by" (come la colonna Broker in BRIM)
+    - In grid: filtro dropdown accanto al search
+    - Filtro solo frontend (nessuna restrizione backend per utente)
 
 **File coinvolti**:
+
 - `frontend/src/routes/(app)/files/+page.svelte` — grid view template + filtri
 - `frontend/src/lib/components/files/FilesTable.svelte` — aggiungere colonna user se multi-utente
 - Backend: l'API `/api/v1/uploads` già restituisce `user_id` nei metadati
 - Necessario: endpoint per lista utenti o estrazione utenti unici dai file
 
 **Riutilizzo codice esistente**:
+
 - Riutilizzare lo stesso pattern filtri di `FilesTable` (tipo colonna enum, `urlFilters`)
 - Riutilizzare `BrokerSearchSelect` come pattern per UserFilter dropdown
 
@@ -464,6 +509,7 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 4. **Click per selezionare** — ritorna URL del file selezionato
 
 **Implementazione**:
+
 - Creare `StaticFileBrowser.svelte` componente riutilizzabile
 - Usato sia dentro AssetPickerModal che potenzialmente in altri contesti
 - Accetta prop `filterMimeTypes?: string[]` per filtrare solo immagini (o solo CSV, etc.)
@@ -471,6 +517,7 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 - Include sia la modalità griglia (con LazyImage) che la modalità tabella (con DataTable)
 
 **UI**:
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  Select existing file                                   [X]  │
@@ -498,9 +545,13 @@ Il chiamante (Avatar, BrokerIcon) riceve sempre un URL finale.
 ## 🔧 Piano Fix Aggiornato (Ordine Implementazione)
 
 ### Fase 1: Migrazione cropperjs ✅ COMPLETATA
-### Fase 2: Edit nella Lista File ✅ COMPLETATA  
+
+### Fase 2: Edit nella Lista File ✅ COMPLETATA
+
 ### Fase 3: Nome File Editabile + FileEditModal ✅ COMPLETATA
+
 ### Fase 2.5: Zoom Unificato ✅ COMPLETATA
+
 ### Bug Fix: Freeze selezione ✅ COMPLETATA
 
 ### Fase 4: Output Size Editabile + Bottom Panel Redesign ✅ COMPLETATA
@@ -624,14 +675,14 @@ sarà aggiunta nello Step 2.5 per completare il flusso.
 
 ## 🔍 Gap Analysis vs Piano Originale
 
-| Aspetto | Piano Originale | Stato Attuale | Azione |
-|---------|-----------------|---------------|--------|
-| Crop interattivo | Pianificato | ✅ Implementato | Done |
-| ImageUploader | Esistente con resize | ✅ Nuovo ImageEditModal | Done |
-| FileUploader | Non menzionato | ✅ Integrazione preparata | Step 2.5 |
-| Avatar utente | Menzionato | ❌ Campo non esiste nel DB | Step 4 |
-| Broker icon | Menzionato | ✅ `icon_url` esiste | Step 3 |
-| Modale wrapper | Non dettagliato | ✅ Creato | Done |
+| Aspetto          | Piano Originale      | Stato Attuale             | Azione   |
+|------------------|----------------------|---------------------------|----------|
+| Crop interattivo | Pianificato          | ✅ Implementato            | Done     |
+| ImageUploader    | Esistente con resize | ✅ Nuovo ImageEditModal    | Done     |
+| FileUploader     | Non menzionato       | ✅ Integrazione preparata  | Step 2.5 |
+| Avatar utente    | Menzionato           | ❌ Campo non esiste nel DB | Step 4   |
+| Broker icon      | Menzionato           | ✅ `icon_url` esiste       | Step 3   |
+| Modale wrapper   | Non dettagliato      | ✅ Creato                  | Done     |
 
 ---
 
@@ -639,28 +690,28 @@ sarà aggiunta nello Step 2.5 per completare il flusso.
 
 ### Nuovi File Frontend ✅
 
-| File | Descrizione | Status |
-|------|-------------|--------|
-| `ui/media/ImageEditModal.svelte` | Modale wrapper con upload | ✅ |
-| `ui/media/ImageCropper.svelte` | Componente crop (svelte-easy-crop) | ✅ |
-| `utils/imageCrop.ts` | Utility: getCroppedImage, presets | ✅ |
+| File                             | Descrizione                        | Status |
+|----------------------------------|------------------------------------|--------|
+| `ui/media/ImageEditModal.svelte` | Modale wrapper con upload          | ✅      |
+| `ui/media/ImageCropper.svelte`   | Componente crop (svelte-easy-crop) | ✅      |
+| `utils/imageCrop.ts`             | Utility: getCroppedImage, presets  | ✅      |
 
 ### Modifiche Frontend
 
-| File | Modifica | Status |
-|------|----------|--------|
-| `ui/media/index.ts` | Export nuovi componenti | ✅ |
-| `files/+page.svelte` | Import e stato ImageEditModal | ✅ |
-| `brokers/BrokerForm.svelte` | Integrazione icon picker | 📋 |
-| `settings/tabs/PreferencesTab.svelte` | Sezione Avatar | 📋 |
+| File                                  | Modifica                      | Status |
+|---------------------------------------|-------------------------------|--------|
+| `ui/media/index.ts`                   | Export nuovi componenti       | ✅      |
+| `files/+page.svelte`                  | Import e stato ImageEditModal | ✅      |
+| `brokers/BrokerForm.svelte`           | Integrazione icon picker      | 📋     |
+| `settings/tabs/PreferencesTab.svelte` | Sezione Avatar                | 📋     |
 
 ### Modifiche Backend (Step 4)
 
-| File | Modifica | Status |
-|------|----------|--------|
-| `db/models.py` | `avatar_url` in UserSettings | 📋 |
-| `schemas/settings.py` | `avatar_url` in schemas | 📋 |
-| `alembic/versions/001_initial.py` | Colonna avatar_url | 📋 |
+| File                              | Modifica                     | Status |
+|-----------------------------------|------------------------------|--------|
+| `db/models.py`                    | `avatar_url` in UserSettings | 📋     |
+| `schemas/settings.py`             | `avatar_url` in schemas      | 📋     |
+| `alembic/versions/001_initial.py` | Colonna avatar_url           | 📋     |
 
 ---
 
@@ -668,9 +719,9 @@ sarà aggiunta nello Step 2.5 per completare il flusso.
 
 ```typescript
 export const IMAGE_PRESETS = {
-  avatar: { aspectRatio: 1, outputWidth: 200, outputHeight: 200, ... },
-  'broker-icon': { aspectRatio: 1, outputWidth: 64, outputHeight: 64, ... },
-  custom: { aspectRatio: 0, outputWidth: null, ... }
+    avatar: {aspectRatio: 1, outputWidth: 200, outputHeight: 200, ...},
+    'broker-icon': {aspectRatio: 1, outputWidth: 64, outputHeight: 64, ...},
+    custom: {aspectRatio: 0, outputWidth: null, ...}
 };
 ```
 
@@ -678,15 +729,15 @@ export const IMAGE_PRESETS = {
 
 ## 📊 Stima Tempo Aggiornata
 
-| Step | Tempo | Status |
-|------|-------|--------|
-| Step 1: Setup & Componenti | 1 giorno | ✅ COMPLETATO |
-| Step 2: Files Page | 0.5 giorni | ✅ COMPLETATO |
-| Step 2.5: Logica intercettazione | 0.25 giorni | ✅ COMPLETATO |
-| Step 3: Broker Icon | 0.5 giorni | ✅ COMPLETATO |
-| Step 4: Avatar Utente | 1 giorno | ✅ COMPLETATO |
-| Step 5: Polish | 0.5 giorni | ✅ COMPLETATO |
-| **Totale** | **~3.75 giorni** | ✅ |
+| Step                             | Tempo            | Status       |
+|----------------------------------|------------------|--------------|
+| Step 1: Setup & Componenti       | 1 giorno         | ✅ COMPLETATO |
+| Step 2: Files Page               | 0.5 giorni       | ✅ COMPLETATO |
+| Step 2.5: Logica intercettazione | 0.25 giorni      | ✅ COMPLETATO |
+| Step 3: Broker Icon              | 0.5 giorni       | ✅ COMPLETATO |
+| Step 4: Avatar Utente            | 1 giorno         | ✅ COMPLETATO |
+| Step 5: Polish                   | 0.5 giorni       | ✅ COMPLETATO |
+| **Totale**                       | **~3.75 giorni** | ✅            |
 
 ---
 
@@ -1095,35 +1146,35 @@ test.describe('Files Page - Grid View', () => {
 
 ### data-testid da aggiungere
 
-| Componente | data-testid | Scopo |
-|------------|-------------|-------|
-| `ImageEditModal` backdrop | `image-edit-modal` | Identificare modal aperto |
-| `ImageEditModal` confirm btn | `image-edit-confirm` | Click per confermare |
-| `ImageEditModal` cancel btn | `image-edit-cancel` | Click per annullare |
-| `ImageEditModal` reset btn | `image-edit-reset` | Click per reset all |
-| `ImageEditModal` filename input | `image-edit-filename` | Editing nome file |
-| `ImageEditModal` eye toggle | `image-edit-ellipse-toggle` | Toggle preview ellipse |
-| `ImageCropper` container | `image-cropper` | Verificare presenza cropper |
-| `ImageCropper` zoom in btn | `cropper-zoom-in` | Zoom in |
-| `ImageCropper` zoom out btn | `cropper-zoom-out` | Zoom out |
-| `ImageCropper` rotate left btn | `cropper-rotate-left` | Rotate -15° |
-| `ImageCropper` rotate right btn | `cropper-rotate-right` | Rotate +15° |
-| `ImageCropper` flip h btn | `cropper-flip-h` | Flip horizontal |
-| `ImageCropper` flip v btn | `cropper-flip-v` | Flip vertical |
-| `FileEditModal` backdrop | `file-edit-modal` | Identificare modal aperto |
-| `FileEditModal` confirm btn | `file-edit-confirm` | Click per confermare |
-| `AssetPickerModal` backdrop | `asset-picker-modal` | Identificare modal aperto |
-| `AssetPickerModal` url tab | `asset-picker-url-tab` | Tab URL |
-| `AssetPickerModal` existing tab | `asset-picker-existing-tab` | Tab Existing |
-| `AssetPickerModal` upload tab | `asset-picker-upload-tab` | Tab Upload |
-| `AssetPickerModal` confirm btn | `asset-picker-confirm` | Use Selected |
-| `AssetPickerModal` search input | `asset-picker-search` | Search nel existing |
-| `BrokerForm` icon trigger | `broker-icon-trigger` | Click per aprire picker |
-| `ProfileTab` avatar area | `profile-avatar` | Area cliccabile avatar |
-| `ProfileTab` avatar remove | `avatar-remove-btn` | Rimuovi avatar |
-| `Sidebar` user avatar | `sidebar-user-avatar` | Verificare presenza avatar |
-| `FileUploader` edit btn | `file-edit-btn` | Trigger edit file |
-| `FileUploader` restore btn | `file-restore-btn` | Trigger restore file |
+| Componente                      | data-testid                 | Scopo                       |
+|---------------------------------|-----------------------------|-----------------------------|
+| `ImageEditModal` backdrop       | `image-edit-modal`          | Identificare modal aperto   |
+| `ImageEditModal` confirm btn    | `image-edit-confirm`        | Click per confermare        |
+| `ImageEditModal` cancel btn     | `image-edit-cancel`         | Click per annullare         |
+| `ImageEditModal` reset btn      | `image-edit-reset`          | Click per reset all         |
+| `ImageEditModal` filename input | `image-edit-filename`       | Editing nome file           |
+| `ImageEditModal` eye toggle     | `image-edit-ellipse-toggle` | Toggle preview ellipse      |
+| `ImageCropper` container        | `image-cropper`             | Verificare presenza cropper |
+| `ImageCropper` zoom in btn      | `cropper-zoom-in`           | Zoom in                     |
+| `ImageCropper` zoom out btn     | `cropper-zoom-out`          | Zoom out                    |
+| `ImageCropper` rotate left btn  | `cropper-rotate-left`       | Rotate -15°                 |
+| `ImageCropper` rotate right btn | `cropper-rotate-right`      | Rotate +15°                 |
+| `ImageCropper` flip h btn       | `cropper-flip-h`            | Flip horizontal             |
+| `ImageCropper` flip v btn       | `cropper-flip-v`            | Flip vertical               |
+| `FileEditModal` backdrop        | `file-edit-modal`           | Identificare modal aperto   |
+| `FileEditModal` confirm btn     | `file-edit-confirm`         | Click per confermare        |
+| `AssetPickerModal` backdrop     | `asset-picker-modal`        | Identificare modal aperto   |
+| `AssetPickerModal` url tab      | `asset-picker-url-tab`      | Tab URL                     |
+| `AssetPickerModal` existing tab | `asset-picker-existing-tab` | Tab Existing                |
+| `AssetPickerModal` upload tab   | `asset-picker-upload-tab`   | Tab Upload                  |
+| `AssetPickerModal` confirm btn  | `asset-picker-confirm`      | Use Selected                |
+| `AssetPickerModal` search input | `asset-picker-search`       | Search nel existing         |
+| `BrokerForm` icon trigger       | `broker-icon-trigger`       | Click per aprire picker     |
+| `ProfileTab` avatar area        | `profile-avatar`            | Area cliccabile avatar      |
+| `ProfileTab` avatar remove      | `avatar-remove-btn`         | Rimuovi avatar              |
+| `Sidebar` user avatar           | `sidebar-user-avatar`       | Verificare presenza avatar  |
+| `FileUploader` edit btn         | `file-edit-btn`             | Trigger edit file           |
+| `FileUploader` restore btn      | `file-restore-btn`          | Trigger restore file        |
 
 ---
 

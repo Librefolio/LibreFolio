@@ -1,9 +1,30 @@
 # Phase 8: Dashboard
 
 **Status**: ⏳ TODO  
-**Durata**: 3 giorni  
-**Priorità**: P1 (Important)
-**Dipendenze**: Phase 4, 6, 7 (tutti i dati)
+**Durata**: ~5 giorni (aggiornata)  
+**Priorità**: P1 (Important)  
+**Dipendenze**: Phase 4.8 (share_percentage per aggregazione), Phase 5 (PriceChartShared), Phase 6, Phase 7 (tutti i dati)
+
+> **📌 Riferimento principale**: [`plan-phase05-to-08-upgrade.md` §8](../plan-phase05-to-08-upgrade.md)
+> Questa sezione è stata **SUPERATA** dal piano aggiornato. Quando si arriva a implementare Phase 8,
+> ripartire da §8 di `plan-phase05-to-08-upgrade.md` che contiene:
+> - **Step 8.1**: `KPICard` — NAV/PnL/ROI calcolati con `share_percentage` pesato (formula: `NAV_utente = Σ(NAV_broker × share%)`)
+> - **Step 8.2**: `PortfolioChart` — due serie ECharts (investito vs mercato), range selector
+> - **Step 8.3**: `AssetDualAxisChart` — dual Y-axis: prezzo asset a sinistra, gain/loss per transazione a destra, linea cumulativa con area, sell events come markPoints (frecce ↓)
+> - **Step 8.4**: `AllocationChart` — ECharts donut, raggruppamento per asset_type
+> - **Step 8.5**: `RecentTransactions` + `QuickActions` — ultime 10 tx con DataTable compatto, bottoni azioni rapide
+>
+> **Componenti da riusare**:
+> `PriceChartShared` (Phase 5), `FiscalRegimeSelect` (Phase 7), `DataTable`, `ModalBase`, `SearchSelect`, `SimpleSelect`
+>
+> **Novità cruciali rispetto a questo vecchio plan**:
+> - **Aggregazione GDPR-pesata**: valori assoluti × share_percentage, MAI media di percentuali ROI
+> - EDITOR con share 0% → il broker NON compare nel Net Worth
+> - VIEWER con share 0% → vede tx ma non impatta patrimonio
+> - Warning se Σ(share%) > 100% → "sovrastima patrimonio"
+> - `AnalyticsMethodSelect` per FIFO/LIFO/PMC — solo vista analitica, disclaimer PMC sempre presente
+> - `AssetDualAxisChart` con sell arrows come ECharts markPoints
+> - **API NUOVO**: `GET /api/v1/portfolio/overview` per aggregazione pesata
 
 ---
 
@@ -13,16 +34,23 @@ Creare la dashboard principale con KPI, grafici di portfolio growth, e asset all
 
 ---
 
-## ⚠️ Riferimento Phase 9
+## ⚠️ Nota: Plan Originale (Legacy)
 
-Se vengono creati componenti riutilizzabili, seguire le linee guida in [Phase 9: Polish](./phase-09-polish.md) e aggiornare quella fase con i dettagli del componente.
+Il contenuto sotto è il **plan originale** scritto prima delle fasi 4.5–4.8. I componenti UI suggeriti
+andranno **riscritti** usando i componenti unificati (DataTable, ModalBase, etc.) e con la logica di
+aggregazione pesata (share_percentage). Fare riferimento a §8 di `plan-phase05-to-08-upgrade.md` per
+la versione aggiornata.
 
-**Componenti previsti per questa fase**:
+**Componenti previsti per questa fase (aggiornati)**:
 
-- `KPICard.svelte` - Card KPI riutilizzabile
-- `PortfolioChart.svelte` - Chart crescita portfolio (ECharts)
+- `KPICard.svelte` - Card KPI con NAV/PnL/ROI pesati + trend e breakdown
+- `PortfolioChart.svelte` - Chart crescita portfolio (ECharts, investito vs mercato)
+- `AssetDualAxisChart.svelte` - Dual Y-axis per-tx gain/loss (ECharts)
 - `AllocationChart.svelte` - Donut chart allocazione (ECharts)
+- `AnalyticsMethodSelect.svelte` - Selettore metodo analitico (FIFO/LIFO/PMC)
 - `RangeSelector.svelte` - Selezione range temporale
+- `RecentTransactions.svelte` - Ultime transazioni con DataTable compatto
+- `QuickActions.svelte` - Bottoni azioni rapide
 
 ---
 

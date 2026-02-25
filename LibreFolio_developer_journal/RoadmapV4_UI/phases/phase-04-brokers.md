@@ -6,7 +6,8 @@
 **Dipendenze**: Phase 3
 **Ultimo aggiornamento**: 24 Febbraio 2026
 
-> **📌 Dettagli completi**: Vedere [plan-phase04-summary.md](../plan-phase04-summary.md) per il riepilogo completo di tutto il lavoro svolto, inclusi 13+ sub-plan, 42 E2E test, Image Crop, ModalBase, e code dedup.
+> **📌 Dettagli completi**: Vedere [plan-phase04-summary.md](../plan-phase04-summary.md) per il riepilogo completo di tutto il lavoro svolto, inclusi 13+ sub-plan, 42 E2E test,
+> Image Crop, ModalBase, e code dedup.
 
 ---
 

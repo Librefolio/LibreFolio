@@ -57,6 +57,35 @@ type BRAccessCreateRequest = {
    */
   user_id: number;
   role?: UserRole | undefined;
+  share_percentage?:
+    | /**
+     * Ownership percentage (0-100%). OWNER defaults 100%, EDITOR/VIEWER default 0%
+     *
+     * @default "100"
+     */
+    (| /**
+         * @minimum 0
+         * @maximum 100
+         */
+        (| number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+          )
+        | Array<
+            /**
+             * @minimum 0
+             * @maximum 100
+             */
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+          >
+      )
+    | undefined;
 };
 type UserRole =
   /**
@@ -95,6 +124,12 @@ type BRAccessItem = {
   email: string;
   role: UserRole;
   /**
+   * Ownership percentage (0-100%) for portfolio aggregation
+   *
+   * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+   */
+  share_percentage: string;
+  /**
    * When access was granted
    */
   created_at: string;
@@ -108,6 +143,35 @@ type BRAccessListResponse = {
 };
 type BRAccessUpdateRequest = {
   role: UserRole;
+  share_percentage?:
+    | /**
+     * New ownership percentage (0-100%). If None, not changed.
+     */
+    (| /**
+         * @minimum 0
+         * @maximum 100
+         */
+        (| number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          )
+        | Array<
+            /**
+             * @minimum 0
+             * @maximum 100
+             */
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          >
+      )
+    | undefined;
 };
 type BRAssetHolding = {
   /**
@@ -717,6 +781,22 @@ type TXCreateItem_Output = {
         | Array<
             /**
              * @maxLength 500
+             */
+            string | null
+          >
+      )
+    | undefined;
+  cost_basis_override?:
+    | /**
+     * Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.
+     */
+    (| /**
+         * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+         */
+        (string | null)
+        | Array<
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
              */
             string | null
           >
@@ -2740,6 +2820,28 @@ type TXCreateItem_Input = {
           >
       )
     | undefined;
+  cost_basis_override?:
+    | /**
+     * Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.
+     */
+    (| (
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          )
+        | Array<
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          >
+      )
+    | undefined;
 };
 type TXReadItem = {
   id: number;
@@ -2755,6 +2857,20 @@ type TXReadItem = {
   related_transaction_id?: ((number | null) | Array<number | null>) | undefined;
   tags?: ((Array<string> | null) | Array<Array<string> | null>) | undefined;
   description?: ((string | null) | Array<string | null>) | undefined;
+  cost_basis_override?:
+    | (
+        | /**
+         * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+         */
+        (string | null)
+        | Array<
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            string | null
+          >
+      )
+    | undefined;
   created_at: string;
   updated_at: string;
 };
@@ -2816,6 +2932,28 @@ type TXUpdateItem = {
              * @maxLength 500
              */
             string | null
+          >
+      )
+    | undefined;
+  cost_basis_override?:
+    | /**
+     * Frozen cost basis for TRANSFER_IN. Set to override calculated cost basis.
+     */
+    (| (
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
+          )
+        | Array<
+            | number
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            | string
+            | null
           >
       )
     | undefined;
@@ -4408,6 +4546,12 @@ Impact:
     .union([z.string(), z.null()])
     .describe("Transaction notes")
     .optional(),
+  cost_basis_override: z
+    .union([z.number(), z.string(), z.null()])
+    .describe(
+      "Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis."
+    )
+    .optional(),
 });
 const TXCreateResultItem: z.ZodType<TXCreateResultItem> = z.object({
   success: z.boolean(),
@@ -4525,6 +4669,7 @@ Impact:
   related_transaction_id: z.union([z.number(), z.null()]).optional(),
   tags: z.union([z.array(z.string()), z.null()]).optional(),
   description: z.union([z.string(), z.null()]).optional(),
+  cost_basis_override: z.union([z.string(), z.null()]).optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -4549,6 +4694,12 @@ const TXUpdateItem: z.ZodType<TXUpdateItem> = z.object({
   description: z
     .union([z.string(), z.null()])
     .describe("New description")
+    .optional(),
+  cost_basis_override: z
+    .union([z.number(), z.string(), z.null()])
+    .describe(
+      "Frozen cost basis for TRANSFER_IN. Set to override calculated cost basis."
+    )
     .optional(),
 });
 const TXUpdateResultItem: z.ZodType<TXUpdateResultItem> = z.object({
@@ -4867,6 +5018,10 @@ const BRAccessItem: z.ZodType<BRAccessItem> = z.object({
 - OWNER: Full access (CRUD broker, manage access, delete broker)
 - EDITOR: Modify broker and transactions, can only remove self
 - VIEWER: Read-only access`),
+  share_percentage: z
+    .string()
+    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
+    .describe("Ownership percentage (0-100%) for portfolio aggregation"),
   created_at: z.string().describe("When access was granted"),
 });
 const BRAccessListResponse: z.ZodType<BRAccessListResponse> = z.object({
@@ -4882,6 +5037,13 @@ const BRAccessCreateRequest: z.ZodType<BRAccessCreateRequest> = z.object({
 - EDITOR: Modify broker and transactions, can only remove self
 - VIEWER: Read-only access`
   ).optional(),
+  share_percentage: z
+    .union([z.number(), z.string()])
+    .describe(
+      "Ownership percentage (0-100%). OWNER defaults 100%, EDITOR/VIEWER default 0%"
+    )
+    .optional()
+    .default("100"),
 });
 const BRAccessCreateResponse: z.ZodType<BRAccessCreateResponse> = z.object({
   success: z.boolean().optional().default(true),
@@ -4895,6 +5057,10 @@ const BRAccessUpdateRequest: z.ZodType<BRAccessUpdateRequest> = z.object({
 - OWNER: Full access (CRUD broker, manage access, delete broker)
 - EDITOR: Modify broker and transactions, can only remove self
 - VIEWER: Read-only access`),
+  share_percentage: z
+    .union([z.number(), z.string(), z.null()])
+    .describe("New ownership percentage (0-100%). If None, not changed.")
+    .optional(),
 });
 const BRAccessDeleteResponse = z
   .object({
@@ -5055,6 +5221,12 @@ Impact:
   description: z
     .union([z.string(), z.null()])
     .describe("Transaction notes")
+    .optional(),
+  cost_basis_override: z
+    .union([z.string(), z.null()])
+    .describe(
+      "Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis."
+    )
     .optional(),
 });
 const BRIMMatchConfidence = z.enum(["exact", "high", "medium", "low"]);

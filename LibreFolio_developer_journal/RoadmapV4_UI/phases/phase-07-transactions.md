@@ -1,28 +1,34 @@
 # Phase 7: Transactions Management
 
 **Status**: ⏳ TODO  
-**Durata**: 5 giorni  
-**Priorità**: P0 (MVP)
-**Dipendenze**: Phase 4 (Brokers), Phase 6 (Assets)
+**Durata**: ~8 giorni (aggiornata)  
+**Priorità**: P0 (MVP)  
+**Dipendenze**: Phase 4.8 (sharing permissions), Phase 6 (Assets, AssetMatchingWizard)  
+**Complessità**: ⚠️ ALTA
 
----
-
-## Obiettivo
-
-Implementare la gestione completa delle transazioni: lista con filtri, creazione/modifica manuale, e import da broker report (BRIM).
-
----
-
-## ⚠️ Riferimento Phase 9
-
-Se vengono creati componenti riutilizzabili, seguire le linee guida in [Phase 9: Polish](./phase-09-polish.md) e aggiornare quella fase con i dettagli del componente.
-
-**Componenti previsti per questa fase**:
-
-- `TransactionTable.svelte` - Tabella transazioni specializzata
-- `TransactionForm.svelte` - Form dinamico per tipo transazione
-- `DatePicker.svelte` - Selezione data (se non già in Phase 9)
-- Import Wizard steps - UploadStep, ParseStep, ReviewStep, ImportStep
+> **📌 Riferimento principale**: [`plan-phase05-to-08-upgrade.md` §6](../plan-phase05-to-08-upgrade.md)
+> Questa è la fase **PIÙ COMPLESSA**. Quando si arriva a implementare Phase 7,
+> ripartire da §6 di `plan-phase05-to-08-upgrade.md` che contiene:
+> - **Step 7.1**: Transaction list con `DataTable`, paginazione server-side, badge colorati per tipo
+> - **Step 7.2**: `TransactionModal` con form dinamico per tipo (BUY/SELL/DEPOSIT/WITHDRAWAL/DIVIDEND/TRANSFER/FX_CONVERSION), `cost_basis_override` per TRANSFER_IN
+> - **Step 7.3**: `FiscalRegimeSelect` — regime fiscale configurabile per utente e per broker (FIFO/LIFO/PMC/Select ID), disclaimer PMC per Italia
+> - **Step 7.4**: `SellBuyMatchingPanel` — matching sell→buy per il metodo selezionato
+> - **Step 7.5**: `CashSplitModal` — tracking fonti dei soldi (stipendio, regalo, vendita)
+> - **Step 7.6**: `MultiImportWizard` a 5 step (Upload → Parse → Review → Validate → Import) con `AssetMatchingWizard` inline (da Phase 6)
+> - **Step 7.7**: `ValidateImportButton` con POST /transactions/validate — over-sell, duplicati, errori
+> - **Step 7.8**: Over-Sell Protection
+>
+> **Componenti da riusare (già esistenti)**:
+> `DataTable`, `ModalBase`, `ConfirmModal`, `SearchSelect`, `SimpleSelect`, `BrokerSearchSelect`, `FileUploader`, `ImportPluginSelect`, `AssetMatchingWizard` (Phase 6),
+`urlFilters.ts`
+>
+> **Note architetturali chiave (dettaglio in §6 del piano aggiornato)**:
+> - **Trasferimenti tra Broker**: TRANSFER_OUT + TRANSFER_IN con PMC "congelato" in `cost_basis_override`
+> - **Regimi fiscali**: FIFO/LIFO/PMC/Select ID configurabili per utente e per broker
+> - **Over-Sell Protection**: validazione backend, il vincolo si estende all'import
+> - **Cash Split**: sotto-transazioni collegate alla tx padre per tracciare fonti soldi
+> - `user_role` condiziona: VIEWER non può creare/editare tx, EDITOR/OWNER sì
+> - `fiscal_preferences` nel backend: `GET/PATCH /settings/fiscal`
 
 ---
 

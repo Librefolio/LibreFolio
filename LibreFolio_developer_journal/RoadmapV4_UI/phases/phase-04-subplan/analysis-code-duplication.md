@@ -8,20 +8,20 @@
 
 ## 📊 Inventario Componenti Analizzati
 
-| File | Righe | Ruolo |
-|------|-------|-------|
-| `ImageCropper.svelte` | ~1020 | Core crop engine (cropperjs v2 wrapper) |
-| `ImageEditModal.svelte` | ~749 | Modal wrapper per crop immagini |
-| `FileEditModal.svelte` | ~584 | Modal wrapper per rename file non-immagine |
-| `AssetPickerModal.svelte` | ~573 | Modal picker (URL/Existing/Upload) |
-| `FileUploader.svelte` | ~583 | Drag & drop file upload con pending list |
-| `ImageUploader.svelte` | ~300 | **LEGACY** — vecchio uploader immagini (non più usato attivamente) |
-| `LazyImage.svelte` | ~132 | Lazy loading immagini con placeholder |
-| `files/+page.svelte` | ~1634 | Pagina Files con upload integration |
-| `BrokerImportFilesModal.svelte` | ~483 | Modal import file BRIM |
-| `BrokerForm.svelte` | ~560 | Form broker con icon picker |
-| `ProfileTab.svelte` | ~807 | Tab profilo con avatar picker |
-| `imageCrop.ts` | ~211 | Utility presets + getCroppedImageFromCropper() |
+| File                            | Righe | Ruolo                                                              |
+|---------------------------------|-------|--------------------------------------------------------------------|
+| `ImageCropper.svelte`           | ~1020 | Core crop engine (cropperjs v2 wrapper)                            |
+| `ImageEditModal.svelte`         | ~749  | Modal wrapper per crop immagini                                    |
+| `FileEditModal.svelte`          | ~584  | Modal wrapper per rename file non-immagine                         |
+| `AssetPickerModal.svelte`       | ~573  | Modal picker (URL/Existing/Upload)                                 |
+| `FileUploader.svelte`           | ~583  | Drag & drop file upload con pending list                           |
+| `ImageUploader.svelte`          | ~300  | **LEGACY** — vecchio uploader immagini (non più usato attivamente) |
+| `LazyImage.svelte`              | ~132  | Lazy loading immagini con placeholder                              |
+| `files/+page.svelte`            | ~1634 | Pagina Files con upload integration                                |
+| `BrokerImportFilesModal.svelte` | ~483  | Modal import file BRIM                                             |
+| `BrokerForm.svelte`             | ~560  | Form broker con icon picker                                        |
+| `ProfileTab.svelte`             | ~807  | Tab profilo con avatar picker                                      |
+| `imageCrop.ts`                  | ~211  | Utility presets + getCroppedImageFromCropper()                     |
 
 ---
 
@@ -32,6 +32,7 @@
 **Implementato in**: `ImageEditModal`, `FileEditModal`, `BrokerImportFilesModal`, `files/+page.svelte` (2 modali inline)
 
 **Codice duplicato** (~70 righe × 5 implementazioni = ~350 righe):
+
 ```
 - showCloseConfirm state variable
 - requestClose() → if hasChanges → show confirm
@@ -44,6 +45,7 @@
 ```
 
 **Proposta**: Creare un **`ModalBase.svelte`** che gestisca:
+
 - Backdrop con click-to-close
 - Escape key handling
 - Close confirmation dialog (opzionale, attivato da prop `hasChanges`)
@@ -61,6 +63,7 @@
 **Implementato in**: `ImageEditModal.handleUpload()`, `FileEditModal.handleConfirm()`, `files/+page.svelte` (uploadFilesNow + handleDirectUpload), `BrokerImportFilesModal`
 
 **Codice duplicato** (~20 righe × 4-5 implementazioni = ~100 righe):
+
 ```typescript
 const formData = new FormData();
 formData.append('file', file);
@@ -70,6 +73,7 @@ if (!uploadedUrl) throw new Error('No URL in upload response');
 ```
 
 **Proposta**: Creare utility **`uploadFile(file: File): Promise<UploadedFile>`** in `utils/uploadApi.ts` che centralizzi:
+
 - Costruzione FormData
 - POST request
 - Estrazione URL da risposta
@@ -84,6 +88,7 @@ if (!uploadedUrl) throw new Error('No URL in upload response');
 **Implementato in**: `ImageEditModal`, `FileEditModal`, `AssetPickerModal`, `BrokerImportFilesModal`, `files/+page.svelte`
 
 **CSS duplicato** (~80 righe × 5 = ~400 righe):
+
 ```css
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; ... }
 .modal-content { background: white; border-radius: 1rem; ... }
@@ -108,6 +113,7 @@ if (!uploadedUrl) throw new Error('No URL in upload response');
 **Codice duplicato**: Stessa funzione con nomi diversi (~5 righe × 4 = ~20 righe)
 
 **Proposta**: Già esiste logica simile altrove. Consolidare in **`utils/format.ts`** con:
+
 ```typescript
 export function formatBytes(bytes: number): string { ... }
 ```
@@ -121,17 +127,20 @@ export function formatBytes(bytes: number): string { ... }
 ### 5. ImageEditModal vs FileEditModal
 
 **Sono modali con la stessa struttura**, ma:
+
 - `ImageEditModal` ha il cropper, bottom panel, ellipse, zoom/rotate
 - `FileEditModal` ha solo rename + metadata display
 
 **Ciò che condividono**:
+
 - Props: `open`, `file`, `uploadOnComplete`
 - Events: `complete`, `cancel`, `error`
 - Logica: `requestClose`, `confirmClose`, `cancelClose`, backdrop click, escape
 - CSS: header, footer, buttons, confirm dialog (~200 righe)
 - Upload flow: FormData + POST
 
-**Proposta alternativa a ModalBase**: Creare `FileEditModal` come caso semplificato che **usa ImageEditModal** con un prop `mode: 'image' | 'file'` dove in mode `file` non mostra il cropper ma solo filename + metadata. 
+**Proposta alternativa a ModalBase**: Creare `FileEditModal` come caso semplificato che **usa ImageEditModal** con un prop `mode: 'image' | 'file'` dove in mode `file` non mostra
+il cropper ma solo filename + metadata.
 
 **Pro**: Un solo componente  
 **Contro**: ImageEditModal è già 749 righe, aggiungere condizionali lo complicherebbe
@@ -142,17 +151,20 @@ export function formatBytes(bytes: number): string { ... }
 
 ### 6. AssetPickerModal — List View vs FilesTable
 
-**Problema**: Il tab "Existing" nella `AssetPickerModal` ha una lista/griglia custom con HTML+CSS inline, mentre `FilesTable.svelte` wrappa `DataTable` con tutte le funzionalità (sort, filter, pagination).
+**Problema**: Il tab "Existing" nella `AssetPickerModal` ha una lista/griglia custom con HTML+CSS inline, mentre `FilesTable.svelte` wrappa `DataTable` con tutte le funzionalità (
+sort, filter, pagination).
 
 **Differenze**:
+
 - AssetPickerModal list è **selezione singola** (click per selezionare, doppio click conferma)
 - FilesTable è **multi-azione** (delete, download, copy link, bulk actions)
 - AssetPickerModal non ha bisogno di pagination/sort
 
 **Proposta**: Non unificare forzatamente — il caso d'uso è abbastanza diverso. Però si potrebbe:
+
 1. Estrarre una **`FileGrid.svelte`** riutilizzabile per la vista griglia con:
-   - Props: files, selectedId, onSelect, onDoubleClick
-   - Slot per azioni card
+    - Props: files, selectedId, onSelect, onDoubleClick
+    - Slot per azioni card
 2. Usarla sia in `AssetPickerModal` che in `files/+page.svelte` (grid mode)
 
 ---
@@ -160,6 +172,7 @@ export function formatBytes(bytes: number): string { ... }
 ### 7. Profile Avatar Upload vs Broker Icon Upload (BrokerForm + ProfileTab)
 
 **Sono quasi identici**:
+
 ```
 1. showAssetPicker = true → AssetPickerModal
 2. handleAssetPickerSelect → set URL
@@ -171,6 +184,7 @@ export function formatBytes(bytes: number): string { ... }
 **Codice duplicato**: ~80 righe di handler identici in entrambi i componenti.
 
 **Proposta**: Creare un **custom hook / action** `useImagePicker(options)` che restituisce:
+
 ```typescript
 const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
     preset: 'avatar',
@@ -180,6 +194,7 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 ```
 
 **Ma attenzione**: in Svelte 4 non ci sono composables come in Vue/React. Si potrebbe:
+
 - Creare un **`ImagePickerWrapper.svelte`** componente che incapsula tutto il flusso
 - Props: preset, initialUrl, circularPreview
 - Events: change (new URL), remove
@@ -192,30 +207,33 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 ## 🟢 Duplicazione BASSA (accettabile)
 
 ### 8. `isImageFile()` — usata in pochi posti, importata da `imageCrop.ts` ✅
+
 ### 9. `LazyImage` — usata ovunque, componente singolo ✅
+
 ### 10. `DataTable` pattern — riutilizzato via composizione ✅
 
 ---
 
 ## 📋 Priorità Refactoring
 
-| # | Intervento | Risparmio | Complessità | Priorità | Status |
-|---|-----------|-----------|-------------|----------|--------|
-| 1 | **ModalBase.svelte** | ~550 righe | Media | 🔴 Alta | ✅ FATTO (TUTTE 10 modali migrate: FileEditModal, ConfirmModal, BrokerImportFilesModal, PasswordChangeModal, files/+page ×2, BrokerModal, ImageEditModal, AssetPickerModal, DeleteBrokerDialog, CashTransactionModal) |
-| 2 | **uploadFile() utility** | ~60 righe | Bassa | 🔴 Alta | ✅ FATTO (`utils/upload.ts`) |
-| 3 | **formatBytes() centralizzato** | ~60 righe (7 copie) | Minima | 🟡 Media | ✅ FATTO (`utils/upload.ts` con i18n via `get(_)`) |
-| 4 | **ImagePickerWrapper.svelte** | ~120 righe | Media | 🟡 Media | ✅ FATTO (incapsula AssetPickerModal + ImageEditModal, usato in BrokerForm + ProfileTab) |
-| 5 | **FileGrid.svelte** estratto | ~80 righe | Media | 🟢 Bassa | ✅ FATTO (componente condiviso tra files/ e AssetPicker, parametrizzato con mode/cardSize/showActions) |
-| 6 | **DataTable single-select mode** | n/a (new feature) | Media | 🔴 Alta | ✅ FATTO |
-| 7 | **DataTable ImageCell type** | n/a (new feature) | Bassa | 🔴 Alta | ✅ FATTO |
-| 8 | **DataTable in AssetPicker** | ~100 righe | Media | 🔴 Alta | ✅ FATTO (list view usa DataTable single-select, rimosso HTML/CSS custom) |
-| 9 | **Preview img_preview cache backend** | n/a (perf) | Bassa | 🔴 Alta | ✅ FATTO (PreviewCache class, size-based) |
-| 10 | **img_preview everywhere** | ~5 righe | Minima | 🟡 Media | ✅ FATTO |
-| 11 | **svelte:component deprecation** | ~1 riga | Minima | 🟡 Media | ✅ FATTO |
-| 12 | **FilesTable image alignment** | ~5 righe CSS | Minima | 🟡 Media | ✅ FATTO (cell-icon-box) |
-| 13 | **AssetPicker URL ellipse** | ~15 righe CSS | Bassa | 🟡 Media | ✅ FATTO (box-shadow overlay) |
+| #  | Intervento                            | Risparmio           | Complessità | Priorità | Status                                                                                                                                                                                                               |
+|----|---------------------------------------|---------------------|-------------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1  | **ModalBase.svelte**                  | ~550 righe          | Media       | 🔴 Alta  | ✅ FATTO (TUTTE 10 modali migrate: FileEditModal, ConfirmModal, BrokerImportFilesModal, PasswordChangeModal, files/+page ×2, BrokerModal, ImageEditModal, AssetPickerModal, DeleteBrokerDialog, CashTransactionModal) |
+| 2  | **uploadFile() utility**              | ~60 righe           | Bassa       | 🔴 Alta  | ✅ FATTO (`utils/upload.ts`)                                                                                                                                                                                          |
+| 3  | **formatBytes() centralizzato**       | ~60 righe (7 copie) | Minima      | 🟡 Media | ✅ FATTO (`utils/upload.ts` con i18n via `get(_)`)                                                                                                                                                                    |
+| 4  | **ImagePickerWrapper.svelte**         | ~120 righe          | Media       | 🟡 Media | ✅ FATTO (incapsula AssetPickerModal + ImageEditModal, usato in BrokerForm + ProfileTab)                                                                                                                              |
+| 5  | **FileGrid.svelte** estratto          | ~80 righe           | Media       | 🟢 Bassa | ✅ FATTO (componente condiviso tra files/ e AssetPicker, parametrizzato con mode/cardSize/showActions)                                                                                                                |
+| 6  | **DataTable single-select mode**      | n/a (new feature)   | Media       | 🔴 Alta  | ✅ FATTO                                                                                                                                                                                                              |
+| 7  | **DataTable ImageCell type**          | n/a (new feature)   | Bassa       | 🔴 Alta  | ✅ FATTO                                                                                                                                                                                                              |
+| 8  | **DataTable in AssetPicker**          | ~100 righe          | Media       | 🔴 Alta  | ✅ FATTO (list view usa DataTable single-select, rimosso HTML/CSS custom)                                                                                                                                             |
+| 9  | **Preview img_preview cache backend** | n/a (perf)          | Bassa       | 🔴 Alta  | ✅ FATTO (PreviewCache class, size-based)                                                                                                                                                                             |
+| 10 | **img_preview everywhere**            | ~5 righe            | Minima      | 🟡 Media | ✅ FATTO                                                                                                                                                                                                              |
+| 11 | **svelte:component deprecation**      | ~1 riga             | Minima      | 🟡 Media | ✅ FATTO                                                                                                                                                                                                              |
+| 12 | **FilesTable image alignment**        | ~5 righe CSS        | Minima      | 🟡 Media | ✅ FATTO (cell-icon-box)                                                                                                                                                                                              |
+| 13 | **AssetPicker URL ellipse**           | ~15 righe CSS       | Bassa       | 🟡 Media | ✅ FATTO (box-shadow overlay)                                                                                                                                                                                         |
 
 ### Feedback Utente (23 Feb 2026)
+
 - **DataTable**: evolverla per supportare `selectionMode: 'single'` (click riga = seleziona, no checkbox) ✅
 - **ImageCell**: aggiungere tipo cella con preview thumbnail + fallback icona ✅
 - **AssetPicker**: usare DataTable con single-select per la lista file ✅ FATTO
@@ -234,30 +252,33 @@ const { showPicker, showEditor, handlers, currentUrl } = useImagePicker({
 
 ### Duplicazione ALTA — da affrontare prima di Phase 5
 
-| Pattern | Occorrenze | Note |
-|---------|-----------|------|
-| **Modal backdrop CSS** | 6 componenti (ConfirmModal, BrokerModal, BrokerImportFilesModal, FileEditModal, ImageEditModal, files/+page.svelte) | Stessi stili `.modal-backdrop` + `.modal-content` copiati |
-| **handleKeydown (Escape)** | 8+ componenti | Pattern identico `if (event.key === 'Escape')` |
-| **Backdrop click handler** | 6 componenti | `event.target === event.currentTarget → close()` |
-| **fade/scale transitions** | 6 componenti | `transition:fade={{ duration: 150 }}` + `transition:scale={{ duration: 200, start: 0.95 }}` |
+| Pattern                    | Occorrenze                                                                                                          | Note                                                                                        |
+|----------------------------|---------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
+| **Modal backdrop CSS**     | 6 componenti (ConfirmModal, BrokerModal, BrokerImportFilesModal, FileEditModal, ImageEditModal, files/+page.svelte) | Stessi stili `.modal-backdrop` + `.modal-content` copiati                                   |
+| **handleKeydown (Escape)** | 8+ componenti                                                                                                       | Pattern identico `if (event.key === 'Escape')`                                              |
+| **Backdrop click handler** | 6 componenti                                                                                                        | `event.target === event.currentTarget → close()`                                            |
+| **fade/scale transitions** | 6 componenti                                                                                                        | `transition:fade={{ duration: 150 }}` + `transition:scale={{ duration: 200, start: 0.95 }}` |
 
 → Tutto risolvibile con **ModalBase.svelte** (task #1, ~550 righe risparmiate)
 
 ### Duplicazione MEDIA — nice to have
 
-| Pattern | Occorrenze | Note |
-|---------|-----------|------|
-| ~~**formatBytes i18n**~~ | ~~3~~ → 0 | ✅ Completamente eliminato — unica implementazione in `utils/upload.ts` con `get(_)` |
+| Pattern                      | Occorrenze | Note                                                                                    |
+|------------------------------|------------|-----------------------------------------------------------------------------------------|
+| ~~**formatBytes i18n**~~     | ~~3~~ → 0  | ✅ Completamente eliminato — unica implementazione in `utils/upload.ts` con `get(_)`     |
 | ~~**Error banner pattern**~~ | ~~4+~~ → 1 | ✅ `ErrorBanner.svelte` creato e usato in 7 componenti (1 rimasto in files/ con dismiss) |
-| ~~**Loading spinner**~~ | ~~4+~~ → 0 | ✅ `LoadingSpinner.svelte` creato e usato in PreferencesTab, GlobalSettingsTab, AboutTab |
+| ~~**Loading spinner**~~      | ~~4+~~ → 0 | ✅ `LoadingSpinner.svelte` creato e usato in PreferencesTab, GlobalSettingsTab, AboutTab |
 
 ---
 
 ## 🏁 Raccomandazione
 
-Il refactoring **ModalBase.svelte** è completato al 100% — tutte le 10 modali del progetto sono migrate. Z-index standardizzato (50→60→70) e keyboard event isolation per modali stackate. I componenti auth (Login, Register, ForgotPassword) sono stati rinominati da "Modal" a "Card" per rispecchiare la loro natura. **ErrorBanner** e **LoadingSpinner** estratti come componenti riutilizzabili. Ogni nuova pagina (Phase 5+) userà ModalBase, ErrorBanner e LoadingSpinner direttamente.
+Il refactoring **ModalBase.svelte** è completato al 100% — tutte le 10 modali del progetto sono migrate. Z-index standardizzato (50→60→70) e keyboard event isolation per modali
+stackate. I componenti auth (Login, Register, ForgotPassword) sono stati rinominati da "Modal" a "Card" per rispecchiare la loro natura. **ErrorBanner** e **LoadingSpinner**
+estratti come componenti riutilizzabili. Ogni nuova pagina (Phase 5+) userà ModalBase, ErrorBanner e LoadingSpinner direttamente.
 
 **Ordine suggerito per gli ultimi task**:
+
 1. ✅ ~~Creare `uploadFile()` utility~~ — FATTO in `utils/upload.ts`
 2. ✅ ~~Creare `ModalBase.svelte`~~ — FATTO (TUTTE 10 modali migrate)
 3. ✅ ~~Migrare modali rimanenti~~ — FATTO (BrokerModal, ImageEditModal, AssetPickerModal, DeleteBrokerDialog, CashTransactionModal)

@@ -29,7 +29,7 @@ The project uses a `.env` file for configuration. A sample file is provided.
 
 2. **Edit `.env`** (Optional):
     - `PORT`: Change the port if `8000` is already in use.
-    - `SECRET_KEY`: For better security, change this to a long, random string. You can generate one [here](https://random-string-generator.com/).
+    - `LIBREFOLIO_DATA_DIR`: Change where data is stored (default: `./backend/data/prod`).
 
 ## 3. Run with Docker Compose
 
@@ -44,10 +44,10 @@ docker-compose up -d
 
 ## 4. Create a Superuser
 
-To log in, you need to create an administrator account.
+To log in, you need to create an administrator account. The first user created automatically becomes the superuser.
 
 ```bash
-docker-compose exec backend pipenv run python user_cli.py create-superuser <username> <email> <password>
+docker-compose exec backend ./dev.py user create <username> <email> <password>
 ```
 
 Replace `<username>`, `<email>`, and `<password>` with your credentials.

@@ -76,16 +76,20 @@ Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facil
 
 ## 📅 Timeline Complessiva
 
-| Settimana | Fasi    | Obiettivi                           |
-|-----------|---------|-------------------------------------|
-| 1         | 0, 1, 2 | Setup, Frontend Auth, Backend Auth  |
-| 2         | 2.5, 3  | Auth Integration, Layout & Settings |
-| 3         | 4, 5    | Brokers, FX Management              |
-| 4         | 6       | Assets Management                   |
-| 5         | 7       | Transactions + Import               |
-| 6         | 8, 9    | Dashboard + Polish                  |
+| Settimana | Fasi     | Obiettivi                                    |
+|-----------|----------|----------------------------------------------|
+| 1         | 0, 1, 2  | Setup, Frontend Auth, Backend Auth           |
+| 2         | 2.5, 3   | Auth Integration, Layout & Settings          |
+| 3-4       | 4        | Brokers, Files, Image Crop, ModalBase        |
+| 4         | Pre-work | Schema Changes (share%, cost_basis_override) |
+| 5         | 5        | FX Management + PriceChartShared             |
+| 6         | 6        | Assets + Gain/Loss + Matching Wizard         |
+| 7-8       | 7        | Transactions + Fiscal + Multi-Import         |
+| 8         | 7.5      | File Preview                                 |
+| 9         | 8        | Dashboard + KPI + Dual Axis Charts           |
+| 10        | 9        | Polish & Responsive                          |
 
-**Totale stimato**: ~6 settimane
+**Totale stimato**: ~10 settimane (incluse fasi completate)
 
 ---
 

@@ -1,5 +1,10 @@
 Note migliorative da fare ma alla fine:
 
+> **📌 Riferimento generale**: [`plan-phase05-to-08-upgrade.md`](../plan-phase05-to-08-upgrade.md) per la roadmap completa.
+> Molte delle note sotto sono state **parzialmente risolte** durante Phase 4.5–4.8 (Image Crop, Code Dedup, MkDocs).
+> Le note restanti (🔲) sono candidate per Phase 9+ o fasi successive.
+> Per i **TODO futuri** non legati direttamente alle fasi, vedi anche `TODO_FUTURI.md` nella root del progetto.
+
 1. ✅ COMPLETATO (14-01-2026): Quando si cambia pw o si crea un utente, aggiungere un componente che indica il livello di sicurezza della pw, e quando non si rispettano i parametri,
    far comparire una nuvoletta che evidenza le regole rispettate e quelle mancanti.
     - Creato `PasswordStrength.svelte` con zxcvbn-ts
@@ -159,34 +164,30 @@ Note migliorative da fare ma alla fine:
 
 ### Alta Priorità
 
-1. 🔲 **Multi-utenza BRIM files**: Backend non filtra per utente
-    - TODO: Aggiungere user_id a metadata file BRIM
-    - TODO: Aggiungere filtro per superuser (as_user_id=all)
-    - TODO: Selettore utente in UI Files page per superuser
+1. ✅ **Multi-utenza BRIM files**: Risolto con broker_access + filtri utente
+    - Rif. `plan-phase05-to-08-upgrade.md` §6 (Phase 7) per import multi-file
 
-2. 🔲 **Tabella avanzata con sorting/filtering/selezione**:
-    - TODO: Valutare librerie (tanstack-table, svelte-simple-datatables)
-    - TODO: Aggiungere ordinamento colonne cliccabili
-    - TODO: Aggiungere filtri per colonna
-    - TODO: Checkbox selezione multipla + azioni bulk (delete, download)
-    - TODO: Applicare sia a Static files che a BRIM files
+2. ✅ **Tabella avanzata con sorting/filtering/selezione**: Implementata `DataTable.svelte` completa
+    - Con tanstack-table, sorting, column filters, selection, image preview, pagination
+    - Usata ovunque: Files, AssetPicker, BrokerDetail, etc.
 
-3. 🔲 **Vista griglia per BRIM files**: Come già fatto per Static files
-    - TODO: Replicare toggle griglia/lista
-    - TODO: Card view per BRIM files
+3. ✅ **Vista griglia per BRIM files**: Implementata con `FileGrid.svelte`
+    - Toggle griglia/lista per entrambi i tab (Static + BRIM)
 
-4. 🔲 **Unificazione PreferencesTab/GlobalSettingsTab**:
-    - Piano scritto in: `plan-settings-unification.md`
-    - TODO: Review piano, poi implementare componenti condivisi
+4. ✅ **Unificazione PreferencesTab/GlobalSettingsTab**: Parzialmente completata
+    - `ModalBase.svelte` creato e usato ovunque
+    - Rif. `plan-phase05-to-08-upgrade.md` Phase 9 per ulteriore polish
 
 ### Media Priorità
 
-5. 🔲 **Preview file testuali**: Poter cliccare su file e vedere anteprima contenuto
-    - TODO: Modal preview con contenuto file (primi N caratteri)
+5. 🔲 **Preview file testuali**: Pianificata in Phase 7.5
+    - Rif. `plan-phase05-to-08-upgrade.md` §7 (Phase 7.5 — File Preview)
+    - Piano originale: `plan-phase7b-filePreview.md`
+    - Da implementare DOPO Phase 7 per avere contesto BRIM completo
 
 6. 🔲 **Plugin Settings Tab**: Mostrare info sui plugin (brim, fx, asset)
-    - TODO: API backend per esporre info plugin multilingua
-    - TODO: UI con card per ogni plugin con icone e link
+    - Rif. `TODO_FUTURI.md` — candidato per Phase 9+
 
 7. 🔲 **Documentazione multilingua**: Scrivere docs in tutte le lingue frontend
+    - Rif. `TODO_FUTURI.md` — candidato per Phase 9+
 

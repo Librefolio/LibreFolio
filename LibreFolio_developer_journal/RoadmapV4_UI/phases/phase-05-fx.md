@@ -1,9 +1,27 @@
 # Phase 5: FX Management
 
 **Status**: ⏳ TODO  
-**Durata**: 3 giorni  
-**Priorità**: P1 (Important)
-**Dipendenze**: Phase 3
+**Durata**: ~4 giorni (aggiornata)  
+**Priorità**: P1 (Important)  
+**Dipendenze**: Phase 4.8 (Broker Sharing GUI), Phase 3 (Layout)
+
+> **📌 Riferimento principale**: [`plan-phase05-to-08-upgrade.md` §4](../plan-phase05-to-08-upgrade.md)
+> Questa sezione è stata **SUPERATA** dal piano aggiornato. Quando si arriva a implementare Phase 5,
+> ripartire da §4 di `plan-phase05-to-08-upgrade.md` che contiene:
+> - **Step 5.0**: `PriceChartShared.svelte` — componente ECharts condiviso tra FX e Assets (§9 per spec)
+> - **Step 5.1**: CurrencyGrid con flag emoji e SearchSelect
+> - **Step 5.2**: FxRateChart con gradiente opacità per dati stale (`staleDays`)
+> - **Step 5.3**: PairSources CRUD con `DataTable` (esistente)
+> - **Step 5.4**: FxSyncModal con date range, warning sovrascrittura, progress bar
+>
+> **Componenti da riusare (già esistenti da Phase 4)**:
+> `DataTable`, `ModalBase`, `ConfirmModal`, `SearchSelect`, `SimpleSelect`, `LazyImage`
+>
+> **Novità rispetto a questo vecchio plan**:
+> - Il chart usa ECharts con gradiente che sfuma dati stale: `opacity = max(0.3, 1.0 - staleDays * 0.15)`
+> - Click-to-edit su data point del chart (per edit manuali)
+> - `user_role` dal broker sharing condiziona i permessi (VIEWER = sola lettura, no sync)
+> - Range selector integrato nel chart (1W, 1M, 3M, 6M, 1Y, ALL)
 
 ---
 
@@ -13,15 +31,20 @@ Implementare la gestione dei tassi di cambio: visualizzazione valute, configuraz
 
 ---
 
-## ⚠️ Riferimento Phase 9
+## ⚠️ Nota: Plan Originale (Legacy)
 
-Se vengono creati componenti riutilizzabili, seguire le linee guida in [Phase 9: Polish](./phase-09-polish.md) e aggiornare quella fase con i dettagli del componente.
+Il contenuto sotto è il **plan originale** scritto prima delle fasi 4.5–4.8. I componenti UI suggeriti
+(CurrencyCard, PairSourceTable, etc.) andranno **riscritti** usando `DataTable`, `ModalBase`, e gli altri
+componenti unificati creati in Phase 4. Fare riferimento a §4 di `plan-phase05-to-08-upgrade.md` per
+la versione aggiornata.
 
-**Componenti previsti per questa fase**:
+**Componenti previsti per questa fase (aggiornati)**:
 
-- `CurrencyCard.svelte` - Card singola valuta con flag
-- `CurrencySelect.svelte` - Dropdown valuta (se non già in Phase 4)
-- `DataTable.svelte` - Tabella riutilizzabile (se non già in Phase 9)
+- `PriceChartShared.svelte` - Chart ECharts condiviso FX/Assets (**NUOVO**, §9 per spec)
+- `FxRateChart.svelte` - Wrapper FX per PriceChartShared
+- `FxPairSourcesSection.svelte` - CRUD pair sources con DataTable
+- `FxSyncModal.svelte` - Dialog sync con ModalBase
+- `CurrencyGrid.svelte` - Grid valute con flag e SearchSelect
 
 ---
 

@@ -74,7 +74,7 @@ L'UploadedFile ha il campo `uploaded_by_user_id` ma non esiste un endpoint per r
 ## 🔒 Ripensare struttura di accesso ai broker Utente-SuperUtente per essere GDPR compliant
 
 **Data aggiunta**: Gennaio 2026  
-**Status**: 📋 PIANIFICATO  
+**Status**: 📋 PIANIFICATO → Architettura definita in `plan-phase05-to-08-upgrade.md` §10 (GDPR/Sharing)  
 **Priorità**: Media
 
 ### Contesto
@@ -107,7 +107,7 @@ La pagina dell'asset dovrebbe mostrare il prezzo corrente in alto con la possibi
 ## 🔄 Import Transazioni — Matching Asset
 
 **Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
+**Status**: 📋 PIANIFICATO → Phase 6 §6.4 + Phase 7 §7.6 (vedi `plan-phase05-to-08-upgrade.md`)  
 **Priorità**: Alta (Phase 7)
 
 ### Contesto

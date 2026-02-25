@@ -151,16 +151,18 @@ def upgrade() -> None:
         sa.text(
             """CREATE TABLE broker_user_access
                (
-                   id         INTEGER PRIMARY KEY,
-                   user_id    INTEGER     NOT NULL,
-                   broker_id  INTEGER     NOT NULL,
-                   role       VARCHAR(10) NOT NULL DEFAULT 'VIEWER',
-                   created_at DATETIME    NOT NULL,
-                   updated_at DATETIME    NOT NULL,
+                   id               INTEGER PRIMARY KEY,
+                   user_id          INTEGER        NOT NULL,
+                   broker_id        INTEGER        NOT NULL,
+                   role             VARCHAR(10)    NOT NULL DEFAULT 'VIEWER',
+                   share_percentage NUMERIC(5, 2)  NOT NULL DEFAULT 100,
+                   created_at       DATETIME       NOT NULL,
+                   updated_at       DATETIME       NOT NULL,
                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
                    FOREIGN KEY (broker_id) REFERENCES brokers (id) ON DELETE CASCADE,
                    CONSTRAINT uq_broker_user_access UNIQUE (user_id, broker_id),
-                   CONSTRAINT chk_broker_user_access_role CHECK (role IN ('OWNER', 'EDITOR', 'VIEWER'))
+                   CONSTRAINT chk_broker_user_access_role CHECK (role IN ('OWNER', 'EDITOR', 'VIEWER')),
+                   CONSTRAINT ck_broker_user_access_share_percentage CHECK (share_percentage >= 0 AND share_percentage <= 100)
                )"""
             )
         )
@@ -305,6 +307,7 @@ def upgrade() -> None:
                    related_transaction_id INTEGER,
                    tags                   TEXT,
                    description            TEXT,
+                   cost_basis_override    NUMERIC(18, 6),
                    created_at             DATETIME       NOT NULL,
                    updated_at             DATETIME       NOT NULL,
                    FOREIGN KEY (broker_id) REFERENCES brokers (id),

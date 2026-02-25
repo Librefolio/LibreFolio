@@ -10,13 +10,13 @@
 
 ### ✅ Implementato
 
-| Componente | File | Descrizione |
-|------------|------|-------------|
-| ImageCropper | `frontend/src/lib/components/ui/media/ImageCropper.svelte` | Crop con zoom, rotation slider, flip H/V, aspect ratio |
-| ImageEditModal | `frontend/src/lib/components/ui/media/ImageEditModal.svelte` | Modale wrapper per ImageCropper con preset (avatar, broker-icon, original, custom) |
-| imageCrop utils | `frontend/src/lib/utils/imageCrop.ts` | Funzioni `getCroppedImage`, `blobToFile`, preset definitions |
-| Avatar in ProfileTab | `frontend/src/lib/components/settings/tabs/ProfileTab.svelte` | Avatar editabile in modalità edit, click per upload |
-| i18n keys | `frontend/src/lib/i18n/locales/*.ts` | Traduzioni per uploads.* (zoom, rotation, flip, inputSize, etc.) |
+| Componente           | File                                                          | Descrizione                                                                        |
+|----------------------|---------------------------------------------------------------|------------------------------------------------------------------------------------|
+| ImageCropper         | `frontend/src/lib/components/ui/media/ImageCropper.svelte`    | Crop con zoom, rotation slider, flip H/V, aspect ratio                             |
+| ImageEditModal       | `frontend/src/lib/components/ui/media/ImageEditModal.svelte`  | Modale wrapper per ImageCropper con preset (avatar, broker-icon, original, custom) |
+| imageCrop utils      | `frontend/src/lib/utils/imageCrop.ts`                         | Funzioni `getCroppedImage`, `blobToFile`, preset definitions                       |
+| Avatar in ProfileTab | `frontend/src/lib/components/settings/tabs/ProfileTab.svelte` | Avatar editabile in modalità edit, click per upload                                |
+| i18n keys            | `frontend/src/lib/i18n/locales/*.ts`                          | Traduzioni per uploads.* (zoom, rotation, flip, inputSize, etc.)                   |
 
 ### 🔄 In Corso
 
@@ -36,18 +36,18 @@
 ## 🔧 Limitazioni Tecniche Note
 
 1. **svelte-easy-crop non supporta**:
-   - Prop `rotation` direttamente (la rotazione viene applicata solo al momento del crop finale)
-   - Aspect ratio 0 ("free") → usa 4:3 come fallback con nota
-   
+    - Prop `rotation` direttamente (la rotazione viene applicata solo al momento del crop finale)
+    - Aspect ratio 0 ("free") → usa 4:3 come fallback con nota
+
 2. **Rotazione**:
-   - Slider da -180° a +180°
-   - Pulsanti ±15° per incrementi discreti
-   - Indicatore visivo quando rotation ≠ 0 ("Rotation will be applied on save")
-   - La rotazione viene applicata in `getCroppedImage()` via canvas
+    - Slider da -180° a +180°
+    - Pulsanti ±15° per incrementi discreti
+    - Indicatore visivo quando rotation ≠ 0 ("Rotation will be applied on save")
+    - La rotazione viene applicata in `getCroppedImage()` via canvas
 
 3. **Zoom**:
-   - Range: 0.5x a 10x (molto aggressivo)
-   - Step: 0.1 via slider, 0.5 via pulsanti
+    - Range: 0.5x a 10x (molto aggressivo)
+    - Step: 0.1 via slider, 0.5 via pulsanti
 
 ---
 
@@ -477,11 +477,11 @@ describe('Mobile/Touch', () => {
 
 ### File Test da Creare
 
-| File | Descrizione |
-|------|-------------|
-| `frontend/e2e/files/image-crop.spec.ts` | Test completi ImageEditModal |
-| `frontend/e2e/settings/avatar.spec.ts` | Test avatar in ProfileTab |
-| `frontend/e2e/brokers/broker-icon.spec.ts` | Test icona broker |
+| File                                       | Descrizione                  |
+|--------------------------------------------|------------------------------|
+| `frontend/e2e/files/image-crop.spec.ts`    | Test completi ImageEditModal |
+| `frontend/e2e/settings/avatar.spec.ts`     | Test avatar in ProfileTab    |
+| `frontend/e2e/brokers/broker-icon.spec.ts` | Test icona broker            |
 
 ---
 
