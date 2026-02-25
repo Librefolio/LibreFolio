@@ -2,6 +2,10 @@
 
 The `DataTable` is a powerful, generic table component built with Svelte 5 Runes. It provides a rich set of features similar to Excel or advanced data grids.
 
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="files" data-name="static-tab" alt="DataTable in Files page" style="width: 100%; display: block;">
+</div>
+
 ## Features
 
 - **Sorting**: Click column headers to sort ASC/DESC.
@@ -130,3 +134,4 @@ The component uses Svelte 5 Runes for internal state:
 - `$state` for sorting, pagination, filters, and selection.
 - `$derived` for calculating filtered/sorted/paginated data efficiently.
 - `$effect` for syncing state with `localStorage`.
+

@@ -6,6 +6,15 @@
 
 Comprehensive file upload system with image editing, asset picking, and multi-file support.
 
+<div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 2rem 0;">
+    <div class="screenshot-container" style="flex: 1; min-width: 300px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+        <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab" style="width: 100%; display: block;">
+    </div>
+    <div class="screenshot-container" style="flex: 1; min-width: 300px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+        <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View" style="width: 100%; display: block;">
+    </div>
+</div>
+
 ## Components
 
 ### FileUploader (`ui/media/FileUploader.svelte`)
@@ -36,6 +45,10 @@ cropperjs v2 based image cropper (Web Components):
 
 Full image editing modal (extends ModalBase):
 
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
+    <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Image Edit Modal" style="width: 100%; display: block;">
+</div>
+
 - Presets: Avatar (200×200), Icon (64×64), Custom (free)
 - Output size with editable width/height + auto scale
 - Format selection (PNG, JPEG, WebP)
@@ -55,6 +68,10 @@ Simple file rename modal (extends ModalBase):
 ### AssetPickerModal (`ui/media/AssetPickerModal.svelte`)
 
 3-tab asset picker modal (extends ModalBase):
+
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
+    <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Asset Picker Modal" style="width: 100%; display: block;">
+</div>
 
 - **Existing**: Browse uploaded files with DataTable or FileGrid
 - **URL**: Enter a URL with live preview and circular overlay
@@ -93,7 +110,7 @@ frontend/src/lib/components/ui/media/
 ## Backend Support
 
 - **Image preview API**: `GET /api/v1/uploads/file/{id}?img_preview=WxH`
-- **Preview cache**: Size-based (`IMAGE_PREVIEW_CACHE_MB` in `.env`, default 50MB), TTL 1h, invalidated on delete
+- **Preview cache**: Size-based (`PREVIEW_CACHE_MAX_MB` in `.env`, default 50MB), TTL 1h, invalidated on delete
 - **No-op for small images**: If requested size ≥ original, serves file directly without processing
 - **Seed avatars**: 30 default avatar PNGs copied to `custom-uploads/` on first startup via `seed_default_avatars()`
 - **Upload utility**: Centralized `uploadFile()` in `utils/upload.ts` — single FormData creation point
@@ -104,3 +121,4 @@ frontend/src/lib/components/ui/media/
 - File type checking against `accept` prop
 - File size checking against global `max_file_upload_mb` setting
 - Client-side only (server validates again)
+

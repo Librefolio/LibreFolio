@@ -103,6 +103,9 @@ function getViewport(testInfo: any): 'desktop' | 'mobile' {
 }
 
 test.describe('Gallery Screenshots', () => {
+    // Gallery tests iterate over 4 languages × 2 themes = 8 screenshots per test
+    // Some tests also navigate (broker detail, import modal) so need extra time
+    test.setTimeout(180_000); // 3 minutes per test
 
     test.describe('Auth Pages', () => {
         test('login page - all languages and themes', async ({page}, testInfo) => {
@@ -471,7 +474,7 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(500);
 
                     // Click edit button to open BrokerModal
-                    const editBtn = page.getByTestId('edit-broker-button');
+                    const editBtn = page.getByTestId('broker-edit-button');
                     if (await editBtn.isVisible({timeout: 2000}).catch(() => false)) {
                         await editBtn.click();
                         await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 3000});

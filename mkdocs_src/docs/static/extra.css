@@ -11,8 +11,8 @@
 
 /* Dark mode overrides - aligned with frontend html.dark */
 [data-md-color-scheme="slate"] {
-    --md-primary-fg-color: #00d681; /* libre-green dark (matches frontend) */
-    --md-primary-bg-color: #0f172a; /* theme-bg-primary (matches frontend) */
+    --md-primary-fg-color: #1a4031; /* Dark green header (matches frontend sidebar) */
+    --md-primary-bg-color: #f8fafc; /* Text on header */
     --md-accent-fg-color: #22c55e; /* theme-accent (matches frontend) */
     --md-default-bg-color: #0f172a; /* theme-bg-primary */
     --md-default-bg-color--light: #1e293b; /* theme-bg-secondary */
@@ -24,6 +24,97 @@
     --md-code-bg-color: #1e293b; /* theme-bg-secondary */
     --md-code-fg-color: #e2e8f0; /* slate-200 */
     --md-typeset-a-color: #22c55e; /* theme-accent */
+}
+
+/* Dark mode header bar - dark with green accent text */
+[data-md-color-scheme="slate"] .md-header {
+    background-color: #0f172a; /* theme-bg-primary, very dark */
+    border-bottom: 1px solid #334155;
+}
+
+/* Dark mode header title and links - green accent */
+[data-md-color-scheme="slate"] .md-header .md-header__title,
+[data-md-color-scheme="slate"] .md-header .md-header__topic,
+[data-md-color-scheme="slate"] .md-header a {
+    color: #00d681;
+}
+
+/* Dark mode header icons */
+[data-md-color-scheme="slate"] .md-header .md-header__button {
+    color: #cbd5e1;
+}
+
+/* Dark mode tabs bar */
+[data-md-color-scheme="slate"] .md-tabs {
+    background-color: #1e293b; /* theme-bg-secondary */
+    border-bottom: 1px solid #334155;
+}
+
+[data-md-color-scheme="slate"] .md-tabs__link {
+    color: #cbd5e1;
+}
+
+[data-md-color-scheme="slate"] .md-tabs__link--active,
+[data-md-color-scheme="slate"] .md-tabs__link:hover {
+    color: #22c55e;
+}
+
+/* Dark mode sidebar background */
+[data-md-color-scheme="slate"] .md-sidebar {
+    background-color: #0f172a;
+}
+
+/* Dark mode sidebar nav links - ensure visible text */
+[data-md-color-scheme="slate"] .md-nav__link {
+    color: #cbd5e1;
+}
+
+[data-md-color-scheme="slate"] .md-nav__link:hover {
+    color: #22c55e;
+}
+
+/* Dark mode mobile drawer */
+[data-md-color-scheme="slate"] .md-nav--primary {
+    background-color: #0f172a;
+}
+
+/* Dark mode mobile drawer overlay and inner nav */
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav {
+    background-color: #0f172a;
+}
+
+/* Dark mode mobile: back button and title */
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav__title {
+    background-color: #1e293b;
+    color: #f8fafc;
+}
+
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav__title .md-nav__icon {
+    color: #cbd5e1;
+}
+
+/* Dark mode mobile: all nav items should have visible text */
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav__item > .md-nav__link {
+    color: #cbd5e1;
+}
+
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav__item > .md-nav__link:hover,
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav__item > .md-nav__link:focus {
+    color: #22c55e;
+}
+
+/* Dark mode mobile: active item */
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav__item--active > .md-nav__link {
+    color: #22c55e;
+}
+
+/* Dark mode search bar */
+[data-md-color-scheme="slate"] .md-search__form {
+    background-color: #1e293b;
+}
+
+[data-md-color-scheme="slate"] .md-search__input {
+    color: #f8fafc;
 }
 
 /* --- LAYOUT & WIDTH --- */
@@ -52,9 +143,9 @@
     box-sizing: border-box; /* Include padding in width */
 }
 
-/* Dark mode H1 - softer gradient */
+/* Dark mode H1 - dark background with green accent text */
 [data-md-color-scheme="slate"] .md-typeset h1 {
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     color: #00d681;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
@@ -63,27 +154,41 @@
 
 /* LEVEL 1: Main Sections - Gradient Style, Centered */
 .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link {
-    font-size: 0.95rem !important; /* Reduced size */
+    font-size: 0.75rem !important; /* Compact to fit sidebar */
     font-weight: 800 !important;
     color: white !important;
     background: linear-gradient(135deg, var(--md-primary-fg-color) 0%, var(--md-accent-fg-color) 100%);
     border-radius: 4px;
     margin-top: 1.2rem;
     margin-bottom: 0.5rem;
-    padding: 0.5rem;
+    padding: 0.4rem 0.5rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.03em;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     border-bottom: none;
     text-align: center; /* Centered text */
     display: block; /* Ensure block display for centering */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
 }
 
-/* Dark mode Level 1 sections - softer gradient */
+/* Dark mode Level 1 sections - dark background with green accent */
 [data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link {
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     color: #00d681 !important;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Mobile sidebar: allow wrapping for long section names */
+@media screen and (max-width: 76.1875em) {
+    .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link {
+        white-space: normal;
+        word-break: break-word;
+        font-size: 0.7rem !important;
+        padding: 0.35rem 0.4rem;
+    }
 }
 
 /* LEVEL 2: Sub-sections */
@@ -117,9 +222,87 @@
     background-color: rgba(0, 0, 0, 0.03);
 }
 
+/* Sidebar nav links - prevent overflow */
+.md-nav__link {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Level 1 section active in sidebar: keep compact style, don't enlarge */
+.md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav__link--active,
+.md-nav--primary > .md-nav__list > .md-nav__item--active > .md-nav__link {
+    border-left: none; /* Level 1 uses gradient background, not border */
+}
+
 /* Dark mode active link */
 [data-md-color-scheme="slate"] .md-nav__item .md-nav__link--active {
     background-color: rgba(255, 255, 255, 0.05);
+    border-left-color: #22c55e; /* Use accent green for visibility */
+}
+
+/* Dark mode Level 2 sidebar headers - use accent green for visibility */
+[data-md-color-scheme="slate"] .md-nav--primary > .md-nav__list > .md-nav__item--section > .md-nav > .md-nav__list > .md-nav__item--section > .md-nav__link {
+    color: #22c55e !important;
+    border-bottom-color: #334155;
+}
+
+/* Dark mode sidebar expand arrows */
+[data-md-color-scheme="slate"] .md-nav__icon {
+    color: #94a3b8;
+}
+
+/* Dark mode sidebar item borders */
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav__item {
+    border-color: #334155;
+}
+
+/* Mobile sidebar: normalize section title when inside a sub-section */
+/* mkdocs-material shows the current section title large and centered - override */
+@media screen and (max-width: 76.1875em) {
+    .md-nav--primary .md-nav__title {
+        font-size: 0.8rem !important;
+        font-weight: 700 !important;
+        text-align: left !important;
+        padding: 0.4rem 0.6rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* The back arrow label in mobile nav */
+    .md-nav--primary .md-nav__title .md-nav__icon {
+        font-size: inherit;
+    }
+
+    /* Sidebar nav links on mobile - allow wrapping for readability */
+    .md-nav__link {
+        white-space: normal !important;
+        word-break: break-word;
+        font-size: 0.8rem;
+        line-height: 1.4;
+    }
+
+    /* Mobile drawer: current section header shown as back-button bar
+       Override the big gradient section style when it appears in the mobile nav title */
+    .md-nav--primary .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__link {
+        font-size: 0.8rem !important;
+        font-weight: 700 !important;
+        text-align: left !important;
+        background: none !important;
+        box-shadow: none !important;
+        color: var(--md-default-fg-color) !important;
+        text-transform: none !important;
+        padding: 0.4rem 0.6rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Dark mode: same override */
+    [data-md-color-scheme="slate"] .md-nav--primary .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__link {
+        color: #cbd5e1 !important;
+    }
 }
 
 /* --- RIGHT SIDEBAR (Table of Contents) --- */
@@ -490,6 +673,15 @@
     margin-bottom: 0.5rem;
     color: var(--md-primary-fg-color);
     display: block;
+}
+
+/* Dark mode card titles and icons - use green accent for visibility */
+[data-md-color-scheme="slate"] .card-title {
+    color: #22c55e;
+}
+
+[data-md-color-scheme="slate"] .card-icon {
+    color: #22c55e;
 }
 
 .card-desc {
