@@ -453,54 +453,71 @@ def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
     import subprocess
 
+    filter_text = getattr(args, 'filter', None)
+    desktop_only = getattr(args, 'desktop_only', False)
+    mobile_only = getattr(args, 'mobile_only', False)
+    no_populate = getattr(args, 'no_populate', False)
+
     print(Colors.success("Generating gallery screenshots for documentation..."))
-    print(f"{Colors.BLUE}This runs gallery.spec.ts for both desktop and mobile viewports{Colors.NC}")
+    if filter_text:
+        print(f"{Colors.YELLOW}Filter: only tests matching '{filter_text}'{Colors.NC}")
+    viewports = []
+    if not mobile_only:
+        viewports.append(('desktop', '📸 Running Desktop Screenshots...'))
+    if not desktop_only:
+        viewports.append(('mobile', '📱 Running Mobile Screenshots...'))
+    print(f"{Colors.BLUE}Viewports: {', '.join(v[0] for v in viewports)}{Colors.NC}")
     print(f"{Colors.BLUE}Screenshots will be saved to mkdocs_src/docs/gallery/{Colors.NC}\n")
 
-    # Populate test database with realistic data (creates fresh DB with --force)
-    # Note: This also creates e2e_test_admin if not exists
-    print(f"\n{Colors.CYAN}🗄️  Populating test database with sample data...{Colors.NC}")
-    result = subprocess.run(
-        ["python", "dev.py", "test", "db", "populate", "--force"],
-        cwd=PROJECT_ROOT
-    )
-    if result.returncode != 0:
-        print_error("Failed to populate test database")
-        return 1
-    print_success("Test database populated")
+    if not no_populate:
+        # Populate test database with realistic data (creates fresh DB with --force)
+        print(f"\n{Colors.CYAN}🗄️  Populating test database with sample data...{Colors.NC}")
+        result = subprocess.run(
+            ["python", "dev.py", "test", "db", "populate", "--force"],
+            cwd=PROJECT_ROOT
+        )
+        if result.returncode != 0:
+            print_error("Failed to populate test database")
+            return 1
+        print_success("Test database populated")
 
-    # Ensure ALL test users exist (adds e2e_test_user and e2e_test_user2 if missing)
-    print(f"\n{Colors.YELLOW}Ensuring E2E test users exist...{Colors.NC}")
-    from scripts.test_runner import _ensure_test_users
-    if not _ensure_test_users():
-        print_error("Failed to create test users")
-        return 1
-    print_success("Test users ready")
+        # Ensure ALL test users exist
+        print(f"\n{Colors.YELLOW}Ensuring E2E test users exist...{Colors.NC}")
+        from scripts.test_runner import _ensure_test_users
+        if not _ensure_test_users():
+            print_error("Failed to create test users")
+            return 1
+        print_success("Test users ready")
+    else:
+        print(f"{Colors.YELLOW}⏭️  Skipping DB population (--no-populate){Colors.NC}")
 
+    failures = []
+    for viewport, label in viewports:
+        print(f"\n{Colors.CYAN}{label}{Colors.NC}")
+        cmd = ["npm", "run", "test:e2e", "--", "gallery.spec.ts", "--project", viewport, "--headed"]
+        if filter_text:
+            cmd.extend(["-g", filter_text])
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", capture_output=True, text=True)
+        # Always print stdout (contains screenshot paths and pass/fail info)
+        if result.stdout:
+            print(result.stdout)
+        if result.returncode != 0:
+            failures.append(viewport)
+            print_error(f"{viewport.capitalize()} gallery generation had failures (see above)")
+            # Print stderr summary (contains error details)
+            if result.stderr:
+                # Filter to show only relevant lines (skip dotenv tips etc.)
+                for line in result.stderr.splitlines():
+                    if 'Error' in line or 'error' in line or 'FAIL' in line:
+                        print(f"  {Colors.RED}{line}{Colors.NC}")
 
-    # Run gallery for desktop
-    print(f"\n{Colors.CYAN}📸 Running Desktop Screenshots...{Colors.NC}")
-    result = subprocess.run(
-        ["npm", "run", "test:e2e", "--", "gallery.spec.ts", "--project", "desktop", "--headed"],
-        cwd=PROJECT_ROOT / "frontend"
-    )
-    if result.returncode != 0:
-        print_error("Desktop gallery generation failed")
-        return 1
-
-    # Run gallery for mobile
-    print(f"\n{Colors.CYAN}📱 Running Mobile Screenshots...{Colors.NC}")
-    result = subprocess.run(
-        ["npm", "run", "test:e2e", "--", "gallery.spec.ts", "--project", "mobile", "--headed"],
-        cwd=PROJECT_ROOT / "frontend"
-    )
-    if result.returncode != 0:
-        print_error("Mobile gallery generation failed")
-        return 1
-
-    print_success("\n✅ Gallery screenshots generated successfully!")
+    if failures:
+        print(f"\n{Colors.YELLOW}⚠️  Gallery generation completed with failures in: {', '.join(failures)}{Colors.NC}")
+        print(f"{Colors.YELLOW}Some screenshots may be missing or outdated. Run with --filter to retry specific tests.{Colors.NC}")
+    else:
+        print_success("\n✅ Gallery screenshots generated successfully!")
     print(f"{Colors.GREEN}Output: mkdocs_src/docs/gallery/{Colors.NC}")
-    return 0
+    return 1 if failures else 0
 
 
 
@@ -806,6 +823,14 @@ Examples:
     mk_p.set_defaults(func=cmd_mkdocs_deploy)
 
     mk_p = mk_sub.add_parser("gallery", help="Generate gallery screenshots with Playwright")
+    mk_p.add_argument("--filter", "-f", type=str, default=None,
+                       help="Filter: only run tests matching this text (passed as -g to Playwright)")
+    mk_p.add_argument("--desktop-only", action="store_true",
+                       help="Only generate desktop screenshots")
+    mk_p.add_argument("--mobile-only", action="store_true",
+                       help="Only generate mobile screenshots")
+    mk_p.add_argument("--no-populate", action="store_true",
+                       help="Skip DB population (faster for re-runs)")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
     # =========================================================================

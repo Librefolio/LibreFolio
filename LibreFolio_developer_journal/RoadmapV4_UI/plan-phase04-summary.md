@@ -1,8 +1,8 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 24 Febbraio 2026  
-**Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename, 42 E2E test, avatar seed, gallery, MkDocs dark mode.)
+**Ultimo aggiornamento**: 25 Febbraio 2026  
+**Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename, 42 E2E test, avatar seed, gallery, MkDocs dark mode, gallery-img-loader fallback.)
 
 ---
 
@@ -399,10 +399,21 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 **Lavoro completato (24 Feb 2026)**:
 
 - ✅ Dark mode CSS allineato con variabili frontend (slate-900, green-500, etc.)
+- ✅ **Header bar dark mode fix**: sfondo `#0f172a` con testo `#00d681` (non più verde brillante su header)
+- ✅ Tabs bar dark mode: `#1e293b` con link `#cbd5e1`, active `#22c55e`
+- ✅ Sidebar dark mode: sfondo `#0f172a`, Level 1 sections gradient dark, Level 2 headers verde accent
+- ✅ Card titles e icon in dark mode: `#22c55e` per visibilità
+- ✅ Active link border: verde accent in dark mode
 - ✅ Gallery screenshot containers con box-shadow corretto in dark mode
 - ✅ Tabelle con header e righe alternate stilizzate per dark mode
 - ✅ Admonitions (tips, notes, warnings) con background dark mode
 - ✅ Gallery markdown con sezioni Media & Upload sia desktop che mobile
+- ✅ Gallery timeout fix: 120s per test (8 combinazioni lingua×tema)
+- ✅ **Screenshot nelle docs**: aggiunti screenshot gallery in auth.md, file-upload.md, settings.md, data-table.md, pages/index.md
+- ✅ **Fix env var name**: `IMAGE_PREVIEW_CACHE_MB` → `PREVIEW_CACHE_MAX_MB` in file-upload.md
+- ✅ **gallery-img-loader.js fallback**: se l'immagine per la lingua selezionata non esiste, fallback automatico a `en` (onerror handler)
+- ✅ **Mobile sidebar CSS fix**: titolo sezione attiva nel drawer mobile normalizzato (non più oversized/centrato)
+- ✅ **Gallery error reporting**: `dev.py mkdocs gallery` ora prosegue con i test anche se un viewport fallisce, e printa un riepilogo errori alla fine
 
 ### Step 4.8: GDPR Permissions Analysis (planning only) ⏸️
 

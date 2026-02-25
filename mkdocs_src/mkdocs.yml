@@ -66,6 +66,8 @@ extra_javascript:
   - javascripts/dashboard-check.js
   # Gallery language selector (for gallery pages)
   - javascripts/gallery-lang-selector.js
+  # Gallery image loader - auto-resolves screenshot paths on any page
+  - javascripts/gallery-img-loader.js
 
 nav:
   - Home: index.md
