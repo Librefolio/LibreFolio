@@ -3662,7 +3662,7 @@
 <p><strong>Edit <code>.env</code></strong> (Optional):</p>
 <ul>
 <li><code>PORT</code>: Change the port if <code>8000</code> is already in use.</li>
-<li><code>SECRET_KEY</code>: For better security, change this to a long, random string. You can generate one <a href="https://random-string-generator.com/">here</a>.</li>
+<li><code>LIBREFOLIO_DATA_DIR</code>: Change where data is stored (default: <code>./backend/data/prod</code>).</li>
 </ul>
 </li>
 </ol>
@@ -3675,8 +3675,8 @@
 <li>The first time you run this, Docker will download the necessary base images and build the application, which may take a few minutes.</li>
 </ul>
 <h2 id="4-create-a-superuser">4. Create a Superuser</h2>
-<p>To log in, you need to create an administrator account.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker-compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>backend<span class="w"> </span>pipenv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>user_cli.py<span class="w"> </span>create-superuser<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;email&gt;<span class="w"> </span>&lt;password&gt;
+<p>To log in, you need to create an administrator account. The first user created automatically becomes the superuser.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker-compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>backend<span class="w"> </span>./dev.py<span class="w"> </span>user<span class="w"> </span>create<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;email&gt;<span class="w"> </span>&lt;password&gt;
 </code></pre></div>
 <p>Replace <code>&lt;username&gt;</code>, <code>&lt;email&gt;</code>, and <code>&lt;password&gt;</code> with your credentials.</p>
 <h2 id="5-access-librefolio">5. Access LibreFolio</h2>

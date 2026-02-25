@@ -964,15 +964,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#devsh" class="md-nav__link">
+  <a href="#devpy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        dev.sh
+        dev.py
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="dev.sh">
+    <nav class="md-nav" aria-label="dev.py">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -992,18 +992,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#user_clipy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        user_cli.py
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="user_cli.py">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
   <a href="#user-management" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1012,7 +1000,8 @@
     </span>
   </a>
   
-</li>
+    <nav class="md-nav" aria-label="User Management">
+      <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#system-management" class="md-nav__link">
@@ -1043,10 +1032,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#running-tests" class="md-nav__link">
+  <a href="#test-categories" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running Tests
+        Test Categories
       
     </span>
   </a>
@@ -3559,15 +3548,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#devsh" class="md-nav__link">
+  <a href="#devpy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        dev.sh
+        dev.py
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="dev.sh">
+    <nav class="md-nav" aria-label="dev.py">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3587,18 +3576,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#user_clipy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        user_cli.py
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="user_cli.py">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
   <a href="#user-management" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3607,7 +3584,8 @@
     </span>
   </a>
   
-</li>
+    <nav class="md-nav" aria-label="User Management">
+      <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#system-management" class="md-nav__link">
@@ -3638,10 +3616,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#running-tests" class="md-nav__link">
+  <a href="#test-categories" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running Tests
+        Test Categories
       
     </span>
   </a>
@@ -3675,77 +3653,122 @@
 
 <h1 id="command-line-tools">Command-Line Tools</h1>
 <p>This section provides detailed information on the command-line tools available in LibreFolio.</p>
-<h2 id="devsh"><code>dev.sh</code></h2>
-<p><code>dev.sh</code> is the main orchestration script for development and maintenance tasks. It provides a convenient wrapper around common commands.</p>
+<h2 id="devpy"><code>dev.py</code></h2>
+<p><code>dev.py</code> is the main orchestration script for development and maintenance tasks. It provides a convenient wrapper around common commands with a tree-structured help system.</p>
 <h3 id="common-commands">Common Commands</h3>
 <ul>
-<li><strong><code>./dev.sh install</code></strong>: Installs all project dependencies (Python and Node.js).</li>
-<li><strong><code>./dev.sh server</code></strong>: Starts the FastAPI server with auto-reload.</li>
-<li><strong><code>./dev.sh db:upgrade</code></strong>: Applies database migrations.</li>
-<li><strong><code>./dev.sh db:migrate "message"</code></strong>: Creates a new database migration.</li>
-<li><strong><code>./dev.sh test &lt;args&gt;</code></strong>: Runs the test suite.</li>
-<li><strong><code>./dev.sh fe:build</code></strong>: Builds the frontend for production.</li>
-<li><strong><code>./dev.sh info:mk deploy</code></strong>: Deploys the documentation to GitHub Pages.</li>
+<li><strong><code>./dev.py install</code></strong>: Installs all project dependencies (Python and Node.js).</li>
+<li><strong><code>./dev.py server</code></strong>: Starts the FastAPI server with auto-reload.</li>
+<li><strong><code>./dev.py server --test</code></strong>: Starts in test mode (isolated test data).</li>
+<li><strong><code>./dev.py db upgrade</code></strong>: Applies database migrations.</li>
+<li><strong><code>./dev.py db migrate "message"</code></strong>: Creates a new database migration.</li>
+<li><strong><code>./dev.py db create-clean</code></strong>: Recreate database from scratch.</li>
+<li><strong><code>./dev.py test all</code></strong>: Runs the complete test suite.</li>
+<li><strong><code>./dev.py front build</code></strong>: Builds the frontend for production.</li>
+<li><strong><code>./dev.py front check</code></strong>: Type-checks Svelte/TypeScript.</li>
+<li><strong><code>./dev.py front dev</code></strong>: Starts the frontend dev server with HMR.</li>
+<li><strong><code>./dev.py api sync</code></strong>: Exports OpenAPI schema + generates TypeScript client.</li>
+<li><strong><code>./dev.py i18n audit</code></strong>: Audit translation coverage.</li>
+<li><strong><code>./dev.py mkdocs deploy</code></strong>: Deploys the documentation to GitHub Pages.</li>
 </ul>
-<p>For a full list of commands, run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>./dev.sh<span class="w"> </span><span class="nb">help</span>
+<p>For a full command tree, run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>./dev.py<span class="w"> </span>--help
 </code></pre></div>
-<h2 id="user_clipy"><code>user_cli.py</code></h2>
-<p><code>user_cli.py</code> is a Python script for managing users and system settings from the command line. It is executed via <code>pipenv run python user_cli.py &lt;command&gt;</code>.</p>
-<h3 id="user-management">User Management</h3>
+<h2 id="user-management">User Management</h2>
+<p>User management is done via <code>./dev.py user</code> subcommands:</p>
 <ul>
 <li>
-<p><strong>Create a Superuser</strong>:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>./dev.sh<span class="w"> </span>user:create<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;email&gt;<span class="w"> </span>&lt;password&gt;
+<p><strong>Create a User</strong> (first user becomes admin):
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>create<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;email&gt;<span class="w"> </span>&lt;password&gt;
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>Reset a User's Password</strong>:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>./dev.sh<span class="w"> </span>user:reset<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;new_password&gt;
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>reset<span class="w"> </span>&lt;username&gt;<span class="w"> </span>&lt;new_password&gt;
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>List All Users</strong>:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>./dev.sh<span class="w"> </span>user:list
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>list
 </code></pre></div></p>
 </li>
 <li>
 <p><strong>Promote a User to Admin</strong>:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>./dev.sh<span class="w"> </span>user:promote<span class="w"> </span>&lt;username&gt;
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>promote<span class="w"> </span>&lt;username&gt;
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Demote an Admin</strong>:
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>demote<span class="w"> </span>&lt;username&gt;
 </code></pre></div></p>
 </li>
 </ul>
 <h3 id="system-management">System Management</h3>
 <ul>
 <li><strong>Initialize Global Settings</strong>:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>./dev.sh<span class="w"> </span>user:init-settings
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>./dev.py<span class="w"> </span>user<span class="w"> </span>init-settings
 </code></pre></div>
   This command populates the database with default global settings if they don't already exist.</li>
 </ul>
 <h2 id="test_runnerpy"><code>test_runner.py</code></h2>
-<p><code>test_runner.py</code> is the entry point for running the project's test suites. It allows you to run specific tests or groups of tests.</p>
-<h3 id="running-tests">Running Tests</h3>
-<ul>
-<li>
-<p><strong>Run all tests</strong>:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>./dev.sh<span class="w"> </span><span class="nb">test</span><span class="w"> </span>all
-</code></pre></div></p>
-</li>
-<li>
-<p><strong>Run a specific test group</strong>:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>./dev.sh<span class="w"> </span><span class="nb">test</span><span class="w"> </span>db<span class="w"> </span>all<span class="w">  </span><span class="c1"># Run all database tests</span>
-</code></pre></div></p>
-</li>
-<li>
-<p><strong>Run tests with coverage</strong>:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>./dev.sh<span class="w"> </span>test:coverage
-</code></pre></div>
-  This generates an HTML report in the <code>htmlcov/</code> directory.</p>
-</li>
-</ul>
-<p>For more options, see the test runner's help message:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>./dev.sh<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--help
-</code></pre></div>
+<p>The test runner orchestrates the complete test suite. It is invoked via <code>./dev.py test</code>.</p>
+<h3 id="test-categories">Test Categories</h3>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>External</td>
+<td><code>./dev.py test external all</code></td>
+<td>Provider tests (FX, assets, BRIM)</td>
+</tr>
+<tr>
+<td>Database</td>
+<td><code>./dev.py test db all</code></td>
+<td>Database layer tests</td>
+</tr>
+<tr>
+<td>Services</td>
+<td><code>./dev.py test services all</code></td>
+<td>Service logic tests</td>
+</tr>
+<tr>
+<td>Utils</td>
+<td><code>./dev.py test utils all</code></td>
+<td>Utility tests</td>
+</tr>
+<tr>
+<td>Schemas</td>
+<td><code>./dev.py test schemas all</code></td>
+<td>Schema validation tests</td>
+</tr>
+<tr>
+<td>API</td>
+<td><code>./dev.py test api all</code></td>
+<td>API endpoint tests</td>
+</tr>
+<tr>
+<td>E2E</td>
+<td><code>./dev.py test e2e all</code></td>
+<td>Backend end-to-end tests</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td><code>./dev.py test front all</code></td>
+<td>Playwright E2E tests</td>
+</tr>
+<tr>
+<td><strong>All</strong></td>
+<td><code>./dev.py test all</code></td>
+<td>Run everything</td>
+</tr>
+</tbody>
+</table>
 
 
 

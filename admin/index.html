@@ -3530,16 +3530,14 @@
 <h1 id="admin-manual">Admin Manual</h1>
 <p>This manual is for system administrators and advanced users who need to perform maintenance, manage users, or interact with the system via the command line.</p>
 <h2 id="overview">Overview</h2>
-<p>Most administrative tasks are handled through three primary tools:</p>
+<p>Most administrative tasks are handled through the main CLI tool:</p>
 <ol>
-<li><strong><code>dev.sh</code></strong>: The main helper script for development and maintenance. It provides shortcuts for common tasks like running tests, managing the database, and building the
-   frontend.</li>
-<li><strong><code>user_cli.py</code></strong>: A command-line interface for user management, such as creating superusers, resetting passwords, and managing roles.</li>
-<li><strong><code>test_runner.py</code></strong>: The script used to run the project's test suites.</li>
+<li><strong><code>dev.py</code></strong>: The main orchestration script for development and maintenance. It provides a tree-structured CLI for all tasks: running tests, managing the database, building the
+   frontend, user management, translations, and more.</li>
 </ol>
 <h2 id="guides">Guides</h2>
 <ul>
-<li><strong><a href="cli_tools/">CLI Tools</a></strong>: Detailed documentation on using <code>dev.sh</code>, <code>user_cli.py</code>, and <code>test_runner.py</code>.</li>
+<li><strong><a href="cli_tools/">CLI Tools</a></strong>: Detailed documentation on <code>dev.py</code> commands and subcommands.</li>
 <li><strong><a href="docker_advanced/">Advanced Docker</a></strong>: A deep dive into the Docker setup, including networking, volumes, and customization for production environments.</li>
 </ul>
 
