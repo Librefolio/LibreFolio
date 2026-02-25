@@ -129,6 +129,12 @@ class TXCreateItem(BaseModel):
         default=None, max_length=500, description="Transaction notes"
         )
 
+    # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time
+    cost_basis_override: Optional[Decimal] = Field(
+        default=None,
+        description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
+    )
+
     @field_validator("tags", mode="before")
     @classmethod
     def _validate_tags(cls, v):
@@ -257,6 +263,9 @@ class TXReadItem(BaseModel):
     tags: Optional[List[str]] = None
     description: Optional[str] = None
 
+    # Frozen cost basis for TRANSFER_IN (None for normal transactions)
+    cost_basis_override: Optional[Decimal] = None
+
     created_at: UTCDateTime
     updated_at: UTCDateTime
 
@@ -295,6 +304,7 @@ class TXReadItem(BaseModel):
             related_transaction_id=tx.related_transaction_id,
             tags=tags,
             description=tx.description,
+            cost_basis_override=tx.cost_basis_override,
             created_at=tx.created_at,
             updated_at=tx.updated_at,
             )
@@ -334,6 +344,12 @@ class TXUpdateItem(BaseModel):
 
     tags: Optional[List[str]] = Field(default=None, description="New tags (replaces existing)")
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
+
+    # Frozen cost basis override (for TRANSFER_IN)
+    cost_basis_override: Optional[Decimal] = Field(
+        default=None,
+        description="Frozen cost basis for TRANSFER_IN. Set to override calculated cost basis.",
+    )
 
     @field_validator("tags", mode="before")
     @classmethod

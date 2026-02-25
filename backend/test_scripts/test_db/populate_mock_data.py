@@ -215,22 +215,29 @@ def populate_broker_user_access(session: Session):
                 user_id=admin.id,
                 broker_id=broker.id,
                 role=UserRole.OWNER,
+                share_percentage=Decimal("100"),
                 )
             session.add(access)
-            print(f"  ✅ {admin.username} → {broker.name} (OWNER)")
+            print(f"  ✅ {admin.username} → {broker.name} (OWNER, 100%)")
 
     # Assign brokers to regular user with mixed roles
     if user:
         for i, broker in enumerate(brokers):
-            # Alternate between EDITOR and VIEWER
-            role = UserRole.EDITOR if i % 2 == 0 else UserRole.VIEWER
+            # Alternate between EDITOR and VIEWER with different share percentages
+            if i % 2 == 0:
+                role = UserRole.EDITOR
+                share = Decimal("50")  # Editor with 50% (co-owner scenario)
+            else:
+                role = UserRole.VIEWER
+                share = Decimal("0")  # Viewer with 0% (read-only, e.g., accountant)
             access = BrokerUserAccess(
                 user_id=user.id,
                 broker_id=broker.id,
                 role=role,
+                share_percentage=share,
                 )
             session.add(access)
-            print(f"  ✅ {user.username} → {broker.name} ({role.value})")
+            print(f"  ✅ {user.username} → {broker.name} ({role.value}, {share}%)")
 
     session.commit()
 

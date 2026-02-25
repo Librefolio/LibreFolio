@@ -83,23 +83,23 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 
 ## Props
 
-| Prop                  | Type                 | Default      | Description                              |
-|:----------------------|:---------------------|:-------------|:-----------------------------------------|
-| `data`                | `T[]`                | **Required** | Array of data objects.                   |
-| `columns`             | `ColumnDef<T>[]`     | **Required** | Column definitions.                      |
-| `getRowId`            | `(row: T) => string` | **Required** | Function to get unique ID for a row.     |
-| `storageKey`          | `string`             | **Required** | Unique key for localStorage persistence. |
-| `enableSelection`     | `boolean`            | `true`       | Enable row selection checkboxes.         |
-| `selectionMode`       | `'multi' \| 'single'`| `'multi'`    | Multi-select or single-select rows.      |
-| `enableActions`       | `boolean`            | `true`       | Enable row actions column.               |
-| `enableSorting`       | `boolean`            | `true`       | Enable column sorting.                   |
-| `enableColumnFilters` | `boolean`            | `true`       | Enable column filters.                   |
-| `enablePagination`    | `boolean`            | `true`       | Enable pagination.                       |
-| `defaultPageSize`     | `number`             | `10`         | Initial page size.                       |
-| `rowActions`          | `RowAction<T>[]`     | `[]`         | Actions available for each row.          |
-| `bulkActions`         | `BulkAction<T>[]`    | `[]`         | Actions available for selected rows.     |
-| `onRowClick`          | `(row: T) => void`   | `undefined`  | Callback when a row is clicked.          |
-| `onRowDoubleClick`    | `(row: T) => void`   | `undefined`  | Callback when a row is double-clicked.   |
+| Prop                  | Type                  | Default      | Description                              |
+|:----------------------|:----------------------|:-------------|:-----------------------------------------|
+| `data`                | `T[]`                 | **Required** | Array of data objects.                   |
+| `columns`             | `ColumnDef<T>[]`      | **Required** | Column definitions.                      |
+| `getRowId`            | `(row: T) => string`  | **Required** | Function to get unique ID for a row.     |
+| `storageKey`          | `string`              | **Required** | Unique key for localStorage persistence. |
+| `enableSelection`     | `boolean`             | `true`       | Enable row selection checkboxes.         |
+| `selectionMode`       | `'multi' \| 'single'` | `'multi'`    | Multi-select or single-select rows.      |
+| `enableActions`       | `boolean`             | `true`       | Enable row actions column.               |
+| `enableSorting`       | `boolean`             | `true`       | Enable column sorting.                   |
+| `enableColumnFilters` | `boolean`             | `true`       | Enable column filters.                   |
+| `enablePagination`    | `boolean`             | `true`       | Enable pagination.                       |
+| `defaultPageSize`     | `number`              | `10`         | Initial page size.                       |
+| `rowActions`          | `RowAction<T>[]`      | `[]`         | Actions available for each row.          |
+| `bulkActions`         | `BulkAction<T>[]`     | `[]`         | Actions available for selected rows.     |
+| `onRowClick`          | `(row: T) => void`    | `undefined`  | Callback when a row is clicked.          |
+| `onRowDoubleClick`    | `(row: T) => void`    | `undefined`  | Callback when a row is double-clicked.   |
 
 ## Column Definition (`ColumnDef<T>`)
 

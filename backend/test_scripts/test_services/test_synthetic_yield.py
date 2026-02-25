@@ -19,7 +19,6 @@ from backend.app.db import TransactionType
 
 # Force test mode BEFORE any other imports
 os.environ["LIBREFOLIO_TEST_MODE"] = "1"
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///backend/data/sqlite/test_app.db"
 
 from backend.app.services.asset_source_providers.scheduled_investment import (
     ScheduledInvestmentProvider,

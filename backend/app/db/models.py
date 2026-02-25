@@ -368,15 +368,33 @@ class BrokerUserAccess(SQLModel, table=True):
     Many-to-many relationship between Users and Brokers with role-based access.
 
     Defines which users can access which brokers and with what permissions.
+
+    share_percentage: Ownership percentage (0-100%) used for portfolio aggregation.
+    - OWNER: defaults to 100% (can be reduced for co-ownership, e.g., joint accounts)
+    - EDITOR: defaults to 0% (delegated operator, e.g., spouse or financial advisor)
+    - VIEWER: defaults to 0% (e.g., accountant, read-only)
+    - Sum of share_percentage across users for a broker CAN exceed 100%
+      (e.g., both partners tracking 100% for personal Net Worth), system shows a warning.
     """
 
     __tablename__ = "broker_user_access"
-    __table_args__ = (UniqueConstraint("user_id", "broker_id", name="uq_broker_user_access"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "broker_id", name="uq_broker_user_access"),
+        CheckConstraint(
+            "share_percentage >= 0 AND share_percentage <= 100",
+            name="ck_broker_user_access_share_percentage",
+        ),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     broker_id: int = Field(foreign_key="brokers.id", nullable=False, index=True)
     role: UserRole = Field(default=UserRole.VIEWER)
+    share_percentage: Decimal = Field(
+        default=Decimal("100"),
+        sa_column=Column(Numeric(5, 2), nullable=False, default=100),
+        description="Ownership percentage (0-100%) for portfolio aggregation",
+    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -592,6 +610,18 @@ class Transaction(SQLModel, table=True):
         )
 
     description: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+    # Frozen cost basis for TRANSFER_IN transactions
+    # When set, this value is used as acquisition price instead of calculating
+    # from source broker history. Enables "snapshot" architecture for transfers:
+    # - Backend calculates PMC on source broker at transfer time
+    # - Saves it here so destination broker never needs to query source history
+    # - Can be manually overridden (e.g., Exit Tax, inheritances use market value)
+    cost_basis_override: Optional[Decimal] = Field(
+        default=None,
+        sa_column=Column(Numeric(18, 6), nullable=True),
+        description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
+    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

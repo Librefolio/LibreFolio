@@ -727,9 +727,9 @@ class TestSuperuserAccess:
 
     To test manually:
     1. Stop server: pkill -f uvicorn
-    2. Delete test DB: rm backend/data/sqlite/test_app.db
-    3. Start test server: ./dev.sh server:test
-    4. Run only this test: ./dev.sh test api broker-access -k superuser
+    2. Recreate test DB: ./dev.py db create-clean --test
+    3. Start test server: ./dev.py server --test
+    4. Run only this test: ./dev.py test api broker-access -k superuser
     """
 
     @pytest.mark.asyncio
@@ -752,8 +752,8 @@ class TestSuperuserAccess:
             if not is_superuser:
                 pytest.skip(
                     "First user is not superuser (DB not clean). "
-                    "To test manually: rm backend/data/sqlite/test_app.db && "
-                    "./dev.sh server:test && ./dev.sh test api broker-access -k superuser"
+                    "To test manually: ./dev.py db create-clean --test && "
+                    "./dev.py server --test && ./dev.py test api broker-access -k superuser"
                     )
 
             # Create regular user with broker

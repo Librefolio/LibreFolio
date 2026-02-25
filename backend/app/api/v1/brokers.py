@@ -385,6 +385,7 @@ async def add_broker_access(
         role=request.role,
         current_user_id=current_user.id,
         is_superuser=current_user.is_superuser,
+        share_percentage=request.share_percentage,
         )
 
     if not success:
@@ -434,6 +435,7 @@ async def update_broker_access(
         new_role=request.role,
         current_user_id=current_user.id,
         is_superuser=current_user.is_superuser,
+        share_percentage=request.share_percentage,
         )
 
     if not success:

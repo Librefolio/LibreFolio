@@ -41,7 +41,7 @@ See our [Installation Guide](getting-started/installation.md) for detailed instr
 Currently, password reset is done via CLI. Contact your instance administrator or run:
 
 ```bash
-./dev.sh user:reset <username> <new_password>
+./dev.py user reset <username> <new_password>
 ```
 
 ## Troubleshooting

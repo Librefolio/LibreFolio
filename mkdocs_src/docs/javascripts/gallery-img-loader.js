@@ -57,6 +57,7 @@
     }
 
     var _basePath = null;
+
     function basePath() {
         if (_basePath === null) {
             _basePath = getBasePath();

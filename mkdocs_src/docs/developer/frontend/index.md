@@ -83,9 +83,9 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
 
 ## Quick Links
 
-| Topic                                    | Description                                           |
-|------------------------------------------|-------------------------------------------------------|
-| [DataTable](components/data-table.md)    | Advanced table with sorting, filtering, pagination    |
-| [Authentication](components/auth.md)     | LoginCard, RegisterCard, ForgotPasswordCard            |
-| [Settings](components/settings.md)       | User preferences, profile, and global settings        |
-| [File Upload](components/file-upload.md) | File uploader, image crop, asset picker               |
+| Topic                                    | Description                                        |
+|------------------------------------------|----------------------------------------------------|
+| [DataTable](components/data-table.md)    | Advanced table with sorting, filtering, pagination |
+| [Authentication](components/auth.md)     | LoginCard, RegisterCard, ForgotPasswordCard        |
+| [Settings](components/settings.md)       | User preferences, profile, and global settings     |
+| [File Upload](components/file-upload.md) | File uploader, image crop, asset picker            |
