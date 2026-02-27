@@ -47,6 +47,7 @@
     "@zxcvbn-ts/language-en": "^3.0.2",
     "cropperjs": "^2.1.0",
     "date-fns": "^4.1.0",
+    "echarts": "^6.0.0",
     "lucide-svelte": "^0.559.0",
     "svelte-i18n": "^4.0.1",
     "zod": "3.24.1"

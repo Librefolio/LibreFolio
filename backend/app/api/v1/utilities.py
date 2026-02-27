@@ -136,7 +136,7 @@ async def list_sectors(
     else:
         sectors = FinancialSector.list_all()
 
-    return SectorListResponse(sectors=sectors, count=len(sectors))
+    return SectorListResponse(items=sectors)
 
 
 @router.get("/countries", response_model=CountryListResponse)
@@ -182,7 +182,7 @@ async def list_countries(
     countries_data = list_countries_util(language)
     countries = [CountryListItem(**c) for c in countries_data]
 
-    return CountryListResponse(countries=countries, count=len(countries), language=language)
+    return CountryListResponse(items=countries, language=language)
 
 
 @router.get("/currencies", response_model=CurrencyListResponse)
@@ -227,7 +227,7 @@ async def list_currencies(
     currencies_data = list_currencies_util(language)
     currencies = [CurrencyListItem(**c) for c in currencies_data]
 
-    return CurrencyListResponse(currencies=currencies, count=len(currencies), language=language)
+    return CurrencyListResponse(items=currencies, language=language)
 
 
 @router.get("/currencies/normalize", response_model=CurrencyNormalizationResponse)

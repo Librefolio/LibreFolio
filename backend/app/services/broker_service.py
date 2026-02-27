@@ -140,7 +140,7 @@ class BrokerService:
                     user_id=user_id,
                     broker_id=broker.id,
                     role=UserRole.OWNER,
-                    share_percentage=Decimal("100"),
+                    share_percentage=Decimal("1"),
                     created_at=utcnow(),
                     updated_at=utcnow(),
                     )
@@ -795,12 +795,14 @@ class BrokerService:
         """
         Sum share_percentage for all users on a broker, optionally excluding one user.
 
+        Returns values in DB scale (0-1 fraction, NOT 0-100%).
+
         Args:
             broker_id: Broker ID
             exclude_user_id: User ID to exclude from sum (for update validation)
 
         Returns:
-            Sum of share_percentage values
+            Sum of share_percentage values (0-1 scale)
         """
         stmt = (
             select(func.sum(BrokerUserAccess.share_percentage))
@@ -829,11 +831,13 @@ class BrokerService:
             role: Access role
             current_user_id: Current user ID
             is_superuser: If True, skip OWNER check
-            share_percentage: Ownership percentage (0-100%) for portfolio aggregation. Defaults to 0%.
+            share_percentage: Ownership fraction (0.0 to 1.0) for portfolio aggregation. Defaults to 0.
 
         Returns:
             Tuple of (success, message)
         """
+        db_share = share_percentage
+
         # Check current user is OWNER (unless superuser)
         if not is_superuser:
             current_role = await self._check_user_access(
@@ -859,14 +863,14 @@ class BrokerService:
         if existing:
             return False, f"User {target_user_id} already has access"
 
-        # Validate share_percentage sum won't exceed 100%
+        # Validate share_percentage sum won't exceed 1.0 (100%)
         current_sum = await self._sum_share_percentages(broker_id)
-        if current_sum + share_percentage > Decimal("100"):
-            available = Decimal("100") - current_sum
+        if current_sum + db_share > Decimal("1"):
+            available = Decimal("1") - current_sum
             return False, (
-                f"Total share percentage would exceed 100%. "
-                f"Current total: {current_sum}%, requested: {share_percentage}%, "
-                f"available: {available}%"
+                f"Total share percentage would exceed 1.0. "
+                f"Current total: {current_sum}, requested: {share_percentage}, "
+                f"available: {available}"
             )
 
         # Create access
@@ -874,7 +878,7 @@ class BrokerService:
             user_id=target_user_id,
             broker_id=broker_id,
             role=role,
-            share_percentage=share_percentage,
+            share_percentage=db_share,
             created_at=utcnow(),
             updated_at=utcnow(),
             )
@@ -938,16 +942,17 @@ class BrokerService:
         # Update role
         access.role = new_role
         if share_percentage is not None:
-            # Validate share_percentage sum won't exceed 100%
+            db_share = share_percentage
+            # Validate share_percentage sum won't exceed 1.0 (100%)
             current_sum = await self._sum_share_percentages(broker_id, exclude_user_id=target_user_id)
-            if current_sum + share_percentage > Decimal("100"):
-                available = Decimal("100") - current_sum
+            if current_sum + db_share > Decimal("1"):
+                available = Decimal("1") - current_sum
                 return False, (
-                    f"Total share percentage would exceed 100%. "
-                    f"Others total: {current_sum}%, requested: {share_percentage}%, "
-                    f"available: {available}%"
+                    f"Total share percentage would exceed 1.0. "
+                    f"Others total: {current_sum}, requested: {share_percentage}, "
+                    f"available: {available}"
                 )
-            access.share_percentage = share_percentage
+            access.share_percentage = db_share
         access.updated_at = utcnow()
 
         return True, "Access updated"
@@ -1006,3 +1011,112 @@ class BrokerService:
         await self.session.delete(access)
 
         return True, "Access removed"
+
+    async def bulk_update_access(
+        self,
+        broker_id: int,
+        desired_accesses: list,
+        current_user_id: int,
+        is_superuser: bool = False,
+        ) -> tuple[bool, str, list]:
+        """
+        Atomically replace the access configuration for a broker.
+
+        Computes the diff between current and desired state, then applies
+        all adds, updates, and removes in a single transaction.
+
+        Rules:
+        - Only OWNERs (or superusers) can call this
+        - At least one OWNER must remain
+        - Only OWNERs can have share_percentage > 0 (enforced by schema)
+        - Sum of share_percentage must be ≤ 1.0
+        - Cannot remove the calling user as last OWNER
+
+        Args:
+            broker_id: Broker ID
+            desired_accesses: List of BRAccessBulkItem (user_id, role, share_percentage in 0-1)
+            current_user_id: Current user ID
+            is_superuser: If True, skip OWNER check
+
+        Returns:
+            Tuple of (success, message, access_list)
+        """
+        # 1. Check current user is OWNER (unless superuser)
+        if not is_superuser:
+            current_role = await self._check_user_access(
+                broker_id, current_user_id, min_role=UserRole.OWNER
+                )
+            if not current_role:
+                return False, "Only OWNERs can manage access", []
+
+        # 2. Check broker exists
+        broker = await self.session.get(Broker, broker_id)
+        if not broker:
+            return False, f"Broker {broker_id} not found", []
+
+        # 3. Validate desired state (in API % scale 0-100)
+        # 3a. Must have at least one OWNER
+        owner_count = sum(1 for a in desired_accesses if a.role == UserRole.OWNER)
+        if owner_count == 0:
+            return False, "At least one OWNER is required", []
+
+        # 3b. Sum of share_percentage ≤ 1.0
+        total_share = sum(a.share_percentage for a in desired_accesses)
+        if total_share > Decimal("1"):
+            return False, (
+                f"Total share percentage exceeds 1.0. "
+                f"Current total: {total_share}"
+            ), []
+
+        # 3c. No duplicate user_ids
+        user_ids = [a.user_id for a in desired_accesses]
+        if len(user_ids) != len(set(user_ids)):
+            return False, "Duplicate user IDs in request", []
+
+        # 3d. All users exist
+        from backend.app.db.models import User
+        for uid in user_ids:
+            user = await self.session.get(User, uid)
+            if not user:
+                return False, f"User {uid} not found", []
+
+        # 4. Get current accesses
+        stmt = select(BrokerUserAccess).where(
+            BrokerUserAccess.broker_id == broker_id
+            )
+        result = await self.session.execute(stmt)
+        current_accesses = {a.user_id: a for a in result.scalars().all()}
+
+        desired_map = {a.user_id: a for a in desired_accesses}
+
+        # 5. Compute diff and apply
+        # 5a. Remove users not in desired list
+        for uid, access in current_accesses.items():
+            if uid not in desired_map:
+                await self.session.delete(access)
+
+        # 5b. Add new users and update existing
+        for uid, desired in desired_map.items():
+            if uid in current_accesses:
+                # Update existing
+                existing = current_accesses[uid]
+                existing.role = desired.role
+                existing.share_percentage = desired.share_percentage
+                existing.updated_at = utcnow()
+            else:
+                # Add new
+                new_access = BrokerUserAccess(
+                    user_id=uid,
+                    broker_id=broker_id,
+                    role=desired.role,
+                    share_percentage=desired.share_percentage,
+                    created_at=utcnow(),
+                    updated_at=utcnow(),
+                    )
+                self.session.add(new_access)
+
+        # Flush to ensure consistency before returning
+        await self.session.flush()
+
+        return True, "Access configuration updated", []
+

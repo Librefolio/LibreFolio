@@ -43,5 +43,5 @@ async def search_users_endpoint(
     )
 
     users = [UserSearchItem(**r) for r in results]
-    return UserSearchResponse(users=users, count=len(users))
+    return UserSearchResponse(items=users)
 

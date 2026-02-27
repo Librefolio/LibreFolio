@@ -21,7 +21,7 @@ from datetime import date as date_type
 from decimal import Decimal
 from typing import Optional, List
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from backend.app.db.models import UserRole
 from backend.app.schemas.common import (
@@ -29,6 +29,7 @@ from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseBulkDeleteResponse,
     BaseDeleteResult,
+    BaseListResponse,
     )
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -375,59 +376,51 @@ class BRAccessItem(BaseModel):
     email: str = Field(..., description="User email")
     role: UserRole = Field(..., description="Access role")
     share_percentage: Decimal = Field(
-        ..., description="Ownership percentage (0-100%) for portfolio aggregation"
-    )
+        ..., description="Ownership fraction (0.0-1.0) for portfolio aggregation"
+        )
     avatar_url: Optional[str] = Field(None, description="User avatar URL")
     created_at: UTCDateTime = Field(..., description="When access was granted")
 
 
-class BRAccessListResponse(BaseModel):
+class BRAccessListResponse(BaseListResponse[BRAccessItem]):
     """Response for listing broker accesses."""
+    pass
+
+
+class BRAccessBulkItem(BaseModel):
+    """
+    Single item in a bulk access update.
+
+    Rules:
+    - share_percentage is only valid for OWNER role (enforced by validator)
+    - EDITOR and VIEWER always have share_percentage = 0
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    accesses: List[BRAccessItem] = Field(default_factory=list)
-    count: int = Field(..., description="Total number of users with access")
+    user_id: int = Field(..., gt=0, description="User ID")
+    role: UserRole = Field(..., description="Access role (OWNER/EDITOR/VIEWER)")
+    share_percentage: Decimal = Field(default=Decimal("0"),ge=0,le=1,description="Ownership fraction (0.0-1.0). Only valid for OWNER role. Frontend displays as %.",)
+
+    @model_validator(mode="after")
+    def validate_share_for_role(self):
+        """Enforce: only OWNERs can have share_percentage > 0."""
+        if self.role != UserRole.OWNER and self.share_percentage > 0:
+            raise ValueError(
+                f"share_percentage must be 0 for role {self.role.value}. "
+                f"Only OWNERs can have ownership percentage."
+                )
+        return self
 
 
-class BRAccessCreateRequest(BaseModel):
-    """Request to add user access to a broker."""
 
-    model_config = ConfigDict(extra="forbid")
+class BRAccessBulkResponse(BaseBulkResponse[BRAccessItem]):
+    """
+    Response for bulk access update.
 
-    user_id: int = Field(..., gt=0, description="User ID to grant access")
-    role: UserRole = Field(default=UserRole.VIEWER, description="Access role")
-    share_percentage: Decimal = Field(default=Decimal("0"), ge=0, le=100, description="Ownership percentage (0-100%). Defaults to 0% for EDITOR/VIEWER.")
+    Extends BaseBulkResponse[BRAccessItem] for atomic access operations.
+    Since the operation is atomic (all-or-nothing), success_count equals
+    len(results) on success, and on failure an HTTPException is raised.
+    """
 
-
-class BRAccessUpdateRequest(BaseModel):
-    """Request to update user access role and/or share percentage."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    role: UserRole = Field(..., description="New access role")
-    share_percentage: Optional[Decimal] = Field(
-        default=None,
-        ge=0,
-        le=100,
-        description="New ownership percentage (0-100%). If None, not changed.",
-    )
-
-
-class BRAccessCreateResponse(BaseModel):
-    """Response after creating access."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    success: bool = True
-    message: str = "Access granted successfully"
-    access: BRAccessItem
-
-
-class BRAccessDeleteResponse(BaseModel):
-    """Response after removing access."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    success: bool = True
-    message: str = "Access removed successfully"
+    pass

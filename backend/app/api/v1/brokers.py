@@ -54,11 +54,9 @@ from backend.app.schemas.brokers import (
     BRBulkUpdateResponse,
     BRBulkDeleteResponse,
     BRAccessItem,
+    BRAccessBulkItem,
     BRAccessListResponse,
-    BRAccessCreateRequest,
-    BRAccessUpdateRequest,
-    BRAccessCreateResponse,
-    BRAccessDeleteResponse,
+    BRAccessBulkResponse,
     )
 from backend.app.services import brim_provider
 from backend.app.services.brim_provider import BRIMParseError
@@ -361,144 +359,61 @@ async def list_broker_access(
             )
 
     return BRAccessListResponse(
-        accesses=[BRAccessItem(**a) for a in accesses],
-        count=len(accesses),
+        items=[BRAccessItem(**a) for a in accesses],
         )
 
 
-@broker_router.post("/{broker_id}/access", response_model=BRAccessCreateResponse)
-async def add_broker_access(
+@broker_router.put("/{broker_id}/access", response_model=BRAccessBulkResponse)
+async def bulk_update_broker_access(
     broker_id: int,
-    request: BRAccessCreateRequest,
+    items: List[BRAccessBulkItem],
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
-    ) -> BRAccessCreateResponse:
+    ) -> BRAccessBulkResponse:
     """
-    Add user access to a broker.
+    Atomically replace the access configuration for a broker.
 
-    Only OWNERs can add access. Superusers can always add access.
+    Sends the COMPLETE desired access list. The backend computes the diff
+    (adds, updates, removes) and applies all changes in a single transaction.
+
+    Rules:
+    - Only OWNERs (or superusers) can call this endpoint.
+    - At least one OWNER must remain after the operation.
+    - Only OWNERs can have share_percentage > 0.
+    - Sum of all share_percentage values must be ≤ 1.0 (fraction, not percent).
+    - The calling user cannot remove themselves as the last OWNER.
     """
+    if not items:
+        raise HTTPException(status_code=422, detail="At least one access item is required")
+
     service = BrokerService(session)
-    success, message = await service.add_access(
+    success, message, accesses = await service.bulk_update_access(
         broker_id=broker_id,
-        target_user_id=request.user_id,
-        role=request.role,
+        desired_accesses=items,
         current_user_id=current_user.id,
         is_superuser=current_user.is_superuser,
-        share_percentage=request.share_percentage,
         )
 
     if not success:
-        # Distinguish between authorization errors and other errors
         if "Only OWNERs can" in message or "Access denied" in message:
             raise HTTPException(status_code=403, detail=message)
         raise HTTPException(status_code=400, detail=message)
 
     await session.commit()
 
-    # Get the created access info
-    accesses = await service.list_accesses(broker_id, current_user.id, is_superuser=True)
-    new_access = next((a for a in accesses if a["user_id"] == request.user_id), None)
-
-    if not new_access:
-        raise HTTPException(status_code=500, detail="Failed to retrieve created access")
+    # Fetch fresh access list after commit
+    fresh_accesses = await service.list_accesses(broker_id, current_user.id, is_superuser=True)
+    access_items = [BRAccessItem(**a) for a in fresh_accesses]
 
     logger.info(
-        f"Added access for user {request.user_id} to broker {broker_id}", user_id=current_user.id
+        f"Bulk updated access for broker {broker_id} ({len(access_items)} users)",
+        user_id=current_user.id,
         )
 
-    return BRAccessCreateResponse(
-        success=True,
-        message=message,
-        access=BRAccessItem(**new_access),
+    return BRAccessBulkResponse(
+        results=access_items,
+        success_count=len(access_items),
         )
-
-
-@broker_router.patch("/{broker_id}/access/{target_user_id}", response_model=BRAccessCreateResponse)
-async def update_broker_access(
-    broker_id: int,
-    target_user_id: int,
-    request: BRAccessUpdateRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    session: AsyncSession = Depends(get_session_generator),
-    ) -> BRAccessCreateResponse:
-    """
-    Update user access role.
-
-    Only OWNERs can modify access. Superusers can always modify.
-    Cannot degrade the last OWNER.
-    """
-    service = BrokerService(session)
-    success, message = await service.update_access(
-        broker_id=broker_id,
-        target_user_id=target_user_id,
-        new_role=request.role,
-        current_user_id=current_user.id,
-        is_superuser=current_user.is_superuser,
-        share_percentage=request.share_percentage,
-        )
-
-    if not success:
-        # Distinguish between authorization errors and other errors
-        if "Only OWNERs can" in message or "Access denied" in message:
-            raise HTTPException(status_code=403, detail=message)
-        raise HTTPException(status_code=400, detail=message)
-
-    await session.commit()
-
-    # Get the updated access info
-    accesses = await service.list_accesses(broker_id, current_user.id, is_superuser=True)
-    updated_access = next((a for a in accesses if a["user_id"] == target_user_id), None)
-
-    if not updated_access:
-        raise HTTPException(status_code=500, detail="Failed to retrieve updated access")
-
-    logger.info(
-        f"Updated access for user {target_user_id} on broker {broker_id}", user_id=current_user.id
-        )
-
-    return BRAccessCreateResponse(
-        success=True,
-        message=message,
-        access=BRAccessItem(**updated_access),
-        )
-
-
-@broker_router.delete("/{broker_id}/access/{target_user_id}", response_model=BRAccessDeleteResponse)
-async def remove_broker_access(
-    broker_id: int,
-    target_user_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    session: AsyncSession = Depends(get_session_generator),
-    ) -> BRAccessDeleteResponse:
-    """
-    Remove user access from a broker.
-
-    - OWNERs can remove others
-    - Anyone can remove themselves (except last OWNER)
-    - Superusers can remove anyone (except last OWNER)
-    """
-    service = BrokerService(session)
-    success, message = await service.remove_access(
-        broker_id=broker_id,
-        target_user_id=target_user_id,
-        current_user_id=current_user.id,
-        is_superuser=current_user.is_superuser,
-        )
-
-    if not success:
-        # Distinguish between authorization errors and other errors
-        if "Only OWNERs can" in message or "Access denied" in message:
-            raise HTTPException(status_code=403, detail=message)
-        raise HTTPException(status_code=400, detail=message)
-
-    await session.commit()
-
-    logger.info(
-        f"Removed access for user {target_user_id} from broker {broker_id}", user_id=current_user.id
-        )
-
-    return BRAccessDeleteResponse(success=True, message=message)
 
 
 # =============================================================================

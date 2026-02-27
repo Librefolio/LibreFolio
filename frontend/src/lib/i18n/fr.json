@@ -249,7 +249,32 @@
     "importFiles": "Fichiers d'Importation",
     "noImportFiles": "Aucun fichier d'importation",
     "uploadHint": "Téléchargez des rapports de courtier pour importer des transactions",
-    "manageFiles": "Gérer tous les fichiers"
+    "manageFiles": "Gérer tous les fichiers",
+    "sharing": {
+      "title": "Partager le Courtier",
+      "addUser": "Ajouter un Utilisateur",
+      "searchPlaceholder": "Rechercher par nom d'utilisateur...",
+      "role": "Rôle",
+      "sharePercentage": "% Propriété",
+      "remove": "Supprimer l'Accès",
+      "removeConfirm": "Supprimer l'accès de {username} à ce courtier ?",
+      "percentageWarning": "La propriété totale dépasse 100%",
+      "selfDemoteWarning": "Vous êtes sur le point de changer votre propre rôle. Vous pourriez perdre l'accès de gestion.",
+      "noOtherUsers": "Aucun utilisateur trouvé",
+      "saved": "Configuration des accès enregistrée",
+      "roleOwner": "Propriétaire — Contrôle total",
+      "roleEditor": "Éditeur — Peut modifier les transactions",
+      "roleViewer": "Lecteur — Lecture seule",
+      "allocated": "Alloué",
+      "available": "Disponible",
+      "owners": "Propriétaires",
+      "editors": "Éditeurs",
+      "viewers": "Lecteurs",
+      "save": "Enregistrer la Configuration",
+      "saveFailed": "Échec de l'enregistrement de la configuration",
+      "selectUser": "Sélectionner un utilisateur",
+      "ownershipChart": "Distribution de la Propriété"
+    }
   },
   "assets": {
     "title": "Actifs",
@@ -497,5 +522,10 @@
     "useSelected": "Utiliser la Sélection",
     "selectIcon": "Sélectionner une Icône",
     "urlHint": "Entrez une URL distante ou un chemin local depuis Fichiers"
+  },
+  "bxrokers": {
+    "sharing": {
+      "lastOwnerWarning": "Impossible de supprimer le dernier propriétaire"
+    }
   }
 }
