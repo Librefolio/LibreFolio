@@ -7,9 +7,8 @@ Business logic for user management, used by both API and CLI.
 from typing import Optional
 
 import structlog
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
 from backend.app.db.models import User, UserSettings, BrokerUserAccess
 from backend.app.services.auth_service import hash_password, delete_user_sessions

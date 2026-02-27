@@ -729,10 +729,13 @@ class TestMultiUserBRIM:
             async with httpx.AsyncClient() as client2:
                 user2_id = await create_test_user(client2)
 
-            # Owner adds user2 as EDITOR
-            add_access_response = await client.post(
+            # Owner adds user2 as EDITOR via bulk PUT
+            add_access_response = await client.put(
                 f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "EDITOR"},
+                json=[
+                    {"user_id": owner_id, "role": "OWNER", "share_percentage": 1.0},
+                    {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
+                ],
                 timeout=TIMEOUT,
                 )
             assert add_access_response.status_code == 200

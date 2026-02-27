@@ -47,7 +47,7 @@
         try {
             const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
 
-            currencyOptions = response.currencies.map(c => ({
+            currencyOptions = (response.items || []).map((c: any) => ({
                 value: c.code,
                 label: c.name,
                 icon: c.symbol && c.symbol !== c.code ? c.symbol : undefined

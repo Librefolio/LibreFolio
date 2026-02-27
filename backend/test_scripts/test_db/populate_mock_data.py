@@ -215,7 +215,7 @@ def populate_broker_user_access(session: Session):
                 user_id=admin.id,
                 broker_id=broker.id,
                 role=UserRole.OWNER,
-                share_percentage=Decimal("100"),
+                share_percentage=Decimal("1"),
                 )
             session.add(access)
             print(f"  ✅ {admin.username} → {broker.name} (OWNER, 100%)")
@@ -226,7 +226,7 @@ def populate_broker_user_access(session: Session):
             # Alternate between EDITOR and VIEWER with different share percentages
             if i % 2 == 0:
                 role = UserRole.EDITOR
-                share = Decimal("50")  # Editor with 50% (co-owner scenario)
+                share = Decimal("0")  # Editor with 0% (can edit, but no ownership)
             else:
                 role = UserRole.VIEWER
                 share = Decimal("0")  # Viewer with 0% (read-only, e.g., accountant)

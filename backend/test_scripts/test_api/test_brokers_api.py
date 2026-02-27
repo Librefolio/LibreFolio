@@ -247,8 +247,8 @@ class TestBrokerCreate:
 
             assert access_resp.status_code == 200
             access_data = access_resp.json()
-            assert access_data["count"] == 1
-            assert access_data["accesses"][0]["role"] == "OWNER"
+            assert len(access_data["items"]) == 1
+            assert access_data["items"][0]["role"] == "OWNER"
 
             print_success("✓ Creator is OWNER")
 
@@ -468,7 +468,7 @@ class TestBrokerDelete:
                 f"{API_BASE}/brokers",
                 params={"ids": [broker_id]},
                 timeout=TIMEOUT,
-                )
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -714,6 +714,8 @@ class TestMultipleOwners:
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
             # User 1 creates broker
             await create_test_user(client1)
+            me_resp = await client1.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            user1_id = me_resp.json()["user"]["id"]
             resp = await client1.post(
                 f"{API_BASE}/brokers",
                 json=[{"name": unique_name("Multi Owner Broker")}],
@@ -733,10 +735,13 @@ class TestMultipleOwners:
                 )
             user2_id = user2_resp.json()["user"]["id"]
 
-            # User 1 adds user 2 as OWNER
-            await client1.post(
+            # User 1 adds user 2 as OWNER via bulk update
+            await client1.put(
                 f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "OWNER"},
+                json=[
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
+                    {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
+                ],
                 timeout=TIMEOUT,
                 )
 
@@ -766,7 +771,7 @@ class TestMultipleOwners:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
                 )
-            owners = [a for a in access_resp.json()["accesses"] if a["role"] == "OWNER"]
+            owners = [a for a in access_resp.json()["items"] if a["role"] == "OWNER"]
             assert len(owners) == 2
 
             print_success("✓ Broker with multiple owners works correctly")
@@ -777,8 +782,10 @@ class TestMultipleOwners:
         print_section("Test BR-A-051: One owner removes another")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            # Setup: user1 creates broker, adds user2 as OWNER
-            user1_id, _, _ = await create_test_user(client1)
+            # Setup: user1 creates broker
+            await create_test_user(client1)
+            me_resp = await client1.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            user1_id = me_resp.json()["user"]["id"]
             resp = await client1.post(
                 f"{API_BASE}/brokers",
                 json=[{"name": unique_name("Remove Owner Test")}],
@@ -786,7 +793,7 @@ class TestMultipleOwners:
                 )
             broker_id = resp.json()["results"][0]["broker_id"]
 
-            # Create and add user 2
+            # Create user 2
             user2_resp = await client2.post(
                 f"{API_BASE}/auth/register",
                 json={
@@ -798,26 +805,33 @@ class TestMultipleOwners:
                 )
             user2_id = user2_resp.json()["user"]["id"]
 
-            await client1.post(
+            # Add user2 as OWNER via bulk
+            await client1.put(
                 f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "OWNER"},
+                json=[
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
+                    {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
+                ],
                 timeout=TIMEOUT,
                 )
 
-            # User 1 removes user 2
-            response = await client1.delete(
-                f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
+            # User 1 removes user 2 by sending bulk with only user1
+            response = await client1.put(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                json=[
+                    {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                ],
                 timeout=TIMEOUT,
                 )
 
             assert response.status_code == 200
-            assert response.json()["success"] is True
+            assert response.json()["success_count"] == 1
 
             # Verify only user1 remains
             access_resp = await client1.get(
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
                 )
-            assert access_resp.json()["count"] == 1
+            assert len(access_resp.json()["items"]) == 1
 
             print_success("✓ Owner removed another owner successfully")

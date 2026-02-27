@@ -173,9 +173,9 @@ async def test_sync_auto_config_no_pairs(test_server):
         list_resp = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
         existing_sources = FXPairSourcesResponse(**list_resp.json())
 
-        if existing_sources.count > 0:
+        if len(existing_sources.items) > 0:
             # Delete all existing pair sources
-            for source in existing_sources.sources:
+            for source in existing_sources.items:
                 delete_items = [
                     FXPairSourceItem(
                         base=source.base,

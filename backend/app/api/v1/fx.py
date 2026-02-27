@@ -131,7 +131,7 @@ async def list_currencies(
                 )
 
         currencies = await provider_instance.get_supported_currencies()
-        return FXCurrenciesResponse(currencies=currencies, count=len(currencies))
+        return FXCurrenciesResponse(items=currencies)
     except HTTPException:
         raise
     except ValueError as e:
@@ -707,7 +707,7 @@ async def list_pair_sources(session: AsyncSession = Depends(get_session_generato
             for s in sources
             ]
 
-        return FXPairSourcesResponse(sources=sources_list, count=len(sources_list))
+        return FXPairSourcesResponse(items=sources_list)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch pair sources: {str(e)}")
 

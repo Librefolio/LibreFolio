@@ -369,20 +369,22 @@ class BrokerUserAccess(SQLModel, table=True):
 
     Defines which users can access which brokers and with what permissions.
 
-    share_percentage: Ownership percentage (0-100%) used for portfolio aggregation.
-    - OWNER: defaults to 100% (can be reduced for co-ownership, e.g., joint accounts)
-    - EDITOR: defaults to 0% (delegated operator, e.g., spouse or financial advisor)
-    - VIEWER: defaults to 0% (e.g., accountant, read-only)
-    - Sum of share_percentage across users for a broker MUST NOT exceed 100%.
+    share_percentage: Ownership fraction (0.00 to 1.00) used for portfolio aggregation.
+    - OWNER: defaults to 1.00 (can be reduced for co-ownership, e.g., joint accounts)
+    - EDITOR: defaults to 0.00 (delegated operator, e.g., spouse or financial advisor)
+    - VIEWER: defaults to 0.00 (e.g., accountant, read-only)
+    - Sum of share_percentage across users for a broker MUST NOT exceed 1.00.
       The backend validates this constraint on add/update operations.
-      Sum CAN be less than 100% (e.g., co-owned account where co-owner is not in the system).
+    - Sum CAN be less than 1.00 (e.g., co-owned account where co-owner is not in the system).
+    - The API sends and receives this value as-is (0-1 fraction).
+      The frontend converts to/from percentage for display purposes.
     """
 
     __tablename__ = "broker_user_access"
     __table_args__ = (
         UniqueConstraint("user_id", "broker_id", name="uq_broker_user_access"),
         CheckConstraint(
-            "share_percentage >= 0 AND share_percentage <= 100",
+            "share_percentage >= 0 AND share_percentage <= 1",
             name="ck_broker_user_access_share_percentage",
         ),
     )
@@ -392,9 +394,9 @@ class BrokerUserAccess(SQLModel, table=True):
     broker_id: int = Field(foreign_key="brokers.id", nullable=False, index=True)
     role: UserRole = Field(default=UserRole.VIEWER)
     share_percentage: Decimal = Field(
-        default=Decimal("100"),
-        sa_column=Column(Numeric(5, 2), nullable=False, default=100),
-        description="Ownership percentage (0-100%) for portfolio aggregation",
+        default=Decimal("1"),
+        sa_column=Column(Numeric(7, 6), nullable=False, default=1),
+        description="Ownership fraction (0.000000 to 1.000000) for portfolio aggregation",
     )
 
     created_at: datetime = Field(default_factory=utcnow)

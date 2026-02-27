@@ -211,9 +211,9 @@ async def list_files(
         List of files with metadata
     """
     user_filter = current_user.id if my_files_only else None
-    files, total = list_uploads(user_id=user_filter)
+    files, _ = list_uploads(user_id=user_filter)
 
-    return UploadListResponse(files=files, count=total)
+    return UploadListResponse(items=files)
 
 
 @router.get("/{file_id}", response_model=UploadFileInfo)

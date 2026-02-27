@@ -78,17 +78,15 @@ async def test_get_currencies(test_server):
         data = response.json()
 
         # Validate response structure
-        assert "currencies" in data, "Response should have 'currencies' field"
-        assert "count" in data, "Response should have 'count' field"
-        assert isinstance(data["currencies"], list), "currencies should be a list"
-        assert data["count"] == len(data["currencies"]), "count should match currencies length"
+        assert "items" in data, "Response should have 'items' field"
+        assert isinstance(data["items"], list), "items should be a list"
 
         # Validate currency codes
-        for currency in data["currencies"]:
+        for currency in data["items"]:
             assert len(currency) == 3, f"Currency code should be 3 chars: {currency}"
             assert currency.isupper(), f"Currency code should be uppercase: {currency}"
 
-        print_success(f"✓ Found {data['count']} currencies")
+        print_success(f"✓ Found {len(data['items'])} currencies")
 
 
 @pytest.mark.asyncio
@@ -130,7 +128,7 @@ async def test_pair_sources_crud(test_server):
         response = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
         assert response.status_code == 200, f"GET failed: {response.status_code}"
         sources_response = FXPairSourcesResponse(**response.json())
-        print_success(f"✓ Listed {sources_response.count} initial sources")
+        print_success(f"✓ Listed {len(sources_response.items)} initial sources")
 
         # 3b. Create a new pair source
         print_info("3b. Create pair source (USD/EUR)")
@@ -158,7 +156,7 @@ async def test_pair_sources_crud(test_server):
         assert response.status_code == 200, f"GET failed: {response.status_code}"
         sources_response = FXPairSourcesResponse(**response.json())
         usd_eur_sources = [
-            s for s in sources_response.sources if s.base == "USD" and s.quote == "EUR"
+            s for s in sources_response.items if s.base == "USD" and s.quote == "EUR"
             ]
         assert len(usd_eur_sources) > 0, "USD/EUR source should exist"
         print_success("✓ Pair source verified")

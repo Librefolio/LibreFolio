@@ -37,11 +37,12 @@ class UploadResponse(BaseModel):
     message: str = Field(default="File uploaded successfully")
 
 
-class UploadListResponse(BaseModel):
-    """Response for listing uploads."""
+from backend.app.schemas.common import BaseListResponse
 
-    files: List[UploadFileInfo] = Field(default_factory=list)
-    count: int = Field(..., description="Total number of files")
+
+class UploadListResponse(BaseListResponse[UploadFileInfo]):
+    """Response for listing uploads."""
+    pass
 
 
 class UploadDeleteResponse(BaseModel):
