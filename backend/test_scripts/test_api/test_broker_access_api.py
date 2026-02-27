@@ -131,7 +131,7 @@ class TestAccessList:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["total"] == 1
+            assert data["count"] == 1
             assert data["accesses"][0]["role"] == "OWNER"
 
             print_success("✓ Owner can list access")

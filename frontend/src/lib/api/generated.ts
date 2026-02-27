@@ -59,9 +59,9 @@ type BRAccessCreateRequest = {
   role?: UserRole | undefined;
   share_percentage?:
     | /**
-     * Ownership percentage (0-100%). OWNER defaults 100%, EDITOR/VIEWER default 0%
+     * Ownership percentage (0-100%). Defaults to 0% for EDITOR/VIEWER.
      *
-     * @default "100"
+     * @default "0"
      */
     (| /**
          * @minimum 0
@@ -129,6 +129,12 @@ type BRAccessItem = {
    * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
    */
   share_percentage: string;
+  avatar_url?:
+    | /**
+     * User avatar URL
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
   /**
    * When access was granted
    */
@@ -139,7 +145,7 @@ type BRAccessListResponse = {
   /**
    * Total number of users with access
    */
-  total: number;
+  count: number;
 };
 type BRAccessUpdateRequest = {
   role: UserRole;
@@ -914,6 +920,28 @@ type BRSummary = {
   opened_at?: ((string | null) | Array<string | null>) | undefined;
   created_at: string;
   updated_at: string;
+  user_role?:
+    | /**
+     * Current user's role on this broker (OWNER/EDITOR/VIEWER)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  user_share_percentage?:
+    | /**
+     * Current user's ownership percentage
+     */
+    (| /**
+         * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+         */
+        (string | null)
+        | Array<
+            /**
+             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+             */
+            string | null
+          >
+      )
+    | undefined;
   cash_balances?: /**
    * Current cash balance per currency
    */
@@ -2970,7 +2998,7 @@ type UploadListResponse = {
   /**
    * Total number of files
    */
-  total: number;
+  count: number;
 };
 type UploadFileInfo = {
   /**
@@ -3018,6 +3046,32 @@ type UploadResponse = {
    * @default "File uploaded successfully"
    */
   string | undefined;
+};
+type UserSearchResponse = {
+  users?: /**
+   * Matching users
+   */
+  Array<UserSearchItem> | undefined;
+  /**
+   * Number of matching users
+   */
+  count: number;
+};
+type UserSearchItem = {
+  /**
+   * User ID
+   */
+  id: number;
+  /**
+   * Username
+   */
+  username: string;
+  avatar_url?:
+    | /**
+     * User avatar URL
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
 };
 
 const AuthLoginRequest = z
@@ -3200,7 +3254,7 @@ const UploadResponse: z.ZodType<UploadResponse> = z
 const UploadListResponse: z.ZodType<UploadListResponse> = z
   .object({
     files: z.array(UploadFileInfo).optional(),
-    total: z.number().int().describe("Total number of files"),
+    count: z.number().int().describe("Total number of files"),
   })
   .passthrough();
 const UploadDeleteResponse = z
@@ -3208,6 +3262,22 @@ const UploadDeleteResponse = z
   .passthrough();
 const offset = z.union([z.number(), z.null()]).optional();
 const img_preview = z.union([z.string(), z.null()]).optional();
+const exclude_broker_id = z
+  .union([z.number(), z.null()])
+  .describe("Exclude users already on this broker")
+  .optional();
+const UserSearchItem: z.ZodType<UserSearchItem> = z.object({
+  id: z.number().int().describe("User ID"),
+  username: z.string().describe("Username"),
+  avatar_url: z
+    .union([z.string(), z.null()])
+    .describe("User avatar URL")
+    .optional(),
+});
+const UserSearchResponse: z.ZodType<UserSearchResponse> = z.object({
+  users: z.array(UserSearchItem).describe("Matching users").optional(),
+  count: z.number().int().describe("Number of matching users"),
+});
 const FXProviderInfo = z
   .object({
     code: z.string().describe("Provider code (e.g., ECB, FED, BOE, SNB)"),
@@ -4995,6 +5065,14 @@ const BRSummary: z.ZodType<BRSummary> = z.object({
   opened_at: z.union([z.string(), z.null()]).optional(),
   created_at: z.string(),
   updated_at: z.string(),
+  user_role: z
+    .union([z.string(), z.null()])
+    .describe("Current user's role on this broker (OWNER/EDITOR/VIEWER)")
+    .optional(),
+  user_share_percentage: z
+    .union([z.string(), z.null()])
+    .describe("Current user's ownership percentage")
+    .optional(),
   cash_balances: z
     .array(Currency_Output)
     .describe("Current cash balance per currency")
@@ -5022,11 +5100,15 @@ const BRAccessItem: z.ZodType<BRAccessItem> = z.object({
     .string()
     .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
     .describe("Ownership percentage (0-100%) for portfolio aggregation"),
+  avatar_url: z
+    .union([z.string(), z.null()])
+    .describe("User avatar URL")
+    .optional(),
   created_at: z.string().describe("When access was granted"),
 });
 const BRAccessListResponse: z.ZodType<BRAccessListResponse> = z.object({
   accesses: z.array(BRAccessItem).optional(),
-  total: z.number().int().describe("Total number of users with access"),
+  count: z.number().int().describe("Total number of users with access"),
 });
 const BRAccessCreateRequest: z.ZodType<BRAccessCreateRequest> = z.object({
   user_id: z.number().int().gt(0).describe("User ID to grant access"),
@@ -5040,10 +5122,10 @@ const BRAccessCreateRequest: z.ZodType<BRAccessCreateRequest> = z.object({
   share_percentage: z
     .union([z.number(), z.string()])
     .describe(
-      "Ownership percentage (0-100%). OWNER defaults 100%, EDITOR/VIEWER default 0%"
+      "Ownership percentage (0-100%). Defaults to 0% for EDITOR/VIEWER."
     )
     .optional()
-    .default("100"),
+    .default("0"),
 });
 const BRAccessCreateResponse: z.ZodType<BRAccessCreateResponse> = z.object({
   success: z.boolean().optional().default(true),
@@ -5580,6 +5662,9 @@ export const schemas = {
   UploadDeleteResponse,
   offset,
   img_preview,
+  exclude_broker_id,
+  UserSearchItem,
+  UserSearchResponse,
   FXProviderInfo,
   FXPairSourceItem,
   FXPairSourcesResponse,
@@ -8199,6 +8284,33 @@ Returns:
       },
     ],
     response: z.unknown(),
+    errors: [
+      {
+        status: 422,
+        description: `Validation Error`,
+        schema: HTTPValidationError,
+      },
+    ],
+  },
+  {
+    method: "get",
+    path: "/api/v1/users/search",
+    alias: "search_users_endpoint_api_v1_users_search_get",
+    description: `Search for users by username (ILIKE match). Does NOT expose email for privacy. Optionally excludes users already having access to a specific broker.`,
+    requestFormat: "json",
+    parameters: [
+      {
+        name: "q",
+        type: "Query",
+        schema: z.string().min(2).describe("Search query (min 2 chars)"),
+      },
+      {
+        name: "exclude_broker_id",
+        type: "Query",
+        schema: exclude_broker_id,
+      },
+    ],
+    response: UserSearchResponse,
     errors: [
       {
         status: 422,

@@ -247,7 +247,7 @@ class TestBrokerCreate:
 
             assert access_resp.status_code == 200
             access_data = access_resp.json()
-            assert access_data["total"] == 1
+            assert access_data["count"] == 1
             assert access_data["accesses"][0]["role"] == "OWNER"
 
             print_success("✓ Creator is OWNER")
@@ -818,6 +818,6 @@ class TestMultipleOwners:
                 f"{API_BASE}/brokers/{broker_id}/access",
                 timeout=TIMEOUT,
                 )
-            assert access_resp.json()["total"] == 1
+            assert access_resp.json()["count"] == 1
 
             print_success("✓ Owner removed another owner successfully")

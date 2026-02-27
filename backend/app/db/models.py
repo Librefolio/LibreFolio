@@ -373,8 +373,9 @@ class BrokerUserAccess(SQLModel, table=True):
     - OWNER: defaults to 100% (can be reduced for co-ownership, e.g., joint accounts)
     - EDITOR: defaults to 0% (delegated operator, e.g., spouse or financial advisor)
     - VIEWER: defaults to 0% (e.g., accountant, read-only)
-    - Sum of share_percentage across users for a broker CAN exceed 100%
-      (e.g., both partners tracking 100% for personal Net Worth), system shows a warning.
+    - Sum of share_percentage across users for a broker MUST NOT exceed 100%.
+      The backend validates this constraint on add/update operations.
+      Sum CAN be less than 100% (e.g., co-owned account where co-owner is not in the system).
     """
 
     __tablename__ = "broker_user_access"

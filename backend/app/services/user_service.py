@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from backend.app.db.models import User
+from backend.app.db.models import User, UserSettings, BrokerUserAccess
 from backend.app.services.auth_service import hash_password, delete_user_sessions
 from backend.app.utils.datetime_utils import utcnow
 
@@ -375,3 +375,53 @@ async def delete_user(session: AsyncSession, user_id: int) -> bool:
         username=user.username
         )
     return True
+
+
+async def search_users(
+    session: AsyncSession,
+    query: str,
+    exclude_broker_id: Optional[int] = None,
+    ) -> list[dict]:
+    """
+    Search users by username (ILIKE). Does NOT expose email for privacy.
+
+    Optionally excludes users already having access to a specific broker.
+
+    Args:
+        session: Database session
+        query: Search string (min 2 chars, searches username)
+        exclude_broker_id: If provided, exclude users already on this broker
+
+    Returns:
+        List of dicts with id, username, avatar_url
+    """
+    stmt = (
+        select(User, UserSettings)
+        .outerjoin(UserSettings, UserSettings.user_id == User.id)
+        .where(
+            User.is_active == True,
+            User.username.ilike(f"%{query}%"),
+        )
+        .order_by(User.username)
+    )
+
+    if exclude_broker_id is not None:
+        # Subquery to find users already on this broker
+        broker_users_subq = (
+            select(BrokerUserAccess.user_id)
+            .where(BrokerUserAccess.broker_id == exclude_broker_id)
+        ).scalar_subquery()
+        stmt = stmt.where(User.id.notin_(broker_users_subq))
+
+    result = await session.execute(stmt)
+    rows = result.all()
+
+    return [
+        {
+            "id": user.id,
+            "username": user.username,
+            "avatar_url": settings.avatar_url if settings else None,
+        }
+        for user, settings in rows
+    ]
+

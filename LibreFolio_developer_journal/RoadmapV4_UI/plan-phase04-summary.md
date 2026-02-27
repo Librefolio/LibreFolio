@@ -1,9 +1,9 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 25 Febbraio 2026 (Pre-step 0.01 brokerSharing completato: pulizia .env/config.py, VERSION da git, rimozione campi obsoleti)  
+**Ultimo aggiornamento**: 27 Febbraio 2026 (brokerSharing Step 1-2 completati + bug fix import user_service + test fix broker response structure. Prossimo: Step 3pre bulk endpoint → Step 3 frontend)  
 **Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename, 42 E2E test, avatar seed, gallery, MkDocs dark mode, gallery-img-loader fallback. Schema
-pre-work Phase 5-8 completato. **Prossimo: Phase 4.8 Broker Sharing GUI — Pre-step 0.01 ✅, ora verifica manuale 0.1-0.4** → vedi `plan-brokerSharing.md`)
+pre-work Phase 5-8 completato. **Prossimo: Phase 4.8 Broker Sharing GUI — Step 0-2 ✅ (backend), Step 3pre (bulk endpoint) → Step 3-8 TODO (frontend)** → vedi `plan-brokerSharing.md`)
 
 ---
 
@@ -162,6 +162,18 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - `Settings` model con `extra="ignore"` per env vars non mappate su campi
     - Fix commenti test con path vecchi (`test_broker_access_api.py`)
 
+15. **Broker Sharing Backend** ✅ NUOVO (27 Feb 2026) — Step 1-2 di `plan-brokerSharing.md`
+    - **Endpoint `GET /users/search`**: ricerca ILIKE su username, no email per GDPR, exclude broker filter
+    - **Schema `UserSearchItem`/`UserSearchResponse`** in nuovo file `schemas/users.py`
+    - **`search_users()` in `user_service.py`**: JOIN con UserSettings per avatar_url
+    - **`avatar_url` in `BRAccessItem`**: JOIN con UserSettings in `list_accesses()`
+    - **`user_role` + `user_share_percentage` in `BRSummary`**: popolati da `get_summary()`
+    - **Share % validation ≤ 100%**: `_sum_share_percentages()` helper, validazione in `add_access()`/`update_access()`
+    - **Standardizzazione `count`**: tutti gli schemi con liste migrati da `total` a `count`
+    - **Test `test_users_search.py`**: 5 test search + 4 test share% validation
+    - **Test runner aggiornato**: `users-search` registrato in `test_runner.py` + `dev.py`
+    - **API sync**: `openapi.json` rigenerato
+
 ---
 
 ## 🔀 Deviazioni dal Piano Originale
@@ -252,7 +264,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 | File                            | Descrizione                                            | Status                         | Rif. 05-08     |
 |---------------------------------|--------------------------------------------------------|--------------------------------|----------------|
-| `plan-brokerSharing.md`         | 🆕 GUI condivisione broker (Phase 4.8)                 | ⏳ TODO — BLOCCANTE per Phase 5 | §3.5, §10, §11 |
+| `plan-brokerSharing.md`         | 🆕 GUI condivisione broker (Phase 4.8)                 | 🔄 IN PROGRESS — Step 0-2 ✅, Step 3pre-8 TODO | §3.5, §10, §11 |
 | `plan-phase7b-filePreview.md`   | Sistema preview file inline — **SPOSTATO a Phase 7.5** | ↗️ Spostato fuori Phase 4      | §7 (Phase 7.5) |
 | `plan-phase05-to-08-upgrade.md` | Piano upgrade fasi 5-8 + GDPR/Sharing + Fiscale        | 🟡 IN CORSO (pre-work ✅)       | Master plan    |
 
@@ -472,15 +484,19 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 **Prossimo task**: Phase 4.8 — Broker Sharing GUI (BLOCCANTE per Phase 5+)
 
-- **PRE-STEP 0**: Verificare schema DB + testare API su Swagger (`/api/v1/docs`) — vedi `plan-brokerSharing.md` §0
-- Creare endpoint `GET /api/v1/users/search` per cercare utenti
-- Aggiungere `avatar_url` a `BRAccessItem`, `user_role` a `BRSummary`
-- Creare `BrokerSharingModal.svelte` con gestione accessi inline
-- Integrare bottone "Share" nella pagina broker detail (solo OWNER)
+- ~~**PRE-STEP 0**: Verificare schema DB + testare API su Swagger~~ — ✅ COMPLETATO
+- ~~Creare endpoint `GET /api/v1/users/search` per cercare utenti~~ — ✅ Step 1 COMPLETATO (27 Feb 2026)
+- ~~Aggiungere `avatar_url` a `BRAccessItem`, `user_role` a `BRSummary`~~ — ✅ Step 2 COMPLETATO (27 Feb 2026)
+- ~~Standardizzare `count` in tutti gli schemi~~ — ✅ COMPLETATO
+- ~~Validazione share_percentage ≤ 100%~~ — ✅ COMPLETATO
+- **TODO**: Installare `echarts` nel frontend
+- **TODO**: Creare `BrokerSharingModal.svelte` con Half-Donut Chart ECharts per ownership
+- **TODO**: Integrare bottone "Share" nella pagina broker detail (solo OWNER)
+- **TODO**: i18n chiavi, E2E test, Gallery screenshots
 - Vedi `plan-brokerSharing.md` per il piano completo
 - **Rif. 05-08**: §3.5 (Sharing GUI), §10 (GDPR Architecture), §11 (Dependency Graph)
 
-**Dopo Phase 4.8**: Installare ECharts e creare `PriceChartShared.svelte` (Phase 5.0)
+**Dopo Phase 4.8**: Creare `PriceChartShared.svelte` (Phase 5.0) — ECharts già installato
 
 - **Rif. 05-08**: §4 (Phase 5 — FX Management), §9 (PriceChartShared spec)
 

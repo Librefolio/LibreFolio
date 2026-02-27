@@ -177,16 +177,9 @@ class FAProviderRefreshFieldsDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    refreshed_fields: List[OldNew[str | None]] = Field(
-        ...,
-        description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.",
-        )
-    missing_data_fields: List[str] = Field(
-        ..., description="Fields provider couldn't fetch (no data available)"
-        )
-    ignored_fields: List[str] = Field(
-        ..., description="Fields ignored (not requested when using field selection)"
-        )
+    refreshed_fields: List[OldNew[str | None]] = Field(...,description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.",)
+    missing_data_fields: List[str] = Field(..., description="Fields provider couldn't fetch (no data available)")
+    ignored_fields: List[str] = Field(..., description="Fields ignored (not requested when using field selection)")
 
 
 class FAProviderAssignmentResult(BaseModel):
@@ -268,6 +261,4 @@ class FAProviderSearchResponse(BaseModel):
     total_results: int = Field(..., description="Total number of results across all providers")
     results: List[FAProviderSearchResultItem] = Field(..., description="Search results")
     providers_queried: List[str] = Field(..., description="Provider codes that were queried")
-    providers_with_errors: List[str] = Field(
-        default_factory=list, description="Providers that returned errors"
-        )
+    providers_with_errors: List[str] = Field(default_factory=list, description="Providers that returned errors")

@@ -177,22 +177,21 @@ class BRSummary(BRReadItem):
     - Current cash balance per currency (computed from transactions)
     - Asset holdings with cost basis and market value
     - Total portfolio value in base currency (if FX rates available)
+    - Current user's role and share percentage on this broker
     """
 
+    # Current user's access info
+    user_role: Optional[str] = Field(default=None, description="Current user's role on this broker (OWNER/EDITOR/VIEWER)")
+    user_share_percentage: Optional[Decimal] = Field(default=None, description="Current user's ownership percentage")
+
     # Cash balances as list of Currency objects
-    cash_balances: List[Currency] = Field(
-        default_factory=list, description="Current cash balance per currency"
-        )
+    cash_balances: List[Currency] = Field(default_factory=list, description="Current cash balance per currency")
 
     # Asset holdings with full details
-    holdings: List[BRAssetHolding] = Field(
-        default_factory=list, description="Current asset holdings with cost basis and market value"
-        )
+    holdings: List[BRAssetHolding] = Field(default_factory=list, description="Current asset holdings with cost basis and market value")
 
     # Optional: Total portfolio value in user's base currency
-    total_value_base_currency: Optional[Currency] = Field(
-        default=None, description="Total portfolio value in base currency (cash + holdings)"
-        )
+    total_value_base_currency: Optional[Currency] = Field(default=None, description="Total portfolio value in base currency (cash + holdings)")
 
     @property
     def currencies(self) -> List[str]:
@@ -378,6 +377,7 @@ class BRAccessItem(BaseModel):
     share_percentage: Decimal = Field(
         ..., description="Ownership percentage (0-100%) for portfolio aggregation"
     )
+    avatar_url: Optional[str] = Field(None, description="User avatar URL")
     created_at: UTCDateTime = Field(..., description="When access was granted")
 
 
@@ -387,7 +387,7 @@ class BRAccessListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     accesses: List[BRAccessItem] = Field(default_factory=list)
-    total: int = Field(..., description="Total number of users with access")
+    count: int = Field(..., description="Total number of users with access")
 
 
 class BRAccessCreateRequest(BaseModel):
@@ -397,12 +397,7 @@ class BRAccessCreateRequest(BaseModel):
 
     user_id: int = Field(..., gt=0, description="User ID to grant access")
     role: UserRole = Field(default=UserRole.VIEWER, description="Access role")
-    share_percentage: Decimal = Field(
-        default=Decimal("100"),
-        ge=0,
-        le=100,
-        description="Ownership percentage (0-100%). OWNER defaults 100%, EDITOR/VIEWER default 0%",
-    )
+    share_percentage: Decimal = Field(default=Decimal("0"), ge=0, le=100, description="Ownership percentage (0-100%). Defaults to 0% for EDITOR/VIEWER.")
 
 
 class BRAccessUpdateRequest(BaseModel):

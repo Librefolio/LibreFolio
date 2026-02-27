@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "0.1.0"
+    "version": "v0.4.25-2-gebcdaa3-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -786,6 +786,70 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/search": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Search users by username",
+        "description": "Search for users by username (ILIKE match). Does NOT expose email for privacy. Optionally excludes users already having access to a specific broker.",
+        "operationId": "search_users_endpoint_api_v1_users_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "description": "Search query (min 2 chars)",
+              "title": "Q"
+            },
+            "description": "Search query (min 2 chars)"
+          },
+          {
+            "name": "exclude_broker_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exclude users already on this broker",
+              "title": "Exclude Broker Id"
+            },
+            "description": "Exclude users already on this broker"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSearchResponse"
+                }
               }
             }
           },
@@ -4265,8 +4329,8 @@
               }
             ],
             "title": "Share Percentage",
-            "description": "Ownership percentage (0-100%). OWNER defaults 100%, EDITOR/VIEWER default 0%",
-            "default": "100"
+            "description": "Ownership percentage (0-100%). Defaults to 0% for EDITOR/VIEWER.",
+            "default": "0"
           }
         },
         "additionalProperties": false,
@@ -4346,6 +4410,18 @@
             "title": "Share Percentage",
             "description": "Ownership percentage (0-100%) for portfolio aggregation"
           },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url",
+            "description": "User avatar URL"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At",
@@ -4374,16 +4450,16 @@
             "type": "array",
             "title": "Accesses"
           },
-          "total": {
+          "count": {
             "type": "integer",
-            "title": "Total",
+            "title": "Count",
             "description": "Total number of users with access"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "total"
+          "count"
         ],
         "title": "BRAccessListResponse",
         "description": "Response for listing broker accesses."
@@ -5547,6 +5623,31 @@
             "type": "string",
             "title": "Updated At"
           },
+          "user_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Role",
+            "description": "Current user's role on this broker (OWNER/EDITOR/VIEWER)"
+          },
+          "user_share_percentage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Share Percentage",
+            "description": "Current user's ownership percentage"
+          },
           "cash_balances": {
             "items": {
               "$ref": "#/components/schemas/Currency-Output"
@@ -5587,7 +5688,7 @@
           "updated_at"
         ],
         "title": "BRSummary",
-        "description": "Broker with computed cash balances and asset holdings.\n\nIncludes:\n- Current cash balance per currency (computed from transactions)\n- Asset holdings with cost basis and market value\n- Total portfolio value in base currency (if FX rates available)"
+        "description": "Broker with computed cash balances and asset holdings.\n\nIncludes:\n- Current cash balance per currency (computed from transactions)\n- Asset holdings with cost basis and market value\n- Total portfolio value in base currency (if FX rates available)\n- Current user's role and share percentage on this broker"
       },
       "BRUpdateItem": {
         "properties": {
@@ -10259,15 +10360,15 @@
             "type": "array",
             "title": "Files"
           },
-          "total": {
+          "count": {
             "type": "integer",
-            "title": "Total",
+            "title": "Count",
             "description": "Total number of files"
           }
         },
         "type": "object",
         "required": [
-          "total"
+          "count"
         ],
         "title": "UploadListResponse",
         "description": "Response for listing uploads."
@@ -10305,6 +10406,64 @@
         ],
         "title": "UserRole",
         "description": "User role for broker access control.\n\n- OWNER: Full access (CRUD broker, manage access, delete broker)\n- EDITOR: Modify broker and transactions, can only remove self\n- VIEWER: Read-only access"
+      },
+      "UserSearchItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "User ID"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Username"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url",
+            "description": "User avatar URL"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "username"
+        ],
+        "title": "UserSearchItem",
+        "description": "Minimal user info for search results. Does NOT expose email for privacy."
+      },
+      "UserSearchResponse": {
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/UserSearchItem"
+            },
+            "type": "array",
+            "title": "Users",
+            "description": "Matching users"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "description": "Number of matching users"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "title": "UserSearchResponse",
+        "description": "Response for user search endpoint."
       },
       "UserSettingsRead": {
         "properties": {

@@ -41,7 +41,7 @@ class UploadListResponse(BaseModel):
     """Response for listing uploads."""
 
     files: List[UploadFileInfo] = Field(default_factory=list)
-    total: int = Field(..., description="Total number of files")
+    count: int = Field(..., description="Total number of files")
 
 
 class UploadDeleteResponse(BaseModel):

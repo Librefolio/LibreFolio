@@ -2,7 +2,7 @@
 
 **Durata**: ~5 giorni  
 **Dipendenze**: Schema pre-work (share_percentage già implementato)  
-**Status**: ⏳ TODO  
+**Status**: 🔄 IN PROGRESS — Step 0-2 completati (+ bug fix), Step 3pre (bulk endpoint) → Step 3-8 da fare  
 **Priorità**: ALTA — Deve essere completato PRIMA di Phase 5  
 **Riferimento 05-08**: Sezioni 3.5, 10, 11 di `plan-phase05-to-08-upgrade.md`
 
@@ -16,13 +16,12 @@ Il backend ha già le API CRUD complete per il broker access control:
 - `POST /api/v1/brokers/{broker_id}/access` — aggiungi utente
 - `PATCH /api/v1/brokers/{broker_id}/access/{target_user_id}` — modifica ruolo/share%
 - `DELETE /api/v1/brokers/{broker_id}/access/{target_user_id}` — rimuovi accesso
+- `GET /api/v1/users/search?q={query}&exclude_broker_id={id}` — cerca utenti (Step 1 ✅)
 
-I test API (16/16) passano. Manca:
+I test API (16/16 + 9 users_search) passano. Serve ancora:
 
-1. **Nessun endpoint per cercare altri utenti** (necessario per "Add User")
-2. **`avatar_url` non incluso** in `BRAccessItem` (necessario per mostrare avatar)
-3. **`user_role` non incluso** in `BRSummary` (necessario per mostrare/nascondere il bottone Share)
-4. **Nessun componente frontend** per gestire lo sharing
+1. **Endpoint `PUT /brokers/{id}/access/bulk`** — necessario per il batch save dalla modale (tutte le modifiche inviate in un'unica transazione)
+2. **Nessun componente frontend** per gestire lo sharing
 
 ---
 
@@ -107,12 +106,12 @@ Dopo aver implementato lo Step 1 (search users), tornare su API Docs e verificar
 
 ### Tasks Pre-Step
 
-- [ ] Eseguire `./dev.py test api broker-access` — verificare che passi
-- [ ] Eseguire `./dev.py test api broker-multi` — verificare che passi
-- [ ] Eseguire `./dev.py test api transactions` — verificare che passi
-- [ ] Eseguire `./dev.py front check` — 0 errori
-- [ ] Verificare su API Docs che `share_percentage` appare negli endpoint broker access
-- [ ] Verificare su API Docs che `cost_basis_override` appare negli endpoint transactions
+- [x] Eseguire `./dev.py test api broker-access` — ✅ PASS
+- [x] Eseguire `./dev.py test api broker-multi` — ✅ PASS
+- [x] Eseguire `./dev.py test api transactions` — ✅ PASS
+- [x] Eseguire `./dev.py front check` — ✅ 0 errori
+- [x] Verificare su API Docs che `share_percentage` appare negli endpoint broker access
+- [x] Verificare su API Docs che `cost_basis_override` appare negli endpoint transactions
 - [ ] Test manuale: creare broker → verificare owner access con share_percentage=100
 - [ ] Test manuale: aggiungere utente con share_percentage custom → verificare persistenza
 
@@ -128,78 +127,43 @@ Dopo aver implementato lo Step 1 (search users), tornare su API Docs e verificar
 
 ---
 
-## 1. Backend — Nuovo endpoint ricerca utenti (~0.5 giorni)
+## 1. ✅ Backend — Nuovo endpoint ricerca utenti (~0.5 giorni) — COMPLETATO 27 Feb 2026
 
 > **Rif. 05-08**: Sezione 3.5 "Phase 4.8 — Broker Sharing GUI" — Questo endpoint è necessario anche per Phase 8 (Dashboard) dove si mostrano gli utenti condivisi per ogni broker
 > nel breakdown KPI.
 
-### 1.1 Nuovo file `backend/app/api/v1/users.py`
+**Implementazione effettiva**:
 
-Creare un nuovo router per gli endpoint utente (separazione di responsabilità):
+.- **`backend/app/api/v1/users.py`**: `GET /users/search?q={query}&exclude_broker_id={id}` — min 2 char, ILIKE su username, no email esposta, no limite risultati (rimosso per semplicità)
 
-```
-GET /api/v1/users/search?q={query}&exclude_broker_id={id}
-```
-
-**Specifiche**:
-
-- Parametro `q`: stringa minimo 2 caratteri, ricerca `ILIKE` su username e email
-- Parametro opzionale `exclude_broker_id`: esclude gli utenti che hanno già accesso al broker
-- Limite: max 10 risultati
-- Richiede autenticazione (qualsiasi utente loggato può cercare altri utenti)
-- **Non esporre email** per privacy — solo username + avatar + id
-
-### 1.2 Schema `UserSearchItem`
-
-In `backend/app/schemas/auth.py` o nuovo file `backend/app/schemas/users.py`:
-
-```python
-class UserSearchItem(BaseModel):
-    """Minimal user info for search results."""
-    id: int
-    username: str
-    avatar_url: Optional[str] = None  # from UserSettings
-
-
-class UserSearchResponse(BaseModel):
-    """Response for user search endpoint."""
-    users: List[UserSearchItem]
-    total: int
-```
-
-### 1.3 Service: `search_users` in `user_service.py`
-
-```python
-async def search_users(
-        session: AsyncSession,
-        query: str,
-        exclude_broker_id: Optional[int] = None,
-        limit: int = 10
-        ) -> list[dict]:
-    """Search users by username (ILIKE). Optionally exclude users already on a broker."""
-```
-
-- JOIN con `UserSettings` per `avatar_url`
-- Se `exclude_broker_id` fornito, LEFT JOIN + WHERE filter per escludere utenti già con accesso
-
-### 1.4 Registrare router in `router.py`
-
-Aggiungere il nuovo router `users_router` in `backend/app/api/v1/router.py`.
+- **`backend/app/schemas/users.py`**: `UserSearchItem(id, username, avatar_url)` + `UserSearchResponse(users, count)` — usa `count` standardizzato (non `total`)
+- **`backend/app/services/user_service.py`**: `search_users()` con JOIN UserSettings per avatar_url, subquery exclude
+- **`backend/app/api/v1/router.py`**: users router registrato
+- **`scripts/test_runner.py`**: test `users-search` registrato nel runner
+- **Standardizzazione `count`**: Migrati tutti gli schemi da `total` a `count` (UploadListResponse, BRAccessListResponse, FXPairSourcesResponse, FXCurrenciesResponse, CountryListResponse, CurrencyListResponse, SectorListResponse). Test aggiornati di conseguenza.
 
 ### Tasks
 
-- [ ] Creare `backend/app/api/v1/users.py` con endpoint `GET /users/search`
-- [ ] Creare schema `UserSearchItem` + `UserSearchResponse`
-- [ ] Aggiungere `search_users()` in `user_service.py`
-- [ ] Registrare `users_router` in `router.py`
-- [ ] Test: `backend/test_scripts/test_api/test_users_search.py`
+- [x] Creare `backend/app/api/v1/users.py` con endpoint `GET /users/search`
+- [x] Creare schema `UserSearchItem` + `UserSearchResponse` (in `users.py` separato)
+- [x] Aggiungere `search_users()` in `user_service.py`
+- [x] Registrare `users_router` in `router.py`
+- [x] Test: `backend/test_scripts/test_api/test_users_search.py`
+- [x] Standardizzare `count` in tutti gli schemi (da `total`)
 
 ---
 
-## 2. Backend — Aggiungere campi mancanti (~0.5 giorni)
+## 2. ✅ Backend — Aggiungere campi mancanti (~0.5 giorni) — COMPLETATO 27 Feb 2026
 
 > **Rif. 05-08**: Sezione 2.1 "share_percentage" + Sezione 10 "GDPR/Sharing Architecture" — `avatar_url` e `user_role` servono anche a Phase 8 (Dashboard) per mostrare avatar
 > utenti nel breakdown e decidere se un broker pesa sul Net Worth dell'utente corrente (share > 0%).
+
+**Implementazione effettiva**:
+
+- **`BRAccessItem`**: Aggiunto `avatar_url: Optional[str]` — JOIN con UserSettings in `list_accesses()`
+- **`BRSummary`**: Aggiunto `user_role: Optional[str]` e `user_share_percentage: Optional[Decimal]` — popolati da `get_summary()`
+- **Share % validation**: `_sum_share_percentages()` helper + validazione in `add_access()` e `update_access()` — somma ≤ 100% enforced
+- **Test aggiornati**: `test_broker_access_api.py`, `test_broker_multiuser_api.py`, `test_brokers_api.py`, `test_uploads_api.py` tutti aggiornati per il cambio `total` → `count`
 
 ### 2.1 `avatar_url` in `BRAccessItem`
 
@@ -251,12 +215,15 @@ summary.user_role = access.value if access else None
 
 ### Tasks
 
-- [ ] Aggiungere `avatar_url: Optional[str] = None` a `BRAccessItem` schema
-- [ ] Modificare `list_accesses()` per JOIN con UserSettings e popolare avatar_url
-- [ ] Aggiungere `user_role: Optional[str] = None` a `BRSummary` schema
-- [ ] Modificare `get_summary()` per popolare user_role
-- [ ] Verificare test API esistenti (16/16 devono continuare a passare)
-- [ ] `./dev.py api sync` per rigenerare il client TypeScript
+- [x] Aggiungere `avatar_url: Optional[str] = None` a `BRAccessItem` schema
+- [x] Modificare `list_accesses()` per JOIN con UserSettings e popolare avatar_url
+- [x] Aggiungere `user_role: Optional[str] = None` a `BRSummary` schema
+- [x] Aggiungere `user_share_percentage: Optional[Decimal]` a `BRSummary` schema
+- [x] Modificare `get_summary()` per popolare user_role e user_share_percentage
+- [x] Implementare `_sum_share_percentages()` helper per validazione ≤ 100%
+- [x] Validazione share_percentage sum in `add_access()` e `update_access()`
+- [x] Verificare test API esistenti aggiornati per `count`
+- [x] `./dev.py api sync` per rigenerare il client TypeScript
 
 ---
 
@@ -266,47 +233,124 @@ summary.user_role = access.value if access else None
 > Share (solo OWNER), edit transazioni (OWNER/EDITOR), sync FX/Prices (OWNER/EDITOR), delete broker (solo OWNER). In Phase 8, `share_percentage` è usato per calcolare NAV/PnL/ROI
 > pesato nella Dashboard (sezione 8.1 "KPI Cards").
 
+### 3.0 Pre-requisito: Installare Apache ECharts
+
+Apache ECharts è necessario per il grafico semi-circolare di ownership. Questa installazione anticipa anche Phase 5-8 dove ECharts verrà usato estensivamente per grafici FX, Asset prices e Dashboard KPIs.
+
+```bash
+cd frontend && npm install echarts
+```
+
+> **Nota**: L'installazione di ECharts era originariamente pianificata in Phase 5/8, ma la necessitiamo qui per il grafico di ownership. Aggiornare i plan Phase 5-8 di conseguenza.
+
 ### 3.1 Componente `BrokerSharingModal.svelte`
 
 Percorso: `frontend/src/lib/components/brokers/BrokerSharingModal.svelte`
 
-**Layout della modale**:
+**Layout della modale (AGGIORNATO con input utente)**:
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Share Broker — "Nome Broker"              ⟲  ✕ │
-├─────────────────────────────────────────────────┤
-│                                                 │
-│  👤 Search user to add...            [Add ▸]    │
-│                                                 │
-│  ┌─────────────────────────────────────────────┐│
-│  │ Avatar │ Username │ Role    │ Share% │ ✕    ││
-│  │────────┼──────────┼─────────┼────────┼──────││
-│  │ 🟢     │ admin    │ [OWNER▼]│ [100 ] │  —   ││
-│  │ 🔵     │ mario    │ [EDITOR]│ [ 50 ] │ [🗑] ││
-│  │ 🟣     │ anna     │ [VIEWER]│ [  0 ] │ [🗑] ││
-│  └─────────────────────────────────────────────┘│
-│                                                 │
-│  ⚠️ La somma delle % di possesso è 150%        │
-│     (consentito ma potrebbe sovrastimare il     │
-│      patrimonio)                                │
-│                                                 │
-│  ℹ️ OWNER: Controllo totale                    │
-│     EDITOR: Modifica transazioni                │
-│     VIEWER: Sola lettura                        │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  Share Broker — "Nome Broker"                   ⟲ ✕ │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│        ┌─────────────────────────┐                  │
+│        │                         │                  │
+│        │   [Half-Donut Chart]    │                  │
+│        │   Owner ██ 50%          │                  │
+│        │   Mario ██ 30%          │                  │
+│        │   Free  ░░ 20%          │                  │
+│        │                         │                  │
+│        │   Allocated: 80%  [+]   │                  │
+│        │   Available: 20%        │                  │
+│        └─────────────────────────┘                  │
+│                                                     │
+│   📝 Editors:  [mario badge]                        │
+│   👁 Viewers:  [anna badge]                         │
+│                                                     │
+│   ⚠️ Sum exceeds 100% (optional warning)            │
+│                                                     │
+│   ℹ️ OWNER: Full control                            │
+│      EDITOR: Can modify transactions                │
+│      VIEWER: Read only                              │
+└─────────────────────────────────────────────────────┘
 ```
 
-**Comportamento**:
+**Grafico Semi-Circolare (Half-Donut ECharts)**:
 
-- **Save inline**: ogni modifica di ruolo/share% chiama subito PATCH API
-- **Add user**: SearchSelect con debounce 300ms → chiama `GET /users/search?q=...&exclude_broker_id=X` → click su risultato → chiama POST → refresh lista
-- **Remove**: ConfirmModal ("Rimuovere l'accesso di {username}?") → DELETE API → refresh
-- **Protezioni**:
+- Basato su `pie-half-donut` di Apache ECharts (tipo: `pie`, startAngle: 180, endAngle: 360)
+- Ogni OWNER con share% > 0 ha un arco colorato con la sua icona/avatar vicino all'arco
+- L'area "non allocata" (100% - Σshare%) è un arco grigio trasparente
+- **Al centro del grafico**: "Allocated: XX%" e "Available: YY%" + pulsante "+" per aggiungere un utente
+- Cliccando sull'icona di un utente vicino l'arco → apre modale di edit (modifica %, ruolo, rimuovi)
+- Passando il mouse sull'arco → tooltip con info utente (già fornito da ECharts)
+- **Sotto il grafico**: lista badge degli Editor e dei Viewer (non hanno arco perché share=0%)
+- Ogni badge ha un "−" per rimuovere l'accesso
+
+**Modale "Add/Edit User"**:
+
+Quando si clicca "+" (add) o un'icona utente (edit), si apre una sotto-modale con:
+
+- **Search/Select utente** (solo in Add, simile a SearchSelect broker con icona + nome e campo ricerca)
+- **Ruolo** (SimpleSelect: OWNER/EDITOR/VIEWER)
+- **Percentuale** (input numerico, non può superare la % residua)
+- **Pulsante "Aggiungi"** (in add) o "Salva"/"Rimuovi" (in edit)
+
+**Comportamento (BATCH SAVE — configurazione locale + salva tutto)**:
+
+> ⚠️ **IMPORTANTE**: La modale opera in modalità "configurazione locale". NESSUNA API viene chiamata
+> finché l'utente non clicca "Salva". Questo permette di comporre l'intera configurazione di sharing
+> prima di inviarla al backend in un'unica transazione atomica.
+
+- **Configurazione locale**: Tutte le modifiche (add user, change role, change share%, remove user) avvengono solo nello stato locale della modale
+- **Salva batch**: Al click di "Salva", il frontend invia l'intera configurazione al backend tramite `PUT /brokers/{id}/access/bulk`
+- **Annulla/Click fuori**: Se ci sono modifiche non salvate, modale di conferma arancione ("Annullare le modifiche?")
+- **Add user**: SearchSelect con debounce 300ms → `GET /users/search?q=...&exclude_broker_id=X` → click su risultato → aggiunge all'elenco locale con ruolo/share% impostabili
+- **Remove**: ConfirmModal ("Rimuovere l'accesso di {username}?") → rimuove dall'elenco locale
+- **Success/Error**: Al salvataggio, il backend valida tutto e ritorna OK (toast verde) o errore (error banner con la causa del fail). Componente ErrorBanner/SuccessBanner già disponibili nel progetto.
+- **Protezioni (validate sia localmente che lato backend)**:
     - Non si può rimuovere l'ultimo OWNER
     - Non si può degradare l'ultimo OWNER
     - Il ruolo OWNER self-demotion mostra warning extra
-    - Warning giallo se Σ(share%) > 100%
+    - Warning banner SOPRA il grafico se Σ(share%) > 100%
+
+### 3.1b Nuovo Backend Endpoint — `PUT /brokers/{id}/access/bulk` (da creare PRIMA del frontend)
+
+> Questo endpoint è **necessario** per il batch save. Va implementato come pre-step 3.
+
+**Endpoint**: `PUT /api/v1/brokers/{broker_id}/access/bulk`  
+**Auth**: Solo OWNER o superuser  
+**Body**:
+
+```json
+{
+  "accesses": [
+    {"user_id": 1, "role": "OWNER", "share_percentage": 50},
+    {"user_id": 2, "role": "EDITOR", "share_percentage": 30},
+    {"user_id": 3, "role": "VIEWER", "share_percentage": 0}
+  ]
+}
+```
+
+**Logica backend (transazione atomica)**:
+
+1. Leggere gli accessi attuali dal DB
+2. Calcolare le diff: utenti da aggiungere, da aggiornare, da rimuovere
+3. Validare: Σ(share%) ≤ 100%, almeno un OWNER rimane, nessun utente inesistente
+4. Applicare tutte le operazioni in un'unica transazione SQL
+5. Se qualcosa fallisce → rollback totale → HTTP 400 con errore specifico
+6. Se tutto OK → commit → HTTP 200 con la lista accessi aggiornata
+
+**Schema request**: `BRAccessBulkUpdateRequest` (lista di `BRAccessBulkItem`)  
+**Schema response**: `BRAccessListResponse` (riutilizzare quello esistente)
+
+**Tasks pre-step 3**:
+
+- [ ] Creare `BRAccessBulkItem` e `BRAccessBulkUpdateRequest` in `schemas/brokers.py`
+- [ ] Implementare `bulk_update_access()` in `broker_service.py`
+- [ ] Creare endpoint `PUT /brokers/{id}/access/bulk` in `brokers.py`
+- [ ] Test: aggiungere test in `test_users_search.py` o file dedicato
+- [ ] `./dev.py api sync` per rigenerare client TypeScript
 
 ### 3.2 Struttura componente
 
@@ -336,19 +380,27 @@ interface BrokerSharingModalProps {
 
 ### Tasks
 
+- [ ] **Pre-step 3**: Implementare `PUT /brokers/{id}/access/bulk` nel backend (vedi 3.1b sopra)
+- [ ] Installare `echarts` nel frontend (`npm install echarts`)
 - [ ] Creare `BrokerSharingModal.svelte` con `ModalBase`
-- [ ] Sezione "Add User" con `SearchSelect` e API search
-- [ ] DataTable (o tabella leggera) per lista accessi con colonne:
-    - Avatar (LazyImage con preview) + Username
-    - Role (SimpleSelect inline — OWNER/EDITOR/VIEWER)
-    - Share % (input numerico con frecce ↑↓)
-    - Azione rimuovi (icona 🗑 con ConfirmModal)
-- [ ] Save inline su ogni modifica (PATCH per role/share%, DELETE per remove)
-- [ ] Warning banner se somma share% > 100%
-- [ ] Protection: last OWNER non rimovibile/degradabile
-- [ ] Loading states per ogni operazione
-- [ ] Error handling con toast/banner
-- [ ] Legenda ruoli in fondo alla modale
+- [ ] Implementare Half-Donut Chart con ECharts (tipo `pie`, startAngle: 180, endAngle: 360)
+    - Archi per ogni OWNER con share% > 0
+    - Arco grigio per percentuale non allocata
+    - Avatar/icona utenti vicino ai rispettivi archi
+    - "Allocated: XX%" e "Available: YY%" al centro
+    - Pulsante "+" al centro per aggiungere utente
+- [ ] Sotto il grafico: liste badge per Editor e Viewer (con "−" per rimuovere)
+- [ ] Sotto-modale "Add/Edit User":
+    - SearchSelect per cercare utenti (simile a broker selector con icona + nome)
+    - SimpleSelect per ruolo (OWNER/EDITOR/VIEWER)
+    - Input numerico per % (limitato a residua)
+    - Pulsanti Aggiungi/Salva/Rimuovi
+- [ ] **Batch Save**: tutte le modifiche locali, pulsante "Salva" chiama `PUT /brokers/{id}/access/bulk`
+- [ ] **Annulla con conferma**: modale arancione se ci sono modifiche non salvate
+- [ ] Warning banner SOPRA il grafico se somma share% > 100%
+- [ ] Success toast (verde) e Error banner al salvataggio
+- [ ] Protection: last OWNER non rimovibile/degradabile (validazione locale + backend)
+- [ ] Loading states per operazione di salvataggio
 - [ ] Dark mode completo
 - [ ] Esportare da `frontend/src/lib/components/brokers/index.ts` (se esiste)
 
@@ -431,24 +483,32 @@ brokers.sharing.legend               = "Roles explanation" / "Spiegazione ruoli"
 
 ---
 
-## 6. Backend Test — API Test Suite (~0.5 giorni)
+## 6. ✅ Backend Test — API Test Suite (~0.5 giorni) — COMPLETATO 27 Feb 2026
 
 ### 6.1 Nuovo file `backend/test_scripts/test_api/test_users_search.py`
 
 Test:
 
-- [ ] `GET /users/search?q=test` → ritorna utenti con "test" nel nome
-- [ ] `GET /users/search?q=ab` → funziona (min 2 char)
-- [ ] `GET /users/search?q=a` → errore 422 (troppo corto)
-- [ ] `GET /users/search` senza `q` → errore 422
-- [ ] `GET /users/search?q=xxx&exclude_broker_id=1` → esclude utenti già con accesso
-- [ ] Non ritorna email per privacy
-- [ ] Richiede autenticazione (401 senza session)
+- [x] `GET /users/search?q=test` → ritorna utenti con "test" nel nome
+- [x] `GET /users/search?q=ab` → funziona (min 2 char)
+- [x] `GET /users/search?q=a` → errore 422 (troppo corto)
+- [x] `GET /users/search` senza `q` → errore 422
+- [x] `GET /users/search?q=xxx&exclude_broker_id=1` → esclude utenti già con accesso
+- [x] Non ritorna email per privacy
+- [x] Richiede autenticazione (401 senza session)
 
-### 6.2 Aggiornamento test esistenti
+### 6.2 Share % Validation Tests (in `test_users_search.py`)
 
-- [ ] Verificare che test `test_broker_access.py` passi con il nuovo campo `avatar_url`
-- [ ] Verificare che test `test_broker_multi_user.py` passi con `user_role` nel summary
+- [x] SHARE-001: Cannot add access if sum would exceed 100%
+- [x] SHARE-002: Can add access if sum exactly 100%
+- [x] SHARE-003: Can add access if sum under 100%
+- [x] SHARE-004: Cannot update share if sum would exceed 100%
+
+### 6.3 Aggiornamento test esistenti
+
+- [x] Verificare che test `test_broker_access.py` passi con il nuovo campo `avatar_url`
+- [x] Verificare che test `test_broker_multi_user.py` passi con `user_role` nel summary
+- [x] Tutti i test migrati da `total` a `count`
 
 ---
 
@@ -496,18 +556,19 @@ Test group `Broker Sharing`:
 
 ## 📊 Timeline Stimata
 
-| Task                              | Giorni        | Cumulativo |
-|-----------------------------------|---------------|------------|
-| 0. Pre-step verifica schema e API | 0.25          | 0.25       |
-| 1. Backend endpoint search users  | 0.5           | 0.75       |
-| 2. Backend avatar_url + user_role | 0.5           | 1.25       |
-| 3. Frontend BrokerSharingModal    | 2.0           | 3.25       |
-| 4. Integrazione broker detail     | 0.5           | 3.75       |
-| 5. i18n chiavi                    | 0.25          | 4.0        |
-| 6. Backend tests                  | 0.5           | 4.5        |
-| 7. E2E tests                      | 0.5           | 5.0        |
-| 8. Gallery screenshots            | 0.25          | 5.25       |
-| **Totale**                        | **~5 giorni** |            |
+| Task                                   | Giorni        | Cumulativo | Status     |
+|----------------------------------------|---------------|------------|------------|
+| 0. Pre-step verifica schema e API      | 0.25          | 0.25       | ✅ DONE    |
+| 1. Backend endpoint search users       | 0.5           | 0.75       | ✅ DONE    |
+| 2. Backend avatar_url + user_role      | 0.5           | 1.25       | ✅ DONE    |
+| 2b. Bug fix import + test fix          | 0.1           | 1.35       | ✅ DONE    |
+| 3pre. Backend `PUT bulk` endpoint      | 0.5           | 1.85       | ⏳ TODO    |
+| 3. Frontend BrokerSharingModal         | 2.0           | 3.85       | ⏳ TODO    |
+| 4. Integrazione broker detail          | 0.5           | 4.35       | ⏳ TODO    |
+| 5. i18n chiavi                         | 0.25          | 4.6        | ⏳ TODO    |
+| 7. E2E tests                           | 0.5           | 5.1        | ⏳ TODO    |
+| 8. Gallery screenshots                 | 0.25          | 5.35       | ⏳ TODO    |
+| **Totale**                             | **~5.5 giorni** |          |            |
 
 ---
 
@@ -525,17 +586,20 @@ frontend/src/lib/components/brokers/BrokerSharingModal.svelte  # Modale sharing
 ### File da modificare
 
 ```
-backend/app/api/v1/router.py                    # Registrare users_router
-backend/app/services/user_service.py            # search_users()
-backend/app/schemas/brokers.py                  # avatar_url in BRAccessItem, user_role in BRSummary
-backend/app/services/broker_service.py          # list_accesses() + get_summary() aggiornati
-frontend/src/routes/(app)/brokers/[id]/+page.svelte  # Bottone Share
-frontend/src/lib/i18n/en.json                   # i18n keys
-frontend/src/lib/i18n/it.json                   # i18n keys
-frontend/src/lib/i18n/fr.json                   # i18n keys
-frontend/src/lib/i18n/es.json                   # i18n keys
-frontend/e2e/brokers.spec.ts                    # E2E tests sharing
-frontend/e2e/gallery.spec.ts                    # Gallery screenshots
+backend/app/api/v1/router.py                    # Registrare users_router — ✅ FATTO
+backend/app/services/user_service.py            # search_users() — ✅ FATTO + fix import
+backend/app/schemas/brokers.py                  # avatar_url in BRAccessItem, user_role in BRSummary — ✅ FATTO
+                                                # + BRAccessBulkItem, BRAccessBulkUpdateRequest — TODO
+backend/app/services/broker_service.py          # list_accesses() + get_summary() aggiornati — ✅ FATTO
+                                                # + bulk_update_access() — TODO
+backend/app/api/v1/brokers.py                   # + PUT /brokers/{id}/access/bulk — TODO
+frontend/src/routes/(app)/brokers/[id]/+page.svelte  # Bottone Share — TODO
+frontend/src/lib/i18n/en.json                   # i18n keys — TODO
+frontend/src/lib/i18n/it.json                   # i18n keys — TODO
+frontend/src/lib/i18n/fr.json                   # i18n keys — TODO
+frontend/src/lib/i18n/es.json                   # i18n keys — TODO
+frontend/e2e/brokers.spec.ts                    # E2E tests sharing — TODO
+frontend/e2e/gallery.spec.ts                    # Gallery screenshots — TODO
 ```
 
 ---
@@ -544,11 +608,18 @@ frontend/e2e/gallery.spec.ts                    # Gallery screenshots
 
 ✅ Backend CRUD API per broker access — GIÀ IMPLEMENTATO  
 ✅ `share_percentage` nel model/schema — GIÀ IMPLEMENTATO  
+✅ Share % validation ≤ 100% — IMPLEMENTATO (Step 2)  
 ✅ Frontend ModalBase, DataTable, SearchSelect, SimpleSelect, ConfirmModal — GIÀ IMPLEMENTATI  
 ✅ LazyImage per avatar preview — GIÀ IMPLEMENTATO  
 ✅ Multi-user test infrastructure — GIÀ IMPLEMENTATA  
-⬜ Endpoint search users — DA CREARE  
-⬜ avatar_url in BRAccessItem — DA AGGIUNGERE  
-⬜ user_role in BRSummary — DA AGGIUNGERE  
-⬜ BrokerSharingModal — DA CREARE  
-
+✅ Endpoint search users — COMPLETATO (Step 1) + bug fix import 27 Feb  
+✅ `avatar_url` in BRAccessItem — COMPLETATO (Step 2)  
+✅ `user_role` in BRSummary — COMPLETATO (Step 2)  
+✅ `count` standardizzato in tutti gli schemi — COMPLETATO (Step 1)  
+✅ Test user search + share validation — COMPLETATI + bug fix 27 Feb (9/9 pass)  
+⬜ `PUT /brokers/{id}/access/bulk` — DA CREARE (Pre-step 3)  
+⬜ BrokerSharingModal — DA CREARE (Step 3)  
+⬜ Integrazione in Broker Detail — DA FARE (Step 4)  
+⬜ i18n chiavi — DA AGGIUNGERE (Step 5)  
+⬜ E2E Test — DA SCRIVERE (Step 7)  
+⬜ Gallery screenshots — DA GENERARE (Step 8)
