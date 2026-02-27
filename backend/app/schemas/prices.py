@@ -150,9 +150,7 @@ class FAAssetDelete(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    date_ranges: List[DateRangeModel] = Field(
-        ..., min_length=1, description="List of date ranges to delete"
-        )
+    date_ranges: List[DateRangeModel] = Field(..., min_length=1, description="List of date ranges to delete")
 
 
 class FAPriceDeleteResult(BaseDeleteResult):

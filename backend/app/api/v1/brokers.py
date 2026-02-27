@@ -362,7 +362,7 @@ async def list_broker_access(
 
     return BRAccessListResponse(
         accesses=[BRAccessItem(**a) for a in accesses],
-        total=len(accesses),
+        count=len(accesses),
         )
 
 

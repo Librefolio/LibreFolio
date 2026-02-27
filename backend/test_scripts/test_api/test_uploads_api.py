@@ -153,7 +153,7 @@ class TestListUploads:
             assert response.status_code == 200
             data = response.json()
             assert "files" in data
-            assert data["total"] >= 1
+            assert data["count"] >= 1
 
             print_success("✓ Listed uploads")
 

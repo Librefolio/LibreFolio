@@ -118,7 +118,7 @@ class TestMultiUserRoles:
 
             assert resp.status_code == 200
             data = resp.json()
-            assert data["total"] == 1
+            assert data["count"] == 1
             assert data["accesses"][0]["user_id"] == user_id
             assert data["accesses"][0]["role"] == "OWNER"
 

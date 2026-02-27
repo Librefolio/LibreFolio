@@ -1111,6 +1111,21 @@ def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = N
     return run_command(cmd, "Broker Multi-User API tests", verbose=verbose)
 
 
+def api_users_search(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """
+    Run user search API tests.
+
+    Tests: user search endpoint and share_percentage validation
+    """
+    print_section("User Search & Share Validation API Tests")
+    print_info("Testing REST API endpoints for user search")
+    print_info("Tests: GET /users/search, share_percentage sum validation")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_users_search.py", test_names)
+    return run_command(cmd, "User Search API tests", verbose=verbose)
+
+
 def api_test(verbose: bool = False) -> bool:
     """Run all API tests."""
     return _run_test_suite(
@@ -1923,6 +1938,14 @@ These tests verify REST API endpoints:
             "desc": "Test multi-user broker scenarios",
             "prereq": "Database created",
             "tests": "Sharing, permissions, isolation",
+            },
+        "users-search": {
+            "func": api_users_search,
+            "test_names": True,
+            "name": "User Search API",
+            "desc": "Test user search and share validation",
+            "prereq": "Database created",
+            "tests": "Search, exclude broker, share % validation",
             },
         "brim": {
             "func": api_brim,

@@ -314,9 +314,7 @@ class BackwardFillInfo(BaseModel):
 
     model_config = ConfigDict()
 
-    actual_rate_date: date_type = Field(
-        ..., description="ISO date of actual data used (YYYY-MM-DD)"
-        )
+    actual_rate_date: date_type = Field(..., description="ISO date of actual data used (YYYY-MM-DD)")
     days_back: int = Field(..., description="Number of days back from requested date")
 
     @field_validator("actual_rate_date", mode="before")
@@ -356,9 +354,7 @@ class DateRangeModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     start: date_type = Field(..., description="Start date (inclusive)")
-    end: Optional[date_type] = Field(
-        None, description="End date (inclusive, optional = single day)"
-        )
+    end: Optional[date_type] = Field(None, description="End date (inclusive, optional = single day)")
 
     @model_validator(mode="after")
     def validate_end_after_start(self) -> "DateRangeModel":
@@ -484,9 +480,7 @@ class BaseBulkResponse(BaseModel, Generic[TResult]):
 
     results: List[TResult] = Field(..., description="Per-item operation results")
     success_count: int = Field(..., ge=0, description="Number of successful operations")
-    errors: List[str] = Field(
-        default_factory=list, description="Operation-level errors (not per-item)"
-        )
+    errors: List[str] = Field(default_factory=list, description="Operation-level errors (not per-item)")
 
     @property
     def failed_count(self) -> int:

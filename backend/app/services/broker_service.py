@@ -402,6 +402,35 @@ class BrokerService:
                     )
                 )
 
+        # Get current user's role and share on this broker
+        user_role_value = None
+        user_share_value = None
+        if not skip_access_check and check_user_id is not None:
+            access_stmt = select(BrokerUserAccess).where(
+                and_(
+                    BrokerUserAccess.broker_id == broker_id,
+                    BrokerUserAccess.user_id == check_user_id,
+                )
+            )
+            access_result = await self.session.execute(access_stmt)
+            user_access = access_result.scalar_one_or_none()
+            if user_access:
+                user_role_value = user_access.role.value
+                user_share_value = user_access.share_percentage
+        elif not skip_access_check:
+            # user_id is the actual logged-in user
+            access_stmt = select(BrokerUserAccess).where(
+                and_(
+                    BrokerUserAccess.broker_id == broker_id,
+                    BrokerUserAccess.user_id == user_id,
+                )
+            )
+            access_result = await self.session.execute(access_stmt)
+            user_access = access_result.scalar_one_or_none()
+            if user_access:
+                user_role_value = user_access.role.value
+                user_share_value = user_access.share_percentage
+
         return BRSummary(
             id=broker.id,
             name=broker.name,
@@ -417,6 +446,8 @@ class BrokerService:
             updated_at=broker.updated_at,
             cash_balances=cash_balances,
             holdings=holdings,
+            user_role=user_role_value,
+            user_share_percentage=user_share_value,
             )
 
     async def _get_latest_price(self, asset_id: int) -> Optional[Decimal]:
@@ -721,11 +752,12 @@ class BrokerService:
                 return []
 
         # Import here to avoid circular import
-        from backend.app.db.models import User
+        from backend.app.db.models import User, UserSettings
 
         stmt = (
-            select(BrokerUserAccess, User)
+            select(BrokerUserAccess, User, UserSettings)
             .join(User, BrokerUserAccess.user_id == User.id)
+            .outerjoin(UserSettings, UserSettings.user_id == User.id)
             .where(BrokerUserAccess.broker_id == broker_id)
             .order_by(BrokerUserAccess.role, User.username)
         )
@@ -739,9 +771,10 @@ class BrokerService:
                 "email": user.email,
                 "role": access.role,
                 "share_percentage": access.share_percentage,
+                "avatar_url": settings.avatar_url if settings else None,
                 "created_at": access.created_at,
                 }
-            for access, user in rows
+            for access, user, settings in rows
             ]
 
     async def _count_owners(self, broker_id: int) -> int:
@@ -758,6 +791,26 @@ class BrokerService:
         result = await self.session.execute(stmt)
         return result.scalar_one()
 
+    async def _sum_share_percentages(self, broker_id: int, exclude_user_id: Optional[int] = None) -> Decimal:
+        """
+        Sum share_percentage for all users on a broker, optionally excluding one user.
+
+        Args:
+            broker_id: Broker ID
+            exclude_user_id: User ID to exclude from sum (for update validation)
+
+        Returns:
+            Sum of share_percentage values
+        """
+        stmt = (
+            select(func.sum(BrokerUserAccess.share_percentage))
+            .where(BrokerUserAccess.broker_id == broker_id)
+        )
+        if exclude_user_id is not None:
+            stmt = stmt.where(BrokerUserAccess.user_id != exclude_user_id)
+        result = await self.session.execute(stmt)
+        return result.scalar() or Decimal("0")
+
     async def add_access(
         self,
         broker_id: int,
@@ -765,7 +818,7 @@ class BrokerService:
         role: UserRole,
         current_user_id: int,
         is_superuser: bool = False,
-        share_percentage: Decimal = Decimal("100"),
+        share_percentage: Decimal = Decimal("0"),
         ) -> tuple[bool, str]:
         """
         Add user access to a broker.
@@ -776,7 +829,7 @@ class BrokerService:
             role: Access role
             current_user_id: Current user ID
             is_superuser: If True, skip OWNER check
-            share_percentage: Ownership percentage (0-100%) for portfolio aggregation
+            share_percentage: Ownership percentage (0-100%) for portfolio aggregation. Defaults to 0%.
 
         Returns:
             Tuple of (success, message)
@@ -805,6 +858,16 @@ class BrokerService:
         existing = await self._check_user_access(broker_id, target_user_id)
         if existing:
             return False, f"User {target_user_id} already has access"
+
+        # Validate share_percentage sum won't exceed 100%
+        current_sum = await self._sum_share_percentages(broker_id)
+        if current_sum + share_percentage > Decimal("100"):
+            available = Decimal("100") - current_sum
+            return False, (
+                f"Total share percentage would exceed 100%. "
+                f"Current total: {current_sum}%, requested: {share_percentage}%, "
+                f"available: {available}%"
+            )
 
         # Create access
         access = BrokerUserAccess(
@@ -875,6 +938,15 @@ class BrokerService:
         # Update role
         access.role = new_role
         if share_percentage is not None:
+            # Validate share_percentage sum won't exceed 100%
+            current_sum = await self._sum_share_percentages(broker_id, exclude_user_id=target_user_id)
+            if current_sum + share_percentage > Decimal("100"):
+                available = Decimal("100") - current_sum
+                return False, (
+                    f"Total share percentage would exceed 100%. "
+                    f"Others total: {current_sum}%, requested: {share_percentage}%, "
+                    f"available: {available}%"
+                )
             access.share_percentage = share_percentage
         access.updated_at = utcnow()
 

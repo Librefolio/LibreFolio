@@ -15,6 +15,7 @@ from backend.app.api.v1 import (
     settings,
     system,
     uploads,
+    users,
     )
 from backend.app.api.v1.utilities import router as utilities_router
 from backend.app.logging_config import get_logger
@@ -28,6 +29,7 @@ router.include_router(auth.router)  # Auth first (no prefix, uses /auth)
 router.include_router(settings.router)  # Settings
 router.include_router(system.router)  # System info
 router.include_router(uploads.router)  # File uploads
+router.include_router(users.router)  # User search
 router.include_router(fx.fx_router)
 router.include_router(assets.asset_router)
 router.include_router(transactions.tx_router)

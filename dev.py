@@ -112,6 +112,7 @@ def cmd_server(args):
     if test_mode:
         port = get_test_server_port()
         db = get_database_path(test_mode=True)
+        debug_mode = True
     else:
         port = get_server_port()
         db = get_database_path(test_mode=False)
@@ -156,33 +157,35 @@ def cmd_server(args):
     auto_build_mkdocs()
     update_js_cache()
 
+    mode_str = " (TEST MODE)" if test_mode else " (DEBUG MODE)" if debug_mode else ""
+    print(Colors.success(f"Starting LibreFolio API server{mode_str}..."))
+    print(Colors.warning(f"Database: {db}"))
+    print(Colors.warning(f"Port: {port}"))
     if test_mode:
-        print(Colors.success("Starting LibreFolio API server (TEST MODE)..."))
-        print(Colors.warning(f"Database: {db}"))
-        print(Colors.warning(f"Port: {port}"))
         print()
-        print(f"{Colors.RED}{Colors.BOLD}⚠️  TEST MODE - Using test database!{Colors.NC}")
-        print()
-    else:
-        mode_str = " (DEBUG MODE)" if debug_mode else ""
-        print(Colors.success(f"Starting LibreFolio API server{mode_str}..."))
-        print(Colors.warning(f"Database: {db}"))
-        print(Colors.warning(f"Port: {port}"))
-        if debug_mode:
-            print(Colors.warning("Log Level: DEBUG"))
-        print()
-        print(f"{Colors.BLUE}{Colors.BOLD}Available endpoints:{Colors.NC}")
-        print(f" ├── 🏠 {Colors.YELLOW}Frontend:  http://localhost:{port}/{Colors.NC}")
-        print(f" ├── 💻 {Colors.YELLOW}API Redoc: http://localhost:{port}/api/v1/redoc{Colors.NC}")
-        print(f" ├── 🚀 {Colors.YELLOW}API Docs:  http://localhost:{port}/api/v1/docs{Colors.NC}")
-        print(f" └── 📚 {Colors.YELLOW}User Doc:  http://localhost:{port}/mkdocs/{Colors.NC}")
-        print()
+        print(f"{Colors.RED}{Colors.BOLD}⚠️  TEST MODE - Using test database! ⚠️{Colors.NC}")
+        #         ("e2e_test_user", "e2e@test.example.com", "E2eTestPass123!"),
+        #         ("e2e_test_admin", "e2eadmin@test.example.com", "E2eAdminPass123!"),
+        print(f"{Colors.RED}{Colors.BOLD}Note: defaults user in test db are:{Colors.NC}")
+        print(f'{Colors.RED}{Colors.BOLD} - {{"username": "e2e_test_user",  "password": "E2eTestPass123!"}}')
+        print(f'{Colors.RED}{Colors.BOLD} - {{"username": "e2e_test_admin", "password": "E2eAdminPass123"}}')
 
-        if (PROJECT_ROOT / "frontend" / "build" / "index.html").exists():
-            print_success("Frontend build found - UI available at /")
-        else:
-            print_warning("No frontend build - run './dev.py front build' to enable UI")
         print()
+    if debug_mode:
+        print(Colors.warning("Log Level: DEBUG"))
+    print()
+    print(f"{Colors.BLUE}{Colors.BOLD}Available endpoints:{Colors.NC}")
+    print(f" ├── 🏠 {Colors.YELLOW}Frontend:  http://localhost:{port}/{Colors.NC}")
+    print(f" ├── 💻 {Colors.YELLOW}API Redoc: http://localhost:{port}/api/v1/redoc{Colors.NC}")
+    print(f" ├── 🚀 {Colors.YELLOW}API Docs:  http://localhost:{port}/api/v1/docs{Colors.NC}")
+    print(f" └── 📚 {Colors.YELLOW}User Doc:  http://localhost:{port}/mkdocs/{Colors.NC}")
+    print()
+
+    if (PROJECT_ROOT / "frontend" / "build" / "index.html").exists():
+        print_success("Frontend build found - UI available at /")
+    else:
+        print_warning("No frontend build - run './dev.py front build' to enable UI")
+    print()
 
     env = os.environ.copy()
     if test_mode:
