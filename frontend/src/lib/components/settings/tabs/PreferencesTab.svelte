@@ -83,7 +83,7 @@
 
             // Convert array to object for easy access
             const settingsMap: Record<string, string> = {};
-            for (const setting of response.settings) {
+            for (const setting of response.items ?? []) {
                 settingsMap[setting.key] = setting.value;
             }
 
@@ -125,7 +125,7 @@
         currenciesLoading = true;
         try {
             const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
-            currencyOptions = response.currencies.map(c => ({
+            currencyOptions = (response.items ?? []).map((c: any) => ({
                 value: c.code,
                 label: c.name,
                 icon: c.symbol !== c.code ? c.symbol : undefined

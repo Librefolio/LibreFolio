@@ -249,7 +249,32 @@
     "importFiles": "Import Files",
     "noImportFiles": "No import files yet",
     "uploadHint": "Upload broker reports to import transactions",
-    "manageFiles": "Manage all files"
+    "manageFiles": "Manage all files",
+    "sharing": {
+      "title": "Share Broker",
+      "addUser": "Add User",
+      "searchPlaceholder": "Search by username...",
+      "role": "Role",
+      "sharePercentage": "Ownership %",
+      "remove": "Remove Access",
+      "removeConfirm": "Remove {username}'s access to this broker?",
+      "percentageWarning": "Total ownership exceeds 100%",
+      "selfDemoteWarning": "You are about to change your own role. You may lose management access.",
+      "noOtherUsers": "No users found",
+      "saved": "Access configuration saved",
+      "roleOwner": "Owner — Full control",
+      "roleEditor": "Editor — Can modify transactions",
+      "roleViewer": "Viewer — Read only",
+      "allocated": "Allocated",
+      "available": "Available",
+      "owners": "Owners",
+      "editors": "Editors",
+      "viewers": "Viewers",
+      "save": "Save Configuration",
+      "saveFailed": "Failed to save access configuration",
+      "selectUser": "Select a user",
+      "ownershipChart": "Ownership Distribution"
+    }
   },
   "assets": {
     "title": "Assets",
@@ -497,5 +522,10 @@
     "useSelected": "Use Selected",
     "selectIcon": "Select Icon",
     "urlHint": "Enter a remote URL or a local path from Files"
+  },
+  "bxrokers": {
+    "sharing": {
+      "lastOwnerWarning": "Cannot remove the last owner"
+    }
   }
 }

@@ -118,6 +118,12 @@ test.describe('Select Components', () => {
             // Listbox should be visible
             await expect(page.locator('[role="listbox"]')).toBeVisible({timeout: 3000});
 
+            // Wait for search input to be focused (SearchSelect focuses input after opening)
+            const searchInput = currencySelect.locator('input[type="text"]');
+            await searchInput.waitFor({state: 'visible', timeout: 1000});
+            await searchInput.focus();
+            await page.waitForTimeout(100);
+
             // Press Escape to close
             await page.keyboard.press('Escape');
 

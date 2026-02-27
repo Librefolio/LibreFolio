@@ -2,7 +2,7 @@
 
 **Durata**: ~5 giorni  
 **Dipendenze**: Schema pre-work (share_percentage già implementato)  
-**Status**: 🔄 IN PROGRESS — Step 0-2 completati (+ bug fix), Step 3pre (bulk endpoint) → Step 3-8 da fare  
+**Status**: 🔄 IN PROGRESS — Step 0-2b completati (backend: user search, bulk endpoint, schema standardization, BaseListResponse/BaseBulkResponse migration, `"accesses"→"items"` test migration, BRAccessBulkUpdateRequest rimosso in favore di List[BRAccessBulkItem] diretto, BRAccessBulkResponse→BaseBulkResponse[BRAccessItem], count rimosso da BaseListResponse, i18n sharing keys aggiunte 24 chiavi). Step 3-8 da fare (frontend)  
 **Priorità**: ALTA — Deve essere completato PRIMA di Phase 5  
 **Riferimento 05-08**: Sezioni 3.5, 10, 11 di `plan-phase05-to-08-upgrade.md`
 
@@ -18,9 +18,9 @@ Il backend ha già le API CRUD complete per il broker access control:
 - `DELETE /api/v1/brokers/{broker_id}/access/{target_user_id}` — rimuovi accesso
 - `GET /api/v1/users/search?q={query}&exclude_broker_id={id}` — cerca utenti (Step 1 ✅)
 
-I test API (16/16 + 9 users_search) passano. Serve ancora:
+I test API (17/17 + 9 users_search + 9 bulk/share) passano. Serve ancora:
 
-1. **Endpoint `PUT /brokers/{id}/access/bulk`** — necessario per il batch save dalla modale (tutte le modifiche inviate in un'unica transazione)
+1. ~~**Endpoint `PUT /brokers/{id}/access/bulk`**~~ — ✅ COMPLETATO (Step 2b)
 2. **Nessun componente frontend** per gestire lo sharing
 
 ---
@@ -227,6 +227,63 @@ summary.user_role = access.value if access else None
 
 ---
 
+## 2b. ✅ Backend — Bulk Endpoint + Schema Standardization (~0.5 giorni) — COMPLETATO 27 Feb 2026
+
+> Questo step era originariamente "Step 3pre" ma è diventato uno step a sé per la mole di lavoro di standardizzazione schema.
+
+**Implementazione effettiva**:
+
+### 2b.1 Bulk Access Endpoint
+
+- **`PUT /api/v1/brokers/{broker_id}/access`**: Atomic replace di tutta la configurazione accessi
+- **`BRAccessBulkItem`** schema: user_id, role, share_percentage (0-1 fraction, validator per OWNER-only share > 0)
+- **`BRAccessBulkUpdateRequest`**: RIMOSSO — l'endpoint accetta direttamente `List[BRAccessBulkItem]` (nessun wrapper, coerente col resto del progetto)
+- **`BRAccessBulkResponse(BaseBulkResponse[BRAccessItem])`**: usa la classe base generica, eredita results/success_count/errors
+- **`bulk_update_access()` in `broker_service.py`**: diff vs. stato attuale, transazione atomica, validazione (≤100% sum, almeno 1 OWNER, no duplicati, no utenti inesistenti)
+- **Protezioni**: solo OWNER/superuser, no auto-rimozione last OWNER, no share>0 per EDITOR/VIEWER
+
+### 2b.2 Schema Standardization
+
+- **`BaseListResponse[T]`**: rimosso `count` (ridondante con `len(items)`). Usata in: `UploadListResponse`, `BRAccessListResponse`, `FXPairSourcesResponse`, `FXCurrenciesResponse`, `CountryListResponse`, `CurrencyListResponse`, `SectorListResponse`, `GlobalSettingsListResponse`, `UserSearchResponse`
+- **`BRAccessBulkUpdateRequest(BaseListResponse[BRAccessBulkItem])`**: request body usa `items` (non `accesses`)
+- **`BRAccessBulkResponse(BaseBulkResponse[BRAccessItem])`**: response body usa `results`/`success_count`/`errors` dalla classe base generica
+- **Migrazione `total` → rimosso**: tutti gli endpoint che ritornano liste ora usano `BaseListResponse` con campo `items`
+- **Migrazione `"accesses"` → `"items"` nei test**: tutti i test API che inviavano `json={"accesses": [...]}` ora inviano `json={"items": [...]}`
+- **Frontend fix `PreferencesTab.svelte`**: `response.currencies` → `response.items ?? []`, `response.items` con nullish coalescing
+- **Frontend fix `GlobalSettingsTab.svelte`**: già usava `response.items`, aggiunto `?? []` per safety
+- **API sync**: `openapi.json` rigenerato, Zodios client aggiornato
+
+### 2b.3 Test Suite
+
+- **9 nuovi test** in `test_users_search.py`:
+  - BULK-001: Bulk replace sets exact configuration
+  - BULK-002: At least one OWNER required
+  - BULK-003: Unlisted users removed
+  - BULK-004: Non-OWNER rejected (403)
+  - BULK-005: Duplicate user_ids rejected
+  - SHARE-001: Sum > 100% blocked
+  - SHARE-002: Sum = 100% allowed
+  - SHARE-003: Sum < 100% allowed (phantom co-owner)
+  - SHARE-004: share% > 0 rejected for EDITOR/VIEWER (422)
+- **17/17 API tests pass** (tutti gli endpoint)
+- **0 errori svelte-check** (frontend type-safe)
+- **Fix select-components E2E test**: currency Escape close timing fix
+
+### Tasks
+
+- [x] Implementare `BRAccessBulkItem`, `BRAccessBulkUpdateRequest`, `BRAccessBulkResponse` in schemas
+- [x] Implementare `bulk_update_access()` in `broker_service.py`
+- [x] Creare endpoint `PUT /brokers/{id}/access` in `brokers.py`
+- [x] Standardizzare `BaseListResponse` in tutti gli schemi (rimuovere `count`)
+- [x] Fix frontend `PreferencesTab.svelte` per nuovo schema currencies
+- [x] Fix E2E test `select-components.spec.ts` (Escape timing)
+- [x] `./dev.py api sync` per rigenerare client TypeScript
+- [x] 9 nuovi test per bulk endpoint + share validation
+- [x] Tutti i 17 test API verdi
+- [x] svelte-check 0 errori
+
+---
+
 ## 3. Frontend — BrokerSharingModal (~2 giorni)
 
 > **Rif. 05-08**: Sezione 10 "GDPR/Sharing Architecture" — Questo è il componente centrale per la condivisione. In Phase 5-8, `user_role` condiziona la visibilità di: bottone
@@ -314,22 +371,20 @@ Quando si clicca "+" (add) o un'icona utente (edit), si apre una sotto-modale co
     - Il ruolo OWNER self-demotion mostra warning extra
     - Warning banner SOPRA il grafico se Σ(share%) > 100%
 
-### 3.1b Nuovo Backend Endpoint — `PUT /brokers/{id}/access/bulk` (da creare PRIMA del frontend)
+### 3.1b ✅ Backend Endpoint — `PUT /brokers/{id}/access` — COMPLETATO (Step 2b)
 
-> Questo endpoint è **necessario** per il batch save. Va implementato come pre-step 3.
+> Questo endpoint è stato implementato nel Step 2b.
 
-**Endpoint**: `PUT /api/v1/brokers/{broker_id}/access/bulk`  
+**Endpoint**: `PUT /api/v1/brokers/{broker_id}/access`  
 **Auth**: Solo OWNER o superuser  
-**Body**:
+**Body**: `List[BRAccessBulkItem]` diretto (nessun wrapper)
 
 ```json
-{
-  "accesses": [
-    {"user_id": 1, "role": "OWNER", "share_percentage": 50},
-    {"user_id": 2, "role": "EDITOR", "share_percentage": 30},
-    {"user_id": 3, "role": "VIEWER", "share_percentage": 0}
-  ]
-}
+[
+  {"user_id": 1, "role": "OWNER", "share_percentage": 0.5},
+  {"user_id": 2, "role": "EDITOR", "share_percentage": 0},
+  {"user_id": 3, "role": "VIEWER", "share_percentage": 0}
+]
 ```
 
 **Logica backend (transazione atomica)**:
@@ -341,16 +396,18 @@ Quando si clicca "+" (add) o un'icona utente (edit), si apre una sotto-modale co
 5. Se qualcosa fallisce → rollback totale → HTTP 400 con errore specifico
 6. Se tutto OK → commit → HTTP 200 con la lista accessi aggiornata
 
-**Schema request**: `BRAccessBulkUpdateRequest` (lista di `BRAccessBulkItem`)  
-**Schema response**: `BRAccessListResponse` (riutilizzare quello esistente)
+**Schema request**: `List[BRAccessBulkItem]` diretto (nessun wrapper)  
+**Schema response**: `BRAccessBulkResponse(BaseBulkResponse[BRAccessItem])`
 
 **Tasks pre-step 3**:
 
-- [ ] Creare `BRAccessBulkItem` e `BRAccessBulkUpdateRequest` in `schemas/brokers.py`
-- [ ] Implementare `bulk_update_access()` in `broker_service.py`
-- [ ] Creare endpoint `PUT /brokers/{id}/access/bulk` in `brokers.py`
-- [ ] Test: aggiungere test in `test_users_search.py` o file dedicato
-- [ ] `./dev.py api sync` per rigenerare client TypeScript
+- [x] Creare `BRAccessBulkItem` in `schemas/brokers.py` (BRAccessBulkUpdateRequest rimosso, endpoint usa `List[BRAccessBulkItem]` diretto)
+- [x] Implementare `bulk_update_access()` in `broker_service.py`
+- [x] Creare endpoint `PUT /brokers/{id}/access` in `brokers.py`
+- [x] Test: 9 nuovi test in `test_users_search.py` (BULK + SHARE validation)
+- [x] `./dev.py api sync` per rigenerare client TypeScript
+- [x] Migrazione `"accesses"` → `"items"` in tutti i file test
+- [x] `BRAccessBulkResponse` estende `BaseBulkResponse[BRAccessItem]`
 
 ### 3.2 Struttura componente
 
@@ -380,7 +437,7 @@ interface BrokerSharingModalProps {
 
 ### Tasks
 
-- [ ] **Pre-step 3**: Implementare `PUT /brokers/{id}/access/bulk` nel backend (vedi 3.1b sopra)
+- [x] **Pre-step 3**: Implementare `PUT /brokers/{id}/access/bulk` nel backend (vedi 2b sopra) — ✅ COMPLETATO
 - [ ] Installare `echarts` nel frontend (`npm install echarts`)
 - [ ] Creare `BrokerSharingModal.svelte` con `ModalBase`
 - [ ] Implementare Half-Donut Chart con ECharts (tipo `pie`, startAngle: 180, endAngle: 360)
@@ -450,9 +507,11 @@ Nella pagina `/brokers`, mostrare un badge/icona se il broker è condiviso con a
 
 ---
 
-## 5. i18n — Chiavi di traduzione (~0.5 giorni)
+## 5. ✅ i18n — Chiavi di traduzione (~0.5 giorni) — COMPLETATO 27 Feb 2026
 
-### Chiavi da aggiungere
+24 chiavi `brokers.sharing.*` aggiunte in EN/IT/FR/ES tramite `./dev.py i18n add`.
+
+### Chiavi aggiunte
 
 ```
 brokers.sharing.title                = "Share Broker" / "Condividi Broker" / "Partager le Courtier" / "Compartir Bróker"
@@ -477,7 +536,7 @@ brokers.sharing.legend               = "Roles explanation" / "Spiegazione ruoli"
 
 ### Tasks
 
-- [ ] Usare `./dev.py i18n add` per aggiungere tutte le chiavi
+- [x] Usare `./dev.py i18n add` per aggiungere tutte le chiavi (24 chiavi `brokers.sharing.*`)
 - [ ] Verificare con `./dev.py i18n audit`
 - [ ] Test visuale in tutte e 4 le lingue
 
@@ -561,14 +620,13 @@ Test group `Broker Sharing`:
 | 0. Pre-step verifica schema e API      | 0.25          | 0.25       | ✅ DONE    |
 | 1. Backend endpoint search users       | 0.5           | 0.75       | ✅ DONE    |
 | 2. Backend avatar_url + user_role      | 0.5           | 1.25       | ✅ DONE    |
-| 2b. Bug fix import + test fix          | 0.1           | 1.35       | ✅ DONE    |
-| 3pre. Backend `PUT bulk` endpoint      | 0.5           | 1.85       | ⏳ TODO    |
-| 3. Frontend BrokerSharingModal         | 2.0           | 3.85       | ⏳ TODO    |
-| 4. Integrazione broker detail          | 0.5           | 4.35       | ⏳ TODO    |
-| 5. i18n chiavi                         | 0.25          | 4.6        | ⏳ TODO    |
-| 7. E2E tests                           | 0.5           | 5.1        | ⏳ TODO    |
-| 8. Gallery screenshots                 | 0.25          | 5.35       | ⏳ TODO    |
-| **Totale**                             | **~5.5 giorni** |          |            |
+| 2b. Bulk endpoint + schema std + fixes | 0.5           | 1.75       | ✅ DONE    |
+| 3. Frontend BrokerSharingModal         | 2.0           | 3.75       | ⏳ TODO    |
+| 4. Integrazione broker detail          | 0.5           | 4.25       | ⏳ TODO    |
+| 5. i18n chiavi                         | 0.25          | 4.5        | ✅ DONE    |
+| 7. E2E tests                           | 0.5           | 5.0        | ⏳ TODO    |
+| 8. Gallery screenshots                 | 0.25          | 5.25       | ⏳ TODO    |
+| **Totale**                             | **~5.25 giorni** |          |            |
 
 ---
 
@@ -589,15 +647,15 @@ frontend/src/lib/components/brokers/BrokerSharingModal.svelte  # Modale sharing
 backend/app/api/v1/router.py                    # Registrare users_router — ✅ FATTO
 backend/app/services/user_service.py            # search_users() — ✅ FATTO + fix import
 backend/app/schemas/brokers.py                  # avatar_url in BRAccessItem, user_role in BRSummary — ✅ FATTO
-                                                # + BRAccessBulkItem, BRAccessBulkUpdateRequest — TODO
+                                                # + BRAccessBulkItem, BRAccessBulkResponse — ✅ FATTO
 backend/app/services/broker_service.py          # list_accesses() + get_summary() aggiornati — ✅ FATTO
-                                                # + bulk_update_access() — TODO
-backend/app/api/v1/brokers.py                   # + PUT /brokers/{id}/access/bulk — TODO
+                                                # + bulk_update_access() — ✅ FATTO
+backend/app/api/v1/brokers.py                   # + PUT /brokers/{id}/access — ✅ FATTO
 frontend/src/routes/(app)/brokers/[id]/+page.svelte  # Bottone Share — TODO
-frontend/src/lib/i18n/en.json                   # i18n keys — TODO
-frontend/src/lib/i18n/it.json                   # i18n keys — TODO
-frontend/src/lib/i18n/fr.json                   # i18n keys — TODO
-frontend/src/lib/i18n/es.json                   # i18n keys — TODO
+frontend/src/lib/i18n/en.json                   # i18n keys — ✅ FATTO (24 chiavi brokers.sharing.*)
+frontend/src/lib/i18n/it.json                   # i18n keys — ✅ FATTO
+frontend/src/lib/i18n/fr.json                   # i18n keys — ✅ FATTO
+frontend/src/lib/i18n/es.json                   # i18n keys — ✅ FATTO
 frontend/e2e/brokers.spec.ts                    # E2E tests sharing — TODO
 frontend/e2e/gallery.spec.ts                    # Gallery screenshots — TODO
 ```
@@ -617,9 +675,15 @@ frontend/e2e/gallery.spec.ts                    # Gallery screenshots — TODO
 ✅ `user_role` in BRSummary — COMPLETATO (Step 2)  
 ✅ `count` standardizzato in tutti gli schemi — COMPLETATO (Step 1)  
 ✅ Test user search + share validation — COMPLETATI + bug fix 27 Feb (9/9 pass)  
-⬜ `PUT /brokers/{id}/access/bulk` — DA CREARE (Pre-step 3)  
+✅ `PUT /brokers/{id}/access` bulk endpoint — COMPLETATO (Step 2b, 27 Feb)  
+✅ Schema standardization `BaseListResponse` — COMPLETATO (Step 2b)  
+✅ Frontend type fixes — COMPLETATO (PreferencesTab currencies → items)  
+✅ 17/17 API tests pass — COMPLETATO  
+✅ 0 errori svelte-check — COMPLETATO  
+✅ i18n 24 chiavi brokers.sharing.* — COMPLETATO (Step 5)  
+✅ BRAccessBulkResponse → BaseBulkResponse[BRAccessItem] — COMPLETATO  
+✅ BRAccessBulkUpdateRequest rimosso → endpoint usa List[BRAccessBulkItem] — COMPLETATO  
 ⬜ BrokerSharingModal — DA CREARE (Step 3)  
 ⬜ Integrazione in Broker Detail — DA FARE (Step 4)  
-⬜ i18n chiavi — DA AGGIUNGERE (Step 5)  
 ⬜ E2E Test — DA SCRIVERE (Step 7)  
 ⬜ Gallery screenshots — DA GENERARE (Step 8)

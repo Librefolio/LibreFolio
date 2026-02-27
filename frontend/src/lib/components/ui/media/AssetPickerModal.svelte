@@ -103,7 +103,7 @@
         loadingFiles = true;
         try {
             const data = await zodiosApi.list_files_api_v1_uploads_get();
-            let files = (data.files || []) as UploadedFile[];
+            let files = (data.items || []) as UploadedFile[];
             // Filter to images if required
             if (filterImages) {
                 files = files.filter(f => f.mime_type?.startsWith('image/'));

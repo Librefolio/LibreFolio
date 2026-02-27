@@ -249,7 +249,32 @@
     "importFiles": "Archivos de Importación",
     "noImportFiles": "Sin archivos de importación",
     "uploadHint": "Sube reportes del bróker para importar transacciones",
-    "manageFiles": "Gestionar todos los archivos"
+    "manageFiles": "Gestionar todos los archivos",
+    "sharing": {
+      "title": "Compartir Bróker",
+      "addUser": "Agregar Usuario",
+      "searchPlaceholder": "Buscar por nombre de usuario...",
+      "role": "Rol",
+      "sharePercentage": "% Propiedad",
+      "remove": "Eliminar Acceso",
+      "removeConfirm": "¿Eliminar el acceso de {username} a este bróker?",
+      "percentageWarning": "La propiedad total supera el 100%",
+      "selfDemoteWarning": "Estás a punto de cambiar tu propio rol. Podrías perder el acceso de gestión.",
+      "noOtherUsers": "No se encontraron usuarios",
+      "saved": "Configuración de accesos guardada",
+      "roleOwner": "Propietario — Control total",
+      "roleEditor": "Editor — Puede modificar transacciones",
+      "roleViewer": "Lector — Solo lectura",
+      "allocated": "Asignado",
+      "available": "Disponible",
+      "owners": "Propietarios",
+      "editors": "Editores",
+      "viewers": "Lectores",
+      "save": "Guardar Configuración",
+      "saveFailed": "Error al guardar la configuración",
+      "selectUser": "Seleccionar un usuario",
+      "ownershipChart": "Distribución de Propiedad"
+    }
   },
   "assets": {
     "title": "Activos",
@@ -497,5 +522,10 @@
     "useSelected": "Usar Seleccionado",
     "selectIcon": "Seleccionar Icono",
     "urlHint": "Introduce una URL remota o una ruta local desde Archivos"
+  },
+  "bxrokers": {
+    "sharing": {
+      "lastOwnerWarning": "No se puede eliminar al último propietario"
+    }
   }
 }

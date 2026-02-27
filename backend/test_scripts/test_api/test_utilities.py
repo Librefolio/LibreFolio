@@ -49,10 +49,9 @@ async def test_list_sectors_with_other(test_server):
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
 
-        assert "sectors" in data
-        assert "count" in data
-        assert data["count"] == 12  # 11 standard + Other
-        assert "Other" in data["sectors"]
+        assert "items" in data
+        assert len(data["items"]) == 12  # 11 standard + Other
+        assert "Other" in data["items"]
 
         # Verify all expected sectors are present
         expected = [
@@ -70,9 +69,9 @@ async def test_list_sectors_with_other(test_server):
             "Other",
             ]
         for sector in expected:
-            assert sector in data["sectors"], f"Missing sector: {sector}"
+            assert sector in data["items"], f"Missing sector: {sector}"
 
-        print_info(f"  Found {data['count']} sectors")
+        print_info(f"  Found {len(data['items'])} sectors")
         print_success("✓ Sectors list with Other returned correctly")
 
 
@@ -89,10 +88,10 @@ async def test_list_sectors_without_other(test_server):
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
 
-        assert data["count"] == 11  # 11 standard (without Other)
-        assert "Other" not in data["sectors"]
+        assert len(data["items"]) == 11  # 11 standard (without Other)
+        assert "Other" not in data["items"]
 
-        print_info(f"  Found {data['count']} sectors (excluding Other)")
+        print_info(f"  Found {len(data['items'])} sectors (excluding Other)")
         print_success("✓ Sectors list without Other returned correctly")
 
 

@@ -90,10 +90,8 @@ from backend.app.schemas.brokers import (
     BRBulkUpdateResponse,
     BRAccessItem,
     BRAccessListResponse,
-    BRAccessCreateRequest,
-    BRAccessUpdateRequest,
-    BRAccessCreateResponse,
-    BRAccessDeleteResponse,
+    BRAccessBulkItem,
+    BRAccessBulkResponse,
     )
 from backend.app.schemas.common import (
     Currency,
@@ -194,10 +192,8 @@ __all__ = [
     "BRBulkUpdateResponse",
     "BRAccessItem",
     "BRAccessListResponse",
-    "BRAccessCreateRequest",
-    "BRAccessUpdateRequest",
-    "BRAccessCreateResponse",
-    "BRAccessDeleteResponse",
+    "BRAccessBulkItem",
+    "BRAccessBulkResponse",
     # Transactions (TX prefix)
     "TXCreateItem",
     "TXReadItem",

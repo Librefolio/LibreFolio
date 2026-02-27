@@ -61,7 +61,7 @@ function createGlobalSettingsStore() {
         async load(): Promise<void> {
             try {
                 const response = await zodiosApi.list_global_settings_api_v1_settings_global_get();
-                const settings = response.settings || [];
+                const settings = response.items || [];
 
                 // Convert array of {key, value} to object
                 const settingsObj: Partial<GlobalSettings> = {};

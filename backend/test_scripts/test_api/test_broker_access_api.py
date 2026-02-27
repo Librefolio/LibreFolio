@@ -3,12 +3,13 @@ Broker Access API Tests.
 
 Tests for broker access management endpoints:
 - GET /brokers/{id}/access: List users with access
-- POST /brokers/{id}/access: Add user access
-- PATCH /brokers/{id}/access/{user_id}: Update user role
-- DELETE /brokers/{id}/access/{user_id}: Remove user access
+- PUT /brokers/{id}/access: Bulk replace access configuration (atomic)
 
 Tests role hierarchy: OWNER > EDITOR > VIEWER
 Tests multi-user isolation and superuser capabilities.
+
+After refactoring: individual POST/PATCH/DELETE endpoints replaced
+by a single PUT bulk endpoint.
 """
 
 import uuid
@@ -54,7 +55,6 @@ async def create_user_and_login(
     email = f"{username}@test.com"
     password = "TestPass123!"
 
-    # Register
     resp = await client.post(
         f"{API_BASE}/auth/register",
         json={"username": username, "email": email, "password": password},
@@ -66,7 +66,6 @@ async def create_user_and_login(
 
     user_id = resp.json()["user"]["id"]
 
-    # Login
     login_resp = await client.post(
         f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT
         )
@@ -87,10 +86,33 @@ async def create_broker(client: httpx.AsyncClient, name: Optional[str] = None) -
     return resp.json()["results"][0]["broker_id"]
 
 
-async def get_user_info(client: httpx.AsyncClient) -> dict:
-    """Get current user info."""
-    resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
-    return resp.json().get("user", {})
+async def get_access_list(client: httpx.AsyncClient, broker_id: int) -> list:
+    """Get the current access list for a broker."""
+    resp = await client.get(f"{API_BASE}/brokers/{broker_id}/access", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"Failed to get access list: {resp.text}"
+    return resp.json()["items"]
+
+
+async def bulk_set_access(client: httpx.AsyncClient, broker_id: int, accesses: list) -> httpx.Response:
+    """Send bulk access update. Returns the raw response."""
+    return await client.put(
+        f"{API_BASE}/brokers/{broker_id}/access",
+        json=accesses,
+        timeout=TIMEOUT,
+        )
+
+
+async def add_user_via_bulk(
+    owner_client: httpx.AsyncClient, broker_id: int, owner_id: int,
+    target_user_id: int, role: str, share_pct: float = 0,
+    owner_share: float = 1.0,
+    ) -> httpx.Response:
+    """Helper: add a user by sending bulk with current owner + new user."""
+    accesses = [
+        {"user_id": owner_id, "role": "OWNER", "share_percentage": owner_share},
+        {"user_id": target_user_id, "role": role, "share_percentage": share_pct},
+    ]
+    return await bulk_set_access(owner_client, broker_id, accesses)
 
 
 # ============================================================================
@@ -131,8 +153,8 @@ class TestAccessList:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["count"] == 1
-            assert data["accesses"][0]["role"] == "OWNER"
+            assert len(data["items"]) == 1
+            assert data["items"][0]["role"] == "OWNER"
 
             print_success("✓ Owner can list access")
 
@@ -142,11 +164,9 @@ class TestAccessList:
         print_section("ACCESS-002: List access without permission")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            # User 1 creates broker
             await create_user_and_login(client1)
             broker_id = await create_broker(client1)
 
-            # User 2 tries to list (no access)
             await create_user_and_login(client2)
             response = await client2.get(
                 f"{API_BASE}/brokers/{broker_id}/access",
@@ -159,182 +179,102 @@ class TestAccessList:
 
 
 # ============================================================================
-# ADD ACCESS TESTS
+# BULK ACCESS ADD TESTS (via PUT bulk)
 # ============================================================================
 
 
-class TestAddAccess:
-    """Tests for POST /brokers/{id}/access."""
+class TestBulkAddAccess:
+    """Tests for adding access via PUT /brokers/{id}/access."""
 
     @pytest.mark.asyncio
     async def test_owner_adds_viewer(self, test_server):
-        """ACCESS-010: OWNER can add VIEWER."""
+        """ACCESS-010: OWNER can add VIEWER via bulk."""
         print_section("ACCESS-010: Owner adds viewer")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            # User 1 (owner) creates broker
-            await create_user_and_login(client1)
+            user1_id, _, _, _ = await create_user_and_login(client1)
             broker_id = await create_broker(client1)
-
-            # Create user 2
             user2_id, _, _, _ = await create_user_and_login(client2)
 
-            # User 1 adds user 2 as VIEWER
-            response = await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
+            resp = await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "VIEWER")
+            assert resp.status_code == 200
+            assert resp.json()["success_count"] == 2
+            assert len(resp.json()["results"]) == 2
 
-            assert response.status_code == 200
-            data = response.json()
-            assert data["success"] is True
-            assert data["access"]["role"] == "VIEWER"
+            # Verify the viewer was added
+            accesses = await get_access_list(client1, broker_id)
+            viewer = next((a for a in accesses if a["user_id"] == user2_id), None)
+            assert viewer is not None
+            assert viewer["role"] == "VIEWER"
 
             print_success("✓ Owner added viewer")
 
     @pytest.mark.asyncio
     async def test_owner_adds_editor(self, test_server):
-        """ACCESS-011: OWNER can add EDITOR."""
+        """ACCESS-011: OWNER can add EDITOR via bulk."""
         print_section("ACCESS-011: Owner adds editor")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
+            user1_id, _, _, _ = await create_user_and_login(client1)
             broker_id = await create_broker(client1)
-
             user2_id, _, _, _ = await create_user_and_login(client2)
 
-            response = await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
+            resp = await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "EDITOR")
+            assert resp.status_code == 200
 
-            assert response.status_code == 200
-            assert response.json()["access"]["role"] == "EDITOR"
+            accesses = await get_access_list(client1, broker_id)
+            editor = next((a for a in accesses if a["user_id"] == user2_id), None)
+            assert editor is not None
+            assert editor["role"] == "EDITOR"
 
             print_success("✓ Owner added editor")
 
     @pytest.mark.asyncio
-    async def test_owner_adds_owner(self, test_server):
-        """ACCESS-012: OWNER can add another OWNER."""
+    async def test_owner_adds_second_owner(self, test_server):
+        """ACCESS-012: OWNER can add another OWNER via bulk."""
         print_section("ACCESS-012: Owner adds another owner")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
+            user1_id, _, _, _ = await create_user_and_login(client1)
             broker_id = await create_broker(client1)
-
             user2_id, _, _, _ = await create_user_and_login(client2)
 
-            response = await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "OWNER"},
-                timeout=TIMEOUT,
-                )
+            resp = await bulk_set_access(client1, broker_id, [
+                {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
+                {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
+            ])
+            assert resp.status_code == 200
 
-            assert response.status_code == 200
-            assert response.json()["access"]["role"] == "OWNER"
+            accesses = await get_access_list(client1, broker_id)
+            owner2 = next((a for a in accesses if a["user_id"] == user2_id), None)
+            assert owner2 is not None
+            assert owner2["role"] == "OWNER"
 
             print_success("✓ Owner added another owner")
 
     @pytest.mark.asyncio
-    async def test_editor_cannot_add(self, test_server):
-        """ACCESS-013: EDITOR cannot add access."""
-        print_section("ACCESS-013: Editor cannot add access")
+    async def test_non_owner_cannot_bulk_update(self, test_server):
+        """ACCESS-013: Non-OWNER cannot call bulk update."""
+        print_section("ACCESS-013: Non-owner cannot manage access")
 
-        async with (
-            httpx.AsyncClient() as client1,
-            httpx.AsyncClient() as client2,
-            httpx.AsyncClient() as client3,
-            ):
-            # User 1 creates broker
-            await create_user_and_login(client1)
+        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2, httpx.AsyncClient() as client3:
+            user1_id, _, _, _ = await create_user_and_login(client1)
             broker_id = await create_broker(client1)
-
-            # Add user 2 as EDITOR
             user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
-
-            # Create user 3
             user3_id, _, _, _ = await create_user_and_login(client3)
 
-            # User 2 (editor) tries to add user 3
-            response = await client2.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user3_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
+            # Add user2 as EDITOR
+            await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "EDITOR")
 
-            assert response.status_code == 403
-            assert "OWNER" in response.json()["detail"]
+            # User2 (EDITOR) tries to modify access → rejected
+            resp = await bulk_set_access(client2, broker_id, [
+                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
+                {"user_id": user3_id, "role": "VIEWER", "share_percentage": 0},
+            ])
+            assert resp.status_code == 403
 
-            print_success("✓ Editor correctly rejected")
-
-    @pytest.mark.asyncio
-    async def test_viewer_cannot_add(self, test_server):
-        """ACCESS-014: VIEWER cannot add access."""
-        print_section("ACCESS-014: Viewer cannot add access")
-
-        async with (
-            httpx.AsyncClient() as client1,
-            httpx.AsyncClient() as client2,
-            httpx.AsyncClient() as client3,
-            ):
-            await create_user_and_login(client1)
-            broker_id = await create_broker(client1)
-
-            user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
-
-            user3_id, _, _, _ = await create_user_and_login(client3)
-
-            response = await client2.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user3_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 403
-
-            print_success("✓ Viewer correctly rejected")
-
-    @pytest.mark.asyncio
-    async def test_add_user_already_has_access(self, test_server):
-        """ACCESS-016: Cannot add user who already has access."""
-        print_section("ACCESS-016: User already has access")
-
-        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
-            broker_id = await create_broker(client1)
-
-            user2_id, _, _, _ = await create_user_and_login(client2)
-
-            # Add first time
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
-
-            # Try to add again
-            response = await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 400
-            assert "already has access" in response.json()["detail"]
-
-            print_success("✓ Duplicate correctly rejected")
+            print_success("✓ Non-owner correctly rejected")
 
     @pytest.mark.asyncio
     async def test_add_nonexistent_user(self, test_server):
@@ -342,204 +282,131 @@ class TestAddAccess:
         print_section("ACCESS-017: Non-existent user")
 
         async with httpx.AsyncClient() as client:
-            await create_user_and_login(client)
+            user_id, _, _, _ = await create_user_and_login(client)
             broker_id = await create_broker(client)
 
-            response = await client.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": 999999, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 400
-            assert "not found" in response.json()["detail"]
+            resp = await bulk_set_access(client, broker_id, [
+                {"user_id": user_id, "role": "OWNER", "share_percentage": 1.0},
+                {"user_id": 999999, "role": "VIEWER", "share_percentage": 0},
+            ])
+            assert resp.status_code == 400
+            assert "not found" in resp.json()["detail"]
 
             print_success("✓ Non-existent user correctly rejected")
 
 
 # ============================================================================
-# UPDATE ACCESS TESTS
+# BULK ACCESS UPDATE TESTS (role changes via PUT bulk)
 # ============================================================================
 
 
-class TestUpdateAccess:
-    """Tests for PATCH /brokers/{id}/access/{user_id}."""
+class TestBulkUpdateAccess:
+    """Tests for updating roles via PUT /brokers/{id}/access."""
 
     @pytest.mark.asyncio
-    async def test_owner_promotes_viewer_to_editor(self, test_server):
-        """ACCESS-020: OWNER promotes VIEWER to EDITOR."""
+    async def test_promote_viewer_to_editor(self, test_server):
+        """ACCESS-020: OWNER promotes VIEWER to EDITOR via bulk."""
         print_section("ACCESS-020: Promote viewer to editor")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
+            user1_id, _, _, _ = await create_user_and_login(client1)
             broker_id = await create_broker(client1)
-
             user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
 
-            # Promote
-            response = await client1.patch(
-                f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
-                json={"role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
+            # Add as viewer
+            await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "VIEWER")
 
-            assert response.status_code == 200
-            assert response.json()["access"]["role"] == "EDITOR"
+            # Promote to editor via bulk
+            resp = await bulk_set_access(client1, broker_id, [
+                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                {"user_id": user2_id, "role": "EDITOR", "share_percentage": 0},
+            ])
+            assert resp.status_code == 200
+
+            accesses = await get_access_list(client1, broker_id)
+            user2_acc = next(a for a in accesses if a["user_id"] == user2_id)
+            assert user2_acc["role"] == "EDITOR"
 
             print_success("✓ Promoted to editor")
 
     @pytest.mark.asyncio
-    async def test_owner_degrades_editor_to_viewer(self, test_server):
-        """ACCESS-021: OWNER degrades EDITOR to VIEWER."""
+    async def test_degrade_editor_to_viewer(self, test_server):
+        """ACCESS-021: OWNER degrades EDITOR to VIEWER via bulk."""
         print_section("ACCESS-021: Degrade editor to viewer")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
+            user1_id, _, _, _ = await create_user_and_login(client1)
             broker_id = await create_broker(client1)
-
             user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
 
-            response = await client1.patch(
-                f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
-                json={"role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
+            # Add as editor
+            await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "EDITOR")
 
-            assert response.status_code == 200
-            assert response.json()["access"]["role"] == "VIEWER"
+            # Degrade to viewer
+            resp = await bulk_set_access(client1, broker_id, [
+                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+                {"user_id": user2_id, "role": "VIEWER", "share_percentage": 0},
+            ])
+            assert resp.status_code == 200
+
+            accesses = await get_access_list(client1, broker_id)
+            user2_acc = next(a for a in accesses if a["user_id"] == user2_id)
+            assert user2_acc["role"] == "VIEWER"
 
             print_success("✓ Degraded to viewer")
 
     @pytest.mark.asyncio
     async def test_last_owner_cannot_be_degraded(self, test_server):
-        """ACCESS-023: Last OWNER cannot be degraded."""
+        """ACCESS-023: Last OWNER cannot be degraded via bulk."""
         print_section("ACCESS-023: Last owner cannot be degraded")
 
         async with httpx.AsyncClient() as client:
             user_id, _, _, _ = await create_user_and_login(client)
             broker_id = await create_broker(client)
 
-            # Try to degrade self (last owner)
-            response = await client.patch(
-                f"{API_BASE}/brokers/{broker_id}/access/{user_id}",
-                json={"role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 400
-            assert "last OWNER" in response.json()["detail"]
+            # Try to set self as EDITOR (no OWNER left)
+            resp = await bulk_set_access(client, broker_id, [
+                {"user_id": user_id, "role": "EDITOR", "share_percentage": 0},
+            ])
+            assert resp.status_code == 400
+            assert "OWNER" in resp.json()["detail"]
 
             print_success("✓ Last owner cannot be degraded")
 
-    @pytest.mark.asyncio
-    async def test_editor_cannot_modify(self, test_server):
-        """ACCESS-024: EDITOR cannot modify access."""
-        print_section("ACCESS-024: Editor cannot modify access")
-
-        async with (
-            httpx.AsyncClient() as client1,
-            httpx.AsyncClient() as client2,
-            httpx.AsyncClient() as client3,
-            ):
-            await create_user_and_login(client1)
-            broker_id = await create_broker(client1)
-
-            # Add editor and viewer
-            user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
-
-            user3_id, _, _, _ = await create_user_and_login(client3)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user3_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
-
-            # Editor tries to modify viewer
-            response = await client2.patch(
-                f"{API_BASE}/brokers/{broker_id}/access/{user3_id}",
-                json={"role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 403
-            assert "OWNER" in response.json()["detail"]
-
-            print_success("✓ Editor correctly rejected")
-
 
 # ============================================================================
-# REMOVE ACCESS TESTS
+# BULK ACCESS REMOVE TESTS (removing users via PUT bulk)
 # ============================================================================
 
 
-class TestRemoveAccess:
-    """Tests for DELETE /brokers/{id}/access/{user_id}."""
+class TestBulkRemoveAccess:
+    """Tests for removing access via PUT /brokers/{id}/access."""
 
     @pytest.mark.asyncio
     async def test_owner_removes_viewer(self, test_server):
-        """ACCESS-030: OWNER can remove VIEWER."""
+        """ACCESS-030: OWNER removes VIEWER by omitting from bulk."""
         print_section("ACCESS-030: Owner removes viewer")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
+            user1_id, _, _, _ = await create_user_and_login(client1)
             broker_id = await create_broker(client1)
-
             user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
 
-            response = await client1.delete(
-                f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
-                timeout=TIMEOUT,
-                )
+            # Add viewer
+            await add_user_via_bulk(client1, broker_id, user1_id, user2_id, "VIEWER")
+            accesses = await get_access_list(client1, broker_id)
+            assert len(accesses) == 2
 
-            assert response.status_code == 200
-            assert response.json()["success"] is True
+            # Remove by sending only owner
+            resp = await bulk_set_access(client1, broker_id, [
+                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+            ])
+            assert resp.status_code == 200
+
+            accesses = await get_access_list(client1, broker_id)
+            assert len(accesses) == 1
 
             print_success("✓ Owner removed viewer")
-
-    @pytest.mark.asyncio
-    async def test_owner_removes_editor(self, test_server):
-        """ACCESS-031: OWNER can remove EDITOR."""
-        print_section("ACCESS-031: Owner removes editor")
-
-        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
-            broker_id = await create_broker(client1)
-
-            user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
-
-            response = await client1.delete(
-                f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 200
-
-            print_success("✓ Owner removed editor")
 
     @pytest.mark.asyncio
     async def test_owner_removes_other_owner(self, test_server):
@@ -547,134 +414,27 @@ class TestRemoveAccess:
         print_section("ACCESS-032: Owner removes other owner")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
+            user1_id, _, _, _ = await create_user_and_login(client1)
             broker_id = await create_broker(client1)
+            user2_id, _, _, _ = await create_user_and_login(client2)
 
             # Add second owner
-            user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "OWNER"},
-                timeout=TIMEOUT,
-                )
+            resp = await bulk_set_access(client1, broker_id, [
+                {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
+                {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
+            ])
+            assert resp.status_code == 200
 
             # Remove second owner
-            response = await client1.delete(
-                f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
-                timeout=TIMEOUT,
-                )
+            resp = await bulk_set_access(client1, broker_id, [
+                {"user_id": user1_id, "role": "OWNER", "share_percentage": 1.0},
+            ])
+            assert resp.status_code == 200
 
-            assert response.status_code == 200
+            accesses = await get_access_list(client1, broker_id)
+            assert len(accesses) == 1
 
             print_success("✓ Owner removed other owner")
-
-    @pytest.mark.asyncio
-    async def test_last_owner_cannot_be_removed(self, test_server):
-        """ACCESS-033: Last OWNER cannot be removed."""
-        print_section("ACCESS-033: Last owner cannot be removed")
-
-        async with httpx.AsyncClient() as client:
-            user_id, _, _, _ = await create_user_and_login(client)
-            broker_id = await create_broker(client)
-
-            response = await client.delete(
-                f"{API_BASE}/brokers/{broker_id}/access/{user_id}",
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 400
-            assert "last OWNER" in response.json()["detail"]
-
-            print_success("✓ Last owner cannot be removed")
-
-    @pytest.mark.asyncio
-    async def test_editor_removes_self(self, test_server):
-        """ACCESS-034: EDITOR can remove self."""
-        print_section("ACCESS-034: Editor removes self")
-
-        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
-            broker_id = await create_broker(client1)
-
-            user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
-
-            # Editor removes self
-            response = await client2.delete(
-                f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 200
-
-            print_success("✓ Editor removed self")
-
-    @pytest.mark.asyncio
-    async def test_viewer_removes_self(self, test_server):
-        """ACCESS-035: VIEWER can remove self."""
-        print_section("ACCESS-035: Viewer removes self")
-
-        async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            await create_user_and_login(client1)
-            broker_id = await create_broker(client1)
-
-            user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
-
-            response = await client2.delete(
-                f"{API_BASE}/brokers/{broker_id}/access/{user2_id}",
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 200
-
-            print_success("✓ Viewer removed self")
-
-    @pytest.mark.asyncio
-    async def test_editor_cannot_remove_others(self, test_server):
-        """ACCESS-036: EDITOR cannot remove others."""
-        print_section("ACCESS-036: Editor cannot remove others")
-
-        async with (
-            httpx.AsyncClient() as client1,
-            httpx.AsyncClient() as client2,
-            httpx.AsyncClient() as client3,
-            ):
-            await create_user_and_login(client1)
-            broker_id = await create_broker(client1)
-
-            user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
-
-            user3_id, _, _, _ = await create_user_and_login(client3)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user3_id, "role": "VIEWER"},
-                timeout=TIMEOUT,
-                )
-
-            # Editor tries to remove viewer
-            response = await client2.delete(
-                f"{API_BASE}/brokers/{broker_id}/access/{user3_id}",
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 400
-            assert "only remove yourself" in response.json()["detail"]
-
-            print_success("✓ Editor correctly rejected")
 
 
 # ============================================================================
@@ -691,19 +451,15 @@ class TestMultiUserIsolation:
         print_section("ACCESS-043: User isolation")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
-            # User 1 creates broker
             await create_user_and_login(client1)
             broker_id = await create_broker(client1, unique_name("User1Broker"))
 
-            # User 2 tries to access
             await create_user_and_login(client2)
 
-            # List should not include user1's broker
             list_resp = await client2.get(f"{API_BASE}/brokers", timeout=TIMEOUT)
             broker_ids = [b["id"] for b in list_resp.json()]
             assert broker_id not in broker_ids
 
-            # Direct access should return 404
             direct_resp = await client2.get(
                 f"{API_BASE}/brokers/{broker_id}",
                 timeout=TIMEOUT,
@@ -722,45 +478,29 @@ class TestSuperuserAccess:
     """Tests for superuser bypass capabilities.
 
     Note: These tests require a clean database where the first user
-    becomes superuser. When running after other tests, the DB already
-    has users so these will be skipped.
-
-    To test manually:
-    1. Stop server: pkill -f uvicorn
-    2. Recreate test DB: ./dev.py db create-clean --test
-    3. Start test server: ./dev.py server --test
-    4. Run only this test: ./dev.py test api broker-access -k superuser
+    becomes superuser. See class docstring for manual test instructions.
     """
 
     @pytest.mark.asyncio
     async def test_superuser_sees_all_brokers_with_as_user_id_all(self, test_server):
-        """ACCESS-050: Superuser with as_user_id=all sees all brokers.
-
-        MANUAL TEST: Requires clean DB. See class docstring for instructions.
-        """
+        """ACCESS-050: Superuser with as_user_id=all sees all brokers."""
         print_section("ACCESS-050: Superuser sees all with as_user_id=all")
 
         async with httpx.AsyncClient() as admin_client, httpx.AsyncClient() as user_client:
-            # Create admin (first user becomes superuser)
-            # Note: This test assumes clean DB or first user is admin
             admin_id, admin_name, _, _ = await create_user_and_login(admin_client)
 
-            # Check if admin is superuser
             me_resp = await admin_client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
             is_superuser = me_resp.json().get("user", {}).get("is_superuser", False)
 
             if not is_superuser:
                 pytest.skip(
                     "First user is not superuser (DB not clean). "
-                    "To test manually: ./dev.py db create-clean --test && "
-                    "./dev.py server --test && ./dev.py test api broker-access -k superuser"
+                    "To test: ./dev.py db create-clean --test && ./dev.py test api broker-access -k superuser"
                     )
 
-            # Create regular user with broker
             await create_user_and_login(user_client)
             broker_id = await create_broker(user_client, unique_name("UserBroker"))
 
-            # Admin queries with as_user_id=all
             response = await admin_client.get(
                 f"{API_BASE}/brokers",
                 params={"as_user_id": "all"},
@@ -799,7 +539,7 @@ class TestSuperuserAccess:
 
 
 class TestSelfModification:
-    """Tests for modifying own role."""
+    """Tests for modifying own role via bulk."""
 
     @pytest.mark.asyncio
     async def test_owner_cannot_degrade_self_if_last(self, test_server):
@@ -810,15 +550,11 @@ class TestSelfModification:
             user_id, _, _, _ = await create_user_and_login(client)
             broker_id = await create_broker(client)
 
-            # Try to degrade self to EDITOR
-            response = await client.patch(
-                f"{API_BASE}/brokers/{broker_id}/access/{user_id}",
-                json={"role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
-
-            assert response.status_code == 400
-            assert "last OWNER" in response.json()["detail"]
+            resp = await bulk_set_access(client, broker_id, [
+                {"user_id": user_id, "role": "EDITOR", "share_percentage": 0},
+            ])
+            assert resp.status_code == 400
+            assert "OWNER" in resp.json()["detail"]
 
             print_success("✓ Last owner cannot degrade self")
 
@@ -830,23 +566,24 @@ class TestSelfModification:
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
             user1_id, _, _, _ = await create_user_and_login(client1)
             broker_id = await create_broker(client1)
+            user2_id, _, _, _ = await create_user_and_login(client2)
 
             # Add second owner
-            user2_id, _, _, _ = await create_user_and_login(client2)
-            await client1.post(
-                f"{API_BASE}/brokers/{broker_id}/access",
-                json={"user_id": user2_id, "role": "OWNER"},
-                timeout=TIMEOUT,
-                )
+            resp = await bulk_set_access(client1, broker_id, [
+                {"user_id": user1_id, "role": "OWNER", "share_percentage": 0.5},
+                {"user_id": user2_id, "role": "OWNER", "share_percentage": 0.5},
+            ])
+            assert resp.status_code == 200
 
-            # User 1 can now degrade self
-            response = await client1.patch(
-                f"{API_BASE}/brokers/{broker_id}/access/{user1_id}",
-                json={"role": "EDITOR"},
-                timeout=TIMEOUT,
-                )
+            # User1 degrades self to EDITOR (user2 remains OWNER)
+            resp = await bulk_set_access(client1, broker_id, [
+                {"user_id": user1_id, "role": "EDITOR", "share_percentage": 0},
+                {"user_id": user2_id, "role": "OWNER", "share_percentage": 1.0},
+            ])
+            assert resp.status_code == 200
 
-            assert response.status_code == 200
-            assert response.json()["access"]["role"] == "EDITOR"
+            accesses = await get_access_list(client1, broker_id)
+            user1_acc = next(a for a in accesses if a["user_id"] == user1_id)
+            assert user1_acc["role"] == "EDITOR"
 
             print_success("✓ Owner degraded self successfully")

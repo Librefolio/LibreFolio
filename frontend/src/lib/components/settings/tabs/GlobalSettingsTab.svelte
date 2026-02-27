@@ -84,7 +84,7 @@
         currenciesLoading = true;
         try {
             const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
-            currencyOptions = response.currencies.map(c => ({
+            currencyOptions = (response.items || []).map((c: any) => ({
                 value: c.code,
                 label: c.name,
                 icon: c.symbol
@@ -102,8 +102,8 @@
         error = null;
         try {
             const response = await zodiosApi.list_global_settings_api_v1_settings_global_get();
-            debug.log('GlobalSettingsTab', 'loadSettings response', response.settings.length);
-            settings = response.settings as GlobalSetting[];
+            debug.log('GlobalSettingsTab', 'loadSettings response', (response.items || []).length);
+            settings = (response.items || []) as GlobalSetting[];
             // Initialize edited values
             editedValues = {};
             for (const setting of settings) {

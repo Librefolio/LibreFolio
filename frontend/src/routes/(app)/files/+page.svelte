@@ -263,7 +263,7 @@
         try {
             if (activeTab === 'static') {
                 const data = await zodiosApi.list_files_api_v1_uploads_get();
-                staticFiles = (data.files || []) as UploadedFile[];
+                staticFiles = (data.items || []) as UploadedFile[];
             } else {
                 // For BRIM, filter by selected broker IDs
                 const brokerIds = Array.from(selectedBrokerIds);

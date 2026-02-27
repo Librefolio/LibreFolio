@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.4.25-2-gebcdaa3-dirty"
+    "version": "v0.4.25-3-gaa2e8f1-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -3083,13 +3083,13 @@
           }
         }
       },
-      "post": {
+      "put": {
         "tags": [
           "BR (Broker)"
         ],
-        "summary": "Add Broker Access",
-        "description": "Add user access to a broker.\n\nOnly OWNERs can add access. Superusers can always add access.",
-        "operationId": "add_broker_access_api_v1_brokers__broker_id__access_post",
+        "summary": "Bulk Update Broker Access",
+        "description": "Atomically replace the access configuration for a broker.\n\nSends the COMPLETE desired access list. The backend computes the diff\n(adds, updates, removes) and applies all changes in a single transaction.\n\nRules:\n- Only OWNERs (or superusers) can call this endpoint.\n- At least one OWNER must remain after the operation.\n- Only OWNERs can have share_percentage > 0.\n- Sum of all share_percentage values must be \u2264 1.0 (fraction, not percent).\n- The calling user cannot remove themselves as the last OWNER.",
+        "operationId": "bulk_update_broker_access_api_v1_brokers__broker_id__access_put",
         "parameters": [
           {
             "name": "broker_id",
@@ -3106,7 +3106,11 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BRAccessCreateRequest"
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BRAccessBulkItem"
+                },
+                "title": "Items"
               }
             }
           }
@@ -3117,119 +3121,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BRAccessCreateResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/brokers/{broker_id}/access/{target_user_id}": {
-      "patch": {
-        "tags": [
-          "BR (Broker)"
-        ],
-        "summary": "Update Broker Access",
-        "description": "Update user access role.\n\nOnly OWNERs can modify access. Superusers can always modify.\nCannot degrade the last OWNER.",
-        "operationId": "update_broker_access_api_v1_brokers__broker_id__access__target_user_id__patch",
-        "parameters": [
-          {
-            "name": "broker_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Broker Id"
-            }
-          },
-          {
-            "name": "target_user_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Target User Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BRAccessUpdateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BRAccessCreateResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "BR (Broker)"
-        ],
-        "summary": "Remove Broker Access",
-        "description": "Remove user access from a broker.\n\n- OWNERs can remove others\n- Anyone can remove themselves (except last OWNER)\n- Superusers can remove anyone (except last OWNER)",
-        "operationId": "remove_broker_access_api_v1_brokers__broker_id__access__target_user_id__delete",
-        "parameters": [
-          {
-            "name": "broker_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Broker Id"
-            }
-          },
-          {
-            "name": "target_user_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Target User Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BRAccessDeleteResponse"
+                  "$ref": "#/components/schemas/BRAccessBulkResponse"
                 }
               }
             }
@@ -4303,24 +4195,23 @@
         "title": "AuthUserResponse",
         "description": "User info returned after login or from /me endpoint."
       },
-      "BRAccessCreateRequest": {
+      "BRAccessBulkItem": {
         "properties": {
           "user_id": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
             "title": "User Id",
-            "description": "User ID to grant access"
+            "description": "User ID"
           },
           "role": {
             "$ref": "#/components/schemas/UserRole",
-            "description": "Access role",
-            "default": "VIEWER"
+            "description": "Access role (OWNER/EDITOR/VIEWER)"
           },
           "share_percentage": {
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 100.0,
+                "maximum": 1.0,
                 "minimum": 0.0
               },
               {
@@ -4329,59 +4220,52 @@
               }
             ],
             "title": "Share Percentage",
-            "description": "Ownership percentage (0-100%). Defaults to 0% for EDITOR/VIEWER.",
+            "description": "Ownership fraction (0.0-1.0). Only valid for OWNER role. Frontend displays as %.",
             "default": "0"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "user_id"
+          "user_id",
+          "role"
         ],
-        "title": "BRAccessCreateRequest",
-        "description": "Request to add user access to a broker."
+        "title": "BRAccessBulkItem",
+        "description": "Single item in a bulk access update.\n\nRules:\n- share_percentage is only valid for OWNER role (enforced by validator)\n- EDITOR and VIEWER always have share_percentage = 0"
       },
-      "BRAccessCreateResponse": {
+      "BRAccessBulkResponse": {
         "properties": {
-          "success": {
-            "type": "boolean",
-            "title": "Success",
-            "default": true
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/BRAccessItem"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Per-item operation results"
           },
-          "message": {
-            "type": "string",
-            "title": "Message",
-            "default": "Access granted successfully"
+          "success_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Success Count",
+            "description": "Number of successful operations"
           },
-          "access": {
-            "$ref": "#/components/schemas/BRAccessItem"
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "Operation-level errors (not per-item)"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "access"
+          "results",
+          "success_count"
         ],
-        "title": "BRAccessCreateResponse",
-        "description": "Response after creating access."
-      },
-      "BRAccessDeleteResponse": {
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "title": "Success",
-            "default": true
-          },
-          "message": {
-            "type": "string",
-            "title": "Message",
-            "default": "Access removed successfully"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "BRAccessDeleteResponse",
-        "description": "Response after removing access."
+        "title": "BRAccessBulkResponse",
+        "description": "Response for bulk access update.\n\nExtends BaseBulkResponse[BRAccessItem] for atomic access operations.\nSince the operation is atomic (all-or-nothing), success_count equals\nlen(results) on success, and on failure an HTTPException is raised."
       },
       "BRAccessItem": {
         "properties": {
@@ -4408,7 +4292,7 @@
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Share Percentage",
-            "description": "Ownership percentage (0-100%) for portfolio aggregation"
+            "description": "Ownership fraction (0.0-1.0) for portfolio aggregation"
           },
           "avatar_url": {
             "anyOf": [
@@ -4443,59 +4327,19 @@
       },
       "BRAccessListResponse": {
         "properties": {
-          "accesses": {
+          "items": {
             "items": {
               "$ref": "#/components/schemas/BRAccessItem"
             },
             "type": "array",
-            "title": "Accesses"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count",
-            "description": "Total number of users with access"
+            "title": "Items",
+            "description": "List of items"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "count"
-        ],
         "title": "BRAccessListResponse",
         "description": "Response for listing broker accesses."
-      },
-      "BRAccessUpdateRequest": {
-        "properties": {
-          "role": {
-            "$ref": "#/components/schemas/UserRole",
-            "description": "New access role"
-          },
-          "share_percentage": {
-            "anyOf": [
-              {
-                "type": "number",
-                "maximum": 100.0,
-                "minimum": 0.0
-              },
-              {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Share Percentage",
-            "description": "New ownership percentage (0-100%). If None, not changed."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "role"
-        ],
-        "title": "BRAccessUpdateRequest",
-        "description": "Request to update user access role and/or share percentage."
       },
       "BRAssetHolding": {
         "properties": {
@@ -5983,18 +5827,13 @@
       },
       "CountryListResponse": {
         "properties": {
-          "countries": {
+          "items": {
             "items": {
               "$ref": "#/components/schemas/CountryListItem"
             },
             "type": "array",
-            "title": "Countries",
-            "description": "List of all countries"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count",
-            "description": "Number of countries"
+            "title": "Items",
+            "description": "List of items"
           },
           "language": {
             "type": "string",
@@ -6005,8 +5844,6 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "countries",
-          "count",
           "language"
         ],
         "title": "CountryListResponse",
@@ -6138,18 +5975,13 @@
       },
       "CurrencyListResponse": {
         "properties": {
-          "currencies": {
+          "items": {
             "items": {
               "$ref": "#/components/schemas/CurrencyListItem"
             },
             "type": "array",
-            "title": "Currencies",
-            "description": "List of all currencies"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count",
-            "description": "Number of currencies"
+            "title": "Items",
+            "description": "List of items"
           },
           "language": {
             "type": "string",
@@ -6160,8 +5992,6 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "currencies",
-          "count",
           "language"
         ],
         "title": "CurrencyListResponse",
@@ -8587,25 +8417,17 @@
       },
       "FXCurrenciesResponse": {
         "properties": {
-          "currencies": {
+          "items": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Currencies",
-            "description": "List of available currency codes"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count",
-            "description": "Number of available currencies"
+            "title": "Items",
+            "description": "List of items"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": [
-          "currencies",
-          "count"
-        ],
         "title": "FXCurrenciesResponse",
         "description": "Response model for available currencies list."
       },
@@ -8932,25 +8754,17 @@
       },
       "FXPairSourcesResponse": {
         "properties": {
-          "sources": {
+          "items": {
             "items": {
               "$ref": "#/components/schemas/FXPairSourceItem"
             },
             "type": "array",
-            "title": "Sources",
-            "description": "Configured pair sources"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count",
-            "description": "Number of configured sources"
+            "title": "Items",
+            "description": "List of items"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": [
-          "sources",
-          "count"
-        ],
         "title": "FXPairSourcesResponse",
         "description": "Response model for listing pair sources."
       },
@@ -9218,18 +9032,17 @@
       },
       "GlobalSettingsListResponse": {
         "properties": {
-          "settings": {
+          "items": {
             "items": {
               "$ref": "#/components/schemas/GlobalSettingRead"
             },
             "type": "array",
-            "title": "Settings"
+            "title": "Items",
+            "description": "List of items"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": [
-          "settings"
-        ],
         "title": "GlobalSettingsListResponse",
         "description": "Response for listing all global settings."
       },
@@ -9356,26 +9169,17 @@
       },
       "SectorListResponse": {
         "properties": {
-          "sectors": {
+          "items": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Sectors",
-            "description": "List of standard financial sector names"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count",
-            "description": "Number of sectors in the list"
+            "title": "Items",
+            "description": "List of items"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "sectors",
-          "count"
-        ],
         "title": "SectorListResponse",
         "description": "Response for sectors list endpoint."
       },
@@ -10353,23 +10157,17 @@
       },
       "UploadListResponse": {
         "properties": {
-          "files": {
+          "items": {
             "items": {
               "$ref": "#/components/schemas/UploadFileInfo"
             },
             "type": "array",
-            "title": "Files"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count",
-            "description": "Total number of files"
+            "title": "Items",
+            "description": "List of items"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": [
-          "count"
-        ],
         "title": "UploadListResponse",
         "description": "Response for listing uploads."
       },
@@ -10443,25 +10241,17 @@
       },
       "UserSearchResponse": {
         "properties": {
-          "users": {
+          "items": {
             "items": {
               "$ref": "#/components/schemas/UserSearchItem"
             },
             "type": "array",
-            "title": "Users",
-            "description": "Matching users"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count",
-            "description": "Number of matching users"
+            "title": "Items",
+            "description": "List of items"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "count"
-        ],
         "title": "UserSearchResponse",
         "description": "Response for user search endpoint."
       },

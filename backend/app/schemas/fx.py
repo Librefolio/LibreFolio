@@ -42,6 +42,7 @@ from backend.app.schemas.common import (
     BaseDeleteResult,
     BaseBulkResponse,
     BaseBulkDeleteResponse,
+    BaseListResponse,
     Currency,
     )
 from backend.app.utils.datetime_utils import parse_ISO_date
@@ -276,11 +277,9 @@ class FXPairSourceItem(BaseModel):
         return Currency.validate_code(v)
 
 
-class FXPairSourcesResponse(BaseModel):
+class FXPairSourcesResponse(BaseListResponse[FXPairSourceItem]):
     """Response model for listing pair sources."""
-
-    sources: list[FXPairSourceItem] = Field(..., description="Configured pair sources")
-    count: int = Field(..., description="Number of configured sources")
+    pass
 
 
 class FXPairSourceResult(BaseModel):
@@ -349,8 +348,6 @@ class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResul
 # ============================================================================
 
 
-class FXCurrenciesResponse(BaseModel):
+class FXCurrenciesResponse(BaseListResponse[str]):
     """Response model for available currencies list."""
-
-    currencies: list[str] = Field(..., description="List of available currency codes")
-    count: int = Field(..., description="Number of available currencies")
+    pass

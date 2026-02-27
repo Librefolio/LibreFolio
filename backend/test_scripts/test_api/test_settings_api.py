@@ -317,15 +317,15 @@ class TestGlobalSettingsList:
             data = resp.json()
 
             # Verify structure
-            assert "settings" in data, "Response should contain 'settings' key"
-            assert isinstance(data["settings"], list), "Settings should be a list"
+            assert "items" in data, "Response should contain 'items' key"
+            assert isinstance(data["items"], list), "Settings should be a list"
 
-            if len(data["settings"]) > 0:
-                setting = data["settings"][0]
+            if len(data["items"]) > 0:
+                setting = data["items"][0]
                 assert "key" in setting, "Setting should have 'key'"
                 assert "value" in setting, "Setting should have 'value'"
                 assert "value_type" in setting, "Setting should have 'value_type'"
-                print_info(f"  Found {len(data['settings'])} global settings")
+                print_info(f"  Found {len(data['items'])} global settings")
 
             print_success("✓ Global settings listed successfully")
 
@@ -341,7 +341,7 @@ class TestGlobalSettingsList:
             # (needed for frontend to check enable_registration, etc.)
             assert resp.status_code == 200, f"Expected 200 (public access), got {resp.status_code}"
             data = resp.json()
-            assert "settings" in data, "Response should contain 'settings' key"
+            assert "items" in data, "Response should contain 'items' key"
             print_success("✓ Global settings publicly accessible (as designed)")
 
 

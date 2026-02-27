@@ -51,21 +51,21 @@ type AuthRegisterResponse = {
    */
   string | undefined;
 };
-type BRAccessCreateRequest = {
+type BRAccessBulkItem = {
   /**
-   * User ID to grant access
+   * User ID
    */
   user_id: number;
-  role?: UserRole | undefined;
+  role: UserRole;
   share_percentage?:
     | /**
-     * Ownership percentage (0-100%). Defaults to 0% for EDITOR/VIEWER.
+     * Ownership fraction (0.0-1.0). Only valid for OWNER role. Frontend displays as %.
      *
      * @default "0"
      */
     (| /**
          * @minimum 0
-         * @maximum 100
+         * @maximum 1
          */
         (| number
             /**
@@ -76,7 +76,7 @@ type BRAccessCreateRequest = {
         | Array<
             /**
              * @minimum 0
-             * @maximum 100
+             * @maximum 1
              */
             | number
             /**
@@ -98,16 +98,21 @@ type UserRole =
  * @enum OWNER, EDITOR, VIEWER
  */
   "OWNER" | "EDITOR" | "VIEWER";
-type BRAccessCreateResponse = {
-  success?: /**
-   * @default true
+type BRAccessBulkResponse = {
+  /**
+   * Per-item operation results
    */
-  boolean | undefined;
-  message?: /**
-   * @default "Access granted successfully"
+  results: Array<BRAccessItem>;
+  /**
+   * Number of successful operations
+   *
+   * @minimum 0
    */
-  string | undefined;
-  access: BRAccessItem;
+  success_count: number;
+  errors?: /**
+   * Operation-level errors (not per-item)
+   */
+  Array<string> | undefined;
 };
 type BRAccessItem = {
   /**
@@ -124,7 +129,7 @@ type BRAccessItem = {
   email: string;
   role: UserRole;
   /**
-   * Ownership percentage (0-100%) for portfolio aggregation
+   * Ownership fraction (0.0-1.0) for portfolio aggregation
    *
    * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
    */
@@ -140,45 +145,12 @@ type BRAccessItem = {
    */
   created_at: string;
 };
-type BRAccessListResponse = {
-  accesses?: Array<BRAccessItem> | undefined;
+type BRAccessListResponse = Partial<{
   /**
-   * Total number of users with access
+   * List of items
    */
-  count: number;
-};
-type BRAccessUpdateRequest = {
-  role: UserRole;
-  share_percentage?:
-    | /**
-     * New ownership percentage (0-100%). If None, not changed.
-     */
-    (| /**
-         * @minimum 0
-         * @maximum 100
-         */
-        (| number
-            /**
-             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
-             */
-            | string
-            | null
-          )
-        | Array<
-            /**
-             * @minimum 0
-             * @maximum 100
-             */
-            | number
-            /**
-             * @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
-             */
-            | string
-            | null
-          >
-      )
-    | undefined;
-};
+  items: Array<BRAccessItem>;
+}>;
 type BRAssetHolding = {
   /**
    * Asset ID
@@ -958,14 +930,10 @@ type BRSummary = {
     | undefined;
 };
 type CountryListResponse = {
-  /**
-   * List of all countries
+  items?: /**
+   * List of items
    */
-  countries: Array<CountryListItem>;
-  /**
-   * Number of countries
-   */
-  count: number;
+  Array<CountryListItem> | undefined;
   /**
    * Language used for country names
    */
@@ -990,14 +958,10 @@ type CountryListItem = {
   flag_emoji: string;
 };
 type CurrencyListResponse = {
-  /**
-   * List of all currencies
+  items?: /**
+   * List of items
    */
-  currencies: Array<CurrencyListItem>;
-  /**
-   * Number of currencies
-   */
-  count: number;
+  Array<CurrencyListItem> | undefined;
   /**
    * Language used for currency names
    */
@@ -2576,16 +2540,12 @@ type FXDeletePairSourceResult = {
     ((number | null) | Array<number | null>)
     | undefined;
 };
-type FXPairSourcesResponse = {
+type FXPairSourcesResponse = Partial<{
   /**
-   * Configured pair sources
+   * List of items
    */
-  sources: Array<FXPairSourceItem>;
-  /**
-   * Number of configured sources
-   */
-  count: number;
-};
+  items: Array<FXPairSourceItem>;
+}>;
 type FXPairSourceItem = {
   /**
    * Base currency (ISO 4217)
@@ -2623,9 +2583,12 @@ type FXSyncResponse = {
    */
   currencies: Array<string>;
 };
-type GlobalSettingsListResponse = {
-  settings: Array<GlobalSettingRead>;
-};
+type GlobalSettingsListResponse = Partial<{
+  /**
+   * List of items
+   */
+  items: Array<GlobalSettingRead>;
+}>;
 type GlobalSettingRead = {
   /**
    * Setting key
@@ -2993,13 +2956,12 @@ type UpdateProfileResponse = {
    */
   string | undefined;
 };
-type UploadListResponse = {
-  files?: Array<UploadFileInfo> | undefined;
+type UploadListResponse = Partial<{
   /**
-   * Total number of files
+   * List of items
    */
-  count: number;
-};
+  items: Array<UploadFileInfo>;
+}>;
 type UploadFileInfo = {
   /**
    * Unique file ID (UUID)
@@ -3047,16 +3009,12 @@ type UploadResponse = {
    */
   string | undefined;
 };
-type UserSearchResponse = {
-  users?: /**
-   * Matching users
-   */
-  Array<UserSearchItem> | undefined;
+type UserSearchResponse = Partial<{
   /**
-   * Number of matching users
+   * List of items
    */
-  count: number;
-};
+  items: Array<UserSearchItem>;
+}>;
 type UserSearchItem = {
   /**
    * User ID
@@ -3203,8 +3161,8 @@ const GlobalSettingRead: z.ZodType<GlobalSettingRead> = z
   })
   .passthrough();
 const GlobalSettingsListResponse: z.ZodType<GlobalSettingsListResponse> = z
-  .object({ settings: z.array(GlobalSettingRead) })
-  .passthrough();
+  .object({ items: z.array(GlobalSettingRead).describe("List of items") })
+  .partial();
 const GlobalSettingUpdate = z
   .object({ value: z.string().describe("New value (as string)") })
   .passthrough();
@@ -3252,11 +3210,8 @@ const UploadResponse: z.ZodType<UploadResponse> = z
   })
   .passthrough();
 const UploadListResponse: z.ZodType<UploadListResponse> = z
-  .object({
-    files: z.array(UploadFileInfo).optional(),
-    count: z.number().int().describe("Total number of files"),
-  })
-  .passthrough();
+  .object({ items: z.array(UploadFileInfo).describe("List of items") })
+  .partial();
 const UploadDeleteResponse = z
   .object({ success: z.boolean(), message: z.string(), file_id: z.string() })
   .passthrough();
@@ -3274,10 +3229,9 @@ const UserSearchItem: z.ZodType<UserSearchItem> = z.object({
     .describe("User avatar URL")
     .optional(),
 });
-const UserSearchResponse: z.ZodType<UserSearchResponse> = z.object({
-  users: z.array(UserSearchItem).describe("Matching users").optional(),
-  count: z.number().int().describe("Number of matching users"),
-});
+const UserSearchResponse: z.ZodType<UserSearchResponse> = z
+  .object({ items: z.array(UserSearchItem).describe("List of items") })
+  .partial();
 const FXProviderInfo = z
   .object({
     code: z.string().describe("Provider code (e.g., ECB, FED, BOE, SNB)"),
@@ -3306,11 +3260,8 @@ const FXPairSourceItem: z.ZodType<FXPairSourceItem> = z
   })
   .passthrough();
 const FXPairSourcesResponse: z.ZodType<FXPairSourcesResponse> = z
-  .object({
-    sources: z.array(FXPairSourceItem).describe("Configured pair sources"),
-    count: z.number().int().describe("Number of configured sources"),
-  })
-  .passthrough();
+  .object({ items: z.array(FXPairSourceItem).describe("List of items") })
+  .partial();
 const FXPairSourceResult: z.ZodType<FXPairSourceResult> = z
   .object({
     success: z.boolean().describe("Whether the operation succeeded"),
@@ -3391,13 +3342,8 @@ const FXDeletePairSourcesResponse: z.ZodType<FXDeletePairSourcesResponse> =
       .describe("Total number of records deleted across all items"),
   });
 const FXCurrenciesResponse = z
-  .object({
-    currencies: z
-      .array(z.string())
-      .describe("List of available currency codes"),
-    count: z.number().int().describe("Number of available currencies"),
-  })
-  .passthrough();
+  .object({ items: z.array(z.string()).describe("List of items") })
+  .partial();
 const provider = z
   .union([z.string(), z.null()])
   .describe(
@@ -5099,57 +5045,43 @@ const BRAccessItem: z.ZodType<BRAccessItem> = z.object({
   share_percentage: z
     .string()
     .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
-    .describe("Ownership percentage (0-100%) for portfolio aggregation"),
+    .describe("Ownership fraction (0.0-1.0) for portfolio aggregation"),
   avatar_url: z
     .union([z.string(), z.null()])
     .describe("User avatar URL")
     .optional(),
   created_at: z.string().describe("When access was granted"),
 });
-const BRAccessListResponse: z.ZodType<BRAccessListResponse> = z.object({
-  accesses: z.array(BRAccessItem).optional(),
-  count: z.number().int().describe("Total number of users with access"),
-});
-const BRAccessCreateRequest: z.ZodType<BRAccessCreateRequest> = z.object({
-  user_id: z.number().int().gt(0).describe("User ID to grant access"),
-  role: UserRole.describe(
-    `User role for broker access control.
-
-- OWNER: Full access (CRUD broker, manage access, delete broker)
-- EDITOR: Modify broker and transactions, can only remove self
-- VIEWER: Read-only access`
-  ).optional(),
-  share_percentage: z
-    .union([z.number(), z.string()])
-    .describe(
-      "Ownership percentage (0-100%). Defaults to 0% for EDITOR/VIEWER."
-    )
-    .optional()
-    .default("0"),
-});
-const BRAccessCreateResponse: z.ZodType<BRAccessCreateResponse> = z.object({
-  success: z.boolean().optional().default(true),
-  message: z.string().optional().default("Access granted successfully"),
-  access: BRAccessItem.describe(`DTO for broker access with user details.
-Used in list responses to show who has access.`),
-});
-const BRAccessUpdateRequest: z.ZodType<BRAccessUpdateRequest> = z.object({
+const BRAccessListResponse: z.ZodType<BRAccessListResponse> = z
+  .object({ items: z.array(BRAccessItem).describe("List of items") })
+  .partial();
+const BRAccessBulkItem: z.ZodType<BRAccessBulkItem> = z.object({
+  user_id: z.number().int().gt(0).describe("User ID"),
   role: UserRole.describe(`User role for broker access control.
 
 - OWNER: Full access (CRUD broker, manage access, delete broker)
 - EDITOR: Modify broker and transactions, can only remove self
 - VIEWER: Read-only access`),
   share_percentage: z
-    .union([z.number(), z.string(), z.null()])
-    .describe("New ownership percentage (0-100%). If None, not changed.")
+    .union([z.number(), z.string()])
+    .describe(
+      "Ownership fraction (0.0-1.0). Only valid for OWNER role. Frontend displays as %."
+    )
+    .optional()
+    .default("0"),
+});
+const BRAccessBulkResponse: z.ZodType<BRAccessBulkResponse> = z.object({
+  results: z.array(BRAccessItem).describe("Per-item operation results"),
+  success_count: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of successful operations"),
+  errors: z
+    .array(z.string())
+    .describe("Operation-level errors (not per-item)")
     .optional(),
 });
-const BRAccessDeleteResponse = z
-  .object({
-    success: z.boolean().default(true),
-    message: z.string().default("Access removed successfully"),
-  })
-  .partial();
 const Body_upload_file_api_v1_brokers_import_upload_post = z
   .object({ file: z.instanceof(File).describe("Broker report file to upload") })
   .passthrough();
@@ -5595,12 +5527,9 @@ const CountryNormalizationResponse = z.object({
     .describe("Error message if normalization failed")
     .optional(),
 });
-const SectorListResponse = z.object({
-  sectors: z
-    .array(z.string())
-    .describe("List of standard financial sector names"),
-  count: z.number().int().describe("Number of sectors in the list"),
-});
+const SectorListResponse = z
+  .object({ items: z.array(z.string()).describe("List of items") })
+  .partial();
 const CountryListItem: z.ZodType<CountryListItem> = z.object({
   iso3: z.string().describe("ISO-3166-A3 country code (e.g., USA, ITA)"),
   iso2: z.string().describe("ISO-3166-A2 country code (e.g., US, IT)"),
@@ -5608,8 +5537,7 @@ const CountryListItem: z.ZodType<CountryListItem> = z.object({
   flag_emoji: z.string().describe("Flag emoji (e.g., 🇺🇸, 🇮🇹)"),
 });
 const CountryListResponse: z.ZodType<CountryListResponse> = z.object({
-  countries: z.array(CountryListItem).describe("List of all countries"),
-  count: z.number().int().describe("Number of countries"),
+  items: z.array(CountryListItem).describe("List of items").optional(),
   language: z.string().describe("Language used for country names"),
 });
 const CurrencyListItem: z.ZodType<CurrencyListItem> = z.object({
@@ -5618,8 +5546,7 @@ const CurrencyListItem: z.ZodType<CurrencyListItem> = z.object({
   symbol: z.string().describe("Currency symbol (e.g., $, €)"),
 });
 const CurrencyListResponse: z.ZodType<CurrencyListResponse> = z.object({
-  currencies: z.array(CurrencyListItem).describe("List of all currencies"),
-  count: z.number().int().describe("Number of currencies"),
+  items: z.array(CurrencyListItem).describe("List of items").optional(),
   language: z.string().describe("Language used for currency names"),
 });
 const CurrencyNormalizationResponse = z.object({
@@ -5778,10 +5705,8 @@ export const schemas = {
   UserRole,
   BRAccessItem,
   BRAccessListResponse,
-  BRAccessCreateRequest,
-  BRAccessCreateResponse,
-  BRAccessUpdateRequest,
-  BRAccessDeleteResponse,
+  BRAccessBulkItem,
+  BRAccessBulkResponse,
   Body_upload_file_api_v1_brokers_import_upload_post,
   BRIMFileStatus,
   BRIMFileInfo,
@@ -7008,18 +6933,26 @@ Superusers can view any broker&#x27;s access list.`,
     ],
   },
   {
-    method: "post",
+    method: "put",
     path: "/api/v1/brokers/:broker_id/access",
-    alias: "add_broker_access_api_v1_brokers__broker_id__access_post",
-    description: `Add user access to a broker.
+    alias: "bulk_update_broker_access_api_v1_brokers__broker_id__access_put",
+    description: `Atomically replace the access configuration for a broker.
 
-Only OWNERs can add access. Superusers can always add access.`,
+Sends the COMPLETE desired access list. The backend computes the diff
+(adds, updates, removes) and applies all changes in a single transaction.
+
+Rules:
+- Only OWNERs (or superusers) can call this endpoint.
+- At least one OWNER must remain after the operation.
+- Only OWNERs can have share_percentage &gt; 0.
+- Sum of all share_percentage values must be ≤ 1.0 (fraction, not percent).
+- The calling user cannot remove themselves as the last OWNER.`,
     requestFormat: "json",
     parameters: [
       {
         name: "body",
         type: "Body",
-        schema: BRAccessCreateRequest,
+        schema: z.array(BRAccessBulkItem),
       },
       {
         name: "broker_id",
@@ -7027,75 +6960,7 @@ Only OWNERs can add access. Superusers can always add access.`,
         schema: z.number().int(),
       },
     ],
-    response: BRAccessCreateResponse,
-    errors: [
-      {
-        status: 422,
-        description: `Validation Error`,
-        schema: HTTPValidationError,
-      },
-    ],
-  },
-  {
-    method: "patch",
-    path: "/api/v1/brokers/:broker_id/access/:target_user_id",
-    alias:
-      "update_broker_access_api_v1_brokers__broker_id__access__target_user_id__patch",
-    description: `Update user access role.
-
-Only OWNERs can modify access. Superusers can always modify.
-Cannot degrade the last OWNER.`,
-    requestFormat: "json",
-    parameters: [
-      {
-        name: "body",
-        type: "Body",
-        schema: BRAccessUpdateRequest,
-      },
-      {
-        name: "broker_id",
-        type: "Path",
-        schema: z.number().int(),
-      },
-      {
-        name: "target_user_id",
-        type: "Path",
-        schema: z.number().int(),
-      },
-    ],
-    response: BRAccessCreateResponse,
-    errors: [
-      {
-        status: 422,
-        description: `Validation Error`,
-        schema: HTTPValidationError,
-      },
-    ],
-  },
-  {
-    method: "delete",
-    path: "/api/v1/brokers/:broker_id/access/:target_user_id",
-    alias:
-      "remove_broker_access_api_v1_brokers__broker_id__access__target_user_id__delete",
-    description: `Remove user access from a broker.
-
-- OWNERs can remove others
-- Anyone can remove themselves (except last OWNER)
-- Superusers can remove anyone (except last OWNER)`,
-    requestFormat: "json",
-    parameters: [
-      {
-        name: "broker_id",
-        type: "Path",
-        schema: z.number().int(),
-      },
-      {
-        name: "target_user_id",
-        type: "Path",
-        schema: z.number().int(),
-      },
-    ],
-    response: BRAccessDeleteResponse,
+    response: BRAccessBulkResponse,
     errors: [
       {
         status: 422,

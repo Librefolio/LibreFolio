@@ -8,6 +8,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from backend.app.schemas.common import BaseListResponse
 from backend.app.utils.datetime_utils import UTCDateTime
 
 
@@ -58,10 +59,9 @@ class GlobalSettingUpdate(BaseModel):
     value: str = Field(..., description="New value (as string)")
 
 
-class GlobalSettingsListResponse(BaseModel):
+class GlobalSettingsListResponse(BaseListResponse[GlobalSettingRead]):
     """Response for listing all global settings."""
-
-    settings: list[GlobalSettingRead]
+    pass
 
 
 # ============================================================================

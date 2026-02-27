@@ -98,7 +98,7 @@ async def list_global_settings(
     Public read access - anyone can view global settings.
     """
     settings = await get_all_global_settings(session)
-    return GlobalSettingsListResponse(settings=settings)
+    return GlobalSettingsListResponse(items=settings)
 
 
 @router.get("/global/{key}", response_model=GlobalSettingRead)

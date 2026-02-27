@@ -6,6 +6,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from backend.app.schemas.common import BaseListResponse
+
 
 class CountryNormalizationResponse(BaseModel):
     """Response for country normalization endpoint."""
@@ -29,13 +31,9 @@ class CountryListItem(BaseModel):
     flag_emoji: str = Field(..., description="Flag emoji (e.g., 🇺🇸, 🇮🇹)")
 
 
-class CountryListResponse(BaseModel):
+class CountryListResponse(BaseListResponse[CountryListItem]):
     """Response for countries list endpoint."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    countries: List[CountryListItem] = Field(..., description="List of all countries")
-    count: int = Field(..., description="Number of countries")
     language: str = Field(..., description="Language used for country names")
 
 
@@ -49,13 +47,9 @@ class CurrencyListItem(BaseModel):
     symbol: str = Field(..., description="Currency symbol (e.g., $, €)")
 
 
-class CurrencyListResponse(BaseModel):
+class CurrencyListResponse(BaseListResponse[CurrencyListItem]):
     """Response for currencies list endpoint."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    currencies: List[CurrencyListItem] = Field(..., description="List of all currencies")
-    count: int = Field(..., description="Number of currencies")
     language: str = Field(..., description="Language used for currency names")
 
 
@@ -70,10 +64,6 @@ class CurrencyNormalizationResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if normalization failed")
 
 
-class SectorListResponse(BaseModel):
+class SectorListResponse(BaseListResponse[str]):
     """Response for sectors list endpoint."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    sectors: List[str] = Field(..., description="List of standard financial sector names")
-    count: int = Field(..., description="Number of sectors in the list")
+    pass

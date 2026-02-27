@@ -7,6 +7,7 @@ This module contains Pydantic models used by multiple services
 **Domain Coverage**:
 - BackwardFillInfo: Shared by FA and FX for gap-filling logic
 - DateRangeModel: Reusable date range representation
+- BaseListResponse: Standardized base class for list/collection responses
 - BaseBulkResponse: Standardized base class for bulk operation responses
 
 **Design Notes**:
@@ -440,6 +441,36 @@ class OldNew(BaseModel, Generic[CType]):
 
 # Generic type for result items in bulk responses, must be child of BaseModel
 TResult = TypeVar("TResult", bound=BaseModel)
+
+
+class BaseListResponse(BaseModel, Generic[TResult]):
+    """
+    Standardized base class for all list/collection responses.
+
+    Provides consistent structure for any endpoint that returns a list of items.
+    Subclasses specify the concrete item type via Generic.
+
+    Standard fields:
+    - items: List of result items
+
+    Design Notes:
+    - Generic class parameterized by TResult (the item type)
+    - count was removed: len(items) in Python / .length in JS is sufficient
+    - Will be reintroduced if server-side pagination is needed (total != len(items))
+
+    Examples:
+        ```python
+        class UploadListResponse(BaseListResponse[UploadFileInfo]):
+            pass  # Inherits: items
+
+        class CountryListResponse(BaseListResponse[CountryListItem]):
+            language: str  # Additional fields allowed
+        ```
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[TResult] = Field(default_factory=list, description="List of items")
 
 
 class BaseBulkResponse(BaseModel, Generic[TResult]):

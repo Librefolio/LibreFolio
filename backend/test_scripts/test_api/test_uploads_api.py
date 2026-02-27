@@ -152,8 +152,8 @@ class TestListUploads:
 
             assert response.status_code == 200
             data = response.json()
-            assert "files" in data
-            assert data["count"] >= 1
+            assert "items" in data
+            assert len(data["items"]) >= 1
 
             print_success("✓ Listed uploads")
 
@@ -181,7 +181,7 @@ class TestListUploads:
 
             assert response.status_code == 200
             data = response.json()
-            file_ids = [f["id"] for f in data["files"]]
+            file_ids = [f["id"] for f in data["items"]]
             assert file1_id not in file_ids  # User 1's file should not be in user 2's list
 
             print_success("✓ Filtered to my files only")
@@ -347,7 +347,7 @@ class TestFileSizeLimit:
             # Get current max file size setting
             settings_resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
             max_mb = 10  # Default fallback
-            for setting in settings_resp.json().get("settings", []):
+            for setting in settings_resp.json().get("items", []):
                 if setting.get("key") == "max_file_upload_mb":
                     max_mb = int(setting.get("value", 10))
                     break

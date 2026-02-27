@@ -5,9 +5,11 @@ These schemas are separate from auth.py to keep authentication-specific
 schemas distinct from general user info schemas.
 """
 
-from typing import Optional, List
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from backend.app.schemas.common import BaseListResponse
 
 
 class UserSearchItem(BaseModel):
@@ -20,11 +22,7 @@ class UserSearchItem(BaseModel):
     avatar_url: Optional[str] = Field(None, description="User avatar URL")
 
 
-class UserSearchResponse(BaseModel):
+class UserSearchResponse(BaseListResponse[UserSearchItem]):
     """Response for user search endpoint."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    users: List[UserSearchItem] = Field(default_factory=list, description="Matching users")
-    count: int = Field(..., description="Number of matching users")
+    pass
 

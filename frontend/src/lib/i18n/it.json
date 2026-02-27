@@ -249,7 +249,32 @@
     "importFiles": "File di Importazione",
     "noImportFiles": "Nessun file di importazione",
     "uploadHint": "Carica report del broker per importare le transazioni",
-    "manageFiles": "Gestisci tutti i file"
+    "manageFiles": "Gestisci tutti i file",
+    "sharing": {
+      "title": "Condividi Broker",
+      "addUser": "Aggiungi Utente",
+      "searchPlaceholder": "Cerca per username...",
+      "role": "Ruolo",
+      "sharePercentage": "% Possesso",
+      "remove": "Rimuovi Accesso",
+      "removeConfirm": "Rimuovere l'accesso di {username} a questo broker?",
+      "percentageWarning": "Il possesso totale supera il 100%",
+      "selfDemoteWarning": "Stai per cambiare il tuo ruolo. Potresti perdere l'accesso di gestione.",
+      "noOtherUsers": "Nessun utente trovato",
+      "saved": "Configurazione accessi salvata",
+      "roleOwner": "Proprietario — Controllo completo",
+      "roleEditor": "Editor — Può modificare transazioni",
+      "roleViewer": "Visualizzatore — Sola lettura",
+      "allocated": "Allocato",
+      "available": "Disponibile",
+      "owners": "Proprietari",
+      "editors": "Editor",
+      "viewers": "Visualizzatori",
+      "save": "Salva Configurazione",
+      "saveFailed": "Errore nel salvataggio della configurazione",
+      "selectUser": "Seleziona un utente",
+      "ownershipChart": "Distribuzione Possesso"
+    }
   },
   "assets": {
     "title": "Asset",
@@ -497,5 +522,10 @@
     "useSelected": "Usa Selezionato",
     "selectIcon": "Seleziona Icona",
     "urlHint": "Inserisci un URL remoto o un percorso locale da File"
+  },
+  "bxrokers": {
+    "sharing": {
+      "lastOwnerWarning": "Impossibile rimuovere l'ultimo proprietario"
+    }
   }
 }
