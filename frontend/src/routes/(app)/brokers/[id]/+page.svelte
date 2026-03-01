@@ -6,12 +6,13 @@
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {ArrowLeft, ArrowRightLeft, Briefcase, ExternalLink, FileUp, Pencil, RefreshCw, TrendingUp, Wallet} from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, Briefcase, ExternalLink, FileUp, Pencil, RefreshCw, Share2, TrendingUp, Wallet} from 'lucide-svelte';
     import CashBalanceCard from '$lib/components/brokers/CashBalanceCard.svelte';
     import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
+    import BrokerSharingModal from '$lib/components/brokers/BrokerSharingModal.svelte';
     import type {BrokerSummary, Transaction} from '$lib/types';
     import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
 
@@ -30,6 +31,7 @@
     let cashModalType: 'DEPOSIT' | 'WITHDRAWAL' = 'DEPOSIT';
     let cashModalCurrency = 'EUR';
     let importFilesModalOpen = false;
+    let sharingModalOpen = false;
 
     onMount(async () => {
         await loadBroker();
@@ -191,6 +193,16 @@
                     <Pencil size={18}/>
                     <span>{$_('common.edit')}</span>
                 </button>
+                {#if safeString(broker.user_role) === 'OWNER'}
+                    <button
+                            on:click={() => sharingModalOpen = true}
+                            class="flex items-center space-x-2 px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
+                            data-testid="broker-share-button"
+                    >
+                        <Share2 size={18}/>
+                        <span>{$_('brokers.sharing.title')}</span>
+                    </button>
+                {/if}
             </div>
         {:else if !error}
             <div class="flex-1">
@@ -468,5 +480,14 @@
             brokerId={broker.id}
             brokerName={broker.name}
             onClose={() => importFilesModalOpen = false}
+    />
+
+    <!-- Sharing Modal -->
+    <BrokerSharingModal
+            open={sharingModalOpen}
+            brokerId={broker.id}
+            brokerName={broker.name}
+            onClose={() => sharingModalOpen = false}
+            onChanged={handleUpdated}
     />
 {/if}

@@ -543,5 +543,43 @@ test.describe('Gallery Screenshots', () => {
                 }
             }
         });
+
+        test('broker sharing modal', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    // Navigate to brokers page
+                    await navigateTo(page, '/brokers');
+                    await page.waitForLoadState('networkidle');
+                    await page.waitForTimeout(300);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Click first broker to go to detail
+                    const brokerCards = page.locator('[data-testid^="broker-card-"]');
+                    if (await brokerCards.first().isVisible({timeout: 3000}).catch(() => false)) {
+                        await brokerCards.first().click();
+                        await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 5000});
+                        await page.waitForTimeout(300);
+
+                        // Click Share button (only visible for OWNER)
+                        const shareBtn = page.getByTestId('broker-share-button');
+                        if (await shareBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                            await shareBtn.click();
+                            await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 3000});
+                            await page.waitForTimeout(500); // Wait for chart to render
+
+                            await screenshot(page, viewport, lang, theme, 'brokers', 'sharing-modal');
+
+                            // Close modal
+                            await page.keyboard.press('Escape');
+                            await page.waitForTimeout(200);
+                        }
+                    }
+                }
+            }
+        });
     });
 });
