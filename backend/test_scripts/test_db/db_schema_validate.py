@@ -12,7 +12,7 @@ Verifies:
 
 Usage:
     pytest backend/test_scripts/test_db/db_schema_validate.py -v
-    or via test_runner.py: python test_runner.py db validate
+    or via test_runner.py: ./dev.py test db validate
 """
 import sys
 

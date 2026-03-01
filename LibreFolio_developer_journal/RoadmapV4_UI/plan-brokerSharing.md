@@ -854,3 +854,27 @@ Quinto giro di feedback: ripristino layout a 3 colonne affiancate, rimozione leg
 - [x] svelte-check: 0 errors, 0 warnings
 - [x] Frontend build: successo
 
+---
+
+## 14. Enhancement Round 6 — Circular Avatars in Chart, Contrast & DB Fix — 1 Mar 2026
+
+Sesto giro di feedback: icone avatar circolari nel grafico ECharts, percentuale sotto icona con contrasto migliore, fix populate_mock_data per Coinbase duplicate.
+
+### 14.1 Modifiche
+
+| # | Miglioramento | Dettaglio |
+|---|---------------|-----------|
+| 33 | Avatar circolari nel grafico ECharts | `borderRadius: avatarSize/2` rende le immagini avatar circolari nel rich text. Aggiunto `borderColor` + `borderWidth: 2` per contrasto con l'arco. Dimensione aumentata da 40px a 44px. |
+| 34 | Percentuale sotto icona con contrasto | Label `pct` con `fontWeight: 'bold'`, colore scuro/chiaro (dark: `#e2e8f0`, light: `#1e293b`), `textShadowColor` per leggibilità sopra i colori del grafico. |
+| 35 | Fix Populate DB: UNIQUE constraint Coinbase | Aggiunto `session.flush()` prima della sezione Coinbase per rendere visibili le INSERT precedenti ai SELECT successivi. Evita duplicate INSERT per utenti già aggiunti nel loop principale. |
+| 36 | Gallery: usa Coinbase per sharing modal | Il test `gallery.spec.ts` già punta a Coinbase (index 4) per lo screenshot sharing-modal con multi-user demo. |
+
+### Tasks Step 14
+
+- [x] Estetico 33: Avatar circolari con `borderRadius: avatarSize/2`, border bianco/scuro
+- [x] Estetico 34: Label percentuale bold, colore ad alto contrasto, text-shadow
+- [x] Bug 35: `session.flush()` prima della sezione Coinbase in `populate_mock_data.py`
+- [x] Gallery 36: Confermato uso Coinbase per screenshot sharing-modal
+- [x] svelte-check: 0 errors, 0 warnings
+- [x] Populate DB: tutti 8 utenti + 27 accessi broker creati senza errori
+
