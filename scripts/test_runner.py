@@ -1363,6 +1363,16 @@ def front_image_crop(verbose: bool = False, ui: bool = False, headed: bool = Fal
     return _run_playwright("image-crop.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
 
 
+def front_broker_sharing(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
+    """Run broker sharing E2E tests."""
+    print_section("Frontend Broker Sharing Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("broker-sharing.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names)
+
+
 def front_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False) -> bool:
     """Run all frontend tests (excludes gallery)."""
     print_header("Frontend E2E Tests (Playwright)")
@@ -1377,7 +1387,7 @@ def front_all(verbose: bool = False, ui: bool = False, headed: bool = False, deb
         return False
 
     # Run all specs except gallery
-    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "brokers.spec.ts", "multi-user.spec.ts", "select-components.spec.ts", "image-crop.spec.ts"]
+    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "brokers.spec.ts", "multi-user.spec.ts", "select-components.spec.ts", "image-crop.spec.ts", "broker-sharing.spec.ts"]
 
     return _run_test_suite(
         suite_name="Frontend E2E Tests",
@@ -2068,6 +2078,14 @@ Note: gallery.spec.ts is NOT included in 'all' - use ./dev.py mkdocs gallery
             "desc": "ImageEditModal, AssetPicker, FileGrid, avatar (42 tests)",
             "prereq": "Login working, uploaded files",
             "tests": "image-crop.spec.ts",
+            },
+        "broker-sharing": {
+            "func": front_broker_sharing,
+            "test_names": True,
+            "name": "Broker Sharing Tests",
+            "desc": "BrokerSharingModal, ownership chart, add/remove users",
+            "prereq": "Login working, brokers exist",
+            "tests": "broker-sharing.spec.ts",
             },
         "all": {
             "func": front_all,

@@ -1,9 +1,9 @@
 # Phase 4 - Brokers Management: Summary & Next Steps
 
 **Data creazione**: 30 Gennaio 2026  
-**Ultimo aggiornamento**: 27 Febbraio 2026 (brokerSharing Step 0-2b+5 completati: backend search users, avatar_url, user_role, bulk access endpoint, schema standardization BaseListResponse/BaseBulkResponse, BRAccessBulkResponse migrato, count rimosso, frontend fix PreferencesTab, i18n 24 chiavi sharing, 17/17 API test verdi. Prossimo: Step 3 frontend BrokerSharingModal)  
+**Ultimo aggiornamento**: 1 Marzo 2026 (brokerSharing COMPLETATO: BrokerSharingModal con ECharts half-donut chart, integrazione broker detail con bottone Share, 11 E2E test verdi, gallery screenshots. Backend: user search, bulk access, schema standardization tutti completati. Phase 4 completata al 100%.)
 **Status**: 🟢 COMPLETATO (Core features, Image Crop, ModalBase migration, Auth rename, 42 E2E test, avatar seed, gallery, MkDocs dark mode, gallery-img-loader fallback. Schema
-pre-work Phase 5-8 completato. **Prossimo: Phase 4.8 Broker Sharing GUI — Step 0-2b+5 ✅ (backend + i18n completi), Step 3-4+7-8 TODO (frontend modal + integration + test)** → vedi `plan-brokerSharing.md`)
+pre-work Phase 5-8 completato. **Phase 4.8 Broker Sharing GUI — ✅ COMPLETATO** (tutti gli step 0-8 implementati) → vedi `plan-brokerSharing.md`)
 
 ---
 
@@ -163,6 +163,13 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
     - Fix commenti test con path vecchi (`test_broker_access_api.py`)
 
 15. **Broker Sharing Backend** ✅ NUOVO (27 Feb 2026) — Step 1-2b di `plan-brokerSharing.md`
+
+16. **Broker Sharing Frontend** ✅ NUOVO (1 Mar 2026) — Step 3-4+7-8 di `plan-brokerSharing.md`
+    - BrokerSharingModal.svelte con ECharts half-donut chart
+    - Integrazione in broker detail (bottone Share per OWNER)
+    - 11 E2E test in broker-sharing.spec.ts (tutti verdi)
+    - Gallery screenshot per sharing modal
+    - Apache ECharts installato nel frontend
     - **Endpoint `GET /users/search`**: ricerca ILIKE su username, no email per GDPR, exclude broker filter
     - **Schema `UserSearchItem`/`UserSearchResponse`** in nuovo file `schemas/users.py`
     - **`search_users()` in `user_service.py`**: JOIN con UserSettings per avatar_url
@@ -270,7 +277,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 | File                            | Descrizione                                            | Status                         | Rif. 05-08     |
 |---------------------------------|--------------------------------------------------------|--------------------------------|----------------|
-| `plan-brokerSharing.md`         | 🆕 GUI condivisione broker (Phase 4.8)                 | 🔄 IN PROGRESS — Step 0-2b ✅ (backend completo), Step 3-8 TODO | §3.5, §10, §11 |
+| `plan-brokerSharing.md`         | 🆕 GUI condivisione broker (Phase 4.8)                 | ✅ COMPLETATO — Step 0-8 tutti completati | §3.5, §10, §11 |
 | `plan-phase7b-filePreview.md`   | Sistema preview file inline — **SPOSTATO a Phase 7.5** | ↗️ Spostato fuori Phase 4      | §7 (Phase 7.5) |
 | `plan-phase05-to-08-upgrade.md` | Piano upgrade fasi 5-8 + GDPR/Sharing + Fiscale        | 🟡 IN CORSO (pre-work ✅)       | Master plan    |
 
