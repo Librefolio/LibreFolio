@@ -6,7 +6,7 @@
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {ArrowLeft, ArrowRightLeft, Briefcase, ExternalLink, FileUp, Pencil, RefreshCw, Share2, TrendingUp, Wallet} from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileUp, Pencil, RefreshCw, Share2, TrendingUp, Wallet} from 'lucide-svelte';
     import CashBalanceCard from '$lib/components/brokers/CashBalanceCard.svelte';
     import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
@@ -161,19 +161,54 @@
             />
 
             <div class="flex-1 min-w-0">
-                <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate" data-testid="broker-name">{broker.name}</h1>
+                <div class="flex items-center gap-2">
+                    {#if safeString(broker.user_role)}
+                        {@const role = safeString(broker.user_role)}
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0
+                            {role === 'OWNER' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                             role === 'EDITOR' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                             'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}"
+                             title={$_(role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}>
+                            {#if role === 'OWNER'}<Crown size={13}/>{:else if role === 'EDITOR'}<Pencil size={13}/>{:else}<Eye size={13}/>{/if}
+                        </span>
+                    {/if}
+                    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate" data-testid="broker-name">{broker.name}</h1>
+                </div>
                 {#if broker.description}
                     <p class="text-gray-500 dark:text-gray-400 text-sm truncate" data-testid="broker-description">{broker.description}</p>
                 {/if}
             </div>
 
-            <div class="flex items-center space-x-2">
+            <div class="grid grid-cols-2 place-items-center sm:flex sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <!-- Row 1 (mobile) / inline (desktop): Edit + Share -->
+                {#if canEdit}
+                <button
+                        on:click={handleEdit}
+                        class="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                        data-testid="broker-edit-button"
+                >
+                    <Pencil size={18}/>
+                    <span class="hidden sm:inline">{$_('common.edit')}</span>
+                </button>
+                {/if}
+                {#if safeString(broker.user_role) === 'OWNER'}
+                    <button
+                            on:click={() => sharingModalOpen = true}
+                            class="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
+                            data-testid="broker-share-button"
+                            title={$_('brokers.sharing.title')}
+                    >
+                        <Share2 size={18}/>
+                        <span class="hidden sm:inline">{$_('brokers.sharing.title')}</span>
+                    </button>
+                {/if}
+                <!-- Row 2 (mobile) / inline (desktop): Portal + Refresh -->
                 {#if safeString(broker.portal_url)}
                     <a
                             href={safeString(broker.portal_url)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors"
+                            class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors sm:w-auto w-full"
                             title={$_('brokers.openPortal')}
                     >
                         <ExternalLink size={20}/>
@@ -182,33 +217,12 @@
                 <button
                         on:click={loadBroker}
                         disabled={loading}
-                        class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50"
+                        class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50 sm:w-auto w-full"
                         title="Refresh"
                         data-testid="broker-refresh"
                 >
                     <RefreshCw size={20} class={loading ? 'animate-spin' : ''}/>
                 </button>
-                {#if canEdit}
-                <button
-                        on:click={handleEdit}
-                        class="flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                        data-testid="broker-edit-button"
-                >
-                    <Pencil size={18}/>
-                    <span>{$_('common.edit')}</span>
-                </button>
-                {/if}
-                {#if safeString(broker.user_role) === 'OWNER'}
-                    <button
-                            on:click={() => sharingModalOpen = true}
-                            class="flex items-center space-x-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
-                            data-testid="broker-share-button"
-                            title={$_('brokers.sharing.title')}
-                    >
-                        <Share2 size={18}/>
-                        <span class="hidden sm:inline">{$_('brokers.sharing.title')}</span>
-                    </button>
-                {/if}
             </div>
         {:else if !error}
             <div class="flex-1">

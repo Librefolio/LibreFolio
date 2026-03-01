@@ -192,6 +192,9 @@ def populate_broker_user_access(session: Session):
         ("e2e_user_carol", "carol@test.example.com", "CarolPass123!", False),
         ("e2e_user_dave", "dave@test.example.com", "DavePass123!", False),
         ("e2e_user_eve", "eve@test.example.com", "EvePass123!", False),
+        # "Free" users — NOT assigned to any broker, useful for search tests
+        ("e2e_user_frank", "frank@test.example.com", "FrankPass123!", False),
+        ("e2e_user_grace", "grace@test.example.com", "GracePass123!", False),
     ]
 
     # Create any missing users
@@ -362,113 +365,60 @@ def populate_broker_user_access(session: Session):
         print(f"  ✅ {eve.username} → {brokers[1].name} (VIEWER, 0%)")
 
     # ── Coinbase (index 4): Rich multi-user demo for gallery screenshots ──
-    # Flush so that SELECT queries below can find the records added above.
-    session.flush()
+    # Commit first to ensure all records from the loop above are persisted.
+    session.commit()
+
+    # Helper: upsert broker access (find existing or create new)
+    def _upsert_access(user_obj, broker_obj, role, share_pct):
+        existing = session.exec(
+            select(BrokerUserAccess).where(
+                BrokerUserAccess.user_id == user_obj.id,
+                BrokerUserAccess.broker_id == broker_obj.id,
+            )
+        ).first()
+        if existing:
+            existing.role = role
+            existing.share_percentage = share_pct
+            session.add(existing)
+            pct = int(share_pct * 100)
+            print(f"  🔄 {user_obj.username} → {broker_obj.name} ({role.value}, {pct}%) [updated]")
+        else:
+            access = BrokerUserAccess(
+                user_id=user_obj.id,
+                broker_id=broker_obj.id,
+                role=role,
+                share_percentage=share_pct,
+            )
+            session.add(access)
+            pct = int(share_pct * 100)
+            print(f"  ✅ {user_obj.username} → {broker_obj.name} ({role.value}, {pct}%)")
 
     # Admin already has 100% ownership from the loop above.
     # Reduce admin to 40% and add co-owners + editors + viewers.
     coinbase_broker = brokers[4] if len(brokers) > 4 else None
     if coinbase_broker and admin:
-        # Update admin's existing Coinbase access to 40%
-        admin_coinbase = session.exec(
-            select(BrokerUserAccess).where(
-                BrokerUserAccess.user_id == admin.id,
-                BrokerUserAccess.broker_id == coinbase_broker.id,
-            )
-        ).first()
-        if admin_coinbase:
-            admin_coinbase.share_percentage = Decimal("0.4")
-            session.add(admin_coinbase)
-            print(f"  🔄 {admin.username} → {coinbase_broker.name} (OWNER, 40%) [updated]")
+        _upsert_access(admin, coinbase_broker, UserRole.OWNER, Decimal("0.4"))
 
-        # e2e_test_user: co-owner 30% (already added as EDITOR in main loop, update it)
         if user:
-            user_coinbase = session.exec(
-                select(BrokerUserAccess).where(
-                    BrokerUserAccess.user_id == user.id,
-                    BrokerUserAccess.broker_id == coinbase_broker.id,
-                )
-            ).first()
-            if user_coinbase:
-                user_coinbase.role = UserRole.OWNER
-                user_coinbase.share_percentage = Decimal("0.3")
-                session.add(user_coinbase)
-                print(f"  🔄 {user.username} → {coinbase_broker.name} (OWNER, 30%) [updated]")
-            else:
-                access = BrokerUserAccess(
-                    user_id=user.id,
-                    broker_id=coinbase_broker.id,
-                    role=UserRole.OWNER,
-                    share_percentage=Decimal("0.3"),
-                )
-                session.add(access)
-                print(f"  ✅ {user.username} → {coinbase_broker.name} (OWNER, 30%)")
+            _upsert_access(user, coinbase_broker, UserRole.OWNER, Decimal("0.3"))
 
-        # alice: co-owner 20%
         if alice:
-            access = BrokerUserAccess(
-                user_id=alice.id,
-                broker_id=coinbase_broker.id,
-                role=UserRole.OWNER,
-                share_percentage=Decimal("0.2"),
-            )
-            session.add(access)
-            print(f"  ✅ {alice.username} → {coinbase_broker.name} (OWNER, 20%)")
+            _upsert_access(alice, coinbase_broker, UserRole.OWNER, Decimal("0.2"))
 
-        # bob: EDITOR
         if bob:
-            access = BrokerUserAccess(
-                user_id=bob.id,
-                broker_id=coinbase_broker.id,
-                role=UserRole.EDITOR,
-                share_percentage=Decimal("0"),
-            )
-            session.add(access)
-            print(f"  ✅ {bob.username} → {coinbase_broker.name} (EDITOR, 0%)")
+            _upsert_access(bob, coinbase_broker, UserRole.EDITOR, Decimal("0"))
 
-        # carol: VIEWER
         if carol:
-            access = BrokerUserAccess(
-                user_id=carol.id,
-                broker_id=coinbase_broker.id,
-                role=UserRole.VIEWER,
-                share_percentage=Decimal("0"),
-            )
-            session.add(access)
-            print(f"  ✅ {carol.username} → {coinbase_broker.name} (VIEWER, 0%)")
+            _upsert_access(carol, coinbase_broker, UserRole.VIEWER, Decimal("0"))
 
-        # dave: EDITOR
         if dave:
-            access = BrokerUserAccess(
-                user_id=dave.id,
-                broker_id=coinbase_broker.id,
-                role=UserRole.EDITOR,
-                share_percentage=Decimal("0"),
-            )
-            session.add(access)
-            print(f"  ✅ {dave.username} → {coinbase_broker.name} (EDITOR, 0%)")
+            _upsert_access(dave, coinbase_broker, UserRole.EDITOR, Decimal("0"))
 
-        # eve: VIEWER
         if eve:
-            access = BrokerUserAccess(
-                user_id=eve.id,
-                broker_id=coinbase_broker.id,
-                role=UserRole.VIEWER,
-                share_percentage=Decimal("0"),
-            )
-            session.add(access)
-            print(f"  ✅ {eve.username} → {coinbase_broker.name} (VIEWER, 0%)")
+            _upsert_access(eve, coinbase_broker, UserRole.VIEWER, Decimal("0"))
 
-        # user2: VIEWER
         if user2:
-            access = BrokerUserAccess(
-                user_id=user2.id,
-                broker_id=coinbase_broker.id,
-                role=UserRole.VIEWER,
-                share_percentage=Decimal("0"),
-            )
-            session.add(access)
-            print(f"  ✅ {user2.username} → {coinbase_broker.name} (VIEWER, 0%)")
+            _upsert_access(user2, coinbase_broker, UserRole.VIEWER, Decimal("0"))
 
     session.commit()
 
@@ -1152,6 +1102,8 @@ def configure_user_avatars(session: Session):
         "e2e_user_carol": "woman_03.png",
         "e2e_user_dave": "men_04.png",
         "e2e_user_eve": "woman_04.png",
+        "e2e_user_frank": "men_05.png",
+        "e2e_user_grace": "woman_05.png",
     }
 
     for username, avatar_filename in user_avatar_assignments.items():
