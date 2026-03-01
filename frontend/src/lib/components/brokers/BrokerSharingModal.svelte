@@ -189,7 +189,66 @@
     // =========================================================================
     // ECharts - Half Donut
     // =========================================================================
-    function renderChart() {
+
+    // Cache for circular avatar data URLs (avoids re-processing on every render)
+    const circularAvatarCache = new Map<string, string>();
+
+    /**
+     * Create a circular avatar image using offscreen canvas.
+     * ECharts canvas renderer ignores borderRadius on background images,
+     * so we pre-clip the image into a circle and return a data URL.
+     */
+    function createCircularImage(url: string, size: number, borderColor: string, borderWidth: number): Promise<string> {
+        const cacheKey = `${url}_${size}_${borderColor}_${borderWidth}`;
+        const cached = circularAvatarCache.get(cacheKey);
+        if (cached) return Promise.resolve(cached);
+
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const totalSize = size + borderWidth * 2;
+                const canvas = document.createElement('canvas');
+                canvas.width = totalSize * 2; // 2x for retina
+                canvas.height = totalSize * 2;
+                const ctx = canvas.getContext('2d')!;
+                ctx.scale(2, 2);
+
+                const cx = totalSize / 2;
+                const cy = totalSize / 2;
+                const outerR = totalSize / 2;
+                const innerR = size / 2;
+
+                // Draw border circle
+                if (borderWidth > 0) {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+                    ctx.fillStyle = borderColor;
+                    ctx.fill();
+                }
+
+                // Clip to inner circle and draw image
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+                ctx.clip();
+
+                // Draw image covering the circle area
+                const imgSize = innerR * 2;
+                ctx.drawImage(img, cx - innerR, cy - innerR, imgSize, imgSize);
+                ctx.restore();
+
+                const dataUrl = canvas.toDataURL('image/png');
+                circularAvatarCache.set(cacheKey, dataUrl);
+                resolve(dataUrl);
+            };
+            img.onerror = () => {
+                resolve(''); // fallback: empty means use initial letter
+            };
+            img.src = url;
+        });
+    }
+
+    async function renderChart() {
         if (!chartContainer) return;
 
         if (!chartInstance) {
@@ -203,12 +262,35 @@
         // Diversified color palette — high chromatic distance between adjacent slices
         const ownerPalette = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5'];
 
+        // Pre-load all circular avatars in parallel
+        const avatarPromises: Array<{index: number; promise: Promise<string>}> = [];
+        const avatarSize = 44;
+        const borderColor = isDark ? '#334155' : '#ffffff';
+        const borderWidth = 2;
+
+        owners.forEach((owner, i) => {
+            if (owner.avatar_url && Math.round(owner.share_percentage * 10000) / 100 > 0) {
+                const avatarUrl = `${owner.avatar_url}?img_preview=64x64`;
+                avatarPromises.push({
+                    index: i,
+                    promise: createCircularImage(avatarUrl, avatarSize, borderColor, borderWidth),
+                });
+            }
+        });
+
+        const resolvedAvatars = await Promise.all(
+            avatarPromises.map(async (p) => ({index: p.index, dataUrl: await p.promise}))
+        );
+        const circularAvatarMap = new Map<number, string>();
+        resolvedAvatars.forEach(r => {
+            if (r.dataUrl) circularAvatarMap.set(r.index, r.dataUrl);
+        });
+
         owners.forEach((owner, i) => {
             const pct = Math.round(owner.share_percentage * 10000) / 100;
             if (pct > 0) {
                 const initial = owner.username.charAt(0).toUpperCase();
-                const avatarUrl = owner.avatar_url ? `${owner.avatar_url}?img_preview=64x64` : null;
-                const avatarSize = 44;
+                const totalIconSize = avatarSize + borderWidth * 2;
                 const rich: Record<string, any> = {
                     pct: {
                         fontSize: 11,
@@ -216,20 +298,20 @@
                         color: isDark ? '#e2e8f0' : '#1e293b',
                         lineHeight: 18,
                         padding: [2, 0, 0, 0],
+                        align: 'center',
                         textShadowColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)',
                         textShadowBlur: 3,
                     },
                 };
                 let formatter: string;
-                if (avatarUrl) {
+                const circularDataUrl = circularAvatarMap.get(i);
+                if (circularDataUrl) {
+                    // Use the pre-clipped circular image
                     rich['avatar'] = {
-                        backgroundColor: {image: avatarUrl},
-                        borderRadius: avatarSize / 2,
-                        width: avatarSize,
-                        height: avatarSize,
+                        backgroundColor: {image: circularDataUrl},
+                        width: totalIconSize,
+                        height: totalIconSize,
                         align: 'center',
-                        borderColor: isDark ? '#334155' : '#ffffff',
-                        borderWidth: 2,
                     };
                     formatter = `{avatar| }\n{pct|${pct.toFixed(1)}%}`;
                 } else {
@@ -290,8 +372,8 @@
             series: [
                 {
                     type: 'pie',
-                    radius: ['45%', '95%'],
-                    center: ['50%', '80%'],
+                    radius: ['55%', '95%'],
+                    center: ['50%', '85%'],
                     startAngle: 180,
                     endAngle: 360,
                     padAngle: 2,
@@ -304,6 +386,7 @@
                         show: true,
                         position: 'outside',
                         distanceToLabelLine: 5,
+                        alignTo: 'labelLine',
                     },
                     labelLine: {
                         show: true,
@@ -633,7 +716,7 @@
             {:else}
                 <!-- Ownership Chart + Center Info -->
                 <div class="relative" data-testid="ownership-chart-section">
-                    <div bind:this={chartContainer} class="w-full" style="height: 260px; min-height: 200px;"></div>
+                    <div bind:this={chartContainer} class="w-full" style="height: 240px; min-height: 180px;"></div>
                     <!-- Center overlay: Allocated / Available + Add button -->
                     <div class="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none" style="z-index: 1;">
                         <div class="text-center">
@@ -659,7 +742,7 @@
                 <!-- 3-Column Grid: Owners | Editors | Viewers -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <!-- Owners Column -->
-                    <div>
+                    <div data-testid="sharing-owners-column">
                         <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                             <Crown size={14} class="text-amber-500" />
                             {$_('brokers.sharing.owners')}
@@ -699,7 +782,7 @@
                     </div>
 
                     <!-- Editors Column -->
-                    <div>
+                    <div data-testid="sharing-editors-column">
                         <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                             <Pencil size={14} class="text-blue-500" />
                             {$_('brokers.sharing.editors')}
@@ -734,7 +817,7 @@
                     </div>
 
                     <!-- Viewers Column -->
-                    <div>
+                    <div data-testid="sharing-viewers-column">
                         <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                             <Eye size={14} class="text-gray-400" />
                             {$_('brokers.sharing.viewers')}
@@ -831,10 +914,11 @@
     open={showAddModal}
     zIndex={60}
     maxWidth="md"
+    allowOverflow={true}
     onRequestClose={() => { showAddModal = false; selectedUser = null; searchQuery = ''; searchHighlightIndex = -1; }}
     testId="sharing-add-user-modal"
 >
-    <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col max-h-[70vh]">
+    <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col">
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
             <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
@@ -851,7 +935,7 @@
         </div>
 
         <!-- Body -->
-        <div class="p-4 space-y-4 overflow-y-auto" data-testid="sharing-add-form">
+        <div class="p-4 space-y-4" data-testid="sharing-add-form">
             <!-- Unified Search / Selected user -->
             <div class="relative">
                 <label for="sharing-search-input" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -903,6 +987,7 @@
                             <button
                                 type="button"
                                 class="w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors {idx === searchHighlightIndex ? 'bg-libre-green/10 dark:bg-libre-green/20' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
+                                data-testid="user-search-result-{user.id}"
                                 on:click={() => selectSearchUser(user)}
                             >
                                 <span class="w-6 h-6 rounded-full overflow-hidden shrink-0">
@@ -946,11 +1031,11 @@
                             <ChevronDown size={12} />
                         </button>
                         {#if showRoleDropdown}
-                            <div class="absolute z-10 mt-1 w-44 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
+                            <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
                                 {#each roleOptions as opt}
                                     <button
                                         type="button"
-                                        class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200"
+                                        class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
                                         on:click={() => { newRole = opt.value; showRoleDropdown = false; if (opt.value !== 'OWNER') newSharePercent = 0; }}
                                     >
                                         <span class={getRoleIconColor(opt.value)}>
@@ -1012,12 +1097,13 @@
     open={showEditModal}
     zIndex={60}
     maxWidth="md"
+    allowOverflow={true}
     onRequestClose={cancelEdit}
     testId="sharing-edit-user-modal"
 >
     {@const editEntry = accesses.find(a => a.user_id === editingUserId)}
     {#if editEntry}
-        <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col">
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col overflow-visible">
             <!-- Header -->
             <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
                 <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
@@ -1072,11 +1158,11 @@
                             <ChevronDown size={12} />
                         </button>
                         {#if showEditRoleDropdown}
-                            <div class="absolute z-10 mt-1 w-48 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
+                            <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
                                 {#each roleOptions as opt}
                                     <button
                                         type="button"
-                                        class="w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200"
+                                        class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
                                         on:click={() => { editRole = opt.value; showEditRoleDropdown = false; if (opt.value !== 'OWNER') editSharePercent = 0; }}
                                     >
                                         <span class={getRoleIconColor(opt.value)}>
@@ -1111,7 +1197,7 @@
             <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
                 <button
                     type="button"
-                    on:click={() => { cancelEdit(); requestRemove(editEntry); }}
+                    on:click={() => { const entry = editEntry; cancelEdit(); if (entry) requestRemove(entry); }}
                     class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 >
                     <Trash2 size={14} />
