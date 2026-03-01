@@ -15,6 +15,7 @@
     export let code: string;
     export let amount: number;
     export let symbol: string | undefined = undefined;
+    export let canEdit: boolean = true;
 
     // Format amount
     $: formattedAmount = new Intl.NumberFormat(undefined, {
@@ -50,6 +51,7 @@
         </div>
 
         <!-- Actions -->
+        {#if canEdit}
         <div class="flex items-center space-x-1">
             <button
                     class="flex items-center space-x-1 px-3 py-1.5 text-sm text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
@@ -68,6 +70,7 @@
                 <span class="hidden sm:inline">{$_('brokers.withdraw')}</span>
             </button>
         </div>
+        {/if}
     </div>
 </div>
 

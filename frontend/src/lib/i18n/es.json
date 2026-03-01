@@ -273,7 +273,14 @@
       "save": "Guardar Configuración",
       "saveFailed": "Error al guardar la configuración",
       "selectUser": "Seleccionar un usuario",
-      "ownershipChart": "Distribución de Propiedad"
+      "ownershipChart": "Distribución de Propiedad",
+      "roleOwnerShort": "Propietario",
+      "roleEditorShort": "Editor",
+      "roleViewerShort": "Lector",
+      "roleHint": "👑 Propietario = control total + % propiedad · ✏️ Editor = editar transacciones · 👁 Lector = solo lectura",
+      "ownerDesc": "Control total + % propiedad",
+      "editorDesc": "Puede modificar transacciones",
+      "viewerDesc": "Solo lectura"
     }
   },
   "assets": {

@@ -16,7 +16,7 @@
     import {zodiosApi} from '$lib/api';
     import {
         X, Plus, Minus, Save, RotateCcw, Users, Crown, Eye, Pencil,
-        AlertTriangle, Search, Check, Loader2, Trash2, ChevronDown
+        AlertTriangle, Search, Check, Loader2, ChevronDown
     } from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
@@ -62,7 +62,7 @@
     let successMessage: string | null = null;
 
     // Add user state
-    let showAddForm = false;
+    let showAddModal = false; // Add User as overlay modal
     let searchQuery = '';
     let searchResults: SearchUser[] = [];
     let searching = false;
@@ -71,6 +71,7 @@
     let newRole: 'OWNER' | 'EDITOR' | 'VIEWER' = 'VIEWER';
     let newSharePercent: number = 0;
     let showRoleDropdown = false;
+    let searchHighlightIndex = -1; // Arrow key navigation index
 
     // Edit state
     let editingUserId: number | null = null;
@@ -87,6 +88,7 @@
     // Chart
     let chartContainer: HTMLDivElement;
     let chartInstance: echarts.ECharts | null = null;
+    let resizeObserver: ResizeObserver | null = null;
 
     // =========================================================================
     // Computed
@@ -116,7 +118,10 @@
     }
 
     $: if (open && chartContainer && !loading) {
-        tick().then(renderChart);
+        tick().then(() => {
+            setupResizeObserver();
+            renderChart();
+        });
     }
 
     $: if (!loading && accesses) {
@@ -125,12 +130,30 @@
 
     onMount(() => {
         return () => {
-            if (chartInstance) {
-                chartInstance.dispose();
-                chartInstance = null;
-            }
+            cleanupChart();
         };
     });
+
+    function setupResizeObserver() {
+        if (resizeObserver || !chartContainer) return;
+        resizeObserver = new ResizeObserver(() => {
+            if (chartInstance) {
+                chartInstance.resize();
+            }
+        });
+        resizeObserver.observe(chartContainer);
+    }
+
+    function cleanupChart() {
+        if (resizeObserver) {
+            resizeObserver.disconnect();
+            resizeObserver = null;
+        }
+        if (chartInstance) {
+            chartInstance.dispose();
+            chartInstance = null;
+        }
+    }
 
     // =========================================================================
     // Data Loading
@@ -139,7 +162,7 @@
         loading = true;
         error = null;
         successMessage = null;
-        showAddForm = false;
+        showAddModal = false;
         editingUserId = null;
 
         try {
@@ -175,18 +198,36 @@
         const isDark = document.documentElement.classList.contains('dark');
 
         // Build data: one slice per OWNER with share > 0, plus "Available"
-        const data: Array<{value: number; name: string; itemStyle?: any}> = [];
-        const colors: string[] = [];
-        const ownerColors = ['#1a4031', '#2d6a4f', '#40916c', '#52b788', '#74c69d', '#95d5b2'];
+        const data: Array<{value: number; name: string; itemStyle?: any; label?: any}> = [];
+        // Diversified color palette — high chromatic distance between adjacent slices
+        const ownerPalette = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5'];
 
         owners.forEach((owner, i) => {
             const pct = Math.round(owner.share_percentage * 10000) / 100;
             if (pct > 0) {
+                const initial = owner.username.charAt(0).toUpperCase();
                 data.push({
                     value: pct,
-                    name: owner.username + ' (' + pct.toFixed(1) + '%)',
+                    name: owner.username,
+                    label: {
+                        show: true,
+                        formatter: `{avatar|${initial}}\n{pct|${pct.toFixed(1)}%}`,
+                        rich: {
+                            avatar: {
+                                fontSize: 13,
+                                fontWeight: 'bold',
+                                color: '#fff',
+                                backgroundColor: ownerPalette[i % ownerPalette.length],
+                                borderRadius: 12,
+                                width: 24,
+                                height: 24,
+                                align: 'center',
+                                lineHeight: 24,
+                            },
+                            pct: {fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', lineHeight: 16},
+                        },
+                    },
                 });
-                colors.push(ownerColors[i % ownerColors.length]);
             }
         });
 
@@ -194,10 +235,11 @@
         if (avail > 0.01) {
             data.push({
                 value: avail,
-                name: $_('brokers.sharing.available') + ' (' + avail.toFixed(1) + '%)',
+                name: $_('brokers.sharing.available'),
                 itemStyle: {
                     color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)',
                 },
+                label: {show: false},
             });
         }
 
@@ -207,11 +249,12 @@
                 value: 100,
                 name: $_('brokers.sharing.available') + ' (100%)',
                 itemStyle: {color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)'},
+                label: {show: false},
             });
         }
 
         const option: echarts.EChartsOption = {
-            color: colors.length > 0 ? colors : ['#cbd5e1'],
+            color: ownerPalette,
             tooltip: {
                 trigger: 'item',
                 formatter: '{b}: {c}%',
@@ -222,13 +265,29 @@
             series: [
                 {
                     type: 'pie',
-                    radius: ['50%', '80%'],
-                    center: ['50%', '75%'],
+                    radius: ['70%', '90%'],
+                    center: ['50%', '80%'],
                     startAngle: 180,
                     endAngle: 360,
-                    label: {show: false},
+                    padAngle: 2,
+                    itemStyle: {
+                        borderRadius: 6,
+                        borderColor: isDark ? '#1e293b' : '#ffffff',
+                        borderWidth: 2,
+                    },
+                    label: {
+                        show: true,
+                        position: 'outside',
+                        distanceToLabelLine: 5,
+                    },
+                    labelLine: {
+                        show: true,
+                        length: 10,
+                        length2: 8,
+                        lineStyle: {color: isDark ? '#475569' : '#94a3b8'},
+                    },
                     emphasis: {
-                        label: {show: false},
+                        label: {show: true},
                         scaleSize: 4,
                     },
                     data: data,
@@ -246,6 +305,7 @@
     function handleSearchInput() {
         if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
         searchResults = [];
+        searchHighlightIndex = -1;
 
         if (searchQuery.length < 2) {
             searching = false;
@@ -267,12 +327,27 @@
                         username: u.username,
                         avatar_url: typeof u.avatar_url === 'string' ? u.avatar_url : null,
                     }));
+                searchHighlightIndex = -1;
             } catch {
                 searchResults = [];
             } finally {
                 searching = false;
             }
         }, 300);
+    }
+
+    function handleSearchKeydown(e: KeyboardEvent) {
+        if (searchResults.length === 0) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            searchHighlightIndex = Math.min(searchHighlightIndex + 1, searchResults.length - 1);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            searchHighlightIndex = Math.max(searchHighlightIndex - 1, 0);
+        } else if (e.key === 'Enter' && searchHighlightIndex >= 0) {
+            e.preventDefault();
+            selectSearchUser(searchResults[searchHighlightIndex]);
+        }
     }
 
     function selectSearchUser(user: SearchUser) {
@@ -303,7 +378,8 @@
         searchQuery = '';
         newRole = 'VIEWER';
         newSharePercent = 0;
-        showAddForm = false;
+        showAddModal = false;
+        searchHighlightIndex = -1;
     }
 
     // =========================================================================
@@ -401,12 +477,10 @@
 
     function doClose() {
         confirmCloseOpen = false;
-        showAddForm = false;
+        showAddModal = false;
         editingUserId = null;
-        if (chartInstance) {
-            chartInstance.dispose();
-            chartInstance = null;
-        }
+        searchHighlightIndex = -1;
+        cleanupChart();
         onClose();
     }
 
@@ -427,21 +501,22 @@
         }
     }
 
-    function getRoleLabel(role: string): string {
+    function getRoleShortLabel(role: string): string {
         switch (role) {
-            case 'OWNER': return $_('brokers.sharing.roleOwner');
-            case 'EDITOR': return $_('brokers.sharing.roleEditor');
-            case 'VIEWER': return $_('brokers.sharing.roleViewer');
+            case 'OWNER': return $_('brokers.sharing.roleOwnerShort');
+            case 'EDITOR': return $_('brokers.sharing.roleEditorShort');
+            case 'VIEWER': return $_('brokers.sharing.roleViewerShort');
             default: return role;
         }
     }
 
-    function getRoleBadgeClass(role: string): string {
+
+    function getRoleIconColor(role: string): string {
         switch (role) {
-            case 'OWNER': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
-            case 'EDITOR': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-            case 'VIEWER': return 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300';
-            default: return 'bg-gray-100 text-gray-600';
+            case 'OWNER': return 'text-amber-500';
+            case 'EDITOR': return 'text-blue-500';
+            case 'VIEWER': return 'text-gray-400';
+            default: return 'text-gray-400';
         }
     }
 
@@ -449,15 +524,18 @@
         return username ? username.charAt(0).toUpperCase() : '?';
     }
 
-    const roleOptions: Array<{value: 'OWNER' | 'EDITOR' | 'VIEWER'; label: string}> = [
-        {value: 'OWNER', label: ''},
-        {value: 'EDITOR', label: ''},
-        {value: 'VIEWER', label: ''},
+    const roleOptions: Array<{value: 'OWNER' | 'EDITOR' | 'VIEWER'; label: string; shortLabel: string}> = [
+        {value: 'OWNER', label: '', shortLabel: ''},
+        {value: 'EDITOR', label: '', shortLabel: ''},
+        {value: 'VIEWER', label: '', shortLabel: ''},
     ];
     // Reactive labels
     $: roleOptions[0].label = $_('brokers.sharing.roleOwner');
     $: roleOptions[1].label = $_('brokers.sharing.roleEditor');
     $: roleOptions[2].label = $_('brokers.sharing.roleViewer');
+    $: roleOptions[0].shortLabel = $_('brokers.sharing.roleOwnerShort');
+    $: roleOptions[1].shortLabel = $_('brokers.sharing.roleEditorShort');
+    $: roleOptions[2].shortLabel = $_('brokers.sharing.roleViewerShort');
 </script>
 
 <ModalBase
@@ -469,32 +547,38 @@
 >
     <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col max-h-[85vh]">
         <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
-            <div class="flex items-center gap-2">
-                <Users size={20} class="text-libre-green" />
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    {$_('brokers.sharing.title')} — {brokerName}
-                </h2>
-            </div>
-            <div class="flex items-center gap-2">
-                {#if hasChanges}
+        <div class="p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <Users size={20} class="text-libre-green" />
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        {$_('brokers.sharing.title')} — {brokerName}
+                    </h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    {#if hasChanges}
+                        <button
+                            type="button"
+                            on:click={() => { accesses = JSON.parse(JSON.stringify(originalAccesses)); }}
+                            class="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
+                            title="Reset"
+                        >
+                            <RotateCcw size={18} />
+                        </button>
+                    {/if}
                     <button
                         type="button"
-                        on:click={() => { accesses = JSON.parse(JSON.stringify(originalAccesses)); }}
-                        class="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
-                        title="Reset"
+                        on:click={handleRequestClose}
+                        class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
                     >
-                        <RotateCcw size={18} />
+                        <X size={20} />
                     </button>
-                {/if}
-                <button
-                    type="button"
-                    on:click={handleRequestClose}
-                    class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
-                >
-                    <X size={20} />
-                </button>
+                </div>
             </div>
+            <!-- Role hint (replaces bottom legend) -->
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5 leading-relaxed">
+                {$_('brokers.sharing.roleHint')}
+            </p>
         </div>
 
         <!-- Body (scrollable) -->
@@ -523,220 +607,156 @@
             {:else}
                 <!-- Ownership Chart + Center Info -->
                 <div class="relative" data-testid="ownership-chart-section">
-                    <div bind:this={chartContainer} class="w-full" style="height: 200px;"></div>
+                    <div bind:this={chartContainer} class="w-full" style="height: 220px; min-height: 180px;"></div>
                     <!-- Center overlay: Allocated / Available + Add button -->
-                    <div class="absolute bottom-2 left-1/2 -translate-x-1/2 text-center pointer-events-none">
-                        <div class="text-xs text-gray-500 dark:text-gray-400">
-                            {$_('brokers.sharing.allocated')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{totalAllocatedPercent.toFixed(1)}%</span>
+                    <div class="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none" style="z-index: 1;">
+                        <div class="text-center">
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                {$_('brokers.sharing.allocated')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{totalAllocatedPercent.toFixed(1)}%</span>
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                {$_('brokers.sharing.available')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{availablePercent.toFixed(1)}%</span>
+                            </div>
+                            <button
+                                type="button"
+                                class="mt-1 pointer-events-auto inline-flex items-center justify-center w-7 h-7 rounded-full bg-libre-green text-white hover:bg-libre-green/90 transition-colors shadow-sm"
+                                on:click={() => { showAddModal = true; selectedUser = null; searchQuery = ''; newRole = 'VIEWER'; newSharePercent = 0; searchHighlightIndex = -1; }}
+                                title={$_('brokers.sharing.addUser')}
+                                data-testid="sharing-add-user-btn"
+                            >
+                                <Plus size={16} />
+                            </button>
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">
-                            {$_('brokers.sharing.available')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{availablePercent.toFixed(1)}%</span>
-                        </div>
-                        <button
-                            type="button"
-                            class="mt-1 pointer-events-auto inline-flex items-center justify-center w-7 h-7 rounded-full bg-libre-green text-white hover:bg-libre-green/90 transition-colors shadow-sm"
-                            on:click={() => { showAddForm = true; selectedUser = null; searchQuery = ''; newRole = 'VIEWER'; newSharePercent = 0; }}
-                            title={$_('brokers.sharing.addUser')}
-                            data-testid="sharing-add-user-btn"
-                        >
-                            <Plus size={16} />
-                        </button>
                     </div>
                 </div>
 
-                <!-- Owners Section -->
-                {#if owners.length > 0}
+                <!-- 3-Column Grid: Owners | Editors | Viewers -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <!-- Owners Column -->
                     <div>
-                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1.5">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                             <Crown size={14} class="text-amber-500" />
                             {$_('brokers.sharing.owners')}
                         </h3>
-                        <div class="space-y-2">
+                        <p class="text-[10px] text-gray-400 dark:text-gray-500 mb-2">{$_('brokers.sharing.ownerDesc')}</p>
+                        <div class="flex flex-col gap-2">
                             {#each owners as entry (entry.user_id)}
-                                {@const isEditing = editingUserId === entry.user_id}
-                                <div class="flex items-center gap-3 p-2.5 bg-gray-50 dark:bg-slate-700/50 rounded-lg" data-testid="access-entry-{entry.user_id}">
-                                    <!-- Avatar -->
-                                    <div class="w-8 h-8 rounded-full overflow-hidden bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                                <button
+                                    type="button"
+                                    class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-full text-sm cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors w-fit"
+                                    data-testid="access-entry-{entry.user_id}"
+                                    on:click={() => startEdit(entry)}
+                                >
+                                    <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
                                         {#if entry.avatar_url}
                                             <LazyImage
                                                 src="{entry.avatar_url}?img_preview=48x48"
                                                 alt={entry.username}
                                                 circle
-                                                
+                                                placeholder="avatar"
                                             />
                                         {:else}
-                                            <span class="text-sm font-semibold text-amber-700 dark:text-amber-300">{getAvatarInitial(entry.username)}</span>
+                                            <span class="w-full h-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center rounded-full">
+                                                <span class="text-[10px] font-semibold text-amber-700 dark:text-amber-300">{getAvatarInitial(entry.username)}</span>
+                                            </span>
                                         {/if}
-                                    </div>
-
-                                    {#if isEditing}
-                                        <!-- Edit mode -->
-                                        <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-2">
-                                            <span class="font-medium text-sm text-gray-800 dark:text-gray-200 truncate">{entry.username}</span>
-                                            <div class="flex items-center gap-2">
-                                                <!-- Role selector -->
-                                                <div class="relative">
-                                                    <button
-                                                        type="button"
-                                                        class="flex items-center gap-1 px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                                        on:click={() => showEditRoleDropdown = !showEditRoleDropdown}
-                                                    >
-                                                        <svelte:component this={getRoleIcon(editRole)} size={12} />
-                                                        {editRole}
-                                                        <ChevronDown size={12} />
-                                                    </button>
-                                                    {#if showEditRoleDropdown}
-                                                        <div class="absolute z-10 mt-1 w-48 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
-                                                            {#each roleOptions as opt}
-                                                                <button
-                                                                    type="button"
-                                                                    class="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200"
-                                                                    on:click={() => { editRole = opt.value; showEditRoleDropdown = false; if (opt.value !== 'OWNER') editSharePercent = 0; }}
-                                                                >
-                                                                    {opt.label}
-                                                                </button>
-                                                            {/each}
-                                                        </div>
-                                                    {/if}
-                                                </div>
-                                                <!-- Share % input (only for OWNER) -->
-                                                {#if editRole === 'OWNER'}
-                                                    <div class="flex items-center gap-1">
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            max="100"
-                                                            step="0.1"
-                                                            bind:value={editSharePercent}
-                                                            class="w-16 px-1.5 py-1 text-xs text-center border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                                        />
-                                                        <span class="text-xs text-gray-500">%</span>
-                                                    </div>
-                                                {/if}
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center gap-1 shrink-0">
-                                            <button type="button" on:click={saveEdit} class="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded" title="Save">
-                                                <Check size={16} />
-                                            </button>
-                                            <button type="button" on:click={cancelEdit} class="p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 rounded" title="Cancel">
-                                                <X size={16} />
-                                            </button>
-                                        </div>
-                                    {:else}
-                                        <!-- View mode -->
-                                        <div class="flex-1 min-w-0">
-                                            <span class="font-medium text-sm text-gray-800 dark:text-gray-200 truncate block">{entry.username}</span>
-                                            <div class="flex items-center gap-2 mt-0.5">
-                                                <span class="text-xs px-1.5 py-0.5 rounded-full {getRoleBadgeClass(entry.role)}">
-                                                    {entry.role}
-                                                </span>
-                                                {#if entry.share_percentage > 0}
-                                                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                                                        {(Math.round(entry.share_percentage * 10000) / 100).toFixed(1)}%
-                                                    </span>
-                                                {/if}
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center gap-1 shrink-0">
-                                            <button type="button" on:click={() => startEdit(entry)} class="p-1 text-gray-400 hover:text-libre-green hover:bg-libre-green/10 rounded transition-colors" title="Edit">
-                                                <Pencil size={14} />
-                                            </button>
-                                            <button type="button" on:click={() => requestRemove(entry)} class="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Remove">
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
+                                    </span>
+                                    <span class="text-amber-800 dark:text-amber-200 font-medium truncate">{entry.username}</span>
+                                    {#if entry.share_percentage > 0}
+                                        <span class="text-xs text-amber-600 dark:text-amber-400">
+                                            {(Math.round(entry.share_percentage * 10000) / 100).toFixed(1)}%
+                                        </span>
                                     {/if}
-                                </div>
+                                </button>
                             {/each}
                         </div>
                     </div>
-                {/if}
 
-                <!-- Editors Section -->
-                {#if editors.length > 0}
+                    <!-- Editors Column -->
                     <div>
-                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1.5">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                             <Pencil size={14} class="text-blue-500" />
                             {$_('brokers.sharing.editors')}
                         </h3>
-                        <div class="flex flex-wrap gap-2">
+                        <p class="text-[10px] text-gray-400 dark:text-gray-500 mb-2">{$_('brokers.sharing.editorDesc')}</p>
+                        <div class="flex flex-col gap-2">
                             {#each editors as entry (entry.user_id)}
-                                <div class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-full text-sm" data-testid="access-entry-{entry.user_id}">
-                                    <!-- Avatar mini -->
-                                    <div class="w-5 h-5 rounded-full overflow-hidden bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                <button
+                                    type="button"
+                                    class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-full text-sm cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors w-fit"
+                                    data-testid="access-entry-{entry.user_id}"
+                                    on:click={() => startEdit(entry)}
+                                >
+                                    <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
                                         {#if entry.avatar_url}
                                             <LazyImage
-                                                src="{entry.avatar_url}?img_preview=32x32"
+                                                src="{entry.avatar_url}?img_preview=48x48"
                                                 alt={entry.username}
                                                 circle
-                                                
+                                                placeholder="avatar"
                                             />
                                         {:else}
-                                            <span class="text-[10px] font-semibold text-blue-700 dark:text-blue-300">{getAvatarInitial(entry.username)}</span>
+                                            <span class="w-full h-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center rounded-full">
+                                                <span class="text-[10px] font-semibold text-blue-700 dark:text-blue-300">{getAvatarInitial(entry.username)}</span>
+                                            </span>
                                         {/if}
-                                    </div>
-                                    <span class="text-blue-800 dark:text-blue-200 font-medium">{entry.username}</span>
-                                    <button type="button" on:click={() => startEdit(entry)} class="p-0.5 text-blue-400 hover:text-blue-600 rounded" title="Edit">
-                                        <Pencil size={12} />
-                                    </button>
-                                    <button type="button" on:click={() => requestRemove(entry)} class="p-0.5 text-blue-400 hover:text-red-500 rounded" title="Remove">
-                                        <Minus size={12} />
-                                    </button>
-                                </div>
+                                    </span>
+                                    <span class="text-blue-800 dark:text-blue-200 font-medium truncate">{entry.username}</span>
+                                </button>
                             {/each}
                         </div>
                     </div>
-                {/if}
 
-                <!-- Viewers Section -->
-                {#if viewers.length > 0}
+                    <!-- Viewers Column -->
                     <div>
-                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1.5">
+                        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
                             <Eye size={14} class="text-gray-400" />
                             {$_('brokers.sharing.viewers')}
                         </h3>
-                        <div class="flex flex-wrap gap-2">
+                        <p class="text-[10px] text-gray-400 dark:text-gray-500 mb-2">{$_('brokers.sharing.viewerDesc')}</p>
+                        <div class="flex flex-col gap-2">
                             {#each viewers as entry (entry.user_id)}
-                                <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 rounded-full text-sm" data-testid="access-entry-{entry.user_id}">
-                                    <div class="w-5 h-5 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-600 flex items-center justify-center">
+                                <button
+                                    type="button"
+                                    class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 rounded-full text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors w-fit"
+                                    data-testid="access-entry-{entry.user_id}"
+                                    on:click={() => startEdit(entry)}
+                                >
+                                    <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
                                         {#if entry.avatar_url}
                                             <LazyImage
-                                                src="{entry.avatar_url}?img_preview=32x32"
+                                                src="{entry.avatar_url}?img_preview=48x48"
                                                 alt={entry.username}
                                                 circle
-                                                
+                                                placeholder="avatar"
                                             />
                                         {:else}
-                                            <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(entry.username)}</span>
+                                            <span class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
+                                                <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(entry.username)}</span>
+                                            </span>
                                         {/if}
-                                    </div>
-                                    <span class="text-gray-700 dark:text-gray-300 font-medium">{entry.username}</span>
-                                    <button type="button" on:click={() => startEdit(entry)} class="p-0.5 text-gray-400 hover:text-gray-600 rounded" title="Edit">
-                                        <Pencil size={12} />
-                                    </button>
-                                    <button type="button" on:click={() => requestRemove(entry)} class="p-0.5 text-gray-400 hover:text-red-500 rounded" title="Remove">
-                                        <Minus size={12} />
-                                    </button>
-                                </div>
+                                    </span>
+                                    <span class="text-gray-700 dark:text-gray-300 font-medium truncate">{entry.username}</span>
+                                </button>
                             {/each}
                         </div>
                     </div>
-                {/if}
+                </div>
 
-                <!-- Edit inline panel (for Editor/Viewer editing) -->
-                {#if editingUserId !== null && !owners.some(o => o.user_id === editingUserId)}
+                <!-- Edit inline panel (for any role editing) -->
+                {#if editingUserId !== null}
                     {@const editEntry = accesses.find(a => a.user_id === editingUserId)}
                     {#if editEntry}
                         <div class="p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg border border-gray-200 dark:border-slate-600">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{$_('common.edit')}: {editEntry.username}</span>
                                 <div class="flex gap-1">
-                                    <button type="button" on:click={saveEdit} class="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"><Check size={16} /></button>
-                                    <button type="button" on:click={cancelEdit} class="p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 rounded"><X size={16} /></button>
+                                    <button type="button" on:click={saveEdit} class="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded" title="Confirm"><Check size={16} /></button>
+                                    <button type="button" on:click={() => requestRemove(editEntry)} class="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded" title="Remove"><Minus size={16} /></button>
+                                    <button type="button" on:click={cancelEdit} class="p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 rounded" title="Cancel"><X size={16} /></button>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3">
+                            <div class="flex flex-wrap items-center gap-3">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">{$_('brokers.sharing.role')}:</span>
                                 <div class="relative">
                                     <button
@@ -744,19 +764,24 @@
                                         class="flex items-center gap-1 px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
                                         on:click={() => showEditRoleDropdown = !showEditRoleDropdown}
                                     >
-                                        <svelte:component this={getRoleIcon(editRole)} size={12} />
-                                        {editRole}
+                                        <span class={getRoleIconColor(editRole)}>
+                                            <svelte:component this={getRoleIcon(editRole)} size={12} />
+                                        </span>
+                                        {getRoleShortLabel(editRole)}
                                         <ChevronDown size={12} />
                                     </button>
                                     {#if showEditRoleDropdown}
-                                        <div class="absolute z-10 mt-1 w-48 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
+                                        <div class="absolute z-10 mt-1 w-40 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
                                             {#each roleOptions as opt}
                                                 <button
                                                     type="button"
-                                                    class="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200"
+                                                    class="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200"
                                                     on:click={() => { editRole = opt.value; showEditRoleDropdown = false; if (opt.value !== 'OWNER') editSharePercent = 0; }}
                                                 >
-                                                    {opt.label}
+                                                    <span class={getRoleIconColor(opt.value)}>
+                                                        <svelte:component this={getRoleIcon(opt.value)} size={12} />
+                                                    </span>
+                                                    {opt.shortLabel}
                                                 </button>
                                             {/each}
                                         </div>
@@ -766,6 +791,7 @@
                                     <span class="text-xs text-gray-500 dark:text-gray-400">{$_('brokers.sharing.sharePercentage')}:</span>
                                     <div class="flex items-center gap-1">
                                         <input type="number" min="0" max="100" step="0.1" bind:value={editSharePercent}
+                                               on:keydown={(e) => { if (e.key === 'Enter') saveEdit(); }}
                                                class="w-16 px-1.5 py-1 text-xs text-center border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200" />
                                         <span class="text-xs text-gray-500">%</span>
                                     </div>
@@ -775,158 +801,7 @@
                     {/if}
                 {/if}
 
-                <!-- Add User Form -->
-                {#if showAddForm}
-                    <div class="p-3 bg-libre-green/5 dark:bg-libre-green/10 rounded-lg border border-libre-green/20 dark:border-libre-green/30" data-testid="sharing-add-form">
-                        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">{$_('brokers.sharing.addUser')}</h4>
-
-                        <!-- Search user -->
-                        <div class="relative mb-3">
-                            <div class="flex items-center gap-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-3 py-2">
-                                <Search size={16} class="text-gray-400 shrink-0" />
-                                <input
-                                    type="text"
-                                    bind:value={searchQuery}
-                                    on:input={handleSearchInput}
-                                    placeholder={$_('brokers.sharing.searchPlaceholder')}
-                                    class="flex-1 bg-transparent text-sm text-gray-700 dark:text-gray-200 outline-none placeholder-gray-400"
-                                    data-testid="sharing-search-input"
-                                />
-                                {#if searching}
-                                    <Loader2 size={14} class="animate-spin text-gray-400" />
-                                {/if}
-                            </div>
-
-                            <!-- Search results dropdown -->
-                            {#if searchResults.length > 0}
-                                <div class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
-                                    {#each searchResults as user}
-                                        <button
-                                            type="button"
-                                            class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-slate-600 text-sm"
-                                            on:click={() => selectSearchUser(user)}
-                                        >
-                                            <span class="w-6 h-6 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-600 flex items-center justify-center shrink-0">
-                                                {#if user.avatar_url}
-                                                    <LazyImage
-                                                        src="{user.avatar_url}?img_preview=32x32"
-                                                        alt={user.username}
-                                                        circle
-                                                        
-                                                    />
-                                                {:else}
-                                                    <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(user.username)}</span>
-                                                {/if}
-                                            </span>
-                                            <span class="text-gray-700 dark:text-gray-200">{user.username}</span>
-                                        </button>
-                                    {/each}
-                                </div>
-                            {:else if searchQuery.length >= 2 && !searching && !selectedUser}
-                                <div class="absolute z-10 mt-1 w-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-3 text-center text-sm text-gray-400">
-                                    {$_('brokers.sharing.noOtherUsers')}
-                                </div>
-                            {/if}
-                        </div>
-
-                        {#if selectedUser}
-                            <div class="flex items-center gap-2 mb-3 p-2 bg-white dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
-                                <div class="w-6 h-6 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-600 flex items-center justify-center shrink-0">
-                                    {#if selectedUser.avatar_url}
-                                        <LazyImage
-                                            src="{selectedUser.avatar_url}?img_preview=32x32"
-                                            alt={selectedUser.username}
-                                            circle
-                                            
-                                        />
-                                    {:else}
-                                        <span class="text-[10px] font-semibold text-gray-500">{getAvatarInitial(selectedUser.username)}</span>
-                                    {/if}
-                                </div>
-                                <span class="text-sm font-medium text-gray-700 dark:text-gray-200 flex-1">{selectedUser.username}</span>
-                                <button type="button" on:click={() => { selectedUser = null; searchQuery = ''; }} class="p-0.5 text-gray-400 hover:text-gray-600">
-                                    <X size={14} />
-                                </button>
-                            </div>
-                        {/if}
-
-                        <!-- Role + Share % -->
-                        <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{$_('brokers.sharing.role')}:</span>
-                                <div class="relative">
-                                    <button
-                                        type="button"
-                                        class="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
-                                        on:click={() => showRoleDropdown = !showRoleDropdown}
-                                    >
-                                        <svelte:component this={getRoleIcon(newRole)} size={12} />
-                                        {newRole}
-                                        <ChevronDown size={12} />
-                                    </button>
-                                    {#if showRoleDropdown}
-                                        <div class="absolute z-10 mt-1 w-48 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
-                                            {#each roleOptions as opt}
-                                                <button
-                                                    type="button"
-                                                    class="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200"
-                                                    on:click={() => { newRole = opt.value; showRoleDropdown = false; if (opt.value !== 'OWNER') newSharePercent = 0; }}
-                                                >
-                                                    {opt.label}
-                                                </button>
-                                            {/each}
-                                        </div>
-                                    {/if}
-                                </div>
-                            </div>
-
-                            {#if newRole === 'OWNER'}
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{$_('brokers.sharing.sharePercentage')}:</span>
-                                    <div class="flex items-center gap-1">
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max={maxNewShare}
-                                            step="0.1"
-                                            bind:value={newSharePercent}
-                                            class="w-16 px-1.5 py-1 text-xs text-center border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                        />
-                                        <span class="text-xs text-gray-500">% (max {maxNewShare.toFixed(1)}%)</span>
-                                    </div>
-                                </div>
-                            {/if}
-                        </div>
-
-                        <!-- Actions -->
-                        <div class="flex items-center justify-end gap-2">
-                            <button
-                                type="button"
-                                on:click={() => { showAddForm = false; selectedUser = null; searchQuery = ''; }}
-                                class="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
-                            >
-                                {$_('common.cancel')}
-                            </button>
-                            <button
-                                type="button"
-                                on:click={handleAddUser}
-                                disabled={!selectedUser}
-                                class="flex items-center gap-1 px-3 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                data-testid="sharing-confirm-add"
-                            >
-                                <Plus size={14} />
-                                {$_('brokers.sharing.addUser')}
-                            </button>
-                        </div>
-                    </div>
-                {/if}
-
-                <!-- Role Legend -->
-                <div class="text-xs text-gray-400 dark:text-gray-500 space-y-0.5 pt-2 border-t border-gray-100 dark:border-slate-700">
-                    <div class="flex items-center gap-1.5"><Crown size={11} class="text-amber-500" /> {$_('brokers.sharing.roleOwner')}</div>
-                    <div class="flex items-center gap-1.5"><Pencil size={11} class="text-blue-500" /> {$_('brokers.sharing.roleEditor')}</div>
-                    <div class="flex items-center gap-1.5"><Eye size={11} class="text-gray-400" /> {$_('brokers.sharing.roleViewer')}</div>
-                </div>
+                <!-- Add User form moved to separate overlay modal below -->
             {/if}
         </div>
 
@@ -975,8 +850,192 @@
     message={$_('brokers.unsavedChanges')}
     confirmText={$_('brokers.discardAndClose')}
     danger={false}
+    warning={true}
     onConfirm={confirmDiscard}
     onCancel={() => confirmCloseOpen = false}
     zIndex={60}
 />
+
+<!-- Add User Overlay Modal -->
+<ModalBase
+    open={showAddModal}
+    zIndex={60}
+    maxWidth="md"
+    onRequestClose={() => { showAddModal = false; selectedUser = null; searchQuery = ''; searchHighlightIndex = -1; }}
+    testId="sharing-add-user-modal"
+>
+    <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col max-h-[70vh]">
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Plus size={18} class="text-libre-green" />
+                {$_('brokers.sharing.addUser')}
+            </h3>
+            <button
+                type="button"
+                on:click={() => { showAddModal = false; selectedUser = null; searchQuery = ''; searchHighlightIndex = -1; }}
+                class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
+            >
+                <X size={18} />
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-4 space-y-4 overflow-y-auto" data-testid="sharing-add-form">
+            <!-- Search user -->
+            <div class="relative">
+                <label for="sharing-search-input" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    {$_('brokers.sharing.searchPlaceholder')}
+                </label>
+                <div class="flex items-center gap-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-3 py-2">
+                    <Search size={16} class="text-gray-400 shrink-0" />
+                    <input
+                        id="sharing-search-input"
+                        type="text"
+                        bind:value={searchQuery}
+                        on:input={handleSearchInput}
+                        on:keydown={handleSearchKeydown}
+                        placeholder={$_('brokers.sharing.searchPlaceholder')}
+                        class="flex-1 bg-transparent text-sm text-gray-700 dark:text-gray-200 outline-none placeholder-gray-400"
+                        data-testid="sharing-search-input"
+                    />
+                    {#if searching}
+                        <Loader2 size={14} class="animate-spin text-gray-400" />
+                    {/if}
+                </div>
+
+                <!-- Search results dropdown -->
+                {#if searchResults.length > 0}
+                    <div class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
+                        {#each searchResults as user, idx}
+                            <button
+                                type="button"
+                                class="w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors {idx === searchHighlightIndex ? 'bg-libre-green/10 dark:bg-libre-green/20' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
+                                on:click={() => selectSearchUser(user)}
+                            >
+                                <span class="w-6 h-6 rounded-full overflow-hidden shrink-0">
+                                    {#if user.avatar_url}
+                                        <LazyImage
+                                            src="{user.avatar_url}?img_preview=48x48"
+                                            alt={user.username}
+                                            circle
+                                        />
+                                    {:else}
+                                        <span class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
+                                            <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(user.username)}</span>
+                                        </span>
+                                    {/if}
+                                </span>
+                                <span class="text-gray-700 dark:text-gray-200">{user.username}</span>
+                            </button>
+                        {/each}
+                    </div>
+                {:else if searchQuery.length >= 2 && !searching && !selectedUser}
+                    <div class="absolute z-10 mt-1 w-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-3 text-center text-sm text-gray-400">
+                        {$_('brokers.sharing.noOtherUsers')}
+                    </div>
+                {/if}
+            </div>
+
+            <!-- Selected user badge -->
+            {#if selectedUser}
+                <div class="flex items-center gap-2 p-2 bg-libre-green/5 dark:bg-libre-green/10 rounded-lg border border-libre-green/20 dark:border-libre-green/30">
+                    <div class="w-7 h-7 rounded-full overflow-hidden shrink-0">
+                        {#if selectedUser.avatar_url}
+                            <LazyImage
+                                src="{selectedUser.avatar_url}?img_preview=48x48"
+                                alt={selectedUser.username}
+                                circle
+                            />
+                        {:else}
+                            <div class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
+                                <span class="text-xs font-semibold text-gray-500">{getAvatarInitial(selectedUser.username)}</span>
+                            </div>
+                        {/if}
+                    </div>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200 flex-1">{selectedUser.username}</span>
+                    <button type="button" on:click={() => { selectedUser = null; searchQuery = ''; }} class="p-0.5 text-gray-400 hover:text-gray-600">
+                        <X size={14} />
+                    </button>
+                </div>
+            {/if}
+
+            <!-- Role selection -->
+            <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{$_('brokers.sharing.role')}:</span>
+                    <div class="relative">
+                        <button
+                            type="button"
+                            class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
+                            on:click={() => showRoleDropdown = !showRoleDropdown}
+                        >
+                            <span class={getRoleIconColor(newRole)}>
+                                <svelte:component this={getRoleIcon(newRole)} size={14} />
+                            </span>
+                            {getRoleShortLabel(newRole)}
+                            <ChevronDown size={12} />
+                        </button>
+                        {#if showRoleDropdown}
+                            <div class="absolute z-10 mt-1 w-44 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
+                                {#each roleOptions as opt}
+                                    <button
+                                        type="button"
+                                        class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200"
+                                        on:click={() => { newRole = opt.value; showRoleDropdown = false; if (opt.value !== 'OWNER') newSharePercent = 0; }}
+                                    >
+                                        <span class={getRoleIconColor(opt.value)}>
+                                            <svelte:component this={getRoleIcon(opt.value)} size={14} />
+                                        </span>
+                                        {opt.shortLabel}
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
+                </div>
+
+                {#if newRole === 'OWNER'}
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{$_('brokers.sharing.sharePercentage')}:</span>
+                        <div class="flex items-center gap-1">
+                            <input
+                                type="number"
+                                min="0"
+                                max={maxNewShare}
+                                step="0.1"
+                                bind:value={newSharePercent}
+                                on:keydown={(e) => { if (e.key === 'Enter') handleAddUser(); }}
+                                class="w-20 px-2 py-1.5 text-sm text-center border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
+                            />
+                            <span class="text-xs text-gray-500">% (max {maxNewShare.toFixed(1)}%)</span>
+                        </div>
+                    </div>
+                {/if}
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-end gap-2 p-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
+            <button
+                type="button"
+                on:click={() => { showAddModal = false; selectedUser = null; searchQuery = ''; searchHighlightIndex = -1; }}
+                class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+            >
+                {$_('common.cancel')}
+            </button>
+            <button
+                type="button"
+                on:click={handleAddUser}
+                disabled={!selectedUser}
+                class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                data-testid="sharing-confirm-add"
+            >
+                <Plus size={16} />
+                {$_('brokers.sharing.addUser')}
+            </button>
+        </div>
+    </div>
+</ModalBase>
+
 

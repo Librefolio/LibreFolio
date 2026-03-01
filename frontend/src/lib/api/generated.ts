@@ -4864,6 +4864,10 @@ const BRReadItem = z.object({
   opened_at: z.union([z.string(), z.null()]).optional(),
   created_at: z.string(),
   updated_at: z.string(),
+  user_role: z
+    .union([z.string(), z.null()])
+    .describe("Current user's role on this broker (OWNER/EDITOR/VIEWER)")
+    .optional(),
 });
 const BRDeleteResult: z.ZodType<BRDeleteResult> = z.object({
   success: z.boolean().describe("Whether the deletion succeeded"),
