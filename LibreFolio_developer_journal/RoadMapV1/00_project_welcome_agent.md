@@ -176,7 +176,7 @@ LibreFolio/
 | **Roadmap UI**          | `LibreFolio_developer_journal/RoadmapV4_UI/`              |
 | **Plan attivi**         | `RoadmapV4_UI/plan-*.md` (root)                           |
 | **Plan completati**     | `RoadmapV4_UI/phases/phase-04-subplan/`                   |
-| **Phase 4 Summary**     | `RoadmapV4_UI/plan-phase04-summary.md`                    |
+| **Phase 4 Summary**     | `RoadmapV4_UI/phases/phase-04-subplan/plan-phase04-summary.md` |
 | **Dark Mode Guide**     | `RoadmapV4_UI/phases/phase-04-subplan/GUIDA-DARK-MODE.md` |
 
 ## 🛠️ Comandi Utili - USARE SEMPRE dev.py

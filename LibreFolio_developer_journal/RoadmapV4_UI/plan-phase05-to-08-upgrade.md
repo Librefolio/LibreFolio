@@ -42,7 +42,7 @@ che verrà creato al momento dell'inizio della fase, partendo dalla sezione corr
 |---------|-----------------------------------------------------------------------|----------------------------------------------------------|
 | §2      | Schema changes (pre-work) — `share_percentage`, `cost_basis_override` | ✅ Completato                                             |
 | §3      | API changes (nuovi + modificati)                                      | Distribuito nelle fasi                                   |
-| §3.5    | **Phase 4.8** — Broker Sharing GUI                                    | `plan-brokerSharing.md` (esistente)                      |
+| §3.5    | **Phase 4.8** — Broker Sharing GUI                                    | `phases/phase-04-subplan/plan-brokerSharing.md` (✅ completato) |
 | §4      | **Phase 5** — FX Management + PriceChartShared                        | `plan-phase05-fx.md` (da creare)                         |
 | §5      | **Phase 6** — Assets Management                                       | `plan-phase06-assets.md` (da creare)                     |
 | §6      | **Phase 7** — Transactions Management                                 | `plan-phase07-transactions.md` (da creare)               |
@@ -212,8 +212,8 @@ async def get_portfolio_overview(user_id: int):
 
 **Durata**: ~5 giorni  
 **Dipendenze**: Schema pre-work (share_percentage GIÀ implementato)  
-**Status**: ⏳ TODO — **BLOCCANTE per Phase 5+**  
-**Piano dettagliato**: `plan-brokerSharing.md`
+**Status**: ✅ COMPLETATO (1 Mar 2026)  
+**Piano dettagliato**: `phases/phase-04-subplan/plan-brokerSharing.md`
 
 Senza la GUI di sharing, il sistema multi-utente resta inutilizzabile dall'utente.
 Questo step DEVE essere completato prima di Phase 5 (FX).
@@ -1038,7 +1038,7 @@ creare un nuovo broker e trasferirci i fondi.
 
 ### Frontend Component
 
-**Piano dettagliato**: vedi `plan-brokerSharing.md`
+**Piano dettagliato**: vedi `phases/phase-04-subplan/plan-brokerSharing.md`
 
 ```
 BrokerSharingModal.svelte

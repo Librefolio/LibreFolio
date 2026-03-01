@@ -12,7 +12,7 @@
 Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facilitare la navigazione e il tracking del progresso.
 
 **📌 Piano Principale**: [→ plan-frontendDevelopment.prompt.md](../plan-frontendDevelopment.prompt.md)  
-**📌 Phase 4 Summary**: [→ plan-phase04-summary.md](../plan-phase04-summary.md)
+**📌 Phase 4 Summary**: [→ plan-phase04-summary.md](phase-04-subplan/plan-phase04-summary.md)
 
 ---
 
