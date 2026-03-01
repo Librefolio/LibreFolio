@@ -453,7 +453,19 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 - ✅ **Mobile sidebar CSS fix**: titolo sezione attiva nel drawer mobile normalizzato (non più oversized/centrato)
 - ✅ **Gallery error reporting**: `dev.py mkdocs gallery` ora prosegue con i test anche se un viewport fallisce, e printa un riepilogo errori alla fine
 
-### Step 4.8: GDPR Permissions Analysis (planning only) ⏸️
+### Step 4.8: Broker Sharing GUI ✅ COMPLETATO (27 Feb — 1 Mar 2026)
+
+> Vedi `plan-brokerSharing.md` per dettagli completi (14 enhancement rounds).
+
+- ✅ Backend: `GET /users/search`, `PUT /brokers/{id}/access` bulk, share_percentage validation ≤ 100%
+- ✅ Schema: `BaseListResponse`, `BaseBulkResponse` standardizzati, `count` rimosso, `avatar_url` + `user_role` aggiunti
+- ✅ Frontend: `BrokerSharingModal.svelte` con ECharts half-donut, 3-column layout, Add/Edit user modali
+- ✅ ECharts: avatar circolari sugli archi, palette cromatica diversificata, borderRadius, padAngle
+- ✅ VIEWER gating: bottoni disabilitati in broker detail + files page per VIEWER
+- ✅ i18n: 30+ chiavi `brokers.sharing.*` in 4 lingue
+- ✅ Gallery: screenshot sharing-modal con Coinbase multi-user demo
+- ✅ Test API: 17/17 passano, svelte-check 0 errori
+- ✅ DB Populate: 8 utenti con avatar, Coinbase con 3 owners + 2 editors + 3 viewers
 
 ### ~~Step 4.9: File Preview System~~ → **SPOSTATO a Phase 7.5**
 
@@ -484,32 +496,23 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 ### 🔲 Optional/Low Priority
 
 - ✅ **MkDocs Dark Mode** (`Step 4.7`) - COMPLETATO (24 Feb 2026)
-- **GDPR Permissions Analysis** (`Step 4.8`) - Planning only
+- ✅ **Broker Sharing GUI** (`Step 4.8`) - COMPLETATO (1 Mar 2026) — vedi `plan-brokerSharing.md`
 
-### Dopo: Phase 4.8 (Broker Sharing GUI) → Phase 5 (FX Management)
+### Dopo: Phase 4.8 completata → Phase 5 (FX Management)
 
-**Pre-work completato (25 Feb 2026)**:
+**Phase 4.8 COMPLETATA (1 Mar 2026)**:
 
-- ✅ `share_percentage` in `BrokerUserAccess` — per aggregazione portfolio pesata
-- ✅ `cost_basis_override` in `Transaction` — per freeze PMC ai trasferimenti
-- ✅ 16/16 API test passano, 0 errori frontend check, DB prod+test ricreati
-- 📋 `fiscal_preferences` pianificato per Phase 7
+- ✅ Endpoint `GET /api/v1/users/search` per cercare utenti
+- ✅ `avatar_url` in `BRAccessItem`, `user_role` in `BRSummary`
+- ✅ `BaseListResponse`/`BaseBulkResponse` standardizzati, `count` rimosso
+- ✅ Validazione share_percentage ≤ 100% con CHECK constraint DB
+- ✅ ECharts installato nel frontend
+- ✅ `BrokerSharingModal.svelte` con Half-Donut Chart per ownership (avatar circolari, palette diversificata)
+- ✅ Bottone "Share" nella pagina broker detail (solo OWNER)
+- ✅ i18n 30+ chiavi, VIEWER gating, gallery screenshots
+- ✅ 8 utenti test con avatar, Coinbase multi-user demo, 27 broker accessi
 
-**Prossimo task**: Phase 4.8 — Broker Sharing GUI (BLOCCANTE per Phase 5+)
-
-- ~~**PRE-STEP 0**: Verificare schema DB + testare API su Swagger~~ — ✅ COMPLETATO
-- ~~Creare endpoint `GET /api/v1/users/search` per cercare utenti~~ — ✅ Step 1 COMPLETATO (27 Feb 2026)
-- ~~Aggiungere `avatar_url` a `BRAccessItem`, `user_role` a `BRSummary`~~ — ✅ Step 2 COMPLETATO (27 Feb 2026)
-- ~~Standardizzare `count` in tutti gli schemi~~ — ✅ COMPLETATO
-- ~~Validazione share_percentage ≤ 100%~~ — ✅ COMPLETATO
-- **TODO**: Installare `echarts` nel frontend
-- **TODO**: Creare `BrokerSharingModal.svelte` con Half-Donut Chart ECharts per ownership
-- **TODO**: Integrare bottone "Share" nella pagina broker detail (solo OWNER)
-- **TODO**: i18n chiavi, E2E test, Gallery screenshots
-- Vedi `plan-brokerSharing.md` per il piano completo
-- **Rif. 05-08**: §3.5 (Sharing GUI), §10 (GDPR Architecture), §11 (Dependency Graph)
-
-**Dopo Phase 4.8**: Creare `PriceChartShared.svelte` (Phase 5.0) — ECharts già installato
+**Prossimo task**: Phase 5 (FX Management)
 
 - **Rif. 05-08**: §4 (Phase 5 — FX Management), §9 (PriceChartShared spec)
 

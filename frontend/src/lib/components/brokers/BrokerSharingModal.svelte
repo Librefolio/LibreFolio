@@ -15,7 +15,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {
-        X, Plus, Minus, Save, RotateCcw, Users, Crown, Eye, Pencil,
+        X, Plus, Save, RotateCcw, Users, Crown, Eye, Pencil, Trash2,
         AlertTriangle, Search, Check, Loader2, ChevronDown
     } from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
@@ -74,6 +74,7 @@
     let searchHighlightIndex = -1; // Arrow key navigation index
 
     // Edit state
+    let showEditModal = false;
     let editingUserId: number | null = null;
     let editRole: 'OWNER' | 'EDITOR' | 'VIEWER' = 'VIEWER';
     let editSharePercent: number = 0;
@@ -206,27 +207,51 @@
             const pct = Math.round(owner.share_percentage * 10000) / 100;
             if (pct > 0) {
                 const initial = owner.username.charAt(0).toUpperCase();
+                const avatarUrl = owner.avatar_url ? `${owner.avatar_url}?img_preview=64x64` : null;
+                const avatarSize = 44;
+                const rich: Record<string, any> = {
+                    pct: {
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        color: isDark ? '#e2e8f0' : '#1e293b',
+                        lineHeight: 18,
+                        padding: [2, 0, 0, 0],
+                        textShadowColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)',
+                        textShadowBlur: 3,
+                    },
+                };
+                let formatter: string;
+                if (avatarUrl) {
+                    rich['avatar'] = {
+                        backgroundColor: {image: avatarUrl},
+                        borderRadius: avatarSize / 2,
+                        width: avatarSize,
+                        height: avatarSize,
+                        align: 'center',
+                        borderColor: isDark ? '#334155' : '#ffffff',
+                        borderWidth: 2,
+                    };
+                    formatter = `{avatar| }\n{pct|${pct.toFixed(1)}%}`;
+                } else {
+                    rich['avatar'] = {
+                        fontSize: 18,
+                        fontWeight: 'bold',
+                        color: '#fff',
+                        backgroundColor: ownerPalette[i % ownerPalette.length],
+                        borderRadius: avatarSize / 2,
+                        width: avatarSize,
+                        height: avatarSize,
+                        align: 'center',
+                        lineHeight: avatarSize,
+                        borderColor: isDark ? '#334155' : '#ffffff',
+                        borderWidth: 2,
+                    };
+                    formatter = `{avatar|${initial}}\n{pct|${pct.toFixed(1)}%}`;
+                }
                 data.push({
                     value: pct,
                     name: owner.username,
-                    label: {
-                        show: true,
-                        formatter: `{avatar|${initial}}\n{pct|${pct.toFixed(1)}%}`,
-                        rich: {
-                            avatar: {
-                                fontSize: 13,
-                                fontWeight: 'bold',
-                                color: '#fff',
-                                backgroundColor: ownerPalette[i % ownerPalette.length],
-                                borderRadius: 12,
-                                width: 24,
-                                height: 24,
-                                align: 'center',
-                                lineHeight: 24,
-                            },
-                            pct: {fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', lineHeight: 16},
-                        },
-                    },
+                    label: {show: true, formatter, rich},
                 });
             }
         });
@@ -265,7 +290,7 @@
             series: [
                 {
                     type: 'pie',
-                    radius: ['70%', '90%'],
+                    radius: ['45%', '95%'],
                     center: ['50%', '80%'],
                     startAngle: 180,
                     endAngle: 360,
@@ -390,6 +415,7 @@
         editRole = entry.role;
         editSharePercent = Math.round(entry.share_percentage * 10000) / 100;
         showEditRoleDropdown = false;
+        showEditModal = true;
     }
 
     function saveEdit() {
@@ -401,10 +427,12 @@
             return {...a, role: editRole, share_percentage: share};
         });
         editingUserId = null;
+        showEditModal = false;
     }
 
     function cancelEdit() {
         editingUserId = null;
+        showEditModal = false;
     }
 
     // =========================================================================
@@ -478,6 +506,7 @@
     function doClose() {
         confirmCloseOpen = false;
         showAddModal = false;
+        showEditModal = false;
         editingUserId = null;
         searchHighlightIndex = -1;
         cleanupChart();
@@ -575,10 +604,7 @@
                     </button>
                 </div>
             </div>
-            <!-- Role hint (replaces bottom legend) -->
-            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5 leading-relaxed">
-                {$_('brokers.sharing.roleHint')}
-            </p>
+            <!-- Role descriptions are now under each column title -->
         </div>
 
         <!-- Body (scrollable) -->
@@ -607,7 +633,7 @@
             {:else}
                 <!-- Ownership Chart + Center Info -->
                 <div class="relative" data-testid="ownership-chart-section">
-                    <div bind:this={chartContainer} class="w-full" style="height: 220px; min-height: 180px;"></div>
+                    <div bind:this={chartContainer} class="w-full" style="height: 260px; min-height: 200px;"></div>
                     <!-- Center overlay: Allocated / Available + Add button -->
                     <div class="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none" style="z-index: 1;">
                         <div class="text-center">
@@ -743,63 +769,7 @@
                     </div>
                 </div>
 
-                <!-- Edit inline panel (for any role editing) -->
-                {#if editingUserId !== null}
-                    {@const editEntry = accesses.find(a => a.user_id === editingUserId)}
-                    {#if editEntry}
-                        <div class="p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg border border-gray-200 dark:border-slate-600">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{$_('common.edit')}: {editEntry.username}</span>
-                                <div class="flex gap-1">
-                                    <button type="button" on:click={saveEdit} class="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded" title="Confirm"><Check size={16} /></button>
-                                    <button type="button" on:click={() => requestRemove(editEntry)} class="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded" title="Remove"><Minus size={16} /></button>
-                                    <button type="button" on:click={cancelEdit} class="p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 rounded" title="Cancel"><X size={16} /></button>
-                                </div>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-3">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">{$_('brokers.sharing.role')}:</span>
-                                <div class="relative">
-                                    <button
-                                        type="button"
-                                        class="flex items-center gap-1 px-2 py-1 text-xs rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                        on:click={() => showEditRoleDropdown = !showEditRoleDropdown}
-                                    >
-                                        <span class={getRoleIconColor(editRole)}>
-                                            <svelte:component this={getRoleIcon(editRole)} size={12} />
-                                        </span>
-                                        {getRoleShortLabel(editRole)}
-                                        <ChevronDown size={12} />
-                                    </button>
-                                    {#if showEditRoleDropdown}
-                                        <div class="absolute z-10 mt-1 w-40 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
-                                            {#each roleOptions as opt}
-                                                <button
-                                                    type="button"
-                                                    class="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200"
-                                                    on:click={() => { editRole = opt.value; showEditRoleDropdown = false; if (opt.value !== 'OWNER') editSharePercent = 0; }}
-                                                >
-                                                    <span class={getRoleIconColor(opt.value)}>
-                                                        <svelte:component this={getRoleIcon(opt.value)} size={12} />
-                                                    </span>
-                                                    {opt.shortLabel}
-                                                </button>
-                                            {/each}
-                                        </div>
-                                    {/if}
-                                </div>
-                                {#if editRole === 'OWNER'}
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">{$_('brokers.sharing.sharePercentage')}:</span>
-                                    <div class="flex items-center gap-1">
-                                        <input type="number" min="0" max="100" step="0.1" bind:value={editSharePercent}
-                                               on:keydown={(e) => { if (e.key === 'Enter') saveEdit(); }}
-                                               class="w-16 px-1.5 py-1 text-xs text-center border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200" />
-                                        <span class="text-xs text-gray-500">%</span>
-                                    </div>
-                                {/if}
-                            </div>
-                        </div>
-                    {/if}
-                {/if}
+                <!-- Edit user is now in a separate overlay modal below -->
 
                 <!-- Add User form moved to separate overlay modal below -->
             {/if}
@@ -882,30 +852,52 @@
 
         <!-- Body -->
         <div class="p-4 space-y-4 overflow-y-auto" data-testid="sharing-add-form">
-            <!-- Search user -->
+            <!-- Unified Search / Selected user -->
             <div class="relative">
                 <label for="sharing-search-input" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                     {$_('brokers.sharing.searchPlaceholder')}
                 </label>
-                <div class="flex items-center gap-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-3 py-2">
-                    <Search size={16} class="text-gray-400 shrink-0" />
-                    <input
-                        id="sharing-search-input"
-                        type="text"
-                        bind:value={searchQuery}
-                        on:input={handleSearchInput}
-                        on:keydown={handleSearchKeydown}
-                        placeholder={$_('brokers.sharing.searchPlaceholder')}
-                        class="flex-1 bg-transparent text-sm text-gray-700 dark:text-gray-200 outline-none placeholder-gray-400"
-                        data-testid="sharing-search-input"
-                    />
-                    {#if searching}
-                        <Loader2 size={14} class="animate-spin text-gray-400" />
+                <div class="flex items-center gap-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-3 py-2 {selectedUser ? 'border-libre-green/40 dark:border-libre-green/40 bg-libre-green/5 dark:bg-libre-green/10' : ''}">
+                    {#if selectedUser}
+                        <!-- Show selected user inline with clear button -->
+                        <div class="w-6 h-6 rounded-full overflow-hidden shrink-0">
+                            {#if selectedUser.avatar_url}
+                                <LazyImage
+                                    src="{selectedUser.avatar_url}?img_preview=48x48"
+                                    alt={selectedUser.username}
+                                    circle
+                                />
+                            {:else}
+                                <span class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
+                                    <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(selectedUser.username)}</span>
+                                </span>
+                            {/if}
+                        </div>
+                        <span class="flex-1 text-sm font-medium text-gray-700 dark:text-gray-200">{selectedUser.username}</span>
+                        <button type="button" on:click={() => { selectedUser = null; searchQuery = ''; }} class="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                            <X size={14} />
+                        </button>
+                    {:else}
+                        <!-- Search mode -->
+                        <Search size={16} class="text-gray-400 shrink-0" />
+                        <input
+                            id="sharing-search-input"
+                            type="text"
+                            bind:value={searchQuery}
+                            on:input={handleSearchInput}
+                            on:keydown={handleSearchKeydown}
+                            placeholder={$_('brokers.sharing.searchPlaceholder')}
+                            class="flex-1 bg-transparent text-sm text-gray-700 dark:text-gray-200 outline-none placeholder-gray-400"
+                            data-testid="sharing-search-input"
+                        />
+                        {#if searching}
+                            <Loader2 size={14} class="animate-spin text-gray-400" />
+                        {/if}
                     {/if}
                 </div>
 
-                <!-- Search results dropdown -->
-                {#if searchResults.length > 0}
+                <!-- Search results dropdown (only when not selected) -->
+                {#if !selectedUser && searchResults.length > 0}
                     <div class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
                         {#each searchResults as user, idx}
                             <button
@@ -930,35 +922,12 @@
                             </button>
                         {/each}
                     </div>
-                {:else if searchQuery.length >= 2 && !searching && !selectedUser}
+                {:else if !selectedUser && searchQuery.length >= 2 && !searching}
                     <div class="absolute z-10 mt-1 w-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-3 text-center text-sm text-gray-400">
                         {$_('brokers.sharing.noOtherUsers')}
                     </div>
                 {/if}
             </div>
-
-            <!-- Selected user badge -->
-            {#if selectedUser}
-                <div class="flex items-center gap-2 p-2 bg-libre-green/5 dark:bg-libre-green/10 rounded-lg border border-libre-green/20 dark:border-libre-green/30">
-                    <div class="w-7 h-7 rounded-full overflow-hidden shrink-0">
-                        {#if selectedUser.avatar_url}
-                            <LazyImage
-                                src="{selectedUser.avatar_url}?img_preview=48x48"
-                                alt={selectedUser.username}
-                                circle
-                            />
-                        {:else}
-                            <div class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
-                                <span class="text-xs font-semibold text-gray-500">{getAvatarInitial(selectedUser.username)}</span>
-                            </div>
-                        {/if}
-                    </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200 flex-1">{selectedUser.username}</span>
-                    <button type="button" on:click={() => { selectedUser = null; searchQuery = ''; }} class="p-0.5 text-gray-400 hover:text-gray-600">
-                        <X size={14} />
-                    </button>
-                </div>
-            {/if}
 
             <!-- Role selection -->
             <div class="flex flex-col gap-3">
@@ -1036,6 +1005,139 @@
             </button>
         </div>
     </div>
+</ModalBase>
+
+<!-- Edit User Overlay Modal -->
+<ModalBase
+    open={showEditModal}
+    zIndex={60}
+    maxWidth="md"
+    onRequestClose={cancelEdit}
+    testId="sharing-edit-user-modal"
+>
+    {@const editEntry = accesses.find(a => a.user_id === editingUserId)}
+    {#if editEntry}
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    <Pencil size={18} class="text-libre-green" />
+                    {$_('common.edit')}: {editEntry.username}
+                </h3>
+                <button
+                    type="button"
+                    on:click={cancelEdit}
+                    class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
+                >
+                    <X size={18} />
+                </button>
+            </div>
+
+            <!-- Body — compact inline layout -->
+            <div class="p-4 space-y-3">
+                <!-- Row 1: Avatar + Username + Role selector + Share % — all inline -->
+                <div class="flex items-center gap-3 flex-wrap">
+                    <!-- Avatar -->
+                    <div class="w-9 h-9 rounded-full overflow-hidden shrink-0">
+                        {#if editEntry.avatar_url}
+                            <LazyImage
+                                src="{editEntry.avatar_url}?img_preview=48x48"
+                                alt={editEntry.username}
+                                circle
+                                placeholder="avatar"
+                            />
+                        {:else}
+                            <div class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
+                                <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(editEntry.username)}</span>
+                            </div>
+                        {/if}
+                    </div>
+                    <!-- Username -->
+                    <span class="text-sm font-medium text-gray-800 dark:text-gray-100">{editEntry.username}</span>
+
+                    <!-- Separator -->
+                    <span class="text-gray-300 dark:text-slate-600">|</span>
+
+                    <!-- Role selector -->
+                    <div class="relative">
+                        <button
+                            type="button"
+                            class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
+                            on:click={() => showEditRoleDropdown = !showEditRoleDropdown}
+                        >
+                            <span class={getRoleIconColor(editRole)}>
+                                <svelte:component this={getRoleIcon(editRole)} size={14} />
+                            </span>
+                            {getRoleShortLabel(editRole)}
+                            <ChevronDown size={12} />
+                        </button>
+                        {#if showEditRoleDropdown}
+                            <div class="absolute z-10 mt-1 w-48 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
+                                {#each roleOptions as opt}
+                                    <button
+                                        type="button"
+                                        class="w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200"
+                                        on:click={() => { editRole = opt.value; showEditRoleDropdown = false; if (opt.value !== 'OWNER') editSharePercent = 0; }}
+                                    >
+                                        <span class={getRoleIconColor(opt.value)}>
+                                            <svelte:component this={getRoleIcon(opt.value)} size={14} />
+                                        </span>
+                                        {opt.shortLabel}
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
+
+                    <!-- Share % (only for OWNER) -->
+                    {#if editRole === 'OWNER'}
+                        <div class="flex items-center gap-1">
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.1"
+                                bind:value={editSharePercent}
+                                on:keydown={(e) => { if (e.key === 'Enter') saveEdit(); }}
+                                class="w-16 px-2 py-1.5 text-sm text-center border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
+                            />
+                            <span class="text-xs text-gray-500">%</span>
+                        </div>
+                    {/if}
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
+                <button
+                    type="button"
+                    on:click={() => { cancelEdit(); requestRemove(editEntry); }}
+                    class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                >
+                    <Trash2 size={14} />
+                    {$_('brokers.sharing.remove')}
+                </button>
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        on:click={cancelEdit}
+                        class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                    >
+                        {$_('common.cancel')}
+                    </button>
+                    <button
+                        type="button"
+                        on:click={saveEdit}
+                        class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                        data-testid="sharing-confirm-edit"
+                    >
+                        <Check size={16} />
+                        {$_('common.confirm')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    {/if}
 </ModalBase>
 
 

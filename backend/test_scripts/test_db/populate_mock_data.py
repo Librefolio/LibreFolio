@@ -20,8 +20,8 @@ The data demonstrates all features of the unified transaction schema.
 Usage:
     python -m backend.test_scripts.test_db.populate_mock_data
     python -m backend.test_scripts.test_db.populate_mock_data --force  # Delete and recreate
-    python test_runner.py db populate
-    python test_runner.py db populate --force  # Delete and recreate
+    dev.py test db populate
+    dev.py test db populate --force  # Delete and recreate
 """
 
 # Setup test database BEFORE importing app modules
@@ -360,6 +360,115 @@ def populate_broker_user_access(session: Session):
         )
         session.add(access2)
         print(f"  ✅ {eve.username} → {brokers[1].name} (VIEWER, 0%)")
+
+    # ── Coinbase (index 4): Rich multi-user demo for gallery screenshots ──
+    # Flush so that SELECT queries below can find the records added above.
+    session.flush()
+
+    # Admin already has 100% ownership from the loop above.
+    # Reduce admin to 40% and add co-owners + editors + viewers.
+    coinbase_broker = brokers[4] if len(brokers) > 4 else None
+    if coinbase_broker and admin:
+        # Update admin's existing Coinbase access to 40%
+        admin_coinbase = session.exec(
+            select(BrokerUserAccess).where(
+                BrokerUserAccess.user_id == admin.id,
+                BrokerUserAccess.broker_id == coinbase_broker.id,
+            )
+        ).first()
+        if admin_coinbase:
+            admin_coinbase.share_percentage = Decimal("0.4")
+            session.add(admin_coinbase)
+            print(f"  🔄 {admin.username} → {coinbase_broker.name} (OWNER, 40%) [updated]")
+
+        # e2e_test_user: co-owner 30% (already added as EDITOR in main loop, update it)
+        if user:
+            user_coinbase = session.exec(
+                select(BrokerUserAccess).where(
+                    BrokerUserAccess.user_id == user.id,
+                    BrokerUserAccess.broker_id == coinbase_broker.id,
+                )
+            ).first()
+            if user_coinbase:
+                user_coinbase.role = UserRole.OWNER
+                user_coinbase.share_percentage = Decimal("0.3")
+                session.add(user_coinbase)
+                print(f"  🔄 {user.username} → {coinbase_broker.name} (OWNER, 30%) [updated]")
+            else:
+                access = BrokerUserAccess(
+                    user_id=user.id,
+                    broker_id=coinbase_broker.id,
+                    role=UserRole.OWNER,
+                    share_percentage=Decimal("0.3"),
+                )
+                session.add(access)
+                print(f"  ✅ {user.username} → {coinbase_broker.name} (OWNER, 30%)")
+
+        # alice: co-owner 20%
+        if alice:
+            access = BrokerUserAccess(
+                user_id=alice.id,
+                broker_id=coinbase_broker.id,
+                role=UserRole.OWNER,
+                share_percentage=Decimal("0.2"),
+            )
+            session.add(access)
+            print(f"  ✅ {alice.username} → {coinbase_broker.name} (OWNER, 20%)")
+
+        # bob: EDITOR
+        if bob:
+            access = BrokerUserAccess(
+                user_id=bob.id,
+                broker_id=coinbase_broker.id,
+                role=UserRole.EDITOR,
+                share_percentage=Decimal("0"),
+            )
+            session.add(access)
+            print(f"  ✅ {bob.username} → {coinbase_broker.name} (EDITOR, 0%)")
+
+        # carol: VIEWER
+        if carol:
+            access = BrokerUserAccess(
+                user_id=carol.id,
+                broker_id=coinbase_broker.id,
+                role=UserRole.VIEWER,
+                share_percentage=Decimal("0"),
+            )
+            session.add(access)
+            print(f"  ✅ {carol.username} → {coinbase_broker.name} (VIEWER, 0%)")
+
+        # dave: EDITOR
+        if dave:
+            access = BrokerUserAccess(
+                user_id=dave.id,
+                broker_id=coinbase_broker.id,
+                role=UserRole.EDITOR,
+                share_percentage=Decimal("0"),
+            )
+            session.add(access)
+            print(f"  ✅ {dave.username} → {coinbase_broker.name} (EDITOR, 0%)")
+
+        # eve: VIEWER
+        if eve:
+            access = BrokerUserAccess(
+                user_id=eve.id,
+                broker_id=coinbase_broker.id,
+                role=UserRole.VIEWER,
+                share_percentage=Decimal("0"),
+            )
+            session.add(access)
+            print(f"  ✅ {eve.username} → {coinbase_broker.name} (VIEWER, 0%)")
+
+        # user2: VIEWER
+        if user2:
+            access = BrokerUserAccess(
+                user_id=user2.id,
+                broker_id=coinbase_broker.id,
+                role=UserRole.VIEWER,
+                share_percentage=Decimal("0"),
+            )
+            session.add(access)
+            print(f"  ✅ {user2.username} → {coinbase_broker.name} (VIEWER, 0%)")
 
     session.commit()
 

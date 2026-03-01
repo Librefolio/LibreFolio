@@ -557,10 +557,11 @@ test.describe('Gallery Screenshots', () => {
                     await setTheme(page, theme);
                     await freezeAnimations(page);
 
-                    // Click first broker to go to detail
+                    // Click Coinbase broker (5th card, index 4) for rich multi-user demo
                     const brokerCards = page.locator('[data-testid^="broker-card-"]');
-                    if (await brokerCards.first().isVisible({timeout: 3000}).catch(() => false)) {
-                        await brokerCards.first().click();
+                    const coinbaseCard = brokerCards.nth(0); // Coinbase is the 5th broker
+                    if (await coinbaseCard.isVisible({timeout: 3000}).catch(() => false)) {
+                        await coinbaseCard.click();
                         await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 5000});
                         await page.waitForTimeout(300);
 
