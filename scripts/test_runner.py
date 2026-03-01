@@ -436,9 +436,9 @@ def db_populate(verbose: bool = False, force: bool = False) -> bool:
     if not success and not verbose:
         print_warning("\n💡 Hint: Database might already contain data")
         print_info("   Run with -v to see detailed error:")
-        print_info(f"     python test_runner.py -v db populate")
+        print_info(f"     dev.py test -v db populate")
         print_info("   Or use --force to delete and recreate:")
-        print_info(f"     python test_runner.py db populate --force")
+        print_info(f"     dev.py test db populate --force")
 
     return success
 
@@ -2252,14 +2252,14 @@ def _generate_main_epilog() -> str:
     lines.append(f"  {'all':8} - Run ALL tests in optimal order")
     lines.append("")
     lines.append("Examples:")
-    lines.append("  python test_runner.py all                 # All tests (optimal order)")
-    lines.append("  python test_runner.py -v all              # All tests with verbose output")
-    lines.append("  python test_runner.py api auth            # Only auth API tests")
-    lines.append("  python test_runner.py db create           # Create database")
+    lines.append("  dev.py test all                 # All tests (optimal order)")
+    lines.append("  dev.py test -v all              # All tests with verbose output")
+    lines.append("  dev.py test api auth            # Only auth API tests")
+    lines.append("  dev.py testpython test_runner.py db create           # Create database")
     lines.append("")
     lines.append("  # Via dev.sh")
-    lines.append("  ./dev.sh test all                         # Complete test suite")
-    lines.append("  ./dev.sh test api all                     # All API tests")
+    lines.append("  dev.sh test all                         # Complete test suite")
+    lines.append("  dev.sh test api all                     # All API tests")
 
     return "\n".join(lines)
 
