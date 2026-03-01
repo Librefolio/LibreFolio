@@ -277,7 +277,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 
 | File                            | Descrizione                                            | Status                         | Rif. 05-08     |
 |---------------------------------|--------------------------------------------------------|--------------------------------|----------------|
-| `plan-brokerSharing.md`         | 🆕 GUI condivisione broker (Phase 4.8)                 | ✅ COMPLETATO — Step 0-8 tutti completati | §3.5, §10, §11 |
+| ~~`plan-brokerSharing.md`~~     | 🆕 GUI condivisione broker (Phase 4.8)                 | ✅ COMPLETATO → spostato in `phase-04-subplan/` | §3.5, §10, §11 |
 | `plan-phase7b-filePreview.md`   | Sistema preview file inline — **SPOSTATO a Phase 7.5** | ↗️ Spostato fuori Phase 4      | §7 (Phase 7.5) |
 | `plan-phase05-to-08-upgrade.md` | Piano upgrade fasi 5-8 + GDPR/Sharing + Fiscale        | 🟡 IN CORSO (pre-work ✅)       | Master plan    |
 
@@ -292,6 +292,7 @@ Implementare gestione completa dei broker: lista, CRUD, vista dettaglio con cash
 | File                               | Descrizione                        | Status        |
 |------------------------------------|------------------------------------|---------------|
 | `plan-component-reorganization.md` | Piano originale (sostituito da V2) | 📦 ARCHIVIATO |
+| `plan-brokerSharing.md`            | GUI condivisione broker (Phase 4.8)| ✅ COMPLETATO |
 
 ### Plans DA CREARE
 

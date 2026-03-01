@@ -184,7 +184,7 @@
                 {#if canEdit}
                 <button
                         on:click={handleEdit}
-                        class="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                        class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
                         data-testid="broker-edit-button"
                 >
                     <Pencil size={18}/>
@@ -194,7 +194,7 @@
                 {#if safeString(broker.user_role) === 'OWNER'}
                     <button
                             on:click={() => sharingModalOpen = true}
-                            class="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
+                            class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
                             data-testid="broker-share-button"
                             title={$_('brokers.sharing.title')}
                     >

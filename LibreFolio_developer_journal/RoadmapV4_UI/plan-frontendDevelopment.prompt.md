@@ -14,7 +14,7 @@ Questo documento è l'indice principale del piano frontend. Ogni fase ha il prop
 
 **📁 Sotto-Plan Dettagliati**: [`phases/`](./phases/)
 **📁 Phase 4 Sub-Plans**: [`phases/phase-04-subplan/`](./phases/phase-04-subplan/)
-**📄 Phase 4 Summary**: [`plan-phase04-summary.md`](./plan-phase04-summary.md)
+**📄 Phase 4 Summary**: [`plan-phase04-summary.md`](./phases/phase-04-subplan/plan-phase04-summary.md)
 
 ---
 
@@ -302,7 +302,7 @@ Usare CLI per gestire traduzioni:
 
 | Risorsa           | Path                                             |
 |-------------------|--------------------------------------------------|
-| Phase 4 Summary   | `./plan-phase04-summary.md`                      |
+| Phase 4 Summary   | `./phases/phase-04-subplan/plan-phase04-summary.md` |
 | Phase 4 Sub-Plans | `./phases/phase-04-subplan/`                     |
 | Design Guide      | `/artwork/Prompt_gemini.md`                      |
 | Dark Mode Guide   | `./phases/phase-04-subplan/GUIDA-DARK-MODE.md`   |
