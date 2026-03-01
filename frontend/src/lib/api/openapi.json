@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.4.25-4-g2d27654-dirty"
+    "version": "v0.4.25-5-g84cd3bc-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -5365,6 +5365,18 @@
           "updated_at": {
             "type": "string",
             "title": "Updated At"
+          },
+          "user_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Role",
+            "description": "Current user's role on this broker (OWNER/EDITOR/VIEWER)"
           }
         },
         "additionalProperties": false,

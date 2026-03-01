@@ -100,7 +100,7 @@
 <style>
     .lazy-image-container {
         position: relative;
-        display: inline-block;
+        display: block;
         /* Transparent background to avoid border in dark mode */
         background-color: transparent;
     }

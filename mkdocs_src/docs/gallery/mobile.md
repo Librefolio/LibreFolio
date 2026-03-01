@@ -177,6 +177,14 @@ Import transactions directly from your phone.
     <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
 </div>
 
+### Broker Sharing
+
+Manage co-ownership and access roles with the sharing modal, optimized for mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Broker Sharing Modal">
+</div>
+
 ---
 
 

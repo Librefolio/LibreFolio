@@ -25,6 +25,8 @@
         value: number | null;
         placeholder?: string;
         disabled?: boolean;
+        /** Broker IDs that should appear greyed-out / non-selectable */
+        disabledIds?: Set<number>;
         dropdownPosition?: 'top' | 'bottom' | 'auto';
         maxVisibleItems?: number;
         onchange?: (brokerId: number | null) => void;
@@ -35,6 +37,7 @@
         value = $bindable(null),
         placeholder = '',
         disabled = false,
+        disabledIds = new Set(),
         dropdownPosition = 'auto',
         maxVisibleItems = 6,
         onchange
@@ -46,7 +49,8 @@
             value: String(b.id),
             label: b.name,
             searchText: b.name,
-            data: b
+            data: b,
+            disabled: disabledIds.has(b.id),
         }))
     );
 
