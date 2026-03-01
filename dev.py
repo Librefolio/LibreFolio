@@ -168,7 +168,7 @@ def cmd_server(args):
         #         ("e2e_test_admin", "e2eadmin@test.example.com", "E2eAdminPass123!"),
         print(f"{Colors.RED}{Colors.BOLD}Note: defaults user in test db are:{Colors.NC}")
         print(f'{Colors.RED}{Colors.BOLD} - {{"username": "e2e_test_user",  "password": "E2eTestPass123!"}}')
-        print(f'{Colors.RED}{Colors.BOLD} - {{"username": "e2e_test_admin", "password": "E2eAdminPass123"}}')
+        print(f'{Colors.RED}{Colors.BOLD} - {{"username": "e2e_test_admin", "password": "E2eAdminPass123!"}}')
 
         print()
     if debug_mode:

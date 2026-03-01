@@ -5,7 +5,7 @@
     import {createEventDispatcher} from 'svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
-    import {ExternalLink, Pencil, Trash2, Wallet} from 'lucide-svelte';
+    import {Crown, ExternalLink, Eye, Pencil, Trash2, Wallet} from 'lucide-svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
 
     const dispatch = createEventDispatcher<{
@@ -24,6 +24,7 @@
         allow_cash_overdraft: boolean;
         allow_asset_shorting: boolean;
         is_active?: boolean;
+        user_role?: string | null;
         cash_balances?: Array<{ code: string; amount: number; symbol?: string }>;
         holdings?: Array<{ asset_id: number }>;
     };
@@ -83,7 +84,18 @@
                 />
 
                 <div class="min-w-0">
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 truncate">{broker.name}</h3>
+                    <div class="flex items-center gap-2">
+                        {#if broker.user_role}
+                            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0
+                                {broker.user_role === 'OWNER' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                                 broker.user_role === 'EDITOR' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}"
+                                 title={$_(broker.user_role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : broker.user_role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}>
+                                {#if broker.user_role === 'OWNER'}<Crown size={11}/>{:else if broker.user_role === 'EDITOR'}<Pencil size={11}/>{:else}<Eye size={11}/>{/if}
+                            </span>
+                        {/if}
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 truncate">{broker.name}</h3>
+                    </div>
                     {#if broker.description}
                         <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">{broker.description}</p>
                     {/if}

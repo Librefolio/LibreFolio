@@ -38,6 +38,8 @@
     export let testId: string = '';
     /** Disable transitions (useful for nested modals) */
     export let noTransition: boolean = false;
+    /** Allow content overflow (for dropdowns inside compact modals) */
+    export let allowOverflow: boolean = false;
 
     // Max-width preset map
     const maxWidthMap: Record<string, string> = {
@@ -111,7 +113,7 @@
         >
             <div
                 class="modal-content {contentClass}"
-                style="max-width: {maxWidthValue};"
+                style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
                 on:click|stopPropagation
             >
                 <slot />
@@ -133,7 +135,7 @@
         >
             <div
                 class="modal-content {contentClass}"
-                style="max-width: {maxWidthValue};"
+                style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
                 on:click|stopPropagation
                 transition:scale={{ duration: 200, start: 0.95 }}
             >
