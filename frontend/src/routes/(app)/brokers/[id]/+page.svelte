@@ -25,6 +25,9 @@
     let loading = true;
     let error: string | null = null;
 
+    // Computed: can current user edit this broker? (OWNER or EDITOR)
+    $: canEdit = broker ? ['OWNER', 'EDITOR'].includes(safeString(broker.user_role) || '') : false;
+
     // Modal states
     let editModalOpen = false;
     let cashModalOpen = false;
@@ -185,6 +188,7 @@
                 >
                     <RefreshCw size={20} class={loading ? 'animate-spin' : ''}/>
                 </button>
+                {#if canEdit}
                 <button
                         on:click={handleEdit}
                         class="flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
@@ -193,14 +197,16 @@
                     <Pencil size={18}/>
                     <span>{$_('common.edit')}</span>
                 </button>
+                {/if}
                 {#if safeString(broker.user_role) === 'OWNER'}
                     <button
                             on:click={() => sharingModalOpen = true}
-                            class="flex items-center space-x-2 px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
+                            class="flex items-center space-x-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
                             data-testid="broker-share-button"
+                            title={$_('brokers.sharing.title')}
                     >
                         <Share2 size={18}/>
-                        <span>{$_('brokers.sharing.title')}</span>
+                        <span class="hidden sm:inline">{$_('brokers.sharing.title')}</span>
                     </button>
                 {/if}
             </div>
@@ -245,12 +251,14 @@
                             <Wallet size={20}/>
                             <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
                         </div>
+                        {#if canEdit}
                         <button
                                 on:click={handleNewDeposit}
                                 class="text-sm text-libre-green hover:underline"
                         >
                             + {$_('brokers.deposit')}
                         </button>
+                        {/if}
                     </div>
 
                     {#if broker.cash_balances && broker.cash_balances.length > 0}
@@ -259,6 +267,7 @@
                                 <CashBalanceCard
                                         code={balance.code}
                                         amount={parseCurrencyAmount(balance.amount)}
+                                        {canEdit}
                                         on:deposit={handleDeposit}
                                         on:withdraw={handleWithdraw}
                                 />
@@ -381,6 +390,7 @@
                 </div>
 
                 <!-- Import Files Button -->
+                {#if canEdit}
                 <button
                         data-testid="import-files-button"
                         class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group"
@@ -399,6 +409,7 @@
                         →
                     </span>
                 </button>
+                {/if}
 
                 <!-- Recent Transactions -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-transactions">

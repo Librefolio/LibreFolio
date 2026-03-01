@@ -273,18 +273,26 @@ class BrokerService:
 
         if no_filter:
             stmt = select(Broker).order_by(Broker.name)
+            result = await self.session.execute(stmt)
+            brokers = result.scalars().all()
+            return [BRReadItem.model_validate(b) for b in brokers]
         else:
-            # Join with BrokerUserAccess to filter by user
+            # Join with BrokerUserAccess to filter by user and get role
             stmt = (
-                select(Broker)
+                select(Broker, BrokerUserAccess.role)
                 .join(BrokerUserAccess, Broker.id == BrokerUserAccess.broker_id)
                 .where(BrokerUserAccess.user_id == filter_user_id)
                 .order_by(Broker.name)
             )
 
         result = await self.session.execute(stmt)
-        brokers = result.scalars().all()
-        return [BRReadItem.model_validate(b) for b in brokers]
+        rows = result.all()
+        items = []
+        for broker, role in rows:
+            item = BRReadItem.model_validate(broker)
+            item.user_role = role.value if role else None
+            items.append(item)
+        return items
 
     async def get_by_id(
         self, broker_id: int, user_id: int, as_user_id: Union[int, Literal["all"], None] = None
@@ -312,7 +320,13 @@ class BrokerService:
             if not has_access:
                 return None
 
-        return BRReadItem.model_validate(broker)
+        item = BRReadItem.model_validate(broker)
+        # Populate user_role if we know the user
+        effective_user = user_id if as_user_id is None else (None if skip_access_check else int(as_user_id))
+        if effective_user is not None:
+            role = await self._check_user_access(broker_id, effective_user)
+            item.user_role = role.value if role else None
+        return item
 
     async def get_summary(
         self, broker_id: int, user_id: int, as_user_id: Union[int, Literal["all"], None] = None

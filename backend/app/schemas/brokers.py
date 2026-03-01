@@ -137,6 +137,9 @@ class BRReadItem(BaseModel):
     created_at: UTCDateTime
     updated_at: UTCDateTime
 
+    # User-specific: the current user's role on this broker
+    user_role: Optional[str] = Field(None, description="Current user's role on this broker (OWNER/EDITOR/VIEWER)")
+
 
 # =============================================================================
 # BROKER WITH BALANCES AND HOLDINGS

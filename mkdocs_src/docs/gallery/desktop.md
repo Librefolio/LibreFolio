@@ -174,6 +174,14 @@ Easily import transactions from your broker's export files.
     <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
 </div>
 
+### Broker Sharing
+
+Manage co-ownership and access roles with a visual half-donut chart showing ownership distribution.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Broker Sharing Modal">
+</div>
+
 ---
 
 

@@ -133,6 +133,11 @@
     let brokerMap: Map<number, BrokerInfo> = new Map();
     let selectedBrokerIds: Set<number> = new Set();
 
+    // Broker IDs where user is VIEWER (cannot upload — greyed out in selector)
+    $: viewerBrokerIds = new Set(
+        brokers.filter(b => (b as any).user_role === 'VIEWER').map(b => b.id)
+    );
+
     // URL filter state
     let initialFilters: Record<string, FilterValue> = {};
     let urlInitialized = false;  // Prevent URL update on initial load
@@ -421,10 +426,12 @@
 
         // Initialize broker assignments - null means not assigned yet
         fileBrokerAssignments = new Map();
+        // Brokers where user can upload (not VIEWER)
+        const editableBrokers = brokers.filter(b => !viewerBrokerIds.has(b.id));
         files.forEach((_, index) => {
-            // If only one broker, auto-assign
-            if (brokers.length === 1) {
-                fileBrokerAssignments.set(index, brokers[0].id);
+            // If only one editable broker, auto-assign
+            if (editableBrokers.length === 1) {
+                fileBrokerAssignments.set(index, editableBrokers[0].id);
             } else {
                 fileBrokerAssignments.set(index, null);
             }
@@ -796,6 +803,7 @@
                             value={null}
                             placeholder={$t('uploads.chooseBroker') || '-- Choose broker --'}
                             dropdownPosition="bottom"
+                            disabledIds={viewerBrokerIds}
                             onchange={(brokerId) => {
                             if (brokerId != null) {
                                 assignAllBroker(brokerId);
@@ -833,6 +841,7 @@
                                     brokers={brokers}
                                     value={fileBrokerAssignments.get(index) ?? null}
                                     placeholder={$t('uploads.selectBroker') || '-- Select --'}
+                                    disabledIds={viewerBrokerIds}
                                     onchange={(brokerId) => assignFileBroker(index, brokerId)}
                             />
                         </div>

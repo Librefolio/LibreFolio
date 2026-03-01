@@ -1205,6 +1205,11 @@ def _ensure_test_users() -> bool:
         ("e2e_test_user", "e2e@test.example.com", "E2eTestPass123!"),
         ("e2e_test_admin", "e2eadmin@test.example.com", "E2eAdminPass123!"),
         ("e2e_test_user2", "e2e2@test.example.com", "E2eTestPass456!"),
+        ("e2e_user_alice", "alice@test.example.com", "AlicePass123!"),
+        ("e2e_user_bob", "bob@test.example.com", "BobPass123!"),
+        ("e2e_user_carol", "carol@test.example.com", "CarolPass123!"),
+        ("e2e_user_dave", "dave@test.example.com", "DavePass123!"),
+        ("e2e_user_eve", "eve@test.example.com", "EvePass123!"),
     ]
 
     for username, email, password in users:

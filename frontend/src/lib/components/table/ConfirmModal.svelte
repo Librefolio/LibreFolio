@@ -31,6 +31,8 @@
         cancelText?: string;
         /** Danger mode (red confirm button) */
         danger?: boolean;
+        /** Warning mode (amber confirm button — for non-destructive but attention-worthy actions) */
+        warning?: boolean;
         /** Called on confirm */
         onConfirm: () => void;
         /** Called on cancel/close */
@@ -48,6 +50,7 @@
         confirmText = $t('common.confirm'),
         cancelText = $t('common.cancel'),
         danger = false,
+        warning = false,
         onConfirm,
         onCancel,
         zIndex = 60,
@@ -70,6 +73,8 @@
     <div class="modal-header">
         {#if danger}
             <AlertTriangle class="text-red-500" size={24}/>
+        {:else if warning}
+            <AlertTriangle class="text-amber-500" size={24}/>
         {/if}
         <h2 class="modal-title">{title}</h2>
         <button
@@ -123,7 +128,7 @@
         </button>
         <button
                 type="button"
-                class="btn {danger ? 'btn-danger' : 'btn-primary'}"
+                class="btn {danger ? 'btn-danger' : warning ? 'btn-warning' : 'btn-primary'}"
                 onclick={onConfirm}
         >
             {confirmText}
@@ -317,5 +322,14 @@
 
     .btn-danger:hover {
         background: #b91c1c;
+    }
+
+    .btn-warning {
+        background: #f59e0b;
+        color: white;
+    }
+
+    .btn-warning:hover {
+        background: #d97706;
     }
 </style>

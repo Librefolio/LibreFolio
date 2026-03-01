@@ -2,7 +2,7 @@
 
 **Durata**: ~5 giorni  
 **Dipendenze**: Schema pre-work (share_percentage già implementato)  
-**Status**: ✅ COMPLETATO — Step 0-8 tutti completati. Backend: user search, bulk endpoint, schema standardization. Frontend: BrokerSharingModal con ECharts half-donut, integrazione broker detail, 11 E2E test verdi, gallery screenshots. i18n: 24 chiavi in 4 lingue.
+**Status**: ✅ COMPLETATO — Step 0-8 completati + 3 round di enhancement estetico/UX. Backend: user search, bulk endpoint, schema standardization. Frontend: BrokerSharingModal con ECharts half-donut, 3-column layout, edit via modal overlay, search combobox unificato, integrazione broker detail, i18n 24 chiavi in 4 lingue. 0 errori svelte-check.
 **Priorità**: ALTA — Deve essere completato PRIMA di Phase 5  
 **Riferimento 05-08**: Sezioni 3.5, 10, 11 di `plan-phase05-to-08-upgrade.md`
 
@@ -687,3 +687,170 @@ frontend/e2e/gallery.spec.ts                    # Gallery screenshots — TODO
 ✅ Integrazione in Broker Detail — COMPLETATO (Step 4, 1 Mar 2026)  
 ⬜ E2E Test — DA SCRIVERE (Step 7)  
 ⬜ Gallery screenshots — DA GENERARE (Step 8)
+
+---
+
+## 9. Enhancement Estetico e Bug Fix Post-Review — 1 Mar 2026
+
+Feedback dall'utente dopo il primo deploy funzionale della modale. Prioritizzati come P0 (bug), P1 (funzionale), P2 (estetico).
+
+### 9.1 Bug Fix (P0)
+
+| # | Issue | Fix | File |
+|---|-------|-----|------|
+| 1 | Mobile: "+" button fisso, semicerchio trasla male | Rivedere posizionamento overlay center → usare posizionamento relativo al chart container con resize handler | BrokerSharingModal.svelte |
+| 2 | Discard Changes ha bottone VERDE → deve essere GIALLO/amber | Aggiungere prop `warning` a ConfirmModal, stile amber per conferma non-distruttiva | ConfirmModal.svelte, BrokerSharingModal.svelte |
+| 3 | VIEWER può cliccare Edit/Deposit/Upload/Import → deve essere disabilitato | Aggiungere `canEdit` computed basato su `user_role`, disabilitare bottoni per VIEWER. In files/ page, broker VIEWER nel selettore BRIM devono essere greyed-out | brokers/[id]/+page.svelte, files/+page.svelte, CashBalanceCard.svelte |
+| 4 | Enter su input percentuale non conferma l'edit | Aggiungere `on:keydown` handler per Enter su tutti gli input % (edit + add form) | BrokerSharingModal.svelte |
+| 5 | Selettore ruolo mostra descrizione completa nel bottone | Aggiungere chiavi i18n `roleOwnerShort/roleEditorShort/roleViewerShort`, usarle nei selettori, mantenere full description nella legenda | i18n/*.json, BrokerSharingModal.svelte |
+
+### 9.2 Miglioramenti Estetici (P2)
+
+| # | Miglioramento | Dettaglio |
+|---|---------------|-----------|
+| 6 | Arco chart più largo | Radius da `['50%', '80%']` → `['35%', '85%']` (spessore 50%) |
+| 7 | Owners in badge come Editor/Viewer | Convertire sezione Owners da righe a badge pill con edit/remove inline |
+| 8 | Avatar/icone utente vicino agli archi | Label ECharts rich text o overlay HTML per posizionare avatar sugli archi |
+| 9 | Margini e bordi arrotondati tra fette | `itemStyle: {borderRadius: 6, borderColor, borderWidth: 2}`, `padAngle: 2` |
+| 10 | Colori adiacenti con più distanza | Palette cromatica diversificata invece di tutte sfumature di verde |
+| 11 | Drag-to-resize fette (opzionale, complesso) | Modalità edit con matita, drag archi per ridimensionare — ECharts non lo supporta nativamente, valutare alternativa con slider |
+
+### Tasks Step 9
+
+- [x] Fix 1: Mobile chart + center overlay responsive — posizionamento relativo con `left-0 right-0 flex justify-center`
+- [x] Fix 2: ConfirmModal warning variant (amber button) — prop `warning` aggiunta, stile `btn-warning` amber
+- [x] Fix 3: VIEWER role gating in broker detail + files page — `canEdit` computed, `user_role` aggiunto a `BRReadItem`, `disabledIds` in BrokerSearchSelect, CashBalanceCard gated
+- [x] Fix 4: Enter key su input percentuale — `on:keydown` handler su tutti gli input % (edit, add form)
+- [x] Fix 5: Role short labels i18n — 3 nuove chiavi `roleOwnerShort/roleEditorShort/roleViewerShort`, selettori usano icona + nome corto
+- [x] Estetico 6: Arco chart più largo — radius `['35%', '85%']`, altezza 240px
+- [x] Estetico 7: Owners in badge — convertiti a pill `rounded-full` con edit/remove, panel edit unificato sotto
+- [x] Estetico 8: Label username vicino archi — ECharts rich text labels con nome e % outside
+- [x] Estetico 9: Margini/bordi arrotondati fette — `borderRadius: 6`, `borderWidth: 2`, `padAngle: 2`
+- [x] Estetico 10: Palette colori diversificata — 8 colori cromaticamente distanti (verde, blu, viola, rosso, arancio, teal, rosa, indaco)
+- [ ] Estetico 11: Drag-to-resize (opzionale — complesso, ECharts non lo supporta nativamente, valutare slider alternativo)
+
+---
+
+## 10. Enhancement Round 2 — Post-Review 1 Mar 2026 (sera)
+
+Secondo giro di feedback dopo le prime fix estetiche.
+
+### 10.1 Bug Fix (P0)
+
+| # | Issue | Fix | File |
+|---|-------|-----|------|
+| 12 | Mobile: chart ha width fissata a 640px (non responsive) — `style="height: 240px"` ma inner div forza 640px | Usare `ResizeObserver` per chart resize + rimuovere dimensioni fisse | BrokerSharingModal.svelte |
+| 13 | VIEWER non vede lista file in broker detail (canEdit troppo restrittivo sui file) | Verificare che la sezione "file list" nel broker detail sia visibile anche ai VIEWER (read-only) — canEdit gating sbagliato su sezione che dovrebbe essere visible | brokers/[id]/+page.svelte |
+| 14 | Mobile: bottone "Share Broker" manda nome a capo | Usare solo icona su schermi piccoli (`hidden sm:inline`), o abbreviare il testo | brokers/[id]/+page.svelte |
+| 15 | Navigazione frecce nella ricerca utenti non funziona | Aggiungere keydown handler per ArrowUp/ArrowDown/Enter nel search dropdown | BrokerSharingModal.svelte |
+
+### 10.2 Miglioramenti Estetici (P1/P2)
+
+| # | Miglioramento | Dettaglio |
+|---|---------------|-----------|
+| 16 | Semicerchio ancora troppo stretto + avatar (non nome) su archi | Aumentare spessore arco a `['25%', '90%']`, usare immagini avatar come label ECharts (HTML overlay o rich text formatter con immagini) invece di testo |
+| 17 | Icone ruolo nel dropdown colorate come legenda | Le icone nei selettori ruolo sono tutte nere — devono usare il colore corrispondente (amber per Owner, blue per Editor, gray per Viewer) |
+| 18 | Add User form come modale sovrapposta | Il form "Add User" che si apre sotto causa problemi su schermi piccoli — convertire in ModalBase overlay |
+| 19 | Files: VIEWER con broker pre-assegnato fa upload e riceve 403 | In files/ page, se solo 1 broker disponibile e è VIEWER, non pre-assegnare. Upload button deve essere disabilitato se broker selezionato è VIEWER |
+
+### Tasks Step 10
+
+- [x] Fix 12: Chart responsive con ResizeObserver — chart auto-resizes con parent container
+- [x] Fix 14: Share button abbreviato su mobile — icona sola su schermi < sm, testo nascosto con `hidden sm:inline`
+- [x] Fix 15: Arrow key navigation nel search dropdown — ArrowUp/ArrowDown/Enter handler aggiunto
+- [x] Estetico 16: Arco più spesso + avatar overlay su archi — radius `['25%', '90%']`, avatar initial in colored circle con ECharts rich text
+- [x] Estetico 17: Icone ruolo colorate nei dropdown — `getRoleIconColor()` helper, amber/blue/gray per Owner/Editor/Viewer
+- [x] Estetico 18: Add User come modale overlay — convertito da inline form a ModalBase overlay (zIndex 60)
+- [x] Fix 19: Files page VIEWER gating upload — auto-assign solo broker editabili, non VIEWER-only
+
+---
+
+## 11. Enhancement Round 3 — Layout Refactor & UX Improvements — 1 Mar 2026
+
+Terzo giro di feedback: riorganizzazione completa del layout utenti, edit via modale, search unificata, fix bug ricerca utenti rimossi.
+
+### 11.1 Miglioramenti Strutturali
+
+| # | Miglioramento | Dettaglio |
+|---|---------------|-----------|
+| 20 | 3-Column layout per ruoli | Sostituire 3 sezioni separate (Owners/Editors/Viewers) con un `grid grid-cols-1 sm:grid-cols-3 gap-4`. Ogni colonna ha header con icona+label e badge impilati verticalmente. Ogni badge è un `<button>` cliccabile che apre l'edit modal. `max-h-48 overflow-y-auto` per scroll se molti utenti. |
+| 21 | Edit come modal overlay | Sostituire panel inline di edit con `ModalBase` overlay (zIndex 60, maxWidth "sm"). Contiene: avatar+username in header, role dropdown, share% input (solo OWNER), bottone Delete danger nel footer sinistro, Cancel+Save nel footer destro. Apertura sia da click-su-badge sia da contesto programmatico. |
+| 22 | Donut ancora più larga | Radius da `['25%', '90%']` → `['15%', '92%']` per massimizzare spessore ring |
+| 23 | Bug: utente rimosso non riappare in ricerca | Rimosso `exclude_broker_id` dalla API call search. Tutto il filtraggio è ora client-side via `existingUserIds` Set reattivo. Quando un utente viene rimosso localmente, ricompare immediatamente nella ricerca. |
+| 24 | Search unificata (combobox) in Add User | Search input + dropdown risultati + badge selezionato unificati in un unico widget combobox. Se utente selezionato: mostra badge inline con X per deselezionare. Se non selezionato: mostra input con dropdown. Nessun componente separato "Selected user badge". |
+| 25 | Delete dentro Edit Modal | Il bottone "Remove" è nel footer sinistro dell'edit modal overlay, con icona Trash2 e stile danger. Disabilitato se si sta rimuovendo l'ultimo OWNER. |
+
+### Tasks Step 11
+
+- [x] Layout 20: Grid 3 colonne `grid-cols-1 sm:grid-cols-3` con Owners/Editors/Viewers separati, badge verticali cliccabili
+- [x] Modal 21: Edit User come ModalBase overlay separata (`showEditModal` state), con role/share%/delete
+- [x] Estetico 22: Radius donut `['15%', '92%']`
+- [x] Bug 23: Rimosso `exclude_broker_id` da search API, filtraggio solo client-side via `existingUserIds`
+- [x] UX 24: Search combobox unificato — selected state inline, search state con dropdown
+- [x] UX 25: Delete button in edit modal footer con Trash2 icon
+- [x] Fix: `div` inside `button` → `span` per validità HTML
+- [x] Fix: Rimosso import `Minus` non utilizzato
+- [ ] Estetico 11 (backlog): Drag-to-resize fette — opzionale, ECharts non supporta nativamente
+
+---
+
+## 12. Enhancement Round 4 — Avatar Fix & Multi-User Population — 1 Mar 2026
+
+### 12.1 Bug Fix
+
+| # | Issue | Fix | File |
+|---|-------|-----|------|
+| 26 | Avatar non visibile nei badge (solo iniziale mostrata) | LazyImage `display: inline-block` non occupava l'intero container `w-5 h-5`. Fix: `display: block` + rimosso `flex items-center justify-center` dal container avatar, aumentato da w-5 a w-6 (24px) e img_preview 48x48 | LazyImage.svelte, BrokerSharingModal.svelte |
+| 27 | Populate DB aveva solo 3 utenti, insufficiente per demo sharing | Creati 8 utenti totali nella populate con password, avatar e assegnazioni broker diversificate. `populate_broker_user_access` crea utenti mancanti direttamente. | populate_mock_data.py, test_runner.py, test-users.ts |
+
+### 12.2 Data Population: 8 Test Users
+
+| Username | Avatar | Broker 1 (IBKR) | Broker 2 (DEGIRO) | Others |
+|----------|--------|------------------|-------------------|--------|
+| e2e_test_admin | men_01 | OWNER 40% | OWNER 100% | OWNER 100% tutti |
+| e2e_test_user | woman_01 | OWNER 30% | VIEWER | EDITOR/VIEWER mix |
+| e2e_test_user2 | men_02 | VIEWER | — | — |
+| e2e_user_alice | woman_02 | OWNER 20% | EDITOR | — |
+| e2e_user_bob | men_03 | EDITOR | — | VIEWER su Directa |
+| e2e_user_carol | woman_03 | VIEWER | — | — |
+| e2e_user_dave | men_04 | — | EDITOR | — |
+| e2e_user_eve | woman_04 | VIEWER | VIEWER | — |
+
+**Broker 1 (IBKR) sharing totale: 90% allocato (40+30+20), 10% disponibile**
+→ Perfetto per screenshot gallery con 3 owners, 1 editor, 3 viewers.
+
+### Tasks Step 12
+
+- [x] Bug 26: LazyImage display block, avatar badge sizing increased to w-6 h-6 (24px), img_preview 48x48
+- [x] Data 27: 8 utenti con avatar in populate_mock_data.py, test_runner.py, test-users.ts
+- [x] Rimossa funzione `getRoleBadgeClass` inutilizzata
+- [x] svelte-check: 0 errors, 0 warnings
+- [x] Populate DB: tutti 8 utenti creati con avatar assegnati correttamente
+
+---
+
+## 13. Enhancement Round 5 — 3-Column Restore, Avatar in Chart, Legend Removal — 1 Mar 2026
+
+Quinto giro di feedback: ripristino layout a 3 colonne affiancate, rimozione legenda in favore di descrizioni sotto ogni colonna, avatar reali nel grafico ECharts, badge cliccabili per edit.
+
+### 13.1 Modifiche
+
+| # | Miglioramento | Dettaglio |
+|---|---------------|-----------|
+| 28 | Ripristino 3 colonne affiancate | Il layout era tornato verticale. Ripristinato `grid grid-cols-1 sm:grid-cols-3 gap-4` con Owners, Editors, Viewers in colonne. Ogni colonna ha heading + descrizione breve sotto + badge verticali. |
+| 29 | Descrizione sotto titolo colonna | Rimozione `roleHint` dall'header della modale. Aggiunta descrizione breve sotto ogni heading colonna: `ownerDesc`, `editorDesc`, `viewerDesc` (nuove chiavi i18n). |
+| 30 | Avatar reali nel grafico ECharts | Usata API `image://url` di ECharts rich text per caricare l'avatar reale dell'utente sugli archi. Se avatar non disponibile, fallback a iniziale in cerchio colorato. |
+| 31 | Badge cliccabili per edit | Rimossi i pulsanti edit/remove separati dai badge. Il badge intero è un `<button>` che apre il pannello di edit. Delete spostato dentro il pannello edit. |
+| 32 | Nuove chiavi i18n | `brokers.sharing.ownerDesc`, `brokers.sharing.editorDesc`, `brokers.sharing.viewerDesc` in EN/IT/FR/ES |
+
+### Tasks Step 13
+
+- [x] Layout 28: Ripristinato grid 3 colonne con `grid-cols-1 sm:grid-cols-3`
+- [x] UX 29: Rimosso roleHint dall'header, aggiunta descrizione sotto ogni heading colonna
+- [x] Estetico 30: Avatar ECharts con `image://url` protocol, fallback a iniziale in cerchio
+- [x] UX 31: Badge interi cliccabili, delete nel pannello edit
+- [x] i18n 32: 3 nuove chiavi descrizione ruolo
+- [x] Fix HTML: `span` al posto di `div` dentro `button` per validità HTML
+- [x] svelte-check: 0 errors, 0 warnings
+- [x] Frontend build: successo
+

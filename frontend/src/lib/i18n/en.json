@@ -273,7 +273,14 @@
       "save": "Save Configuration",
       "saveFailed": "Failed to save access configuration",
       "selectUser": "Select a user",
-      "ownershipChart": "Ownership Distribution"
+      "ownershipChart": "Ownership Distribution",
+      "roleOwnerShort": "Owner",
+      "roleEditorShort": "Editor",
+      "roleViewerShort": "Viewer",
+      "roleHint": "👑 Owner = full control + ownership % · ✏️ Editor = edit transactions · 👁 Viewer = read only",
+      "ownerDesc": "Full control + ownership %",
+      "editorDesc": "Can modify transactions",
+      "viewerDesc": "Read only"
     }
   },
   "assets": {

@@ -180,26 +180,38 @@ def populate_broker_user_access(session: Session):
     print("\n👥 Creating Broker User Access...")
     print("-" * 60)
 
-    # Find test users (created by ensure_e2e_test_users)
+    from backend.app.services.auth_service import hash_password
+
+    # All test users we need (must match test-users.ts and test_runner.py)
+    test_user_defs = [
+        ("e2e_test_admin", "e2eadmin@test.example.com", "E2eAdminPass123!", True),
+        ("e2e_test_user", "e2e@test.example.com", "E2eTestPass123!", False),
+        ("e2e_test_user2", "e2e2@test.example.com", "E2eTestPass456!", False),
+        ("e2e_user_alice", "alice@test.example.com", "AlicePass123!", False),
+        ("e2e_user_bob", "bob@test.example.com", "BobPass123!", False),
+        ("e2e_user_carol", "carol@test.example.com", "CarolPass123!", False),
+        ("e2e_user_dave", "dave@test.example.com", "DavePass123!", False),
+        ("e2e_user_eve", "eve@test.example.com", "EvePass123!", False),
+    ]
+
+    # Create any missing users
+    for uname, email, pwd, is_admin in test_user_defs:
+        existing = session.exec(select(User).where(User.username == uname)).first()
+        if not existing:
+            u = User(
+                username=uname,
+                email=email,
+                hashed_password=hash_password(pwd),
+                is_active=True,
+                is_admin=is_admin,
+            )
+            session.add(u)
+            print(f"  ✅ Created user: {uname}{' (admin)' if is_admin else ''}")
+    session.commit()
+
+    # Now fetch all users
     admin = session.exec(select(User).where(User.username == "e2e_test_admin")).first()
     user = session.exec(select(User).where(User.username == "e2e_test_user")).first()
-
-    if not admin and not user:
-        print("  ⚠️  No test users found. Creating default admin user...")
-        # Create a default admin user if none exists
-        # Password must match TEST_ADMIN in frontend/e2e/fixtures/test-users.ts
-        from backend.app.services.auth_service import hash_password
-        admin = User(
-            username="e2e_test_admin",
-            email="e2eadmin@test.example.com",
-            hashed_password=hash_password("E2eAdminPass123!"),
-            is_active=True,
-            is_admin=True,
-            )
-        session.add(admin)
-        session.commit()
-        session.refresh(admin)
-        print(f"  ✅ Created admin user: {admin.username}")
 
     # Get all brokers
     brokers = session.exec(select(Broker)).all()
@@ -208,28 +220,47 @@ def populate_broker_user_access(session: Session):
         print("  ⚠️  No brokers found to assign")
         return
 
+    # Also find additional test users
+    user2 = session.exec(select(User).where(User.username == "e2e_test_user2")).first()
+    alice = session.exec(select(User).where(User.username == "e2e_user_alice")).first()
+    bob = session.exec(select(User).where(User.username == "e2e_user_bob")).first()
+    carol = session.exec(select(User).where(User.username == "e2e_user_carol")).first()
+    dave = session.exec(select(User).where(User.username == "e2e_user_dave")).first()
+    eve = session.exec(select(User).where(User.username == "e2e_user_eve")).first()
+
     # Assign brokers to admin as OWNER
+    # First broker: shared ownership (admin 40%) to demo sharing feature with multiple owners
+    # Other brokers: admin 100%
     if admin:
-        for broker in brokers:
+        for i, broker in enumerate(brokers):
+            if i == 0:
+                # First broker: admin gets 40% to leave room for co-ownership demo
+                share = Decimal("0.4")
+            else:
+                share = Decimal("1")
             access = BrokerUserAccess(
                 user_id=admin.id,
                 broker_id=broker.id,
                 role=UserRole.OWNER,
-                share_percentage=Decimal("1"),
+                share_percentage=share,
                 )
             session.add(access)
-            print(f"  ✅ {admin.username} → {broker.name} (OWNER, 100%)")
+            pct = int(share * 100)
+            print(f"  ✅ {admin.username} → {broker.name} (OWNER, {pct}%)")
 
-    # Assign brokers to regular user with mixed roles
+    # Assign e2e_test_user with mixed roles
     if user:
         for i, broker in enumerate(brokers):
-            # Alternate between EDITOR and VIEWER with different share percentages
-            if i % 2 == 0:
+            if i == 0:
+                # First broker: co-owner with 30%
+                role = UserRole.OWNER
+                share = Decimal("0.3")
+            elif i % 2 == 0:
                 role = UserRole.EDITOR
-                share = Decimal("0")  # Editor with 0% (can edit, but no ownership)
+                share = Decimal("0")
             else:
                 role = UserRole.VIEWER
-                share = Decimal("0")  # Viewer with 0% (read-only, e.g., accountant)
+                share = Decimal("0")
             access = BrokerUserAccess(
                 user_id=user.id,
                 broker_id=broker.id,
@@ -237,7 +268,98 @@ def populate_broker_user_access(session: Session):
                 share_percentage=share,
                 )
             session.add(access)
-            print(f"  ✅ {user.username} → {broker.name} ({role.value}, {share}%)")
+            pct_label = f"{int(share * 100)}%" if share > 0 else "0%"
+            print(f"  ✅ {user.username} → {broker.name} ({role.value}, {pct_label})")
+
+    # e2e_test_user2: VIEWER on first broker
+    if user2 and brokers:
+        access = BrokerUserAccess(
+            user_id=user2.id,
+            broker_id=brokers[0].id,
+            role=UserRole.VIEWER,
+            share_percentage=Decimal("0"),
+            )
+        session.add(access)
+        print(f"  ✅ {user2.username} → {brokers[0].name} (VIEWER, 0%)")
+
+    # alice: OWNER 20% on first broker, EDITOR on second
+    if alice and len(brokers) >= 2:
+        access1 = BrokerUserAccess(
+            user_id=alice.id,
+            broker_id=brokers[0].id,
+            role=UserRole.OWNER,
+            share_percentage=Decimal("0.2"),
+        )
+        session.add(access1)
+        print(f"  ✅ {alice.username} → {brokers[0].name} (OWNER, 20%)")
+        access2 = BrokerUserAccess(
+            user_id=alice.id,
+            broker_id=brokers[1].id,
+            role=UserRole.EDITOR,
+            share_percentage=Decimal("0"),
+        )
+        session.add(access2)
+        print(f"  ✅ {alice.username} → {brokers[1].name} (EDITOR, 0%)")
+
+    # bob: EDITOR on first broker, VIEWER on third
+    if bob and len(brokers) >= 3:
+        access1 = BrokerUserAccess(
+            user_id=bob.id,
+            broker_id=brokers[0].id,
+            role=UserRole.EDITOR,
+            share_percentage=Decimal("0"),
+        )
+        session.add(access1)
+        print(f"  ✅ {bob.username} → {brokers[0].name} (EDITOR, 0%)")
+        access2 = BrokerUserAccess(
+            user_id=bob.id,
+            broker_id=brokers[2].id,
+            role=UserRole.VIEWER,
+            share_percentage=Decimal("0"),
+        )
+        session.add(access2)
+        print(f"  ✅ {bob.username} → {brokers[2].name} (VIEWER, 0%)")
+
+    # carol: VIEWER on first broker
+    if carol and brokers:
+        access = BrokerUserAccess(
+            user_id=carol.id,
+            broker_id=brokers[0].id,
+            role=UserRole.VIEWER,
+            share_percentage=Decimal("0"),
+        )
+        session.add(access)
+        print(f"  ✅ {carol.username} → {brokers[0].name} (VIEWER, 0%)")
+
+    # dave: EDITOR on second broker
+    if dave and len(brokers) >= 2:
+        access = BrokerUserAccess(
+            user_id=dave.id,
+            broker_id=brokers[1].id,
+            role=UserRole.EDITOR,
+            share_percentage=Decimal("0"),
+        )
+        session.add(access)
+        print(f"  ✅ {dave.username} → {brokers[1].name} (EDITOR, 0%)")
+
+    # eve: VIEWER on first and second broker
+    if eve and len(brokers) >= 2:
+        access1 = BrokerUserAccess(
+            user_id=eve.id,
+            broker_id=brokers[0].id,
+            role=UserRole.VIEWER,
+            share_percentage=Decimal("0"),
+        )
+        session.add(access1)
+        print(f"  ✅ {eve.username} → {brokers[0].name} (VIEWER, 0%)")
+        access2 = BrokerUserAccess(
+            user_id=eve.id,
+            broker_id=brokers[1].id,
+            role=UserRole.VIEWER,
+            share_percentage=Decimal("0"),
+        )
+        session.add(access2)
+        print(f"  ✅ {eve.username} → {brokers[1].name} (VIEWER, 0%)")
 
     session.commit()
 
@@ -871,15 +993,24 @@ def populate_fx_currency_pair_sources(session: Session):
     print(f"\n  📊 Configured {len(eur_pairs)} currency pairs with ECB as provider")
 
 
-def configure_admin_avatar(session: Session):
+def configure_user_avatars(session: Session):
     """
-    Set the admin user's avatar to men_01.png from the seeded default avatars.
+    Set avatars for all test users from the seeded default avatars.
 
     The seed_default_avatars() function copies avatar PNGs into custom-uploads/.
     We call it here to ensure avatars exist even when running without server.
-    Then we find the file_id by scanning metadata JSON files for 'men_01.png'.
+    Then we find the file_id by scanning metadata JSON files for the avatar images.
+    Assigns avatars to all 8 test users:
+    - e2e_test_admin → men_01.png
+    - e2e_test_user → woman_01.png
+    - e2e_test_user2 → men_02.png
+    - e2e_user_alice → woman_02.png
+    - e2e_user_bob → men_03.png
+    - e2e_user_carol → woman_03.png
+    - e2e_user_dave → men_04.png
+    - e2e_user_eve → woman_04.png
     """
-    print("\n🖼️  Configuring admin avatar...")
+    print("\n🖼️  Configuring user avatars...")
     print("-" * 60)
 
     # Ensure avatars are seeded (normally happens at server startup)
@@ -888,47 +1019,61 @@ def configure_admin_avatar(session: Session):
     if seeded > 0:
         print(f"  📁 Seeded {seeded} default avatar images")
 
-    admin = session.exec(select(User).where(User.username == "e2e_test_admin")).first()
-    if not admin:
-        print("  ⚠️  Admin user not found, skipping avatar config")
-        return
-
-    # Find men_01.png in uploaded files metadata
+    # Build a map: original_name → file_id
     from backend.app.services.static_uploads import get_uploads_dir
     uploads_dir = get_uploads_dir()
-    avatar_file_id = None
+    avatar_map: dict[str, str] = {}  # original_name → file_id
 
     for meta_path in uploads_dir.glob("*.json"):
         try:
             meta = json.loads(meta_path.read_text())
-            if meta.get("original_name") == "men_01.png":
-                avatar_file_id = meta["id"]
-                break
+            name = meta.get("original_name", "")
+            if name.startswith("men_") or name.startswith("woman_"):
+                avatar_map[name] = meta["id"]
         except (json.JSONDecodeError, KeyError):
             continue
 
-    if not avatar_file_id:
-        print("  ⚠️  men_01.png not found in uploads (seed may not have run)")
-        return
+    # Define avatar assignments: username → avatar filename
+    user_avatar_assignments = {
+        "e2e_test_admin": "men_01.png",
+        "e2e_test_user": "woman_01.png",
+        "e2e_test_user2": "men_02.png",
+        "e2e_user_alice": "woman_02.png",
+        "e2e_user_bob": "men_03.png",
+        "e2e_user_carol": "woman_03.png",
+        "e2e_user_dave": "men_04.png",
+        "e2e_user_eve": "woman_04.png",
+    }
 
-    avatar_url = f"/api/v1/uploads/file/{avatar_file_id}"
+    for username, avatar_filename in user_avatar_assignments.items():
+        user = session.exec(select(User).where(User.username == username)).first()
+        if not user:
+            print(f"  ⚠️  User '{username}' not found, skipping avatar")
+            continue
 
-    # Find or create UserSettings for admin
-    settings = session.exec(
-        select(UserSettings).where(UserSettings.user_id == admin.id)
-    ).first()
+        file_id = avatar_map.get(avatar_filename)
+        if not file_id:
+            print(f"  ⚠️  {avatar_filename} not found in uploads for {username}")
+            continue
 
-    if settings:
-        settings.avatar_url = avatar_url
-        session.add(settings)
-    else:
-        settings = UserSettings(
-            user_id=admin.id,
-            avatar_url=avatar_url,
-        )
-        session.add(settings)
+        avatar_url = f"/api/v1/uploads/file/{file_id}"
 
-    print(f"  ✅ Admin avatar set to: {avatar_url}")
+        # Find or create UserSettings
+        settings = session.exec(
+            select(UserSettings).where(UserSettings.user_id == user.id)
+        ).first()
+
+        if settings:
+            settings.avatar_url = avatar_url
+            session.add(settings)
+        else:
+            settings = UserSettings(
+                user_id=user.id,
+                avatar_url=avatar_url,
+            )
+            session.add(settings)
+
+        print(f"  ✅ {username} avatar → {avatar_filename} ({avatar_url})")
 
 
 def main():
@@ -992,7 +1137,7 @@ def main():
             populate_price_history(session)
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
-            configure_admin_avatar(session)
+            configure_user_avatars(session)
 
             print("\n💾 Committing all data to database...")
             session.commit()
