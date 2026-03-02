@@ -41,8 +41,8 @@
     let editSection: FxEditSection;
 
     // Date range (default 3M — same as list page)
-    let dateStart = '';
-    let dateEnd = '';
+    let dateEnd = new Date().toISOString().slice(0, 10);
+    let dateStart = (() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().slice(0, 10); })();
     let activePreset: any = '3M';
 
     // Provider config
@@ -53,17 +53,6 @@
     // Derived
     // =========================================================================
 
-    $: {
-        if (!dateEnd) {
-            const now = new Date();
-            dateEnd = now.toISOString().slice(0, 10);
-        }
-        if (!dateStart) {
-            const d = new Date();
-            d.setMonth(d.getMonth() - 3);
-            dateStart = d.toISOString().slice(0, 10);
-        }
-    }
 
     $: displayBase = inverted ? data.quote : data.base;
     $: displayQuote = inverted ? data.base : data.quote;

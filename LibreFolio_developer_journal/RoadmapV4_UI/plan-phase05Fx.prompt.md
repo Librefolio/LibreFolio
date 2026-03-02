@@ -1,7 +1,8 @@
 # Plan: Phase 5 — FX Management + Chart Library + User Docs + i18n MkDocs (v6)
 
 **Data creazione**: 2 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 (Chart avanzati) parzialmente completato (MeasureOverlay implementato, + DateRangePicker custom, colori % segmentati, asse Y, toggle abs/% in FxCard, zoom bidirezionale)
+**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 (Chart avanzati) in corso.
+Completati in Step 6: DateRangePicker custom (dual-column semi-indipendenti, i18n weekdays/months, presets ridotti 1W/1M/1Y/Custom inline badge), LineChart fix Y-axis + colori % segmentati piecewise (rosso sotto 0%, verde sopra), MeasureOverlay 3-click cycle con Y coordinata mappata, fix 404 su FX detail initial load.
 **Durata stimata**: ~7-8 giorni
 **Dipendenze**: Phase 4 completata, Phase 4.8 (Broker Sharing) completata
 **Riferimenti**:
@@ -11,27 +12,39 @@
 
 ---
 
-## ✅ Decisioni Confermate (2 Marzo 2026 — Review iterazione 2)
+## ✅ Decisioni Confermate (2 Marzo 2026 — Review iterazione 3)
 
 ### DateRangePicker
 - **Calendario custom dual-column**: NO input HTML nativi (brutti, non uniformi cross-OS). Implementare popover Svelte con 2 mesi affiancati, click su 2 date → min è "from", max è "to". Possono essere sulla stessa colonna.
-- I preset temporali (1W, 1M, 3M, 6M, 1Y, 2Y, 5Y, Custom) rimangono sopra il calendario.
+- **Colonne semi-indipendenti**: ogni colonna ha il suo selettore mese e anno. Se la colonna sinistra viene impostata oltre la destra, le colonne si swappano automaticamente (e viceversa). Questo permette di selezionare date distanti tra loro.
+- **Presets ridotti**: solo 1W, 1M, 1Y + Custom (inline badge editabile). Il Custom quando cliccato mostra amount + granularity (days/weeks/months/years) inline, senza creare una nuova sezione.
+- **i18n completa**: weekdays e months tradotti in tutte le lingue supportate (EN/IT/FR/ES) via `$derived` pre-computed labels (necessario perché Svelte 5 non permette `$_()` dentro `{#snippet}`).
+- **Componente su 2 righe nel filter bar**: riga 1 = presets (1W, 1M, 1Y, Custom), riga 2 = calendario From/To. Il tutto affiancato ai filtri valuta.
 
 ### LineChart ↔ DataZoomBar
-- **Collegamento bidirezionale visivo**: zoom con rotellina nel chart DEVE aggiornare la barra e viceversa. Implementato tramite custom event `chartZoom` che propaga start/end percentuali.
+- **Collegamento bidirezionale visivo**: zoom con rotellina nel chart DEVE aggiornare la barra e viceversa. Implementato tramite `onZoomChange` callback che propaga start/end percentuali.
+- **DataZoomBar**: singolo grafico overview (linea assoluta), eliminati i grafici secondari confusi.
 
 ### Colori Percentuale (% mode)
-- **Segmenti dinamici**: la linea diventa rossa quando il valore scende sotto lo 0% e verde sopra. Anche l'area fill cambia colore per segmento. NON basato sull'ultimo valore globale.
-- **Nota informativa**: nel tooltip o come label, chiarire che la % è relativa al primo giorno nel date-picker (giorno 0 del range selezionato), non al primo giorno visibile dopo zoom.
-- **Asse Y visibile**: sempre mostrare asse Y con valori, sia in modalità assoluta che percentuale.
-- **Toggle abs/% anche nelle FxCard**: aggiungere un piccolo selettore nelle card della pagina lista.
+- **Segmenti dinamici**: la linea diventa rossa quando il valore scende sotto lo 0% e verde sopra. Anche l'area fill cambia colore per segmento tramite ECharts `visualMap` piecewise su dimensione Y.
+- **Nota informativa**: nel tooltip, chiarire che la % è relativa al primo giorno nel date-picker (giorno 0 del range selezionato), non al primo giorno visibile dopo zoom.
+- **Asse Y visibile**: sempre mostrare asse Y con valori, sia in modalità assoluta che percentuale. Formatter: % in percentuale mode, numeri abbreviati (k) in assoluta.
+- **Toggle abs/% nelle FxCard**: piccolo pulsante % nel header della card.
+- **Toggle abs/% globale**: slider button nella pagina FX lista, sopra le card.
 
 ### Cache Bidirezionale Inversione
-- **2 istanze TimeSeriesStore per coppia**: una per direzione originale, una per direzione inversa. Invalidare entrambe su refresh/sync. Utilizzatore sceglie quale puntare.
+- **Calcolo locale client-side**: quando si inverte la coppia (swap), il valore invertito = `1/rate`. Calcolo fatto localmente per performance immediata, nessuna doppia chiamata al backend.
+- **2 istanze TimeSeriesStore per coppia**: una per direzione originale, una per direzione inversa. Invalidare entrambe su refresh/sync.
 
 ### MeasureOverlay (Linea di tendenza)
-- **Click-drag time-axis aligned**: la freccia segue l'asse temporale. Non importa dove clicchi verticalmente — il secondo punto viene proiettato sull'asse X. Se il secondo punto finisce prima del primo temporalmente, i due punti vengono scambiati (la freccia punta sempre avanti nel tempo).
-- Info box: valore partenza, valore arrivo, Δ assoluto, Δ%, intervallo giorni.
+- **3-click cycle**: 1° click = start point, 2° click = disegna misura con info box, 3° click = cancella e torna ad aspettare il 1° click. NO pulsante toggle separato per attivare/disattivare.
+- **Y segue valori grafico**: la freccia e i pallini si posizionano all'altezza del valore del dato, non a un'altezza fissa. Coordinate Y mappate tramite `yRange` e `chartGridBounds`.
+- **Arrow follows time axis**: se il secondo punto finisce prima del primo, i due punti vengono scambiati (la freccia punta sempre avanti nel tempo).
+- Info box: valore partenza, valore arrivo, Δ assoluto, Δ%, intervallo giorni. "Click anywhere to dismiss" message.
+
+### Layout pagina FX detail
+- **Toolbar compatta**: presets + calendario su una riga a sinistra, Line/Candle + Abs/% + Measure + Refresh/Sync/Edit a destra. In mobile, bottoni con solo icona.
+- **Fix 404 initial load**: date range inizializzate in modo sincrono (non reattivo) per evitare chiamate API con date vuote.
 
 ### Cross-Rate (USD→EUR→RON)
 - Documentato in TODO_FUTURI.md — NON implementato ora. Placeholder visivo "Coming Soon" presente.

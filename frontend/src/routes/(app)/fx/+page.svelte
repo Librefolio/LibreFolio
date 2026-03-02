@@ -4,7 +4,7 @@
      *
      * Displays all configured FX pairs as cards with mini charts.
      * Features: currency filter (SearchSelect), unified date range picker with presets,
-     * Sync All, Refresh All, Add Pair.
+     * global abs/% slider toggle, Sync All, Refresh All, Add Pair.
      */
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
@@ -47,6 +47,7 @@
     let dateStart = '';
     let dateEnd = '';
     let activePreset: any = '3M';
+    let globalViewMode: 'absolute' | 'percentage' = 'absolute';
 
     // Currency options for SearchSelect
     let currencyOptions: SelectOption[] = [];

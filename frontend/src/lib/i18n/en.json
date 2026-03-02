@@ -536,6 +536,42 @@
     }
   },
   "datePicker": {
-    "from": "From"
+    "from": "From",
+    "to": "To",
+    "custom": "Custom",
+    "selectSecondDate": "Click another date to complete the range",
+    "weekdays": {
+      "mo": "Mo",
+      "tu": "Tu",
+      "th": "Th",
+      "fr": "Fr",
+      "sa": "Sa",
+      "su": "Su"
+    },
+    "months": {
+      "january": "January",
+      "february": "February",
+      "march": "March",
+      "april": "April",
+      "may": "May",
+      "june": "June",
+      "july": "July",
+      "august": "August",
+      "september": "September",
+      "october": "October",
+      "november": "November",
+      "december": "December"
+    },
+    "granularity": {
+      "days": "Days",
+      "weeks": "Weeks",
+      "months": "Months",
+      "years": "Years"
+    }
+  },
+  " datePicker": {
+    "weekdays": {
+      "we": "We"
+    }
   }
 }

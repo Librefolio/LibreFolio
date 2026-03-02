@@ -1,8 +1,9 @@
 <!--
   PriceChartFull — Full-featured price chart compositor.
 
-  Assembles: ChartToolbar + LineChart + DataZoomBar
+  Assembles: ChartToolbar + LineChart + DataZoomBar + MeasureOverlay
   Bidirectional zoom: LineChart ↔ DataZoomBar sync both ways.
+  MeasureOverlay: 3-click cycle with Y-coordinate mapping.
 
   Note: Range presets (1W, 1M, etc.) are handled by DateRangePicker outside of this component.
 -->
@@ -96,6 +97,34 @@
     // Zoom data for DataZoomBar (always absolute for the overview)
     let zoomData = $derived(data.map(d => ({date: d.date, value: d.value})));
 
+    // Y-range for MeasureOverlay coordinate mapping
+    let yRange = $derived.by(() => {
+        if (displayData.length === 0) return null;
+        const values = displayData.map(d => d.value);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        // Add padding (same as ECharts scale: true)
+        const padding = (max - min) * 0.1 || 0.01;
+        return {min: min - padding, max: max + padding};
+    });
+
+    // Approximate chart grid bounds based on typical ECharts rendering
+    // These match the grid config in LineChart.svelte
+    let chartGridBounds = $derived.by(() => {
+        // Approximate based on LineChart grid config:
+        // {top: 35, right: 15, bottom: 35, left: 15, containLabel: true}
+        // With containLabel, the actual grid includes label widths.
+        // We estimate: left ~60px (Y-axis labels), right ~15px, top ~35px, bottom ~35px
+        return {
+            left: 60,
+            right: 15,
+            top: 35,
+            bottom: 35,
+            width: 0,  // Will be overridden — width not critical for % mapping
+            height: 0, // Same
+        };
+    });
+
     // =========================================================================
     // Handlers
     // =========================================================================
@@ -164,23 +193,24 @@
                 viewMode={viewMode}
             />
         {:else}
-            <!-- Candlestick stub — will be replaced in Step 6 -->
+            <!-- Candlestick stub -->
             <div class="flex items-center justify-center bg-gray-50 dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-600" style="height: {chartHeight};">
                 <p class="text-gray-400 dark:text-slate-500 text-sm">Candlestick chart — Coming soon</p>
             </div>
         {/if}
 
-        <!-- MeasureOverlay (click-drag trend arrow) -->
+        <!-- MeasureOverlay (3-click cycle: start → complete → dismiss) -->
         <MeasureOverlay
             enabled={measureMode}
             data={displayData}
             {currency}
             viewMode={viewMode}
-            onDismiss={() => { measureMode = false; }}
+            {chartGridBounds}
+            {yRange}
         />
     </div>
 
-    <!-- DataZoom Bar (bidirectionally connected to main chart via zoomRange) -->
+    <!-- DataZoom Bar (single overview line, synced bidirectionally) -->
     {#if zoomData.length > 0}
         <DataZoomBar
             data={zoomData}
