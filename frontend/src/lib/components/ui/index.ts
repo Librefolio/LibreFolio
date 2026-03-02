@@ -3,6 +3,7 @@ export * from './select';
 export * from './input';
 export * from './media';
 export {default as AnimatedBackground} from './AnimatedBackground.svelte';
+export {default as DateRangePicker} from './DateRangePicker.svelte';
 export {default as ErrorBanner} from './ErrorBanner.svelte';
 export {default as LoadingSpinner} from './LoadingSpinner.svelte';
 export {default as ModalBase} from './ModalBase.svelte';

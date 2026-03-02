@@ -1,28 +1,498 @@
 <script lang="ts">
+    /**
+     * FX Rates List Page
+     *
+     * Displays all configured FX pairs as cards with mini charts.
+     * Features: currency filter (SearchSelect), unified date range picker with presets,
+     * Sync All, Refresh All, Add Pair.
+     */
+    import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {Coins, RefreshCw} from 'lucide-svelte';
+    import {zodiosApi} from '$lib/api';
+    import {Coins, Plus, RefreshCw, RotateCcw} from 'lucide-svelte';
+    import FxCard from '$lib/components/fx/FxCard.svelte';
+    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
+    import {ConfirmModal} from '$lib/components/table';
+    import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import {SearchSelect} from '$lib/components/ui/select';
+    import type {SelectOption} from '$lib/components/ui/select/types';
+    import {
+        createPairSlug, getFxStore, invalidateAllFxStores, removeFxStore,
+        apiResultToFxDataPoint,
+        type FxDataPoint, type FxPairConfig
+    } from '$lib/stores/fxStoreRegistry';
+
+    // =========================================================================
+    // Types
+    // =========================================================================
+
+    interface FxPairState {
+        config: FxPairConfig;
+        data: FxDataPoint[];
+        loading: boolean;
+    }
+
+    // =========================================================================
+    // State
+    // =========================================================================
+
+    let pairs: FxPairState[] = [];
+    let loading = true;
+    let error: string | null = null;
+
+    // Filters
+    let filterCurrency1 = '';
+    let filterCurrency2 = '';
+    let dateStart = '';
+    let dateEnd = '';
+    let activePreset: any = '3M';
+
+    // Currency options for SearchSelect
+    let currencyOptions: SelectOption[] = [];
+    let currenciesLoading = true;
+
+    // Delete
+    let deleteDialogOpen = false;
+    let deletingPair: {base: string; quote: string; slug: string} | null = null;
+    let deleteAlsoRates = false;
+    let deleteLoading = false;
+
+    // Modals
+    let addModalOpen = false;
+    let syncModalOpen = false;
+
+    // =========================================================================
+    // Derived
+    // =========================================================================
+
+    // Default date range: last 3 months
+    $: {
+        if (!dateEnd) {
+            const now = new Date();
+            dateEnd = now.toISOString().slice(0, 10);
+        }
+        if (!dateStart) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - 3);
+            dateStart = d.toISOString().slice(0, 10);
+        }
+    }
+
+    // Filtered pairs
+    $: filteredPairs = pairs.filter(p => {
+        if (!filterCurrency1) return true;
+        const fc1 = filterCurrency1.toUpperCase();
+        const matchFirst = p.config.base === fc1 || p.config.quote === fc1;
+        if (!matchFirst) return false;
+        if (!filterCurrency2) return true;
+        const fc2 = filterCurrency2.toUpperCase();
+        return p.config.base === fc2 || p.config.quote === fc2;
+    });
+
+    // =========================================================================
+    // Lifecycle
+    // =========================================================================
+
+    onMount(async () => {
+        await Promise.all([loadPairSources(), loadCurrencies()]);
+    });
+
+    // =========================================================================
+    // Data Loading
+    // =========================================================================
+
+    async function loadCurrencies() {
+        currenciesLoading = true;
+        try {
+            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
+            currencyOptions = [{value: '', label: 'All currencies', icon: '💱'}, ...(response.items ?? []).map((c: any) => ({
+                value: c.code,
+                label: `${c.code} — ${c.name}`,
+                icon: c.symbol !== c.code ? c.symbol : undefined,
+                searchText: `${c.code} ${c.name}`,
+            }))];
+        } catch (e) {
+            console.error('Failed to load currencies:', e);
+        } finally {
+            currenciesLoading = false;
+        }
+    }
+
+    async function loadPairSources() {
+        loading = true;
+        error = null;
+        try {
+            const response = await zodiosApi.list_pair_sources_api_v1_fx_providers_pair_sources_get();
+            const items = (response as any)?.items || [];
+
+            // Group by unique pair (base/quote)
+            const pairMap = new Map<string, FxPairConfig>();
+            for (const item of items) {
+                const slug = createPairSlug(item.base, item.quote);
+                if (!pairMap.has(slug)) {
+                    pairMap.set(slug, {
+                        base: item.base < item.quote ? item.base : item.quote,
+                        quote: item.base < item.quote ? item.quote : item.base,
+                        slug,
+                        providers: [],
+                    });
+                }
+                pairMap.get(slug)!.providers.push({
+                    providerCode: item.provider_code,
+                    priority: item.priority,
+                });
+            }
+
+            // Sort providers by priority
+            for (const config of pairMap.values()) {
+                config.providers.sort((a, b) => a.priority - b.priority);
+            }
+
+            // Initialize pair states
+            pairs = Array.from(pairMap.values()).map(config => ({
+                config,
+                data: getFxStore(config.slug).getAllSorted(),
+                loading: false,
+            }));
+
+            // Fetch chart data for all pairs
+            await fetchAllPairData();
+        } catch (e: any) {
+            console.error('Failed to load pair sources:', e);
+            error = e?.message || 'Failed to load FX pairs';
+        } finally {
+            loading = false;
+        }
+    }
+
+    async function fetchAllPairData() {
+        const promises = pairs.map((_, idx) => fetchPairData(idx));
+        await Promise.allSettled(promises);
+    }
+
+    async function fetchPairData(index: number) {
+        const pair = pairs[index];
+        if (!pair) return;
+
+        const store = getFxStore(pair.config.slug);
+        const gaps = store.getMissingIntervals(dateStart, dateEnd);
+
+        if (gaps.length === 0) {
+            pairs[index] = {...pair, data: store.getRange(dateStart, dateEnd).data};
+            return;
+        }
+
+        pairs[index] = {...pair, loading: true};
+
+        try {
+            const convertRequests = gaps.map(gap => ({
+                from_amount: {code: pair.config.base, amount: 1},
+                to: pair.config.quote,
+                date_range: {start: gap.start, end: gap.end},
+            }));
+
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(
+                convertRequests
+            );
+
+            const results = (response as any)?.results || [];
+            const points: FxDataPoint[] = results.map((r: any) => apiResultToFxDataPoint(r));
+            store.merge(points);
+
+            pairs[index] = {
+                ...pair,
+                data: store.getRange(dateStart, dateEnd).data,
+                loading: false,
+            };
+        } catch (e: any) {
+            // Gracefully handle 404 (no data available) — show existing data if any
+            const existingData = store.getRange(dateStart, dateEnd).data;
+            pairs[index] = {...pair, data: existingData, loading: false};
+            if (e?.response?.status !== 404) {
+                console.error(`Failed to fetch data for ${pair.config.slug}:`, e);
+            }
+        }
+    }
+
+    // =========================================================================
+    // Actions
+    // =========================================================================
+
+    async function handleRefreshAll() {
+        invalidateAllFxStores();
+        pairs = pairs.map(p => ({...p, data: [], loading: true}));
+        await fetchAllPairData();
+    }
+
+    async function handleRefreshPair(event: CustomEvent<{slug: string}>) {
+        const idx = pairs.findIndex(p => p.config.slug === event.detail.slug);
+        if (idx < 0) return;
+        const store = getFxStore(event.detail.slug);
+        store.invalidateRange(dateStart, dateEnd);
+        await fetchPairData(idx);
+    }
+
+    function handleEditPair(event: CustomEvent<{base: string; quote: string; slug: string}>) {
+        // Navigate to detail page
+        const {slug} = event.detail;
+        window.location.href = `/fx/${slug}`;
+    }
+
+    function handleDeletePair(event: CustomEvent<{base: string; quote: string; slug: string}>) {
+        deletingPair = event.detail;
+        deleteAlsoRates = false;
+        deleteDialogOpen = true;
+    }
+
+    async function confirmDelete() {
+        if (!deletingPair) return;
+        deleteLoading = true;
+        try {
+            const pair = pairs.find(p => p.config.slug === deletingPair!.slug);
+            if (pair) {
+                const deleteItems = pair.config.providers.map(() => ({
+                    base: pair.config.base,
+                    quote: pair.config.quote,
+                }));
+                await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete(deleteItems);
+            }
+
+            if (deleteAlsoRates) {
+                console.log('TODO: delete historical rates for', deletingPair.slug);
+            }
+
+            removeFxStore(deletingPair.slug);
+            pairs = pairs.filter(p => p.config.slug !== deletingPair!.slug);
+            deleteDialogOpen = false;
+            deletingPair = null;
+        } catch (e: any) {
+            console.error('Failed to delete pair:', e);
+        } finally {
+            deleteLoading = false;
+        }
+    }
+
+    function handleDateRangeChange(newStart: string, newEnd: string) {
+        dateStart = newStart;
+        dateEnd = newEnd;
+        fetchAllPairData();
+    }
+
+    function handleAddPair() {
+        addModalOpen = true;
+    }
+
+    function handleSyncAll() {
+        syncModalOpen = true;
+    }
+
+    async function handleSyncPair(event: CustomEvent<{slug: string; base: string; quote: string}>) {
+        const {slug, base, quote} = event.detail;
+        const idx = pairs.findIndex(p => p.config.slug === slug);
+        if (idx < 0) return;
+        pairs[idx] = {...pairs[idx], loading: true};
+        try {
+            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_get({
+                queries: {
+                    start: dateStart,
+                    end: dateEnd,
+                    currencies: `${base},${quote}`,
+                }
+            });
+            // After sync, refresh the pair
+            const store = getFxStore(slug);
+            store.invalidateRange(dateStart, dateEnd);
+            await fetchPairData(idx);
+        } catch (e: any) {
+            console.error('Sync failed for', slug, e);
+            pairs[idx] = {...pairs[idx], loading: false};
+        }
+    }
+
+    async function handlePairCreated() {
+        addModalOpen = false;
+        await loadPairSources();
+    }
+
+    async function handleSynced() {
+        syncModalOpen = false;
+        await handleRefreshAll();
+    }
 </script>
 
 <div class="space-y-6">
-    <!-- Header with action -->
-    <div class="flex items-center justify-between">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-            <h2 class="text-lg font-semibold text-gray-700">{$_('fx.title')}</h2>
-            <p class="text-gray-500 text-sm">{$_('fx.subtitle')}</p>
+            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">{$_('fx.title')}</h2>
+            <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
         </div>
-        <button class="flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all">
-            <RefreshCw size={18}/>
-            <span>{$_('fx.syncRates')}</span>
-        </button>
+        <div class="flex items-center gap-2 flex-wrap">
+            <button
+                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300 transition-colors"
+                on:click={handleSyncAll}
+            >
+                <RotateCcw size={15} />
+                Sync All
+            </button>
+            <button
+                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300 transition-colors"
+                on:click={handleRefreshAll}
+            >
+                <RefreshCw size={15} />
+                Refresh All
+            </button>
+            <button
+                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                on:click={handleAddPair}
+            >
+                <Plus size={15} />
+                Add Pair
+            </button>
+        </div>
     </div>
 
-    <!-- Placeholder -->
-    <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
-        <div class="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-full mb-4">
-            <Coins class="text-amber-600" size={32}/>
+    <!-- Filter Bar -->
+    <div class="flex flex-col gap-2 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
+        <!-- Row 1: Presets (above the date/currency fields) -->
+        <DateRangePicker
+            bind:start={dateStart}
+            bind:end={dateEnd}
+            bind:activePreset
+            compact={true}
+            showDateFields={false}
+            onchange={handleDateRangeChange}
+        />
+
+        <!-- Row 2: Currency filters + Date From/To on the same row -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+            <!-- Currency filter -->
+            <div class="w-full sm:w-44">
+                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Filter Currency</label>
+                <SearchSelect
+                    bind:value={filterCurrency1}
+                    options={currencyOptions}
+                    placeholder="All currencies"
+                    loading={currenciesLoading}
+                    maxVisibleItems={6}
+                    onchange={(v) => { filterCurrency1 = v; filterCurrency2 = ''; }}
+                />
+            </div>
+
+            <!-- Second currency (appears when first is set) -->
+            {#if filterCurrency1}
+                <div class="w-full sm:w-44">
+                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Second Currency</label>
+                    <SearchSelect
+                        bind:value={filterCurrency2}
+                        options={currencyOptions}
+                        placeholder="Any"
+                        loading={currenciesLoading}
+                        maxVisibleItems={6}
+                    />
+                </div>
+            {/if}
+
+            <!-- Date Range (From/To fields only, no presets) -->
+            <div class="flex-1 min-w-0">
+                <DateRangePicker
+                    bind:start={dateStart}
+                    bind:end={dateEnd}
+                    bind:activePreset
+                    compact={true}
+                    showPresets={false}
+                    showCustomWindow={false}
+                    onchange={handleDateRangeChange}
+                />
+            </div>
         </div>
-        <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('common.comingSoon')}</h3>
-        <p class="text-gray-500">{$_('fx.placeholderMessage')}</p>
     </div>
+
+    <!-- Content -->
+    {#if loading}
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {#each Array(3) as _}
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-4 animate-pulse">
+                    <div class="h-5 bg-gray-200 dark:bg-slate-700 rounded w-32 mb-3"></div>
+                    <div class="h-20 bg-gray-100 dark:bg-slate-700 rounded mb-3"></div>
+                    <div class="h-4 bg-gray-100 dark:bg-slate-700 rounded w-20"></div>
+                </div>
+            {/each}
+        </div>
+    {:else if error}
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
+            <p class="text-red-600 dark:text-red-400">{error}</p>
+            <button
+                class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                on:click={loadPairSources}
+            >
+                Retry
+            </button>
+        </div>
+    {:else if filteredPairs.length === 0}
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full mb-4">
+                <Coins class="text-amber-600 dark:text-amber-400" size={32}/>
+            </div>
+            {#if pairs.length === 0}
+                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">No FX Pairs Configured</h3>
+                <p class="text-gray-500 dark:text-gray-400 mb-4">Add your first currency pair to start tracking exchange rates.</p>
+                <button
+                    class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                    on:click={handleAddPair}
+                >
+                    <Plus size={16} class="inline mr-1" />
+                    Add First Pair
+                </button>
+            {:else}
+                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">No Matches</h3>
+                <p class="text-gray-500 dark:text-gray-400">No pairs match the current filter.</p>
+            {/if}
+        </div>
+    {:else}
+        <!-- Card Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {#each filteredPairs as pair (pair.config.slug)}
+                <FxCard
+                    base={pair.config.base}
+                    quote={pair.config.quote}
+                    slug={pair.config.slug}
+                    data={pair.data}
+                    loading={pair.loading}
+                    on:edit={handleEditPair}
+                    on:delete={handleDeletePair}
+                    on:refresh={handleRefreshPair}
+                    on:sync={handleSyncPair}
+                />
+            {/each}
+        </div>
+    {/if}
 </div>
 
+<!-- Delete Confirm Dialog -->
+<ConfirmModal
+    open={deleteDialogOpen}
+    title="Delete FX Pair"
+    message="Are you sure you want to delete {deletingPair?.base ?? ''}/{deletingPair?.quote ?? ''}? This will remove the provider configuration."
+    confirmText="Delete"
+    danger={true}
+    onConfirm={confirmDelete}
+    onCancel={() => { deleteDialogOpen = false; deletingPair = null; }}
+/>
+
+<!-- Add Pair Modal -->
+<FxPairAddModal
+    bind:open={addModalOpen}
+    on:created={handlePairCreated}
+    on:close={() => addModalOpen = false}
+/>
+
+<!-- Sync Modal -->
+<FxSyncModal
+    bind:open={syncModalOpen}
+    {dateStart}
+    {dateEnd}
+    on:synced={handleSynced}
+    on:close={() => syncModalOpen = false}
+/>
