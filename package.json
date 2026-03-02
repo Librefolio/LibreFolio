@@ -1,6 +1,6 @@
 {
 	"name": "librefolio",
-	"version": "0.0.1",
+	"version": "0.5.x",
 	"description": "LibreFolio - Self-hosted financial portfolio tracker",
 	"private": true,
 	"scripts": {

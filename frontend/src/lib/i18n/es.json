@@ -534,5 +534,8 @@
     "sharing": {
       "lastOwnerWarning": "No se puede eliminar al último propietario"
     }
+  },
+  "datePicker": {
+    "from": "Desde"
   }
 }

@@ -9,8 +9,8 @@
     <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{date}</div>
     <input type="number" class="w-full px-2 py-1 border rounded text-sm dark:bg-slate-700 dark:border-slate-600" bind:value step="0.0001" />
     <div class="flex gap-2 mt-2">
-        <button class="px-3 py-1 text-xs bg-libre-green text-white rounded hover:bg-libre-green/90" on:click={() => onSave?.(date, value)}>Save</button>
-        <button class="px-3 py-1 text-xs bg-gray-200 dark:bg-slate-600 rounded hover:bg-gray-300" on:click={() => onClose?.()}>Cancel</button>
+        <button class="px-3 py-1 text-xs bg-libre-green text-white rounded hover:bg-libre-green/90" onclick={() => onSave?.(date, value)}>Save</button>
+        <button class="px-3 py-1 text-xs bg-gray-200 dark:bg-slate-600 rounded hover:bg-gray-300" onclick={() => onClose?.()}>Cancel</button>
     </div>
 </div>
 {/if}
