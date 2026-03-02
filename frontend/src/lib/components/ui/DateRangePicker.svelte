@@ -104,6 +104,10 @@
         'datePicker.months.december',
     ];
 
+    // Pre-compute translated strings at top-level (Svelte 5 doesn't allow $_ inside snippets)
+    let weekdayLabels: string[] = $derived(WEEKDAY_KEYS.map(k => $_(k)));
+    let monthLabels: string[] = $derived(MONTH_KEYS.map(k => $_(k)));
+
     // =========================================================================
     // Preset Definitions
     // =========================================================================
@@ -465,7 +469,7 @@
                                     onchange={(e) => setLeftMonth(parseInt((e.target as HTMLSelectElement).value))}
                                 >
                                     {#each Array(12) as _, i}
-                                        <option value={i}>{$_(MONTH_KEYS[i])}</option>
+                                        <option value={i}>{monthLabels[i]}</option>
                                     {/each}
                                 </select>
                                 <select
@@ -498,7 +502,7 @@
                                     onchange={(e) => setRightMonth(parseInt((e.target as HTMLSelectElement).value))}
                                 >
                                     {#each Array(12) as _, i}
-                                        <option value={i}>{$_(MONTH_KEYS[i])}</option>
+                                        <option value={i}>{monthLabels[i]}</option>
                                     {/each}
                                 </select>
                                 <select
@@ -533,7 +537,7 @@
     <table class="w-full table-fixed">
         <thead>
             <tr>
-                {#each WEEKDAY_KEYS as wdKey}<th class="text-center text-[10px] font-semibold text-gray-500 dark:text-gray-400 pb-1 w-[14.28%]">{$_(wdKey)}</th>{/each}
+                {#each weekdayLabels as wdLabel}<th class="text-center text-[10px] font-semibold text-gray-500 dark:text-gray-400 pb-1 w-[14.28%]">{wdLabel}</th>{/each}
             </tr>
         </thead>
         <tbody>

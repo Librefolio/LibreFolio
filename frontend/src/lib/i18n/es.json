@@ -536,6 +536,42 @@
     }
   },
   "datePicker": {
-    "from": "Desde"
+    "from": "Desde",
+    "to": "Hasta",
+    "custom": "Personalizado",
+    "selectSecondDate": "Haz clic en otra fecha para completar el rango",
+    "weekdays": {
+      "mo": "Lu",
+      "tu": "Ma",
+      "th": "Ju",
+      "fr": "Vi",
+      "sa": "Sá",
+      "su": "Do"
+    },
+    "months": {
+      "january": "Enero",
+      "february": "Febrero",
+      "march": "Marzo",
+      "april": "Abril",
+      "may": "Mayo",
+      "june": "Junio",
+      "july": "Julio",
+      "august": "Agosto",
+      "september": "Septiembre",
+      "october": "Octubre",
+      "november": "Noviembre",
+      "december": "Diciembre"
+    },
+    "granularity": {
+      "days": "Días",
+      "weeks": "Semanas",
+      "months": "Meses",
+      "years": "Años"
+    }
+  },
+  " datePicker": {
+    "weekdays": {
+      "we": "Mi"
+    }
   }
 }

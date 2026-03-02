@@ -191,8 +191,6 @@
         const isDark = document.documentElement.classList.contains('dark');
         const isPercentage = viewMode === 'percentage';
 
-        // In percentage mode, use segment coloring (green > 0, red < 0)
-        // In absolute mode, use single color
         const baseColor = isDark
             ? (darkLineColor || DEFAULT_LINE_DARK)
             : (lineColor || DEFAULT_LINE_LIGHT);
@@ -200,31 +198,35 @@
         const greenColor = isDark ? GREEN_DARK : GREEN_LIGHT;
         const redColor = isDark ? RED_DARK : RED_LIGHT;
 
-        // Build series data
-        const seriesData = data.map(d => [d.date, d.value]);
+        // Build series data as [date, value] pairs
+        const dates = data.map(d => d.date);
+        const values = data.map(d => d.value);
 
         // Main line series
         const mainSeries: any = {
             type: 'line',
             name: currency || 'Value',
-            data: seriesData,
+            data: values,
             smooth: compact ? true : false,
             symbol: compact ? 'none' : 'circle',
             symbolSize: compact ? 0 : 4,
             showSymbol: !compact,
             lineStyle: {
                 width: compact ? 1.5 : 2,
-                color: isPercentage ? undefined : baseColor,  // undefined = let visualMap decide
             },
-            itemStyle: {
-                color: isPercentage ? undefined : baseColor,
-            },
+            itemStyle: {},
             emphasis: {
                 focus: compact ? 'none' : 'series',
             },
         };
 
-        // Area fill
+        // For non-percentage mode, set fixed colors
+        if (!isPercentage) {
+            mainSeries.lineStyle.color = baseColor;
+            mainSeries.itemStyle.color = baseColor;
+        }
+
+        // Area fill for absolute mode
         if (areaFill && !isPercentage) {
             const areaTopColor = hexToRgba(baseColor, isDark ? 0.35 : 0.2);
             const areaBottomColor = hexToRgba(baseColor, isDark ? 0.05 : 0.02);
@@ -236,11 +238,10 @@
             };
         }
 
-        // In percentage mode, use piecewise visualMap for segment coloring
+        // Area fill for percentage mode (will be colored by visualMap)
         if (areaFill && isPercentage) {
             mainSeries.areaStyle = {
-                // Will be overridden by visualMap colors
-                opacity: isDark ? 0.2 : 0.12,
+                opacity: isDark ? 0.25 : 0.15,
             };
         }
 
@@ -251,7 +252,10 @@
             series.push({
                 type: 'scatter',
                 name: 'Pending',
-                data: pendingData.map(d => [d.date, d.value]),
+                data: pendingData.map(d => {
+                    const idx = dates.indexOf(d.date);
+                    return idx >= 0 ? [idx, d.value] : null;
+                }).filter(Boolean),
                 symbol: 'diamond',
                 symbolSize: 10,
                 itemStyle: {
@@ -281,10 +285,10 @@
         const option: echarts.EChartsOption = {
             animation: !compact,
             grid: {
-                top: compact ? 5 : 30,
-                right: compact ? 5 : 20,
-                bottom: compact ? 5 : 30,
-                left: compact ? 5 : 60,
+                top: compact ? 5 : 35,
+                right: compact ? 5 : 15,
+                bottom: compact ? 5 : 35,
+                left: compact ? 5 : 15,
                 containLabel: !compact,
             },
             dataZoom: compact ? [] : [
@@ -298,7 +302,7 @@
             ],
             xAxis: {
                 type: 'category',
-                data: data.map(d => d.date),
+                data: dates,
                 show: !compact,
                 axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
                 axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11},
@@ -307,13 +311,16 @@
             yAxis: {
                 type: 'value',
                 show: !compact,
-                axisLine: {show: false},
+                position: 'left',
+                axisLine: {show: true, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                axisTick: {show: true},
                 axisLabel: {
+                    show: true,
                     color: isDark ? '#94a3b8' : '#6b7280',
                     fontSize: 11,
-                    formatter: isPercentage ? '{value}%' : undefined,
+                    formatter: isPercentage ? (v: number) => `${v.toFixed(1)}%` : (v: number) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(4).replace(/\.?0+$/, ''),
                 },
-                splitLine: {lineStyle: {color: isDark ? '#334155' : '#f3f4f6'}},
+                splitLine: {show: true, lineStyle: {color: isDark ? '#334155' : '#e5e7eb', type: 'dashed'}},
                 scale: true,
             },
             tooltip: compact ? undefined : {
@@ -340,18 +347,20 @@
             series,
         };
 
-        // Visual map for percentage mode: segment coloring
+        // Visual map for percentage mode: piecewise segment coloring by y-value
         if (isPercentage && !compact) {
             (option as any).visualMap = {
                 show: false,
                 seriesIndex: 0,
-                dimension: 1,  // y-axis value
+                type: 'piecewise',
+                dimension: 1,  // y-axis value (the data values)
                 pieces: [
                     {lt: 0, color: redColor},
                     {gte: 0, color: greenColor},
                 ],
+                outOfRange: {color: greenColor},
             };
-        } else if (showGradient && !compact) {
+        } else if (showGradient && !compact && !isPercentage) {
             // Stale data gradient (absolute mode)
             const pieces: any[] = [];
             for (let i = 0; i < data.length - 1; i++) {

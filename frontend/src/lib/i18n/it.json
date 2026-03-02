@@ -536,6 +536,42 @@
     }
   },
   "datePicker": {
-    "from": "Dal"
+    "from": "Dal",
+    "to": "Al",
+    "custom": "Personalizzato",
+    "selectSecondDate": "Clicca un'altra data per completare l'intervallo",
+    "weekdays": {
+      "mo": "Lu",
+      "tu": "Ma",
+      "th": "Gi",
+      "fr": "Ve",
+      "sa": "Sa",
+      "su": "Do"
+    },
+    "months": {
+      "january": "Gennaio",
+      "february": "Febbraio",
+      "march": "Marzo",
+      "april": "Aprile",
+      "may": "Maggio",
+      "june": "Giugno",
+      "july": "Luglio",
+      "august": "Agosto",
+      "september": "Settembre",
+      "october": "Ottobre",
+      "november": "Novembre",
+      "december": "Dicembre"
+    },
+    "granularity": {
+      "days": "Giorni",
+      "weeks": "Settimane",
+      "months": "Mesi",
+      "years": "Anni"
+    }
+  },
+  " datePicker": {
+    "weekdays": {
+      "we": "Me"
+    }
   }
 }
