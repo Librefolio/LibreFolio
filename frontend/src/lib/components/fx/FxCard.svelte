@@ -10,7 +10,7 @@
     import {createEventDispatcher} from 'svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
-    import {ArrowLeftRight, Pencil, RefreshCw, RotateCcw, Trash2} from 'lucide-svelte';
+    import {ArrowLeftRight, Pencil, Percent, RefreshCw, RotateCcw, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -37,6 +37,7 @@
     // =========================================================================
 
     let inverted = false;
+    let cardViewMode: 'absolute' | 'percentage' = 'absolute';
 
     // =========================================================================
     // Derived
@@ -61,11 +62,20 @@
     })();
 
     // Chart data (convert FxDataPoint → LineDataPoint)
-    $: chartData = data.map((d): LineDataPoint => ({
-        date: d.date,
-        value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
-        staleDays: d.backwardFillInfo?.daysBack ?? 0,
-    }));
+    $: chartData = (() => {
+        const absolute = data.map((d): LineDataPoint => ({
+            date: d.date,
+            value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
+            staleDays: d.backwardFillInfo?.daysBack ?? 0,
+        }));
+        if (cardViewMode === 'absolute' || absolute.length === 0) return absolute;
+        const baseValue = absolute[0].value;
+        if (baseValue === 0) return absolute;
+        return absolute.map(d => ({
+            ...d,
+            value: ((d.value - baseValue) / baseValue) * 100,
+        }));
+    })();
 
     // =========================================================================
     // Currency flag emoji helper
@@ -147,6 +157,17 @@
                 >
                     <ArrowLeftRight size={14} />
                 </button>
+
+                <!-- Abs/% toggle -->
+                <button
+                    class="p-1 rounded-md transition-colors {cardViewMode === 'percentage'
+                        ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400'
+                        : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    on:click={(e) => { e.stopPropagation(); cardViewMode = cardViewMode === 'absolute' ? 'percentage' : 'absolute'; }}
+                    title={cardViewMode === 'absolute' ? 'Show percentage' : 'Show absolute'}
+                >
+                    <Percent size={14} />
+                </button>
             </div>
 
             <!-- Last rate + delta -->
@@ -172,7 +193,7 @@
     <!-- Mini Chart -->
     <div class="px-4">
         {#if chartData.length > 0}
-            <PriceChartCompact data={chartData} height="80px" />
+            <PriceChartCompact data={chartData} height="80px" viewMode={cardViewMode} />
         {:else if loading}
             <div class="h-20 flex items-center justify-center">
                 <div class="animate-pulse bg-gray-100 dark:bg-slate-700 rounded w-full h-12"></div>

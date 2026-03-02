@@ -39,6 +39,7 @@ email-validator = "*"
 python-magic = "*"
 argcomplete = "*"
 pillow = "*"
+mkdocs-static-i18n = "*"
 
 [dev-packages]
 pytest = "*"

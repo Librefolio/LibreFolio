@@ -1,9 +1,11 @@
 <!--
   DataZoomBar — ECharts dataZoom slider for time range navigation.
+  Bidirectionally syncs with LineChart: receives zoomRange updates and emits changes.
 -->
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+
     interface DataPoint { date: string; value: number; }
     interface Props {
         data: DataPoint[];
@@ -12,21 +14,43 @@
         height?: string;
         lineColor?: string;
     }
+
     let {
         data = [], zoomRange = [0, 100], onZoomChange,
         height = '60px', lineColor = '#1a4031',
     }: Props = $props();
+
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let suppressEmit = false;
+
     onMount(() => () => { resizeObserver?.disconnect(); chartInstance?.dispose(); });
+
+    // Render when data changes
     $effect(() => { if (chartContainer && data.length > 0) tick().then(renderChart); });
+
+    // Sync zoom range from external source (LineChart mouse wheel zoom)
+    $effect(() => {
+        if (chartInstance && zoomRange) {
+            suppressEmit = true;
+            chartInstance.dispatchAction({
+                type: 'dataZoom',
+                start: zoomRange[0],
+                end: zoomRange[1],
+            });
+            setTimeout(() => { suppressEmit = false; }, 50);
+        }
+    });
+
     function renderChart() {
         if (!chartContainer) return;
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
             chartInstance.on('datazoom', (params: any) => {
-                if (onZoomChange && params.start !== undefined) onZoomChange(params.start, params.end);
+                if (!suppressEmit && onZoomChange && params.start !== undefined) {
+                    onZoomChange(params.start, params.end);
+                }
             });
             if (!resizeObserver) {
                 resizeObserver = new ResizeObserver(() => chartInstance?.resize());
