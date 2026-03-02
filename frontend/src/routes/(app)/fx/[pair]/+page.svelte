@@ -441,8 +441,6 @@
         <FxProviderConfig
             {providers}
             {availableProviders}
-            base={data.base}
-            quote={data.quote}
             on:addProvider={handleAddProvider}
             on:removeProvider={handleRemoveProvider}
         />

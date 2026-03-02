@@ -369,7 +369,7 @@
         <div class="flex flex-col sm:flex-row items-start sm:items-end gap-3">
             <!-- Currency filter -->
             <div class="w-full sm:w-44">
-                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Filter Currency</label>
+                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Filter Currency</span>
                 <SearchSelect
                     bind:value={filterCurrency1}
                     options={currencyOptions}
@@ -383,7 +383,7 @@
             <!-- Second currency (appears when first is set) -->
             {#if filterCurrency1}
                 <div class="w-full sm:w-44">
-                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Second Currency</label>
+                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Second Currency</span>
                     <SearchSelect
                         bind:value={filterCurrency2}
                         options={currencyOptions}

@@ -2,7 +2,7 @@
   PriceChartFull — Full-featured price chart compositor.
 
   Assembles: ChartToolbar + LineChart + DataZoomBar
-  The DataZoomBar controls the visible range of the LineChart via shared zoom state.
+  Bidirectional zoom: LineChart ↔ DataZoomBar sync both ways.
 
   Note: Range presets (1W, 1M, etc.) are handled by DateRangePicker outside of this component.
 -->
@@ -10,6 +10,7 @@
     import ChartToolbar from './ChartToolbar.svelte';
     import LineChart from './LineChart.svelte';
     import DataZoomBar from './DataZoomBar.svelte';
+    import MeasureOverlay from './MeasureOverlay.svelte';
     import type {LineDataPoint} from './LineChart.svelte';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
 
@@ -54,9 +55,14 @@
     // State
     // =========================================================================
 
-    let chartType: ChartType = $state(initialChartType);
-    let viewMode: ViewMode = $state(initialViewMode);
+    let chartType: ChartType = $state('line');
+    let viewMode: ViewMode = $state('absolute');
     let zoomRange: [number, number] = $state([0, 100]);
+    let measureMode = $state(false);
+
+    // Sync from props when they change externally
+    $effect(() => { chartType = initialChartType; });
+    $effect(() => { viewMode = initialViewMode; });
 
     // =========================================================================
     // Derived data (percentage mode)
@@ -65,7 +71,7 @@
     let displayData = $derived.by(() => {
         if (viewMode === 'absolute' || data.length === 0) return data;
 
-        // Percentage mode: relative to first visible point
+        // Percentage mode: relative to first point in data (range start)
         const baseValue = data[0].value;
         if (baseValue === 0) return data;
 
@@ -87,20 +93,6 @@
         }));
     });
 
-    // Determine line color based on viewMode and data trend
-    let lineColor = $derived.by(() => {
-        if (viewMode !== 'percentage' || displayData.length < 2) return undefined; // use default
-        const last = displayData[displayData.length - 1].value;
-        // Percentage mode: negative = red, positive = green
-        return last < 0 ? '#ef4444' : '#16a34a'; // red-500 / green-600
-    });
-
-    let darkLineColor = $derived.by(() => {
-        if (viewMode !== 'percentage' || displayData.length < 2) return undefined;
-        const last = displayData[displayData.length - 1].value;
-        return last < 0 ? '#f87171' : '#4ade80'; // red-400 / green-400
-    });
-
     // Zoom data for DataZoomBar (always absolute for the overview)
     let zoomData = $derived(data.map(d => ({date: d.date, value: d.value})));
 
@@ -116,7 +108,17 @@
         viewMode = mode;
     }
 
-    function handleZoomChange(start: number, end: number) {
+    function handleMeasureModeChange(enabled: boolean) {
+        measureMode = enabled;
+    }
+
+    /** Called by DataZoomBar when user drags the slider */
+    function handleZoomBarChange(start: number, end: number) {
+        zoomRange = [start, end];
+    }
+
+    /** Called by LineChart when user zooms with mouse wheel/drag */
+    function handleChartZoomChange(start: number, end: number) {
         zoomRange = [start, end];
     }
 
@@ -139,39 +141,51 @@
     <ChartToolbar
         {chartType}
         {viewMode}
+        {measureMode}
         onChartTypeChange={handleChartTypeChange}
         onViewModeChange={handleViewModeChange}
+        onMeasureModeChange={handleMeasureModeChange}
         disableCandlestick={true}
     />
 
-    <!-- Main Chart -->
-    {#if chartType === 'line'}
-        <LineChart
-            data={displayData}
-            pendingData={displayPending}
-            {currency}
-            height={chartHeight}
-            showGradient={true}
-            areaFill={true}
-            onPointClick={editMode ? handlePointClick : undefined}
-            {zoomRange}
-            {lineColor}
-            {darkLineColor}
-            viewMode={viewMode}
-        />
-    {:else}
-        <!-- Candlestick stub — will be replaced in Step 6 -->
-        <div class="flex items-center justify-center bg-gray-50 dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-600" style="height: {chartHeight};">
-            <p class="text-gray-400 dark:text-slate-500 text-sm">Candlestick chart — Coming soon</p>
-        </div>
-    {/if}
+    <!-- Main Chart (with MeasureOverlay) -->
+    <div class="relative">
+        {#if chartType === 'line'}
+            <LineChart
+                data={displayData}
+                pendingData={displayPending}
+                {currency}
+                height={chartHeight}
+                showGradient={true}
+                areaFill={true}
+                onPointClick={editMode ? handlePointClick : undefined}
+                {zoomRange}
+                onZoomChange={handleChartZoomChange}
+                viewMode={viewMode}
+            />
+        {:else}
+            <!-- Candlestick stub — will be replaced in Step 6 -->
+            <div class="flex items-center justify-center bg-gray-50 dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-600" style="height: {chartHeight};">
+                <p class="text-gray-400 dark:text-slate-500 text-sm">Candlestick chart — Coming soon</p>
+            </div>
+        {/if}
 
-    <!-- DataZoom Bar (connected to main chart via zoomRange) -->
+        <!-- MeasureOverlay (click-drag trend arrow) -->
+        <MeasureOverlay
+            enabled={measureMode}
+            data={displayData}
+            {currency}
+            viewMode={viewMode}
+            onDismiss={() => { measureMode = false; }}
+        />
+    </div>
+
+    <!-- DataZoom Bar (bidirectionally connected to main chart via zoomRange) -->
     {#if zoomData.length > 0}
         <DataZoomBar
             data={zoomData}
             {zoomRange}
-            onZoomChange={handleZoomChange}
+            onZoomChange={handleZoomBarChange}
             height={zoomHeight}
         />
     {/if}

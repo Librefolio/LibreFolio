@@ -121,7 +121,7 @@ LibreFolio/
 - **Data Separation**: Cartelle prod/test completamente isolate (`backend/data/prod/`, `backend/data/test/`)
 - **Test Suite**: 8/8 categorie passano (external, db, services, utils, schemas, api, e2e, frontend)
 
-### ✅ Frontend Completato (Phase 0-3.5 + gran parte Phase 4)
+### ✅ Frontend Completato (Phase 4, siamo in procinto di iniziare la Phase 5)
 
 - **Login/Register/Forgot Password**: Modali funzionanti con animazioni
 - **Dashboard Placeholder**: Struttura base con navigazione
@@ -136,6 +136,7 @@ LibreFolio/
 - **Mobile Responsive**: Settings e layout ottimizzati per mobile
 - **E2E Tests**: 67+ test Playwright, gallery con 224 screenshot (light/dark)
 - **Zodios API Client**: Type-safe con validazione Zod runtime
+- **Echart Diagram**: Componente base per grafici installato e iniziato a integrare dove serve
 
 ### 🔄 In Corso (Phase 4 finale)
 

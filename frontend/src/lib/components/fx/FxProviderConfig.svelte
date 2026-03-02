@@ -29,8 +29,6 @@
 
     export let providers: ProviderEntry[] = [];
     export let availableProviders: AvailableProvider[] = [];
-    export let base: string = '';
-    export let quote: string = '';
     export let readonly: boolean = false;
 
     const dispatch = createEventDispatcher<{

@@ -1,13 +1,40 @@
 # Plan: Phase 5 — FX Management + Chart Library + User Docs + i18n MkDocs (v6)
 
 **Data creazione**: 2 Marzo 2026
-**Status**: 📋 DRAFT — In attesa di review finale
+**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 (Chart avanzati) parzialmente completato (MeasureOverlay implementato, + DateRangePicker custom, colori % segmentati, asse Y, toggle abs/% in FxCard, zoom bidirezionale)
 **Durata stimata**: ~7-8 giorni
 **Dipendenze**: Phase 4 completata, Phase 4.8 (Broker Sharing) completata
 **Riferimenti**:
 - `plan-phase05-to-08-upgrade.md` §4 (versione precedente)
 - `phases/phase-05-fx.md` (legacy plan, superato da questo documento)
 - `TODO_FUTURI.md` §FX, §Cross-Rate
+
+---
+
+## ✅ Decisioni Confermate (2 Marzo 2026 — Review iterazione 2)
+
+### DateRangePicker
+- **Calendario custom dual-column**: NO input HTML nativi (brutti, non uniformi cross-OS). Implementare popover Svelte con 2 mesi affiancati, click su 2 date → min è "from", max è "to". Possono essere sulla stessa colonna.
+- I preset temporali (1W, 1M, 3M, 6M, 1Y, 2Y, 5Y, Custom) rimangono sopra il calendario.
+
+### LineChart ↔ DataZoomBar
+- **Collegamento bidirezionale visivo**: zoom con rotellina nel chart DEVE aggiornare la barra e viceversa. Implementato tramite custom event `chartZoom` che propaga start/end percentuali.
+
+### Colori Percentuale (% mode)
+- **Segmenti dinamici**: la linea diventa rossa quando il valore scende sotto lo 0% e verde sopra. Anche l'area fill cambia colore per segmento. NON basato sull'ultimo valore globale.
+- **Nota informativa**: nel tooltip o come label, chiarire che la % è relativa al primo giorno nel date-picker (giorno 0 del range selezionato), non al primo giorno visibile dopo zoom.
+- **Asse Y visibile**: sempre mostrare asse Y con valori, sia in modalità assoluta che percentuale.
+- **Toggle abs/% anche nelle FxCard**: aggiungere un piccolo selettore nelle card della pagina lista.
+
+### Cache Bidirezionale Inversione
+- **2 istanze TimeSeriesStore per coppia**: una per direzione originale, una per direzione inversa. Invalidare entrambe su refresh/sync. Utilizzatore sceglie quale puntare.
+
+### MeasureOverlay (Linea di tendenza)
+- **Click-drag time-axis aligned**: la freccia segue l'asse temporale. Non importa dove clicchi verticalmente — il secondo punto viene proiettato sull'asse X. Se il secondo punto finisce prima del primo temporalmente, i due punti vengono scambiati (la freccia punta sempre avanti nel tempo).
+- Info box: valore partenza, valore arrivo, Δ assoluto, Δ%, intervallo giorni.
+
+### Cross-Rate (USD→EUR→RON)
+- Documentato in TODO_FUTURI.md — NON implementato ora. Placeholder visivo "Coming Soon" presente.
 
 ---
 
@@ -513,9 +540,14 @@ src/lib/components/charts/EditPopup.svelte
 **Tasks**:
 - [ ] Completare `CandlestickChart.svelte` con OHLC sintetizzato + nota "Simulated OHLC"
 - [ ] Completare `VolumeBar.svelte` con barre Δ% (verde/rosso)
-- [ ] Completare `MeasureOverlay.svelte` con click-drag → freccia + info box (Δ assoluto, Δ%, giorni, valori start/end)
+- [x] Completare `MeasureOverlay.svelte` con click-drag → freccia time-axis aligned + info box (Δ assoluto, Δ%, giorni, valori start/end). Freccia punta sempre avanti nel tempo.
 - [ ] Completare `EditPopup.svelte` con popup numerico + integrazione `EditBuffer`
-- [ ] Integrare tutto in `PriceChartFull.svelte`
+- [x] Integrare `MeasureOverlay` in `PriceChartFull.svelte` con toggle "Measure" in toolbar
+- [x] `DateRangePicker` custom dual-calendar: popover Svelte con 2 mesi affiancati, click su 2 date, range highlight, hover preview, Escape/click-outside per chiudere
+- [x] `LineChart` colori % segmentati: ECharts `visualMap` pieces, rosso sotto 0%, verde sopra, con area fill dinamica + markLine a y=0 + nota informativa "% relative to day 0"
+- [x] `LineChart` asse Y: sempre visibile con valori, sia in modalità assoluta che percentuale
+- [x] `LineChart` ↔ `DataZoomBar` zoom bidirezionale: chart emette `onZoomChange` → aggiorna `DataZoomBar`; `DataZoomBar` aggiorna chart
+- [x] `FxCard` toggle abs/%: bottone 📊 nel header per switchare tra valore assoluto e percentuale, con colore linea dinamico
 
 ### Step 7 — i18n MkDocs
 
