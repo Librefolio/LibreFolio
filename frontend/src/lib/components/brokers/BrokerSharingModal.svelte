@@ -11,7 +11,6 @@
   - Uses ModalBase for consistent modal behavior
 -->
 <script lang="ts">
-    import {onMount, tick} from 'svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {
@@ -22,7 +21,7 @@
     import {ConfirmModal} from '$lib/components/table';
     import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
-    import * as echarts from 'echarts';
+    import SemiDonutChart from '$lib/components/charts/SemiDonutChart.svelte';
 
     // =========================================================================
     // Props
@@ -86,10 +85,6 @@
     let confirmRemoveUserId: number | null = null;
     let confirmCloseOpen = false;
 
-    // Chart
-    let chartContainer: HTMLDivElement;
-    let chartInstance: echarts.ECharts | null = null;
-    let resizeObserver: ResizeObserver | null = null;
 
     // =========================================================================
     // Computed
@@ -118,43 +113,16 @@
         loadAccesses();
     }
 
-    $: if (open && chartContainer && !loading) {
-        tick().then(() => {
-            setupResizeObserver();
-            renderChart();
-        });
-    }
-
-    $: if (!loading && accesses) {
-        tick().then(renderChart);
-    }
-
-    onMount(() => {
-        return () => {
-            cleanupChart();
-        };
-    });
-
-    function setupResizeObserver() {
-        if (resizeObserver || !chartContainer) return;
-        resizeObserver = new ResizeObserver(() => {
-            if (chartInstance) {
-                chartInstance.resize();
-            }
-        });
-        resizeObserver.observe(chartContainer);
-    }
-
-    function cleanupChart() {
-        if (resizeObserver) {
-            resizeObserver.disconnect();
-            resizeObserver = null;
-        }
-        if (chartInstance) {
-            chartInstance.dispose();
-            chartInstance = null;
-        }
-    }
+    // =========================================================================
+    // Derived: chart data for SemiDonutChart
+    // =========================================================================
+    $: chartSlices = owners
+        .filter(o => Math.round(o.share_percentage * 10000) / 100 > 0)
+        .map(o => ({
+            name: o.username,
+            percentage: Math.round(o.share_percentage * 10000) / 100,
+            avatarUrl: o.avatar_url ? `${o.avatar_url}?img_preview=64x64` : null,
+        }));
 
     // =========================================================================
     // Data Loading
@@ -186,226 +154,6 @@
         }
     }
 
-    // =========================================================================
-    // ECharts - Half Donut
-    // =========================================================================
-
-    // Cache for circular avatar data URLs (avoids re-processing on every render)
-    const circularAvatarCache = new Map<string, string>();
-
-    /**
-     * Create a circular avatar image using offscreen canvas.
-     * ECharts canvas renderer ignores borderRadius on background images,
-     * so we pre-clip the image into a circle and return a data URL.
-     */
-    function createCircularImage(url: string, size: number, borderColor: string, borderWidth: number): Promise<string> {
-        const cacheKey = `${url}_${size}_${borderColor}_${borderWidth}`;
-        const cached = circularAvatarCache.get(cacheKey);
-        if (cached) return Promise.resolve(cached);
-
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-                const totalSize = size + borderWidth * 2;
-                const canvas = document.createElement('canvas');
-                canvas.width = totalSize * 2; // 2x for retina
-                canvas.height = totalSize * 2;
-                const ctx = canvas.getContext('2d')!;
-                ctx.scale(2, 2);
-
-                const cx = totalSize / 2;
-                const cy = totalSize / 2;
-                const outerR = totalSize / 2;
-                const innerR = size / 2;
-
-                // Draw border circle
-                if (borderWidth > 0) {
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
-                    ctx.fillStyle = borderColor;
-                    ctx.fill();
-                }
-
-                // Clip to inner circle and draw image
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
-                ctx.clip();
-
-                // Draw image covering the circle area
-                const imgSize = innerR * 2;
-                ctx.drawImage(img, cx - innerR, cy - innerR, imgSize, imgSize);
-                ctx.restore();
-
-                const dataUrl = canvas.toDataURL('image/png');
-                circularAvatarCache.set(cacheKey, dataUrl);
-                resolve(dataUrl);
-            };
-            img.onerror = () => {
-                resolve(''); // fallback: empty means use initial letter
-            };
-            img.src = url;
-        });
-    }
-
-    async function renderChart() {
-        if (!chartContainer) return;
-
-        if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
-        }
-
-        const isDark = document.documentElement.classList.contains('dark');
-
-        // Build data: one slice per OWNER with share > 0, plus "Available"
-        const data: Array<{value: number; name: string; itemStyle?: any; label?: any}> = [];
-        // Diversified color palette — high chromatic distance between adjacent slices
-        const ownerPalette = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5'];
-
-        // Pre-load all circular avatars in parallel
-        const avatarPromises: Array<{index: number; promise: Promise<string>}> = [];
-        const avatarSize = 44;
-        const borderColor = isDark ? '#334155' : '#ffffff';
-        const borderWidth = 2;
-
-        owners.forEach((owner, i) => {
-            if (owner.avatar_url && Math.round(owner.share_percentage * 10000) / 100 > 0) {
-                const avatarUrl = `${owner.avatar_url}?img_preview=64x64`;
-                avatarPromises.push({
-                    index: i,
-                    promise: createCircularImage(avatarUrl, avatarSize, borderColor, borderWidth),
-                });
-            }
-        });
-
-        const resolvedAvatars = await Promise.all(
-            avatarPromises.map(async (p) => ({index: p.index, dataUrl: await p.promise}))
-        );
-        const circularAvatarMap = new Map<number, string>();
-        resolvedAvatars.forEach(r => {
-            if (r.dataUrl) circularAvatarMap.set(r.index, r.dataUrl);
-        });
-
-        owners.forEach((owner, i) => {
-            const pct = Math.round(owner.share_percentage * 10000) / 100;
-            if (pct > 0) {
-                const initial = owner.username.charAt(0).toUpperCase();
-                const totalIconSize = avatarSize + borderWidth * 2;
-                const rich: Record<string, any> = {
-                    pct: {
-                        fontSize: 11,
-                        fontWeight: 'bold',
-                        color: isDark ? '#e2e8f0' : '#1e293b',
-                        lineHeight: 18,
-                        padding: [2, 0, 0, 0],
-                        align: 'center',
-                        textShadowColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)',
-                        textShadowBlur: 3,
-                    },
-                };
-                let formatter: string;
-                const circularDataUrl = circularAvatarMap.get(i);
-                if (circularDataUrl) {
-                    // Use the pre-clipped circular image
-                    rich['avatar'] = {
-                        backgroundColor: {image: circularDataUrl},
-                        width: totalIconSize,
-                        height: totalIconSize,
-                        align: 'center',
-                    };
-                    formatter = `{avatar| }\n{pct|${pct.toFixed(1)}%}`;
-                } else {
-                    rich['avatar'] = {
-                        fontSize: 18,
-                        fontWeight: 'bold',
-                        color: '#fff',
-                        backgroundColor: ownerPalette[i % ownerPalette.length],
-                        borderRadius: avatarSize / 2,
-                        width: avatarSize,
-                        height: avatarSize,
-                        align: 'center',
-                        lineHeight: avatarSize,
-                        borderColor: isDark ? '#334155' : '#ffffff',
-                        borderWidth: 2,
-                    };
-                    formatter = `{avatar|${initial}}\n{pct|${pct.toFixed(1)}%}`;
-                }
-                data.push({
-                    value: pct,
-                    name: owner.username,
-                    label: {show: true, formatter, rich},
-                });
-            }
-        });
-
-        const avail = Math.max(0, Math.round((1 - totalAllocated) * 10000) / 100);
-        if (avail > 0.01) {
-            data.push({
-                value: avail,
-                name: $_('brokers.sharing.available'),
-                itemStyle: {
-                    color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)',
-                },
-                label: {show: false},
-            });
-        }
-
-        // If no data at all (edge case)
-        if (data.length === 0) {
-            data.push({
-                value: 100,
-                name: $_('brokers.sharing.available') + ' (100%)',
-                itemStyle: {color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)'},
-                label: {show: false},
-            });
-        }
-
-        const option: echarts.EChartsOption = {
-            color: ownerPalette,
-            tooltip: {
-                trigger: 'item',
-                formatter: '{b}: {c}%',
-                backgroundColor: isDark ? '#1e293b' : '#fff',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b'},
-            },
-            series: [
-                {
-                    type: 'pie',
-                    radius: ['55%', '95%'],
-                    center: ['50%', '85%'],
-                    startAngle: 180,
-                    endAngle: 360,
-                    padAngle: 2,
-                    itemStyle: {
-                        borderRadius: 6,
-                        borderColor: isDark ? '#1e293b' : '#ffffff',
-                        borderWidth: 2,
-                    },
-                    label: {
-                        show: true,
-                        position: 'outside',
-                        distanceToLabelLine: 5,
-                        alignTo: 'labelLine',
-                    },
-                    labelLine: {
-                        show: true,
-                        length: 10,
-                        length2: 8,
-                        lineStyle: {color: isDark ? '#475569' : '#94a3b8'},
-                    },
-                    emphasis: {
-                        label: {show: true},
-                        scaleSize: 4,
-                    },
-                    data: data,
-                },
-            ],
-        };
-
-        chartInstance.setOption(option, true);
-        chartInstance.resize();
-    }
 
     // =========================================================================
     // User Search (debounced)
@@ -592,7 +340,6 @@
         showEditModal = false;
         editingUserId = null;
         searchHighlightIndex = -1;
-        cleanupChart();
         onClose();
     }
 
@@ -716,7 +463,11 @@
             {:else}
                 <!-- Ownership Chart + Center Info -->
                 <div class="relative" data-testid="ownership-chart-section">
-                    <div bind:this={chartContainer} class="w-full" style="height: 240px; min-height: 180px;"></div>
+                    <SemiDonutChart
+                        data={chartSlices}
+                        availableLabel={$_('brokers.sharing.available')}
+                        height="240px"
+                    />
                     <!-- Center overlay: Allocated / Available + Add button -->
                     <div class="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none" style="z-index: 1;">
                         <div class="text-center">
