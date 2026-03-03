@@ -1,7 +1,7 @@
 # Plan: FxPairAddModal Redesign — CurrencySelect, FxProviderSelect & OrderableList
 
 **Data creazione**: 3 Marzo 2026
-**Status**: ✅ COMPLETATO (test manuali pendenti)
+**Status**: ✅ COMPLETATO (Step 8 UX fix applicati — svelte-check 0 errori, build OK)
 **Dipendenze**: Phase 5 FX in corso, plan-phase05Fx.prompt.md, plan-fxUiRefinementsRound2.prompt.md
 **Riferimenti**:
 - `plan-phase05Fx.prompt.md` — Piano principale Phase 5
@@ -204,3 +204,60 @@ feat(fx): redesign add pair modal with CurrencySearchSelect, FxProviderSelect & 
 - Add i18n keys for add pair modal (EN/IT/FR/ES)
 ```
 
+---
+
+## Step 8: Fix da test manuale — Round di rifinitura ✅
+
+**Feedback ricevuti dal test manuale** (3 Marzo 2026):
+
+### 8a. Dropdown provider troncato nella modale
+- [x] Il dropdown del `FxProviderSelect` viene tagliato da `overflow: hidden` di `ModalBase`
+- **Fix**: passare `allowOverflow={true}` a `ModalBase` nel `FxPairAddModal`
+
+### 8b. Impossibile aggiungere il secondo provider
+- [x] Dopo aver aggiunto il primo provider, il `FxProviderSelect` non permette selezione successiva
+- **Root cause**: il `value` del select rimane vuoto ma la `excludeCodes` filtra correttamente — il problema è che dopo l'`addProvider()` il componente SearchSelect non re-renderizza
+- **Fix**: auto-add — quando l'utente seleziona un provider dal dropdown, viene aggiunto automaticamente alla lista senza bisogno del pulsante +
+
+### 8c. Auto-add on select (rimuovere pulsante +)
+- [x] Rimuovere il pulsante `+` separato
+- [x] Usare `onchange` del `FxProviderSelect` per aggiungere automaticamente il provider appena selezionato
+- [x] Dopo l'aggiunta, resettare il valore del select a '' per permettere una nuova selezione
+- [x] Il pulsante `+` era all'inizio della sezione e apriva la riga — ora reso implicito: cliccare il dropdown = aggiungere
+
+### 8d. Estetica modale — margini e spaziatura
+- [x] **Padding mancante**: il `<div class="space-y-5">` non ha padding — la modale BrokerModal usa `p-4` con header/footer separati
+- **Fix**: Ristrutturare layout modale con:
+  - Header: `p-5 pb-0` con titolo + eventuale X button
+  - Body: `p-5` con contenuto scrollabile
+  - Footer: `p-5 pt-3 border-t` separato
+- [x] Allineare allo stile BrokerModal (header con border-b, scrollable body, sticky footer)
+
+### 8e. Mobile — valute una sotto l'altra
+- [x] Quando lo schermo è piccolo, i 2 `CurrencySearchSelect` (base + quote) vanno oltre lo schermo
+- **Fix**: cambiare il layout da `flex items-end gap-3` a `flex flex-col sm:flex-row items-end gap-3`
+- [x] La freccia `→` diventa `↓` in modalità verticale (nascondere con `hidden sm:inline`, mostrare alternativa con `sm:hidden`)
+
+### 8f. Warning su cancel con modifiche in corso
+- [x] Quando l'utente clicca Cancel o fuori dalla modale, se ci sono inserimenti/modifiche (dirty state), mostrare un ConfirmDialog
+- **Fix**: tracciare `isDirty` = `baseCurrency !== '' || quoteCurrency !== '' || providerEntries.length > 0`
+- [x] Se dirty, intercettare `handleClose` e mostrare un `ConfirmDialog` prima di chiudere
+- [x] Se non dirty, chiudere direttamente
+
+### 8g. Ogni riga provider dovrebbe essere editabile on hover
+- [ ] Quando l'utente passa sopra una riga, mostrare i controlli (remove, move) — attualmente sempre visibili è ok come primo step, hover-only è un'ottimizzazione futura
+
+---
+
+## Commit message suggerito (Step 8)
+
+```
+fix(fx): improve add pair modal UX — auto-add provider, overflow fix, mobile layout, dirty warning
+
+- Fix dropdown truncation by enabling allowOverflow on ModalBase
+- Auto-add provider on selection (remove separate + button)
+- Add proper padding/spacing matching BrokerModal style
+- Responsive mobile layout: currencies stack vertically with ↓ arrow
+- Add dirty state tracking with ConfirmDialog on cancel/close
+- Fix second provider addition issue
+```

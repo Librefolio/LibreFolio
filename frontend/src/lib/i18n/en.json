@@ -42,7 +42,9 @@
     "restore": "Restore original",
     "type": "Type",
     "retry": "Retry",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "discardChanges": "Discard Changes?",
+    "discardChangesMessage": "You have unsaved changes. Are you sure you want to close?"
   },
   "table": {
     "rowsPerPage": "Rows per page",

@@ -5,18 +5,21 @@
 
   Features:
   - CurrencySearchSelect for base and quote currency selection
-  - FxProviderSelect for adding compatible providers
+  - FxProviderSelect for adding compatible providers (auto-add on selection)
   - OrderableList for provider priority with drag & drop
   - Provider section disabled until both currencies are selected
+  - Dirty state tracking with ConfirmDialog on close
+  - Responsive mobile layout (currencies stack vertically)
   - Full i18n support
-  - ModalBase wrapper
+  - ModalBase wrapper with proper padding/spacing
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {Plus, Trash2, Lock} from 'lucide-svelte';
+    import {Trash2, Lock, X, ArrowDown, ArrowRight} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
+    import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
     import type {FxProviderInfo} from '$lib/components/ui/select/FxProviderSelect.svelte';
 
@@ -46,9 +49,12 @@
     let saving = $state(false);
     let error = $state<string | null>(null);
 
-    // Provider select
+    // Provider select (for auto-add)
     let newProviderCode = $state('');
     let allProviders = $state<FxProviderInfo[]>([]);
+
+    // Dirty/discard state
+    let showDiscardConfirm = $state(false);
 
     // =========================================================================
     // Types
@@ -69,6 +75,7 @@
     let hasCurrencies = $derived(!!baseCurrency && !!quoteCurrency && baseCurrency !== quoteCurrency);
     let usedCodes = $derived(providerEntries.map(p => p.code));
     let isValid = $derived(hasCurrencies && providerEntries.length > 0);
+    let isDirty = $derived(baseCurrency !== '' || quoteCurrency !== '' || providerEntries.length > 0);
 
     // =========================================================================
     // Handlers
@@ -78,9 +85,10 @@
         allProviders = providers;
     }
 
-    function addProvider() {
-        if (!newProviderCode) return;
-        const provider = allProviders.find(p => p.code === newProviderCode);
+    /** Auto-add provider when selected from the dropdown */
+    function handleProviderSelected(code: string) {
+        if (!code) return;
+        const provider = allProviders.find(p => p.code === code);
         if (!provider) return;
 
         const nextPriority = providerEntries.length > 0
@@ -94,6 +102,8 @@
             icon_url: provider.icon_url,
             priority: nextPriority,
         }];
+
+        // Reset the select so user can pick another
         newProviderCode = '';
     }
 
@@ -137,7 +147,7 @@
             }));
             await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post(items);
             oncreated?.();
-            handleClose();
+            resetAndClose();
         } catch (e: any) {
             const detail = e?.response?.data?.detail;
             if (detail?.message) {
@@ -150,157 +160,174 @@
         }
     }
 
+    /** Try to close — show confirm if dirty */
     function handleClose() {
+        if (isDirty) {
+            showDiscardConfirm = true;
+        } else {
+            resetAndClose();
+        }
+    }
+
+    /** Actually reset and close */
+    function resetAndClose() {
         baseCurrency = '';
         quoteCurrency = '';
         providerEntries = [];
         newProviderCode = '';
         error = null;
+        showDiscardConfirm = false;
         onclose?.();
     }
 </script>
 
-<ModalBase {open} onRequestClose={handleClose} maxWidth="lg">
-    <div class="space-y-5">
-        <!-- Title -->
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-            {$_('fx.addPair.title')}
-        </h2>
-
-        <!-- Error banner -->
-        {#if error}
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-600 dark:text-red-400">
-                {error}
-            </div>
-        {/if}
-
+<ModalBase {open} onRequestClose={handleClose} maxWidth="lg" allowOverflow={true}>
+    <div class="flex flex-col max-h-[85vh]">
         <!-- ============================================================= -->
-        <!-- Currency selection -->
+        <!-- Header -->
         <!-- ============================================================= -->
-        <div class="space-y-2">
-            <div class="flex items-end gap-3">
-                <div class="flex-1">
-                    <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        {$_('fx.addPair.baseCurrency')}
-                    </div>
-                    <CurrencySearchSelect
-                        bind:value={baseCurrency}
-                        placeholder={$_('fx.addPair.baseCurrency')}
-                    />
-                </div>
-                <span class="text-gray-400 dark:text-gray-500 text-lg pb-2 flex-shrink-0">→</span>
-                <div class="flex-1">
-                    <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        {$_('fx.addPair.quoteCurrency')}
-                    </div>
-                    <CurrencySearchSelect
-                        bind:value={quoteCurrency}
-                        placeholder={$_('fx.addPair.quoteCurrency')}
-                    />
-                </div>
-            </div>
+        <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+                {$_('fx.addPair.title')}
+            </h2>
+            <button
+                onclick={handleClose}
+                disabled={saving}
+                class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+            >
+                <X size={20}/>
+            </button>
         </div>
 
         <!-- ============================================================= -->
-        <!-- Provider Priority -->
+        <!-- Body (scrollable) -->
         <!-- ============================================================= -->
-        <div class="space-y-3 {!hasCurrencies ? 'opacity-50 pointer-events-none' : ''}">
-            <div class="flex items-center justify-between">
+        <div class="overflow-y-auto flex-1 min-h-0 p-5 space-y-5">
+            <!-- Error banner -->
+            {#if error}
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-600 dark:text-red-400">
+                    {error}
+                </div>
+            {/if}
+
+            <!-- ========================================================= -->
+            <!-- Currency selection -->
+            <!-- ========================================================= -->
+            <div class="space-y-2">
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+                    <div class="flex-1">
+                        <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {$_('fx.addPair.baseCurrency')}
+                        </div>
+                        <CurrencySearchSelect
+                            bind:value={baseCurrency}
+                            placeholder={$_('fx.addPair.baseCurrency')}
+                        />
+                    </div>
+                    <!-- Arrow: → on desktop, ↓ on mobile -->
+                    <span class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:pb-2">
+                        <ArrowRight size={20} class="hidden sm:block" />
+                        <ArrowDown size={20} class="sm:hidden" />
+                    </span>
+                    <div class="flex-1">
+                        <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {$_('fx.addPair.quoteCurrency')}
+                        </div>
+                        <CurrencySearchSelect
+                            bind:value={quoteCurrency}
+                            placeholder={$_('fx.addPair.quoteCurrency')}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================= -->
+            <!-- Provider Priority -->
+            <!-- ========================================================= -->
+            <div class="space-y-3 {!hasCurrencies ? 'opacity-50 pointer-events-none' : ''}">
                 <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
                     {$_('fx.addPair.providerPriority')}
                 </h3>
-            </div>
 
-            <!-- Hint when currencies not selected -->
-            {#if !hasCurrencies}
-                <div class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600 text-sm text-gray-400 dark:text-gray-500">
-                    <Lock size={14} />
-                    {$_('fx.addPair.providerDisabledHint')}
-                </div>
-            {/if}
-
-            <!-- Provider list (orderable) -->
-            {#if providerEntries.length > 0}
-                <OrderableList
-                    items={providerEntries}
-                    keyFn={providerKey}
-                    onReorder={handleReorder}
-                >
-                    {#snippet children({ item, index })}
-                        <div class="flex items-center gap-2.5 group">
-                            <!-- Provider icon -->
-                            {#if item.icon_url}
-                                <img
-                                    src={item.icon_url}
-                                    alt={item.code}
-                                    class="w-7 h-7 rounded-md object-contain bg-gray-50 dark:bg-slate-700 p-0.5 flex-shrink-0"
-                                />
-                            {:else}
-                                <span class="w-7 h-7 flex items-center justify-center rounded-md bg-libre-green/15 text-libre-green text-xs font-bold flex-shrink-0">
-                                    {getInitials(item.code)}
-                                </span>
-                            {/if}
-
-                            <!-- Provider info -->
-                            <div class="flex-1 min-w-0">
-                                <span class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate">
-                                    {item.name}
-                                </span>
-                                <span class="text-xs text-gray-400 dark:text-gray-500 ml-1">({item.code})</span>
-                            </div>
-
-                            <!-- Priority badge -->
-                            <span class="text-xs font-mono px-2 py-0.5 rounded flex-shrink-0
-                                {index === 0
-                                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                                    : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}">
-                                #{index + 1} {index === 0 ? $_('fx.provider.primary') : $_('fx.provider.fallback')}
-                            </span>
-
-                            <!-- Remove button -->
-                            <button
-                                type="button"
-                                class="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex-shrink-0"
-                                onclick={() => removeProvider(item.code)}
-                                title="Remove"
-                            >
-                                <Trash2 size={14} />
-                            </button>
-                        </div>
-                    {/snippet}
-                </OrderableList>
-            {/if}
-
-            <!-- Add provider -->
-            {#if hasCurrencies}
-                <div class="flex items-center gap-2">
-                    <div class="flex-1">
-                        <FxProviderSelect
-                            bind:value={newProviderCode}
-                            {baseCurrency}
-                            {quoteCurrency}
-                            excludeCodes={usedCodes}
-                            onProvidersLoaded={handleProvidersLoaded}
-                            placeholder={$_('fx.addPair.addProvider')}
-                        />
+                <!-- Hint when currencies not selected -->
+                {#if !hasCurrencies}
+                    <div class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600 text-sm text-gray-400 dark:text-gray-500">
+                        <Lock size={14} />
+                        {$_('fx.addPair.providerDisabledHint')}
                     </div>
-                    <button
-                        type="button"
-                        class="p-2 text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-                        onclick={addProvider}
-                        disabled={!newProviderCode}
-                        title={$_('fx.addPair.addProvider')}
-                    >
-                        <Plus size={18} />
-                    </button>
-                </div>
-            {/if}
+                {/if}
 
-            <!-- Intermediate Route placeholder -->
-            <div class="p-3 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600">
-                <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
-                    <Lock size={14} />
-                    <span>{$_('fx.addPair.intermediateRouteComingSoon')}</span>
+                <!-- Provider list (orderable) -->
+                {#if providerEntries.length > 0}
+                    <OrderableList
+                        items={providerEntries}
+                        keyFn={providerKey}
+                        onReorder={handleReorder}
+                    >
+                        {#snippet children({ item, index })}
+                            <div class="flex items-center gap-2.5 group">
+                                <!-- Provider icon -->
+                                {#if item.icon_url}
+                                    <img
+                                        src={item.icon_url}
+                                        alt={item.code}
+                                        class="w-7 h-7 rounded-md object-contain bg-gray-50 dark:bg-slate-700 p-0.5 flex-shrink-0"
+                                    />
+                                {:else}
+                                    <span class="w-7 h-7 flex items-center justify-center rounded-md bg-libre-green/15 text-libre-green text-xs font-bold flex-shrink-0">
+                                        {getInitials(item.code)}
+                                    </span>
+                                {/if}
+
+                                <!-- Provider info -->
+                                <div class="flex-1 min-w-0">
+                                    <span class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate">
+                                        {item.name}
+                                    </span>
+                                    <span class="text-xs text-gray-400 dark:text-gray-500 ml-1">({item.code})</span>
+                                </div>
+
+                                <!-- Priority badge -->
+                                <span class="text-xs font-mono px-2 py-0.5 rounded flex-shrink-0
+                                    {index === 0
+                                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                                        : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}">
+                                    #{index + 1} {index === 0 ? $_('fx.provider.primary') : $_('fx.provider.fallback')}
+                                </span>
+
+                                <!-- Remove button -->
+                                <button
+                                    type="button"
+                                    class="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex-shrink-0"
+                                    onclick={() => removeProvider(item.code)}
+                                    title="Remove"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
+                        {/snippet}
+                    </OrderableList>
+                {/if}
+
+                <!-- Add provider (auto-add on selection, no separate + button) -->
+                {#if hasCurrencies}
+                    <FxProviderSelect
+                        bind:value={newProviderCode}
+                        {baseCurrency}
+                        {quoteCurrency}
+                        excludeCodes={usedCodes}
+                        onProvidersLoaded={handleProvidersLoaded}
+                        onchange={handleProviderSelected}
+                        placeholder={$_('fx.addPair.addProvider')}
+                    />
+                {/if}
+
+                <!-- Intermediate Route placeholder -->
+                <div class="p-3 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600">
+                    <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
+                        <Lock size={14} />
+                        <span>{$_('fx.addPair.intermediateRouteComingSoon')}</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -308,11 +335,12 @@
         <!-- ============================================================= -->
         <!-- Footer -->
         <!-- ============================================================= -->
-        <div class="flex justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-700">
+        <div class="flex justify-end gap-2 p-5 pt-4 border-t border-gray-100 dark:border-slate-700 shrink-0">
             <button
                 type="button"
                 class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
                 onclick={handleClose}
+                disabled={saving}
             >
                 {$_('common.cancel')}
             </button>
@@ -327,3 +355,15 @@
         </div>
     </div>
 </ModalBase>
+
+<!-- Discard changes confirmation -->
+<ConfirmModal
+    open={showDiscardConfirm}
+    title={$_('common.discardChanges')}
+    message={$_('common.discardChangesMessage')}
+    confirmText={$_('common.discard')}
+    danger={true}
+    onConfirm={resetAndClose}
+    onCancel={() => { showDiscardConfirm = false; }}
+    zIndex={70}
+/>

@@ -140,9 +140,10 @@
         let newCode = defaultCurrency;
 
         if (usedCodes.has(defaultCurrency)) {
-            // Find a currency not already used
-            const available = currencyOptions.find(c => !usedCodes.has(c.value));
-            newCode = available?.value ?? 'EUR';
+            // Find a common currency not already used
+            const commonCurrencies = ['EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'CNY'];
+            const available = commonCurrencies.find(c => !usedCodes.has(c));
+            newCode = available ?? 'EUR';
         }
 
         initialBalances = [...initialBalances, {
@@ -395,7 +396,6 @@
                 <button
                         type="button"
                         on:click={addBalance}
-                        disabled={loadingCurrencies}
                         class="flex items-center space-x-1 px-3 py-1.5 text-sm bg-libre-green/10 text-libre-green rounded-lg hover:bg-libre-green/20 transition-colors disabled:opacity-50"
                 >
                     <Plus size={16}/>
