@@ -42,7 +42,9 @@
     "restore": "Ripristina originale",
     "type": "Tipo",
     "retry": "Riprova",
-    "saving": "Salvataggio..."
+    "saving": "Salvataggio...",
+    "discardChanges": "Annullare le Modifiche?",
+    "discardChangesMessage": "Hai modifiche non salvate. Sei sicuro di voler chiudere?"
   },
   "table": {
     "rowsPerPage": "Righe per pagina",

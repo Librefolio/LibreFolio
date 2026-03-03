@@ -42,7 +42,9 @@
     "restore": "Restaurar original",
     "type": "Tipo",
     "retry": "Reintentar",
-    "saving": "Guardando..."
+    "saving": "Guardando...",
+    "discardChanges": "¿Descartar Cambios?",
+    "discardChangesMessage": "Tienes cambios sin guardar. ¿Estás seguro de que quieres cerrar?"
   },
   "table": {
     "rowsPerPage": "Filas por página",
