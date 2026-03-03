@@ -2,13 +2,15 @@
 FX API Tests.
 
 Tests for Foreign Exchange (FX) endpoints:
-- GET /fx/currencies (list supported currencies)
-- GET /fx/providers (list FX providers)
+- GET /fx/providers (list FX providers with target currencies)
 - POST /fx/providers/pair-sources (CRUD for pair sources)
 - POST /fx/sync (sync rates from providers)
 - POST /fx/convert (currency conversion)
 - POST /fx/rates (manual rate upsert)
 - DELETE /fx/rates (rate deletion)
+
+Note: The former GET /fx/currencies endpoint was removed and absorbed
+by GET /fx/providers which now includes target_currencies per provider.
 """
 
 from datetime import date, timedelta
@@ -64,34 +66,67 @@ def test_server():
 
 
 @pytest.mark.asyncio
-async def test_get_currencies(test_server):
-    """Test 1: GET /fx/currencies - List supported currencies."""
-    print_section("Test 1: GET /fx/currencies")
+async def test_providers_include_target_currencies(test_server):
+    """Test 1: GET /fx/providers - Providers include target_currencies field.
+
+    This test replaces the former test_get_currencies which tested the now-removed
+    GET /fx/currencies endpoint. Target currencies are now part of the providers response.
+    """
+    print_section("Test 1: GET /fx/providers - target_currencies")
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{API_BASE}/fx/currencies", timeout=TIMEOUT)
+        response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
 
         assert (
             response.status_code == 200
         ), f"Expected 200, got {response.status_code}: {response.text}"
 
-        data = response.json()
+        providers = [FXProviderInfo(**p) for p in response.json()]
+        assert len(providers) > 0, "Should have at least one provider"
 
-        # Validate response structure
-        assert "items" in data, "Response should have 'items' field"
-        assert isinstance(data["items"], list), "items should be a list"
+        for provider in providers:
+            # Validate target_currencies field exists and is populated
+            assert hasattr(provider, "target_currencies"), \
+                f"Provider {provider.code} should have target_currencies field"
+            assert isinstance(provider.target_currencies, list), \
+                f"target_currencies should be a list for {provider.code}"
+            assert len(provider.target_currencies) > 0, \
+                f"Provider {provider.code} should have at least one target currency"
 
-        # Validate currency codes
-        for currency in data["items"]:
-            assert len(currency) == 3, f"Currency code should be 3 chars: {currency}"
-            assert currency.isupper(), f"Currency code should be uppercase: {currency}"
+            # Validate currency codes format
+            for currency in provider.target_currencies:
+                assert len(currency) == 3, \
+                    f"Currency code should be 3 chars: {currency} (provider: {provider.code})"
+                assert currency.isupper(), \
+                    f"Currency code should be uppercase: {currency} (provider: {provider.code})"
 
-        print_success(f"✓ Found {len(data['items'])} currencies")
+            # Base currency should be included in target currencies
+            assert provider.base_currency in provider.target_currencies, \
+                f"Base currency {provider.base_currency} should be in target_currencies for {provider.code}"
+
+            print_success(
+                f"✓ {provider.code}: {len(provider.target_currencies)} target currencies, "
+                f"base_currencies={provider.base_currencies}"
+            )
+
+
+@pytest.mark.asyncio
+async def test_old_currencies_endpoint_removed(test_server):
+    """Test 1b: GET /fx/currencies - Should return 404/405 (endpoint removed)."""
+    print_section("Test 1b: GET /fx/currencies - Removed endpoint")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{API_BASE}/fx/currencies", timeout=TIMEOUT)
+
+        assert response.status_code in (404, 405), \
+            f"Expected 404 or 405 for removed endpoint, got {response.status_code}"
+
+        print_success("✓ GET /fx/currencies correctly removed (returns 404/405)")
 
 
 @pytest.mark.asyncio
 async def test_get_providers(test_server):
-    """Test 2: GET /fx/providers - List FX providers."""
+    """Test 2: GET /fx/providers - List FX providers with full info."""
     print_section("Test 2: GET /fx/providers")
 
     async with httpx.AsyncClient() as client:
@@ -111,10 +146,49 @@ async def test_get_providers(test_server):
             assert provider.code, "Provider should have code"
             assert provider.name, "Provider should have name"
             assert provider.base_currency, "Provider should have base_currency"
+            assert provider.base_currencies, "Provider should have base_currencies"
+            assert provider.target_currencies, "Provider should have target_currencies"
             assert hasattr(provider, "icon_url"), "Provider should have icon_url field"
+            # base_currency should be in base_currencies
+            assert provider.base_currency in provider.base_currencies, \
+                f"base_currency {provider.base_currency} should be in base_currencies"
 
         print_success(f"✓ Found {len(providers)} providers")
         print_info(f"  Providers: {', '.join([p.code for p in providers])}")
+
+        # 2b. Test providers filter (single provider)
+        print_info("2b. Filter by single provider (ECB)")
+        response_filtered = await client.get(
+            f"{API_BASE}/fx/providers",
+            params={"providers": ["ECB"]},
+            timeout=TIMEOUT,
+            )
+        assert response_filtered.status_code == 200
+        filtered = [FXProviderInfo(**p) for p in response_filtered.json()]
+        assert len(filtered) == 1, f"Expected 1 provider, got {len(filtered)}"
+        assert filtered[0].code == "ECB"
+        print_success("✓ Single provider filter works")
+
+        # 2c. Test providers filter (multiple providers)
+        print_info("2c. Filter by multiple providers (ECB, FED)")
+        response_multi = await client.get(
+            f"{API_BASE}/fx/providers",
+            params={"providers": ["ECB", "FED"]},
+            timeout=TIMEOUT,
+            )
+        assert response_multi.status_code == 200
+        multi = [FXProviderInfo(**p) for p in response_multi.json()]
+        assert len(multi) == 2, f"Expected 2 providers, got {len(multi)}"
+        codes = {p.code for p in multi}
+        assert codes == {"ECB", "FED"}, f"Expected ECB & FED, got {codes}"
+        print_success("✓ Multi-provider filter works")
+
+        # 2d. No filter returns all providers
+        print_info("2d. No filter returns all")
+        response_all = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
+        all_providers = [FXProviderInfo(**p) for p in response_all.json()]
+        assert len(all_providers) >= 4, f"Expected >= 4, got {len(all_providers)}"
+        print_success(f"✓ No filter returns {len(all_providers)} providers")
 
 
 @pytest.mark.asyncio

@@ -41,7 +41,8 @@
     "refresh": "Aggiorna",
     "restore": "Ripristina originale",
     "type": "Tipo",
-    "retry": "Riprova"
+    "retry": "Riprova",
+    "saving": "Salvataggio..."
   },
   "table": {
     "rowsPerPage": "Righe per pagina",
@@ -319,6 +320,21 @@
       "filterCurrency": "Filtra valuta",
       "secondCurrency": "Seconda valuta",
       "allCurrencies": "Tutte le valute"
+    },
+    "addPair": {
+      "title": "Aggiungi Nuova Coppia FX",
+      "baseCurrency": "Valuta Base",
+      "quoteCurrency": "Valuta Quotata",
+      "providerPriority": "Priorità Provider",
+      "addProvider": "Aggiungi Provider",
+      "providerDisabledHint": "Seleziona prima entrambe le valute",
+      "providerIncompatible": "Questo provider non supporta questa coppia",
+      "intermediateRouteComingSoon": "Conversione tramite valute intermedie — In arrivo",
+      "saveConfiguration": "Salva Configurazione"
+    },
+    "provider": {
+      "primary": "Primario",
+      "fallback": "Riserva"
     }
   },
   "settings": {

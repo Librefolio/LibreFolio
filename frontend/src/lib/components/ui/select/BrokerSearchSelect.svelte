@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
-    import BrokerIcon from './BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {_} from '$lib/i18n';
 
     /**

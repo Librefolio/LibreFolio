@@ -6,7 +6,7 @@ Handles currency conversion and FX rate synchronization.
 from datetime import date
 from datetime import timedelta
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +39,6 @@ from backend.app.schemas.fx import (
     FXDeletePairSourceItem,
     FXDeletePairSourceResult,
     FXDeletePairSourcesResponse,
-    FXCurrenciesResponse,
     )
 from backend.app.schemas.refresh import FXSyncResponse
 from backend.app.services.fx import (
@@ -62,27 +61,44 @@ router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 # ============================================================================
 
 
-@router_providers.get("", response_model=List[FXProviderInfo])
-async def list_providers():
-    """
-    Get the list of all available FX rate providers.
+def _build_providers_description() -> str:
+    """Build dynamic description listing all installed FX providers."""
+    try:
+        installed = FXProviderRegistry.list_providers()
+        codes = ", ".join(p["code"] for p in installed)
+    except Exception:
+        codes = "(auto-discovered at runtime)"
+    return (
+        "Get the list of available FX rate providers.\n\n"
+        "Returns information about each provider including:\n"
+        "- Provider code and name\n"
+        "- Default base currency\n"
+        "- All supported base currencies (for multi-base providers)\n"
+        "- All target currencies (from get_supported_currencies)\n"
+        "- Description and icon URL\n\n"
+        "Note: This endpoint absorbed the former GET /fx/currencies endpoint.\n"
+        "Target currencies are now returned per-provider instead of a separate call.\n\n"
+        f"Installed providers: {codes}\n\n"
+        "Use the `providers` query parameter to filter by specific provider codes."
+    )
 
-    Returns information about each provider including:
-    - Provider code and name
-    - Default base currency
-    - All supported base currencies (for multi-base providers)
-    - Description
-    - Icon URL
 
-    Returns:
-        List of provider information
-    """
+@router_providers.get("", response_model=List[FXProviderInfo], description=_build_providers_description())
+async def list_providers(
+        providers: Optional[List[str]] = Query(None,description="Optional list of provider codes to filter. If empty, returns all providers.",),
+        ):
+    """Get the list of available FX rate providers, optionally filtered."""
     try:
         # Get all providers from registry
         providers_list = FXProviderRegistry.list_providers()
 
+        # Filter by requested provider codes (case-insensitive)
+        if providers:
+            requested = {p.upper() for p in providers}
+            providers_list = [p for p in providers_list if p["code"].upper() in requested]
+
         # Build provider info from instances
-        providers = []
+        result = []
         for provider_dict in providers_list:
             code = provider_dict["code"]
             instance = FXProviderRegistry.get_provider_instance(code)
@@ -90,12 +106,20 @@ async def list_providers():
             # Get base currencies (property always available in base class)
             base_currencies = instance.base_currencies
 
-            providers.append(
+            # Get target currencies via async call
+            try:
+                target_currencies = await instance.get_supported_currencies()
+            except Exception as e:
+                logger.warning(f"Failed to fetch target currencies for {code}: {e}")
+                target_currencies = []
+
+            result.append(
                 FXProviderInfo(
                     code=code,
                     name=provider_dict["name"],
                     base_currency=instance.base_currency,
                     base_currencies=base_currencies,
+                    target_currencies=sorted(target_currencies),
                     description=getattr(
                         instance, "description", f'{provider_dict["name"]} FX rate provider'
                         ),
@@ -103,41 +127,9 @@ async def list_providers():
                     )
                 )
 
-        return providers  # Return list directly, no wrapper
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}")
-
-
-@router_currencies.get("", response_model=FXCurrenciesResponse)
-async def list_currencies(
-    provider: str = Query("ECB", description="Provider code (ECB, FED, BOE, SNB)")
-    ):
-    """
-    Get the list of available currencies from specified provider.
-
-    Args:
-        provider: Provider code (default: ECB)
-
-    Returns:
-        List of ISO 4217 currency codes
-    """
-    try:
-        provider_instance = FXProviderRegistry.get_provider_instance(provider)
-        if not provider_instance:
-            available = [p["code"] for p in FXProviderRegistry.list_providers()]
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unknown FX provider: {provider}. Available providers: {', '.join(available) if available else 'none registered'}",
-                )
-
-        currencies = await provider_instance.get_supported_currencies()
-        return FXCurrenciesResponse(items=currencies)
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except FXServiceError as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch currencies: {str(e)}")
 
 
 @router_currencies.get("/sync", response_model=FXSyncResponse)

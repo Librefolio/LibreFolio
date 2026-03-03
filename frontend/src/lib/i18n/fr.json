@@ -41,7 +41,8 @@
     "refresh": "Actualiser",
     "restore": "Restaurer l'original",
     "type": "Type",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "saving": "Enregistrement..."
   },
   "table": {
     "rowsPerPage": "Lignes par page",
@@ -319,6 +320,21 @@
       "filterCurrency": "Filtrer devise",
       "secondCurrency": "Deuxième devise",
       "allCurrencies": "Toutes les devises"
+    },
+    "addPair": {
+      "title": "Ajouter une Paire de Devises",
+      "baseCurrency": "Devise de Base",
+      "quoteCurrency": "Devise Cotée",
+      "providerPriority": "Priorité des Fournisseurs",
+      "addProvider": "Ajouter un Fournisseur",
+      "providerDisabledHint": "Sélectionnez d'abord les deux devises",
+      "providerIncompatible": "Ce fournisseur ne supporte pas cette paire",
+      "intermediateRouteComingSoon": "Routes de conversion intermédiaires — Bientôt",
+      "saveConfiguration": "Enregistrer la Configuration"
+    },
+    "provider": {
+      "primary": "Principal",
+      "fallback": "Secours"
     }
   },
   "settings": {
