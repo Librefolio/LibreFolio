@@ -169,7 +169,7 @@
                         {index === 0
                             ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
                             : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}">
-                        Priority {index + 1}{index === 0 ? ' (Primary)' : ' (Fallback)'}
+                        Priority {index + 1}{index === 0 ? ` (${$_('fx.provider.primary')})` : ` (${$_('fx.provider.fallback')})`}
                     </span>
                     {#if !isReadonly}
                         <button
@@ -217,7 +217,7 @@
     <div class="p-3 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600">
         <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
             <span>🔒</span>
-            <span>Intermediate Route (e.g., USD → EUR → RON) — Coming Soon</span>
+            <span>{$_('fx.addPair.intermediateRouteComingSoon')}</span>
         </div>
     </div>
 </div>

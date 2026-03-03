@@ -4,10 +4,8 @@
      */
     import {createEventDispatcher, onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {zodiosApi} from '$lib/api';
     import {userSettings} from '$lib/stores/settings';
-    import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
-    import ImportPluginSelect from '$lib/components/ImportPluginSelect.svelte';
+    import {CurrencySearchSelect, ImportPluginSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
@@ -108,26 +106,8 @@
     // Initial balances (only for create mode)
     let initialBalances: Array<{ code: string; amount: number }> = [];
 
-    // Currency options for SearchSelect
-    let currencyOptions: SelectOption[] = [];
-    let loadingCurrencies = true;
-
-    // Load currencies on mount
+    // Load user settings on mount
     onMount(async () => {
-        // Load currencies
-        try {
-            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
-
-            currencyOptions = (response.items || []).map((c: any) => ({
-                value: c.code,
-                label: c.name,
-                icon: c.symbol && c.symbol !== c.code ? c.symbol : undefined
-            }));
-        } catch (e) {
-            console.error('Failed to load currencies:', e);
-        } finally {
-            loadingCurrencies = false;
-        }
 
         // Bug 2 fix: Load user settings if not already available
         // This ensures base_currency is available for the initial balance selector
@@ -441,11 +421,9 @@
 
                             <!-- Currency Select (40% width, dropdown opens upward) -->
                             <div class="flex-[4] min-w-[120px]">
-                                <SearchSelect
+                                <CurrencySearchSelect
                                         bind:value={balance.code}
-                                        options={currencyOptions}
                                         placeholder={$_('settings.selectCurrency')}
-                                        loading={loadingCurrencies}
                                         dropdownPosition="top"
                                 />
                             </div>

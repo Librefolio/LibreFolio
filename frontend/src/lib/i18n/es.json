@@ -41,7 +41,8 @@
     "refresh": "Actualizar",
     "restore": "Restaurar original",
     "type": "Tipo",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "saving": "Guardando..."
   },
   "table": {
     "rowsPerPage": "Filas por página",
@@ -319,6 +320,21 @@
       "filterCurrency": "Filtrar divisa",
       "secondCurrency": "Segunda divisa",
       "allCurrencies": "Todas las divisas"
+    },
+    "addPair": {
+      "title": "Añadir Par de Divisas",
+      "baseCurrency": "Divisa Base",
+      "quoteCurrency": "Divisa Cotizada",
+      "providerPriority": "Prioridad de Proveedores",
+      "addProvider": "Añadir Proveedor",
+      "providerDisabledHint": "Seleccione primero ambas divisas",
+      "providerIncompatible": "Este proveedor no soporta este par",
+      "intermediateRouteComingSoon": "Rutas de conversión intermedias — Próximamente",
+      "saveConfiguration": "Guardar Configuración"
+    },
+    "provider": {
+      "primary": "Principal",
+      "fallback": "Reserva"
     }
   },
   "settings": {

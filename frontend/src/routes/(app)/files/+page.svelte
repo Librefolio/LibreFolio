@@ -26,7 +26,7 @@
     import {ImageEditModal, FileEditModal} from '$lib/components/ui/media';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
-    import BrokerSearchSelect from '$lib/components/brokers/BrokerSearchSelect.svelte';
+    import {BrokerSearchSelect} from '$lib/components/ui/select';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Search, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';

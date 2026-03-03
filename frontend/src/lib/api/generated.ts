@@ -3232,6 +3232,12 @@ const UserSearchItem: z.ZodType<UserSearchItem> = z.object({
 const UserSearchResponse: z.ZodType<UserSearchResponse> = z
   .object({ items: z.array(UserSearchItem).describe("List of items") })
   .partial();
+const providers = z
+  .union([z.array(z.string()), z.null()])
+  .describe(
+    "Optional list of provider codes to filter. If empty, returns all providers."
+  )
+  .optional();
 const FXProviderInfo = z
   .object({
     code: z.string().describe("Provider code (e.g., ECB, FED, BOE, SNB)"),
@@ -3240,6 +3246,12 @@ const FXProviderInfo = z
     base_currencies: z
       .array(z.string())
       .describe("All supported base currencies"),
+    target_currencies: z
+      .array(z.string())
+      .describe(
+        "All target currencies this provider can convert to (from get_supported_currencies)"
+      )
+      .optional(),
     description: z.string().describe("Provider description"),
     icon_url: z
       .union([z.string(), z.null()])
@@ -3341,9 +3353,6 @@ const FXDeletePairSourcesResponse: z.ZodType<FXDeletePairSourcesResponse> =
       .gte(0)
       .describe("Total number of records deleted across all items"),
   });
-const FXCurrenciesResponse = z
-  .object({ items: z.array(z.string()).describe("List of items") })
-  .partial();
 const provider = z
   .union([z.string(), z.null()])
   .describe(
@@ -4291,7 +4300,7 @@ const FABulkRemoveResponse: z.ZodType<FABulkRemoveResponse> = z.object({
     .describe("Operation-level errors (not per-item)")
     .optional(),
 });
-const providers = z
+const providers__2 = z
   .union([z.string(), z.null()])
   .describe("Comma-separated provider codes (default: all)")
   .optional();
@@ -5596,6 +5605,7 @@ export const schemas = {
   exclude_broker_id,
   UserSearchItem,
   UserSearchResponse,
+  providers,
   FXProviderInfo,
   FXPairSourceItem,
   FXPairSourcesResponse,
@@ -5604,7 +5614,6 @@ export const schemas = {
   FXDeletePairSourceItem,
   FXDeletePairSourceResult,
   FXDeletePairSourcesResponse,
-  FXCurrenciesResponse,
   provider,
   base_currency,
   DateRangeModel,
@@ -5670,7 +5679,7 @@ export const schemas = {
   FABulkAssignResponse,
   FAProviderRemovalResult,
   FABulkRemoveResponse,
-  providers,
+  providers__2,
   FAProviderSearchResultItem,
   FAProviderSearchResponse,
   FAProviderAssignmentReadItem,
@@ -6366,7 +6375,7 @@ GET /api/v1/assets/provider/search?q&#x3D;AAPL&amp;providers&#x3D;yfinance,juste
       {
         name: "providers",
         type: "Query",
-        schema: providers,
+        schema: providers__2,
       },
     ],
     response: FAProviderSearchResponse,
@@ -7241,38 +7250,6 @@ Returns file metadata including compatible plugins.`,
     ],
   },
   {
-    method: "get",
-    path: "/api/v1/fx/currencies",
-    alias: "list_currencies_api_v1_fx_currencies_get",
-    description: `Get the list of available currencies from specified provider.
-
-Args:
-    provider: Provider code (default: ECB)
-
-Returns:
-    List of ISO 4217 currency codes`,
-    requestFormat: "json",
-    parameters: [
-      {
-        name: "provider",
-        type: "Query",
-        schema: z
-          .string()
-          .describe("Provider code (ECB, FED, BOE, SNB)")
-          .optional()
-          .default("ECB"),
-      },
-    ],
-    response: FXCurrenciesResponse,
-    errors: [
-      {
-        status: 422,
-        description: `Validation Error`,
-        schema: HTTPValidationError,
-      },
-    ],
-  },
-  {
     method: "post",
     path: "/api/v1/fx/currencies/convert",
     alias: "convert_currency_bulk_api_v1_fx_currencies_convert_post",
@@ -7471,19 +7448,37 @@ Returns:
     method: "get",
     path: "/api/v1/fx/providers",
     alias: "list_providers_api_v1_fx_providers_get",
-    description: `Get the list of all available FX rate providers.
+    description: `Get the list of available FX rate providers.
 
 Returns information about each provider including:
 - Provider code and name
 - Default base currency
 - All supported base currencies (for multi-base providers)
-- Description
-- Icon URL
+- All target currencies (from get_supported_currencies)
+- Description and icon URL
 
-Returns:
-    List of provider information`,
+Note: This endpoint absorbed the former GET /fx/currencies endpoint.
+Target currencies are now returned per-provider instead of a separate call.
+
+Installed providers: BOE, FED, ECB, SNB
+
+Use the &#x60;providers&#x60; query parameter to filter by specific provider codes.`,
     requestFormat: "json",
+    parameters: [
+      {
+        name: "providers",
+        type: "Query",
+        schema: providers,
+      },
+    ],
     response: z.array(FXProviderInfo),
+    errors: [
+      {
+        status: 422,
+        description: `Validation Error`,
+        schema: HTTPValidationError,
+      },
+    ],
   },
   {
     method: "get",
