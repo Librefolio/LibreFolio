@@ -25,6 +25,5 @@ export {default as MeasureOverlay} from './MeasureOverlay.svelte';
 export {default as EditPopup} from './EditPopup.svelte';
 
 // Re-export types
-export type {LineDataPoint} from './LineChart.svelte';
+export type {LineDataPoint, ChartApi} from './LineChart.svelte';
 export type {ChartType, ViewMode} from './ChartToolbar.svelte';
-

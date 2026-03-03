@@ -31,13 +31,25 @@
     export let slug: string;
     export let data: FxDataPoint[] = [];
     export let loading: boolean = false;
+    /** Global view mode from parent — card follows this unless locally toggled */
+    export let globalViewMode: 'absolute' | 'percentage' = 'absolute';
 
     // =========================================================================
     // State
     // =========================================================================
 
     let inverted = false;
-    let cardViewMode: 'absolute' | 'percentage' = 'absolute';
+    let localViewModeOverride: 'absolute' | 'percentage' | null = null;
+
+    // Card view mode: local override takes precedence, otherwise follows global
+    $: cardViewMode = localViewModeOverride ?? globalViewMode;
+
+    // Reset local override when global changes (so cards follow global)
+    let lastGlobalViewMode = globalViewMode;
+    $: if (globalViewMode !== lastGlobalViewMode) {
+        localViewModeOverride = null;
+        lastGlobalViewMode = globalViewMode;
+    }
 
     // =========================================================================
     // Derived
@@ -163,7 +175,7 @@
                     class="p-1 rounded-md transition-colors {cardViewMode === 'percentage'
                         ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400'
                         : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
-                    on:click={(e) => { e.stopPropagation(); cardViewMode = cardViewMode === 'absolute' ? 'percentage' : 'absolute'; }}
+                    on:click={(e) => { e.stopPropagation(); localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute'; }}
                     title={cardViewMode === 'absolute' ? 'Show percentage' : 'Show absolute'}
                 >
                     <Percent size={14} />

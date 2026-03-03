@@ -1,18 +1,18 @@
 # Plan: Phase 5 — FX Management + Chart Library + User Docs + i18n MkDocs (v6)
 
 **Data creazione**: 2 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 (Chart avanzati) in corso.
-Completati in Step 6: DateRangePicker custom (dual-column semi-indipendenti, i18n weekdays/months, presets ridotti 1W/1M/1Y/Custom inline badge), LineChart fix Y-axis + colori % segmentati piecewise (rosso sotto 0%, verde sopra), MeasureOverlay 3-click cycle con Y coordinata mappata, fix 404 su FX detail initial load.
+**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 in corso (fix iterativi: sub-plan Steps 1-7,9 ✅ completati, Step 8 📋 TODO).
 **Durata stimata**: ~7-8 giorni
 **Dipendenze**: Phase 4 completata, Phase 4.8 (Broker Sharing) completata
 **Riferimenti**:
 - `plan-phase05-to-08-upgrade.md` §4 (versione precedente)
 - `phases/phase-05-fx.md` (legacy plan, superato da questo documento)
+- `plan-fxUiRefinementsRound2.prompt.md` ← **SUB-PLAN** con fix dettagliati (visualMap, stale gradient, layout, MeasureOverlay, OrderableList, settings ⚙️, overlay confronto, benchmark line)
 - `TODO_FUTURI.md` §FX, §Cross-Rate
 
 ---
 
-## ✅ Decisioni Confermate (2 Marzo 2026 — Review iterazione 3)
+## ✅ Decisioni Confermate (2 Marzo 2026 — Review iterazione 4)
 
 ### DateRangePicker
 - **Calendario custom dual-column**: NO input HTML nativi (brutti, non uniformi cross-OS). Implementare popover Svelte con 2 mesi affiancati, click su 2 date → min è "from", max è "to". Possono essere sulla stessa colonna.
@@ -768,4 +768,3 @@ Step 1 (TimeSeriesStore)
          │
          └──→ Step 9 (i18n Frontend + E2E + Cleanup) ←── dopo tutto il resto
 ```
-

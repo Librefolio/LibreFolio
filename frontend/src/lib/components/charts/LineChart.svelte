@@ -3,15 +3,16 @@
 
   Features:
   - Line series with configurable area fill
-  - Gradient opacity based on staleDays
-  - Segment-based color in % mode: green above 0%, red below 0% (with matching area fill)
-  - Y-axis always visible with values
-  - Tooltip with date, value, and stale warning
+  - Per-point opacity based on staleDays (stale gradient)
+  - Segment-based color by baseline: green above baseline, red below (both % and abs modes)
+  - Y-axis always visible with values (also mini-axis mode for compact cards)
+  - Tooltip with date, value, stale warning, and % note
   - Dark mode support with MutationObserver
   - ResizeObserver for responsive sizing
   - Mouse wheel zoom + drag-to-pan via ECharts inside dataZoom
   - Bidirectional zoom sync: emits onZoomChange when user zooms inside chart
   - Click event emission for parent components
+  - onChartReady callback for coordinate mapping (used by MeasureOverlay)
 
   Used by: PriceChartCompact, PriceChartFull (line mode)
 -->
@@ -29,18 +30,29 @@
         staleDays?: number;
     }
 
+    export interface ChartApi {
+        getGridBounds: () => {left: number; right: number; top: number; bottom: number; width: number; height: number};
+        dataToPixel: (dataIndex: number, value: number) => {x: number; y: number} | null;
+    }
+
     interface Props {
         data: LineDataPoint[];
         /** Y-axis label / currency code */
         currency?: string;
         /** Show area fill under the line */
         areaFill?: boolean;
-        /** Show stale-data gradient */
+        /** Show stale-data gradient (per-point opacity) */
         showGradient?: boolean;
+        /** Enable baseline coloring (red below baseline, green above) */
+        colorByBaseline?: boolean;
+        /** Show grid split lines */
+        showGridLines?: boolean;
         /** CSS height */
         height?: string;
         /** Compact mode (no axis labels, no tooltip, thinner line) */
         compact?: boolean;
+        /** Show mini Y-axis in compact mode (2-3 ticks, right side) */
+        showMiniAxis?: boolean;
         /** Color for the line (light mode) — if undefined, uses theme default */
         lineColor?: string;
         /** Color for the line (dark mode) — if undefined, uses theme default */
@@ -57,6 +69,8 @@
         onZoomChange?: (start: number, end: number) => void;
         /** View mode (for tooltip formatting and segment colors) */
         viewMode?: 'absolute' | 'percentage';
+        /** Called when chart instance is ready (for coordinate mapping) */
+        onChartReady?: (api: ChartApi) => void;
     }
 
     let {
@@ -64,8 +78,11 @@
         currency = '',
         areaFill = true,
         showGradient = true,
+        colorByBaseline = true,
+        showGridLines = true,
         height = '300px',
         compact = false,
+        showMiniAxis = false,
         lineColor,
         darkLineColor,
         pendingColor = '#f59e0b',
@@ -74,6 +91,7 @@
         zoomRange,
         onZoomChange,
         viewMode = 'absolute',
+        onChartReady,
     }: Props = $props();
 
     // Default colors
@@ -152,6 +170,42 @@
     }
 
     // =========================================================================
+    // ChartApi for external coordinate mapping
+    // =========================================================================
+
+    function emitChartReady() {
+        if (!chartInstance || !onChartReady) return;
+        onChartReady({
+            getGridBounds: () => {
+                try {
+                    const gridModel = (chartInstance as any).getModel().getComponent('grid', 0);
+                    if (gridModel && gridModel.coordinateSystem) {
+                        const rect = gridModel.coordinateSystem.getRect();
+                        return {
+                            left: rect.x,
+                            right: rect.x + rect.width,
+                            top: rect.y,
+                            bottom: rect.y + rect.height,
+                            width: rect.width,
+                            height: rect.height,
+                        };
+                    }
+                } catch (_) { /* fallback below */ }
+                // Fallback estimate
+                return {left: 60, right: 15, top: 35, bottom: 35, width: 0, height: 0};
+            },
+            dataToPixel: (dataIndex: number, value: number) => {
+                if (!chartInstance) return null;
+                try {
+                    const pixel = (chartInstance as any).convertToPixel('grid', [dataIndex, value]);
+                    if (pixel) return {x: pixel[0], y: pixel[1]};
+                } catch (_) { /* return null */ }
+                return null;
+            },
+        });
+    }
+
+    // =========================================================================
     // Chart Rendering
     // =========================================================================
 
@@ -198,17 +252,45 @@
         const greenColor = isDark ? GREEN_DARK : GREEN_LIGHT;
         const redColor = isDark ? RED_DARK : RED_LIGHT;
 
-        // Build series data as [date, value] pairs
+        // Build series data
         const dates = data.map(d => d.date);
-        const values = data.map(d => d.value);
+
+        // Determine if we need visualMap (baseline coloring)
+        const useBaselineColoring = colorByBaseline && !compact;
+        const baselineValue = isPercentage ? 0 : (data[0]?.value ?? 0);
+        // When baseline coloring is active, data MUST be tuples [index, value] for visualMap dimension:1 to work
+        const useTupleFormat = useBaselineColoring;
+
+        // Build per-point data with optional stale gradient opacity
+        const hasStaleData = showGradient && !useBaselineColoring && data.some(d => (d.staleDays ?? 0) > 0);
+
+        const seriesData: any[] = data.map((d, i) => {
+            const val = useTupleFormat ? [i, d.value] : d.value;
+            const opacity = getOpacity(d.staleDays);
+
+            // When stale gradient is active (and baseline coloring is NOT), apply per-point opacity
+            if (hasStaleData && opacity < 1.0) {
+                return {
+                    value: val,
+                    itemStyle: {
+                        color: hexToRgba(baseColor, opacity),
+                        borderColor: hexToRgba(baseColor, opacity),
+                    },
+                    lineStyle: {
+                        color: hexToRgba(baseColor, opacity),
+                    },
+                };
+            }
+            return val;
+        });
 
         // Main line series
         const mainSeries: any = {
             type: 'line',
             name: currency || 'Value',
-            data: values,
-            smooth: compact ? true : false,
-            symbol: compact ? 'none' : 'circle',
+            data: seriesData,
+            smooth: !!compact,
+            symbol: compact && !showMiniAxis ? 'none' : (compact ? 'none' : 'circle'),
             symbolSize: compact ? 0 : 4,
             showSymbol: !compact,
             lineStyle: {
@@ -220,29 +302,30 @@
             },
         };
 
-        // For non-percentage mode, set fixed colors
-        if (!isPercentage) {
+        // Set line/item color when NOT using baseline coloring
+        if (!useBaselineColoring) {
             mainSeries.lineStyle.color = baseColor;
             mainSeries.itemStyle.color = baseColor;
         }
 
-        // Area fill for absolute mode
-        if (areaFill && !isPercentage) {
-            const areaTopColor = hexToRgba(baseColor, isDark ? 0.35 : 0.2);
-            const areaBottomColor = hexToRgba(baseColor, isDark ? 0.05 : 0.02);
-            mainSeries.areaStyle = {
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    {offset: 0, color: areaTopColor},
-                    {offset: 1, color: areaBottomColor},
-                ]),
-            };
-        }
-
-        // Area fill for percentage mode (will be colored by visualMap)
-        if (areaFill && isPercentage) {
-            mainSeries.areaStyle = {
-                opacity: isDark ? 0.25 : 0.15,
-            };
+        // Area fill
+        if (areaFill) {
+            if (useBaselineColoring) {
+                // Area colored by visualMap (green/red segments)
+                mainSeries.areaStyle = {
+                    opacity: isDark ? 0.25 : 0.15,
+                };
+            } else {
+                // Fixed color gradient area
+                const areaTopColor = hexToRgba(baseColor, isDark ? 0.35 : 0.2);
+                const areaBottomColor = hexToRgba(baseColor, isDark ? 0.05 : 0.02);
+                mainSeries.areaStyle = {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        {offset: 0, color: areaTopColor},
+                        {offset: 1, color: areaBottomColor},
+                    ]),
+                };
+            }
         }
 
         const series: any[] = [mainSeries];
@@ -267,8 +350,8 @@
             });
         }
 
-        // Mark line at y=0 when in percentage mode
-        if (isPercentage) {
+        // Mark line at baseline
+        if (useBaselineColoring) {
             mainSeries.markLine = {
                 silent: true,
                 symbol: 'none',
@@ -277,20 +360,32 @@
                     type: 'dashed',
                     width: 1,
                 },
-                data: [{yAxis: 0}],
+                data: [{yAxis: baselineValue}],
                 label: {show: false},
             };
         }
 
+        // Grid configuration
+        const showYAxis = !compact || showMiniAxis;
+        const gridConfig = compact
+            ? {
+                top: 5,
+                right: showMiniAxis ? 45 : 5,
+                bottom: 5,
+                left: 5,
+                containLabel: false,
+            }
+            : {
+                top: 35,
+                right: 15,
+                bottom: 35,
+                left: 15,
+                containLabel: true,
+            };
+
         const option: echarts.EChartsOption = {
             animation: !compact,
-            grid: {
-                top: compact ? 5 : 35,
-                right: compact ? 5 : 15,
-                bottom: compact ? 5 : 35,
-                left: compact ? 5 : 15,
-                containLabel: !compact,
-            },
+            grid: gridConfig,
             dataZoom: compact ? [] : [
                 {
                     type: 'inside',
@@ -310,17 +405,31 @@
             },
             yAxis: {
                 type: 'value',
-                show: !compact,
-                position: 'left',
-                axisLine: {show: true, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                axisTick: {show: true},
+                show: showYAxis,
+                position: compact && showMiniAxis ? 'right' : 'left',
+                axisLine: {show: !compact, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                axisTick: {show: !compact},
+                splitNumber: compact && showMiniAxis ? 2 : undefined,
                 axisLabel: {
-                    show: true,
+                    show: showYAxis,
                     color: isDark ? '#94a3b8' : '#6b7280',
-                    fontSize: 11,
-                    formatter: isPercentage ? (v: number) => `${v.toFixed(1)}%` : (v: number) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(4).replace(/\.?0+$/, ''),
+                    fontSize: compact && showMiniAxis ? 9 : 11,
+                    formatter: isPercentage
+                        ? (v: number) => `${v.toFixed(1)}%`
+                        : (v: number) => {
+                            if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+                            if (Math.abs(v) >= 1) return v.toFixed(2);
+                            return v.toFixed(4).replace(/\.?0+$/, '');
+                        },
                 },
-                splitLine: {show: true, lineStyle: {color: isDark ? '#334155' : '#e5e7eb', type: 'dashed'}},
+                splitLine: {
+                    show: showGridLines && showYAxis,
+                    lineStyle: {
+                        color: isDark ? '#334155' : '#e5e7eb',
+                        type: 'dashed',
+                        opacity: compact && showMiniAxis ? 0.5 : 1,
+                    },
+                },
                 scale: true,
             },
             tooltip: compact ? undefined : {
@@ -331,7 +440,9 @@
                 formatter: (params: any) => {
                     const p = Array.isArray(params) ? params[0] : params;
                     const date = p.axisValue || p.name;
-                    const value = typeof p.value === 'object' ? p.value[1] : p.value;
+                    // Value may be in tuple format [index, value] or plain number
+                    const rawVal = p.value;
+                    const value = Array.isArray(rawVal) ? rawVal[1] : (typeof rawVal === 'object' && rawVal?.value !== undefined ? (Array.isArray(rawVal.value) ? rawVal.value[1] : rawVal.value) : rawVal);
                     const dataPoint = data.find(d => d.date === date);
                     const suffix = isPercentage ? '%' : '';
                     let html = `<strong>${date}</strong><br/>${currency} ${Number(value).toFixed(4)}${suffix}`;
@@ -347,40 +458,25 @@
             series,
         };
 
-        // Visual map for percentage mode: piecewise segment coloring by y-value
-        if (isPercentage && !compact) {
+        // Visual map for baseline coloring: piecewise segment coloring by y-value
+        if (useBaselineColoring) {
             (option as any).visualMap = {
                 show: false,
                 seriesIndex: 0,
                 type: 'piecewise',
-                dimension: 1,  // y-axis value (the data values)
+                dimension: 1,  // y-axis value — works because data is [index, value] tuples
                 pieces: [
-                    {lt: 0, color: redColor},
-                    {gte: 0, color: greenColor},
+                    {lt: baselineValue, color: redColor},
+                    {gte: baselineValue, color: greenColor},
                 ],
                 outOfRange: {color: greenColor},
             };
-        } else if (showGradient && !compact && !isPercentage) {
-            // Stale data gradient (absolute mode)
-            const pieces: any[] = [];
-            for (let i = 0; i < data.length - 1; i++) {
-                const opacity = getOpacity(data[i].staleDays);
-                pieces.push({
-                    gt: i, lte: i + 1,
-                    color: baseColor,
-                    opacity: opacity,
-                });
-            }
-            if (pieces.length > 0) {
-                (option as any).visualMap = {
-                    show: false,
-                    dimension: 0,
-                    pieces: pieces,
-                };
-            }
         }
 
         chartInstance.setOption(option, true);
+
+        // Emit chart ready API for MeasureOverlay coordinate mapping
+        emitChartReady();
     }
 </script>
 

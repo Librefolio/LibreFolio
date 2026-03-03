@@ -3,7 +3,7 @@
 
   Assembles: ChartToolbar + LineChart + DataZoomBar + MeasureOverlay
   Bidirectional zoom: LineChart ↔ DataZoomBar sync both ways.
-  MeasureOverlay: 3-click cycle with Y-coordinate mapping.
+  MeasureOverlay: always-on 3-click cycle with real coordinate mapping via ChartApi.
 
   Note: Range presets (1W, 1M, etc.) are handled by DateRangePicker outside of this component.
 -->
@@ -12,7 +12,7 @@
     import LineChart from './LineChart.svelte';
     import DataZoomBar from './DataZoomBar.svelte';
     import MeasureOverlay from './MeasureOverlay.svelte';
-    import type {LineDataPoint} from './LineChart.svelte';
+    import type {LineDataPoint, ChartApi} from './LineChart.svelte';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
 
     // =========================================================================
@@ -59,7 +59,7 @@
     let chartType: ChartType = $state('line');
     let viewMode: ViewMode = $state('absolute');
     let zoomRange: [number, number] = $state([0, 100]);
-    let measureMode = $state(false);
+    let chartApi: ChartApi | null = $state(null);
 
     // Sync from props when they change externally
     $effect(() => { chartType = initialChartType; });
@@ -97,34 +97,6 @@
     // Zoom data for DataZoomBar (always absolute for the overview)
     let zoomData = $derived(data.map(d => ({date: d.date, value: d.value})));
 
-    // Y-range for MeasureOverlay coordinate mapping
-    let yRange = $derived.by(() => {
-        if (displayData.length === 0) return null;
-        const values = displayData.map(d => d.value);
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-        // Add padding (same as ECharts scale: true)
-        const padding = (max - min) * 0.1 || 0.01;
-        return {min: min - padding, max: max + padding};
-    });
-
-    // Approximate chart grid bounds based on typical ECharts rendering
-    // These match the grid config in LineChart.svelte
-    let chartGridBounds = $derived.by(() => {
-        // Approximate based on LineChart grid config:
-        // {top: 35, right: 15, bottom: 35, left: 15, containLabel: true}
-        // With containLabel, the actual grid includes label widths.
-        // We estimate: left ~60px (Y-axis labels), right ~15px, top ~35px, bottom ~35px
-        return {
-            left: 60,
-            right: 15,
-            top: 35,
-            bottom: 35,
-            width: 0,  // Will be overridden — width not critical for % mapping
-            height: 0, // Same
-        };
-    });
-
     // =========================================================================
     // Handlers
     // =========================================================================
@@ -137,10 +109,6 @@
         viewMode = mode;
     }
 
-    function handleMeasureModeChange(enabled: boolean) {
-        measureMode = enabled;
-    }
-
     /** Called by DataZoomBar when user drags the slider */
     function handleZoomBarChange(start: number, end: number) {
         zoomRange = [start, end];
@@ -149,6 +117,10 @@
     /** Called by LineChart when user zooms with mouse wheel/drag */
     function handleChartZoomChange(start: number, end: number) {
         zoomRange = [start, end];
+    }
+
+    function handleChartReady(api: ChartApi) {
+        chartApi = api;
     }
 
     function handlePointClick(date: string, value: number) {
@@ -170,14 +142,12 @@
     <ChartToolbar
         {chartType}
         {viewMode}
-        {measureMode}
         onChartTypeChange={handleChartTypeChange}
         onViewModeChange={handleViewModeChange}
-        onMeasureModeChange={handleMeasureModeChange}
         disableCandlestick={true}
     />
 
-    <!-- Main Chart (with MeasureOverlay) -->
+    <!-- Main Chart (with MeasureOverlay always-on) -->
     <div class="relative">
         {#if chartType === 'line'}
             <LineChart
@@ -187,10 +157,12 @@
                 height={chartHeight}
                 showGradient={true}
                 areaFill={true}
+                colorByBaseline={true}
                 onPointClick={editMode ? handlePointClick : undefined}
                 {zoomRange}
                 onZoomChange={handleChartZoomChange}
                 viewMode={viewMode}
+                onChartReady={handleChartReady}
             />
         {:else}
             <!-- Candlestick stub -->
@@ -199,14 +171,13 @@
             </div>
         {/if}
 
-        <!-- MeasureOverlay (3-click cycle: start → complete → dismiss) -->
+        <!-- MeasureOverlay (always-on, 3-click cycle: start → complete → dismiss) -->
         <MeasureOverlay
-            enabled={measureMode}
+            enabled={true}
             data={displayData}
             {currency}
             viewMode={viewMode}
-            {chartGridBounds}
-            {yRange}
+            {chartApi}
         />
     </div>
 
