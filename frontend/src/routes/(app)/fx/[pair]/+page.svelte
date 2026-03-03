@@ -40,7 +40,7 @@
     let savingEdit = false;
     let editSection: FxEditSection;
 
-    // Date range (default 3M — same as list page)
+    // Date range (default 3M)
     let dateEnd = new Date().toISOString().slice(0, 10);
     let dateStart = (() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().slice(0, 10); })();
     let activePreset: any = '3M';
@@ -243,13 +243,13 @@
         editMode = false;
     }
 
-    async function handleAddProvider(event: CustomEvent<{providerCode: string; priority: number}>) {
+    async function handleAddProvider(detail: {providerCode: string; priority: number}) {
         try {
             await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post([{
                 base: data.base,
                 quote: data.quote,
-                provider_code: event.detail.providerCode,
-                priority: event.detail.priority,
+                provider_code: detail.providerCode,
+                priority: detail.priority,
             }]);
             await loadProviders();
         } catch (e: any) {
@@ -258,7 +258,7 @@
         }
     }
 
-    async function handleRemoveProvider(event: CustomEvent<{providerCode: string}>) {
+    async function handleRemoveProvider(detail: {providerCode: string}) {
         try {
             await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete([{
                 base: data.base,
@@ -267,6 +267,28 @@
             await loadProviders();
         } catch (e: any) {
             console.error('Failed to remove provider:', e);
+        }
+    }
+
+    async function handleSaveProviderOrder(reorderedProviders: Array<{providerCode: string; priority: number}>) {
+        try {
+            // Delete all existing pair sources, then recreate in new order
+            await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete([{
+                base: data.base,
+                quote: data.quote,
+            }]);
+            // Recreate with new priorities
+            const createItems = reorderedProviders.map(p => ({
+                base: data.base,
+                quote: data.quote,
+                provider_code: p.providerCode,
+                priority: p.priority,
+            }));
+            await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post(createItems);
+            await loadProviders();
+        } catch (e: any) {
+            console.error('Failed to save provider order:', e);
+            error = 'Failed to save provider order: ' + (e?.message || 'unknown error');
         }
     }
 </script>
@@ -428,10 +450,11 @@
     <!-- Provider Configuration -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4">
         <FxProviderConfig
-            {providers}
+            bind:providers
             {availableProviders}
-            on:addProvider={handleAddProvider}
-            on:removeProvider={handleRemoveProvider}
+            onSave={handleSaveProviderOrder}
+            onAddProvider={handleAddProvider}
+            onRemoveProvider={handleRemoveProvider}
         />
     </div>
 </div>

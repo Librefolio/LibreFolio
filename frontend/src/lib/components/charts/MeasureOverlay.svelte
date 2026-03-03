@@ -7,10 +7,16 @@
   The arrow follows the time axis (X). Y values are looked up from data.
   Arrow always points forward in time.
 
+  Uses ChartApi.dataToPixel() for accurate coordinate mapping when available,
+  falls back to percentage-based estimates otherwise.
+
+  When waiting for 1st click, pointer-events: none lets ECharts tooltip work.
+
   Usage: overlays on top of the chart container via absolute positioning.
 -->
 <script lang="ts">
     import {X} from 'lucide-svelte';
+    import type {ChartApi} from './LineChart.svelte';
 
     interface Props {
         /** Enable measure mode (always on when true — 3-click cycle) */
@@ -21,10 +27,8 @@
         currency?: string;
         /** View mode for suffix */
         viewMode?: 'absolute' | 'percentage';
-        /** ECharts grid bounds for mapping data→pixel coordinates */
-        chartGridBounds?: {left: number; right: number; top: number; bottom: number; width: number; height: number} | null;
-        /** Y-axis min/max for coordinate mapping */
-        yRange?: {min: number; max: number} | null;
+        /** ChartApi from LineChart for precise coordinate mapping */
+        chartApi?: ChartApi | null;
         /** Called when measure is dismissed */
         onDismiss?: () => void;
     }
@@ -34,8 +38,7 @@
         data = [],
         currency = '',
         viewMode = 'absolute',
-        chartGridBounds = null,
-        yRange = null,
+        chartApi = null,
         onDismiss,
     }: Props = $props();
 
@@ -48,28 +51,44 @@
     let hoveredIndex: number | null = $state(null);
     let containerEl: HTMLDivElement | undefined = $state(undefined);
 
+    // Phase: 'waiting' (no click yet), 'drawing' (after 1st click), 'complete' (after 2nd click)
+    let phase = $derived(
+        startIndex === null ? 'waiting' :
+        endIndex === null ? 'drawing' :
+        'complete'
+    );
+
     // =========================================================================
     // Coordinate helpers
     // =========================================================================
 
-    /** Map data index → X pixel percent within the container */
-    function indexToXPercent(idx: number): number {
-        if (data.length <= 1) return 50;
-        return (idx / (data.length - 1)) * 100;
-    }
+    /** Map data index + value → {xPct, yPct} as percentages of container */
+    function dataToPercent(idx: number, value: number): {xPct: number; yPct: number} {
+        if (!containerEl) return {xPct: 50, yPct: 50};
+        const containerRect = containerEl.getBoundingClientRect();
 
-    /** Map data value → Y pixel percent within the container (inverted: top=0%) */
-    function valueToYPercent(value: number): number {
-        if (!yRange || !chartGridBounds || !containerEl) return 50;
-        const {min, max} = yRange;
-        if (max === min) return 50;
-        // Map value to grid pixel position
-        const gridTop = chartGridBounds.top;
-        const gridBottom = chartGridBounds.top + chartGridBounds.height;
-        const yPixel = gridBottom - ((value - min) / (max - min)) * chartGridBounds.height;
-        // Convert to percentage of full container height
-        const containerHeight = containerEl.getBoundingClientRect().height;
-        return (yPixel / containerHeight) * 100;
+        // Try real coordinate mapping via ChartApi
+        if (chartApi) {
+            const pixel = chartApi.dataToPixel(idx, value);
+            if (pixel) {
+                return {
+                    xPct: (pixel.x / containerRect.width) * 100,
+                    yPct: (pixel.y / containerRect.height) * 100,
+                };
+            }
+        }
+
+        // Fallback: simple percentage-based estimate
+        const xPct = data.length <= 1 ? 50 : (idx / (data.length - 1)) * 100;
+        // For Y we need min/max range estimate
+        const values = data.map(d => d.value);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min || 0.01;
+        const padding = range * 0.1;
+        const yNorm = (value - (min - padding)) / (range + 2 * padding);
+        const yPct = (1 - yNorm) * 100; // inverted (top=0%)
+        return {xPct, yPct};
     }
 
     // =========================================================================
@@ -98,6 +117,9 @@
         const endDate = new Date(endPoint.date + 'T00:00:00');
         const days = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
+        const startCoord = dataToPercent(lo, startPoint.value);
+        const endCoord = dataToPercent(hi, endPoint.value);
+
         return {
             startDate: startPoint.date,
             endDate: endPoint.date,
@@ -106,10 +128,10 @@
             deltaAbs,
             deltaPct,
             days,
-            startXPct: indexToXPercent(lo),
-            endXPct: indexToXPercent(hi),
-            startYPct: valueToYPercent(startPoint.value),
-            endYPct: valueToYPercent(endPoint.value),
+            startXPct: startCoord.xPct,
+            endXPct: endCoord.xPct,
+            startYPct: startCoord.yPct,
+            endYPct: endCoord.yPct,
             isPositive: deltaAbs >= 0,
         };
     });
@@ -171,7 +193,8 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
         bind:this={containerEl}
-        class="absolute inset-0 z-20 {endIndex !== null ? 'cursor-pointer' : startIndex !== null ? 'cursor-crosshair' : 'cursor-crosshair'}"
+        class="absolute inset-0 z-20"
+        style="pointer-events: {phase === 'waiting' ? 'none' : 'auto'}; cursor: {phase === 'complete' ? 'pointer' : 'crosshair'};"
         onclick={handleClick}
         onmousemove={handleMouseMove}
     >

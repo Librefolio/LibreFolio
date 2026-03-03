@@ -40,7 +40,8 @@
     "discard": "Abandonner",
     "refresh": "Actualiser",
     "restore": "Restaurer l'original",
-    "type": "Type"
+    "type": "Type",
+    "retry": "Réessayer"
   },
   "table": {
     "rowsPerPage": "Lignes par page",
@@ -300,7 +301,25 @@
     "title": "Taux de Change",
     "subtitle": "Consultez et synchronisez les taux de change",
     "syncRates": "Synchroniser les Taux",
-    "placeholderMessage": "La gestion des taux de change sera bientôt disponible."
+    "placeholderMessage": "La gestion des taux de change sera bientôt disponible.",
+    "actions": {
+      "syncAll": "Sync. Tout",
+      "refreshAll": "Actualiser Tout",
+      "settings": "Paramètres",
+      "addPair": "Ajouter Paire"
+    },
+    "empty": {
+      "noPairsTitle": "Aucune Paire FX Configurée",
+      "noPairsDesc": "Ajoutez votre première paire de devises pour commencer à suivre les taux de change.",
+      "addFirstPair": "Ajouter la Première Paire",
+      "noMatchesTitle": "Aucun Résultat",
+      "noMatchesDesc": "Aucune paire ne correspond au filtre actuel."
+    },
+    "filter": {
+      "filterCurrency": "Filtrer devise",
+      "secondCurrency": "Deuxième devise",
+      "allCurrencies": "Toutes les devises"
+    }
   },
   "settings": {
     "profile": "Profil",
@@ -546,7 +565,8 @@
       "th": "Je",
       "fr": "Ve",
       "sa": "Sa",
-      "su": "Di"
+      "su": "Di",
+      "we": "Me"
     },
     "months": {
       "january": "Janvier",
@@ -567,7 +587,9 @@
       "weeks": "Semaines",
       "months": "Mois",
       "years": "Années"
-    }
+    },
+    "info": "Les fenêtres prédéfinies vont toujours de N jours/semaines/mois/années avant aujourd'hui à aujourd'hui. Pour un intervalle personnalisé, utilisez le calendrier ci-dessous.",
+    "today": "Aujourd'hui"
   },
   " datePicker": {
     "weekdays": {
