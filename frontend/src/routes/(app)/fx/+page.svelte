@@ -7,9 +7,10 @@
      * global abs/% slider toggle, Sync All, Refresh All, Add Pair.
      */
     import {onMount} from 'svelte';
+    import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {Coins, Plus, RefreshCw, RotateCcw} from 'lucide-svelte';
+    import {Coins, Plus, RefreshCw, RotateCcw, Settings} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
@@ -44,8 +45,8 @@
     // Filters
     let filterCurrency1 = '';
     let filterCurrency2 = '';
-    let dateStart = '';
-    let dateEnd = '';
+    let dateStart = (() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().slice(0, 10); })();
+    let dateEnd = new Date().toISOString().slice(0, 10);
     let activePreset: any = '3M';
     let globalViewMode: 'absolute' | 'percentage' = 'absolute';
 
@@ -67,18 +68,6 @@
     // Derived
     // =========================================================================
 
-    // Default date range: last 3 months
-    $: {
-        if (!dateEnd) {
-            const now = new Date();
-            dateEnd = now.toISOString().slice(0, 10);
-        }
-        if (!dateStart) {
-            const d = new Date();
-            d.setMonth(d.getMonth() - 3);
-            dateStart = d.toISOString().slice(0, 10);
-        }
-    }
 
     // Filtered pairs
     $: filteredPairs = pairs.filter(p => {
@@ -235,9 +224,9 @@
     }
 
     function handleEditPair(event: CustomEvent<{base: string; quote: string; slug: string}>) {
-        // Navigate to detail page
+        // Navigate to detail page via client-side routing
         const {slug} = event.detail;
-        window.location.href = `/fx/${slug}`;
+        goto(`/fx/${slug}`);
     }
 
     function handleDeletePair(event: CustomEvent<{base: string; quote: string; slug: string}>) {
@@ -323,89 +312,104 @@
 </script>
 
 <div class="space-y-6">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <!-- Header: Title left, + Add Pair right -->
+    <div class="flex items-center justify-between">
         <div>
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">{$_('fx.title')}</h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
-            <button
-                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300 transition-colors"
-                on:click={handleSyncAll}
-            >
-                <RotateCcw size={15} />
-                Sync All
-            </button>
-            <button
-                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300 transition-colors"
-                on:click={handleRefreshAll}
-            >
-                <RefreshCw size={15} />
-                Refresh All
-            </button>
-            <button
-                class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                on:click={handleAddPair}
-            >
-                <Plus size={15} />
-                Add Pair
-            </button>
-        </div>
+        <button
+            class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
+            onclick={handleAddPair}
+        >
+            <Plus size={16} />
+            {$_('fx.actions.addPair')}
+        </button>
     </div>
 
-    <!-- Filter Bar -->
-    <div class="flex flex-col gap-2 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
-        <!-- Row 1: Presets (above the date/currency fields) -->
-        <DateRangePicker
-            bind:start={dateStart}
-            bind:end={dateEnd}
-            bind:activePreset
-            compact={true}
-            showDateFields={false}
-            onchange={handleDateRangeChange}
-        />
+    <!-- Filter Bar: 3-column grid on desktop (left|center|right), stacked centered on mobile -->
+    <div class="grid grid-cols-1 lg:grid-cols-[auto_1fr_auto] items-center gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
+        <!-- Section 1: DateRangePicker — left on desktop, centered on mobile -->
+        <div class="flex justify-center lg:justify-start">
+            <DateRangePicker
+                bind:start={dateStart}
+                bind:end={dateEnd}
+                bind:activePreset
+                compact={true}
+                onchange={handleDateRangeChange}
+            />
+        </div>
 
-        <!-- Row 2: Currency filters + Date From/To on the same row -->
-        <div class="flex flex-col sm:flex-row items-start sm:items-end gap-3">
-            <!-- Currency filter -->
-            <div class="w-full sm:w-44">
-                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Filter Currency</span>
-                <SearchSelect
-                    bind:value={filterCurrency1}
-                    options={currencyOptions}
-                    placeholder="All currencies"
-                    loading={currenciesLoading}
-                    maxVisibleItems={6}
-                    onchange={(v) => { filterCurrency1 = v; filterCurrency2 = ''; }}
-                />
-            </div>
-
-            <!-- Second currency (appears when first is set) -->
-            {#if filterCurrency1}
-                <div class="w-full sm:w-44">
-                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Second Currency</span>
+        <!-- Section 2: Currency filters — centered always, side by side -->
+        <div class="flex justify-center">
+            <div class="flex flex-row items-center gap-2">
+                <div class="w-40">
                     <SearchSelect
-                        bind:value={filterCurrency2}
+                        bind:value={filterCurrency1}
                         options={currencyOptions}
-                        placeholder="Any"
+                        placeholder={$_('fx.filter.filterCurrency')}
                         loading={currenciesLoading}
                         maxVisibleItems={6}
+                        onchange={(v) => { filterCurrency1 = v; filterCurrency2 = ''; }}
                     />
                 </div>
-            {/if}
+                {#if filterCurrency1}
+                    <div class="w-40">
+                        <SearchSelect
+                            bind:value={filterCurrency2}
+                            options={currencyOptions}
+                            placeholder={$_('fx.filter.secondCurrency')}
+                            loading={currenciesLoading}
+                            maxVisibleItems={6}
+                        />
+                    </div>
+                {/if}
+            </div>
+        </div>
 
-            <!-- Date Range (From/To fields only, no presets) -->
-            <div class="flex-1 min-w-0">
-                <DateRangePicker
-                    bind:start={dateStart}
-                    bind:end={dateEnd}
-                    bind:activePreset
-                    compact={true}
-                    showPresets={false}
-                    showCustomWindow={false}
-                    onchange={handleDateRangeChange}
-                />
+        <!-- Section 3: Actions — right on desktop, centered on mobile -->
+        <div class="flex justify-center lg:justify-end">
+            <div class="grid grid-cols-2 gap-1.5">
+                <!-- Row 1: Abs/% toggle + Settings gear -->
+                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden w-full">
+                    <button
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute'
+                            ? 'bg-libre-green text-white'
+                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => { globalViewMode = 'absolute'; }}
+                    >Abs</button>
+                    <button
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage'
+                            ? 'bg-libre-green text-white'
+                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => { globalViewMode = 'percentage'; }}
+                    >%</button>
+                </div>
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    title={$_('fx.actions.settings')}
+                >
+                    <Settings size={14} />
+                    <span class="hidden xl:inline">{$_('fx.actions.settings')}</span>
+                </button>
+
+                <!-- Row 2: Sync All + Refresh All -->
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={handleSyncAll}
+                    title={$_('fx.actions.syncAll')}
+                >
+                    <RotateCcw size={14} />
+                    <span class="hidden xl:inline">{$_('fx.actions.syncAll')}</span>
+                </button>
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    onclick={handleRefreshAll}
+                    title={$_('fx.actions.refreshAll')}
+                >
+                    <RefreshCw size={14} />
+                    <span class="hidden xl:inline">{$_('fx.actions.refreshAll')}</span>
+                </button>
             </div>
         </div>
     </div>
@@ -426,9 +430,9 @@
             <p class="text-red-600 dark:text-red-400">{error}</p>
             <button
                 class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                on:click={loadPairSources}
+                onclick={loadPairSources}
             >
-                Retry
+                {$_('common.retry')}
             </button>
         </div>
     {:else if filteredPairs.length === 0}
@@ -437,18 +441,18 @@
                 <Coins class="text-amber-600 dark:text-amber-400" size={32}/>
             </div>
             {#if pairs.length === 0}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">No FX Pairs Configured</h3>
-                <p class="text-gray-500 dark:text-gray-400 mb-4">Add your first currency pair to start tracking exchange rates.</p>
+                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('fx.empty.noPairsTitle')}</h3>
+                <p class="text-gray-500 dark:text-gray-400 mb-4">{$_('fx.empty.noPairsDesc')}</p>
                 <button
                     class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
-                    on:click={handleAddPair}
+                    onclick={handleAddPair}
                 >
                     <Plus size={16} class="inline mr-1" />
-                    Add First Pair
+                    {$_('fx.empty.addFirstPair')}
                 </button>
             {:else}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">No Matches</h3>
-                <p class="text-gray-500 dark:text-gray-400">No pairs match the current filter.</p>
+                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('fx.empty.noMatchesTitle')}</h3>
+                <p class="text-gray-500 dark:text-gray-400">{$_('fx.empty.noMatchesDesc')}</p>
             {/if}
         </div>
     {:else}
@@ -461,6 +465,7 @@
                     slug={pair.config.slug}
                     data={pair.data}
                     loading={pair.loading}
+                    {globalViewMode}
                     on:edit={handleEditPair}
                     on:delete={handleDeletePair}
                     on:refresh={handleRefreshPair}

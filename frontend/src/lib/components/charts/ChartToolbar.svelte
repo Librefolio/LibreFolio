@@ -1,9 +1,8 @@
 <!--
-  ChartToolbar — Toolbar for chart type, view mode, and measure mode selection.
+  ChartToolbar — Toolbar for chart type and view mode selection.
+  Note: Measure mode is always-on (3-click cycle), no toggle button needed.
 -->
 <script lang="ts">
-    import {Ruler} from 'lucide-svelte';
-
     // =========================================================================
     // Types
     // =========================================================================
@@ -14,10 +13,8 @@
     interface Props {
         chartType?: ChartType;
         viewMode?: ViewMode;
-        measureMode?: boolean;
         onChartTypeChange?: (type: ChartType) => void;
         onViewModeChange?: (mode: ViewMode) => void;
-        onMeasureModeChange?: (enabled: boolean) => void;
         /** Disable candlestick option (e.g., when stub not yet implemented) */
         disableCandlestick?: boolean;
     }
@@ -25,10 +22,8 @@
     let {
         chartType = 'line',
         viewMode = 'absolute',
-        measureMode = false,
         onChartTypeChange,
         onViewModeChange,
-        onMeasureModeChange,
         disableCandlestick = false,
     }: Props = $props();
 </script>
@@ -79,21 +74,4 @@
             %
         </button>
     </div>
-
-    <!-- Divider -->
-    <div class="w-px h-6 bg-gray-200 dark:bg-slate-600 hidden sm:block"></div>
-
-    <!-- Measure Mode Toggle -->
-    <button
-        class="flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-colors
-            {measureMode
-                ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
-                : 'border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-        onclick={() => onMeasureModeChange?.(!measureMode)}
-        title="Measure trend (click two points)"
-    >
-        <Ruler size={14} />
-        <span class="hidden sm:inline">Measure</span>
-    </button>
 </div>
-

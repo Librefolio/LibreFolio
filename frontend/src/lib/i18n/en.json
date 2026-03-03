@@ -40,7 +40,8 @@
     "discard": "Discard",
     "refresh": "Refresh",
     "restore": "Restore original",
-    "type": "Type"
+    "type": "Type",
+    "retry": "Retry"
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -300,7 +301,25 @@
     "title": "FX Rates",
     "subtitle": "View and sync exchange rates",
     "syncRates": "Sync Rates",
-    "placeholderMessage": "FX rate management will be available soon."
+    "placeholderMessage": "FX rate management will be available soon.",
+    "actions": {
+      "syncAll": "Sync All",
+      "refreshAll": "Refresh All",
+      "settings": "Settings",
+      "addPair": "Add Pair"
+    },
+    "empty": {
+      "noPairsTitle": "No FX Pairs Configured",
+      "noPairsDesc": "Add your first currency pair to start tracking exchange rates.",
+      "addFirstPair": "Add First Pair",
+      "noMatchesTitle": "No Matches",
+      "noMatchesDesc": "No pairs match the current filter."
+    },
+    "filter": {
+      "filterCurrency": "Filter currency",
+      "secondCurrency": "Second currency",
+      "allCurrencies": "All currencies"
+    }
   },
   "settings": {
     "profile": "Profile",
@@ -546,7 +565,8 @@
       "th": "Th",
       "fr": "Fr",
       "sa": "Sa",
-      "su": "Su"
+      "su": "Su",
+      "we": "We"
     },
     "months": {
       "january": "January",
@@ -567,7 +587,9 @@
       "weeks": "Weeks",
       "months": "Months",
       "years": "Years"
-    }
+    },
+    "info": "Preset windows always go from N days/weeks/months/years before today to today. For a custom date range, use the calendar picker below.",
+    "today": "Today"
   },
   " datePicker": {
     "weekdays": {
