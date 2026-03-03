@@ -119,7 +119,6 @@ from backend.app.schemas.fx import (
     FXDeletePairSourceItem,
     FXDeletePairSourceResult,
     FXDeletePairSourcesResponse,
-    FXCurrenciesResponse,
     )
 from backend.app.schemas.prices import (
     FAUpsert,
@@ -279,7 +278,6 @@ __all__ = [
     "FXDeletePairSourceItem",
     "FXDeletePairSourceResult",
     "FXDeletePairSourcesResponse",
-    "FXCurrenciesResponse",
     # BRIM (Broker Report Import Manager)
     "FAKE_ASSET_ID_BASE",
     "is_fake_asset_id",

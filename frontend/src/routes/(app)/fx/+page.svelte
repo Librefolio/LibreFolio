@@ -16,8 +16,7 @@
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
-    import {SearchSelect} from '$lib/components/ui/select';
-    import type {SelectOption} from '$lib/components/ui/select/types';
+    import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {
         createPairSlug, getFxStore, invalidateAllFxStores, removeFxStore,
         apiResultToFxDataPoint,
@@ -50,9 +49,6 @@
     let activePreset: any = '3M';
     let globalViewMode: 'absolute' | 'percentage' = 'absolute';
 
-    // Currency options for SearchSelect
-    let currencyOptions: SelectOption[] = [];
-    let currenciesLoading = true;
 
     // Delete
     let deleteDialogOpen = false;
@@ -85,29 +81,13 @@
     // =========================================================================
 
     onMount(async () => {
-        await Promise.all([loadPairSources(), loadCurrencies()]);
+        await loadPairSources();
     });
 
     // =========================================================================
     // Data Loading
     // =========================================================================
 
-    async function loadCurrencies() {
-        currenciesLoading = true;
-        try {
-            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
-            currencyOptions = [{value: '', label: 'All currencies', icon: '💱'}, ...(response.items ?? []).map((c: any) => ({
-                value: c.code,
-                label: `${c.code} — ${c.name}`,
-                icon: c.symbol !== c.code ? c.symbol : undefined,
-                searchText: `${c.code} ${c.name}`,
-            }))];
-        } catch (e) {
-            console.error('Failed to load currencies:', e);
-        } finally {
-            currenciesLoading = false;
-        }
-    }
 
     async function loadPairSources() {
         loading = true;
@@ -344,22 +324,20 @@
         <div class="flex justify-center">
             <div class="flex flex-row items-center gap-2">
                 <div class="w-40">
-                    <SearchSelect
+                    <CurrencySearchSelect
                         bind:value={filterCurrency1}
-                        options={currencyOptions}
+                        includeAll={true}
                         placeholder={$_('fx.filter.filterCurrency')}
-                        loading={currenciesLoading}
                         maxVisibleItems={6}
                         onchange={(v) => { filterCurrency1 = v; filterCurrency2 = ''; }}
                     />
                 </div>
                 {#if filterCurrency1}
                     <div class="w-40">
-                        <SearchSelect
+                        <CurrencySearchSelect
                             bind:value={filterCurrency2}
-                            options={currencyOptions}
+                            includeAll={true}
                             placeholder={$_('fx.filter.secondCurrency')}
-                            loading={currenciesLoading}
                             maxVisibleItems={6}
                         />
                     </div>
@@ -490,8 +468,8 @@
 <!-- Add Pair Modal -->
 <FxPairAddModal
     bind:open={addModalOpen}
-    on:created={handlePairCreated}
-    on:close={() => addModalOpen = false}
+    oncreated={handlePairCreated}
+    onclose={() => addModalOpen = false}
 />
 
 <!-- Sync Modal -->

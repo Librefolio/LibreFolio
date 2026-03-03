@@ -41,7 +41,8 @@
     "refresh": "Refresh",
     "restore": "Restore original",
     "type": "Type",
-    "retry": "Retry"
+    "retry": "Retry",
+    "saving": "Saving..."
   },
   "table": {
     "rowsPerPage": "Rows per page",
@@ -319,6 +320,21 @@
       "filterCurrency": "Filter currency",
       "secondCurrency": "Second currency",
       "allCurrencies": "All currencies"
+    },
+    "addPair": {
+      "title": "Add New Currency Pair",
+      "baseCurrency": "Base Currency",
+      "quoteCurrency": "Quote Currency",
+      "providerPriority": "Provider Priority",
+      "addProvider": "Add Provider",
+      "providerDisabledHint": "Select both currencies first",
+      "providerIncompatible": "This provider doesn't support this pair",
+      "intermediateRouteComingSoon": "Intermediate conversion routes — Coming Soon",
+      "saveConfiguration": "Save Configuration"
+    },
+    "provider": {
+      "primary": "Primary",
+      "fallback": "Fallback"
     }
   },
   "settings": {

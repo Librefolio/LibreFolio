@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.4.27-3-gdc4c25b-dirty"
+    "version": "v0.4.27-4-g1b5abd7-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -873,19 +873,52 @@
           "FX Providers"
         ],
         "summary": "List Providers",
-        "description": "Get the list of all available FX rate providers.\n\nReturns information about each provider including:\n- Provider code and name\n- Default base currency\n- All supported base currencies (for multi-base providers)\n- Description\n- Icon URL\n\nReturns:\n    List of provider information",
+        "description": "Get the list of available FX rate providers.\n\nReturns information about each provider including:\n- Provider code and name\n- Default base currency\n- All supported base currencies (for multi-base providers)\n- All target currencies (from get_supported_currencies)\n- Description and icon URL\n\nNote: This endpoint absorbed the former GET /fx/currencies endpoint.\nTarget currencies are now returned per-provider instead of a separate call.\n\nInstalled providers: BOE, FED, ECB, SNB\n\nUse the `providers` query parameter to filter by specific provider codes.",
         "operationId": "list_providers_api_v1_fx_providers_get",
+        "parameters": [
+          {
+            "name": "providers",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional list of provider codes to filter. If empty, returns all providers.",
+              "title": "Providers"
+            },
+            "description": "Optional list of provider codes to filter. If empty, returns all providers."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/FXProviderInfo"
                   },
-                  "type": "array",
                   "title": "Response List Providers Api V1 Fx Providers Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -989,53 +1022,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FXDeletePairSourcesResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/fx/currencies": {
-      "get": {
-        "tags": [
-          "FX (Forex)",
-          "FX Currencies"
-        ],
-        "summary": "List Currencies",
-        "description": "Get the list of available currencies from specified provider.\n\nArgs:\n    provider: Provider code (default: ECB)\n\nReturns:\n    List of ISO 4217 currency codes",
-        "operationId": "list_currencies_api_v1_fx_currencies_get",
-        "parameters": [
-          {
-            "name": "provider",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Provider code (ECB, FED, BOE, SNB)",
-              "default": "ECB",
-              "title": "Provider"
-            },
-            "description": "Provider code (ECB, FED, BOE, SNB)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FXCurrenciesResponse"
                 }
               }
             }
@@ -8427,22 +8413,6 @@
         "title": "FXCreatePairSourcesResponse",
         "description": "Response model for bulk pair source creation."
       },
-      "FXCurrenciesResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Items",
-            "description": "List of items"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "FXCurrenciesResponse",
-        "description": "Response model for available currencies list."
-      },
       "FXDeleteItem": {
         "properties": {
           "from": {
@@ -8804,6 +8774,14 @@
             "type": "array",
             "title": "Base Currencies",
             "description": "All supported base currencies"
+          },
+          "target_currencies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Target Currencies",
+            "description": "All target currencies this provider can convert to (from get_supported_currencies)"
           },
           "description": {
             "type": "string",

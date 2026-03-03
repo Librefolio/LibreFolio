@@ -61,7 +61,9 @@ class FXProviderInfo(BaseModel):
     code: str = Field(..., description="Provider code (e.g., ECB, FED, BOE, SNB)")
     name: str = Field(..., description="Provider full name")
     base_currency: str = Field(..., description="Default base currency")
+    # TODO: deprecate base_currency in favor of base_currencies
     base_currencies: list[str] = Field(..., description="All supported base currencies")
+    target_currencies: list[str] = Field(default_factory=list,description="All target currencies this provider can convert to (from get_supported_currencies)")
     description: str = Field(..., description="Provider description")
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
 
@@ -343,11 +345,5 @@ class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResul
     pass
 
 
-# ============================================================================
-# CURRENCY LIST MODELS
-# ============================================================================
-
-
-class FXCurrenciesResponse(BaseListResponse[str]):
-    """Response model for available currencies list."""
-    pass
+# NOTE: FXCurrenciesResponse was removed — GET /fx/currencies endpoint absorbed by
+# GET /fx/providers which now includes target_currencies per provider.
