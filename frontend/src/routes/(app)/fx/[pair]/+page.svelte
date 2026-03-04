@@ -261,35 +261,82 @@
 
     async function handleRemoveProvider(detail: {providerCode: string}) {
         try {
-            await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete([{
-                base: data.base,
-                quote: data.quote,
-            }]);
+            // Differential approach: load current state, compute diff, apply minimal changes
+            await applyProviderDiff(
+                providers.filter(p => p.providerCode !== detail.providerCode)
+            );
             await loadProviders();
         } catch (e: any) {
             console.error('Failed to remove provider:', e);
+            error = 'Failed to remove provider: ' + (e?.message || 'unknown error');
         }
     }
 
     async function handleSaveProviderOrder(reorderedProviders: Array<{providerCode: string; priority: number}>) {
         try {
-            // Delete all existing pair sources, then recreate in new order
-            await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete([{
-                base: data.base,
-                quote: data.quote,
-            }]);
-            // Recreate with new priorities
-            const createItems = reorderedProviders.map(p => ({
+            // Differential approach: load current state, compute diff, apply minimal changes
+            await applyProviderDiff(reorderedProviders);
+            await loadProviders();
+        } catch (e: any) {
+            console.error('Failed to save provider order:', e);
+            error = 'Failed to save provider order: ' + (e?.message || 'unknown error');
+        }
+    }
+
+    /**
+     * Apply a differential update to pair sources for the current pair.
+     *
+     * Strategy (safe — no "delete all", no data loss on connection failure):
+     * 1. POST desired state (backend upserts on base+quote+priority key:
+     *    creates missing priorities, updates provider_code on existing ones)
+     * 2. GET fresh state from backend (source of truth after upsert)
+     * 3. DELETE entries that don't match the desired configuration
+     *
+     * Order: POST first (never lose data), GET fresh, DELETE stale.
+     */
+    async function applyProviderDiff(desired: Array<{providerCode: string; priority: number}>) {
+        // Normalize desired with sequential priorities (1-based)
+        const desiredNormalized = desired.map((p, idx) => ({
+            providerCode: p.providerCode,
+            priority: idx + 1,
+        }));
+
+        // Step 1: POST all desired entries — backend upserts (create or update provider_code)
+        // This is always safe: it only adds or modifies, never removes.
+        if (desiredNormalized.length > 0) {
+            const upsertItems = desiredNormalized.map(p => ({
                 base: data.base,
                 quote: data.quote,
                 provider_code: p.providerCode,
                 priority: p.priority,
             }));
-            await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post(createItems);
-            await loadProviders();
-        } catch (e: any) {
-            console.error('Failed to save provider order:', e);
-            error = 'Failed to save provider order: ' + (e?.message || 'unknown error');
+            await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post(upsertItems);
+        }
+
+        // Step 2: GET fresh state from backend (after upsert — this is the real state now)
+        const freshResp = await zodiosApi.list_pair_sources_api_v1_fx_providers_pair_sources_get();
+        const freshForPair = (freshResp.items ?? []).filter(
+            (s: any) => s.base === data.base && s.quote === data.quote
+        );
+
+        // Step 3: DELETE entries that are NOT in the desired list
+        // Build a set of desired "provider@priority" keys for fast lookup
+        const desiredKeys = new Set(
+            desiredNormalized.map(p => `${p.providerCode}@${p.priority}`)
+        );
+
+        const toDelete = freshForPair.filter(
+            (s: any) => !desiredKeys.has(`${s.provider_code}@${s.priority}`)
+        );
+
+        if (toDelete.length > 0) {
+            await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete(
+                toDelete.map((s: any) => ({
+                    base: data.base,
+                    quote: data.quote,
+                    priority: s.priority,
+                }))
+            );
         }
     }
 </script>

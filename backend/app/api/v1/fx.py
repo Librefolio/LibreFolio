@@ -471,9 +471,9 @@ async def delete_rates_endpoint(
     errors = []
     total_deleted = 0
 
-    # Prepare deletions for bulk service call
+    # Separate "delete_all" requests from date-range requests
     bulk_deletions = []
-    deletion_metadata = []  # Track original request info for response
+    deletion_metadata = []
 
     for idx, delete_req in enumerate(deletions):
         from_cur = delete_req.from_currency.upper()
@@ -485,22 +485,61 @@ async def delete_rates_endpoint(
             errors.append(error_msg)
             continue
 
-        # Extract dates from DateRangeModel
-        start_date = delete_req.date_range.start
-        end_date = delete_req.date_range.end
+        # Normalize to alphabetical order
+        if from_cur > to_cur:
+            base, quote = to_cur, from_cur
+        else:
+            base, quote = from_cur, to_cur
 
-        # Add to bulk deletions (backend will normalize)
-        bulk_deletions.append((from_cur, to_cur, start_date, end_date))
+        if delete_req.delete_all:
+            # Delete ALL rates for this pair (no date filter)
+            try:
+                # Count existing
+                count_stmt = select(FxRate).where(
+                    FxRate.base == base, FxRate.quote == quote
+                    )
+                count_result = await session.execute(count_stmt)
+                existing_count = len(count_result.scalars().all())
 
-        deletion_metadata.append(
-            {
-                "original_idx": idx,
-                "from_currency": from_cur,
-                "to_currency": to_cur,
-                "start_date": start_date,
-                "end_date": end_date,
-                }
-            )
+                # Delete all
+                del_stmt = sql_delete(FxRate).where(
+                    FxRate.base == base, FxRate.quote == quote
+                    )
+                del_result = await session.execute(del_stmt)
+                deleted_count = del_result.rowcount
+                await session.commit()
+
+                message = None if deleted_count > 0 else f"No rates found for {base}/{quote}"
+
+                results.append(
+                    FXDeleteResult(
+                        success=True,
+                        base=base,
+                        quote=quote,
+                        date_range=DateRangeModel(start=date.today()),  # placeholder
+                        existing_count=existing_count,
+                        deleted_count=deleted_count,
+                        message=message,
+                        )
+                    )
+                total_deleted += deleted_count
+            except Exception as e:
+                errors.append(f"Delete all for {base}/{quote} failed: {str(e)}")
+        else:
+            # Date-range deletion — collect for bulk service call
+            start_date = delete_req.date_range.start
+            end_date = delete_req.date_range.end
+
+            bulk_deletions.append((from_cur, to_cur, start_date, end_date))
+            deletion_metadata.append(
+                {
+                    "original_idx": idx,
+                    "from_currency": from_cur,
+                    "to_currency": to_cur,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    }
+                )
 
     # Execute bulk deletions if any valid
     if bulk_deletions:

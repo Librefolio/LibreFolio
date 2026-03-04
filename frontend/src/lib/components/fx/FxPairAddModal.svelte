@@ -16,7 +16,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {Trash2, Lock, X, ArrowDown, ArrowRight, Info} from 'lucide-svelte';
+    import {Trash2, Lock, X, ArrowDown, ArrowRight, Info, RotateCcw} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {ConfirmModal} from '$lib/components/table';
@@ -29,12 +29,17 @@
 
     interface Props {
         open?: boolean;
-        oncreated?: () => void;
+        /** Current date range for auto-sync after creation */
+        dateStart?: string;
+        dateEnd?: string;
+        oncreated?: (detail: {base: string; quote: string; hasRealProvider: boolean}) => void;
         onclose?: () => void;
     }
 
     let {
         open = $bindable(false),
+        dateStart = '',
+        dateEnd = '',
         oncreated,
         onclose,
     }: Props = $props();
@@ -47,6 +52,7 @@
     let quoteCurrency = $state('');
     let providerEntries = $state<ProviderEntry[]>([]);
     let saving = $state(false);
+    let syncing = $state(false);
     let error = $state<string | null>(null);
 
     // Provider select (for auto-add)
@@ -159,7 +165,29 @@
                     priority: 999,
                 }]);
             }
-            oncreated?.();
+            // Auto-sync if real providers exist (not MANUAL-only)
+            const hasRealProvider = providerEntries.length > 0;
+            if (hasRealProvider && dateStart && dateEnd) {
+                syncing = true;
+                try {
+                    await zodiosApi.sync_rates_api_v1_fx_currencies_sync_get({
+                        queries: {
+                            start: dateStart,
+                            end: dateEnd,
+                            currencies: `${base},${quote}`,
+                        }
+                    });
+                } catch (e) {
+                    console.warn('Auto-sync after pair creation failed:', e);
+                } finally {
+                    syncing = false;
+                }
+            }
+
+            oncreated?.({
+                base, quote,
+                hasRealProvider,
+            });
             resetAndClose();
         } catch (e: any) {
             const detail = e?.response?.data?.detail;
@@ -235,7 +263,6 @@
                         <CurrencySearchSelect
                             bind:value={baseCurrency}
                             placeholder={$_('fx.addPair.baseCurrency')}
-                            compact={true}
                         />
                     </div>
                     <!-- Arrow: → on desktop, ↓ on mobile -->
@@ -250,7 +277,6 @@
                         <CurrencySearchSelect
                             bind:value={quoteCurrency}
                             placeholder={$_('fx.addPair.quoteCurrency')}
-                            compact={true}
                         />
                     </div>
                 </div>
@@ -371,17 +397,24 @@
                 type="button"
                 class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
                 onclick={handleClose}
-                disabled={saving}
+                disabled={saving || syncing}
             >
                 {$_('common.cancel')}
             </button>
             <button
                 type="button"
-                class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                 onclick={handleSave}
-                disabled={!isValid || saving}
+                disabled={!isValid || saving || syncing}
             >
-                {saving ? $_('common.saving') : $_('fx.addPair.saveConfiguration')}
+                {#if syncing}
+                    <RotateCcw size={14} class="animate-spin" />
+                    {$_('fx.actions.syncing')}
+                {:else if saving}
+                    {$_('common.saving')}
+                {:else}
+                    {$_('fx.addPair.saveConfiguration')}
+                {/if}
             </button>
         </div>
     </div>

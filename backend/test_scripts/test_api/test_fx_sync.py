@@ -21,6 +21,7 @@ from backend.app.schemas.fx import (
     FXConversionRequest,
     FXConvertResponse,
     FXPairSourceItem,
+    FXDeletePairSourceItem,
     FXCreatePairSourcesResponse,
     FXPairSourcesResponse,
     DateRangeModel,
@@ -169,28 +170,40 @@ async def test_sync_auto_config_no_pairs(test_server):
     print_section("Test 3: GET /fx/currencies/sync - Auto-config no pairs")
 
     async with httpx.AsyncClient() as client:
-        # Step 1: Ensure no pair sources configured (delete all)
+        # Step 1: Ensure no pair sources configured (delete all pairs entirely)
+        # Use priority=None to delete entire pair config (avoids MANUAL auto-reinstatement)
         list_resp = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
         existing_sources = FXPairSourcesResponse(**list_resp.json())
 
         if len(existing_sources.items) > 0:
-            # Delete all existing pair sources
+            # Collect unique pairs and delete them entirely (no priority = full pair delete)
+            unique_pairs = set()
             for source in existing_sources.items:
-                delete_items = [
-                    FXPairSourceItem(
-                        base=source.base,
-                        quote=source.quote,
-                        provider_code=source.provider_code,
-                        priority=source.priority,
-                        )
-                    ]
-                await client.request(
-                    "DELETE",
-                    f"{API_BASE}/fx/providers/pair-sources",
-                    json=[s.model_dump(mode="json") for s in delete_items],
-                    timeout=TIMEOUT,
+                b, q = source.base, source.quote
+                unique_pairs.add((min(b, q), max(b, q)))
+
+            delete_items = [
+                FXDeletePairSourceItem(
+                    base=base,
+                    quote=quote,
+                    priority=None,  # None = delete entire pair, no MANUAL auto-reinstatement
                     )
-            print_info("  Deleted all existing pair sources")
+                for base, quote in unique_pairs
+                ]
+            await client.request(
+                "DELETE",
+                f"{API_BASE}/fx/providers/pair-sources",
+                json=[s.model_dump(mode="json") for s in delete_items],
+                timeout=TIMEOUT,
+                )
+            print_info(f"  Deleted all {len(unique_pairs)} pair configurations entirely")
+
+        # Verify no pair sources remain
+        verify_resp = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
+        verify_sources = FXPairSourcesResponse(**verify_resp.json())
+        assert len(verify_sources.items) == 0, (
+            f"Expected 0 pair sources after full delete, got {len(verify_sources.items)}"
+            )
 
         # Step 2: Try sync without provider param (auto-config mode)
         # Should fail because no pair sources configured

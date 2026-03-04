@@ -13,6 +13,7 @@
     import {ArrowLeftRight, Pencil, Percent, RefreshCw, RotateCcw, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
     const dispatch = createEventDispatcher<{
@@ -92,20 +93,14 @@
     })();
 
     // =========================================================================
-    // Currency flag emoji helper
+    // Currency flag emoji from shared store
     // =========================================================================
 
+    // Ensure currency data is loaded (idempotent, no-op if already loaded)
+    ensureCurrenciesLoaded();
+
     function currencyFlag(code: string): string {
-        // Map common currencies to flag emoji via country code
-        const map: Record<string, string> = {
-            EUR: '🇪🇺', USD: '🇺🇸', GBP: '🇬🇧', JPY: '🇯🇵', CHF: '🇨🇭',
-            CAD: '🇨🇦', AUD: '🇦🇺', NZD: '🇳🇿', CNY: '🇨🇳', SEK: '🇸🇪',
-            NOK: '🇳🇴', DKK: '🇩🇰', PLN: '🇵🇱', CZK: '🇨🇿', HUF: '🇭🇺',
-            RON: '🇷🇴', BGN: '🇧🇬', HRK: '🇭🇷', TRY: '🇹🇷', BRL: '🇧🇷',
-            MXN: '🇲🇽', INR: '🇮🇳', KRW: '🇰🇷', SGD: '🇸🇬', HKD: '🇭🇰',
-            THB: '🇹🇭', ZAR: '🇿🇦', RUB: '🇷🇺', ILS: '🇮🇱',
-        };
-        return map[code] || '💱';
+        return getCurrencyInfo(code).flag_emoji;
     }
 
     // =========================================================================

@@ -377,7 +377,7 @@ Documentare in `TODO_FUTURI.md`: "Refactor DataTableToolbar per usare OrderableL
 
 ### Problema
 
-Le card mini (80px di altezza) non mostrano asse Y né linee di riferimento. L'utente considera l'asse Y **fondamentale** in un programma di finanza — la scala è un dato importantissimo.
+Le card mini (80px di altezza) non mostrano asse queY né linee di riferimento. L'utente considera l'asse Y **fondamentale** in un programma di finanza — la scala è un dato importantissimo.
 
 ### Soluzione
 

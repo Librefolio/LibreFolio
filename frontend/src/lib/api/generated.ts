@@ -980,6 +980,16 @@ type CurrencyListItem = {
    * Currency symbol (e.g., $, €)
    */
   symbol: string;
+  flag_emoji?: /**
+   * Flag emoji of primary country using this currency (e.g., 🇺🇸, 🇪🇺, 🪙 for crypto)
+   *
+   * @default "🏳️"
+   */
+  string | undefined;
+  country_codes?: /**
+   * ISO-2 country codes using this currency (e.g., ['US', 'AS', 'EC'] for USD)
+   */
+  Array<string> | undefined;
 };
 type ExportRequest = Partial<{
   format: ExportFormat;
@@ -2484,7 +2494,18 @@ type FXDeleteItem = {
    * @maxLength 3
    */
   to: string;
-  date_range: DateRangeModel;
+  date_range?:
+    | /**
+     * Date range to delete (start required, end optional for single day). Required unless delete_all=True.
+     */
+    ((DateRangeModel | null) | Array<DateRangeModel | null>)
+    | undefined;
+  delete_all?: /**
+   * If True, delete ALL rates for this pair (ignores date_range)
+   *
+   * @default false
+   */
+  boolean | undefined;
 };
 type FXDeletePairSourcesResponse = {
   /**
@@ -3439,27 +3460,17 @@ const FXDeleteItem: z.ZodType<FXDeleteItem> = z
   .object({
     from: z.string().min(3).max(3).describe("Source currency (ISO 4217)"),
     to: z.string().min(3).max(3).describe("Target currency (ISO 4217)"),
-    date_range:
-      DateRangeModel.describe(`Reusable date range model for FA and FX operations.
-
-Used across multiple operations: price deletion, FX rate queries, etc.
-Represents an inclusive date range [start, end].
-
-Attributes:
-    start: Start date (inclusive, required)
-    end: End date (inclusive, optional - defaults to start for single day)
-
-Design Notes:
-    - If end is None, represents a single day (start only)
-    - If end is provided, represents a range [start, end] inclusive
-    - Validator ensures end >= start when provided
-
-Examples:
-    # Single day
-    {"start": "2025-11-05", "end": null}  # Just 2025-11-05
-
-    # Range
-    {"start": "2025-11-01", "end": "2025-11-30"}  # Entire November`),
+    date_range: z
+      .union([DateRangeModel, z.null()])
+      .describe(
+        "Date range to delete (start required, end optional for single day). Required unless delete_all=True."
+      )
+      .optional(),
+    delete_all: z
+      .boolean()
+      .describe("If True, delete ALL rates for this pair (ignores date_range)")
+      .optional()
+      .default(false),
   })
   .passthrough();
 const FXDeleteResult: z.ZodType<FXDeleteResult> = z.object({
@@ -5557,6 +5568,19 @@ const CurrencyListItem: z.ZodType<CurrencyListItem> = z.object({
   code: z.string().describe("ISO 4217 currency code (e.g., USD, EUR)"),
   name: z.string().describe("Currency name in requested language"),
   symbol: z.string().describe("Currency symbol (e.g., $, €)"),
+  flag_emoji: z
+    .string()
+    .describe(
+      "Flag emoji of primary country using this currency (e.g., 🇺🇸, 🇪🇺, 🪙 for crypto)"
+    )
+    .optional()
+    .default("🏳️"),
+  country_codes: z
+    .array(z.string())
+    .describe(
+      "ISO-2 country codes using this currency (e.g., ['US', 'AS', 'EC'] for USD)"
+    )
+    .optional(),
 });
 const CurrencyListResponse: z.ZodType<CurrencyListResponse> = z.object({
   items: z.array(CurrencyListItem).describe("List of items").optional(),
@@ -7460,7 +7484,7 @@ Returns information about each provider including:
 Note: This endpoint absorbed the former GET /fx/currencies endpoint.
 Target currencies are now returned per-provider instead of a separate call.
 
-Installed providers: BOE, FED, ECB, SNB
+Installed providers: BOE, FED, ECB, SNB, MANUAL
 
 Use the &#x60;providers&#x60; query parameter to filter by specific provider codes.`,
     requestFormat: "json",
