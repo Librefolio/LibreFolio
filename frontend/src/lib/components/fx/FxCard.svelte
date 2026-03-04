@@ -31,6 +31,8 @@
     export let slug: string;
     export let data: FxDataPoint[] = [];
     export let loading: boolean = false;
+    /** Whether this pair has only a MANUAL sentinel provider (no auto-sync) */
+    export let manualOnly: boolean = false;
     /** Global view mode from parent — card follows this unless locally toggled */
     export let globalViewMode: 'absolute' | 'percentage' = 'absolute';
 
@@ -180,6 +182,12 @@
                 >
                     <Percent size={14} />
                 </button>
+
+                {#if manualOnly}
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                        ✏️ Manual
+                    </span>
+                {/if}
             </div>
 
             <!-- Last rate + delta -->

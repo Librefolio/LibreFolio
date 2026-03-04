@@ -447,6 +447,7 @@
                     slug={pair.config.slug}
                     data={pair.data}
                     loading={pair.loading}
+                    manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
                     {globalViewMode}
                     on:edit={handleEditPair}
                     on:delete={handleDeletePair}

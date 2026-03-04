@@ -324,7 +324,7 @@ async def list_providers():
                         code=instance.provider_code,
                         name=instance.provider_name,
                         description=f"{instance.provider_name} pricing provider",
-                        icon_url=instance.get_icon(),
+                        icon_url=instance.icon,
                         supports_search=supports_search,
                         )
                     )

@@ -347,3 +347,17 @@ class FXDeletePairSourcesResponse(BaseBulkDeleteResponse[FXDeletePairSourceResul
 
 # NOTE: FXCurrenciesResponse was removed — GET /fx/currencies endpoint absorbed by
 # GET /fx/providers which now includes target_currencies per provider.
+
+
+class FXPairItem(BaseModel):
+    """A unique currency pair with optional metadata."""
+
+    base: str = Field(..., description="Base currency (alphabetically first)")
+    quote: str = Field(..., description="Quote currency (alphabetically second)")
+    has_provider: bool = Field(default=False, description="Whether this pair has configured providers")
+    rate_count: int = Field(default=0, description="Number of rate data points in the DB")
+
+
+class FXPairsListResponse(BaseListResponse[FXPairItem]):
+    """Response for GET /currencies/pairs — all known FX pairs."""
+    pass

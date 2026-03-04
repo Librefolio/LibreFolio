@@ -254,9 +254,9 @@
             aria-controls={listboxId}
             aria-expanded={isOpen}
             aria-haspopup="listbox"
-            class="w-full flex items-center justify-between px-3 py-2 border rounded-lg bg-white dark:bg-slate-700
+            class="w-full flex items-center justify-between px-3 py-2 border rounded-lg
                transition-all text-left gap-2
-               {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed' : 'dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer'}
+               {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' : 'bg-white dark:bg-slate-700 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer'}
                {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
             onclick={() => !isOpen && openDropdown()}
             onkeydown={handleTriggerKeydown}

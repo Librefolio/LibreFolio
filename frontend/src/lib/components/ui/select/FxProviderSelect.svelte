@@ -193,17 +193,19 @@
                 </span>
             {/if}
             <div class="min-w-0 flex-1">
-                <div class="font-medium text-xs text-gray-900 dark:text-gray-100 truncate">
-                    {option.label}
+                <div class="flex items-center gap-1.5">
+                    <span class="font-medium text-xs text-gray-900 dark:text-gray-100 truncate">
+                        {option.label}
+                    </span>
+                    {#if option.disabled}
+                        <span class="text-[10px] text-amber-500 dark:text-amber-400 flex-shrink-0 whitespace-nowrap">
+                            — {$_('fx.addPair.providerIncompatible')}
+                        </span>
+                    {/if}
                 </div>
                 {#if getProvData(option)?.description}
-                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    <div class="text-[10px] text-gray-500 dark:text-gray-400 truncate">
                         {getProvData(option)?.description}
-                    </div>
-                {/if}
-                {#if option.disabled}
-                    <div class="text-[10px] text-amber-500 dark:text-amber-400 mt-0.5">
-                        {$_('fx.addPair.providerIncompatible')}
                     </div>
                 {/if}
             </div>

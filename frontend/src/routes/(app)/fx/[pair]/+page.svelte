@@ -155,8 +155,9 @@
             const items = (response as any)?.items || [];
             providers = items
                 .filter((i: any) =>
-                    (i.base === data.base && i.quote === data.quote) ||
-                    (i.base === data.quote && i.quote === data.base)
+                    ((i.base === data.base && i.quote === data.quote) ||
+                    (i.base === data.quote && i.quote === data.base)) &&
+                    i.provider_code !== 'MANUAL'
                 )
                 .sort((a: any, b: any) => a.priority - b.priority)
                 .map((i: any) => ({providerCode: i.provider_code, priority: i.priority}));

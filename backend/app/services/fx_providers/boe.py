@@ -69,6 +69,10 @@ class BOEProvider(FXRateProvider):
         return "Bank of England"
 
     @property
+    def icon(self) -> str | None:
+        return "https://www.bankofengland.co.uk/favicon.svg?ver=2c06d"
+
+    @property
     def base_currency(self) -> str:
         return "GBP"
 

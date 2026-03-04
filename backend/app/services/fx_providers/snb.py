@@ -64,6 +64,11 @@ class SNBProvider(FXRateProvider):
         return "Swiss National Bank"
 
     @property
+    def icon(self) -> str | None:
+        return "https://www.centralbanking.com/themes/incisive_centralbanking/images/favicons/centralbanking.ico"
+
+
+    @property
     def base_currency(self) -> str:
         return "CHF"
 
