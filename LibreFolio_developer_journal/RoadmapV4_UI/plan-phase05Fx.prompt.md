@@ -770,3 +770,21 @@ Step 1 (TimeSeriesStore)
          │
          └──→ Step 9 (i18n Frontend + E2E + Cleanup) ←── dopo tutto il resto
 ```
+
+---
+
+## 🧪 Test Futuri (da eseguire quando i componenti saranno maturi)
+
+### Test cambio ordine provider (FX Detail Page)
+**Contesto**: Il `applyProviderDiff()` in `fx/[pair]/+page.svelte` è stato riscritto con approccio differenziale sicuro (POST→GET→DELETE) per gestire riordino, aggiunta e rimozione provider. La funzione è stata codificata ma non testata end-to-end perché:
+- Da `FxPairAddModal` si possono solo aggiungere provider (non riordinare quelli pre-esistenti)
+- La UI nella pagina FX Detail (`FxProviderConfig`) usa ancora i vecchi componenti per l'editing
+- Il test completo richiede: creare coppia con 2+ provider → entrare nel detail → riordinare → salvare → verificare che l'ordine sia aggiornato nel backend
+
+**Scenari da testare**:
+1. **Swap ordine**: ECB@1, FED@2 → FED@1, ECB@2 (upsert solo, nessun delete)
+2. **Rimuovi uno**: ECB@1, FED@2, BOE@3 → ECB@1, BOE@2 (upsert + delete priority 3)
+3. **Aggiungi e riordina**: ECB@1 → FED@1, ECB@2 (upsert + nessun delete in eccesso)
+4. **Rimuovi tutti tranne uno**: ECB@1, FED@2 → ECB@1 (delete priority 2 → trigger MANUAL sentinel check)
+5. **Connection failure resilience**: verificare che dopo il POST (step 1) i dati non vadano persi anche se DELETE fallisce
+

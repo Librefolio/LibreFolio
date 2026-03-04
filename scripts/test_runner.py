@@ -763,6 +763,15 @@ def utils_sector_normalization(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Sector normalization tests", verbose=verbose)
 
 
+def utils_currency_utils(verbose: bool = False, test_names: list = None) -> bool:
+    """Test currency listing, flag mapping, and validation consistency."""
+    print_section("Utils: Currency Utils")
+    print_info("Testing: backend/app/utils/currency_utils.py")
+    print_info("Tests: list_currencies (pycountry), flag_emoji mapping, crypto, validation consistency")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_currency_utils.py", test_names)
+    return run_command(cmd, "Currency utils tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     return _run_test_suite(
@@ -1761,6 +1770,14 @@ These tests verify utility modules and helper functions:
             "desc": "Test FinancialSector enum and normalization",
             "prereq": "None",
             "tests": "Sector enum values, aliases",
+            },
+        "currency-utils": {
+            "func": utils_currency_utils,
+            "test_names": True,
+            "name": "Currency Utils",
+            "desc": "Test currency listing, flag mapping, validation consistency",
+            "prereq": "pycountry, babel installed",
+            "tests": "list_currencies (pycountry), flag_emoji, crypto, no historic currencies",
             },
         "all": {
             "func": utils_all,

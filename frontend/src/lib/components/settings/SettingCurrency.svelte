@@ -112,7 +112,6 @@
                     disabled={isLocked}
                     onchange={handleChange}
                     placeholder={$_('settings.selectCurrency')}
-                    compact={true}
             />
         </div>
     </div>

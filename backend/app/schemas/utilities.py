@@ -45,6 +45,8 @@ class CurrencyListItem(BaseModel):
     code: str = Field(..., description="ISO 4217 currency code (e.g., USD, EUR)")
     name: str = Field(..., description="Currency name in requested language")
     symbol: str = Field(..., description="Currency symbol (e.g., $, €)")
+    flag_emoji: str = Field("🏳️", description="Flag emoji of primary country using this currency (e.g., 🇺🇸, 🇪🇺, 🪙 for crypto)")
+    country_codes: list[str] = Field(default_factory=list, description="ISO-2 country codes using this currency (e.g., ['US', 'AS', 'EC'] for USD)")
 
 
 class CurrencyListResponse(BaseListResponse[CurrencyListItem]):

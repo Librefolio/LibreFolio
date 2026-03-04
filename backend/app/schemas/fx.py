@@ -34,7 +34,7 @@ from datetime import date as date_type
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -63,7 +63,7 @@ class FXProviderInfo(BaseModel):
     base_currency: str = Field(..., description="Default base currency")
     # TODO: deprecate base_currency in favor of base_currencies
     base_currencies: list[str] = Field(..., description="All supported base currencies")
-    target_currencies: list[str] = Field(default_factory=list,description="All target currencies this provider can convert to (from get_supported_currencies)")
+    target_currencies: list[str] = Field(default_factory=list, description="All target currencies this provider can convert to (from get_supported_currencies)")
     description: str = Field(..., description="Provider description")
     icon_url: Optional[str] = Field(None, description="Provider icon URL (hardcoded)")
 
@@ -209,27 +209,30 @@ class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
 
 
 class FXDeleteItem(BaseModel):
-    """Single rate deletion request."""
+    """Single rate deletion request.
 
-    model_config = ConfigDict(
-        populate_by_name=True,
-        str_strip_whitespace=True,
-        )
+    Either `date_range` or `delete_all=True` must be specified.
+    If `delete_all=True`, all rates for the pair are deleted regardless of date_range.
+    """
 
-    from_currency: str = Field(
-        ..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)"
-        )
-    to_currency: str = Field(
-        ..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)"
-        )
-    date_range: DateRangeModel = Field(
-        ..., description="Date range to delete (start required, end optional for single day)"
-        )
+    model_config = ConfigDict(populate_by_name=True, str_strip_whitespace=True, )
+
+    from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
+    to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
+    date_range: Optional[DateRangeModel] = Field(None, description="Date range to delete (start required, end optional for single day). Required unless delete_all=True.")
+    delete_all: bool = Field(False, description="If True, delete ALL rates for this pair (ignores date_range)")
 
     @field_validator("from_currency", "to_currency", mode="before")
     @classmethod
     def uppercase_currency(cls, v):
         return Currency.validate_code(v)
+
+    @model_validator(mode="after")
+    def validate_range_or_all(self) -> "FXDeleteItem":
+        """Ensure either date_range or delete_all is specified."""
+        if not self.delete_all and self.date_range is None:
+            raise ValueError("Either 'date_range' or 'delete_all: true' must be specified")
+        return self
 
 
 class FXDeleteResult(BaseDeleteResult):

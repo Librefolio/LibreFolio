@@ -309,7 +309,8 @@
       "syncAll": "Sinc. Todo",
       "refreshAll": "Actualizar Todo",
       "settings": "Ajustes",
-      "addPair": "Añadir Par"
+      "addPair": "Añadir Par",
+      "syncing": "Sincronizando..."
     },
     "empty": {
       "noPairsTitle": "Sin Pares FX Configurados",

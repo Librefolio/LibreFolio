@@ -772,7 +772,6 @@
                                                 bind:value={editedValues[setting.key]}
                                                 placeholder={$_('settings.selectCurrency')}
                                                 disabled={isLocked}
-                                                compact={true}
                                                 onchange={() => { editedValues = {...editedValues}; }}
                                         />
                                     </div>

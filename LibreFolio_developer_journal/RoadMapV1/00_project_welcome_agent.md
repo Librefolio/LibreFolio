@@ -373,29 +373,6 @@ dev.py [-h]
 - **Edit better rewrite**: Evita di riscrivere tutto un file se già esiste, preferisci modifiche puntuali per evitare perdite di funzionalità
 - **Test DB users**: `e2e_test_user` / `E2eTestPass123!` e `e2e_test_admin` / `E2eAdminPass123!`
 
-## 📍 Contesto Corrente — Dove Siamo (4 Marzo 2026)
-
-**Fase attiva**: Phase 5 — FX Management Pages
-**Stato**: Pagine FX funzionanti con chart, cache, CRUD. In corso rifinitura grafica e UX.
-
-**Plan attivi** (in `RoadmapV4_UI/`):
-- `plan-phase05Fx.prompt.md` — Piano principale Phase 5 (master plan)
-- `plan-fxUiRefinementsRound2.prompt.md` — Sub-plan fix UI (Step 8 TODO: Settings ⚙️, overlay confronto, benchmark line)
-
-**Plan completati** (in `RoadmapV4_UI/phases/phase-05-subplan/`):
-- `plan-manualFxProvider.prompt.md` — Provider MANUAL sentinel (backend + frontend)
-- `plan-fxPairAddModalRedesign.prompt.md` — Modale Add FX redesign completa
-
-**Cosa stiamo facendo adesso**: Rifinitura della grafica generata durante Phase 5. Le pagine FX sono funzionanti ma necessitano di polish su:
-- Colori percentuale negativi (segmenti rosso/verde dinamici)
-- Chart settings popover con checkbox per feature estetiche
-- Overlay confronto tra coppie FX diverse
-- Linea benchmark crescita sintetica
-- Stale data gradient (opacità per dati backward-fill)
-- Micro-fix UX iterativi da feedback utente
-
-**Prossimo step dopo Phase 5**: Phase 6 — Asset Management Pages (riuso massivo dei componenti chart e TimeSeriesStore creati per FX).
-
 Prima di proseguire:
 
 1. ✅ Leggi i plan attivi in `RoadmapV4_UI/` per capire lo stato dettagliato

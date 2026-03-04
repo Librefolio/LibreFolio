@@ -309,7 +309,8 @@
       "syncAll": "Sync All",
       "refreshAll": "Refresh All",
       "settings": "Settings",
-      "addPair": "Add Pair"
+      "addPair": "Add Pair",
+      "syncing": "Syncing..."
     },
     "empty": {
       "noPairsTitle": "No FX Pairs Configured",
