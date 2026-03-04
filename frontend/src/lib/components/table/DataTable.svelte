@@ -18,7 +18,7 @@
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableToolbar from './DataTableToolbar.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
-    import ConfirmModal from './ConfirmModal.svelte';
+    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
 
     interface Props {

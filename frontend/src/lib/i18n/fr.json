@@ -332,7 +332,9 @@
       "providerDisabledHint": "Sélectionnez d'abord les deux devises",
       "providerIncompatible": "Ce fournisseur ne supporte pas cette paire",
       "intermediateRouteComingSoon": "Routes de conversion intermédiaires — Bientôt",
-      "saveConfiguration": "Enregistrer la Configuration"
+      "saveConfiguration": "Enregistrer la Configuration",
+      "providerInfoBanner": "Les fournisseurs récupèrent automatiquement les taux de change des banques centrales. Sans fournisseur, vous devrez saisir les taux manuellement.",
+      "noProviderWarning": "Aucun fournisseur configuré. Vous devrez saisir manuellement les taux de change pour chaque date."
     },
     "provider": {
       "primary": "Principal",

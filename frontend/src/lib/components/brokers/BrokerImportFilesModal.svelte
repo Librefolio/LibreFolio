@@ -17,7 +17,7 @@
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal} from '$lib/components/ui/media';
-    import ConfirmModal from '$lib/components/table/ConfirmModal.svelte';
+    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import type {BrimFile} from '$lib/types';
 

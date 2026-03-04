@@ -1,7 +1,7 @@
 # Plan: FxPairAddModal Redesign — CurrencySelect, FxProviderSelect & OrderableList
 
 **Data creazione**: 3 Marzo 2026
-**Status**: ✅ COMPLETATO (Step 9 — compact sizing, filter currencies, warning color)
+**Status**: ✅ COMPLETATO (Step 10 — component restructuring, save without provider, info banners, settings CurrencySearchSelect)
 **Dipendenze**: Phase 5 FX in corso, plan-phase05Fx.prompt.md, plan-fxUiRefinementsRound2.prompt.md
 **Riferimenti**:
 - `plan-phase05Fx.prompt.md` — Piano principale Phase 5
@@ -311,3 +311,86 @@ fix(fx): compact modal sizing, filter currencies by config, warning color for di
 - Change discard ConfirmModal from danger (red) to warning (amber)
 ```
 
+---
+
+## Step 10: Component restructuring, save senza provider, info banners, Settings migration ✅
+
+**Data**: 4 Marzo 2026
+
+### 10a. Spostamento ConfirmModal da `table/` a `ui/`
+- [x] `ConfirmModal` è un componente generico di conferma, non specifico della tabella
+- [x] Spostato il file `table/ConfirmModal.svelte` → `ui/ConfirmModal.svelte`
+- [x] `table/index.ts` ora ri-esporta da `$lib/components/ui/ConfirmModal.svelte` (backward compat)
+- [x] `ui/index.ts` aggiunto export di `ConfirmModal` e `OrderableList`
+- [x] `DataTable.svelte` aggiornato import da `$lib/components/ui/ConfirmModal.svelte`
+- [x] `BrokerImportFiles.svelte` e `BrokerImportFilesModal.svelte` aggiornati import diretti
+- [x] Tutti gli import barrel (`from '$lib/components/table'`) continuano a funzionare grazie al re-export
+
+### 10b. Analisi componenti posizionati male
+- [x] Analizzata l'intera struttura `components/`:
+  - `ui/` — componenti generici (ModalBase, ErrorBanner, Tooltip, LoadingSpinner, etc.) ✅ tutti OK
+  - `ui/select/` — selettori (SearchSelect, CurrencySearchSelect, FxProviderSelect, etc.) ✅ OK
+  - `ui/input/` — PasswordInput, PasswordStrength ✅ OK
+  - `ui/media/` — gestione media/file (ImageEditModal, FileUploader, etc.) ✅ OK
+  - `table/` — DataTable e sotto-componenti ✅ OK (ConfirmModal spostato)
+  - `charts/` — grafici (LineChart, PriceChartFull, SemiDonutChart, etc.) ✅ OK
+  - `brokers/` — componenti specifici broker ✅ OK
+  - `settings/` — componenti specifici settings ✅ OK
+  - `auth/` — Login, Register, ForgotPassword ✅ OK
+  - `layout/` — Header, Sidebar, LanguageSelector ✅ OK
+  - `fx/` — componenti specifici FX ✅ OK
+  - `files/` — FileGrid, FilesTable ✅ OK
+- **Risultato**: L'unico componente fuori posto era `ConfirmModal` (ora corretto)
+
+### 10c. FxPairAddModal: salvataggio senza provider
+- [x] Rimosso il vincolo `isValid = hasCurrencies && providerEntries.length > 0`
+- [x] Ora `isValid = hasCurrencies` — basta che base e quote siano impostate
+- [x] Aggiunto flag `hasProviders = providerEntries.length > 0` per banner condizionali
+- [x] `handleSave()` gestisce entrambi i casi: con provider (POST pair-sources) e senza (oncreated + close)
+
+### 10d. Info banners nella modale
+- [x] **Banner blu informativo** (tra currencies e provider section): spiega il ruolo dei provider e che senza si inseriscono i tassi manualmente
+  - Chiave i18n: `fx.addPair.providerInfoBanner` (EN/IT/FR/ES)
+  - Visibile solo quando `hasCurrencies = true`
+- [x] **Banner ambra di warning** (sopra il footer): avvisa che senza provider i tassi vanno inseriti a mano per ogni data
+  - Chiave i18n: `fx.addPair.noProviderWarning` (EN/IT/FR/ES)
+  - Visibile solo quando `hasCurrencies && !hasProviders`
+- [x] Modale più alta: da `max-h-[85vh]` a `max-h-[90vh] min-h-[50vh]`
+
+### 10e. Settings: migrazione a CurrencySearchSelect
+- [x] **SettingCurrency.svelte**: sostituito `SearchSelect` generico con `CurrencySearchSelect`
+  - Il componente ora carica autonomamente le valute dall'API (non serve più passare `options` e `loading`)
+  - Props `options` e `loading` mantenute come `@deprecated` per backward compat
+  - Usato `compact={true}` per mantenere dimensioni coerenti con il layout settings
+- [x] **PreferencesTab.svelte**: 
+  - Rimossa funzione `loadCurrencies()` e stato `currencyOptions`, `currenciesLoading`
+  - Rimossa interfaccia `CurrencyInfo` (non più usata)
+  - Rimosso `loadCurrencies()` da `onMount` (era in `Promise.all`)
+  - Rimossi props `options={currencyOptions}` e `loading={currenciesLoading}` dall'uso di `SettingCurrency`
+- [x] **GlobalSettingsTab.svelte**:
+  - Stessa pulizia: rimossa `loadCurrencies()`, `currencyOptions`, `currenciesLoading`, `CurrencyInfo`
+  - Aggiunto import `CurrencySearchSelect` e sostituito `SearchSelect` nel template
+  - Usato `compact={true}` e rimosso `options={currencyOptions}` + `loading={currenciesLoading}`
+- **Risultato**: Ora tutti i currency selector nell'app usano `CurrencySearchSelect` tranne `CashTransactionModal` (TODO futuro)
+
+### Validazione
+- [x] `./dev.py front check` — 0 errori ✅
+- [x] `./dev.py front build` — build pulita ✅
+
+---
+
+## Commit message suggerito (Step 10)
+
+```
+refactor(ui): restructure components, allow providerless FX pairs, migrate settings to CurrencySearchSelect
+
+- Move ConfirmModal from table/ to ui/ (generic component, not table-specific)
+- Keep re-export in table/index.ts for backward compatibility
+- FxPairAddModal: allow save with currencies only (no provider required)
+- Add info banner explaining provider role between currencies and provider section
+- Add amber warning when saving without provider (manual rate entry required)
+- Increase modal height to max-h-[90vh] min-h-[50vh]
+- SettingCurrency: replace SearchSelect with CurrencySearchSelect (self-loading)
+- PreferencesTab + GlobalSettingsTab: remove manual loadCurrencies(), cleanup state
+- Audit all component folders — only ConfirmModal was misplaced (now fixed)
+```

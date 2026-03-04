@@ -16,7 +16,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {Trash2, Lock, X, ArrowDown, ArrowRight} from 'lucide-svelte';
+    import {Trash2, Lock, X, ArrowDown, ArrowRight, Info} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {ConfirmModal} from '$lib/components/table';
@@ -74,7 +74,8 @@
 
     let hasCurrencies = $derived(!!baseCurrency && !!quoteCurrency && baseCurrency !== quoteCurrency);
     let usedCodes = $derived(providerEntries.map(p => p.code));
-    let isValid = $derived(hasCurrencies && providerEntries.length > 0);
+    let hasProviders = $derived(providerEntries.length > 0);
+    let isValid = $derived(hasCurrencies);
     let isDirty = $derived(baseCurrency !== '' || quoteCurrency !== '' || providerEntries.length > 0);
 
     // =========================================================================
@@ -140,12 +141,17 @@
             ? quoteCurrency.toUpperCase() : baseCurrency.toUpperCase();
 
         try {
-            const items = providerEntries.map(p => ({
-                base, quote,
-                provider_code: p.code,
-                priority: p.priority,
-            }));
-            await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post(items);
+            if (providerEntries.length > 0) {
+                // Save with provider sources
+                const items = providerEntries.map(p => ({
+                    base, quote,
+                    provider_code: p.code,
+                    priority: p.priority,
+                }));
+                await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post(items);
+            }
+            // Note: even without providers, the pair is still "created" — the user
+            // will need to insert rates manually via the rate edit UI.
             oncreated?.();
             resetAndClose();
         } catch (e: any) {
@@ -182,7 +188,7 @@
 </script>
 
 <ModalBase {open} onRequestClose={handleClose} maxWidth="lg" allowOverflow={true}>
-    <div class="flex flex-col max-h-[85vh]">
+    <div class="flex flex-col max-h-[90vh] min-h-[50vh]">
         <!-- ============================================================= -->
         <!-- Header -->
         <!-- ============================================================= -->
@@ -242,6 +248,14 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Info banner: explain provider role -->
+            {#if hasCurrencies}
+                <div class="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+                    <Info size={14} class="flex-shrink-0 mt-0.5" />
+                    <span>{$_('fx.addPair.providerInfoBanner')}</span>
+                </div>
+            {/if}
 
             <!-- ========================================================= -->
             <!-- Provider Priority -->
@@ -333,6 +347,16 @@
                 </div>
             </div>
         </div>
+
+        <!-- ============================================================= -->
+        <!-- No-provider warning -->
+        <!-- ============================================================= -->
+        {#if hasCurrencies && !hasProviders}
+            <div class="flex items-start gap-2 mx-5 mb-0 mt-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700/40 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+                <Info size={14} class="flex-shrink-0 mt-0.5" />
+                <span>{$_('fx.addPair.noProviderWarning')}</span>
+            </div>
+        {/if}
 
         <!-- ============================================================= -->
         <!-- Footer -->
