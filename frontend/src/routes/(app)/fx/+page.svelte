@@ -37,57 +37,68 @@
     // State
     // =========================================================================
 
-    let pairs: FxPairState[] = [];
-    let loading = true;
-    let error: string | null = null;
+    let pairs = $state<FxPairState[]>([]);
+    let loading = $state(true);
+    let error = $state<string | null>(null);
 
     // Filters
-    let filterCurrency1 = '';
-    let filterCurrency2 = '';
-    let dateStart = (() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().slice(0, 10); })();
-    let dateEnd = new Date().toISOString().slice(0, 10);
-    let activePreset: any = '3M';
-    let globalViewMode: 'absolute' | 'percentage' = 'absolute';
+    let filterCurrency1 = $state('');
+    let filterCurrency2 = $state('');
+    let dateStart = $state((() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().slice(0, 10); })());
+    let dateEnd = $state(new Date().toISOString().slice(0, 10));
+    let activePreset: any = $state('3M');
+    let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
 
 
     // Delete
-    let deleteDialogOpen = false;
-    let deletingPair: {base: string; quote: string; slug: string} | null = null;
-    let deleteLoading = false;
+    let deleteDialogOpen = $state(false);
+    let deletingPair = $state<{base: string; quote: string; slug: string} | null>(null);
+    let deleteLoading = $state(false);
 
     // Modals
-    let addModalOpen = false;
-    let syncModalOpen = false;
+    let addModalOpen = $state(false);
+    let syncModalOpen = $state(false);
+
+    // Filter bar adaptive layout
+    let filterBarRef = $state<HTMLDivElement | null>(null);
+    /** Layout mode based on measured container width:
+     *  - 'wide' (≥950px): filters left + actions 2×2 grid right, all inline
+     *  - 'tablet' (≥500px): filters left (wrapping) + actions column right
+     *  - 'mobile' (<500px): all stacked vertically, actions row at bottom
+     */
+    let layoutMode = $state<'wide' | 'tablet' | 'mobile'>('tablet');
+    /** Whether action buttons show text labels (≥700px) */
+    let showActionLabels = $state(true);
 
     // =========================================================================
     // Derived
     // =========================================================================
 
     // Extract unique currencies from configured pairs for filter dropdown
-    $: configuredCurrencies = [...new Set(pairs.flatMap(p => [p.config.base, p.config.quote]))].sort();
+    let configuredCurrencies = $derived([...new Set(pairs.flatMap(p => [p.config.base, p.config.quote]))].sort());
 
     // Allowed currencies for filter 1: if filter 2 is set, only currencies paired with filter 2
     // Exclude the value currently selected in filter 2
-    $: allowedForFilter1 = (filterCurrency2
+    let allowedForFilter1 = $derived((filterCurrency2
         ? [...new Set(pairs
             .filter(p => p.config.base === filterCurrency2 || p.config.quote === filterCurrency2)
             .flatMap(p => [p.config.base, p.config.quote])
         )]
         : configuredCurrencies
-    ).filter(c => c !== filterCurrency2).sort();
+    ).filter(c => c !== filterCurrency2).sort());
 
     // Allowed currencies for filter 2: if filter 1 is set, only currencies paired with filter 1
     // Exclude the value currently selected in filter 1
-    $: allowedForFilter2 = (filterCurrency1
+    let allowedForFilter2 = $derived((filterCurrency1
         ? [...new Set(pairs
             .filter(p => p.config.base === filterCurrency1 || p.config.quote === filterCurrency1)
             .flatMap(p => [p.config.base, p.config.quote])
         )]
         : configuredCurrencies
-    ).filter(c => c !== filterCurrency1).sort();
+    ).filter(c => c !== filterCurrency1).sort());
 
     // Filtered pairs
-    $: filteredPairs = pairs.filter(p => {
+    let filteredPairs = $derived(pairs.filter(p => {
         if (!filterCurrency1) return true;
         const fc1 = filterCurrency1.toUpperCase();
         const matchFirst = p.config.base === fc1 || p.config.quote === fc1;
@@ -95,7 +106,7 @@
         if (!filterCurrency2) return true;
         const fc2 = filterCurrency2.toUpperCase();
         return p.config.base === fc2 || p.config.quote === fc2;
-    });
+    }));
 
     // =========================================================================
     // Lifecycle
@@ -103,6 +114,30 @@
 
     onMount(async () => {
         await loadPairSources();
+    });
+
+    // ResizeObserver for adaptive filter bar layout.
+    // Measures the filter bar itself — its width is always 100% of the parent
+    // (block-level flex), so layout changes only affect height, not width.
+    //
+    // contentRect.width = CSS box-width − padding(32px) − border(2px) = box − 34px
+    //
+    // User-tuned thresholds (CSS box → contentRect):
+    //   wide  ≈ 970px box → 936 contentRect
+    //   tablet ≈ 635px box → 601 contentRect
+    //   labels ≈ 720px box → 686 contentRect
+    $effect(() => {
+        const el = filterBarRef;
+        if (!el) return;
+        const ro = new ResizeObserver(([entry]) => {
+            const w = entry.contentRect.width;
+            if (w >= 1010) layoutMode = 'wide';
+            else if (w >= 610) layoutMode = 'tablet';
+            else layoutMode = 'mobile';
+            showActionLabels = w >= 690;
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
     });
 
     // =========================================================================
@@ -330,13 +365,22 @@
         </button>
     </div>
 
-    <!-- Filter Bar: E+ layout — filters flex-wrap left, actions adaptive right -->
-    <div class="flex flex-col xl:flex-row items-center xl:items-start gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
-
-        <!-- Left: Filters (flex-wrap, centered when stacked, left-aligned on xl) -->
-        <div class="flex-1 flex flex-col xl:flex-row flex-wrap items-center gap-3">
-            <!-- DateRangePicker — max-width to prevent deformed expansion -->
-            <div class="w-full xl:w-auto max-w-md">
+    <!-- Filter Bar: 100% programmatic layout — NO flex-wrap, NO CSS-driven wrapping.
+         wide:   [ datepicker  currency ─── actions-2×2 ]  all in one row
+         tablet: [ datepicker       ] [ actions-2×2 ]      filters stacked, actions grid right
+                 [ currency-filters ] [             ]
+         mobile: [ datepicker       ]  all stacked centered
+                 [ currency-filters ]
+                 [ actions-row      ] -->
+    <div
+        bind:this={filterBarRef}
+        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
+               {layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-center justify-between'}"
+    >
+        <!-- Filters block -->
+        <div class="flex gap-3 {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-center'}">
+            <!-- DateRangePicker -->
+            <div class="max-w-md">
                 <DateRangePicker
                     bind:start={dateStart}
                     bind:end={dateEnd}
@@ -346,9 +390,8 @@
                 />
             </div>
 
-            <!-- Currency Filters — grouped so they wrap as a unit -->
+            <!-- Currency Filters — always grouped as a pair -->
             <div class="flex items-center gap-3">
-                <!-- Currency Filter 1 -->
                 <div class="w-40">
                     <CurrencySearchSelect
                         bind:value={filterCurrency1}
@@ -369,8 +412,6 @@
                         }}
                     />
                 </div>
-
-                <!-- Currency Filter 2 — always visible, disabled when C1 empty -->
                 <div class="w-40 transition-opacity {filterCurrency1 ? '' : 'opacity-50'}">
                     <CurrencySearchSelect
                         bind:value={filterCurrency2}
@@ -384,8 +425,9 @@
             </div>
         </div>
 
-        <!-- Right: Actions — row centered below xl, 2×2 grid on xl+ -->
-        <div class="flex flex-row xl:grid xl:grid-cols-2 gap-1.5 justify-center shrink-0">
+        <!-- Actions: 2×2 grid (wide+tablet), horizontal row (mobile) -->
+        <div class="flex shrink-0 gap-1.5
+                    {layoutMode === 'mobile' ? 'flex-row justify-center' : 'grid grid-cols-2'}">
             <!-- Abs/% toggle -->
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
@@ -407,7 +449,7 @@
                 title={$_('fx.actions.settings')}
             >
                 <Settings size={14} />
-                <span class="hidden xl:inline">{$_('fx.actions.settings')}</span>
+                {#if showActionLabels}<span>{$_('fx.actions.settings')}</span>{/if}
             </button>
             <!-- Sync All -->
             <button
@@ -416,7 +458,7 @@
                 title={$_('fx.actions.syncAll')}
             >
                 <RotateCcw size={14} />
-                <span class="hidden xl:inline">{$_('fx.actions.syncAll')}</span>
+                {#if showActionLabels}<span>{$_('fx.actions.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
             <button
@@ -425,7 +467,7 @@
                 title={$_('fx.actions.refreshAll')}
             >
                 <RefreshCw size={14} />
-                <span class="hidden xl:inline">{$_('fx.actions.refreshAll')}</span>
+                {#if showActionLabels}<span>{$_('fx.actions.refreshAll')}</span>{/if}
             </button>
         </div>
     </div>
