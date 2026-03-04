@@ -53,7 +53,6 @@
     // Delete
     let deleteDialogOpen = false;
     let deletingPair: {base: string; quote: string; slug: string} | null = null;
-    let deleteAlsoRates = false;
     let deleteLoading = false;
 
     // Modals
@@ -66,6 +65,26 @@
 
     // Extract unique currencies from configured pairs for filter dropdown
     $: configuredCurrencies = [...new Set(pairs.flatMap(p => [p.config.base, p.config.quote]))].sort();
+
+    // Allowed currencies for filter 1: if filter 2 is set, only currencies paired with filter 2
+    // Exclude the value currently selected in filter 2
+    $: allowedForFilter1 = (filterCurrency2
+        ? [...new Set(pairs
+            .filter(p => p.config.base === filterCurrency2 || p.config.quote === filterCurrency2)
+            .flatMap(p => [p.config.base, p.config.quote])
+        )]
+        : configuredCurrencies
+    ).filter(c => c !== filterCurrency2).sort();
+
+    // Allowed currencies for filter 2: if filter 1 is set, only currencies paired with filter 1
+    // Exclude the value currently selected in filter 1
+    $: allowedForFilter2 = (filterCurrency1
+        ? [...new Set(pairs
+            .filter(p => p.config.base === filterCurrency1 || p.config.quote === filterCurrency1)
+            .flatMap(p => [p.config.base, p.config.quote])
+        )]
+        : configuredCurrencies
+    ).filter(c => c !== filterCurrency1).sort();
 
     // Filtered pairs
     $: filteredPairs = pairs.filter(p => {
@@ -213,7 +232,6 @@
 
     function handleDeletePair(event: CustomEvent<{base: string; quote: string; slug: string}>) {
         deletingPair = event.detail;
-        deleteAlsoRates = false;
         deleteDialogOpen = true;
     }
 
@@ -221,19 +239,20 @@
         if (!deletingPair) return;
         deleteLoading = true;
         try {
-            const pair = pairs.find(p => p.config.slug === deletingPair!.slug);
-            if (pair) {
-                const deleteItems = pair.config.providers.map(() => ({
-                    base: pair.config.base,
-                    quote: pair.config.quote,
-                }));
-                await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete(deleteItems);
-            }
+            // Step 1: Delete all provider sources for this pair (single item, no priority = delete all)
+            await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete([{
+                base: deletingPair.base,
+                quote: deletingPair.quote,
+            }]);
 
-            if (deleteAlsoRates) {
-                console.log('TODO: delete historical rates for', deletingPair.slug);
-            }
+            // Step 2: Delete all historical rates for this pair
+            await zodiosApi.delete_rates_endpoint_api_v1_fx_currencies_rate_delete([{
+                from: deletingPair.base,
+                to: deletingPair.quote,
+                delete_all: true,
+            }]);
 
+            // Step 3: Clean up frontend state
             removeFxStore(deletingPair.slug);
             pairs = pairs.filter(p => p.config.slug !== deletingPair!.slug);
             deleteDialogOpen = false;
@@ -282,9 +301,11 @@
         }
     }
 
-    async function handlePairCreated() {
+    async function handlePairCreated(detail: {base: string; quote: string; hasRealProvider: boolean}) {
         addModalOpen = false;
+        // Reload pair sources and fetch data (sync already done by modal)
         await loadPairSources();
+        await fetchAllPairData();
     }
 
     async function handleSynced() {
@@ -309,90 +330,103 @@
         </button>
     </div>
 
-    <!-- Filter Bar: 3-column grid on desktop (left|center|right), stacked centered on mobile -->
-    <div class="grid grid-cols-1 lg:grid-cols-[auto_1fr_auto] items-center gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
-        <!-- Section 1: DateRangePicker — left on desktop, centered on mobile -->
-        <div class="flex justify-center lg:justify-start">
-            <DateRangePicker
-                bind:start={dateStart}
-                bind:end={dateEnd}
-                bind:activePreset
-                compact={true}
-                onchange={handleDateRangeChange}
-            />
-        </div>
+    <!-- Filter Bar: E+ layout — filters flex-wrap left, actions adaptive right -->
+    <div class="flex flex-col xl:flex-row items-center xl:items-start gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
 
-        <!-- Section 2: Currency filters — centered always, side by side -->
-        <div class="flex justify-center">
-            <div class="flex flex-row items-center gap-2">
+        <!-- Left: Filters (flex-wrap, centered when stacked, left-aligned on xl) -->
+        <div class="flex-1 flex flex-col xl:flex-row flex-wrap items-center gap-3">
+            <!-- DateRangePicker — max-width to prevent deformed expansion -->
+            <div class="w-full xl:w-auto max-w-md">
+                <DateRangePicker
+                    bind:start={dateStart}
+                    bind:end={dateEnd}
+                    bind:activePreset
+                    compact={true}
+                    onchange={handleDateRangeChange}
+                />
+            </div>
+
+            <!-- Currency Filters — grouped so they wrap as a unit -->
+            <div class="flex items-center gap-3">
+                <!-- Currency Filter 1 -->
                 <div class="w-40">
                     <CurrencySearchSelect
                         bind:value={filterCurrency1}
                         includeAll={true}
-                        allowedCurrencies={configuredCurrencies}
+                        allowedCurrencies={allowedForFilter1}
                         placeholder={$_('fx.filter.filterCurrency')}
                         maxVisibleItems={6}
-                        onchange={(v) => { filterCurrency1 = v; filterCurrency2 = ''; }}
+                        onchange={(v) => {
+                            if (v === '' && filterCurrency2) {
+                                filterCurrency1 = filterCurrency2;
+                                filterCurrency2 = '';
+                            } else {
+                                filterCurrency1 = v;
+                                if (filterCurrency2 && !allowedForFilter2.includes(filterCurrency2)) {
+                                    filterCurrency2 = '';
+                                }
+                            }
+                        }}
                     />
                 </div>
-                {#if filterCurrency1}
-                    <div class="w-40">
-                        <CurrencySearchSelect
-                            bind:value={filterCurrency2}
-                            includeAll={true}
-                            allowedCurrencies={configuredCurrencies}
-                            placeholder={$_('fx.filter.secondCurrency')}
-                            maxVisibleItems={6}
-                        />
-                    </div>
-                {/if}
+
+                <!-- Currency Filter 2 — always visible, disabled when C1 empty -->
+                <div class="w-40 transition-opacity {filterCurrency1 ? '' : 'opacity-50'}">
+                    <CurrencySearchSelect
+                        bind:value={filterCurrency2}
+                        includeAll={true}
+                        allowedCurrencies={allowedForFilter2}
+                        disabled={!filterCurrency1}
+                        placeholder={$_('fx.filter.secondCurrency')}
+                        maxVisibleItems={6}
+                    />
+                </div>
             </div>
         </div>
 
-        <!-- Section 3: Actions — right on desktop, centered on mobile -->
-        <div class="flex justify-center lg:justify-end">
-            <div class="grid grid-cols-2 gap-1.5">
-                <!-- Row 1: Abs/% toggle + Settings gear -->
-                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden w-full">
-                    <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute'
-                            ? 'bg-libre-green text-white'
-                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { globalViewMode = 'absolute'; }}
-                    >Abs</button>
-                    <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage'
-                            ? 'bg-libre-green text-white'
-                            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { globalViewMode = 'percentage'; }}
-                    >%</button>
-                </div>
+        <!-- Right: Actions — row centered below xl, 2×2 grid on xl+ -->
+        <div class="flex flex-row xl:grid xl:grid-cols-2 gap-1.5 justify-center shrink-0">
+            <!-- Abs/% toggle -->
+            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    title={$_('fx.actions.settings')}
-                >
-                    <Settings size={14} />
-                    <span class="hidden xl:inline">{$_('fx.actions.settings')}</span>
-                </button>
-
-                <!-- Row 2: Sync All + Refresh All -->
+                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute'
+                        ? 'bg-libre-green text-white'
+                        : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                    onclick={() => { globalViewMode = 'absolute'; }}
+                >Abs</button>
                 <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={handleSyncAll}
-                    title={$_('fx.actions.syncAll')}
-                >
-                    <RotateCcw size={14} />
-                    <span class="hidden xl:inline">{$_('fx.actions.syncAll')}</span>
-                </button>
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={handleRefreshAll}
-                    title={$_('fx.actions.refreshAll')}
-                >
-                    <RefreshCw size={14} />
-                    <span class="hidden xl:inline">{$_('fx.actions.refreshAll')}</span>
-                </button>
+                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage'
+                        ? 'bg-libre-green text-white'
+                        : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                    onclick={() => { globalViewMode = 'percentage'; }}
+                >%</button>
             </div>
+            <!-- Settings -->
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                title={$_('fx.actions.settings')}
+            >
+                <Settings size={14} />
+                <span class="hidden xl:inline">{$_('fx.actions.settings')}</span>
+            </button>
+            <!-- Sync All -->
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                onclick={handleSyncAll}
+                title={$_('fx.actions.syncAll')}
+            >
+                <RotateCcw size={14} />
+                <span class="hidden xl:inline">{$_('fx.actions.syncAll')}</span>
+            </button>
+            <!-- Refresh All -->
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                onclick={handleRefreshAll}
+                title={$_('fx.actions.refreshAll')}
+            >
+                <RefreshCw size={14} />
+                <span class="hidden xl:inline">{$_('fx.actions.refreshAll')}</span>
+            </button>
         </div>
     </div>
 
@@ -463,7 +497,7 @@
 <ConfirmModal
     open={deleteDialogOpen}
     title="Delete FX Pair"
-    message="Are you sure you want to delete {deletingPair?.base ?? ''}/{deletingPair?.quote ?? ''}? This will remove the provider configuration."
+    message="Are you sure you want to delete {deletingPair?.base ?? ''}/{deletingPair?.quote ?? ''}? This will remove the provider configuration and all historical exchange rates."
     confirmText="Delete"
     danger={true}
     onConfirm={confirmDelete}
@@ -473,6 +507,8 @@
 <!-- Add Pair Modal -->
 <FxPairAddModal
     bind:open={addModalOpen}
+    {dateStart}
+    {dateEnd}
     oncreated={handlePairCreated}
     onclose={() => addModalOpen = false}
 />

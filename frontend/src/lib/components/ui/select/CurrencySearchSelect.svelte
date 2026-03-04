@@ -5,14 +5,16 @@
   Centralizes the currency loading logic used across the app.
 
   Features:
-  - Loads currencies from the utilities API
+  - Loads currencies from the shared currencyStore (session-level cache)
+  - Flag emoji as icon, currency symbol shown inline
   - Optional `allowedCurrencies` filter to restrict visible currencies
   - Optional `includeAll` to add an "All currencies" option at the top
-  - Currency symbol as icon in each option
+  - Searchable by code, name, and symbol (€, $, £, etc.)
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {zodiosApi} from '$lib/api';
+    import {ensureCurrenciesLoaded, getAllCurrencies} from '$lib/stores/currencyStore';
+    import type {CurrencyInfo} from '$lib/stores/currencyStore';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
 
     interface Props {
@@ -32,8 +34,6 @@
         maxVisibleItems?: number;
         /** Dropdown position */
         dropdownPosition?: 'top' | 'bottom' | 'auto';
-        /** Compact mode — smaller icons and text for use in modals/tight spaces */
-        compact?: boolean;
         /** Change callback */
         onchange?: (value: string) => void;
     }
@@ -47,17 +47,10 @@
         loading: externalLoading = false,
         maxVisibleItems = 6,
         dropdownPosition = 'auto',
-        compact = false,
         onchange
     }: Props = $props();
 
-    interface CurrencyItem {
-        code: string;
-        name: string;
-        symbol?: string;
-    }
-
-    let allCurrencies = $state<CurrencyItem[]>([]);
+    let allCurrencies = $state<CurrencyInfo[]>([]);
     let internalLoading = $state(true);
     let error = $state<string | null>(null);
 
@@ -68,7 +61,7 @@
             : allCurrencies
     );
 
-    // Build SelectOption array
+    // Build SelectOption array — use flag_emoji as icon, symbol + country names in searchText
     let currencyOptions = $derived.by<SelectOption[]>(() => {
         const options: SelectOption[] = [];
 
@@ -81,12 +74,32 @@
             });
         }
 
+        // Use browser Intl.DisplayNames for localized country names (e.g., "IT" → "Italia")
+        let countryNames: Intl.DisplayNames | null = null;
+        try {
+            countryNames = new Intl.DisplayNames(navigator.language || 'en', {type: 'region'});
+        } catch {
+            // Fallback: no country name resolution
+        }
+
         for (const c of filteredCurrencies) {
+            // Include symbol in searchText so users can search by € $ £ etc.
+            const symbolPart = c.symbol && c.symbol !== c.code ? c.symbol : '';
+            // Include country codes (ISO-2) and localized country names for search
+            const countryCodes = (c.country_codes ?? []).join(' ');
+            const countryNamesStr = (c.country_codes ?? [])
+                .map(cc => {
+                    try { return countryNames?.of(cc) ?? ''; } catch { return ''; }
+                })
+                .filter(Boolean)
+                .join(' ');
+
             options.push({
                 value: c.code,
                 label: `${c.code} — ${c.name}`,
-                icon: c.symbol && c.symbol !== c.code ? c.symbol : undefined,
-                searchText: `${c.code} ${c.name}`,
+                icon: c.flag_emoji || symbolPart || undefined,
+                searchText: `${c.code} ${c.name} ${symbolPart} ${countryCodes} ${countryNamesStr}`.trim(),
+                data: {symbol: c.symbol},
             });
         }
 
@@ -95,7 +108,7 @@
 
     let isLoading = $derived(internalLoading || externalLoading);
 
-    // Load currencies once on mount
+    // Load currencies once via shared store
     $effect(() => {
         loadCurrencies();
     });
@@ -104,12 +117,8 @@
         internalLoading = true;
         error = null;
         try {
-            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
-            allCurrencies = (response.items ?? []).map((c: any) => ({
-                code: c.code,
-                name: c.name,
-                symbol: c.symbol,
-            }));
+            await ensureCurrenciesLoaded();
+            allCurrencies = getAllCurrencies();
         } catch (e) {
             console.error('Failed to load currencies:', e);
             error = 'Failed to load currencies';
@@ -121,6 +130,13 @@
     function handleChange(newValue: string) {
         value = newValue;
         onchange?.(newValue);
+    }
+
+    /** Helper to extract symbol from option data (avoids 'as any' in template) */
+    function getSymbol(option: SelectOption): string | undefined {
+        const d = option.data as Record<string, unknown> | undefined;
+        const sym = d?.symbol as string | undefined;
+        return sym && sym !== option.value ? sym : undefined;
     }
 </script>
 
@@ -138,26 +154,32 @@
     {#snippet item(option)}
         <div class="flex items-center space-x-2 min-w-0">
             {#if option.icon}
-                <span class="{compact ? 'text-sm w-6 h-6' : 'text-lg w-9 h-9'} shrink-0 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium">
-                    {option.icon}
-                </span>
+                <span class="text-base shrink-0 leading-none">{option.icon}</span>
             {/if}
             <div class="min-w-0">
-                <div class="{compact ? 'text-sm' : ''} font-medium text-gray-900 dark:text-gray-100">{option.value || ''}</div>
-                <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}</div>
+                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {option.value || ''}
+                    {#if getSymbol(option)}
+                        <span class="text-gray-400 ml-0.5 text-xs">{getSymbol(option)}</span>
+                    {/if}
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title={option.label}>{option.label}</div>
             </div>
         </div>
     {/snippet}
     {#snippet selectedItem(option)}
         <div class="flex items-center space-x-2 min-w-0">
             {#if option.icon}
-                <span class="{compact ? 'text-sm w-6 h-6' : 'text-lg w-9 h-9'} shrink-0 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium">
-                    {option.icon}
-                </span>
+                <span class="text-base shrink-0 leading-none">{option.icon}</span>
             {/if}
             <div class="min-w-0">
-                <div class="{compact ? 'text-sm' : ''} font-medium text-gray-900 dark:text-gray-100">{option.value || ''}</div>
-                <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}</div>
+                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {option.value || ''}
+                    {#if getSymbol(option)}
+                        <span class="text-gray-400 ml-0.5 text-xs">{getSymbol(option)}</span>
+                    {/if}
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title={option.label}>{option.label}</div>
             </div>
         </div>
     {/snippet}

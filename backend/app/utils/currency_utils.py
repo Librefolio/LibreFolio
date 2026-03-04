@@ -2,16 +2,125 @@
 Currency utilities with multi-language support via Babel.
 
 Provides normalization and listing of currencies with localized names and symbols.
+Uses pycountry as source-of-truth for active ISO 4217 currencies.
+Babel is used only for localized names, symbols, and territory→currency mapping.
 """
 
+from functools import lru_cache
 from typing import List
 
+import pycountry
 import structlog
+from babel.core import get_global
 from babel.numbers import get_currency_symbol, get_currency_name
 
+from backend.app.schemas.common import CRYPTO_CURRENCIES
+from backend.app.utils.geo_utils import iso2_to_flag_emoji
 from backend.app.utils.translation_utils import get_babel_locale
 
 logger = structlog.get_logger(__name__)
+
+# =============================================================================
+# CURRENCY → FLAG EMOJI MAPPING
+# =============================================================================
+
+# Multi-country currency overrides (flag for the "representative" entity)
+# These currencies are used by multiple territories; pycountry iterates alphabetically
+# so a smaller territory (e.g., American Samoa) would win over the main country (US).
+_CURRENCY_FLAG_OVERRIDES: dict[str, str] = {
+    # Supranational currencies
+    "EUR": "🇪🇺",  # European Union (not a single country)
+    "XAF": "🌍",  # CFA franc BEAC — Central Africa (multi-country)
+    "XOF": "🌍",  # CFA franc BCEAO — West Africa (multi-country)
+    "XCD": "🌍",  # East Caribbean dollar (multi-country)
+    "XPF": "🌍",  # CFP franc — French Pacific (multi-country)
+    # Major currencies used by multiple territories (alphabetical first ≠ main country)
+    "USD": "🇺🇸",  # United States (not American Samoa 🇦🇸)
+    "INR": "🇮🇳",  # India (not Bhutan 🇧🇹)
+    "NOK": "🇳🇴",  # Norway (not Bouvet Island 🇧🇻)
+    "NZD": "🇳🇿",  # New Zealand (not Cook Islands 🇨🇰)
+    "ZAR": "🇿🇦",  # South Africa (not Lesotho 🇱🇸)
+}
+
+
+@lru_cache(maxsize=1)
+def _build_currency_to_flag_map() -> dict[str, str]:
+    """
+    Build mapping: currency_code → flag_emoji.
+
+    Uses Babel's territory_currencies data to find which country uses each currency
+    as legal tender, then converts country ISO-2 → flag emoji.
+
+    Multi-country currencies (EUR, XAF, etc.) use explicit overrides.
+    Crypto currencies use 🪙.
+
+    Babel territory_currencies format: dict[territory_iso2] → list of tuples
+    Each tuple: (currency_code, start_date_tuple, end_date_tuple_or_None, is_tender)
+    Example: ('USD', (1792, 1, 1), None, True)
+    - end=None means still active
+    - tender=True means legal tender
+    """
+    currency_to_flag: dict[str, str] = {}
+
+    # Start with overrides (they win over auto-detected)
+    currency_to_flag.update(_CURRENCY_FLAG_OVERRIDES)
+
+    # Get Babel's territory→currencies mapping
+    territory_currencies = get_global("territory_currencies")
+
+    # Iterate all countries from pycountry
+    for country in pycountry.countries:
+        iso2 = country.alpha_2
+        entries = territory_currencies.get(iso2, [])
+
+        for entry in entries:
+            # entry is tuple: (code, start, end, tender)
+            code, _start, end, tender = entry
+
+            # Only current (end=None) and legal tender currencies
+            if end is not None or not tender:
+                continue
+
+            # Don't override multi-country currencies already set
+            if code not in currency_to_flag:
+                currency_to_flag[code] = iso2_to_flag_emoji(iso2)
+
+    # Add crypto
+    for code in CRYPTO_CURRENCIES:
+        currency_to_flag[code] = "🪙"
+
+    return currency_to_flag
+
+# =============================================================================
+# CURRENCY → COUNTRY CODES MAPPING (for search by nation)
+# =============================================================================
+
+
+@lru_cache(maxsize=1)
+def _build_currency_to_countries_map() -> dict[str, list[str]]:
+    """
+    Build mapping: currency_code → list of ISO-2 country codes that use it.
+
+    Only includes active legal tender currencies (end=None, tender=True).
+    Used to enable searching currencies by country name.
+    """
+    currency_to_countries: dict[str, list[str]] = {}
+    territory_currencies = get_global("territory_currencies")
+
+    for country in pycountry.countries:
+        iso2 = country.alpha_2
+        entries = territory_currencies.get(iso2, [])
+
+        for entry in entries:
+            code, _start, end, tender = entry
+            if end is not None or not tender:
+                continue
+            if code not in currency_to_countries:
+                currency_to_countries[code] = []
+            currency_to_countries[code].append(iso2)
+
+    return currency_to_countries
+
 
 # Map of common currency symbols to possible ISO codes
 SYMBOL_TO_ISO = {
@@ -147,31 +256,53 @@ def normalize_currency(input_str: str, language: str = "en") -> dict:
 
 def list_currencies(language: str = "en") -> List[dict]:
     """
-    List all currencies with localized names and symbols.
+    List all active currencies with localized names, symbols, flag emoji, and country codes.
+
+    Source-of-truth: pycountry (only active ISO 4217 currencies).
+    Babel is used only for localized names and symbols.
+    Crypto currencies from CRYPTO_CURRENCIES are appended at the end.
 
     Args:
         language: ISO 639-1 language code (default: 'en')
 
     Returns:
-        List of dicts with 'code', 'name', 'symbol'
+        List of dicts with 'code', 'name', 'symbol', 'flag_emoji', 'country_codes'
     """
     locale = get_babel_locale(language)
+    flag_map = _build_currency_to_flag_map()
+    countries_map = _build_currency_to_countries_map()
     currencies = []
 
-    try:
-        all_codes = sorted(locale.currencies.keys())
+    # 1. Active ISO 4217 currencies from pycountry (source-of-truth)
+    for currency in sorted(pycountry.currencies, key=lambda c: c.alpha_3):
+        code = currency.alpha_3
+        try:
+            name = get_currency_name(code, locale=locale) or currency.name
+            symbol = get_currency_symbol(code, locale=locale) or code
+        except Exception:
+            name = currency.name
+            symbol = code
 
-        for code in all_codes:
-            try:
-                name = get_currency_name(code, locale=locale)
-                symbol = get_currency_symbol(code, locale=locale)
+        currencies.append(
+            {
+                "code": code,
+                "name": name,
+                "symbol": symbol,
+                "flag_emoji": flag_map.get(code, "🏳️"),
+                "country_codes": sorted(countries_map.get(code, [])),
+            }
+        )
 
-                if name and symbol:
-                    currencies.append({"code": code, "name": name, "symbol": symbol})
-            except Exception as e:
-                logger.debug(f"Could not get info for currency {code}", error=str(e))
-                continue
-    except Exception as e:
-        logger.error(f"Failed to list currencies for language {language}", error=str(e))
+    # 2. Crypto currencies (from CRYPTO_CURRENCIES dict)
+    for code, crypto_name in sorted(CRYPTO_CURRENCIES.items()):
+        currencies.append(
+            {
+                "code": code,
+                "name": crypto_name,
+                "symbol": code,
+                "flag_emoji": "🪙",
+                "country_codes": [],
+            }
+        )
 
     return currencies
