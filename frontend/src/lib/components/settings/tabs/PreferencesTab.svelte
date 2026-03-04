@@ -15,12 +15,6 @@
     import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
     import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
 
-    interface CurrencyInfo {
-        code: string;
-        name: string;
-        symbol: string;
-    }
-
     // Category definitions
     interface Category {
         id: string;
@@ -56,11 +50,6 @@
     let success: string | null = null;
     let selectedCategory: string = '';
 
-
-    // Currency options for FuzzySelect
-    let currencyOptions: SelectOption[] = [];
-    let currenciesLoading = true;
-
     // Language options
     const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map(l => ({
         value: l.code,
@@ -70,7 +59,7 @@
 
     onMount(async () => {
         debug.log('PreferencesTab', 'onMount');
-        await Promise.all([loadGlobalDefaults(), loadSettings(), loadCurrencies()]);
+        await Promise.all([loadGlobalDefaults(), loadSettings()]);
     });
 
     async function loadGlobalDefaults() {
@@ -120,22 +109,6 @@
         }
     }
 
-    async function loadCurrencies() {
-        debug.log('PreferencesTab', 'loadCurrencies');
-        currenciesLoading = true;
-        try {
-            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
-            currencyOptions = (response.items ?? []).map((c: any) => ({
-                value: c.code,
-                label: c.name,
-                icon: c.symbol !== c.code ? c.symbol : undefined
-            }));
-        } catch (e) {
-            debug.error('PreferencesTab', 'loadCurrencies failed', e);
-        } finally {
-            currenciesLoading = false;
-        }
-    }
 
     function getStoredTheme(): 'light' | 'dark' | 'auto' {
         if (typeof localStorage === 'undefined') return 'auto';
@@ -349,13 +322,11 @@
             <div data-testid="preference-currency">
                 <SettingCurrency
                         bind:value={editedValues.default_currency}
-                        options={currencyOptions}
                         label={$_('settings.defaultCurrency')}
                         hint={$_('settings.defaultCurrencyHint')}
                         isModified={currencyModified}
                         isNonDefault={currencyNonDefault}
                         isLocked={false}
-                        loading={currenciesLoading}
                         onsave={() => saveField('default_currency')}
                         onundo={() => undoField('default_currency')}
                         onreset={() => resetField('default_currency')}
