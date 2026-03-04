@@ -1,22 +1,25 @@
 <script lang="ts">
     /**
      * SettingCurrency.svelte - Svelte 5
-     * Currency setting with SearchSelect and inline actions
+     * Currency setting with CurrencySearchSelect and inline actions.
+     * CurrencySearchSelect handles its own data loading from the API.
      */
     import {_} from '$lib/i18n';
     import {RotateCcw, Save, Undo} from 'lucide-svelte';
-    import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
+    import {CurrencySearchSelect} from '$lib/components/ui/select';
     import type {Component} from 'svelte';
 
     interface Props {
         value: string;
-        options?: SelectOption[];
+        /** @deprecated — CurrencySearchSelect loads its own options. Kept for backward compat. */
+        options?: any[];
         label: string;
         hint?: string;
         icon?: Component | null;
         isModified?: boolean;
         isNonDefault?: boolean;
         isLocked?: boolean;
+        /** @deprecated — CurrencySearchSelect manages its own loading state. */
         loading?: boolean;
         testId?: string;
         onsave?: () => void;
@@ -27,7 +30,7 @@
 
     let {
         value = $bindable(''),
-        options = [],
+        options,
         label,
         hint = '',
         icon = null,
@@ -102,15 +105,14 @@
             </div>
         {/if}
 
-        <!-- SearchSelect for currency - responsive width -->
+        <!-- CurrencySearchSelect — loads its own data from API -->
         <div class="w-48 sm:w-64">
-            <SearchSelect
+            <CurrencySearchSelect
                     bind:value
                     disabled={isLocked}
-                    {loading}
                     onchange={handleChange}
-                    {options}
                     placeholder={$_('settings.selectCurrency')}
+                    compact={true}
             />
         </div>
     </div>

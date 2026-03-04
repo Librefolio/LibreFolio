@@ -5,7 +5,7 @@
     import {onDestroy, onMount} from 'svelte';
     import {debug} from '$lib/debug';
     import {AlertCircle, ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
-    import {SearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
+    import {SearchSelect, type SelectOption, SimpleSelect, CurrencySearchSelect} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/globalSettings';
     import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
@@ -13,12 +13,6 @@
     // Props
     export let canEdit: boolean = false;
 
-
-    interface CurrencyInfo {
-        code: string;
-        name: string;
-        symbol: string;
-    }
 
     // Default values for global settings
     const SETTING_DEFAULTS: Record<string, string> = {
@@ -60,9 +54,6 @@
     let fileSizeUnit: 'MB' | 'GB' = 'MB';
     let fileSizeDisplayValue: number = 10;
 
-    // Currency options for SearchSelect
-    let currencyOptions: SelectOption[] = [];
-    let currenciesLoading = true;
 
     // Language options for dropdown
     const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map(l => ({
@@ -73,28 +64,8 @@
 
     onMount(async () => {
         debug.log('GlobalSettingsTab', 'onMount');
-        await Promise.all([
-            loadSettings(),
-            loadCurrencies()
-        ]);
+        await loadSettings();
     });
-
-    async function loadCurrencies() {
-        debug.log('GlobalSettingsTab', 'loadCurrencies');
-        currenciesLoading = true;
-        try {
-            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
-            currencyOptions = (response.items || []).map((c: any) => ({
-                value: c.code,
-                label: c.name,
-                icon: c.symbol
-            }));
-        } catch (e) {
-            debug.error('GlobalSettingsTab', 'loadCurrencies failed', e);
-        } finally {
-            currenciesLoading = false;
-        }
-    }
 
     async function loadSettings() {
         debug.log('GlobalSettingsTab', 'loadSettings');
@@ -795,14 +766,13 @@
                                             {/if}
                                         </div>
                                     {/if}
-                                    <!-- Currency SearchSelect - responsive width -->
+                                    <!-- Currency CurrencySearchSelect - responsive width -->
                                     <div class="w-48 sm:w-64">
-                                        <SearchSelect
+                                        <CurrencySearchSelect
                                                 bind:value={editedValues[setting.key]}
-                                                options={currencyOptions}
                                                 placeholder={$_('settings.selectCurrency')}
                                                 disabled={isLocked}
-                                                loading={currenciesLoading}
+                                                compact={true}
                                                 onchange={() => { editedValues = {...editedValues}; }}
                                         />
                                     </div>

@@ -332,7 +332,9 @@
       "providerDisabledHint": "Select both currencies first",
       "providerIncompatible": "This provider doesn't support this pair",
       "intermediateRouteComingSoon": "Intermediate conversion routes — Coming Soon",
-      "saveConfiguration": "Save Configuration"
+      "saveConfiguration": "Save Configuration",
+      "providerInfoBanner": "Providers automatically fetch exchange rates from central banks. Without a provider, you will need to insert rates manually.",
+      "noProviderWarning": "No provider configured. You will need to manually insert exchange rates for each date."
     },
     "provider": {
       "primary": "Primary",

@@ -332,7 +332,9 @@
       "providerDisabledHint": "Seleziona prima entrambe le valute",
       "providerIncompatible": "Questo provider non supporta questa coppia",
       "intermediateRouteComingSoon": "Conversione tramite valute intermedie — In arrivo",
-      "saveConfiguration": "Salva Configurazione"
+      "saveConfiguration": "Salva Configurazione",
+      "providerInfoBanner": "I provider recuperano automaticamente i tassi di cambio dalle banche centrali. Senza un provider, dovrai inserire i tassi manualmente.",
+      "noProviderWarning": "Nessun provider configurato. Dovrai inserire manualmente i tassi di cambio per ogni data."
     },
     "provider": {
       "primary": "Primario",
