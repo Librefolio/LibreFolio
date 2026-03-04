@@ -32,6 +32,8 @@
         maxVisibleItems?: number;
         /** Dropdown position */
         dropdownPosition?: 'top' | 'bottom' | 'auto';
+        /** Compact mode — smaller icons and text for use in modals/tight spaces */
+        compact?: boolean;
         /** Change callback */
         onchange?: (value: string) => void;
     }
@@ -45,6 +47,7 @@
         loading: externalLoading = false,
         maxVisibleItems = 6,
         dropdownPosition = 'auto',
+        compact = false,
         onchange
     }: Props = $props();
 
@@ -135,12 +138,12 @@
     {#snippet item(option)}
         <div class="flex items-center space-x-2 min-w-0">
             {#if option.icon}
-                <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium">
+                <span class="{compact ? 'text-sm w-6 h-6' : 'text-lg w-9 h-9'} shrink-0 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium">
                     {option.icon}
                 </span>
             {/if}
             <div class="min-w-0">
-                <div class="font-medium text-gray-900 dark:text-gray-100">{option.value || ''}</div>
+                <div class="{compact ? 'text-sm' : ''} font-medium text-gray-900 dark:text-gray-100">{option.value || ''}</div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}</div>
             </div>
         </div>
@@ -148,12 +151,12 @@
     {#snippet selectedItem(option)}
         <div class="flex items-center space-x-2 min-w-0">
             {#if option.icon}
-                <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium">
+                <span class="{compact ? 'text-sm w-6 h-6' : 'text-lg w-9 h-9'} shrink-0 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium">
                     {option.icon}
                 </span>
             {/if}
             <div class="min-w-0">
-                <div class="font-medium text-gray-900 dark:text-gray-100">{option.value || ''}</div>
+                <div class="{compact ? 'text-sm' : ''} font-medium text-gray-900 dark:text-gray-100">{option.value || ''}</div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}</div>
             </div>
         </div>

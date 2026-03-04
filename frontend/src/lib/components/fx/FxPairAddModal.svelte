@@ -202,10 +202,10 @@
         <!-- ============================================================= -->
         <!-- Body (scrollable) -->
         <!-- ============================================================= -->
-        <div class="overflow-y-auto flex-1 min-h-0 p-5 space-y-5">
+        <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4">
             <!-- Error banner -->
             {#if error}
-                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-600 dark:text-red-400">
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2.5 text-xs text-red-600 dark:text-red-400">
                     {error}
                 </div>
             {/if}
@@ -213,8 +213,8 @@
             <!-- ========================================================= -->
             <!-- Currency selection -->
             <!-- ========================================================= -->
-            <div class="space-y-2">
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+            <div class="space-y-1.5">
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
                     <div class="flex-1">
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.baseCurrency')}
@@ -222,12 +222,13 @@
                         <CurrencySearchSelect
                             bind:value={baseCurrency}
                             placeholder={$_('fx.addPair.baseCurrency')}
+                            compact={true}
                         />
                     </div>
                     <!-- Arrow: → on desktop, ↓ on mobile -->
                     <span class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:pb-2">
-                        <ArrowRight size={20} class="hidden sm:block" />
-                        <ArrowDown size={20} class="sm:hidden" />
+                        <ArrowRight size={18} class="hidden sm:block" />
+                        <ArrowDown size={18} class="sm:hidden" />
                     </span>
                     <div class="flex-1">
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -236,6 +237,7 @@
                         <CurrencySearchSelect
                             bind:value={quoteCurrency}
                             placeholder={$_('fx.addPair.quoteCurrency')}
+                            compact={true}
                         />
                     </div>
                 </div>
@@ -244,15 +246,15 @@
             <!-- ========================================================= -->
             <!-- Provider Priority -->
             <!-- ========================================================= -->
-            <div class="space-y-3 {!hasCurrencies ? 'opacity-50 pointer-events-none' : ''}">
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+            <div class="space-y-2 {!hasCurrencies ? 'opacity-50 pointer-events-none' : ''}">
+                <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide">
                     {$_('fx.addPair.providerPriority')}
                 </h3>
 
                 <!-- Hint when currencies not selected -->
                 {#if !hasCurrencies}
-                    <div class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600 text-sm text-gray-400 dark:text-gray-500">
-                        <Lock size={14} />
+                    <div class="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600 text-xs text-gray-400 dark:text-gray-500">
+                        <Lock size={12} />
                         {$_('fx.addPair.providerDisabledHint')}
                     </div>
                 {/if}
@@ -265,30 +267,30 @@
                         onReorder={handleReorder}
                     >
                         {#snippet children({ item, index })}
-                            <div class="flex items-center gap-2.5 group">
+                            <div class="flex items-center gap-2 group">
                                 <!-- Provider icon -->
                                 {#if item.icon_url}
                                     <img
                                         src={item.icon_url}
                                         alt={item.code}
-                                        class="w-7 h-7 rounded-md object-contain bg-gray-50 dark:bg-slate-700 p-0.5 flex-shrink-0"
+                                        class="w-6 h-6 rounded-md object-contain bg-gray-50 dark:bg-slate-700 p-0.5 flex-shrink-0"
                                     />
                                 {:else}
-                                    <span class="w-7 h-7 flex items-center justify-center rounded-md bg-libre-green/15 text-libre-green text-xs font-bold flex-shrink-0">
+                                    <span class="w-6 h-6 flex items-center justify-center rounded-md bg-libre-green/15 text-libre-green text-[10px] font-bold flex-shrink-0">
                                         {getInitials(item.code)}
                                     </span>
                                 {/if}
 
                                 <!-- Provider info -->
                                 <div class="flex-1 min-w-0">
-                                    <span class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate">
+                                    <span class="font-medium text-xs text-gray-700 dark:text-gray-200 truncate">
                                         {item.name}
                                     </span>
-                                    <span class="text-xs text-gray-400 dark:text-gray-500 ml-1">({item.code})</span>
+                                    <span class="text-[10px] text-gray-400 dark:text-gray-500 ml-1">({item.code})</span>
                                 </div>
 
                                 <!-- Priority badge -->
-                                <span class="text-xs font-mono px-2 py-0.5 rounded flex-shrink-0
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0
                                     {index === 0
                                         ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
                                         : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}">
@@ -323,9 +325,9 @@
                 {/if}
 
                 <!-- Intermediate Route placeholder -->
-                <div class="p-3 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600">
-                    <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
-                        <Lock size={14} />
+                <div class="p-2.5 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600">
+                    <div class="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
+                        <Lock size={12} />
                         <span>{$_('fx.addPair.intermediateRouteComingSoon')}</span>
                     </div>
                 </div>
@@ -335,10 +337,10 @@
         <!-- ============================================================= -->
         <!-- Footer -->
         <!-- ============================================================= -->
-        <div class="flex justify-end gap-2 p-5 pt-4 border-t border-gray-100 dark:border-slate-700 shrink-0">
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0">
             <button
                 type="button"
-                class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
+                class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
                 onclick={handleClose}
                 disabled={saving}
             >
@@ -346,7 +348,7 @@
             </button>
             <button
                 type="button"
-                class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 onclick={handleSave}
                 disabled={!isValid || saving}
             >
@@ -362,7 +364,8 @@
     title={$_('common.discardChanges')}
     message={$_('common.discardChangesMessage')}
     confirmText={$_('common.discard')}
-    danger={true}
+    danger={false}
+    warning={true}
     onConfirm={resetAndClose}
     onCancel={() => { showDiscardConfirm = false; }}
     zIndex={70}

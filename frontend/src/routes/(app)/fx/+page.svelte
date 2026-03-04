@@ -64,6 +64,8 @@
     // Derived
     // =========================================================================
 
+    // Extract unique currencies from configured pairs for filter dropdown
+    $: configuredCurrencies = [...new Set(pairs.flatMap(p => [p.config.base, p.config.quote]))].sort();
 
     // Filtered pairs
     $: filteredPairs = pairs.filter(p => {
@@ -327,6 +329,7 @@
                     <CurrencySearchSelect
                         bind:value={filterCurrency1}
                         includeAll={true}
+                        allowedCurrencies={configuredCurrencies}
                         placeholder={$_('fx.filter.filterCurrency')}
                         maxVisibleItems={6}
                         onchange={(v) => { filterCurrency1 = v; filterCurrency2 = ''; }}
@@ -337,6 +340,7 @@
                         <CurrencySearchSelect
                             bind:value={filterCurrency2}
                             includeAll={true}
+                            allowedCurrencies={configuredCurrencies}
                             placeholder={$_('fx.filter.secondCurrency')}
                             maxVisibleItems={6}
                         />
