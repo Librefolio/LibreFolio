@@ -63,7 +63,8 @@ class FXRateProvider(ABC):
         """Human-readable provider name (e.g., 'European Central Bank')."""
         pass
 
-    def get_icon(self) -> str | None:
+    @property
+    def icon(self) -> str | None:
         """
         Return provider icon URL (hardcoded).
 
@@ -367,6 +368,20 @@ async def ensure_rates_multi_source(
 
     if not provider_code:
         raise FXServiceError("Provider code is required")
+
+    # MANUAL provider: skip sync silently — manual pairs don't auto-sync
+    if provider_code.upper() == "MANUAL":
+        logger.info(
+            f"MANUAL provider: skipping sync for {len(currencies)} currencies "
+            f"({date_range[0]} to {date_range[1]}) — manual-only pair"
+            )
+        return {
+            "provider": "MANUAL",
+            "base_currency": "",
+            "total_fetched": 0,
+            "total_changed": 0,
+            "currencies_synced": [],
+            }
 
     # Get provider instance from registry
     provider = FXProviderRegistry.get_provider_instance(provider_code)

@@ -149,9 +149,16 @@
                     priority: p.priority,
                 }));
                 await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post(items);
+            } else {
+                // No providers — create MANUAL sentinel so the pair exists
+                // in pair-sources and appears in the list. The backend auto-manages
+                // MANUAL: removes it when a real provider is added, reinstates when removed.
+                await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post([{
+                    base, quote,
+                    provider_code: 'MANUAL',
+                    priority: 999,
+                }]);
             }
-            // Note: even without providers, the pair is still "created" — the user
-            // will need to insert rates manually via the rate edit UI.
             oncreated?.();
             resetAndClose();
         } catch (e: any) {
@@ -249,13 +256,11 @@
                 </div>
             </div>
 
-            <!-- Info banner: explain provider role -->
-            {#if hasCurrencies}
-                <div class="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-lg text-xs text-blue-700 dark:text-blue-300">
-                    <Info size={14} class="flex-shrink-0 mt-0.5" />
-                    <span>{$_('fx.addPair.providerInfoBanner')}</span>
-                </div>
-            {/if}
+            <!-- Info banner: explain provider role (always visible) -->
+            <div class="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+                <Info size={14} class="flex-shrink-0 mt-0.5" />
+                <span>{$_('fx.addPair.providerInfoBanner')}</span>
+            </div>
 
             <!-- ========================================================= -->
             <!-- Provider Priority -->

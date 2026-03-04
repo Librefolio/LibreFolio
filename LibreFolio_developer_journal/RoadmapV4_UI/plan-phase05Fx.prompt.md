@@ -1,13 +1,15 @@
 # Plan: Phase 5 — FX Management + Chart Library + User Docs + i18n MkDocs (v6)
 
 **Data creazione**: 2 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 in corso (fix iterativi: sub-plan Steps 1-7,9 ✅ completati, Step 8 📋 TODO).
+**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 in corso (fix iterativi: sub-plan Steps 1-7,9 ✅ completati, Step 8 📋 TODO). MANUAL Provider ✅ completato (→ `phases/phase-05-subplan/plan-manualFxProvider.prompt.md`). FxPairAddModal Redesign ✅ completato (→ `phases/phase-05-subplan/plan-fxPairAddModalRedesign.prompt.md`).
 **Durata stimata**: ~7-8 giorni
 **Dipendenze**: Phase 4 completata, Phase 4.8 (Broker Sharing) completata
 **Riferimenti**:
 - `plan-phase05-to-08-upgrade.md` §4 (versione precedente)
 - `phases/phase-05-fx.md` (legacy plan, superato da questo documento)
 - `plan-fxUiRefinementsRound2.prompt.md` ← **SUB-PLAN** con fix dettagliati (visualMap, stale gradient, layout, MeasureOverlay, OrderableList, settings ⚙️, overlay confronto, benchmark line)
+- `phases/phase-05-subplan/plan-manualFxProvider.prompt.md` ← **✅ COMPLETATO** provider MANUAL sentinel
+- `phases/phase-05-subplan/plan-fxPairAddModalRedesign.prompt.md` ← **✅ COMPLETATO** modale Add FX redesign
 - `TODO_FUTURI.md` §FX, §Cross-Rate
 
 ---

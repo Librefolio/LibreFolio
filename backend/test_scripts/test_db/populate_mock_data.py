@@ -1048,8 +1048,16 @@ def populate_fx_currency_pair_sources(session: Session):
         session.add(pair_source)
         print(f"  ✅ {base}/{quote} → ECB (priority=1)")
 
+    # Add a MANUAL-only pair for testing (no automatic provider)
+    from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
+    manual_pair = FxCurrencyPairSource(
+        base="NOK", quote="SEK", provider_code="MANUAL", priority=MANUAL_PRIORITY
+        )
+    session.add(manual_pair)
+    print(f"  ✅ NOK/SEK → MANUAL (priority={MANUAL_PRIORITY}) — manual-only pair")
+
     session.commit()
-    print(f"\n  📊 Configured {len(eur_pairs)} currency pairs with ECB as provider")
+    print(f"\n  📊 Configured {len(eur_pairs)} currency pairs with ECB + 1 manual-only pair")
 
 
 def configure_user_avatars(session: Session):

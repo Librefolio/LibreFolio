@@ -789,3 +789,223 @@ async def test_invalid_requests(test_server):
             response.status_code == 422
         ), f"Expected 422 for invalid date, got {response.status_code}"
         print_success("✓ Invalid date rejected with 422")
+
+
+# ============================================================================
+# MANUAL PROVIDER TESTS
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_manual_provider_hidden_from_list(test_server):
+    """Test 12: MANUAL provider should NOT appear in GET /fx/providers."""
+    print_section("Test 12: MANUAL provider hidden from GET /fx/providers")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
+        assert response.status_code == 200
+
+        providers = response.json()
+        provider_codes = [p["code"] for p in providers]
+        assert "MANUAL" not in provider_codes, \
+            f"MANUAL should NOT appear in provider list, got: {provider_codes}"
+        print_success(f"✓ MANUAL not in provider list: {provider_codes}")
+
+
+@pytest.mark.asyncio
+async def test_manual_pair_creation(test_server):
+    """Test 13: Create a pair with only MANUAL provider."""
+    print_section("Test 13: Create MANUAL-only pair")
+
+    async with httpx.AsyncClient() as client:
+        # Create a MANUAL-only pair
+        create_data = [
+            {"base": "BRL", "quote": "MXN", "provider_code": "MANUAL", "priority": 999}
+        ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/pair-sources", json=create_data, timeout=TIMEOUT
+        )
+        assert response.status_code == 201, f"POST failed: {response.status_code}: {response.text}"
+        print_success("✓ Created BRL/MXN with MANUAL provider")
+
+        # Verify it appears in pair-sources
+        response = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        manual_pairs = [i for i in items if i["base"] == "BRL" and i["quote"] == "MXN"]
+        assert len(manual_pairs) == 1, f"Expected 1 MANUAL pair, got {manual_pairs}"
+        assert manual_pairs[0]["provider_code"] == "MANUAL"
+        assert manual_pairs[0]["priority"] == 999
+        print_success("✓ BRL/MXN MANUAL pair visible in pair-sources")
+
+
+@pytest.mark.asyncio
+async def test_manual_auto_removed_on_real_provider(test_server):
+    """Test 14: MANUAL auto-removed when a real provider is added to the same pair."""
+    print_section("Test 14: MANUAL auto-removed when real provider added")
+
+    async with httpx.AsyncClient() as client:
+        # First create a MANUAL-only pair
+        create_manual = [
+            {"base": "DKK", "quote": "PLN", "provider_code": "MANUAL", "priority": 999}
+        ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/pair-sources", json=create_manual, timeout=TIMEOUT
+        )
+        assert response.status_code == 201
+        print_success("✓ Created DKK/PLN with MANUAL")
+
+        # Now add a real provider to the same pair
+        create_real = [
+            {"base": "DKK", "quote": "PLN", "provider_code": "ECB", "priority": 1}
+        ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/pair-sources", json=create_real, timeout=TIMEOUT
+        )
+        assert response.status_code == 201
+        print_success("✓ Added ECB to DKK/PLN")
+
+        # Verify MANUAL was auto-removed
+        response = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        dkk_pln = [i for i in items if i["base"] == "DKK" and i["quote"] == "PLN"]
+        provider_codes = [i["provider_code"] for i in dkk_pln]
+        assert "MANUAL" not in provider_codes, \
+            f"MANUAL should have been auto-removed, but found: {provider_codes}"
+        assert "ECB" in provider_codes, f"ECB should be present: {provider_codes}"
+        print_success(f"✓ MANUAL auto-removed, remaining providers: {provider_codes}")
+
+        # Cleanup
+        await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/pair-sources",
+            json=[{"base": "DKK", "quote": "PLN"}], timeout=TIMEOUT
+        )
+
+
+@pytest.mark.asyncio
+async def test_manual_auto_reinstated_on_last_provider_removed(test_server):
+    """Test 15: MANUAL auto-reinstated when the last real provider is removed."""
+    print_section("Test 15: MANUAL auto-reinstated when last provider removed")
+
+    async with httpx.AsyncClient() as client:
+        # Create a pair with a real provider
+        create_real = [
+            {"base": "HUF", "quote": "RON", "provider_code": "ECB", "priority": 1}
+        ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/pair-sources", json=create_real, timeout=TIMEOUT
+        )
+        assert response.status_code == 201
+        print_success("✓ Created HUF/RON with ECB")
+
+        # Remove the real provider
+        delete_data = [
+            {"base": "HUF", "quote": "RON", "priority": 1}
+        ]
+        response = await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/pair-sources",
+            json=delete_data, timeout=TIMEOUT
+        )
+        assert response.status_code == 200
+        print_success("✓ Removed ECB from HUF/RON")
+
+        # Verify MANUAL was auto-reinstated
+        response = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        huf_ron = [i for i in items if i["base"] == "HUF" and i["quote"] == "RON"]
+        assert len(huf_ron) == 1, f"Expected 1 entry (MANUAL), got {huf_ron}"
+        assert huf_ron[0]["provider_code"] == "MANUAL"
+        assert huf_ron[0]["priority"] == 999
+        print_success("✓ MANUAL auto-reinstated for HUF/RON")
+
+        # Cleanup
+        await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/pair-sources",
+            json=[{"base": "HUF", "quote": "RON"}], timeout=TIMEOUT
+        )
+
+
+@pytest.mark.asyncio
+async def test_manual_sync_returns_empty(test_server):
+    """Test 16: Sync with MANUAL provider should return 0 results, no errors."""
+    print_section("Test 16: Sync with MANUAL provider — silent skip")
+
+    async with httpx.AsyncClient() as client:
+        # Create a MANUAL-only pair
+        create_data = [
+            {"base": "ISK", "quote": "TRY", "provider_code": "MANUAL", "priority": 999}
+        ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/pair-sources", json=create_data, timeout=TIMEOUT
+        )
+        assert response.status_code == 201
+
+        # Attempt sync — should not error
+        # Specify ISK,TRY as currencies to focus on the MANUAL pair
+        response = await client.get(
+            f"{API_BASE}/fx/currencies/sync",
+            params={"start": "2025-01-01", "end": "2025-01-05", "currencies": "ISK,TRY"},
+            timeout=TIMEOUT
+        )
+        # Sync should succeed (200) — MANUAL pairs are silently skipped
+        assert response.status_code == 200, \
+            f"Sync should succeed with MANUAL pairs, got {response.status_code}: {response.text}"
+        print_success("✓ Sync completed successfully with MANUAL pair (silently skipped)")
+
+        # Cleanup
+        await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/pair-sources",
+            json=[{"base": "ISK", "quote": "TRY"}], timeout=TIMEOUT
+        )
+
+
+@pytest.mark.asyncio
+async def test_manual_full_pair_delete_no_reinstate(test_server):
+    """Test 17: Full pair delete (no priority) should NOT reinstate MANUAL."""
+    print_section("Test 17: Full pair delete does not reinstate MANUAL")
+
+    async with httpx.AsyncClient() as client:
+        # Create a MANUAL-only pair
+        create_data = [
+            {"base": "ARS", "quote": "CLP", "provider_code": "MANUAL", "priority": 999}
+        ]
+        response = await client.post(
+            f"{API_BASE}/fx/providers/pair-sources", json=create_data, timeout=TIMEOUT
+        )
+        assert response.status_code == 201
+        print_success("✓ Created ARS/CLP with MANUAL")
+
+        # Delete entire pair (no priority = delete ALL)
+        response = await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/pair-sources",
+            json=[{"base": "ARS", "quote": "CLP"}], timeout=TIMEOUT
+        )
+        assert response.status_code == 200
+        print_success("✓ Deleted ARS/CLP (full pair)")
+
+        # Verify pair is completely gone — MANUAL was NOT reinstated
+        response = await client.get(f"{API_BASE}/fx/providers/pair-sources", timeout=TIMEOUT)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        ars_clp = [i for i in items if i["base"] == "ARS" and i["quote"] == "CLP"]
+        assert len(ars_clp) == 0, \
+            f"Pair should be completely deleted, but found: {ars_clp}"
+        print_success("✓ Full pair delete: pair completely gone, MANUAL NOT reinstated")
+
+
+@pytest.mark.asyncio
+async def test_manual_cleanup_from_previous_tests(test_server):
+    """Test 18: Cleanup pairs created by earlier MANUAL tests."""
+    print_section("Test 18: Cleanup MANUAL test pairs")
+
+    async with httpx.AsyncClient() as client:
+        # Cleanup BRL/MXN from test 13
+        await client.request(
+            "DELETE", f"{API_BASE}/fx/providers/pair-sources",
+            json=[{"base": "BRL", "quote": "MXN"}], timeout=TIMEOUT
+        )
+        print_success("✓ Cleanup BRL/MXN")
+
+

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, delete as sql_delete, and_, or_
 
-from backend.app.db.models import FxCurrencyPairSource
+from backend.app.db.models import FxCurrencyPairSource, FxRate
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
@@ -39,6 +39,9 @@ from backend.app.schemas.fx import (
     FXDeletePairSourceItem,
     FXDeletePairSourceResult,
     FXDeletePairSourcesResponse,
+    # Pairs list models
+    FXPairItem,
+    FXPairsListResponse,
     )
 from backend.app.schemas.refresh import FXSyncResponse
 from backend.app.services.fx import (
@@ -92,6 +95,9 @@ async def list_providers(
         # Get all providers from registry
         providers_list = FXProviderRegistry.list_providers()
 
+        # Always filter out MANUAL provider — it's an internal sentinel
+        providers_list = [p for p in providers_list if p["code"] != "MANUAL"]
+
         # Filter by requested provider codes (case-insensitive)
         if providers:
             requested = {p.upper() for p in providers}
@@ -123,7 +129,7 @@ async def list_providers(
                     description=getattr(
                         instance, "description", f'{provider_dict["name"]} FX rate provider'
                         ),
-                    icon_url=instance.get_icon(),
+                    icon_url=instance.icon,
                     )
                 )
 
@@ -845,6 +851,23 @@ async def create_pair_sources_bulk(
                     },
                 )
 
+        # Auto-remove MANUAL sentinel for pairs that now have real providers
+        pairs_with_real_providers = set()
+        for source in sources:
+            if source.provider_code.upper() != "MANUAL":
+                b, q = source.base.upper(), source.quote.upper()
+                pairs_with_real_providers.add((min(b, q), max(b, q)))
+
+        for base, quote in pairs_with_real_providers:
+            manual_del = sql_delete(FxCurrencyPairSource).where(
+                FxCurrencyPairSource.base == base,
+                FxCurrencyPairSource.quote == quote,
+                FxCurrencyPairSource.provider_code == "MANUAL",
+                )
+            del_result = await session.execute(manual_del)
+            if del_result.rowcount > 0:
+                logger.info(f"Auto-removed MANUAL sentinel for {base}/{quote} (real provider added)")
+
         await session.commit()
 
         return FXCreatePairSourcesResponse(
@@ -930,6 +953,44 @@ async def delete_pair_sources_bulk(
                         )
                     )
                 total_deleted += deleted_count
+
+        # Auto-reinstate MANUAL sentinel for pairs that have no real providers left
+        # ONLY when deleting specific providers (with priority), NOT when deleting entire pair.
+        # When priority is None, the user intentionally deletes the entire pair configuration.
+        affected_pairs = set()
+        for source_item in sources:
+            if source_item.priority is not None:
+                # Only track pairs where a specific provider was removed
+                b, q = source_item.base, source_item.quote  # Already uppercase from validator
+                affected_pairs.add((min(b, q), max(b, q)))
+
+        for base, quote in affected_pairs:
+            # Count remaining real providers (non-MANUAL)
+            count_stmt = select(FxCurrencyPairSource).where(
+                FxCurrencyPairSource.base == base,
+                FxCurrencyPairSource.quote == quote,
+                FxCurrencyPairSource.provider_code != "MANUAL",
+                )
+            remaining = await session.execute(count_stmt)
+            real_count = len(remaining.scalars().all())
+
+            if real_count == 0:
+                # Check if MANUAL already exists
+                manual_check = select(FxCurrencyPairSource).where(
+                    FxCurrencyPairSource.base == base,
+                    FxCurrencyPairSource.quote == quote,
+                    FxCurrencyPairSource.provider_code == "MANUAL",
+                    )
+                manual_exists = (await session.execute(manual_check)).scalar_one_or_none()
+
+                if not manual_exists:
+                    from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
+                    manual_source = FxCurrencyPairSource(
+                        base=base, quote=quote,
+                        provider_code="MANUAL", priority=MANUAL_PRIORITY,
+                        )
+                    session.add(manual_source)
+                    logger.info(f"Auto-reinstated MANUAL sentinel for {base}/{quote} (no real providers left)")
 
         await session.commit()
 
