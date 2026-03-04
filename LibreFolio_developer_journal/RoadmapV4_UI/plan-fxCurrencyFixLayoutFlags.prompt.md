@@ -140,13 +140,13 @@ Nota: [DateRangePicker] include nativamente i preset (1W,1M,3M,6M,1Y,2Y,Custom) 
 e il selettore date (📅 From──To) su riga 2. È un unico componente.
 
 DESKTOP LARGO (≥1280px) — filtri + azioni 2×2 come oggi, ma senza 1fr sprecato:
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ ┌─DateRangePicker────────────────────┐                        ║ [Abs/%][⚙️] │
-│ │ [1W 1M ▌3M▐ 6M 1Y 2Y Custom ⓘ]    │    [🇪🇺 C1] [🇺🇸 C2 dis] ║  [⟳]  [↻]  │
-│ │ [📅 From Dec 04 ── To Mar 04]      │                        ║             │
-│ └────────────────────────────────────┘                        ║             │
-└──────────────────────────────────────────────────────────────────────────────┘
- ← filtri: flex-wrap orizzontale ──────────────────────→  ↑ azioni: griglia 2×2
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ ┌─DateRangePicker────────────────────┐                                            ║ [Abs/%][⚙️] │
+│ │ [1W 1M ▌3M▐ 6M 1Y 2Y Custom ⓘ]    │               [🇪🇺 C1] [🇺🇸 C2 dis]          ║  [⟳]  [↻]  │
+│ │ [📅 From Dec 04 ── To Mar 04]      │                                            ║             │
+│ └────────────────────────────────────┘                                            ║             │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ← filtri: flex-wrap orizzontale con filtri centrati tra pulsanti e datapicker───→  ↑ azioni: griglia 2×2
 
 TABLET (768–1279px) — filtri wrappano, azioni colonna verticale a destra:
 ┌──────────────────────────────────────────────────┬─────────┐
@@ -156,6 +156,8 @@ TABLET (768–1279px) — filtri wrappano, azioni colonna verticale a destra:
 │ └──────────────────────────────────┘             │  [↻]   │
 │ [🇪🇺 C1]  [🇺🇸 C2 (disabled se C1 vuoto)]      │         │
 └──────────────────────────────────────────────────┴─────────┘
+Con ancora le lable ai pulsanti, e un pò di spazio tra filtor e datapicker per riempire bene tutto lo spazio
+Quando lo spazio cala ulteriormente scompaiono le label dai pulsanti
 
 MOBILE (<768px) — tutto stacked, azioni come riga orizzontale in fondo:
 ┌──────────────────────────────┐
