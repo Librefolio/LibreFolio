@@ -1,7 +1,7 @@
 # Plan: FxPairAddModal Redesign — CurrencySelect, FxProviderSelect & OrderableList
 
 **Data creazione**: 3 Marzo 2026
-**Status**: ✅ COMPLETATO (Step 8 UX fix applicati — svelte-check 0 errori, build OK)
+**Status**: ✅ COMPLETATO (Step 9 — compact sizing, filter currencies, warning color)
 **Dipendenze**: Phase 5 FX in corso, plan-phase05Fx.prompt.md, plan-fxUiRefinementsRound2.prompt.md
 **Riferimenti**:
 - `plan-phase05Fx.prompt.md` — Piano principale Phase 5
@@ -261,3 +261,53 @@ fix(fx): improve add pair modal UX — auto-add provider, overflow fix, mobile l
 - Add dirty state tracking with ConfirmDialog on cancel/close
 - Fix second provider addition issue
 ```
+
+---
+
+## Step 9: Rifinitura dimensioni modale + filtro valute + colore warning ✅
+
+**Feedback ricevuti dal test manuale** (4 Marzo 2026):
+
+### 9a. Campi troppo grandi nella modale
+- [x] Tutti i campi (CurrencySearchSelect, FxProviderSelect, provider entries) avevano dimensioni oversized rispetto alle altre modali
+- **Fix**: Aggiunto prop `compact` a `CurrencySearchSelect` che riduce icone (da `w-9 h-9` a `w-6 h-6`) e testo
+- [x] Usato `compact={true}` nella modale FxPairAddModal per entrambi i selettori valuta
+- [x] Ridotto dimensioni icone/testo provider nella OrderableList (da `w-7 h-7` a `w-6 h-6`, text da `text-sm` a `text-xs`)
+- [x] Ridotto dimensioni icone/testo in `FxProviderSelect` (da `w-8 h-8` / `w-7 h-7` a `w-6 h-6`)
+- [x] Ridotto padding body (da `p-5 space-y-5` a `px-5 py-4 space-y-4`)
+- [x] Ridotto padding footer (da `p-5 pt-4` a `px-5 py-3`) e bottoni (da `px-4 py-2` a `px-3 py-1.5`)
+- [x] Ridotto hint e placeholder sections (da `p-3` a `p-2.5`, `text-sm` a `text-xs`)
+
+### 9b. Filtro valute FX mostra tutte le valute
+- [x] Il `CurrencySearchSelect` nel filtro della pagina FX mostrava ~160 valute (tutte)
+- **Fix**: Aggiunto `configuredCurrencies = [...new Set(pairs.flatMap(p => [p.config.base, p.config.quote]))]` come derived
+- [x] Passato `allowedCurrencies={configuredCurrencies}` a entrambi i `CurrencySearchSelect` nel filtro
+- [x] Ora mostra solo le valute presenti nelle coppie configurate
+
+### 9c. ConfirmModal colore da rosso a giallo
+- [x] Il `ConfirmModal` per discard changes usava `danger={true}` (bottone rosso) — troppo "ansiogeno"
+- **Fix**: Cambiato in `danger={false} warning={true}` per usare il colore amber/giallo
+
+### 9d. Vecchio componente valuta verificato
+- [x] Il vecchio endpoint `GET /fx/currencies` è già rimosso (Step 1)
+- [x] `CurrencySearchSelect` usa `utilities/currencies` (corretto)
+- [x] 3 altri posti (PreferencesTab, GlobalSettingsTab, CashTransactionModal) usano ancora l'API direttamente — documentato come TODO futuro
+
+### Validazione
+- [x] `./dev.py front check` — 0 errori ✅
+- [x] `./dev.py front build` — build pulita ✅
+
+---
+
+## Commit message suggerito (Step 9)
+
+```
+fix(fx): compact modal sizing, filter currencies by config, warning color for discard
+
+- Add compact prop to CurrencySearchSelect (smaller icons/text for modals)
+- Reduce FxPairAddModal field sizes: icons, padding, buttons all tighter
+- Reduce FxProviderSelect dropdown item sizes for better modal fit
+- Filter currency dropdown in FX page to show only configured currencies
+- Change discard ConfirmModal from danger (red) to warning (amber)
+```
+

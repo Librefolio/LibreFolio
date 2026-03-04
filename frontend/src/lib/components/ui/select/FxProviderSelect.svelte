@@ -179,21 +179,21 @@
     placeholder={placeholder || $_('fx.addPair.addProvider')}
 >
     {#snippet item(option)}
-        <div class="flex items-center space-x-2.5 min-w-0 {option.disabled ? 'opacity-40' : ''}">
+        <div class="flex items-center space-x-2 min-w-0 {option.disabled ? 'opacity-40' : ''}">
             <!-- Provider icon -->
             {#if getProvData(option)?.icon_url}
                 <img
                     src={getProvData(option)?.icon_url ?? ''}
                     alt={option.value}
-                    class="w-8 h-8 rounded-lg object-contain bg-gray-50 dark:bg-slate-700 p-0.5 flex-shrink-0"
+                    class="w-6 h-6 rounded-md object-contain bg-gray-50 dark:bg-slate-700 p-0.5 flex-shrink-0"
                 />
             {:else}
-                <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-libre-green/15 text-libre-green text-xs font-bold flex-shrink-0">
+                <span class="w-6 h-6 flex items-center justify-center rounded-md bg-libre-green/15 text-libre-green text-[10px] font-bold flex-shrink-0">
                     {getInitials(option.value)}
                 </span>
             {/if}
             <div class="min-w-0 flex-1">
-                <div class="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+                <div class="font-medium text-xs text-gray-900 dark:text-gray-100 truncate">
                     {option.label}
                 </div>
                 {#if getProvData(option)?.description}
@@ -215,15 +215,15 @@
                 <img
                     src={getProvData(option)?.icon_url ?? ''}
                     alt={option.value}
-                    class="w-7 h-7 rounded-md object-contain bg-gray-50 dark:bg-slate-700 p-0.5 flex-shrink-0"
+                    class="w-6 h-6 rounded-md object-contain bg-gray-50 dark:bg-slate-700 p-0.5 flex-shrink-0"
                 />
             {:else}
-                <span class="w-7 h-7 flex items-center justify-center rounded-md bg-libre-green/15 text-libre-green text-xs font-bold flex-shrink-0">
+                <span class="w-6 h-6 flex items-center justify-center rounded-md bg-libre-green/15 text-libre-green text-[10px] font-bold flex-shrink-0">
                     {getInitials(option.value)}
                 </span>
             {/if}
             <div class="min-w-0">
-                <div class="font-medium text-sm text-gray-900 dark:text-gray-100">{option.label}</div>
+                <div class="font-medium text-xs text-gray-900 dark:text-gray-100">{option.label}</div>
             </div>
         </div>
     {/snippet}
