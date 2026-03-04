@@ -274,6 +274,9 @@ Inoltre: se il primo filtro va su "All currencies" mentre il secondo è selezion
 | 12 | F12 — Auto-sync spinner in modale | Media | ✅ Completato |
 | 13 | F13 — Ricerca "unite" non funziona | Bassa | 🔍 Da investigare |
 | 14 | F14 — Utilities API localizzazione lingua | Alta | 📋 Da fare |
+| 15 | F15 — Layout programmatico ResizeObserver | Alta | ✅ Completato |
+| 16 | F16 — DateRangePicker calendario orizzontale | Bassa | ✅ Completato |
+| 17 | F17 — Allineamento tablet (filtri sx, azioni dx) | Bassa | ✅ Completato |
 
 **Step 1-3**: Fix immediati frontend (nessun cambio backend)
 **Step 4**: Layout fix (solo frontend)
@@ -335,6 +338,30 @@ Inoltre: se il primo filtro va su "All currencies" mentre il secondo è selezion
 ### F13 — Ricerca "unite"→"United Kingdom" non funziona
 **Problema**: L'utente conferma che "unit" trova GBP ma "unite" no. Probabilmente `Intl.DisplayNames` funziona, ma c'è un bug nella costruzione del `searchText` o nel filtro.
 **Stato**: 🔍 Da investigare — il filtro `SearchSelect` usa `.includes()` che è substring match, quindi "unite" dovrebbe matchare "United Kingdom". Probabile che `Intl.DisplayNames` non risolva tutti i codici ISO-2 o che il `searchText` non venga costruito correttamente. Investigare nel browser.
+
+### F15 — Layout programmatico con ResizeObserver ✅
+**Problema**: I breakpoint CSS causavano stati intermedi incoerenti (filtri wrappati con azioni 2×2, oscillazione tra layout). Il `flex-wrap` creava zone di overlap tra stati CSS e stati logici.
+**Fix**: Riscritta completamente la filter bar con approccio 100% programmatico:
+- **ResizeObserver** misura `contentRect.width` del container (esclude padding 32px + border 2px)
+- **3 layout modes** (`wide`, `tablet`, `mobile`) determinati da soglie fisse, NO `flex-wrap`
+- **`showActionLabels`** flag indipendente per testo bottoni
+- Ogni stato disegna una struttura diversa:
+  - **wide** (≥936 contentRect ≈ 970px box): `flex-row` container, filtri `flex-row` + azioni `grid 2×2`
+  - **tablet** (≥601 contentRect ≈ 635px box): `flex-row` container, filtri `flex-col` (stacked) + azioni `grid 2×2`
+  - **mobile** (<601 contentRect): `flex-col` container centrato, azioni `flex-row`
+- Labels visibili ≥686 contentRect (≈720px box)
+- Il file è stato completamente convertito da Svelte 4 (`$:`) a **Svelte 5 runes** (`$state`, `$derived`, `$effect`)
+**File**: `frontend/src/routes/(app)/fx/+page.svelte`
+
+### F16 — DateRangePicker calendario verticale troppo presto ✅
+**Problema**: Il popup calendario a 2 mesi andava verticale anche con spazio orizzontale sufficiente, perché usava `flex-wrap`.
+**Fix**: Cambiato da `flex flex-wrap` a `flex flex-col sm:flex-row` — i 2 mesi sono affiancati sopra sm (640px), verticali solo su mobile stretto. Popup centrato con `left-1/2 -translate-x-1/2` su mobile, `left-0` su sm+.
+**File**: `frontend/src/lib/components/ui/DateRangePicker.svelte`
+
+### F17 — Allineamento tablet: filtri centrati a sinistra, azioni a destra ✅
+**Problema**: In tablet, datepicker e currency filters non erano centrati tra loro, e le azioni non erano allineate a destra né centrate verticalmente.
+**Fix**: Container tablet/wide usa `items-center justify-between` — filtri a sinistra, azioni a destra, centrati verticalmente. Filtri in tablet usano `flex-col items-center` per centrare datepicker e currency orizzontalmente tra loro come blocco.
+**File**: `frontend/src/routes/(app)/fx/+page.svelte`
 
 ---
 

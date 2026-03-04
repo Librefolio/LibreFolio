@@ -501,8 +501,8 @@
         </button>
 
         {#if calendarOpen}
-            <div class="drp-popover absolute z-50 top-full mt-2 left-0 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4">
-                <div class="flex flex-wrap gap-4 justify-center">
+            <div class="drp-popover absolute z-50 top-full mt-2 left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4">
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
                     <!-- Left month (semi-independent) -->
                     <div class="min-w-[240px] flex-1">
                         <div class="flex items-center justify-between mb-2">
