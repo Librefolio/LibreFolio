@@ -256,22 +256,25 @@ def normalize_currency(input_str: str, language: str = "en") -> dict:
 
 def list_currencies(language: str = "en") -> List[dict]:
     """
-    List all active currencies with localized names, symbols, flag emoji, and country codes.
+    List all active currencies with localized names, symbols, flag emoji, country codes, and country names.
 
     Source-of-truth: pycountry (only active ISO 4217 currencies).
-    Babel is used only for localized names and symbols.
+    Babel is used only for localized names, symbols, and country name translations.
     Crypto currencies from CRYPTO_CURRENCIES are appended at the end.
 
     Args:
         language: ISO 639-1 language code (default: 'en')
 
     Returns:
-        List of dicts with 'code', 'name', 'symbol', 'flag_emoji', 'country_codes'
+        List of dicts with 'code', 'name', 'symbol', 'flag_emoji', 'country_codes', 'country_names'
     """
     locale = get_babel_locale(language)
     flag_map = _build_currency_to_flag_map()
     countries_map = _build_currency_to_countries_map()
     currencies = []
+
+    # Pre-build localized territory names from Babel
+    territory_names = locale.territories  # dict: ISO-2 → localized name
 
     # 1. Active ISO 4217 currencies from pycountry (source-of-truth)
     for currency in sorted(pycountry.currencies, key=lambda c: c.alpha_3):
@@ -283,13 +286,26 @@ def list_currencies(language: str = "en") -> List[dict]:
             name = currency.name
             symbol = code
 
+        country_codes = sorted(countries_map.get(code, []))
+        # Resolve localized country names via Babel territories
+        country_names = []
+        for cc in country_codes:
+            localized = territory_names.get(cc)
+            if localized:
+                country_names.append(localized)
+            else:
+                # Fallback to pycountry English name
+                country = pycountry.countries.get(alpha_2=cc)
+                country_names.append(country.name if country else cc)
+
         currencies.append(
             {
                 "code": code,
                 "name": name,
                 "symbol": symbol,
                 "flag_emoji": flag_map.get(code, "🏳️"),
-                "country_codes": sorted(countries_map.get(code, [])),
+                "country_codes": country_codes,
+                "country_names": country_names,
             }
         )
 
@@ -302,6 +318,7 @@ def list_currencies(language: str = "en") -> List[dict]:
                 "symbol": code,
                 "flag_emoji": "🪙",
                 "country_codes": [],
+                "country_names": [],
             }
         )
 

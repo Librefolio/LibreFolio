@@ -9,10 +9,12 @@
   - Flag emoji as icon, currency symbol shown inline
   - Optional `allowedCurrencies` filter to restrict visible currencies
   - Optional `includeAll` to add an "All currencies" option at the top
-  - Searchable by code, name, and symbol (€, $, £, etc.)
+  - Searchable by code, name, symbol (€, $, £), country codes (US, GB), and country names
+  - Automatically reloads when app language changes (via currentLanguage store)
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/language';
     import {ensureCurrenciesLoaded, getAllCurrencies} from '$lib/stores/currencyStore';
     import type {CurrencyInfo} from '$lib/stores/currencyStore';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
@@ -74,25 +76,13 @@
             });
         }
 
-        // Use browser Intl.DisplayNames for localized country names (e.g., "IT" → "Italia")
-        let countryNames: Intl.DisplayNames | null = null;
-        try {
-            countryNames = new Intl.DisplayNames(navigator.language || 'en', {type: 'region'});
-        } catch {
-            // Fallback: no country name resolution
-        }
-
         for (const c of filteredCurrencies) {
             // Include symbol in searchText so users can search by € $ £ etc.
             const symbolPart = c.symbol && c.symbol !== c.code ? c.symbol : '';
-            // Include country codes (ISO-2) and localized country names for search
+            // Include country codes (ISO-2) for search
             const countryCodes = (c.country_codes ?? []).join(' ');
-            const countryNamesStr = (c.country_codes ?? [])
-                .map(cc => {
-                    try { return countryNames?.of(cc) ?? ''; } catch { return ''; }
-                })
-                .filter(Boolean)
-                .join(' ');
+            // Use localized country names from backend (Babel) — already in the correct language
+            const countryNamesStr = (c.country_names ?? []).join(' ');
 
             options.push({
                 value: c.code,
@@ -108,16 +98,18 @@
 
     let isLoading = $derived(internalLoading || externalLoading);
 
-    // Load currencies once via shared store
+    // Load currencies when component mounts and reload when language changes
     $effect(() => {
-        loadCurrencies();
+        // Subscribe to currentLanguage — triggers reload when language changes
+        const lang = $currentLanguage;
+        loadCurrencies(lang);
     });
 
-    async function loadCurrencies() {
+    async function loadCurrencies(language: string) {
         internalLoading = true;
         error = null;
         try {
-            await ensureCurrenciesLoaded();
+            await ensureCurrenciesLoaded(language);
             allCurrencies = getAllCurrencies();
         } catch (e) {
             console.error('Failed to load currencies:', e);

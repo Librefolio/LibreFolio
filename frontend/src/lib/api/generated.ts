@@ -990,6 +990,10 @@ type CurrencyListItem = {
    * ISO-2 country codes using this currency (e.g., ['US', 'AS', 'EC'] for USD)
    */
   Array<string> | undefined;
+  country_names?: /**
+   * Localized country names using this currency (e.g., ['United States', 'American Samoa'] for USD in English)
+   */
+  Array<string> | undefined;
 };
 type ExportRequest = Partial<{
   format: ExportFormat;
@@ -5579,6 +5583,12 @@ const CurrencyListItem: z.ZodType<CurrencyListItem> = z.object({
     .array(z.string())
     .describe(
       "ISO-2 country codes using this currency (e.g., ['US', 'AS', 'EC'] for USD)"
+    )
+    .optional(),
+  country_names: z
+    .array(z.string())
+    .describe(
+      "Localized country names using this currency (e.g., ['United States', 'American Samoa'] for USD in English)"
     )
     .optional(),
 });

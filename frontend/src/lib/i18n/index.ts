@@ -3,6 +3,13 @@
  *
  * Supported languages: English, Italian, French, Spanish
  * Uses svelte-i18n for internationalization
+ *
+ * ⚠️ LANGUAGE CODE SYNC: The codes in SUPPORTED_LOCALES ('en', 'it', 'fr', 'es')
+ * MUST match the ISO 639-1 codes accepted by Python Babel on the backend.
+ * These codes are passed as `?language=XX` to utility endpoints (currencies, countries)
+ * so Babel can return correctly localized names, symbols, and country names.
+ * When adding new languages, verify Babel supports them (it has 1067+ locales).
+ * See also: backend/app/utils/translation_utils.py (get_babel_locale)
  */
 import {browser} from '$app/environment';
 import {getLocaleFromNavigator, init, register} from 'svelte-i18n';

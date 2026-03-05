@@ -1,7 +1,7 @@
 # Plan: Phase 5 — FX Management + Chart Library + User Docs + i18n MkDocs (v6)
 
 **Data creazione**: 2 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 in corso (fix iterativi: sub-plan Steps 1-7,9 ✅ completati, Step 8 📋 TODO). MANUAL Provider ✅ completato (→ `phases/phase-05-subplan/plan-manualFxProvider.prompt.md`). FxPairAddModal Redesign ✅ completato (→ `phases/phase-05-subplan/plan-fxPairAddModalRedesign.prompt.md`).
+**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 in corso (fix iterativi: sub-plan Steps 1-7,9 ✅ completati, Step 8 📋 TODO). MANUAL Provider ✅ completato (→ `phases/phase-05-subplan/plan-manualFxProvider.prompt.md`). FxPairAddModal Redesign ✅ completato (→ `phases/phase-05-subplan/plan-fxPairAddModalRedesign.prompt.md`). Currency Fix + Layout + Flags ✅ completato (→ `phases/phase-05-subplan/plan-fxCurrencyFixLayoutFlags.prompt.md`). UI Feedback Round 3 (F1-F17) ✅ completato (→ `phases/phase-05-subplan/plan-fxUiFeedbackRound3.prompt.md`) — include F13 search fix + F14 localizzazione multi-lingua.
 **Durata stimata**: ~7-8 giorni
 **Dipendenze**: Phase 4 completata, Phase 4.8 (Broker Sharing) completata
 **Riferimenti**:

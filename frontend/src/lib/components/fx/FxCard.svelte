@@ -10,6 +10,7 @@
     import {createEventDispatcher} from 'svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/language';
     import {ArrowLeftRight, Pencil, Percent, RefreshCw, RotateCcw, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
@@ -96,8 +97,8 @@
     // Currency flag emoji from shared store
     // =========================================================================
 
-    // Ensure currency data is loaded (idempotent, no-op if already loaded)
-    ensureCurrenciesLoaded();
+    // Ensure currency data is loaded (idempotent, no-op if already loaded in this language)
+    ensureCurrenciesLoaded($currentLanguage);
 
     function currencyFlag(code: string): string {
         return getCurrencyInfo(code).flag_emoji;
