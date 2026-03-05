@@ -5,6 +5,14 @@ Provides common functions for translating country names, currency names,
 and normalizing user input to standard ISO formats.
 
 Uses Babel for localization with automatic fallback to English.
+
+⚠️ LANGUAGE CODE SYNC: The language codes accepted here ('en', 'it', 'fr', 'es', etc.)
+MUST match the SUPPORTED_LOCALES defined in the frontend (frontend/src/lib/i18n/index.ts).
+The frontend passes these codes as `?language=XX` to utility endpoints so Babel can return
+correctly localized currency names, country names, and symbols.
+Babel supports 1067+ locales, so adding new languages is always safe on this side.
+When adding a new language to the frontend, no backend changes are needed — just verify
+the code is a valid ISO 639-1 identifier that Babel recognizes.
 """
 
 import structlog

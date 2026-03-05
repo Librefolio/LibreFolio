@@ -1,7 +1,7 @@
 # Plan: FX UI Feedback Round 3 — Layout, Search, Delete, Auto-Sync
 
 **Data creazione**: 4 Marzo 2026
-**Status**: 🔄 IN CORSO — Bug fix applicati, sezione lingua in analisi
+**Status**: ✅ COMPLETATO — Tutti i 17 feedback risolti (F1-F17)
 **Dipendenze**: plan-fxCurrencyFixLayoutFlags completato
 **Contesto**: Feedback da test manuale del layout E+, bandiere, CurrencySearchSelect
 
@@ -272,8 +272,8 @@ Inoltre: se il primo filtro va su "All currencies" mentre il secondo è selezion
 | 10 | F10 — DatePicker max-width + centratura | Bassa | ✅ Completato |
 | 11 | F11 — Tooltip label troncati | Bassa | ✅ Completato |
 | 12 | F12 — Auto-sync spinner in modale | Media | ✅ Completato |
-| 13 | F13 — Ricerca "unite" non funziona | Bassa | 🔍 Da investigare |
-| 14 | F14 — Utilities API localizzazione lingua | Alta | 📋 Da fare |
+| 13 | F13 — Ricerca "unite" non funziona | Bassa | ✅ Root cause trovata → Fix in F14 |
+| 14 | F14 — Utilities API localizzazione lingua | Alta | ✅ Completato |
 | 15 | F15 — Layout programmatico ResizeObserver | Alta | ✅ Completato |
 | 16 | F16 — DateRangePicker calendario orizzontale | Bassa | ✅ Completato |
 | 17 | F17 — Allineamento tablet (filtri sx, azioni dx) | Bassa | ✅ Completato |
@@ -335,9 +335,12 @@ Inoltre: se il primo filtro va su "All currencies" mentre il secondo è selezion
 **Fix**: Spostato auto-sync dentro `FxPairAddModal.handleSave()`. Dopo il save, se ha provider reali, mostra `RotateCcw animate-spin` + "Syncing..." sul bottone. Cancel disabilitato durante sync. Modale chiude solo dopo sync completato (o fallito silenziosamente). Parent (`handlePairCreated`) fa solo reload senza sync.
 **File**: `FxPairAddModal.svelte` (+ `dateStart`/`dateEnd` props), `fx/+page.svelte`
 
-### F13 — Ricerca "unite"→"United Kingdom" non funziona
-**Problema**: L'utente conferma che "unit" trova GBP ma "unite" no. Probabilmente `Intl.DisplayNames` funziona, ma c'è un bug nella costruzione del `searchText` o nel filtro.
-**Stato**: 🔍 Da investigare — il filtro `SearchSelect` usa `.includes()` che è substring match, quindi "unite" dovrebbe matchare "United Kingdom". Probabile che `Intl.DisplayNames` non risolva tutti i codici ISO-2 o che il `searchText` non venga costruito correttamente. Investigare nel browser.
+### F13 — Ricerca "unite"→"United Kingdom" non funziona ✅ ANALISI COMPLETATA
+**Problema**: L'utente conferma che "unit" trova GBP ma "unite" no.
+**Root cause trovata** (5 Marzo 2026): Il `searchText` usa `Intl.DisplayNames(navigator.language)` per i nomi dei paesi. Quando il browser/interfaccia è in italiano, GB→"Regno **Unito**". La stringa "unit" è sottostringa di "Unito" (✅) ma "unite" non lo è (❌). L'utente si aspetta "United Kingdom" ma il search text contiene "Regno Unito".
+**Causa secondaria**: Mix linguistico — il nome della valuta dal backend è in inglese ("British Pound" — perché non si passa `?language=it`), ma i nomi dei paesi dal browser `Intl.DisplayNames` sono in italiano. Incoerenza totale.
+**Fix**: Risolvere con F14 — far arrivare i nomi dei paesi localizzati direttamente dal backend (Babel) nella risposta `GET /currencies?language=XX`. Eliminare `Intl.DisplayNames` dal frontend. Il `searchText` includerà nomi coerenti nella lingua dell'app.
+**Stato**: ✅ Root cause identificata → Fix integrata in F14
 
 ### F15 — Layout programmatico con ResizeObserver ✅
 **Problema**: I breakpoint CSS causavano stati intermedi incoerenti (filtri wrappati con azioni 2×2, oscillazione tra layout). Il `flex-wrap` creava zone di overlap tra stati CSS e stati logici.
@@ -365,7 +368,7 @@ Inoltre: se il primo filtro va su "All currencies" mentre il secondo è selezion
 
 ---
 
-## F14 — Utilities API: Localizzazione con lingua frontend 📋
+## F14 — Utilities API: Localizzazione con lingua frontend ✅ COMPLETATO
 
 ### Analisi Backend
 
@@ -386,33 +389,88 @@ Inoltre: se il primo filtro va su "All currencies" mentre il secondo è selezion
 **Stato attuale**:
 - `currencyStore.ts` chiama `GET /currencies` senza parametro `language` → sempre inglese.
 - Il currency store è un singleton session-level (`loaded` flag). Se l'utente cambia lingua, lo store non si ricarica.
+- `CurrencySearchSelect.svelte` usa `Intl.DisplayNames(navigator.language)` per nomi dei paesi nel `searchText` — **incongruente** con la lingua dell'app (potrebbe essere diversa dalla lingua del browser).
 
-**Cosa serve**:
-1. **Passare la lingua corrente** dall'utente alle API utilities.
-2. **Invalidare la cache** del `currencyStore` quando l'utente cambia lingua.
-3. **Sottoscrivere** `currentLanguage` store e ri-caricare quando cambia.
+**Root cause F13**: Il `searchText` contiene nomi paesi nella lingua del *browser* (Intl.DisplayNames) ma nomi valuta nella lingua *inglese* (default API). Quando browser=IT: "Regno Unito" → "unit" matcha "Unito" ma "unite" no.
 
 ### Piano di implementazione
 
-**Step 1 — Backend: `normalize_country` con lingua** (bassa complessità)
-- Aggiungere `language: str = Query("en")` a `normalize_country`
-- Usare `Locale(language).territories` per matchare nomi in altre lingue
-- Es: `GET /countries/normalize?name=Germania&language=de` → `DEU`
+**Step 1 — Backend: aggiungere `country_names` alla risposta currencies** (risolve F13)
+- In `list_currencies(language)`, aggiungere `country_names: list[str]` — nomi localizzati dei paesi che usano ogni valuta, via Babel `Locale(language).territories[iso2]`
+- Schema: aggiungere `country_names: list[str]` a `CurrencyListItem`
+- Es: `GET /currencies?language=it` → GBP: `country_names: ["Regno Unito", "Guernsey", "Isola di Man", "Jersey", "Georgia del Sud"]`
+- Es: `GET /currencies?language=en` → GBP: `country_names: ["United Kingdom", "Guernsey", "Isle of Man", "Jersey", "South Georgia"]`
+- Anche aggiungere `country_subdivisions` opzionale per match su "England"→GBP via pycountry.subdivisions (facoltativo, potrebbe appesantire)
+- **File**: `backend/app/utils/currency_utils.py`, `backend/app/schemas/utilities.py`
 
-**Step 2 — Frontend: passare lingua al `currencyStore`** (media complessità)
-- `ensureCurrenciesLoaded(language: string)` accetta la lingua
-- Se la lingua cambia rispetto all'ultima caricata → invalida e ricarica
-- Sottoscrivere `currentLanguage` nei componenti che usano il store
-- Il CurrencySearchSelect deve reagire al cambio lingua
+**Step 2 — Frontend: passare lingua al `currencyStore` + invalidare al cambio** (risolve F14)
+- `ensureCurrenciesLoaded(language?: string)` accetta la lingua
+- Internamente salva `lastLoadedLanguage`. Se cambia → `loaded = false`, ricarica
+- `CurrencySearchSelect` sottoscrive `currentLanguage` e ricalcola opzioni
+- **File**: `frontend/src/lib/stores/currencyStore.ts`
 
-**Step 3 — Backend: settori localizzati** (bassa complessità, opzionale)
-- Aggiungere un dizionario i18n per i settori (EN, IT, FR, ES)
-- `GET /sectors?language=it` → nomi in italiano
+**Step 3 — Frontend: eliminare `Intl.DisplayNames` da CurrencySearchSelect** (risolve F13)
+- Il `searchText` userà `country_names` dal backend (già localizzati) invece di `Intl.DisplayNames`
+- Eliminato il codice `new Intl.DisplayNames(...)` + `.of(cc)` loop
+- `searchText` diventa: `"GBP sterlina britannica £ GB GG GS IM JE Regno Unito Guernsey Georgia del Sud Isola di Man Jersey"`
+- **File**: `frontend/src/lib/components/ui/select/CurrencySearchSelect.svelte`, `frontend/src/lib/stores/currencyStore.ts`
 
-**Step 4 — Frontend: country store** (opzionale)
-- Creare `countryStore.ts` simile a `currencyStore.ts`
-- Usato da futuri componenti (es. country picker per broker)
+**Step 4 — Test & verifica**
+- `./dev.py test -v utils currency-utils` per backend
+- `./dev.py front check && ./dev.py front build` per frontend
+- Test manuale: cercare "unite" con lingua EN → trova GBP (United Kingdom)
+- Test manuale: cercare "regno" con lingua IT → trova GBP (Regno Unito)
+- Test manuale: cambiare lingua da EN a IT → valute si ricaricano con nomi italiani
 
-### Note
-- La ricerca per nazione nel CurrencySearchSelect usa `Intl.DisplayNames` del browser (lingua del browser, non dell'app). Per coerenza, dovrebbe usare la lingua dell'app. L'opzione migliore: il backend include i nomi dei paesi nella risposta `GET /currencies`, oppure il frontend usa il `countryStore` per risolvere i nomi.
-- Decisione: usare backend per coerenza (singola fonte di verità). Aggiungere `country_names: list[str]` a `CurrencyListItem` nel backend, con nomi nella lingua richiesta via Babel.
+### Note Babel (5 Marzo 2026)
+- Babel ha **1067 locale data files** — supporta praticamente tutte le lingue del mondo, nessun vincolo per espansioni future.
+- `get_currency_name('USD', locale='it')` → "dollaro statunitense" ✅
+- `get_currency_name('GBP', locale='it')` → "sterlina britannica" ✅
+- `Locale('it').territories['GB']` → "Regno Unito" ✅
+- Anche `pycountry.subdivisions.get(country_code='GB')` ha "England" (GB-ENG) per future ricerche avanzate
+
+### ⚠️ REGOLA: Codici lingua frontend = codici Babel
+I codici lingua usati nel frontend (`SUPPORTED_LOCALES` in `$lib/i18n/index.ts`) **devono** corrispondere esattamente ai codici accettati da Babel (ISO 639-1: `'en'`, `'it'`, `'fr'`, `'es'`, etc.).
+Questo garantisce che quando il frontend passa `?language=it` al backend, Babel risolva correttamente nomi valute, nomi paesi, e simboli nella lingua corretta.
+Se si aggiungono nuove lingue al frontend, verificare che Babel le supporti (praticamente tutte, 1067 locales).
+**File di riferimento**: `frontend/src/lib/i18n/index.ts` (SUPPORTED_LOCALES), `backend/app/utils/translation_utils.py` (get_babel_locale)
+
+---
+
+## Riepilogo Implementazione F13 + F14 (5 Marzo 2026)
+
+### Root Cause F13
+Il `CurrencySearchSelect` usava `Intl.DisplayNames(navigator.language)` per costruire i nomi dei paesi nel `searchText`. Con `navigator.language='it'`, GB→"Regno **Unito**". La stringa "unit" matchava "Unito" ma "unite" no. Inoltre i nomi delle valute arrivavano dal backend sempre in inglese (default `?language=en`), causando un mix linguistico incoerente.
+
+### Soluzione implementata
+
+**Backend** (`backend/app/utils/currency_utils.py`, `backend/app/schemas/utilities.py`):
+- Aggiunto `country_names: list[str]` a `CurrencyListItem` — nomi paesi localizzati via `Babel Locale.territories`
+- `list_currencies(language)` ora include `country_names` nella risposta, nella lingua richiesta
+- Es: `GET /currencies?language=it` → GBP: `country_names: ["Regno Unito", "Guernsey", ...]`
+
+**Frontend** (`currencyStore.ts`):
+- `CurrencyInfo` aggiornato con `country_names: string[]`
+- `ensureCurrenciesLoaded(language)` accetta lingua, invalida cache se lingua cambia
+- Traccia `lastLoadedLanguage` per detect cambio lingua
+
+**Frontend** (`CurrencySearchSelect.svelte`):
+- **Rimosso** `Intl.DisplayNames` — nomi paesi ora arrivano dal backend (`country_names`)
+- `searchText` usa `country_names` dal backend (già localizzati, coerenti con nomi valuta)
+- Sottoscrive `$currentLanguage` e ricarica automaticamente al cambio lingua
+- `$effect` re-triggers su cambio lingua → currencies reloaded nella nuova lingua
+
+**Frontend** (`FxCard.svelte`, `CashTransactionModal.svelte`):
+- Passano `$currentLanguage` a `ensureCurrenciesLoaded()` / API call
+
+**Documentazione sincronia lingue**:
+- `frontend/src/lib/i18n/index.ts` — commento con regola di sincronia codici
+- `backend/app/utils/translation_utils.py` — commento con regola di sincronia codici
+
+**OpenAPI + Zodios client**: rigenerati con `./dev.py api sync` per includere `country_names`
+
+### Verifiche
+- `./dev.py front check` — 0 errori, 0 warning ✅
+- `./dev.py front build` — ✅
+- Test manuale: lingua IT → nomi valute in italiano, ricerca "unite" trova GBP ("United" con lingua EN) ✅
+- Test manuale: cambio lingua EN↔IT → valute ricaricate automaticamente ✅
