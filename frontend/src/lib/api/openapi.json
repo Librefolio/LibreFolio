@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.1-1-g5478dd5-dirty"
+    "version": "v0.5.1-2-g6b14177-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -5973,6 +5973,14 @@
             "type": "array",
             "title": "Country Codes",
             "description": "ISO-2 country codes using this currency (e.g., ['US', 'AS', 'EC'] for USD)"
+          },
+          "country_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Country Names",
+            "description": "Localized country names using this currency (e.g., ['United States', 'American Samoa'] for USD in English)"
           }
         },
         "additionalProperties": false,

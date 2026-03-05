@@ -4,6 +4,7 @@
      */
     import {createEventDispatcher, onMount} from 'svelte';
     import {_} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/language';
     import {zodiosApi} from '$lib/api';
     import {X} from 'lucide-svelte';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
@@ -45,7 +46,9 @@
     // Load currencies on mount
     onMount(async () => {
         try {
-            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get();
+            const response = await zodiosApi.list_currencies_api_v1_utilities_currencies_get({
+                queries: {language: $currentLanguage},
+            });
 
             currencyOptions = (response.items || []).map((c: any) => ({
                 value: c.code,
