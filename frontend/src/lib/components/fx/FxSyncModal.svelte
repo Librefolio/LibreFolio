@@ -75,7 +75,7 @@
 
 <ModalBase {open} onRequestClose={onclose} maxWidth="max-w-md">
     <!-- Header -->
-    <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-700">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
         <div class="flex items-center gap-2.5">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30">
                 <RefreshCw size={18} class="text-amber-600 dark:text-amber-400" />
@@ -93,7 +93,7 @@
     </div>
 
     <!-- Body -->
-    <div class="py-4 space-y-3">
+    <div class="px-6 py-4 space-y-3">
         <p class="text-sm text-gray-600 dark:text-gray-400">
             {$t('fx.sync.description') ?? 'Synchronize exchange rates from configured providers for the selected date range.'}
         </p>
@@ -130,7 +130,7 @@
     </div>
 
     <!-- Footer -->
-    <div class="flex justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-700">
+    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
         <button
             class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
             onclick={onclose}

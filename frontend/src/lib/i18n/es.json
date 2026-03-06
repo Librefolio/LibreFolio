@@ -624,5 +624,45 @@
     "weekdays": {
       "we": "Mi"
     }
+  },
+  "chartSettings": {
+    "title": "Ajustes del Gráfico",
+    "titleLocal": "Ajustes del Gráfico (Local)",
+    "globalWarning": "Estos ajustes anularán todas las personalizaciones de las tarjetas.",
+    "aesthetics": "Estética",
+    "baselineColors": "Colores de Referencia",
+    "baselineColorsDesc": "Verde arriba / Rojo abajo",
+    "areaFill": "Relleno de Área",
+    "areaFillDesc": "Degradado bajo la línea",
+    "gridLines": "Líneas de Cuadrícula",
+    "gridLinesDesc": "Cuadrícula horizontal punteada",
+    "staleGradient": "Degradado Datos Antiguos",
+    "staleGradientDesc": "Difuminar datos antiguos",
+    "overlaySignals": "Señales Superpuestas",
+    "noSignals": "Ninguna señal superpuesta configurada. Añade una a continuación.",
+    "style": {
+      "color": "Color",
+      "width": "Grosor",
+      "lineType": "Estilo",
+      "markerStart": "Inicio",
+      "markerEnd": "Fin"
+    },
+    "lineType": {
+      "solid": "Continuo",
+      "dashed": "Punteado",
+      "dotted": "Con puntos"
+    },
+    "marker": {
+      "none": "Ninguno",
+      "arrow": "Flecha",
+      "circle": "Círculo",
+      "diamond": "Diamante",
+      "pin": "Marcador"
+    },
+    "apply": "Aplicar",
+    "discardTitle": "¿Descartar los cambios?",
+    "discardMessage": "Tienes cambios sin guardar en los ajustes. ¿Descartarlos?",
+    "discard": "Descartar",
+    "removeSignal": "Eliminar señal"
   }
 }
