@@ -1142,6 +1142,41 @@ Add a small preview chart at the top of the modal showing current aesthetics.
 
 ---
 
+## 🔍 Backend FX Sync Analysis (6 Mar 2026)
+
+### Current API: `GET /api/v1/fx/currencies/sync`
+The API accepts individual currencies (CSV: `"EUR,USD,GBP,..."`) not pairs.
+In Auto-Configuration mode (no provider param):
+1. Loads ALL `fx_currency_pair_sources` from DB
+2. Groups by provider → extracts individual currencies per provider
+3. Calls `ensure_rates_multi_source()` per provider with flat currency list
+4. `ensure_rates_multi_source()` generates **all possible pairs** between currencies (N*(N-1)/2)
+   — this creates spurious pairs not configured by user!
+5. Response returns individual currencies, not pairs
+
+### Problems Identified:
+- **Spurious pairs**: If ECB gets [CAD,EUR,GBP,JPY,USD], it generates 10 pairs when only 4 are configured
+- **Wasted fetch**: Provider APIs may return data for unwanted pairs
+- **Confusing response**: `currencies_synced: ["CAD","GBP","JPY","USD"]` — user doesn't know which pairs
+- **API design**: `currencies` param should be `pairs` (e.g. `"EUR-GBP,EUR-USD"`)
+
+### Planned Fix (breaking change — no backward compat needed):
+- Change API param from `currencies` to `pairs` (CSV of `BASE-QUOTE` slugs)
+- Pass explicit pairs to `ensure_rates_multi_source()` instead of flat currencies
+- Response should return pair slugs, not individual currencies
+- Frontend already passes pair slugs since this session's refactor
+
+### 📝 Documentation TODO:
+When writing MkDocs documentation for FX (Phase 5 docs step):
+- Document the pair-based sync API (new design)
+- Document provider fallback mechanism (priority-based)
+- Document MANUAL provider sentinel behavior
+- Document FX data flow: frontend → API → provider → normalize → DB
+- Update API examples in docs
+- The existing docstrings in `fx.py` and `fx_providers/*.py` are outdated
+
+---
+
 ## Files Involved
 
 | File | Action |
@@ -1153,16 +1188,18 @@ Add a small preview chart at the top of the modal showing current aesthetics.
 | `frontend/src/lib/charts/signals/registry.ts` | ✅ DONE — Registry + factory (arrows in defaults) |
 | `frontend/src/lib/charts/signals/index.ts` | ✅ DONE — Barrel export |
 | `frontend/src/lib/stores/chartSettingsStore.svelte.ts` | ✅ DONE — Session-level store (renamed from .ts → .svelte.ts for $state) |
-| `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | ✅ DONE — Settings + i18n (25 keys) + Layout C (SVG preview strip) |
-| `frontend/src/lib/components/fx/FxSyncModal.svelte` | ✅ DONE — Fix currencies + Svelte 5 + style + padding fix |
+| `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | ✅ DONE — Settings + i18n (25 keys) + Layout C v3 (marker popovers, SVG line popover upward, square caps) |
+| `frontend/src/lib/components/fx/FxSyncModal.svelte` | ✅ DONE — Pair-based (not currency-based), Svelte 5, padding fix |
 | `frontend/src/lib/components/fx/FxCard.svelte` | REWRITE — Layout B + Svelte 5 |
 | `frontend/src/lib/components/charts/LineChart.svelte` | ✅ DONE — overlaySignals prop + multi-series tooltip + arrows |
 | `frontend/src/lib/components/charts/PriceChartCompact.svelte` | MODIFY — passthrough `overlaySignals` + aesthetics |
 | `frontend/src/lib/components/charts/PriceChartFull.svelte` | MODIFY — passthrough `overlaySignals` + aesthetics |
-| `frontend/src/routes/(app)/fx/+page.svelte` | ✅ PARTIAL — sync fix + settings modal done, card integration pending |
+| `frontend/src/routes/(app)/fx/+page.svelte` | ✅ PARTIAL — pair-based sync + settings modal done, card integration pending |
 | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` | MODIFY — local settings, overlay |
 | `frontend/src/lib/components/table/DataTableToolbar.svelte` | REFACTOR — Use OrderableList |
 | `backend/app/services/fx_providers/snb.py` | ✅ DONE — Complete rewrite: JSON API, dynamic dimensions, 25 currencies |
+| `backend/app/api/v1/fx.py` | TODO — Refactor sync API to pair-based |
+| `backend/app/services/fx.py` | TODO — Refactor `ensure_rates_multi_source` to accept pairs |
 
 ---
 

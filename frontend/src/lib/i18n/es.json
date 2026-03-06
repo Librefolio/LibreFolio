@@ -347,7 +347,8 @@
       "currenciesCount": "monedas",
       "synced": "Sincronizados",
       "syncing": "Sincronizando...",
-      "start": "Iniciar sincronización"
+      "start": "Iniciar sincronización",
+      "pairsCount": "pares"
     }
   },
   "settings": {

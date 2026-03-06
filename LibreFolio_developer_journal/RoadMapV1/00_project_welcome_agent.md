@@ -329,7 +329,7 @@ dev.py [-h]
 │ ├──╴add KEY --en --it --fr --es     # Aggiungi chiave a tutte le lingue
 │ ├──╴remove KEY [-f]                 # Rimuovi chiave da tutte le lingue
 │ ├──╴update KEY [--en] [--it] [--fr] [--es]  # Modifica traduzioni
-│ ╰──╴search QUERY                    # Cerca nelle chiavi e valori
+│ ╰──╴search QUERY [-k] [-v] [-l LANG]  # Cerca in chiavi e/o valori, filtro per lingua
 ├─┬╴cache [-h]
 │ ╰──╴js [--force]                    # Aggiorna cache JS
 ├─┬╴info [-h]
@@ -356,6 +356,8 @@ dev.py [-h]
 | **Verificare traduzioni**         | `./dev.py i18n audit`                                                      |
 | **Aggiungere traduzione**         | `./dev.py i18n add "key.path" --en "..." --it "..." --fr "..." --es "..."` |
 | **Cercare traduzioni**            | `./dev.py i18n search "query"`                                             |
+| **Cercare solo nelle chiavi**     | `./dev.py i18n search "common" --keys`                                     |
+| **Cercare solo nei valori IT**    | `./dev.py i18n search "Annulla" --values --lang it`                        |
 | **Modificare traduzione**         | `./dev.py i18n update "key.path" --it "nuova traduzione"`                  |
 | **Build per produzione**          | `./dev.py front build && ./dev.py server`                                  |
 | **Nuovo utente**                  | `./dev.py user create admin admin@mail.com pass`                           |

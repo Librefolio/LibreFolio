@@ -383,7 +383,7 @@
         <!-- No-provider warning -->
         <!-- ============================================================= -->
         {#if hasCurrencies && !hasProviders}
-            <div class="flex items-start gap-2 mx-5 mb-0 mt-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700/40 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+            <div class="flex items-start gap-2 mx-5 mb-0 mt-2 p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/30 rounded-lg text-xs text-amber-700 dark:text-amber-400/80">
                 <Info size={14} class="flex-shrink-0 mt-0.5" />
                 <span>{$_('fx.addPair.noProviderWarning')}</span>
             </div>
