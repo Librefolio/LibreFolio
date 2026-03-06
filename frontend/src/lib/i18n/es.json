@@ -340,6 +340,14 @@
     "provider": {
       "primary": "Principal",
       "fallback": "Reserva"
+    },
+    "sync": {
+      "title": "Sincronizar tasas FX",
+      "description": "Sincronizar tasas de cambio de los proveedores configurados para el rango de fechas seleccionado.",
+      "currenciesCount": "monedas",
+      "synced": "Sincronizados",
+      "syncing": "Sincronizando...",
+      "start": "Iniciar sincronización"
     }
   },
   "settings": {

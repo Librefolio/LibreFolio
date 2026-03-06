@@ -340,6 +340,14 @@
     "provider": {
       "primary": "Primary",
       "fallback": "Fallback"
+    },
+    "sync": {
+      "title": "Sync FX Rates",
+      "description": "Synchronize exchange rates from configured providers for the selected date range.",
+      "currenciesCount": "currencies",
+      "synced": "Synced",
+      "syncing": "Syncing...",
+      "start": "Start Sync"
     }
   },
   "settings": {

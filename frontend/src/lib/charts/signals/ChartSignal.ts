@@ -1,0 +1,200 @@
+/**
+ * ChartSignal — Abstract base class for chart overlay signals.
+ *
+ * All overlay signals (real data from backend, synthetic benchmarks) share this
+ * interface. The UI reads `paramDescriptors` from each subclass to dynamically
+ * render controls in the ChartSettingsModal.
+ *
+ * @module charts/signals/ChartSignal
+ */
+
+import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PARAM DESCRIPTORS — Read by ChartSettingsModal to render controls
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Descriptor for a user-editable parameter of a signal.
+ * The ChartSettingsModal reads these from each signal class to dynamically
+ * render the appropriate input controls in the OrderableList rows.
+ */
+export interface SignalParamDescriptor {
+    /** Unique key (maps to signal.params[key]) */
+    key: string;
+    /** Label shown in the UI (i18n key or fallback string) */
+    label: string;
+    /**
+     * Input type for rendering:
+     *  - 'number': <input type="number"> with min/max/step/suffix
+     *  - 'select': <select> with static options or dynamicOptionsKey
+     *  - 'string': <input type="text">
+     */
+    type: 'number' | 'string' | 'select';
+    /** Default value for new instances */
+    default: unknown;
+    // ── For type === 'number' ──
+    min?: number;
+    max?: number;
+    step?: number;
+    /** Suffix shown inline after the input (e.g. "%/yr") */
+    suffix?: string;
+    // ── For type === 'select' ──
+    /** Static options list */
+    options?: Array<{value: string; label: string}>;
+    /**
+     * If set, the modal resolves options at runtime using this key.
+     * e.g. 'configuredFxPairs' → modal passes configured pairs as options
+     */
+    dynamicOptionsKey?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIGNAL STYLE — Common rendering parameters for every signal
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface SignalStyle {
+    /** Line color as hex string, e.g. '#3b82f6' */
+    color: string;
+    /** Line width: 1, 2, 3, or 4 */
+    lineWidth: number;
+    /** Line dash style */
+    lineType: 'solid' | 'dashed' | 'dotted';
+    /** Show arrow marker at the first data point (for trend direction in detail page) */
+    arrowStart: boolean;
+    /** Show arrow marker at the last data point (for trend direction in detail page) */
+    arrowEnd: boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIGNAL CONFIG — Serializable state (stored in ChartSettings)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Serializable config for a signal instance.
+ * Stored in `ChartSettings.signals[]` and used to recreate class instances
+ * via the registry's `signalFromConfig()`.
+ *
+ * Fields prefixed with '_' in params are transient and excluded by `toConfig()`.
+ */
+export interface SignalConfig {
+    /** Unique instance ID (UUID) */
+    id: string;
+    /** Registry key: 'fx-pair', 'linear', 'compound', etc. */
+    signalType: string;
+    /** Signal-specific editable parameters */
+    params: Record<string, unknown>;
+    /** Rendering style */
+    style: SignalStyle;
+}
+
+/** Default color palette — cycled when adding new signals */
+export const DEFAULT_SIGNAL_COLORS = [
+    '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RENDERED SIGNAL — Output format for chart components
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Output format after computing signal points — ready for chart rendering.
+ * Passed as `overlayData` prop to LineChart / PriceChartCompact / PriceChartFull.
+ */
+export interface RenderedSignal {
+    id: string;
+    label: string;
+    data: LineDataPoint[];
+    color: string;
+    lineWidth: number;
+    lineType: 'solid' | 'dashed' | 'dotted';
+    /** Show arrow marker at the first data point */
+    arrowStart: boolean;
+    /** Show arrow marker at the last data point */
+    arrowEnd: boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ABSTRACT BASE CLASS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Abstract base class for all chart overlay signals.
+ *
+ * Subclasses MUST define static properties:
+ *   - `signalType: string`              — unique registry key
+ *   - `displayName: string`             — shown in "Add signal" dropdown
+ *   - `icon: string`                    — emoji for the dropdown
+ *   - `paramDescriptors: SignalParamDescriptor[]`  — editable params
+ *   - `maxInstances?: number`           — max allowed per chart (undefined = unlimited)
+ *
+ * Subclasses MUST implement:
+ *   - `computePoints(baseData, viewMode)` — generate overlay data points
+ *   - `getLabel()` — human-readable label for legend/tooltip
+ */
+export abstract class ChartSignal {
+    readonly id: string;
+    style: SignalStyle;
+    params: Record<string, unknown>;
+
+    // ── Static metadata (read by UI and registry) ────────────────────────────
+    static signalType: string;
+    static displayName: string;
+    static icon: string;
+    static paramDescriptors: SignalParamDescriptor[];
+    static maxInstances?: number;
+
+    constructor(id: string, style: SignalStyle, params: Record<string, unknown>) {
+        this.id = id;
+        this.style = {...style};
+        this.params = {...params};
+    }
+
+    /**
+     * Compute overlay data points aligned to the primary chart's date axis.
+     *
+     * @param baseData  Primary chart data (provides date axis + baseValue reference)
+     * @param viewMode  'absolute' or 'percentage' — signals adjust their output
+     * @returns         Points aligned to baseData dates
+     */
+    abstract computePoints(
+        baseData: LineDataPoint[],
+        viewMode: 'absolute' | 'percentage',
+    ): LineDataPoint[];
+
+    /** Human-readable label for ECharts legend and tooltip */
+    abstract getLabel(): string;
+
+    /**
+     * Serialize to storable config.
+     * Excludes fields prefixed with '_' (transient runtime data like _resolvedData).
+     */
+    toConfig(): SignalConfig {
+        const serializableParams = Object.fromEntries(
+            Object.entries(this.params).filter(([k]) => !k.startsWith('_')),
+        );
+        return {
+            id: this.id,
+            signalType: (this.constructor as typeof ChartSignal).signalType,
+            params: serializableParams,
+            style: {...this.style},
+        };
+    }
+
+    /**
+     * Convenience: compute points and wrap into RenderedSignal format.
+     */
+    render(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal {
+        return {
+            id: this.id,
+            label: this.getLabel(),
+            data: this.computePoints(baseData, viewMode),
+            color: this.style.color,
+            lineWidth: this.style.lineWidth,
+            lineType: this.style.lineType,
+            arrowStart: this.style.arrowStart,
+            arrowEnd: this.style.arrowEnd,
+        };
+    }
+}
+

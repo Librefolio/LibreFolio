@@ -1,0 +1,35 @@
+/**
+ * Chart Signals Library — Barrel export.
+ *
+ * Provides chart overlay signals: real data (FxPairSignal) and
+ * synthetic benchmarks (LinearSignal, CompoundSignal).
+ *
+ * Usage:
+ *   import { createSignal, signalFromConfig, getRegisteredSignalTypes } from '$lib/charts/signals';
+ *   import type { SignalConfig, RenderedSignal } from '$lib/charts/signals';
+ */
+
+// Base class & types
+export {
+    ChartSignal,
+    DEFAULT_SIGNAL_COLORS,
+    type SignalParamDescriptor,
+    type SignalStyle,
+    type SignalConfig,
+    type RenderedSignal,
+} from './ChartSignal';
+
+// Concrete signal classes
+export {FxPairSignal} from './FxPairSignal';
+export {LinearSignal} from './LinearSignal';
+export {CompoundSignal} from './CompoundSignal';
+
+// Registry & factory
+export {
+    getRegisteredSignalTypes,
+    createSignal,
+    signalFromConfig,
+    canAddSignalType,
+    type SignalTypeInfo,
+} from './registry';
+
