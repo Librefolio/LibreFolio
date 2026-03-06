@@ -81,7 +81,7 @@ class FEDProvider(FXRateProvider):
 
     @property
     def icon(self) -> str | None:
-        return "https://www.federalreserve.gov/favicon.ico"
+        return "https://fred.stlouisfed.org/favicon.ico"
 
 
     @property

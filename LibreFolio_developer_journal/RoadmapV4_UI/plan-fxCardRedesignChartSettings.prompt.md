@@ -1017,18 +1017,56 @@ in both `ChartSettingsModal.svelte` and `chartSettingsStore.svelte.ts`.
 
 **Console errors analysis:**
 - `content-script.js:104 Failed to get subsystem status` → browser extension, not our code. Ignore.
-- `api/v1/fx/currencies/convert 404` → the endpoint exists as POST; the 404s are likely GET requests
-  from a browser extension intercepting currency codes. Our code never calls GET on this URL. Ignore.
+- `api/v1/fx/currencies/convert 404` → **EXPLAINED**: the convert endpoint returns 404 when no rates
+  exist for the requested pair. This happened because the SNB provider was completely broken and produced
+  0 rates for ALL currencies (not just CNY). Now fixed with the SNB rewrite. If 404 still appears for
+  other pairs, it means the sync hasn't been run yet or the provider doesn't support that currency.
 - `A listener indicated an asynchronous response` → browser extension. Ignore.
 - `structuredClone DataCloneError` → **FIXED** (see above).
 
 **Verified**: `./dev.py front check` → 0 errors, 0 warnings. `./dev.py front build` → success.
 
+### SNB Provider Rewrite — 6 Mar 2026 (backend bug fix)
+
+**Root cause of CHF→CNY sync failure**: The SNB provider (`backend/app/services/fx_providers/snb.py`)
+was completely broken since inception. Multiple critical bugs:
+
+1. **CSV parser used `,` separator** — SNB uses `;` (semicolon-separated)
+2. **Expected daily dates `YYYY-MM-DD`** — SNB only provides monthly data `YYYY-MM`
+3. **Expected simple 2-column CSV** — actual format has 4 columns with metadata header
+4. **Hardcoded currency map** — no `CNY` in multi-unit currencies list
+5. **Per-currency HTTP requests** — inefficient, could use single request for all currencies
+6. **Dataset labeled "daily"** — actually monthly averages (no daily dataset exists)
+
+**Complete rewrite using JSON API:**
+- **Dynamic currency map**: fetched from `/api/cube/devkum/dimensions/en` (lazy-loaded, cached for process lifetime).
+  Walks nested dimension items recursively, extracts D1 id → ISO code + multiplier mapping.
+  Now supports 25 currencies (was 10 hardcoded) without any code changes when SNB adds new currencies.
+- **JSON data endpoint**: uses `/api/cube/devkum/data/json/en` with `dimSel=D0(M0),D1(EUR1,CNY100,...)`
+  filter to request only M0 (monthly average) for only the needed currencies. Much more robust than CSV parsing.
+- **Single HTTP request** for all currencies (was one per currency).
+- **Date assigned to 1st of month** (`YYYY-MM` → `date(year, month, 1)`) for compatibility with daily rate storage.
+- **Rate normalization**: D1 id contains multiplier (e.g. `CNY100` → divide by 100). No more separate
+  `multi_unit_currencies` property needed — managed internally via dimension map.
+- **Debug test suite**: `pipenv run python -m backend.app.services.fx_providers.snb [dimensions|json|parser|supported|datasets|all]`
+
+**Also analyzed: convert endpoint 404 in frontend**
+The 404 on `POST /api/v1/fx/currencies/convert` when clicking sync on CHF→CNY card is **caused by**
+the SNB sync producing 0 rates → no data in DB → convert endpoint returns 404 because there are no
+rates to convert with. With the SNB fix, sync will now produce monthly data points and the convert
+will work.
+
+**Note**: SNB only provides monthly averages. For a CHF→CNY pair, data will have 1 point per month
+(assigned to 1st), not daily. This means the line chart will show fewer data points compared to
+ECB-sourced pairs. The backward-fill logic in the convert endpoint will interpolate for dates between
+monthly points.
+
+**Verified**: `pipenv run python -m backend.app.services.fx_providers.snb parser` → ✅ CNY: 5 rates parsed.
+
 ---
 
 ## Pending Feedback Items (Step 4 iteration)
 
-These items require user decision before continuing to Step 5:
 
 ### 📐 Signal Card Layout — Pick one of A/B/C
 See Step 4 → "Signal Card Layout — Pending Decision" for ASCII art.
@@ -1067,6 +1105,7 @@ that live-updates as aesthetics toggles and signals change.
 | `frontend/src/routes/(app)/fx/+page.svelte` | ✅ PARTIAL — sync fix + settings modal done, card integration pending |
 | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` | MODIFY — local settings, overlay |
 | `frontend/src/lib/components/table/DataTableToolbar.svelte` | REFACTOR — Use OrderableList |
+| `backend/app/services/fx_providers/snb.py` | ✅ DONE — Complete rewrite: JSON API, dynamic dimensions, 25 currencies |
 
 ---
 
