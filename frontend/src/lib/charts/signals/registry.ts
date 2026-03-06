@@ -45,7 +45,6 @@ export interface SignalTypeInfo {
     type: string;
     displayName: string;
     icon: string;
-    maxInstances?: number;
     paramDescriptors: SignalParamDescriptor[];
 }
 
@@ -55,7 +54,6 @@ export function getRegisteredSignalTypes(): SignalTypeInfo[] {
         type: Cls.signalType,
         displayName: Cls.displayName,
         icon: Cls.icon,
-        maxInstances: Cls.maxInstances,
         paramDescriptors: Cls.paramDescriptors,
     }));
 }
@@ -73,8 +71,8 @@ export function createSignal(signalType: string, existingCount: number): ChartSi
         color: DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length],
         lineWidth: 2,
         lineType: 'dashed',
-        arrowStart: false,
-        arrowEnd: false,
+        markerStart: null,
+        markerEnd: null,
     };
 
     const params: Record<string, unknown> = {};
@@ -97,13 +95,4 @@ export function signalFromConfig(config: SignalConfig): ChartSignal | null {
     return new (Cls as any)(config.id, config.style, config.params);
 }
 
-/**
- * Check if adding another signal of this type is allowed.
- * Returns true if maxInstances is undefined (unlimited) or not yet reached.
- */
-export function canAddSignalType(signalType: string, currentSignals: SignalConfig[]): boolean {
-    const Cls = SIGNAL_REGISTRY.get(signalType);
-    if (!Cls || Cls.maxInstances === undefined) return true;
-    return currentSignals.filter(s => s.signalType === signalType).length < Cls.maxInstances;
-}
 

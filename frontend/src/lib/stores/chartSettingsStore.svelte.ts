@@ -39,10 +39,19 @@ export const DEFAULT_CHART_SETTINGS: ChartSettings = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Deep-clone that works with Svelte 5 $state proxy objects */
+function deepClone<T>(obj: T): T {
+    return JSON.parse(JSON.stringify(obj));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Module-level state (session-lifetime)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-let globalSettings: ChartSettings = structuredClone(DEFAULT_CHART_SETTINGS);
+let globalSettings: ChartSettings = deepClone(DEFAULT_CHART_SETTINGS);
 let pairOverrides = new Map<string, ChartSettings>();
 
 // Reactive version counter — Svelte 5 components can use this to trigger re-renders
@@ -63,7 +72,7 @@ function bump() {
 export function getGlobalSettings(): ChartSettings {
     // Access _version to register reactive dependency
     void _version;
-    return structuredClone(globalSettings);
+    return deepClone(globalSettings);
 }
 
 /**
@@ -74,7 +83,7 @@ export function getSettingsForPair(slug: string): ChartSettings {
     // Access _version to register reactive dependency
     void _version;
     const override = pairOverrides.get(slug);
-    return override ? structuredClone(override) : structuredClone(globalSettings);
+    return override ? deepClone(override) : deepClone(globalSettings);
 }
 
 /**
@@ -102,7 +111,7 @@ export function getSettingsVersion(): number {
  * IMPORTANT: clears ALL pair overrides — global settings override everything.
  */
 export function setGlobalSettings(settings: ChartSettings): void {
-    globalSettings = structuredClone(settings);
+    globalSettings = deepClone(settings);
     pairOverrides.clear();
     bump();
 }
@@ -112,7 +121,7 @@ export function setGlobalSettings(settings: ChartSettings): void {
  * Does NOT affect other pairs or global settings.
  */
 export function setPairSettings(slug: string, settings: ChartSettings): void {
-    pairOverrides.set(slug, structuredClone(settings));
+    pairOverrides.set(slug, deepClone(settings));
     bump();
 }
 
@@ -128,7 +137,7 @@ export function clearPairSettings(slug: string): void {
  * Reset everything to defaults (for testing or "reset all" button).
  */
 export function resetAllSettings(): void {
-    globalSettings = structuredClone(DEFAULT_CHART_SETTINGS);
+    globalSettings = deepClone(DEFAULT_CHART_SETTINGS);
     pairOverrides.clear();
     bump();
 }

@@ -393,33 +393,33 @@
                     z: 1, // below main series
                 };
 
-                // Arrow markers at start/end of signal data
-                if (signal.arrowStart || signal.arrowEnd) {
+                // Endpoint markers at start/end of signal data
+                if (signal.markerStart || signal.markerEnd) {
                     const markData: any[] = [];
-                    // Find first non-null index for arrowStart
-                    if (signal.arrowStart) {
+                    // Find first non-null index for markerStart
+                    if (signal.markerStart) {
                         for (let i = 0; i < signalSeriesData.length; i++) {
                             const v = useTupleFormat ? signalSeriesData[i]?.[1] : signalSeriesData[i];
                             if (v !== null && v !== undefined) {
                                 markData.push({
                                     coord: [i, v],
-                                    symbol: 'arrow',
+                                    symbol: signal.markerStart,
                                     symbolSize: 8,
-                                    symbolRotate: 180,
+                                    symbolRotate: signal.markerStart === 'arrow' ? 180 : 0,
                                     itemStyle: {color: signal.color},
                                 });
                                 break;
                             }
                         }
                     }
-                    // Find last non-null index for arrowEnd
-                    if (signal.arrowEnd) {
+                    // Find last non-null index for markerEnd
+                    if (signal.markerEnd) {
                         for (let i = signalSeriesData.length - 1; i >= 0; i--) {
                             const v = useTupleFormat ? signalSeriesData[i]?.[1] : signalSeriesData[i];
                             if (v !== null && v !== undefined) {
                                 markData.push({
                                     coord: [i, v],
-                                    symbol: 'arrow',
+                                    symbol: signal.markerEnd,
                                     symbolSize: 8,
                                     itemStyle: {color: signal.color},
                                 });

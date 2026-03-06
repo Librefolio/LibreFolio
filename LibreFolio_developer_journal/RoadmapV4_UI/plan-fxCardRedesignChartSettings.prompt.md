@@ -1,7 +1,7 @@
 # Plan: FX Card Redesign, Chart Settings, Signal Library & Sync All Fix
 
 **Data creazione**: 5 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Steps 1-4,6 completati. Prossimo: Step 5 (FxCard redesign), Step 7 (DataTable), Step 8 (integration)
+**Status**: 🔄 IN PROGRESS — Steps 1-4,6 done. Step 4 has pending UI iteration (signal card layout choice + visual selectors + preview chart). Prossimo: finalize Step 4 → Step 5 (FxCard redesign)
 **Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5
 **Contesto**: Feedback utente su card layout, settings ⚙️ non collegato, Sync All non funzionante, overlay/benchmark da implementare come libreria di segnali
 
@@ -112,9 +112,11 @@ export interface SignalStyle {
     color: string;                              // hex, e.g. '#3b82f6'
     lineWidth: number;                          // 1, 2, 3, or 4
     lineType: 'solid' | 'dashed' | 'dotted';
-    arrowStart: boolean;                        // show arrow marker at first point
-    arrowEnd: boolean;                          // show arrow marker at last point
+    markerStart: MarkerType;                    // marker at first point, null = none
+    markerEnd: MarkerType;                      // marker at last point, null = none
 }
+
+// MarkerType = 'arrow' | 'circle' | 'diamond' | 'pin' | null
 
 // ═══════════════════════════════════════════════════════════════════
 // SIGNAL CONFIG — Serializable state (stored in ChartSettings)
@@ -445,8 +447,8 @@ export function createSignal(signalType: string, existingCount: number): ChartSi
         color: DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length],
         lineWidth: 2,
         lineType: 'dashed',
-        arrowStart: false,
-        arrowEnd: false,
+        markerStart: null,
+        markerEnd: null,
     };
 
     const params: Record<string, unknown> = {};
@@ -492,8 +494,8 @@ The `OrderableList` in `ChartSettingsModal` renders each signal item by:
    - Color: <input type="color">
    - Width: <select> 1,2,3,4
    - Line type: <select> solid, dashed, dotted
-   - Arrow start: <checkbox> (default off)
-   - Arrow end: <checkbox> (default off)
+   - Marker start: <select> None, Arrow, Circle, Diamond, Pin
+   - Marker end: <select> None, Arrow, Circle, Diamond, Pin
 4. 🗑 button to remove
 ```
 
@@ -575,13 +577,13 @@ ChartSignal[] (live instances)
     ↓ signal.computePoints(baseData, viewMode)
 LineDataPoint[] per signal
     ↓ signal.render(baseData, viewMode) — wraps into RenderedSignal
-RenderedSignal[] — uniform format with color, lineWidth, lineType, arrowStart, arrowEnd
+RenderedSignal[] — uniform format with color, lineWidth, lineType, markerStart, markerEnd
     ↓ passed as prop `overlaySignals` to LineChart / PriceChartCompact / PriceChartFull
 LineChart treats ALL signals equally — it doesn't know or care about signal types.
 For each RenderedSignal it adds an ECharts line series:
     - z: 1 (below main series)
     - NOT affected by visualMap (seriesIndex: 0 targets only main series)
-    - symbol: 'none' (or 'arrow' at endpoints if arrowStart/arrowEnd)
+    - symbol: 'none' (or marker shape at endpoints if markerStart/markerEnd set)
     - Tooltip shows signal label
 ```
 
@@ -625,23 +627,76 @@ Created session-level settings store.
   - API: `getGlobalSettings()`, `getSettingsForPair(slug)`, `setGlobalSettings()`, `setPairSettings()`, `clearPairSettings()`
   - `setGlobalSettings` overwrites global + `pairOverrides.clear()`
 
-### Step 4 — Chart Settings Modal (P2 + P4) ✅ COMPLETED
+### Step 4 — Chart Settings Modal (P2 + P4) ✅ COMPLETED + Iteration
 Modal component for configuring aesthetics + signals.
 
-- **`ChartSettingsModal.svelte`** (NEW):
-  - **Aesthetics section**: 4 checkboxes (colorByBaseline, areaFill, gridLines, staleGradient)
+- **`ChartSettingsModal.svelte`**:
+  - **Aesthetics section**: 4 toggle switches (matching project SettingToggle pattern)
   - **Signals section**: `OrderableList` of signal items
-    - Each row: type (from registry `getRegisteredSignalTypes()`), params (from `paramDescriptors`), style (color/width/type/arrows)
-    - For `FxPairSignal`: `pairSlug` options resolved dynamically from prop `availablePairs`; no instance limit
-    - For synthetics: numeric inputs with suffix
-    - All signal types: unlimited instances (no maxInstances enforced)
-    - "+ Add signal" button at bottom, "🗑" to remove
-  - Props: `open`, `settings: ChartSettings`, `mode: 'global' | 'pair'`, `availablePairs: string[]`
-  - Callbacks: `onsave(settings: ChartSettings)`, `onclose()`
-  - **If mode='global'**: banner "⚠ These settings will override all per-card customizations"
+  - **Dirty check**: Cancel triggers `ConfirmModal` (warning=true, arancione) if changes detected
+  - **structuredClone fix**: replaced with `JSON.parse(JSON.stringify(...))` for Svelte 5 proxy compat
+  - **aria-label** on all toggle buttons for a11y
 
 - **Connect to filter bar** `+page.svelte`: ⚙️ button → `ChartSettingsModal(mode='global')`
   - On confirm: `setGlobalSettings(newSettings)`
+
+#### 🔄 Signal Card Layout — Pending Decision (3 alternatives)
+
+The current signal card layout uses native HTML selects and text labels.
+User feedback: use project selectors, show visual previews, add flags for FX pairs.
+
+**ALTERNATIVE A — "Two-Row Compact"**
+Type-params on row 1, style controls on row 2. Minimal vertical footprint.
+```
+┌─[⠿]───────────────────────────────────────────────────────────[🗑]─┐
+│  💱 FX Pair    🇪🇺 EUR/🇬🇧 GBP  ▼                                  │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  │
+│  🎨■  W[━━]▼  [─ ─ ─]▼  Start[◇]▼  End[→]▼                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+- Row 1: signal icon + type label + type-specific params (FxPair: CurrencySearchSelect with flags)
+- Row 2: color swatch, width preview (line thickness), style preview (solid/dashed/dotted line),
+  marker start/end preview (visual icon of the shape)
+- ⠿ = drag handle (desktop), ↑↓ arrows (mobile)
+- 🗑 top-right corner
+- **Pro**: Very compact, minimal space. Good when many signals.
+- **Con**: Two rows per signal = moderate density.
+
+**ALTERNATIVE B — "Inline Ribbon"**
+Everything on one row with icon-only controls. Most compact possible.
+```
+┌─[⠿]─ 💱 EUR/GBP ▼ ─── 🎨■ [━]▼ [- -]▼ ◇▼ →▼ ──────────── [🗑]─┐
+└────────────────────────────────────────────────────────────────────┘
+```
+- Single row: handle, type icon, param selector, color, width, style, markers, delete
+- All controls inline, separator between param and style zones
+- Width/style/markers show visual icons only (no text labels)
+- **Pro**: Ultra-compact, maximizes vertical space for chart preview or adding many signals
+- **Con**: Can feel crowded, harder on mobile, less discoverable for new users
+
+**ALTERNATIVE C — "Card with Preview Strip"**
+Params top, visual style as a live-preview strip below.
+```
+┌─[⠿]────────────────────────────────────────────────────────[🗑]───┐
+│  💱 FX Pair    🇪🇺 EUR / 🇬🇧 GBP  ▼                               │
+│                                                                    │
+│  ◇──── ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ────→     [🎨] [⚙ style] │
+│  ↑ markerStart    line preview (color+width+type)    markerEnd     │
+└────────────────────────────────────────────────────────────────────┘
+```
+- Top: signal type + params (with project selectors + flags)
+- Bottom: live SVG preview strip showing the actual line (color, thickness, dash pattern)
+  with marker icons at start/end. Clicking the strip opens a style popover.
+- Color picker and style button to the right of the strip.
+- **Pro**: Most intuitive — user SEES the result immediately. Low cognitive load.
+- **Con**: Tallest layout per signal, complex SVG rendering. But most delightful UX.
+
+**Decision pending** from user review.
+
+#### 📊 Preview Chart in Modal (TODO)
+Add a small chart preview at the top of the modal that shows current aesthetics applied
+(using the same `PriceChartCompact` component with synthetic demo data).
+Live-updates as toggles change. Shows overlay signals in real-time when added.
 
 ### Step 5 — Redesign FxCard (P3 + P2)
 New layout B with local settings.
@@ -688,8 +743,9 @@ signal types — it receives a list of `RenderedSignal[]` and renders them all e
         markPoint: buildArrowMarks(signal),
     }
     ```
-  - **Arrow markers**: If `signal.arrowStart` or `signal.arrowEnd`, add `markPoint` entries
-    with ECharts `symbol: 'arrow'` at start/end coordinates. Useful for detail page trend direction.
+  - **Endpoint markers**: If `signal.markerStart` or `signal.markerEnd` is non-null, add `markPoint`
+    entries at start/end coordinates with the specified ECharts symbol type ('arrow', 'circle',
+    'diamond', 'pin'). Arrow start marker rotated 180° to point backwards.
   - `visualMap.seriesIndex: 0` to target only main series
   - Tooltip updated to show all overlay series labels
 
@@ -859,10 +915,11 @@ and overlay logic across FX, Asset, and Dashboard chart components.
     `canAddSignalType()`, `getRegisteredSignalTypes()`.
   - `index.ts` — Barrel exports for all classes, types, and functions.
 - All subclasses use `static override` for proper TypeScript inheritance.
-- **6 Mar iteration**: Removed `maxInstances = 1` from `FxPairSignal`. Added `arrowStart`/`arrowEnd`
-  boolean fields to `SignalStyle` (default false). Updated `RenderedSignal` to include arrows.
-  Updated `createSignal()` default style to include `arrowStart: false, arrowEnd: false`.
-  Charts will treat ALL signals uniformly — no "first" signal concept.
+- **6 Mar iteration**: Removed `maxInstances` completely from `ChartSignal` base class and `FxPairSignal`.
+  Removed `canAddSignalType()` function — no limits needed. Replaced `arrowStart`/`arrowEnd` booleans
+  with `MarkerType = 'arrow' | 'circle' | 'diamond' | 'pin' | null` enum. `SignalStyle` uses
+  `markerStart: MarkerType` and `markerEnd: MarkerType` (null = no marker). Updated `RenderedSignal`,
+  `createSignal()` defaults, and all downstream consumers. Charts treat ALL signals uniformly.
 - **Verified**: `./dev.py front check` → 0 errors, 0 warnings.
 
 ### Step 3 — Chart Settings Store ✅ (5 Mar 2026)
@@ -906,12 +963,87 @@ and overlay logic across FX, Asset, and Dashboard chart components.
   - Added `overlaySignals: RenderedSignal[]` prop (imported from `$lib/charts/signals`)
   - New overlay rendering loop after pending edits: for each signal, builds date-aligned series
     data with `connectNulls: true`, renders as ECharts line series with `z: 1` (below main)
-  - Arrow markers: if `signal.arrowStart`/`arrowEnd`, adds `markPoint` entries with `symbol: 'arrow'`
-    at first/last non-null data points (start arrow rotated 180° to point left)
+  - Endpoint markers: if `signal.markerStart`/`markerEnd` is non-null, adds `markPoint` entries
+    with the specified ECharts symbol type ('arrow', 'circle', 'diamond', 'pin') at first/last
+    non-null data points (arrow start marker rotated 180° to point backwards)
   - Tooltip rewritten from single-series to multi-series: iterates all `params[]`, shows color dot +
     series name + value for each visible series. Stale warning and % note appended at the end.
   - `$effect` now registers `overlaySignals` as reactive dependency to trigger re-render on change
 - **Verified**: `./dev.py front check` → 0 errors, 0 warnings. `./dev.py front build` → success.
+
+### Bugfix Round — 6 Mar 2026 PM
+**Critical: `$state is not defined` runtime error (HTTP 500 on /fx page)**
+
+Root cause: `chartSettingsStore.ts` used `$state(0)` rune but had `.ts` extension instead of `.svelte.ts`.
+Svelte 5 runes (`$state`, `$derived`, `$effect`) only work in `.svelte` or `.svelte.ts` files. The build
+succeeded because Vite's SSR transform processes `.ts` files differently, but at runtime in the browser
+the rune was not compiled, resulting in `$state is not defined`.
+
+**Changes:**
+- Renamed `chartSettingsStore.ts` → `chartSettingsStore.svelte.ts`
+- Updated all imports to use `$lib/stores/chartSettingsStore.svelte` path
+  (SvelteKit resolves `.svelte.ts` → `.svelte.js` at compile time)
+
+**Also in this round:**
+- **Removed `canAddSignalType()`**: Function no longer needed since all signal types are unlimited
+  (no `maxInstances` on any class). Removed from `registry.ts`, `index.ts` barrel, and `ChartSignal.ts`.
+- **Removed `maxInstances` from `ChartSignal` base class** and `SignalTypeInfo` interface.
+- **Replaced `arrowStart`/`arrowEnd` booleans with `MarkerType` enum**: New `MarkerType = 'arrow' | 'circle' | 'diamond' | 'pin' | null`.
+  `SignalStyle` now has `markerStart: MarkerType` and `markerEnd: MarkerType` (null = no marker).
+  `RenderedSignal` updated accordingly. `createSignal()` defaults to `null` (no markers).
+  `ChartSettingsModal` now shows `<select>` dropdowns instead of checkboxes for marker type.
+  `LineChart` uses the marker type string as ECharts symbol name directly.
+- **SemiDonutChart**: Already extracted as reusable component in `components/charts/SemiDonutChart.svelte`
+  during Phase 4. No action needed.
+
+**Verified**: `./dev.py front check` → 0 errors, 0 warnings. `./dev.py front build` → success.
+
+### Bugfix Round 2 — 6 Mar 2026 (user testing feedback)
+
+**Critical: `structuredClone` crash on Apply button**
+Root cause: `structuredClone(signals)` fails because Svelte 5 `$state()` produces Proxy objects
+that are not cloneable via `structuredClone`. Error: `DataCloneError: could not be cloned`.
+Fix: replaced ALL `structuredClone` with `JSON.parse(JSON.stringify(...))` via `deepClone()` helper
+in both `ChartSettingsModal.svelte` and `chartSettingsStore.svelte.ts`.
+
+**Other fixes:**
+- **Aesthetics: checkboxes → toggle switches**: Replaced `<input type="checkbox">` with `<button>`
+  toggle switches matching the project's `SettingToggle.svelte` design pattern (green pill with
+  sliding dot). Added `aria-label` on all 4 toggles for a11y (0 svelte-check warnings).
+- **Cancel with dirty check**: Added `isDirty()` function comparing local state vs initial settings.
+  If dirty, Cancel shows a `ConfirmModal` (warning=true, arancione, not red) asking "Discard changes?".
+  If clean, closes silently.
+- **Type annotation**: Added explicit `ChartSettings` type on `onsave` callback in `+page.svelte`.
+
+**Console errors analysis:**
+- `content-script.js:104 Failed to get subsystem status` → browser extension, not our code. Ignore.
+- `api/v1/fx/currencies/convert 404` → the endpoint exists as POST; the 404s are likely GET requests
+  from a browser extension intercepting currency codes. Our code never calls GET on this URL. Ignore.
+- `A listener indicated an asynchronous response` → browser extension. Ignore.
+- `structuredClone DataCloneError` → **FIXED** (see above).
+
+**Verified**: `./dev.py front check` → 0 errors, 0 warnings. `./dev.py front build` → success.
+
+---
+
+## Pending Feedback Items (Step 4 iteration)
+
+These items require user decision before continuing to Step 5:
+
+### 📐 Signal Card Layout — Pick one of A/B/C
+See Step 4 → "Signal Card Layout — Pending Decision" for ASCII art.
+Once chosen, implement in ChartSettingsModal before moving to FxCard redesign.
+
+### 🎨 Visual Selectors (all signal card layouts)
+Replace native `<select>` with project selectors for:
+- **Width**: show actual line thickness preview (SVG line at 1px, 2px, 3px, 4px)
+- **Style**: show solid/dashed/dotted as SVG line preview
+- **Marker Start/End**: show shape icon (●, ◆, ▲, 📌) instead of text
+- **FX Pair**: show flags 🇪🇺/🇬🇧 next to currency codes (use CurrencySearchSelect)
+
+### 📊 Preview Chart
+Add a `PriceChartCompact` at the top of the modal with synthetic data
+that live-updates as aesthetics toggles and signals change.
 
 ---
 
@@ -925,7 +1057,7 @@ and overlay logic across FX, Asset, and Dashboard chart components.
 | `frontend/src/lib/charts/signals/CompoundSignal.ts` | ✅ DONE — Compound growth |
 | `frontend/src/lib/charts/signals/registry.ts` | ✅ DONE — Registry + factory (arrows in defaults) |
 | `frontend/src/lib/charts/signals/index.ts` | ✅ DONE — Barrel export |
-| `frontend/src/lib/stores/chartSettingsStore.ts` | ✅ DONE — Session-level store |
+| `frontend/src/lib/stores/chartSettingsStore.svelte.ts` | ✅ DONE — Session-level store (renamed from .ts → .svelte.ts for $state) |
 | `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | ✅ DONE — Settings configurator (aesthetics + signals) |
 | `frontend/src/lib/components/fx/FxSyncModal.svelte` | ✅ DONE — Fix currencies + Svelte 5 + style |
 | `frontend/src/lib/components/fx/FxCard.svelte` | REWRITE — Layout B + Svelte 5 |
