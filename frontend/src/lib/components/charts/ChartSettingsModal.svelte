@@ -196,6 +196,37 @@
         const v = signal.params[key];
         return typeof v === 'string' ? v : '';
     }
+
+    // =========================================================================
+    // Marker cycling (click to cycle: null → arrow → circle → diamond → pin → null)
+    // =========================================================================
+
+    const MARKER_CYCLE: (MarkerType | null)[] = [null, 'arrow', 'circle', 'diamond', 'pin'];
+    const MARKER_SYMBOLS_START: Record<string, string> = {
+        arrow: '◁', circle: '●', diamond: '◆', pin: '📍',
+    };
+    const MARKER_SYMBOLS_END: Record<string, string> = {
+        arrow: '▷', circle: '●', diamond: '◆', pin: '📍',
+    };
+
+    function cycleMarker(id: string, key: 'markerStart' | 'markerEnd') {
+        const signal = signals.find(s => s.id === id);
+        if (!signal) return;
+        const current = signal.style[key];
+        const idx = MARKER_CYCLE.indexOf(current);
+        const next = MARKER_CYCLE[(idx + 1) % MARKER_CYCLE.length];
+        updateSignalStyle(id, key, next);
+    }
+
+    // =========================================================================
+    // Line style popover (click SVG line → show width + type picker)
+    // =========================================================================
+
+    let linePopoverId = $state<string | null>(null);
+
+    function toggleLinePopover(id: string) {
+        linePopoverId = linePopoverId === id ? null : id;
+    }
 </script>
 
 <ModalBase
@@ -388,90 +419,137 @@
                                     </div>
                                 {/if}
 
-                                <!-- Row 3: Visual Style Preview Strip (Layout C) -->
-                                <div class="flex items-center gap-2 pt-1.5 border-t border-gray-100 dark:border-slate-700">
-                                    <!-- Marker start selector (visual symbols) -->
-                                    <select
-                                        class="w-8 px-0 py-0.5 text-center text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                        title={$t('chartSettings.style.markerStart')}
-                                        onchange={(e) => {
-                                            const val = e.currentTarget.value;
-                                            updateSignalStyle(signal.id, 'markerStart', val === '' ? null : val as MarkerType);
-                                        }}
-                                    >
-                                        <option value="" selected={!signal.style.markerStart}>·</option>
-                                        <option value="arrow" selected={signal.style.markerStart === 'arrow'}>◁</option>
-                                        <option value="circle" selected={signal.style.markerStart === 'circle'}>○</option>
-                                        <option value="diamond" selected={signal.style.markerStart === 'diamond'}>◇</option>
-                                        <option value="pin" selected={signal.style.markerStart === 'pin'}>📍</option>
-                                    </select>
-
-                                    <!-- SVG line preview strip (shows actual color + width + dash pattern) -->
-                                    <div class="flex-1 h-6 flex items-center">
-                                        <svg width="100%" height="24" class="overflow-visible">
-                                            <line
-                                                x1="0" y1="12" x2="100%" y2="12"
-                                                stroke={signal.style.color}
-                                                stroke-width={signal.style.lineWidth}
-                                                stroke-dasharray={signal.style.lineType === 'dashed' ? '8,4' : signal.style.lineType === 'dotted' ? '2,4' : 'none'}
-                                            />
-                                        </svg>
-                                    </div>
-
-                                    <!-- Marker end selector (visual symbols) -->
-                                    <select
-                                        class="w-8 px-0 py-0.5 text-center text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                        title={$t('chartSettings.style.markerEnd')}
-                                        onchange={(e) => {
-                                            const val = e.currentTarget.value;
-                                            updateSignalStyle(signal.id, 'markerEnd', val === '' ? null : val as MarkerType);
-                                        }}
-                                    >
-                                        <option value="" selected={!signal.style.markerEnd}>·</option>
-                                        <option value="arrow" selected={signal.style.markerEnd === 'arrow'}>▷</option>
-                                        <option value="circle" selected={signal.style.markerEnd === 'circle'}>○</option>
-                                        <option value="diamond" selected={signal.style.markerEnd === 'diamond'}>◇</option>
-                                        <option value="pin" selected={signal.style.markerEnd === 'pin'}>📍</option>
-                                    </select>
-
-                                    <!-- Divider -->
-                                    <div class="w-px h-5 bg-gray-200 dark:bg-slate-600"></div>
-
-                                    <!-- Color picker -->
+                                <!-- Row 3: Visual Style Preview Strip (Layout C v2) -->
+                                <div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700">
+                                    <!-- Color picker (first) -->
                                     <input
                                         type="color"
                                         value={signal.style.color}
-                                        class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer"
+                                        class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
                                         title={$t('chartSettings.style.color')}
                                         oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
                                     />
 
-                                    <!-- Width selector (visual thickness preview) -->
-                                    <select
-                                        class="w-12 px-0.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700"
-                                        title={$t('chartSettings.style.width')}
-                                        onchange={(e) => updateSignalStyle(signal.id, 'lineWidth', Number(e.currentTarget.value))}
+                                    <!-- Marker start: clickable cycle button, colored -->
+                                    <button
+                                        type="button"
+                                        class="w-6 h-6 flex items-center justify-center rounded text-sm shrink-0 transition-colors
+                                            {signal.style.markerStart
+                                                ? 'hover:bg-gray-100 dark:hover:bg-slate-600'
+                                                : 'text-gray-300 dark:text-slate-600 hover:text-gray-400 dark:hover:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                        style={signal.style.markerStart ? `color: ${signal.style.color}` : ''}
+                                        title={$t('chartSettings.style.markerStart')}
+                                        onclick={() => cycleMarker(signal.id, 'markerStart')}
                                     >
-                                        {#each [1, 2, 3, 4] as w}
-                                            <option value={w} selected={signal.style.lineWidth === w}>{'━'.repeat(w)}</option>
-                                        {/each}
-                                    </select>
+                                        {#if signal.style.markerStart}
+                                            {MARKER_SYMBOLS_START[signal.style.markerStart] ?? '·'}
+                                        {:else}
+                                            <span class="text-[10px]">·</span>
+                                        {/if}
+                                    </button>
 
-                                    <!-- Line type selector (visual dash pattern) -->
-                                    <select
-                                        class="w-12 px-0.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700"
-                                        title={$t('chartSettings.style.lineType')}
-                                        onchange={(e) => {
-                                            const val = e.currentTarget.value;
-                                            if (val === 'solid' || val === 'dashed' || val === 'dotted') {
-                                                updateSignalStyle(signal.id, 'lineType', val);
-                                            }
-                                        }}
+                                    <!-- SVG line preview strip — click to open width/type popover -->
+                                    <div class="flex-1 relative">
+                                        <button
+                                            type="button"
+                                            class="w-full h-6 flex items-center cursor-pointer rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                                            title={$t('chartSettings.style.lineType')}
+                                            onclick={() => toggleLinePopover(signal.id)}
+                                        >
+                                            <svg width="100%" height="24" class="overflow-visible">
+                                                <line
+                                                    x1="4" y1="12" x2="calc(100% - 4)" y2="12"
+                                                    stroke={signal.style.color}
+                                                    stroke-width={signal.style.lineWidth}
+                                                    stroke-dasharray={signal.style.lineType === 'dashed' ? '8,4' : signal.style.lineType === 'dotted' ? '2,4' : 'none'}
+                                                />
+                                            </svg>
+                                        </button>
+
+                                        <!-- Popover for width + type -->
+                                        {#if linePopoverId === signal.id}
+                                            <!-- Invisible backdrop to close popover on click outside -->
+                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                            <div class="fixed inset-0 z-10" onclick={() => { linePopoverId = null; }}></div>
+                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                            <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-20
+                                                bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
+                                                rounded-lg shadow-lg p-2 space-y-2 min-w-[140px]"
+                                                onclick={(e) => e.stopPropagation()}>
+
+                                                <!-- Line type picker -->
+                                                <div class="flex items-center gap-1">
+                                                    <span class="text-[10px] text-gray-500 dark:text-gray-400 w-10">{$t('chartSettings.style.lineType')}</span>
+                                                    <div class="flex gap-1">
+                                                        {#each ['solid', 'dashed', 'dotted'] as lt}
+                                                            <button
+                                                                type="button"
+                                                                aria-label={lt}
+                                                                class="w-10 h-6 flex items-center justify-center rounded border transition-colors
+                                                                    {signal.style.lineType === lt
+                                                                        ? 'border-libre-green bg-libre-green/10'
+                                                                        : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
+                                                                onclick={() => { updateSignalStyle(signal.id, 'lineType', lt as 'solid' | 'dashed' | 'dotted'); }}
+                                                            >
+                                                                <svg width="32" height="6">
+                                                                    <line x1="2" y1="3" x2="30" y2="3"
+                                                                        stroke={signal.style.color}
+                                                                        stroke-width="2"
+                                                                        stroke-dasharray={lt === 'dashed' ? '5,3' : lt === 'dotted' ? '2,3' : 'none'}
+                                                                    />
+                                                                </svg>
+                                                            </button>
+                                                        {/each}
+                                                    </div>
+                                                </div>
+
+                                                <!-- Width picker -->
+                                                <div class="flex items-center gap-1">
+                                                    <span class="text-[10px] text-gray-500 dark:text-gray-400 w-10">{$t('chartSettings.style.width')}</span>
+                                                    <div class="flex gap-1">
+                                                        {#each [1, 2, 3, 4] as w}
+                                                            <button
+                                                                type="button"
+                                                                aria-label="width {w}"
+                                                                class="w-7 h-6 flex items-center justify-center rounded border transition-colors
+                                                                    {signal.style.lineWidth === w
+                                                                        ? 'border-libre-green bg-libre-green/10'
+                                                                        : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
+                                                                onclick={() => updateSignalStyle(signal.id, 'lineWidth', w)}
+                                                            >
+                                                                <svg width="20" height="10">
+                                                                    <line x1="2" y1="5" x2="18" y2="5"
+                                                                        stroke={signal.style.color}
+                                                                        stroke-width={w}
+                                                                    />
+                                                                </svg>
+                                                            </button>
+                                                        {/each}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {/if}
+                                    </div>
+
+                                    <!-- Marker end: clickable cycle button, colored -->
+                                    <button
+                                        type="button"
+                                        class="w-6 h-6 flex items-center justify-center rounded text-sm shrink-0 transition-colors
+                                            {signal.style.markerEnd
+                                                ? 'hover:bg-gray-100 dark:hover:bg-slate-600'
+                                                : 'text-gray-300 dark:text-slate-600 hover:text-gray-400 dark:hover:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                        style={signal.style.markerEnd ? `color: ${signal.style.color}` : ''}
+                                        title={$t('chartSettings.style.markerEnd')}
+                                        onclick={() => cycleMarker(signal.id, 'markerEnd')}
                                     >
-                                        <option value="solid" selected={signal.style.lineType === 'solid'}>━━━</option>
-                                        <option value="dashed" selected={signal.style.lineType === 'dashed'}>╌╌╌</option>
-                                        <option value="dotted" selected={signal.style.lineType === 'dotted'}>···</option>
-                                    </select>
+                                        {#if signal.style.markerEnd}
+                                            {MARKER_SYMBOLS_END[signal.style.markerEnd] ?? '·'}
+                                        {:else}
+                                            <span class="text-[10px]">·</span>
+                                        {/if}
+                                    </button>
                                 </div>
                             </div>
                         {/snippet}

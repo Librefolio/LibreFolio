@@ -1,7 +1,7 @@
 # Plan: FX Card Redesign, Chart Settings, Signal Library & Sync All Fix
 
 **Data creazione**: 5 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Steps 1-4,6 done. Step 4: Layout C implemented, i18n done, FxSyncModal padding fix done. SNB provider rewritten. Prossimo: Step 4 preview chart + Step 5 (FxCard redesign)
+**Status**: 🔄 IN PROGRESS — Steps 1-4,6 done. Step 4: Layout C v2 (SVG popover + clickable markers + color first), i18n done, FxSyncModal padding fix, i18n search CLI improved. Prossimo: Step 4 preview chart + Step 5 (FxCard redesign)
 **Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5
 **Contesto**: Feedback utente su card layout, settings ⚙️ non collegato, Sync All non funzionante, overlay/benchmark da implementare come libreria di segnali
 
@@ -1068,12 +1068,16 @@ monthly points.
 ## Pending Feedback Items (Step 4 iteration)
 
 
-### ✅ 📐 Signal Card Layout — DECIDED: Layout C ("Card with Preview Strip")
-Implemented 6 Mar 2026. Math params on top, visual SVG preview strip on bottom.
-- SVG line shows actual color + width + dash pattern
-- Marker selectors (◁/○/◇/📍) at start/end of the line
-- Color picker + width selector (━/━━/━━━/━━━━) + line type selector (━━━/╌╌╌/···) to the right
-- All visual — no text labels, just symbols and live preview.
+### ✅ 📐 Signal Card Layout — DECIDED: Layout C v2 ("Card with Preview Strip")
+Implemented 6 Mar 2026, refined same day.
+- **Math params** on top row (type-specific: pair selector, annual rate, etc.)
+- **Visual style strip** on bottom row:
+  - Color picker at start (leftmost)
+  - Marker start: clickable cycle button (null→arrow→circle→diamond→pin→null), colored with signal color, no dropdown
+  - SVG line preview (full width): shows actual color + width + dash pattern. Click opens popover.
+  - Marker end: same clickable cycle, colored
+  - Line style popover: tiny overlay with SVG buttons for type (solid/dashed/dotted) and width (1-4px), all shown as visual SVG previews
+  - Click-outside closes popover (invisible backdrop pattern)
 
 ### ✅ 🌍 i18n of ChartSettingsModal — COMPLETED 6 Mar 2026
 All hardcoded strings replaced with `$t()` calls. Added 25+ new i18n keys under `chartSettings.*`:
@@ -1085,6 +1089,17 @@ All hardcoded strings replaced with `$t()` calls. Added 25+ new i18n keys under 
 ### ✅ FxSyncModal Padding Fix — COMPLETED 6 Mar 2026
 Added `px-6 py-4` to header, body, and footer sections (was missing horizontal padding).
 Matches `ChartSettingsModal` pattern. No longer "tutto attaccato".
+
+### ✅ `dev.py i18n search` CLI Rewrite — COMPLETED 6 Mar 2026
+**Bug**: Old search matched per-language then only showed matched languages (others as "—").
+This gave confusing results where searching a Spanish word showed "—" for EN/IT/FR.
+
+**Fix**: Complete rewrite using `flatten_dict` for all languages, union of all keys.
+- **Always shows ALL languages** for every matching key
+- New flags: `--keys` (search only key names), `--values` (search only values), `--lang` (restrict to specific languages)
+- Default (no flags): search both keys and values across all languages
+- Shows search mode in output header: `(in keys + values[all])`, `(in keys)`, `(in values[it,es])`, etc.
+- Also noted typo: `bxrokers.sharing.lastOwnerWarning` should be `brokers.sharing.lastOwnerWarning` (not fixed, just flagged)
 
 ### 🔍 Sync Feedback to Frontend — Analysis (pending implementation)
 **Problem**: When sync completes, the frontend doesn't know which pairs had 0 data (e.g., SNB→CNY before fix).
