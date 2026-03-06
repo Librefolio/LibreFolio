@@ -2,7 +2,7 @@
 
 **Data creazione**: 5 Marzo 2026
 **Status**: 🔄 IN PROGRESS — Steps 1-4,6 done. Step 4: Layout C v2 (SVG popover + clickable markers + color first), i18n done, FxSyncModal padding fix, i18n search CLI improved. Prossimo: Step 4 preview chart + Step 5 (FxCard redesign)
-**Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5
+**Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5, plan-fxSyncApiRedesign (sync API pair-based)
 **Contesto**: Feedback utente su card layout, settings ⚙️ non collegato, Sync All non funzionante, overlay/benchmark da implementare come libreria di segnali
 
 ---
