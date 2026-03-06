@@ -16,6 +16,7 @@
 -->
 <script lang="ts">
     import {X, Plus, Trash2, Settings, AlertTriangle} from 'lucide-svelte';
+    import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
@@ -209,7 +210,7 @@
             <div class="flex items-center gap-2">
                 <Settings size={20} class="text-libre-green" />
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                    {mode === 'global' ? 'Chart Settings' : 'Chart Settings (Local)'}
+                    {mode === 'global' ? $t('chartSettings.title') : $t('chartSettings.titleLocal')}
                 </h2>
             </div>
             <button
@@ -228,20 +229,20 @@
                 <div class="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
                     <AlertTriangle size={16} class="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                     <p class="text-xs text-amber-700 dark:text-amber-300">
-                        These settings will override all per-card customizations.
+                        {$t('chartSettings.globalWarning')}
                     </p>
                 </div>
             {/if}
 
             <!-- Aesthetics Section -->
             <div>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Aesthetics</h3>
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{$t('chartSettings.aesthetics')}</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <!-- Color by baseline -->
                     <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <span>
-                            <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Baseline Colors</span>
-                            <span class="block text-xs text-gray-500 dark:text-gray-400">Green above / Red below</span>
+                            <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.baselineColors')}</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.baselineColorsDesc')}</span>
                         </span>
                         <button
                             type="button"
@@ -256,8 +257,8 @@
                     <!-- Area fill -->
                     <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <span>
-                            <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Area Fill</span>
-                            <span class="block text-xs text-gray-500 dark:text-gray-400">Gradient under line</span>
+                            <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.areaFill')}</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.areaFillDesc')}</span>
                         </span>
                         <button
                             type="button"
@@ -272,8 +273,8 @@
                     <!-- Grid lines -->
                     <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <span>
-                            <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Grid Lines</span>
-                            <span class="block text-xs text-gray-500 dark:text-gray-400">Horizontal dashed grid</span>
+                            <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.gridLines')}</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.gridLinesDesc')}</span>
                         </span>
                         <button
                             type="button"
@@ -288,8 +289,8 @@
                     <!-- Stale gradient -->
                     <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <span>
-                            <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Stale Gradient</span>
-                            <span class="block text-xs text-gray-500 dark:text-gray-400">Fade old data</span>
+                            <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.staleGradient')}</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.staleGradientDesc')}</span>
                         </span>
                         <button
                             type="button"
@@ -305,11 +306,11 @@
 
             <!-- Signals Section -->
             <div>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Overlay Signals</h3>
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{$t('chartSettings.overlaySignals')}</h3>
 
                 {#if signals.length === 0}
                     <p class="text-xs text-gray-400 dark:text-gray-500 italic mb-3">
-                        No overlay signals configured. Add one below.
+                        {$t('chartSettings.noSignals')}
                     </p>
                 {:else}
                     <OrderableList
@@ -331,7 +332,7 @@
                                     <button
                                         type="button"
                                         class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
-                                        title="Remove signal"
+                                        title={$t('chartSettings.removeSignal')}
                                         onclick={() => removeSignal(signal.id)}
                                     >
                                         <Trash2 size={14} />
@@ -387,86 +388,90 @@
                                     </div>
                                 {/if}
 
-                                <!-- Style controls: color, width, lineType, arrows -->
-                                <div class="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100 dark:border-slate-700">
+                                <!-- Row 3: Visual Style Preview Strip (Layout C) -->
+                                <div class="flex items-center gap-2 pt-1.5 border-t border-gray-100 dark:border-slate-700">
+                                    <!-- Marker start selector (visual symbols) -->
+                                    <select
+                                        class="w-8 px-0 py-0.5 text-center text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
+                                        title={$t('chartSettings.style.markerStart')}
+                                        onchange={(e) => {
+                                            const val = e.currentTarget.value;
+                                            updateSignalStyle(signal.id, 'markerStart', val === '' ? null : val as MarkerType);
+                                        }}
+                                    >
+                                        <option value="" selected={!signal.style.markerStart}>·</option>
+                                        <option value="arrow" selected={signal.style.markerStart === 'arrow'}>◁</option>
+                                        <option value="circle" selected={signal.style.markerStart === 'circle'}>○</option>
+                                        <option value="diamond" selected={signal.style.markerStart === 'diamond'}>◇</option>
+                                        <option value="pin" selected={signal.style.markerStart === 'pin'}>📍</option>
+                                    </select>
+
+                                    <!-- SVG line preview strip (shows actual color + width + dash pattern) -->
+                                    <div class="flex-1 h-6 flex items-center">
+                                        <svg width="100%" height="24" class="overflow-visible">
+                                            <line
+                                                x1="0" y1="12" x2="100%" y2="12"
+                                                stroke={signal.style.color}
+                                                stroke-width={signal.style.lineWidth}
+                                                stroke-dasharray={signal.style.lineType === 'dashed' ? '8,4' : signal.style.lineType === 'dotted' ? '2,4' : 'none'}
+                                            />
+                                        </svg>
+                                    </div>
+
+                                    <!-- Marker end selector (visual symbols) -->
+                                    <select
+                                        class="w-8 px-0 py-0.5 text-center text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
+                                        title={$t('chartSettings.style.markerEnd')}
+                                        onchange={(e) => {
+                                            const val = e.currentTarget.value;
+                                            updateSignalStyle(signal.id, 'markerEnd', val === '' ? null : val as MarkerType);
+                                        }}
+                                    >
+                                        <option value="" selected={!signal.style.markerEnd}>·</option>
+                                        <option value="arrow" selected={signal.style.markerEnd === 'arrow'}>▷</option>
+                                        <option value="circle" selected={signal.style.markerEnd === 'circle'}>○</option>
+                                        <option value="diamond" selected={signal.style.markerEnd === 'diamond'}>◇</option>
+                                        <option value="pin" selected={signal.style.markerEnd === 'pin'}>📍</option>
+                                    </select>
+
+                                    <!-- Divider -->
+                                    <div class="w-px h-5 bg-gray-200 dark:bg-slate-600"></div>
+
                                     <!-- Color picker -->
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Color</span>
-                                        <input
-                                            type="color"
-                                            value={signal.style.color}
-                                            class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer"
-                                            oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
-                                        />
-                                    </div>
+                                    <input
+                                        type="color"
+                                        value={signal.style.color}
+                                        class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer"
+                                        title={$t('chartSettings.style.color')}
+                                        oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
+                                    />
 
-                                    <!-- Line width -->
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Width</span>
-                                        <select
-                                            class="px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                            onchange={(e) => updateSignalStyle(signal.id, 'lineWidth', Number(e.currentTarget.value))}
-                                        >
-                                            <option value="1" selected={signal.style.lineWidth === 1}>1</option>
-                                            <option value="2" selected={signal.style.lineWidth === 2}>2</option>
-                                            <option value="3" selected={signal.style.lineWidth === 3}>3</option>
-                                            <option value="4" selected={signal.style.lineWidth === 4}>4</option>
-                                        </select>
-                                    </div>
+                                    <!-- Width selector (visual thickness preview) -->
+                                    <select
+                                        class="w-12 px-0.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700"
+                                        title={$t('chartSettings.style.width')}
+                                        onchange={(e) => updateSignalStyle(signal.id, 'lineWidth', Number(e.currentTarget.value))}
+                                    >
+                                        {#each [1, 2, 3, 4] as w}
+                                            <option value={w} selected={signal.style.lineWidth === w}>{'━'.repeat(w)}</option>
+                                        {/each}
+                                    </select>
 
-                                    <!-- Line type -->
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Style</span>
-                                        <select
-                                            class="px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                            onchange={(e) => {
-                                                const val = e.currentTarget.value;
-                                                if (val === 'solid' || val === 'dashed' || val === 'dotted') {
-                                                    updateSignalStyle(signal.id, 'lineType', val);
-                                                }
-                                            }}
-                                        >
-                                            <option value="solid" selected={signal.style.lineType === 'solid'}>Solid</option>
-                                            <option value="dashed" selected={signal.style.lineType === 'dashed'}>Dashed</option>
-                                            <option value="dotted" selected={signal.style.lineType === 'dotted'}>Dotted</option>
-                                        </select>
-                                    </div>
-
-                                    <!-- Marker start -->
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Start</span>
-                                        <select
-                                            class="px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                            onchange={(e) => {
-                                                const val = e.currentTarget.value;
-                                                updateSignalStyle(signal.id, 'markerStart', val === '' ? null : val as MarkerType);
-                                            }}
-                                        >
-                                            <option value="" selected={!signal.style.markerStart}>None</option>
-                                            <option value="arrow" selected={signal.style.markerStart === 'arrow'}>Arrow</option>
-                                            <option value="circle" selected={signal.style.markerStart === 'circle'}>Circle</option>
-                                            <option value="diamond" selected={signal.style.markerStart === 'diamond'}>Diamond</option>
-                                            <option value="pin" selected={signal.style.markerStart === 'pin'}>Pin</option>
-                                        </select>
-                                    </div>
-
-                                    <!-- Marker end -->
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-gray-500 dark:text-gray-400">End</span>
-                                        <select
-                                            class="px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
-                                            onchange={(e) => {
-                                                const val = e.currentTarget.value;
-                                                updateSignalStyle(signal.id, 'markerEnd', val === '' ? null : val as MarkerType);
-                                            }}
-                                        >
-                                            <option value="" selected={!signal.style.markerEnd}>None</option>
-                                            <option value="arrow" selected={signal.style.markerEnd === 'arrow'}>Arrow</option>
-                                            <option value="circle" selected={signal.style.markerEnd === 'circle'}>Circle</option>
-                                            <option value="diamond" selected={signal.style.markerEnd === 'diamond'}>Diamond</option>
-                                            <option value="pin" selected={signal.style.markerEnd === 'pin'}>Pin</option>
-                                        </select>
-                                    </div>
+                                    <!-- Line type selector (visual dash pattern) -->
+                                    <select
+                                        class="w-12 px-0.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700"
+                                        title={$t('chartSettings.style.lineType')}
+                                        onchange={(e) => {
+                                            const val = e.currentTarget.value;
+                                            if (val === 'solid' || val === 'dashed' || val === 'dotted') {
+                                                updateSignalStyle(signal.id, 'lineType', val);
+                                            }
+                                        }}
+                                    >
+                                        <option value="solid" selected={signal.style.lineType === 'solid'}>━━━</option>
+                                        <option value="dashed" selected={signal.style.lineType === 'dashed'}>╌╌╌</option>
+                                        <option value="dotted" selected={signal.style.lineType === 'dotted'}>···</option>
+                                    </select>
                                 </div>
                             </div>
                         {/snippet}
@@ -503,14 +508,14 @@
                 class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
                 onclick={handleClose}
             >
-                Cancel
+                {$t('common.cancel')}
             </button>
             <button
                 type="button"
                 class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors"
                 onclick={handleSave}
             >
-                Apply
+                {$t('chartSettings.apply')}
             </button>
         </div>
     </div>
@@ -519,9 +524,9 @@
 <!-- Confirm discard changes -->
 <ConfirmModal
     open={confirmCloseOpen}
-    title="Discard changes?"
-    message="You have unsaved changes in chart settings. Discard them?"
-    confirmText="Discard"
+    title={$t('chartSettings.discardTitle')}
+    message={$t('chartSettings.discardMessage')}
+    confirmText={$t('chartSettings.discard')}
     danger={false}
     warning={true}
     onConfirm={confirmDiscardAndClose}
