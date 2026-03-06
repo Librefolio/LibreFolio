@@ -624,5 +624,45 @@
     "weekdays": {
       "we": "We"
     }
+  },
+  "chartSettings": {
+    "title": "Chart Settings",
+    "titleLocal": "Chart Settings (Local)",
+    "globalWarning": "These settings will override all per-card customizations.",
+    "aesthetics": "Aesthetics",
+    "baselineColors": "Baseline Colors",
+    "baselineColorsDesc": "Green above / Red below",
+    "areaFill": "Area Fill",
+    "areaFillDesc": "Gradient under line",
+    "gridLines": "Grid Lines",
+    "gridLinesDesc": "Horizontal dashed grid",
+    "staleGradient": "Stale Gradient",
+    "staleGradientDesc": "Fade old data",
+    "overlaySignals": "Overlay Signals",
+    "noSignals": "No overlay signals configured. Add one below.",
+    "style": {
+      "color": "Color",
+      "width": "Width",
+      "lineType": "Style",
+      "markerStart": "Start",
+      "markerEnd": "End"
+    },
+    "lineType": {
+      "solid": "Solid",
+      "dashed": "Dashed",
+      "dotted": "Dotted"
+    },
+    "marker": {
+      "none": "None",
+      "arrow": "Arrow",
+      "circle": "Circle",
+      "diamond": "Diamond",
+      "pin": "Pin"
+    },
+    "apply": "Apply",
+    "discardTitle": "Discard changes?",
+    "discardMessage": "You have unsaved changes in chart settings. Discard them?",
+    "discard": "Discard",
+    "removeSignal": "Remove signal"
   }
 }

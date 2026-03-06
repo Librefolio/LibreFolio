@@ -624,5 +624,45 @@
     "weekdays": {
       "we": "Me"
     }
+  },
+  "chartSettings": {
+    "title": "Paramètres du Graphique",
+    "titleLocal": "Paramètres du Graphique (Local)",
+    "globalWarning": "Ces paramètres remplaceront toutes les personnalisations par carte.",
+    "aesthetics": "Esthétique",
+    "baselineColors": "Couleurs de Référence",
+    "baselineColorsDesc": "Vert au-dessus / Rouge en-dessous",
+    "areaFill": "Remplissage",
+    "areaFillDesc": "Dégradé sous la ligne",
+    "gridLines": "Lignes de Grille",
+    "gridLinesDesc": "Grille horizontale en pointillés",
+    "staleGradient": "Dégradé Données Anciennes",
+    "staleGradientDesc": "Estomper les anciennes données",
+    "overlaySignals": "Signaux Superposés",
+    "noSignals": "Aucun signal superposé configuré. Ajoutez-en un ci-dessous.",
+    "style": {
+      "color": "Couleur",
+      "width": "Épaisseur",
+      "lineType": "Style",
+      "markerStart": "Début",
+      "markerEnd": "Fin"
+    },
+    "lineType": {
+      "solid": "Continu",
+      "dashed": "Pointillé",
+      "dotted": "En pointillés"
+    },
+    "marker": {
+      "none": "Aucun",
+      "arrow": "Flèche",
+      "circle": "Cercle",
+      "diamond": "Losange",
+      "pin": "Épingle"
+    },
+    "apply": "Appliquer",
+    "discardTitle": "Annuler les modifications ?",
+    "discardMessage": "Vous avez des modifications non enregistrées. Les annuler ?",
+    "discard": "Annuler",
+    "removeSignal": "Supprimer le signal"
   }
 }

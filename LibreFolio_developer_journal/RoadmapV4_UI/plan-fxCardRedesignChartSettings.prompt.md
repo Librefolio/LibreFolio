@@ -1,7 +1,7 @@
 # Plan: FX Card Redesign, Chart Settings, Signal Library & Sync All Fix
 
 **Data creazione**: 5 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Steps 1-4,6 done. Step 4 has pending UI iteration (signal card layout choice + visual selectors + preview chart). Prossimo: finalize Step 4 → Step 5 (FxCard redesign)
+**Status**: 🔄 IN PROGRESS — Steps 1-4,6 done. Step 4: Layout C implemented, i18n done, FxSyncModal padding fix done. SNB provider rewritten. Prossimo: Step 4 preview chart + Step 5 (FxCard redesign)
 **Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5
 **Contesto**: Feedback utente su card layout, settings ⚙️ non collegato, Sync All non funzionante, overlay/benchmark da implementare come libreria di segnali
 
@@ -1068,20 +1068,62 @@ monthly points.
 ## Pending Feedback Items (Step 4 iteration)
 
 
-### 📐 Signal Card Layout — Pick one of A/B/C
-See Step 4 → "Signal Card Layout — Pending Decision" for ASCII art.
-Once chosen, implement in ChartSettingsModal before moving to FxCard redesign.
+### ✅ 📐 Signal Card Layout — DECIDED: Layout C ("Card with Preview Strip")
+Implemented 6 Mar 2026. Math params on top, visual SVG preview strip on bottom.
+- SVG line shows actual color + width + dash pattern
+- Marker selectors (◁/○/◇/📍) at start/end of the line
+- Color picker + width selector (━/━━/━━━/━━━━) + line type selector (━━━/╌╌╌/···) to the right
+- All visual — no text labels, just symbols and live preview.
 
-### 🎨 Visual Selectors (all signal card layouts)
-Replace native `<select>` with project selectors for:
-- **Width**: show actual line thickness preview (SVG line at 1px, 2px, 3px, 4px)
-- **Style**: show solid/dashed/dotted as SVG line preview
-- **Marker Start/End**: show shape icon (●, ◆, ▲, 📌) instead of text
-- **FX Pair**: show flags 🇪🇺/🇬🇧 next to currency codes (use CurrencySearchSelect)
+### ✅ 🌍 i18n of ChartSettingsModal — COMPLETED 6 Mar 2026
+All hardcoded strings replaced with `$t()` calls. Added 25+ new i18n keys under `chartSettings.*`:
+- Title, warning, aesthetics, overlay signals, empty state
+- Style labels (color, width, lineType, markerStart, markerEnd)
+- Line types (solid, dashed, dotted), markers (none, arrow, circle, diamond, pin)
+- Apply, cancel, discard changes confirmation
 
-### 📊 Preview Chart
-Add a `PriceChartCompact` at the top of the modal with synthetic data
-that live-updates as aesthetics toggles and signals change.
+### ✅ FxSyncModal Padding Fix — COMPLETED 6 Mar 2026
+Added `px-6 py-4` to header, body, and footer sections (was missing horizontal padding).
+Matches `ChartSettingsModal` pattern. No longer "tutto attaccato".
+
+### 🔍 Sync Feedback to Frontend — Analysis (pending implementation)
+**Problem**: When sync completes, the frontend doesn't know which pairs had 0 data (e.g., SNB→CNY before fix).
+The user wants non-invasive feedback about sync outcomes per-pair.
+
+**Current API response** (`FXSyncResponse`):
+```json
+{"synced": 244, "date_range": {...}, "currencies": ["CAD", "GBP", "JPY", "USD"]}
+```
+- `synced` = total changed rates
+- `currencies` = currencies that had at least 1 change
+
+**Problem**: If SNB fetches CNY but all values already exist (0 changed), CNY won't appear in `currencies`.
+But if SNB returns 0 rates because the currency has no data, same result. The frontend can't distinguish.
+
+**Proposed solution** (TODO — not yet implemented):
+1. **Backend**: Extend `FXSyncResponse` with per-provider detail:
+   ```python
+   provider_results: list[ProviderSyncResult]  # each has: provider, fetched, changed, skipped_currencies
+   ```
+   This lets the frontend show: "ECB: 4 currencies ✓ | SNB: CNY — no data available"
+
+2. **Frontend**: In `FxSyncModal`, after sync, show collapsible detail per provider.
+   For the per-card sync button, show a brief toast/badge if sync returned 0 rates for that pair.
+
+3. **Non-invasive approach**: Only show warnings (amber banner) for currencies with 0 fetched rates,
+   not for currencies with 0 changed (which is normal when data is already up-to-date).
+
+**Impact**: Requires backend schema change + API response enrichment + frontend UI. Medium effort.
+Defer to next iteration unless specifically requested.
+
+### 📊 Preview Chart in Settings Modal (TODO)
+Add a small preview chart at the top of the modal showing current aesthetics.
+- Global mode: use synthetic sinusoidal data (shows positive/negative segments for baseline color testing)
+- Pair mode: use actual pair data from TimeSeriesStore
+- Overlay signals rendered on top in real-time as they are added/configured
+- Primary signal always in default green color
+- Uses same `PriceChartCompact` component
+- **Blocking on**: Step 5 (FxCard redesign) for the chart integration pattern
 
 ---
 
@@ -1096,8 +1138,8 @@ that live-updates as aesthetics toggles and signals change.
 | `frontend/src/lib/charts/signals/registry.ts` | ✅ DONE — Registry + factory (arrows in defaults) |
 | `frontend/src/lib/charts/signals/index.ts` | ✅ DONE — Barrel export |
 | `frontend/src/lib/stores/chartSettingsStore.svelte.ts` | ✅ DONE — Session-level store (renamed from .ts → .svelte.ts for $state) |
-| `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | ✅ DONE — Settings configurator (aesthetics + signals) |
-| `frontend/src/lib/components/fx/FxSyncModal.svelte` | ✅ DONE — Fix currencies + Svelte 5 + style |
+| `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | ✅ DONE — Settings + i18n (25 keys) + Layout C (SVG preview strip) |
+| `frontend/src/lib/components/fx/FxSyncModal.svelte` | ✅ DONE — Fix currencies + Svelte 5 + style + padding fix |
 | `frontend/src/lib/components/fx/FxCard.svelte` | REWRITE — Layout B + Svelte 5 |
 | `frontend/src/lib/components/charts/LineChart.svelte` | ✅ DONE — overlaySignals prop + multi-series tooltip + arrows |
 | `frontend/src/lib/components/charts/PriceChartCompact.svelte` | MODIFY — passthrough `overlaySignals` + aesthetics |
