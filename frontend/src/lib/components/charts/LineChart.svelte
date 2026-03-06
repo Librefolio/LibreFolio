@@ -19,6 +19,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import type {RenderedSignal} from '$lib/charts/signals';
 
     // =========================================================================
     // Types
@@ -71,6 +72,8 @@
         viewMode?: 'absolute' | 'percentage';
         /** Called when chart instance is ready (for coordinate mapping) */
         onChartReady?: (api: ChartApi) => void;
+        /** Overlay signals to render as additional line series */
+        overlaySignals?: RenderedSignal[];
     }
 
     let {
@@ -92,6 +95,7 @@
         onZoomChange,
         viewMode = 'absolute',
         onChartReady,
+        overlaySignals = [],
     }: Props = $props();
 
     // Default colors
@@ -130,7 +134,11 @@
     });
 
     $effect(() => {
-        if (chartContainer && data) tick().then(renderChart);
+        if (chartContainer && data) {
+            // Touch overlaySignals to register dependency
+            void overlaySignals;
+            tick().then(renderChart);
+        }
     });
 
     $effect(() => {
@@ -350,6 +358,87 @@
             });
         }
 
+        // Overlay signals — rendered as additional line series (generic: chart doesn't
+        // know or care about signal types, it just renders whatever it receives)
+        if (overlaySignals && overlaySignals.length > 0) {
+            for (const signal of overlaySignals) {
+                if (!signal.data.length) continue;
+
+                // Build date→value lookup, then align to main chart's date axis
+                const signalLookup = new Map(signal.data.map(d => [d.date, d.value]));
+                const signalSeriesData: any[] = dates.map((date, i) => {
+                    const val = signalLookup.get(date);
+                    if (val === undefined) return useTupleFormat ? [i, null] : null;
+                    return useTupleFormat ? [i, val] : val;
+                });
+
+                const overlaySeries: any = {
+                    type: 'line',
+                    name: signal.label,
+                    data: signalSeriesData,
+                    connectNulls: true,
+                    smooth: false,
+                    symbol: 'none',
+                    lineStyle: {
+                        color: signal.color,
+                        width: signal.lineWidth,
+                        type: signal.lineType,
+                    },
+                    itemStyle: {
+                        color: signal.color,
+                    },
+                    emphasis: {
+                        focus: 'none',
+                    },
+                    z: 1, // below main series
+                };
+
+                // Arrow markers at start/end of signal data
+                if (signal.arrowStart || signal.arrowEnd) {
+                    const markData: any[] = [];
+                    // Find first non-null index for arrowStart
+                    if (signal.arrowStart) {
+                        for (let i = 0; i < signalSeriesData.length; i++) {
+                            const v = useTupleFormat ? signalSeriesData[i]?.[1] : signalSeriesData[i];
+                            if (v !== null && v !== undefined) {
+                                markData.push({
+                                    coord: [i, v],
+                                    symbol: 'arrow',
+                                    symbolSize: 8,
+                                    symbolRotate: 180,
+                                    itemStyle: {color: signal.color},
+                                });
+                                break;
+                            }
+                        }
+                    }
+                    // Find last non-null index for arrowEnd
+                    if (signal.arrowEnd) {
+                        for (let i = signalSeriesData.length - 1; i >= 0; i--) {
+                            const v = useTupleFormat ? signalSeriesData[i]?.[1] : signalSeriesData[i];
+                            if (v !== null && v !== undefined) {
+                                markData.push({
+                                    coord: [i, v],
+                                    symbol: 'arrow',
+                                    symbolSize: 8,
+                                    itemStyle: {color: signal.color},
+                                });
+                                break;
+                            }
+                        }
+                    }
+                    if (markData.length > 0) {
+                        overlaySeries.markPoint = {
+                            data: markData,
+                            label: {show: false},
+                        };
+                    }
+                }
+
+                series.push(overlaySeries);
+            }
+        }
+
         // Mark line at baseline
         if (useBaselineColoring) {
             mainSeries.markLine = {
@@ -438,14 +527,29 @@
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
                 formatter: (params: any) => {
-                    const p = Array.isArray(params) ? params[0] : params;
-                    const date = p.axisValue || p.name;
-                    // Value may be in tuple format [index, value] or plain number
-                    const rawVal = p.value;
-                    const value = Array.isArray(rawVal) ? rawVal[1] : (typeof rawVal === 'object' && rawVal?.value !== undefined ? (Array.isArray(rawVal.value) ? rawVal.value[1] : rawVal.value) : rawVal);
+                    const items = Array.isArray(params) ? params : [params];
+                    if (!items.length) return '';
+                    const date = items[0].axisValue || items[0].name;
+                    let html = `<strong>${date}</strong>`;
+
+                    for (const p of items) {
+                        // Skip pending scatter series
+                        if (p.seriesName === 'Pending') continue;
+                        // Extract value (may be tuple [index, value] or plain number)
+                        const rawVal = p.value;
+                        const value = Array.isArray(rawVal) ? rawVal[1]
+                            : (typeof rawVal === 'object' && rawVal?.value !== undefined
+                                ? (Array.isArray(rawVal.value) ? rawVal.value[1] : rawVal.value)
+                                : rawVal);
+                        if (value === null || value === undefined) continue;
+
+                        const suffix = isPercentage ? '%' : '';
+                        const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
+                        html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${suffix}`;
+                    }
+
+                    // Stale warning for main series
                     const dataPoint = data.find(d => d.date === date);
-                    const suffix = isPercentage ? '%' : '';
-                    let html = `<strong>${date}</strong><br/>${currency} ${Number(value).toFixed(4)}${suffix}`;
                     if (dataPoint?.staleDays && dataPoint.staleDays > 0) {
                         html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ Stale: ${dataPoint.staleDays} day(s) old</span>`;
                     }
