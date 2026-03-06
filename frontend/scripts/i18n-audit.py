@@ -835,46 +835,98 @@ def cmd_update(args) -> int:
 
 
 def cmd_search(args) -> int:
-    """Search for keys/values in translations."""
+    """Search for keys/values in translations.
+
+    Supports filtering by:
+    - --keys: search only in key names
+    - --values: search only in translation values
+    - --lang: restrict value search to specific language(s)
+    Default (no flags): search in keys AND all values.
+    Result always shows ALL languages for matching keys.
+    """
     query = args.query.lower()
-    results = []
+    search_keys = getattr(args, 'keys', False)
+    search_values = getattr(args, 'values', False)
+    lang_filter = getattr(args, 'lang', None)  # e.g. "en,it"
 
-    def search_recursive(data: dict, prefix: str, lang: str):
-        for key, value in data.items():
-            full_key = f"{prefix}.{key}" if prefix else key
-            if isinstance(value, dict):
-                search_recursive(value, full_key, lang)
-            elif isinstance(value, str):
-                if query in full_key.lower() or query in value.lower():
-                    results.append((full_key, lang, value))
+    # Default: search both keys and values if neither flag specified
+    if not search_keys and not search_values:
+        search_keys = True
+        search_values = True
 
+    # Parse language filter
+    search_langs = None
+    if lang_filter:
+        search_langs = [l.strip().lower() for l in lang_filter.split(",") if l.strip()]
+        # Validate
+        for sl in search_langs:
+            if sl not in LANGUAGES:
+                print(f"❌ Unknown language '{sl}'. Available: {', '.join(LANGUAGES)}")
+                return 1
+
+    # Load all language data
+    all_data = {}
+    all_flat = {}
     for lang in LANGUAGES:
         data = load_lang_file(lang)
-        search_recursive(data, "", lang)
+        all_data[lang] = data
+        all_flat[lang] = flatten_dict(data)
 
-    if not results:
+    # Collect all known keys (union of all languages)
+    all_keys = set()
+    for lang in LANGUAGES:
+        all_keys.update(all_flat[lang].keys())
+
+    # Find matching keys
+    matching_keys = set()
+
+    for key in all_keys:
+        matched = False
+
+        # Search in key name
+        if search_keys and query in key.lower():
+            matched = True
+
+        # Search in values
+        if search_values and not matched:
+            langs_to_check = search_langs if search_langs else LANGUAGES
+            for lang in langs_to_check:
+                value = all_flat[lang].get(key, "")
+                if isinstance(value, str) and query in value.lower():
+                    matched = True
+                    break
+
+        if matched:
+            matching_keys.add(key)
+
+    if not matching_keys:
         print(f"🔍 No results found for '{args.query}'")
         return 0
 
-    # Group by key
-    by_key = {}
-    for key, lang, value in results:
-        if key not in by_key:
-            by_key[key] = {}
-        by_key[key][lang] = value
-
-    # Build table rows
+    # Build table rows — ALWAYS show ALL languages
     rows = []
-    for key in sorted(by_key.keys()):
+    for key in sorted(matching_keys):
         row = [key]
         for lang in LANGUAGES:
-            if lang in by_key[key]:
-                row.append(by_key[key][lang])
+            value = all_flat[lang].get(key)
+            if value is not None and isinstance(value, str):
+                row.append(value)
             else:
-                row.append("—")
+                row.append("(missing)")
         rows.append(row)
 
-    print(f"\n🔍 Found {len(by_key)} key(s) matching '{args.query}':\n")
+    # Build mode description for output
+    mode_parts = []
+    if search_keys:
+        mode_parts.append("keys")
+    if search_values:
+        if search_langs:
+            mode_parts.append(f"values[{','.join(search_langs)}]")
+        else:
+            mode_parts.append("values[all]")
+    mode_str = " + ".join(mode_parts)
+
+    print(f"\n🔍 Found {len(matching_keys)} key(s) matching '{args.query}' (in {mode_str}):\n")
     headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
     print(tabulate(rows, headers=headers, tablefmt="simple", maxcolwidths=[40, 30, 30, 30, 30]))
 
@@ -917,7 +969,13 @@ def register_subparser(subparsers) -> None:
 
     # Search command
     search_p = i18n_sub.add_parser("search", help="Search for keys/values in translations")
-    search_p.add_argument("query", help="Search query (searches both keys and values)")
+    search_p.add_argument("query", help="Search query (substring match, case-insensitive)")
+    search_p.add_argument("-k", "--keys", action="store_true",
+                          help="Search only in key names (e.g., 'common.cancel')")
+    search_p.add_argument("-v", "--values", action="store_true",
+                          help="Search only in translation values")
+    search_p.add_argument("-l", "--lang",
+                          help="Restrict value search to specific language(s), comma-separated (e.g., 'it' or 'en,es')")
     search_p.set_defaults(func=cmd_search)
 
 
