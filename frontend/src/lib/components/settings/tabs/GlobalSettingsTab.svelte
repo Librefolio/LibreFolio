@@ -9,6 +9,7 @@
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/globalSettings';
     import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     // Props
     export let canEdit: boolean = false;
@@ -490,16 +491,15 @@
         </div>
 
         {#if error}
-            <div class="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                <AlertCircle size={18}/>
+            <InfoBanner variant="error">
                 <span>{error}</span>
-            </div>
+            </InfoBanner>
         {/if}
 
         {#if success}
-            <div class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 whitespace-pre-line">
-                {success}
-            </div>
+            <InfoBanner variant="success">
+                <span class="whitespace-pre-line">{success}</span>
+            </InfoBanner>
         {/if}
 
         {#if isLoading}
@@ -836,11 +836,11 @@
         {/if}
 
         {#if !isLocked}
-            <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <p class="text-sm text-amber-700">
+            <InfoBanner variant="warning">
+                <p class="text-sm">
                     <strong>⚠️ {$_('settings.warning')}:</strong> {$_('settings.globalSettingsWarning')}
                 </p>
-            </div>
+            </InfoBanner>
         {/if}
     </div>
 </div>

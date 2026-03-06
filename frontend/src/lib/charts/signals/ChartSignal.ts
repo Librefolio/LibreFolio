@@ -61,7 +61,7 @@ export interface SignalParamDescriptor {
  * - 'pin': pin/flag marker
  * - null: no marker
  */
-export type MarkerType = 'arrow' | 'circle' | 'diamond' | 'pin' | null;
+export type MarkerType = 'arrow' | 'circle' | 'diamond' | 'rect' | 'pin' | null;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SIGNAL STYLE — Common rendering parameters for every signal

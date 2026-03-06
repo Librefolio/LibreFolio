@@ -16,8 +16,9 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {Trash2, Lock, X, ArrowDown, ArrowRight, Info, RotateCcw} from 'lucide-svelte';
+    import {Trash2, Lock, X, ArrowDown, ArrowRight, RotateCcw} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
@@ -246,9 +247,7 @@
         <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4">
             <!-- Error banner -->
             {#if error}
-                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2.5 text-xs text-red-600 dark:text-red-400">
-                    {error}
-                </div>
+                <InfoBanner variant="error">{error}</InfoBanner>
             {/if}
 
             <!-- ========================================================= -->
@@ -283,10 +282,9 @@
             </div>
 
             <!-- Info banner: explain provider role (always visible) -->
-            <div class="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-lg text-xs text-blue-700 dark:text-blue-300">
-                <Info size={14} class="flex-shrink-0 mt-0.5" />
-                <span>{$_('fx.addPair.providerInfoBanner')}</span>
-            </div>
+            <InfoBanner variant="info">
+                {$_('fx.addPair.providerInfoBanner')}
+            </InfoBanner>
 
             <!-- ========================================================= -->
             <!-- Provider Priority -->
@@ -383,9 +381,10 @@
         <!-- No-provider warning -->
         <!-- ============================================================= -->
         {#if hasCurrencies && !hasProviders}
-            <div class="flex items-start gap-2 mx-5 mb-0 mt-2 p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/30 rounded-lg text-xs text-amber-700 dark:text-amber-400/80">
-                <Info size={14} class="flex-shrink-0 mt-0.5" />
-                <span>{$_('fx.addPair.noProviderWarning')}</span>
+            <div class="mx-5 mb-0 mt-2">
+                <InfoBanner variant="warning">
+                    {$_('fx.addPair.noProviderWarning')}
+                </InfoBanner>
             </div>
         {/if}
 

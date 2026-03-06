@@ -8,8 +8,9 @@
 -->
 <script lang="ts">
     import {zodiosApi} from '$lib/api';
-    import {RefreshCw, Check, AlertTriangle, X} from 'lucide-svelte';
+    import {RefreshCw, Check, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {_ as t} from '$lib/i18n';
 
     interface Props {
@@ -120,26 +121,24 @@
         </div>
 
         {#if error}
-            <div class="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                <AlertTriangle size={16} class="text-red-500 flex-shrink-0" />
-                <span class="text-sm text-red-600 dark:text-red-400">{error}</span>
-            </div>
+            <InfoBanner variant="error">
+                <span class="text-sm">{error}</span>
+            </InfoBanner>
         {/if}
 
         {#if result}
-            <div class="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                <Check size={16} class="text-emerald-500 flex-shrink-0" />
-                <div class="text-sm text-emerald-700 dark:text-emerald-400">
+            <InfoBanner variant="success">
+                <div class="text-sm">
                     <span class="font-medium">
                         {$t('fx.sync.synced') ?? 'Synced'} {result.synced} rate{result.synced !== 1 ? 's' : ''}
                     </span>
                     {#if syncedPairs.length > 0}
-                        <span class="text-emerald-600 dark:text-emerald-500">
+                        <span class="opacity-80">
                             — {syncedPairs.map(s => s.replace('-', '/')).join(', ')}
                         </span>
                     {/if}
                 </div>
-            </div>
+            </InfoBanner>
         {/if}
     </div>
 
