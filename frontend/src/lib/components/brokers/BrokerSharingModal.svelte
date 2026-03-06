@@ -20,6 +20,7 @@
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import SemiDonutChart from '$lib/components/charts/SemiDonutChart.svelte';
 
@@ -441,19 +442,17 @@
         <div class="flex-1 overflow-y-auto p-4 space-y-4">
             <!-- Warning Banner -->
             {#if exceedsLimit}
-                <div class="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-amber-800 dark:text-amber-300 text-sm">
-                    <AlertTriangle size={16} class="shrink-0" />
-                    <span>{$_('brokers.sharing.percentageWarning')}</span>
-                </div>
+                <InfoBanner variant="warning">
+                    <span class="text-sm">{$_('brokers.sharing.percentageWarning')}</span>
+                </InfoBanner>
             {/if}
 
             <!-- Error / Success banners -->
             <ErrorBanner message={error} on:dismiss={() => error = null} />
             {#if successMessage}
-                <div class="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-green-700 dark:text-green-300 text-sm">
-                    <Check size={16} class="shrink-0" />
-                    <span>{successMessage}</span>
-                </div>
+                <InfoBanner variant="success">
+                    <span class="text-sm">{successMessage}</span>
+                </InfoBanner>
             {/if}
 
             {#if loading}

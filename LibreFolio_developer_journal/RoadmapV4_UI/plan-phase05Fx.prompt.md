@@ -788,3 +788,23 @@ Step 1 (TimeSeriesStore)
 4. **Rimuovi tutti tranne uno**: ECB@1, FED@2 → ECB@1 (delete priority 2 → trigger MANUAL sentinel check)
 5. **Connection failure resilience**: verificare che dopo il POST (step 1) i dati non vadano persi anche se DELETE fallisce
 
+---
+
+## 📝 Documentazione (da fare prima di chiudere Phase 5)
+
+### Documentazione Backend FX
+La documentazione backend per il sistema FX è **obsoleta e incompleta**. Prima di chiudere Phase 5, aggiornare la documentazione MkDocs con:
+
+1. **Flusso sync con fallback**: come funziona il sistema multi-provider con priority e fallback automatico
+2. **Provider MANUAL**: spiegazione del sentinel pattern (auto-insert/remove/reinstate)
+3. **Nuovo endpoint sync pair-based**: il vecchio `GET /fx/currencies/sync` basato su valute piatte è stato sostituito da `POST /fx/currencies/sync` basato su coppie (vedi `plan-fxSyncApiRedesign.prompt.md`)
+4. **SNB provider aggiornato**: JSON API con dimensioni dinamiche, dati mensili (non giornalieri)
+5. **Currency utils**: sistema flag emoji da `pycountry` con overrides per major currencies, crypto incluse, localizzazione nomi con `babel` + fallback `pycountry`
+6. **Traduzione endpoints**: parametro `lang` su `/utilities/currencies` e `/utilities/countries` per nomi localizzati, mapping locale frontend↔backend (vedi `LANG_TO_BABEL_LOCALE` in `translation_utils.py`)
+
+### Sync API Redesign (sub-plan separato)
+Piano dettagliato in: `plan-fxSyncApiRedesign.prompt.md`
+- Endpoint pair-based con risultati per-coppia (provider usato, punti, status)
+- Frontend SyncModal con risultati dettagliati
+
+

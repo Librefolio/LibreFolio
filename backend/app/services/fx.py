@@ -833,7 +833,7 @@ async def convert_bulk(
             # Log if using backward-fill
             if backward_fill_applied:
                 days_back = (meta["date"] - rate_record.date).days
-                logger.info(
+                logger.debug(
                     f"Using backward-fill: rate for {meta['base']}/{meta['quote']} from {rate_record.date} "
                     f"({days_back} days back, requested: {meta['date']})"
                     )
