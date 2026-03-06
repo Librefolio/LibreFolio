@@ -209,13 +209,23 @@
         arrow: '▷', circle: '●', diamond: '◆', pin: '📍',
     };
 
-    function cycleMarker(id: string, key: 'markerStart' | 'markerEnd') {
-        const signal = signals.find(s => s.id === id);
-        if (!signal) return;
-        const current = signal.style[key];
-        const idx = MARKER_CYCLE.indexOf(current);
-        const next = MARKER_CYCLE[(idx + 1) % MARKER_CYCLE.length];
-        updateSignalStyle(id, key, next);
+    // =========================================================================
+    // Marker popover (click marker button → show picker with options)
+    // =========================================================================
+
+    let markerPopover = $state<{id: string; key: 'markerStart' | 'markerEnd'} | null>(null);
+
+    function toggleMarkerPopover(id: string, key: 'markerStart' | 'markerEnd') {
+        if (markerPopover?.id === id && markerPopover?.key === key) {
+            markerPopover = null;
+        } else {
+            markerPopover = {id, key};
+        }
+    }
+
+    function selectMarker(id: string, key: 'markerStart' | 'markerEnd', value: MarkerType | null) {
+        updateSignalStyle(id, key, value);
+        markerPopover = null;
     }
 
     // =========================================================================
@@ -226,6 +236,13 @@
 
     function toggleLinePopover(id: string) {
         linePopoverId = linePopoverId === id ? null : id;
+        // Close marker popover when opening line popover
+        markerPopover = null;
+    }
+
+    function closeAllPopovers() {
+        linePopoverId = null;
+        markerPopover = null;
     }
 </script>
 
@@ -257,9 +274,9 @@
         <div class="flex-1 overflow-y-auto px-6 py-4 space-y-6">
             <!-- Global override warning -->
             {#if mode === 'global'}
-                <div class="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
-                    <AlertTriangle size={16} class="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                    <p class="text-xs text-amber-700 dark:text-amber-300">
+                <div class="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/30">
+                    <AlertTriangle size={16} class="text-amber-600 dark:text-amber-500/70 mt-0.5 shrink-0" />
+                    <p class="text-xs text-amber-700 dark:text-amber-400/80">
                         {$t('chartSettings.globalWarning')}
                     </p>
                 </div>
@@ -419,7 +436,7 @@
                                     </div>
                                 {/if}
 
-                                <!-- Row 3: Visual Style Preview Strip (Layout C v2) -->
+                                <!-- Row 3: Visual Style Preview Strip (Layout C v3) -->
                                 <div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700">
                                     <!-- Color picker (first) -->
                                     <input
@@ -430,23 +447,51 @@
                                         oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
                                     />
 
-                                    <!-- Marker start: clickable cycle button, colored -->
-                                    <button
-                                        type="button"
-                                        class="w-6 h-6 flex items-center justify-center rounded text-sm shrink-0 transition-colors
-                                            {signal.style.markerStart
-                                                ? 'hover:bg-gray-100 dark:hover:bg-slate-600'
-                                                : 'text-gray-300 dark:text-slate-600 hover:text-gray-400 dark:hover:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                                        style={signal.style.markerStart ? `color: ${signal.style.color}` : ''}
-                                        title={$t('chartSettings.style.markerStart')}
-                                        onclick={() => cycleMarker(signal.id, 'markerStart')}
-                                    >
-                                        {#if signal.style.markerStart}
-                                            {MARKER_SYMBOLS_START[signal.style.markerStart] ?? '·'}
-                                        {:else}
-                                            <span class="text-[10px]">·</span>
+                                    <!-- Marker start: click to open picker popover -->
+                                    <div class="relative shrink-0">
+                                        <button
+                                            type="button"
+                                            class="w-6 h-6 flex items-center justify-center rounded transition-colors hover:bg-gray-100 dark:hover:bg-slate-600"
+                                            title={$t('chartSettings.style.markerStart')}
+                                            onclick={() => toggleMarkerPopover(signal.id, 'markerStart')}
+                                        >
+                                            {#if signal.style.markerStart}
+                                                <span style="color: {signal.style.color}" class="text-sm leading-none">
+                                                    {MARKER_SYMBOLS_START[signal.style.markerStart]}
+                                                </span>
+                                            {:else}
+                                                <!-- No marker: empty placeholder -->
+                                                <span class="text-gray-300 dark:text-slate-600 text-[10px]">◁</span>
+                                            {/if}
+                                        </button>
+                                        <!-- Marker start popover (opens upward) -->
+                                        {#if markerPopover?.id === signal.id && markerPopover?.key === 'markerStart'}
+                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                            <div class="fixed inset-0 z-10" onclick={closeAllPopovers}></div>
+                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20
+                                                bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
+                                                rounded-lg shadow-lg p-1.5 flex gap-1"
+                                                onclick={(e) => e.stopPropagation()}>
+                                                <button type="button" aria-label="none"
+                                                    class="w-7 h-7 flex items-center justify-center rounded transition-colors
+                                                        {!signal.style.markerStart ? 'bg-libre-green/10 border border-libre-green' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
+                                                    onclick={() => selectMarker(signal.id, 'markerStart', null)}>
+                                                    <span class="text-[10px] text-gray-400">✕</span>
+                                                </button>
+                                                {#each MARKER_CYCLE.filter(m => m !== null) as mk}
+                                                    <button type="button" aria-label={mk}
+                                                        class="w-7 h-7 flex items-center justify-center rounded transition-colors
+                                                            {signal.style.markerStart === mk ? 'bg-libre-green/10 border border-libre-green' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
+                                                        onclick={() => selectMarker(signal.id, 'markerStart', mk)}>
+                                                        <span style="color: {signal.style.color}" class="text-sm leading-none">{MARKER_SYMBOLS_START[mk ?? '']}</span>
+                                                    </button>
+                                                {/each}
+                                            </div>
                                         {/if}
-                                    </button>
+                                    </div>
 
                                     <!-- SVG line preview strip — click to open width/type popover -->
                                     <div class="flex-1 relative">
@@ -457,6 +502,15 @@
                                             onclick={() => toggleLinePopover(signal.id)}
                                         >
                                             <svg width="100%" height="24" class="overflow-visible">
+                                                <!-- Start square cap (size = lineWidth+2, min 4) -->
+                                                <rect
+                                                    x={4 - Math.max(signal.style.lineWidth + 2, 4) / 2}
+                                                    y={12 - Math.max(signal.style.lineWidth + 2, 4) / 2}
+                                                    width={Math.max(signal.style.lineWidth + 2, 4)}
+                                                    height={Math.max(signal.style.lineWidth + 2, 4)}
+                                                    fill={signal.style.color} rx="1"
+                                                />
+                                                <!-- Line -->
                                                 <line
                                                     x1="4" y1="12" x2="calc(100% - 4)" y2="12"
                                                     stroke={signal.style.color}
@@ -466,22 +520,21 @@
                                             </svg>
                                         </button>
 
-                                        <!-- Popover for width + type -->
+                                        <!-- Popover for width + type (opens upward) -->
                                         {#if linePopoverId === signal.id}
-                                            <!-- Invisible backdrop to close popover on click outside -->
                                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                                             <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                            <div class="fixed inset-0 z-10" onclick={() => { linePopoverId = null; }}></div>
+                                            <div class="fixed inset-0 z-10" onclick={closeAllPopovers}></div>
                                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                                             <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                            <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-20
+                                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20
                                                 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
-                                                rounded-lg shadow-lg p-2 space-y-2 min-w-[140px]"
+                                                rounded-lg shadow-lg p-2 space-y-2 min-w-[160px]"
                                                 onclick={(e) => e.stopPropagation()}>
 
                                                 <!-- Line type picker -->
-                                                <div class="flex items-center gap-1">
-                                                    <span class="text-[10px] text-gray-500 dark:text-gray-400 w-10">{$t('chartSettings.style.lineType')}</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="text-[10px] text-gray-500 dark:text-gray-400 w-10 shrink-0">{$t('chartSettings.style.lineType')}</span>
                                                     <div class="flex gap-1">
                                                         {#each ['solid', 'dashed', 'dotted'] as lt}
                                                             <button
@@ -506,8 +559,8 @@
                                                 </div>
 
                                                 <!-- Width picker -->
-                                                <div class="flex items-center gap-1">
-                                                    <span class="text-[10px] text-gray-500 dark:text-gray-400 w-10">{$t('chartSettings.style.width')}</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="text-[10px] text-gray-500 dark:text-gray-400 w-10 shrink-0">{$t('chartSettings.style.width')}</span>
                                                     <div class="flex gap-1">
                                                         {#each [1, 2, 3, 4] as w}
                                                             <button
@@ -533,23 +586,50 @@
                                         {/if}
                                     </div>
 
-                                    <!-- Marker end: clickable cycle button, colored -->
-                                    <button
-                                        type="button"
-                                        class="w-6 h-6 flex items-center justify-center rounded text-sm shrink-0 transition-colors
-                                            {signal.style.markerEnd
-                                                ? 'hover:bg-gray-100 dark:hover:bg-slate-600'
-                                                : 'text-gray-300 dark:text-slate-600 hover:text-gray-400 dark:hover:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                                        style={signal.style.markerEnd ? `color: ${signal.style.color}` : ''}
-                                        title={$t('chartSettings.style.markerEnd')}
-                                        onclick={() => cycleMarker(signal.id, 'markerEnd')}
-                                    >
-                                        {#if signal.style.markerEnd}
-                                            {MARKER_SYMBOLS_END[signal.style.markerEnd] ?? '·'}
-                                        {:else}
-                                            <span class="text-[10px]">·</span>
+                                    <!-- Marker end: click to open picker popover -->
+                                    <div class="relative shrink-0">
+                                        <button
+                                            type="button"
+                                            class="w-6 h-6 flex items-center justify-center rounded transition-colors hover:bg-gray-100 dark:hover:bg-slate-600"
+                                            title={$t('chartSettings.style.markerEnd')}
+                                            onclick={() => toggleMarkerPopover(signal.id, 'markerEnd')}
+                                        >
+                                            {#if signal.style.markerEnd}
+                                                <span style="color: {signal.style.color}" class="text-sm leading-none">
+                                                    {MARKER_SYMBOLS_END[signal.style.markerEnd]}
+                                                </span>
+                                            {:else}
+                                                <span class="text-gray-300 dark:text-slate-600 text-[10px]">▷</span>
+                                            {/if}
+                                        </button>
+                                        <!-- Marker end popover (opens upward) -->
+                                        {#if markerPopover?.id === signal.id && markerPopover?.key === 'markerEnd'}
+                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                            <div class="fixed inset-0 z-10" onclick={closeAllPopovers}></div>
+                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                            <div class="absolute bottom-full right-0 mb-1 z-20
+                                                bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
+                                                rounded-lg shadow-lg p-1.5 flex gap-1"
+                                                onclick={(e) => e.stopPropagation()}>
+                                                <button type="button" aria-label="none"
+                                                    class="w-7 h-7 flex items-center justify-center rounded transition-colors
+                                                        {!signal.style.markerEnd ? 'bg-libre-green/10 border border-libre-green' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
+                                                    onclick={() => selectMarker(signal.id, 'markerEnd', null)}>
+                                                    <span class="text-[10px] text-gray-400">✕</span>
+                                                </button>
+                                                {#each MARKER_CYCLE.filter(m => m !== null) as mk}
+                                                    <button type="button" aria-label={mk}
+                                                        class="w-7 h-7 flex items-center justify-center rounded transition-colors
+                                                            {signal.style.markerEnd === mk ? 'bg-libre-green/10 border border-libre-green' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
+                                                        onclick={() => selectMarker(signal.id, 'markerEnd', mk)}>
+                                                        <span style="color: {signal.style.color}" class="text-sm leading-none">{MARKER_SYMBOLS_END[mk ?? '']}</span>
+                                                    </button>
+                                                {/each}
+                                            </div>
                                         {/if}
-                                    </button>
+                                    </div>
                                 </div>
                             </div>
                         {/snippet}

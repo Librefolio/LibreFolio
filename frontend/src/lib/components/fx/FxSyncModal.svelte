@@ -2,8 +2,9 @@
   FxSyncModal — Modal for syncing FX rates with external providers.
   Shows progress and results of the sync operation.
 
-  Converted to Svelte 5 runes. Passes configured currencies to backend
-  (fixes bug where backend defaulted to USD,GBP,CHF,JPY).
+  Accepts configured pairs (e.g. ['EUR-GBP', 'EUR-USD']) and extracts
+  unique currencies for the backend API call. Displays pair count and
+  pair names for user clarity.
 -->
 <script lang="ts">
     import {zodiosApi} from '$lib/api';
@@ -18,8 +19,8 @@
         dateStart: string;
         /** End date for sync range */
         dateEnd: string;
-        /** All unique currencies from configured pairs — MUST be passed by parent */
-        currencies: string[];
+        /** Configured pair slugs, e.g. ['EUR-GBP', 'EUR-USD'] */
+        pairs: string[];
         /** Called after successful sync */
         onsynced: () => void;
         /** Called on close */
@@ -30,14 +31,27 @@
         open = $bindable(),
         dateStart,
         dateEnd,
-        currencies,
+        pairs,
         onsynced,
         onclose,
     }: Props = $props();
 
+    // Derive unique currencies from pairs for the backend API
+    let currencies = $derived([...new Set(pairs.flatMap(p => p.split('-')))].sort());
+
     let syncing = $state(false);
     let result = $state<{synced: number; currencies: string[]} | null>(null);
     let error = $state<string | null>(null);
+
+    // Map synced currencies back to pairs for display
+    let syncedPairs = $derived.by(() => {
+        if (!result) return [];
+        const syncedSet = new Set(result.currencies);
+        return pairs.filter(slug => {
+            const [base, quote] = slug.split('-');
+            return syncedSet.has(base) || syncedSet.has(quote);
+        });
+    });
 
     // Reset state when modal opens
     $effect(() => {
@@ -102,7 +116,7 @@
             <span>→</span>
             <span class="font-medium text-gray-700 dark:text-gray-300">{dateEnd}</span>
             <span class="mx-1">·</span>
-            <span>{currencies.length} {$t('fx.sync.currenciesCount') ?? 'currencies'}</span>
+            <span>{pairs.length} {$t('fx.sync.pairsCount') ?? 'pairs'}</span>
         </div>
 
         {#if error}
@@ -119,9 +133,9 @@
                     <span class="font-medium">
                         {$t('fx.sync.synced') ?? 'Synced'} {result.synced} rate{result.synced !== 1 ? 's' : ''}
                     </span>
-                    {#if result.currencies.length > 0}
+                    {#if syncedPairs.length > 0}
                         <span class="text-emerald-600 dark:text-emerald-500">
-                            — {result.currencies.join(', ')}
+                            — {syncedPairs.map(s => s.replace('-', '/')).join(', ')}
                         </span>
                     {/if}
                 </div>
@@ -141,7 +155,7 @@
             <button
                 class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
                 onclick={handleSync}
-                disabled={syncing || currencies.length === 0}
+                disabled={syncing || pairs.length === 0}
             >
                 <RefreshCw size={15} class={syncing ? 'animate-spin' : ''} />
                 {syncing ? ($t('fx.sync.syncing') ?? 'Syncing...') : ($t('fx.sync.start') ?? 'Start Sync')}

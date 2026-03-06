@@ -569,7 +569,7 @@
     bind:open={syncModalOpen}
     {dateStart}
     {dateEnd}
-    currencies={configuredCurrencies}
+    pairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
     onsynced={handleSynced}
     onclose={() => syncModalOpen = false}
 />

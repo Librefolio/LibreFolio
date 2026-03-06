@@ -347,7 +347,8 @@
       "currenciesCount": "currencies",
       "synced": "Synced",
       "syncing": "Syncing...",
-      "start": "Start Sync"
+      "start": "Start Sync",
+      "pairsCount": "pairs"
     }
   },
   "settings": {
