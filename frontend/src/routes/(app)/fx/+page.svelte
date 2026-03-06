@@ -14,9 +14,13 @@
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
+    import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
+    import {
+        getGlobalSettings, setGlobalSettings,
+    } from '$lib/stores/chartSettingsStore';
     import {
         createPairSlug, getFxStore, invalidateAllFxStores, removeFxStore,
         apiResultToFxDataPoint,
@@ -58,6 +62,7 @@
     // Modals
     let addModalOpen = $state(false);
     let syncModalOpen = $state(false);
+    let settingsModalOpen = $state(false);
 
     // Filter bar adaptive layout
     let filterBarRef = $state<HTMLDivElement | null>(null);
@@ -344,8 +349,11 @@
     }
 
     async function handleSynced() {
-        syncModalOpen = false;
-        await handleRefreshAll();
+        // Don't close modal — let user see the results, they close manually
+        // But refresh data in background
+        invalidateAllFxStores();
+        pairs = pairs.map(p => ({...p, data: [], loading: true}));
+        await fetchAllPairData();
     }
 </script>
 
@@ -447,6 +455,7 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 title={$_('fx.actions.settings')}
+                onclick={() => settingsModalOpen = true}
             >
                 <Settings size={14} />
                 {#if showActionLabels}<span>{$_('fx.actions.settings')}</span>{/if}
@@ -560,6 +569,18 @@
     bind:open={syncModalOpen}
     {dateStart}
     {dateEnd}
-    on:synced={handleSynced}
-    on:close={() => syncModalOpen = false}
+    currencies={configuredCurrencies}
+    onsynced={handleSynced}
+    onclose={() => syncModalOpen = false}
 />
+
+<!-- Chart Settings Modal (global) -->
+<ChartSettingsModal
+    bind:open={settingsModalOpen}
+    settings={getGlobalSettings()}
+    mode="global"
+    availablePairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
+    onsave={(s) => setGlobalSettings(s)}
+    onclose={() => settingsModalOpen = false}
+/>
+

@@ -340,6 +340,14 @@
     "provider": {
       "primary": "Principal",
       "fallback": "Secours"
+    },
+    "sync": {
+      "title": "Synchroniser les taux FX",
+      "description": "Synchroniser les taux de change des fournisseurs configurés pour la plage de dates sélectionnée.",
+      "currenciesCount": "devises",
+      "synced": "Synchronisé",
+      "syncing": "Synchronisation...",
+      "start": "Démarrer la synchronisation"
     }
   },
   "settings": {
