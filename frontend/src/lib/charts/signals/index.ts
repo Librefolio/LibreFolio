@@ -13,6 +13,7 @@
 export {
     ChartSignal,
     DEFAULT_SIGNAL_COLORS,
+    type MarkerType,
     type SignalParamDescriptor,
     type SignalStyle,
     type SignalConfig,
@@ -29,7 +30,6 @@ export {
     getRegisteredSignalTypes,
     createSignal,
     signalFromConfig,
-    canAddSignalType,
     type SignalTypeInfo,
 } from './registry';
 

@@ -19,8 +19,8 @@
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {
-        getGlobalSettings, setGlobalSettings,
-    } from '$lib/stores/chartSettingsStore';
+        getGlobalSettings, setGlobalSettings, type ChartSettings,
+    } from '$lib/stores/chartSettingsStore.svelte';
     import {
         createPairSlug, getFxStore, invalidateAllFxStores, removeFxStore,
         apiResultToFxDataPoint,
@@ -580,7 +580,7 @@
     settings={getGlobalSettings()}
     mode="global"
     availablePairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
-    onsave={(s) => setGlobalSettings(s)}
+    onsave={(s: ChartSettings) => setGlobalSettings(s)}
     onclose={() => settingsModalOpen = false}
 />
 

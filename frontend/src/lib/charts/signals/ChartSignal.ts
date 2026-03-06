@@ -50,6 +50,20 @@ export interface SignalParamDescriptor {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// MARKER TYPES — Endpoint markers for signal lines
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Marker type for signal line endpoints.
+ * - 'arrow': directional arrow (ECharts 'arrow' symbol)
+ * - 'circle': round dot
+ * - 'diamond': diamond shape
+ * - 'pin': pin/flag marker
+ * - null: no marker
+ */
+export type MarkerType = 'arrow' | 'circle' | 'diamond' | 'pin' | null;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SIGNAL STYLE — Common rendering parameters for every signal
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -60,10 +74,10 @@ export interface SignalStyle {
     lineWidth: number;
     /** Line dash style */
     lineType: 'solid' | 'dashed' | 'dotted';
-    /** Show arrow marker at the first data point (for trend direction in detail page) */
-    arrowStart: boolean;
-    /** Show arrow marker at the last data point (for trend direction in detail page) */
-    arrowEnd: boolean;
+    /** Marker at the first data point, null = no marker */
+    markerStart: MarkerType;
+    /** Marker at the last data point, null = no marker */
+    markerEnd: MarkerType;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -108,10 +122,10 @@ export interface RenderedSignal {
     color: string;
     lineWidth: number;
     lineType: 'solid' | 'dashed' | 'dotted';
-    /** Show arrow marker at the first data point */
-    arrowStart: boolean;
-    /** Show arrow marker at the last data point */
-    arrowEnd: boolean;
+    /** Marker at the first data point, null = no marker */
+    markerStart: MarkerType;
+    /** Marker at the last data point, null = no marker */
+    markerEnd: MarkerType;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -126,7 +140,6 @@ export interface RenderedSignal {
  *   - `displayName: string`             — shown in "Add signal" dropdown
  *   - `icon: string`                    — emoji for the dropdown
  *   - `paramDescriptors: SignalParamDescriptor[]`  — editable params
- *   - `maxInstances?: number`           — max allowed per chart (undefined = unlimited)
  *
  * Subclasses MUST implement:
  *   - `computePoints(baseData, viewMode)` — generate overlay data points
@@ -142,7 +155,6 @@ export abstract class ChartSignal {
     static displayName: string;
     static icon: string;
     static paramDescriptors: SignalParamDescriptor[];
-    static maxInstances?: number;
 
     constructor(id: string, style: SignalStyle, params: Record<string, unknown>) {
         this.id = id;
@@ -192,8 +204,8 @@ export abstract class ChartSignal {
             color: this.style.color,
             lineWidth: this.style.lineWidth,
             lineType: this.style.lineType,
-            arrowStart: this.style.arrowStart,
-            arrowEnd: this.style.arrowEnd,
+            markerStart: this.style.markerStart,
+            markerEnd: this.style.markerEnd,
         };
     }
 }

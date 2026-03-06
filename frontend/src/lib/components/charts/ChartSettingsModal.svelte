@@ -17,11 +17,13 @@
 <script lang="ts">
     import {X, Plus, Trash2, Settings, AlertTriangle} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import {ConfirmModal} from '$lib/components/table';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
-    import type {ChartSettings} from '$lib/stores/chartSettingsStore';
+    import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {
         type SignalConfig,
         type SignalStyle,
+        type MarkerType,
         getRegisteredSignalTypes,
         createSignal,
         type SignalTypeInfo,
@@ -71,7 +73,7 @@
             areaFill = settings.areaFill;
             gridLines = settings.gridLines;
             staleGradient = settings.staleGradient;
-            signals = structuredClone(settings.signals);
+            signals = JSON.parse(JSON.stringify(settings.signals));
         }
     });
 
@@ -130,19 +132,48 @@
     // Save / Close
     // =========================================================================
 
+    /** Deep-clone that works with Svelte 5 proxy objects ($state) */
+    function deepClone<T>(obj: T): T {
+        return JSON.parse(JSON.stringify(obj));
+    }
+
+    /** Check if local state differs from initial settings */
+    function isDirty(): boolean {
+        if (!settings) return false;
+        if (colorByBaseline !== settings.colorByBaseline) return true;
+        if (areaFill !== settings.areaFill) return true;
+        if (gridLines !== settings.gridLines) return true;
+        if (staleGradient !== settings.staleGradient) return true;
+        if (JSON.stringify(signals) !== JSON.stringify(settings.signals)) return true;
+        return false;
+    }
+
+    // Confirm close state
+    let confirmCloseOpen = $state(false);
+
     function handleSave() {
         const result: ChartSettings = {
             colorByBaseline,
             areaFill,
             gridLines,
             staleGradient,
-            signals: structuredClone(signals),
+            signals: deepClone(signals),
         };
         onsave?.(result);
         open = false;
     }
 
     function handleClose() {
+        if (isDirty()) {
+            confirmCloseOpen = true;
+        } else {
+            onclose?.();
+            open = false;
+        }
+    }
+
+    function confirmDiscardAndClose() {
+        confirmCloseOpen = false;
         onclose?.();
         open = false;
     }
@@ -207,44 +238,68 @@
                 <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Aesthetics</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <!-- Color by baseline -->
-                    <label class="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
-                        <input type="checkbox" bind:checked={colorByBaseline}
-                            class="w-4 h-4 rounded border-gray-300 dark:border-slate-500 text-libre-green focus:ring-libre-green" />
+                    <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <span>
                             <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Baseline Colors</span>
-                            <span class="block text-xs text-gray-500 dark:text-gray-400">Green above / Red below baseline</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">Green above / Red below</span>
                         </span>
-                    </label>
+                        <button
+                            type="button"
+                            class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                            onclick={() => { colorByBaseline = !colorByBaseline; }}
+                            aria-label="Toggle baseline colors"
+                        >
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {colorByBaseline ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                    </div>
 
                     <!-- Area fill -->
-                    <label class="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
-                        <input type="checkbox" bind:checked={areaFill}
-                            class="w-4 h-4 rounded border-gray-300 dark:border-slate-500 text-libre-green focus:ring-libre-green" />
+                    <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <span>
                             <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Area Fill</span>
-                            <span class="block text-xs text-gray-500 dark:text-gray-400">Gradient fill under the line</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">Gradient under line</span>
                         </span>
-                    </label>
+                        <button
+                            type="button"
+                            class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                            onclick={() => { areaFill = !areaFill; }}
+                            aria-label="Toggle area fill"
+                        >
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {areaFill ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                    </div>
 
                     <!-- Grid lines -->
-                    <label class="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
-                        <input type="checkbox" bind:checked={gridLines}
-                            class="w-4 h-4 rounded border-gray-300 dark:border-slate-500 text-libre-green focus:ring-libre-green" />
+                    <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <span>
                             <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Grid Lines</span>
-                            <span class="block text-xs text-gray-500 dark:text-gray-400">Show horizontal dashed grid</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">Horizontal dashed grid</span>
                         </span>
-                    </label>
+                        <button
+                            type="button"
+                            class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                            onclick={() => { gridLines = !gridLines; }}
+                            aria-label="Toggle grid lines"
+                        >
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {gridLines ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                    </div>
 
                     <!-- Stale gradient -->
-                    <label class="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
-                        <input type="checkbox" bind:checked={staleGradient}
-                            class="w-4 h-4 rounded border-gray-300 dark:border-slate-500 text-libre-green focus:ring-libre-green" />
+                    <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <span>
                             <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Stale Gradient</span>
-                            <span class="block text-xs text-gray-500 dark:text-gray-400">Fade old backward-filled data</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">Fade old data</span>
                         </span>
-                    </label>
+                        <button
+                            type="button"
+                            class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                            onclick={() => { staleGradient = !staleGradient; }}
+                            aria-label="Toggle stale gradient"
+                        >
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {staleGradient ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -377,27 +432,41 @@
                                         </select>
                                     </div>
 
-                                    <!-- Arrow start -->
-                                    <label class="flex items-center gap-1 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={signal.style.arrowStart}
-                                            class="w-3 h-3 rounded border-gray-300 dark:border-slate-500 text-libre-green focus:ring-libre-green"
-                                            onchange={(e) => updateSignalStyle(signal.id, 'arrowStart', e.currentTarget.checked)}
-                                        />
-                                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Arrow ←</span>
-                                    </label>
+                                    <!-- Marker start -->
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Start</span>
+                                        <select
+                                            class="px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
+                                            onchange={(e) => {
+                                                const val = e.currentTarget.value;
+                                                updateSignalStyle(signal.id, 'markerStart', val === '' ? null : val as MarkerType);
+                                            }}
+                                        >
+                                            <option value="" selected={!signal.style.markerStart}>None</option>
+                                            <option value="arrow" selected={signal.style.markerStart === 'arrow'}>Arrow</option>
+                                            <option value="circle" selected={signal.style.markerStart === 'circle'}>Circle</option>
+                                            <option value="diamond" selected={signal.style.markerStart === 'diamond'}>Diamond</option>
+                                            <option value="pin" selected={signal.style.markerStart === 'pin'}>Pin</option>
+                                        </select>
+                                    </div>
 
-                                    <!-- Arrow end -->
-                                    <label class="flex items-center gap-1 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={signal.style.arrowEnd}
-                                            class="w-3 h-3 rounded border-gray-300 dark:border-slate-500 text-libre-green focus:ring-libre-green"
-                                            onchange={(e) => updateSignalStyle(signal.id, 'arrowEnd', e.currentTarget.checked)}
-                                        />
-                                        <span class="text-[10px] text-gray-500 dark:text-gray-400">Arrow →</span>
-                                    </label>
+                                    <!-- Marker end -->
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[10px] text-gray-500 dark:text-gray-400">End</span>
+                                        <select
+                                            class="px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
+                                            onchange={(e) => {
+                                                const val = e.currentTarget.value;
+                                                updateSignalStyle(signal.id, 'markerEnd', val === '' ? null : val as MarkerType);
+                                            }}
+                                        >
+                                            <option value="" selected={!signal.style.markerEnd}>None</option>
+                                            <option value="arrow" selected={signal.style.markerEnd === 'arrow'}>Arrow</option>
+                                            <option value="circle" selected={signal.style.markerEnd === 'circle'}>Circle</option>
+                                            <option value="diamond" selected={signal.style.markerEnd === 'diamond'}>Diamond</option>
+                                            <option value="pin" selected={signal.style.markerEnd === 'pin'}>Pin</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         {/snippet}
@@ -446,4 +515,17 @@
         </div>
     </div>
 </ModalBase>
+
+<!-- Confirm discard changes -->
+<ConfirmModal
+    open={confirmCloseOpen}
+    title="Discard changes?"
+    message="You have unsaved changes in chart settings. Discard them?"
+    confirmText="Discard"
+    danger={false}
+    warning={true}
+    onConfirm={confirmDiscardAndClose}
+    onCancel={() => { confirmCloseOpen = false; }}
+    zIndex={70}
+/>
 
