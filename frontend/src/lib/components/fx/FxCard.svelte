@@ -1,84 +1,107 @@
 <!--
   FxCard — Card displaying a currency pair with mini chart and quick actions.
-
-  Shows: flag + pair + swap button, last rate + delta %, mini chart (PriceChartCompact),
-  refresh/edit/delete buttons. Click navigates to detail page.
-
+  Layout B: Header (pair + controls), Rate row, Mini chart, Footer (settings+sync+refresh | edit+delete).
+  Svelte 5 runes, callback props.
   Used by: /fx list page
 -->
 <script lang="ts">
-    import {createEventDispatcher} from 'svelte';
     import {goto} from '$app/navigation';
-    import {_} from '$lib/i18n';
+    import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {ArrowLeftRight, Pencil, Percent, RefreshCw, RotateCcw, Trash2} from 'lucide-svelte';
+    import {ArrowLeftRight, Pencil, Percent, RefreshCw, RotateCcw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-
-    const dispatch = createEventDispatcher<{
-        edit: { base: string; quote: string; slug: string };
-        delete: { base: string; quote: string; slug: string };
-        refresh: { slug: string };
-        sync: { slug: string; base: string; quote: string };
-    }>();
+    import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import type {RenderedSignal} from '$lib/charts/signals';
 
     // =========================================================================
     // Props
     // =========================================================================
 
-    export let base: string;
-    export let quote: string;
-    export let slug: string;
-    export let data: FxDataPoint[] = [];
-    export let loading: boolean = false;
-    /** Whether this pair has only a MANUAL sentinel provider (no auto-sync) */
-    export let manualOnly: boolean = false;
-    /** Global view mode from parent — card follows this unless locally toggled */
-    export let globalViewMode: 'absolute' | 'percentage' = 'absolute';
+    interface Props {
+        base: string;
+        quote: string;
+        slug: string;
+        data?: FxDataPoint[];
+        loading?: boolean;
+        /** Whether this pair has only a MANUAL sentinel provider */
+        manualOnly?: boolean;
+        /** Global view mode from parent */
+        globalViewMode?: 'absolute' | 'percentage';
+        /** Chart settings for this card (resolved from store by parent) */
+        chartSettings?: ChartSettings;
+        /** Overlay signals pre-rendered by parent */
+        overlaySignals?: RenderedSignal[];
+        /** Callbacks */
+        onedit?: (info: { base: string; quote: string; slug: string }) => void;
+        ondelete?: (info: { base: string; quote: string; slug: string }) => void;
+        onrefresh?: (info: { slug: string }) => void;
+        onsync?: (info: { slug: string; base: string; quote: string }) => void;
+        onsettings?: (info: { slug: string }) => void;
+    }
+
+    let {
+        base,
+        quote,
+        slug,
+        data = [],
+        loading = false,
+        manualOnly = false,
+        globalViewMode = 'absolute',
+        chartSettings,
+        overlaySignals = [],
+        onedit,
+        ondelete,
+        onrefresh,
+        onsync,
+        onsettings,
+    }: Props = $props();
 
     // =========================================================================
     // State
     // =========================================================================
 
-    let inverted = false;
-    let localViewModeOverride: 'absolute' | 'percentage' | null = null;
+    let inverted = $state(false);
+    let localViewModeOverride = $state<'absolute' | 'percentage' | null>(null);
 
     // Card view mode: local override takes precedence, otherwise follows global
-    $: cardViewMode = localViewModeOverride ?? globalViewMode;
+    let cardViewMode = $derived(localViewModeOverride ?? globalViewMode);
 
-    // Reset local override when global changes (so cards follow global)
-    let lastGlobalViewMode = globalViewMode;
-    $: if (globalViewMode !== lastGlobalViewMode) {
-        localViewModeOverride = null;
-        lastGlobalViewMode = globalViewMode;
-    }
+    // Reset local override when global changes
+    let prevGlobal: string | undefined;
+    $effect(() => {
+        if (prevGlobal !== undefined && globalViewMode !== prevGlobal) {
+            localViewModeOverride = null;
+        }
+        prevGlobal = globalViewMode;
+    });
 
     // =========================================================================
     // Derived
     // =========================================================================
 
-    $: displayBase = inverted ? quote : base;
-    $: displayQuote = inverted ? base : quote;
+    let displayBase = $derived(inverted ? quote : base);
+    let displayQuote = $derived(inverted ? base : quote);
 
-    // Last rate and change
-    $: lastRate = (() => {
+    let lastRate = $derived.by(() => {
         if (data.length === 0) return null;
         const last = data[data.length - 1];
         return inverted && last.rate !== 0 ? 1 / last.rate : last.rate;
-    })();
+    });
 
-    $: deltaPercent = (() => {
+    let deltaPercent = $derived.by(() => {
         if (data.length < 2) return null;
-        const first = data[0].rate;
-        const last = data[data.length - 1].rate;
-        if (first === 0) return null;
+        const rawFirst = data[0].rate;
+        const rawLast = data[data.length - 1].rate;
+        if (rawFirst === 0 || rawLast === 0) return null;
+        const first = inverted ? 1 / rawFirst : rawFirst;
+        const last = inverted ? 1 / rawLast : rawLast;
         return ((last - first) / first) * 100;
-    })();
+    });
 
-    // Chart data (convert FxDataPoint → LineDataPoint)
-    $: chartData = (() => {
+    let chartData = $derived.by((): LineDataPoint[] => {
         const absolute = data.map((d): LineDataPoint => ({
             date: d.date,
             value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
@@ -91,13 +114,12 @@
             ...d,
             value: ((d.value - baseValue) / baseValue) * 100,
         }));
-    })();
+    });
 
     // =========================================================================
-    // Currency flag emoji from shared store
+    // Currency flag
     // =========================================================================
 
-    // Ensure currency data is loaded (idempotent, no-op if already loaded in this language)
     ensureCurrenciesLoaded($currentLanguage);
 
     function currencyFlag(code: string): string {
@@ -112,30 +134,7 @@
         goto(`/fx/${slug}`);
     }
 
-    function handleSwap(e: MouseEvent) {
-        e.stopPropagation();
-        inverted = !inverted;
-    }
-
-    function handleEdit(e: MouseEvent) {
-        e.stopPropagation();
-        dispatch('edit', {base, quote, slug});
-    }
-
-    function handleDelete(e: MouseEvent) {
-        e.stopPropagation();
-        dispatch('delete', {base, quote, slug});
-    }
-
-    function handleRefresh(e: MouseEvent) {
-        e.stopPropagation();
-        dispatch('refresh', {slug});
-    }
-
-    function handleSync(e: MouseEvent) {
-        e.stopPropagation();
-        dispatch('sync', {slug, base, quote});
-    }
+    function stop(e: MouseEvent) { e.stopPropagation(); }
 </script>
 
 <div
@@ -143,73 +142,80 @@
        transition-all duration-200 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
        focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
     data-testid="fx-card-{slug}"
-    on:click={handleCardClick}
-    on:keydown={(e) => e.key === 'Enter' && handleCardClick()}
+    onclick={handleCardClick}
+    onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
     role="button"
     tabindex="0"
 >
-    <!-- Header -->
-    <div class="p-4 pb-2">
+    <!-- Row 1: Pair + controls + badge -->
+    <div class="px-4 pt-3 pb-1">
         <div class="flex items-center justify-between">
-            <!-- Pair display -->
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5">
                 <span class="text-lg">{currencyFlag(displayBase)}</span>
                 <span class="font-semibold text-gray-800 dark:text-gray-100">{displayBase}</span>
-                <span class="text-gray-400 dark:text-gray-500">→</span>
+                <span class="text-gray-400 dark:text-gray-500 text-sm">→</span>
                 <span class="text-lg">{currencyFlag(displayQuote)}</span>
                 <span class="font-semibold text-gray-800 dark:text-gray-100">{displayQuote}</span>
 
-                <!-- Swap button -->
                 <button
                     class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    on:click={handleSwap}
+                    onclick={(e) => { stop(e); inverted = !inverted; }}
                     title="Swap direction"
                 >
                     <ArrowLeftRight size={14} />
                 </button>
 
-                <!-- Abs/% toggle -->
                 <button
                     class="p-1 rounded-md transition-colors {cardViewMode === 'percentage'
                         ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400'
                         : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
-                    on:click={(e) => { e.stopPropagation(); localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute'; }}
+                    onclick={(e) => { stop(e); localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute'; }}
                     title={cardViewMode === 'absolute' ? 'Show percentage' : 'Show absolute'}
                 >
                     <Percent size={14} />
                 </button>
+            </div>
 
-                {#if manualOnly}
-                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
-                        ✏️ Manual
+            {#if manualOnly}
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                    ✏️ Manual
+                </span>
+            {/if}
+        </div>
+    </div>
+
+    <!-- Row 2: Rate + delta -->
+    <div class="px-4 pb-2">
+        {#if lastRate !== null}
+            <div class="flex items-baseline gap-2">
+                <span class="text-xl font-mono font-bold text-gray-800 dark:text-gray-100">
+                    {lastRate.toFixed(4)}
+                </span>
+                {#if deltaPercent !== null}
+                    <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                        {deltaPercent >= 0 ? '▲' : '▼'} {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
                     </span>
                 {/if}
             </div>
-
-            <!-- Last rate + delta -->
-            <div class="text-right">
-                {#if lastRate !== null}
-                    <div class="font-mono font-semibold text-gray-800 dark:text-gray-100">
-                        {lastRate.toFixed(4)}
-                    </div>
-                    {#if deltaPercent !== null}
-                        <div class="text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                            {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
-                        </div>
-                    {/if}
-                {:else if loading}
-                    <div class="text-sm text-gray-400 dark:text-gray-500">...</div>
-                {:else}
-                    <div class="text-sm text-gray-400 dark:text-gray-500">—</div>
-                {/if}
-            </div>
-        </div>
+        {:else if loading}
+            <div class="text-lg text-gray-400 dark:text-gray-500">...</div>
+        {:else}
+            <div class="text-lg text-gray-400 dark:text-gray-500">—</div>
+        {/if}
     </div>
 
     <!-- Mini Chart -->
     <div class="px-4">
         {#if chartData.length > 0}
-            <PriceChartCompact data={chartData} height="80px" viewMode={cardViewMode} />
+            <PriceChartCompact
+                data={chartData}
+                height="80px"
+                viewMode={cardViewMode}
+                areaFill={chartSettings?.areaFill ?? true}
+                colorByBaseline={chartSettings?.colorByBaseline}
+                showGridLines={chartSettings?.gridLines}
+                overlaySignals={overlaySignals}
+            />
         {:else if loading}
             <div class="h-20 flex items-center justify-center">
                 <div class="animate-pulse bg-gray-100 dark:bg-slate-700 rounded w-full h-12"></div>
@@ -221,36 +227,47 @@
         {/if}
     </div>
 
-    <!-- Actions -->
-    <div class="px-4 py-3 flex items-center justify-end gap-1 border-t border-gray-50 dark:border-slate-700/50">
-        <button
-            class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600 transition-colors"
-            on:click={handleSync}
-            title="Sync rates from provider"
-        >
-            <RotateCcw size={15} class={loading ? 'animate-spin' : ''} />
-        </button>
-        <button
-            class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
-            on:click={handleRefresh}
-            title="Refresh"
-        >
-            <RefreshCw size={15} class={loading ? 'animate-spin' : ''} />
-        </button>
-        <button
-            class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-600 transition-colors"
-            on:click={handleEdit}
-            title="Edit pair config"
-        >
-            <Pencil size={15} />
-        </button>
-        <button
-            class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
-            on:click={handleDelete}
-            title="Delete pair"
-        >
-            <Trash2 size={15} />
-        </button>
+    <!-- Footer: left actions (settings, sync, refresh) | right actions (edit, delete) -->
+    <div class="px-4 py-2.5 flex items-center justify-between border-t border-gray-50 dark:border-slate-700/50">
+        <div class="flex items-center gap-0.5">
+            <button
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                onclick={(e) => { stop(e); onsettings?.({ slug }); }}
+                title={$t('chartSettings.title')}
+            >
+                <Settings size={15} />
+            </button>
+            <button
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600 transition-colors"
+                onclick={(e) => { stop(e); onsync?.({ slug, base, quote }); }}
+                title="Sync rates from provider"
+            >
+                <RotateCcw size={15} class={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                onclick={(e) => { stop(e); onrefresh?.({ slug }); }}
+                title="Refresh"
+            >
+                <RefreshCw size={15} class={loading ? 'animate-spin' : ''} />
+            </button>
+        </div>
+        <div class="flex items-center gap-0.5">
+            <button
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-600 transition-colors"
+                onclick={(e) => { stop(e); onedit?.({ base, quote, slug }); }}
+                title="Edit pair config"
+            >
+                <Pencil size={15} />
+            </button>
+            <button
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
+                onclick={(e) => { stop(e); ondelete?.({ base, quote, slug }); }}
+                title="Delete pair"
+            >
+                <Trash2 size={15} />
+            </button>
+        </div>
     </div>
 </div>
 

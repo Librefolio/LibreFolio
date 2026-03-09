@@ -664,6 +664,9 @@
     "discardTitle": "Discard changes?",
     "discardMessage": "You have unsaved changes in chart settings. Discard them?",
     "discard": "Discard",
-    "removeSignal": "Remove signal"
+    "removeSignal": "Remove signal",
+    "preview": "Preview",
+    "previewDescGlobal": "Synthetic demo data — shows how aesthetics affect all charts",
+    "previewDescPair": "Live preview with actual pair data and overlay signals"
   }
 }

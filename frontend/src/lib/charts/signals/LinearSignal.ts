@@ -35,11 +35,11 @@ export class LinearSignal extends ChartSignal {
 
         const rate = Number(this.params.annualRate ?? 2) / 100;
         const baseValue = baseData[0].value;
-        const startMs = new Date(baseData[0].date).getTime();
-        const MS_PER_YEAR = 86_400_000 * 365;
+        const startDate = baseData[0].date;
 
         return baseData.map(d => {
-            const t = (new Date(d.date).getTime() - startMs) / MS_PER_YEAR;
+            const days = ChartSignal.daysBetween(startDate, d.date);
+            const t = days / 365;
             return {
                 date: d.date,
                 value: viewMode === 'percentage'

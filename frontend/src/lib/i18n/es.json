@@ -664,6 +664,9 @@
     "discardTitle": "¿Descartar los cambios?",
     "discardMessage": "Tienes cambios sin guardar en los ajustes. ¿Descartarlos?",
     "discard": "Descartar",
-    "removeSignal": "Eliminar señal"
+    "removeSignal": "Eliminar señal",
+    "preview": "Vista previa",
+    "previewDescGlobal": "Datos sintéticos de ejemplo — muestra cómo los ajustes afectan todos los gráficos",
+    "previewDescPair": "Vista previa en vivo con datos reales del par y señales overlay"
   }
 }
