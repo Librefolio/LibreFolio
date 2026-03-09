@@ -1,10 +1,16 @@
 /**
  * CompoundSignal — Synthetic signal: compound growth (exponential / interesse composto).
  *
- * Formula (absolute): y = y0 × (1 + rate)^t
- * Formula (percentage): pct = ((1 + rate)^t − 1) × 100
+ * Mathematical formula (for reference):
+ *   absolute:   y(t) = y0 × (1 + rate)^t
+ *   percentage: pct(t) = ((1 + rate)^t − 1) × 100
+ *   where t = daysSinceStart / 365, rate = annualRate / 100
  *
- * where: t = daysSinceStart / 365, rate = annualRate / 100
+ * For performance, since we need ALL data points in sequence, we compute iteratively:
+ * each point multiplies the previous value by the daily growth factor, avoiding N
+ * expensive Math.pow() calls. This is computationally equivalent but O(N) multiplications
+ * instead of O(N) full power operations.
+ *
  * Unlimited instances per chart.
  */
 
@@ -34,19 +40,39 @@ export class CompoundSignal extends ChartSignal {
         if (!baseData.length) return [];
 
         const rate = Number(this.params.annualRate ?? 8) / 100;
-        const baseValue = baseData[0].value;
-        const startMs = new Date(baseData[0].date).getTime();
-        const MS_PER_YEAR = 86_400_000 * 365;
+        const y0 = baseData[0].value;
 
-        return baseData.map(d => {
-            const t = (new Date(d.date).getTime() - startMs) / MS_PER_YEAR;
-            return {
-                date: d.date,
-                value: viewMode === 'percentage'
-                    ? (Math.pow(1 + rate, t) - 1) * 100
-                    : baseValue * Math.pow(1 + rate, t),
-            };
-        });
+        // Daily growth factor: (1 + rate)^(1/365)
+        // We compute this once and multiply iteratively, which is much cheaper
+        // than calling Math.pow() for every single data point.
+        const dailyFactor = Math.pow(1 + rate, 1 / 365);
+
+        const result: LineDataPoint[] = [];
+        let currentValue = y0;
+        let prevDate = baseData[0].date;
+
+        for (let i = 0; i < baseData.length; i++) {
+            const d = baseData[i];
+            if (i === 0) {
+                result.push({
+                    date: d.date,
+                    value: viewMode === 'percentage' ? 0 : y0,
+                });
+            } else {
+                const daysDelta = ChartSignal.daysBetween(prevDate, d.date);
+                currentValue *= Math.pow(dailyFactor, daysDelta);
+                prevDate = d.date;
+
+                result.push({
+                    date: d.date,
+                    value: viewMode === 'percentage'
+                        ? ((currentValue / y0) - 1) * 100
+                        : currentValue,
+                });
+            }
+        }
+
+        return result;
     }
 
     getLabel(): string {

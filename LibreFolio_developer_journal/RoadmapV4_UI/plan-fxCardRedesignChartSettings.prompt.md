@@ -1,7 +1,7 @@
 # Plan: FX Card Redesign, Chart Settings, Signal Library & Sync All Fix
 
 **Data creazione**: 5 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Steps 1-4,6 done. Step 4: Layout C v2 (SVG popover + clickable markers + color first), i18n done, FxSyncModal padding fix, i18n search CLI improved. Prossimo: Step 4 preview chart + Step 5 (FxCard redesign)
+**Status**: 🔄 IN PROGRESS — Steps 1-6 done. Step 5: FxCard Layout B + Svelte 5 runes + deltaPercent inversion fix (9 Mar). Step 4: preview chart added. Prossimo: Step 7 (DataTable refactor, optional) → Step 8 (Integration & Test)
 **Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5, plan-fxSyncApiRedesign (sync API pair-based)
 **Contesto**: Feedback utente su card layout, settings ⚙️ non collegato, Sync All non funzionante, overlay/benchmark da implementare come libreria di segnali
 
@@ -920,6 +920,13 @@ and overlay logic across FX, Asset, and Dashboard chart components.
   with `MarkerType = 'arrow' | 'circle' | 'diamond' | 'pin' | null` enum. `SignalStyle` uses
   `markerStart: MarkerType` and `markerEnd: MarkerType` (null = no marker). Updated `RenderedSignal`,
   `createSignal()` defaults, and all downstream consumers. Charts treat ALL signals uniformly.
+- **9 Mar iteration**: `CompoundSignal.computePoints()` rewritten to use **iterative computation**
+  instead of per-point `Math.pow()`. Computes `dailyFactor = (1+rate)^(1/365)` once, then
+  multiplies iteratively point-by-point. Also refactored date arithmetic: `daysBetween()` utility
+  moved to `ChartSignal` base class as a `protected static` method shared by all subclasses.
+  Removed millisecond-based arithmetic from both `LinearSignal` and `CompoundSignal` — now both
+  use `ChartSignal.daysBetween(dateA, dateB)` which parses YYYY-MM-DD strings via `Date.UTC`.
+  (JS has no built-in day-diff, so one `Date.UTC` + divide is unavoidable, but it's in one place.)
 - **Verified**: `./dev.py front check` → 0 errors, 0 warnings.
 
 ### Step 3 — Chart Settings Store ✅ (5 Mar 2026)
@@ -1100,6 +1107,24 @@ This gave confusing results where searching a Spanish word showed "—" for EN/I
 - Default (no flags): search both keys and values across all languages
 - Shows search mode in output header: `(in keys + values[all])`, `(in keys)`, `(in values[it,es])`, etc.
 - Also noted typo: `bxrokers.sharing.lastOwnerWarning` should be `brokers.sharing.lastOwnerWarning` (not fixed, just flagged)
+
+### 🔍 Sync Feedback to Frontend — Analysis (pending implementation)
+
+### ✅ Step 5 — FxCard Redesign (Layout B) — 9 Mar 2026
+**Changes made:**
+- **Full Svelte 5 runes migration**: Replaced `createEventDispatcher` + `export let` with `interface Props` +
+  `$props()` + callback props (`onedit`, `ondelete`, `onrefresh`, `onsync`, `onsettings`).
+- **Layout B** implemented:
+  - **Row 1**: Pair with flags (🇪🇺 EUR → 🇬🇧 GBP) + swap [⇄] + toggle [%] + Manual badge (right-aligned)
+  - **Row 2**: Prominent rate (text-xl font-bold) + delta with ▲/▼ arrows on same baseline
+  - **Mini chart**: PriceChartCompact with new props: `chartSettings` passthrough (areaFill, colorByBaseline,
+    gridLines), `overlaySignals` for signal rendering
+  - **Footer split**: Left side (⚙️ Settings, ⟳ Sync, ↻ Refresh) | Right side (✏️ Edit, 🗑 Delete)
+- **New props**: `chartSettings?: ChartSettings`, `overlaySignals?: RenderedSignal[]`, `onsettings?` callback
+- **Parent page updated**: `/fx/+page.svelte` handlers converted from `CustomEvent` to direct callback signatures
+- **daysBetween refactored**: Utility moved to `ChartSignal` base class as `protected static daysBetween()`,
+  shared by `LinearSignal` and `CompoundSignal`. No more millisecond arithmetic duplication.
+- **Verified**: `./dev.py front check` → 0 errors, 0 warnings. `./dev.py front build` → success.
 
 ### 🔍 Sync Feedback to Frontend — Analysis (pending implementation)
 **Problem**: When sync completes, the frontend doesn't know which pairs had 0 data (e.g., SNB→CNY before fix).
