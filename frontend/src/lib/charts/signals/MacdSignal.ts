@@ -1,5 +1,5 @@
 /**
- * MacdSignal — Moving Average Convergence Divergence.
+ * MacdSignal — Moving Average Convergence Divergence (Composite).
  *
  * Financial meaning:
  *   Detects momentum shifts by comparing a fast EMA to a slow EMA.
@@ -15,10 +15,10 @@
  *
  * Computed iteratively in O(N): three EMA passes, each a single multiplication per point.
  *
- * Components:
- *   - 'macd': MACD line (fast EMA − slow EMA)
- *   - 'signal': Signal line (EMA of MACD line)
- *   - 'histogram': MACD − Signal (divergence bars)
+ * This is a COMPOSITE signal: a single card/config generates 3 RenderedSignals:
+ *   1. MACD Line (solid, primary color)
+ *   2. Signal Line (dashed, secondary color)
+ *   3. Histogram bars (bar chart, green/red)
  *
  * Y-axis: secondary (left axis, independent scale) → yAxisIndex = 1
  *
@@ -67,26 +67,24 @@ export class MacdSignal extends ChartSignal {
             step: 1,
             suffix: 'days',
         },
-        {
-            key: 'component',
-            label: 'Component',                        // i18n: 'signals.params.component'
-            type: 'select',
-            default: 'macd',
-            options: [
-                {value: 'macd', label: 'MACD Line'},
-                {value: 'signal', label: 'Signal Line'},
-                {value: 'histogram', label: 'Histogram'},
-            ],
-        },
     ];
 
-    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
-        if (baseData.length < 2) return [];
+    /**
+     * Compute all three MACD components in one pass.
+     * Returns { macdLine, signalLine, histogram } aligned to baseData dates.
+     */
+    private _computeAll(baseData: LineDataPoint[]): {
+        macdLine: LineDataPoint[];
+        signalLine: LineDataPoint[];
+        histogram: LineDataPoint[];
+    } {
+        if (baseData.length < 2) {
+            return {macdLine: [], signalLine: [], histogram: []};
+        }
 
         const fastN = Math.max(2, Math.round(Number(this.params.fastPeriod ?? 12)));
         const slowN = Math.max(2, Math.round(Number(this.params.slowPeriod ?? 26)));
         const sigN = Math.max(2, Math.round(Number(this.params.signalPeriod ?? 9)));
-        const component = String(this.params.component ?? 'macd');
 
         const alphaFast = 2 / (fastN + 1);
         const alphaSlow = 2 / (slowN + 1);
@@ -122,40 +120,89 @@ export class MacdSignal extends ChartSignal {
             signalValues.push(emaSig);
         }
 
-        // Select component and build output
-        return baseData.map((d, i) => {
-            let value: number;
-            switch (component) {
-                case 'signal':
-                    value = signalValues[i];
-                    break;
-                case 'histogram':
-                    value = macdValues[i] - signalValues[i];
-                    break;
-                default: // 'macd'
-                    value = macdValues[i];
-                    break;
-            }
-            return {date: d.date, value};
-        });
+        // Build output arrays
+        const macdLine: LineDataPoint[] = [];
+        const signalLine: LineDataPoint[] = [];
+        const histogram: LineDataPoint[] = [];
+
+        for (let i = 0; i < baseData.length; i++) {
+            const date = baseData[i].date;
+            macdLine.push({date, value: macdValues[i]});
+            signalLine.push({date, value: signalValues[i]});
+            histogram.push({date, value: macdValues[i] - signalValues[i]});
+        }
+
+        return {macdLine, signalLine, histogram};
+    }
+
+    /** computePoints returns MACD line for compatibility with base class */
+    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
+        return this._computeAll(baseData).macdLine;
     }
 
     getLabel(): string {
         const fast = this.params.fastPeriod ?? 12;
         const slow = this.params.slowPeriod ?? 26;
         const sig = this.params.signalPeriod ?? 9;
-        const comp = String(this.params.component ?? 'macd');
-        const compLabel = comp === 'signal' ? 'Sig' : comp === 'histogram' ? 'Hist' : 'MACD';
-        return `${compLabel}(${fast},${slow},${sig})`;
+        return `MACD(${fast},${slow},${sig})`;
     }
 
-    /** Override to set seriesType='bar' for histogram component */
-    override render(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal {
-        const base = super.render(baseData, viewMode);
-        if (String(this.params.component ?? 'macd') === 'histogram') {
-            base.seriesType = 'bar';
-        }
-        return base;
+    /**
+     * Override renderMulti() to produce 3 RenderedSignals from a single config:
+     *  1. MACD Line (solid, uses the card's style color)
+     *  2. Signal Line (dashed, dimmed variant of card color)
+     *  3. Histogram (bar chart, red/green determined by LineChart)
+     *
+     * No % conversion for secondary-axis signals (they're dimensionless).
+     */
+    override renderMulti(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
+        const {macdLine, signalLine, histogram} = this._computeAll(baseData);
+        if (macdLine.length === 0) return [];
+
+        const label = this.getLabel();
+        // Derive Signal Line color: use a complementary hue
+        const signalColor = this.params._signalColor as string || '#f59e0b';
+        const histColor = this.params._histColor as string || '#94a3b8';
+
+        return [
+            // 1. MACD Line
+            {
+                id: `${this.id}-macd`,
+                label: `${label}`,
+                data: macdLine,
+                color: this.style.color,
+                lineWidth: this.style.lineWidth,
+                lineType: 'solid',
+                markerStart: this.style.markerStart,
+                markerEnd: this.style.markerEnd,
+                yAxisIndex: 1,
+            },
+            // 2. Signal Line
+            {
+                id: `${this.id}-signal`,
+                label: `${label} Signal`,
+                data: signalLine,
+                color: signalColor,
+                lineWidth: Math.max(1, this.style.lineWidth - 1),
+                lineType: 'dashed',
+                markerStart: null,
+                markerEnd: null,
+                yAxisIndex: 1,
+            },
+            // 3. Histogram (bar chart — red/green coloring handled by LineChart)
+            {
+                id: `${this.id}-hist`,
+                label: `${label} Hist`,
+                data: histogram,
+                color: histColor,
+                lineWidth: 1,
+                lineType: 'solid',
+                markerStart: null,
+                markerEnd: null,
+                yAxisIndex: 1,
+                seriesType: 'bar',
+            },
+        ];
     }
 }
 

@@ -313,8 +313,10 @@
                 }
             }
 
-            const result = instance.render(absoluteData, vm);
-            if (result.data.length > 0) rendered.push(result);
+            const results = instance.renderMulti(absoluteData, vm);
+            for (const result of results) {
+                if (result.data.length > 0) rendered.push(result);
+            }
         }
         return rendered;
     }

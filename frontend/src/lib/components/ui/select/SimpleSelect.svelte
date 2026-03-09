@@ -54,6 +54,7 @@
     let highlightedIndex = $state(-1);
     let containerRef = $state<HTMLDivElement | null>(null);
     let computedPosition = $state<'top' | 'bottom'>('bottom');
+    let dropdownMaxHeight = $state<string>('15rem');
 
     // Derived state
     let selectedOption = $derived(options.find(o => o.value === value));
@@ -62,6 +63,7 @@
     function updateDropdownPosition() {
         if (dropdownPosition !== 'auto' || !containerRef) {
             computedPosition = dropdownPosition === 'top' ? 'top' : 'bottom';
+            dropdownMaxHeight = '15rem';
             return;
         }
         const rect = containerRef.getBoundingClientRect();
@@ -70,19 +72,24 @@
         // Walk up to find the closest scrollable parent
         let scrollParent = containerRef.parentElement;
         let parentBottom = window.innerHeight;
+        let parentTop = 0;
         while (scrollParent) {
             const style = getComputedStyle(scrollParent);
             if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
-                parentBottom = scrollParent.getBoundingClientRect().bottom;
+                const pRect = scrollParent.getBoundingClientRect();
+                parentBottom = pRect.bottom;
+                parentTop = pRect.top;
                 break;
             }
             scrollParent = scrollParent.parentElement;
         }
 
         const spaceBelow = parentBottom - rect.bottom - padding;
-        const spaceAbove = rect.top - padding;
-        // Need ~240px for dropdown (max-h-60 = 15rem = 240px)
+        const spaceAbove = rect.top - parentTop - padding;
         computedPosition = (spaceBelow < 200 && spaceAbove > spaceBelow) ? 'top' : 'bottom';
+        // Limit dropdown height to actual available space (min 120px, max 240px)
+        const available = computedPosition === 'top' ? spaceAbove : spaceBelow;
+        dropdownMaxHeight = `${Math.max(120, Math.min(240, available))}px`;
     }
 
     // Reset highlight when options change
@@ -204,6 +211,7 @@
                 class="absolute z-50 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
                    rounded-lg shadow-lg max-h-60 overflow-y-auto
                    {computedPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}"
+                style:max-height={dropdownMaxHeight}
         >
             {#if loading}
                 <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
