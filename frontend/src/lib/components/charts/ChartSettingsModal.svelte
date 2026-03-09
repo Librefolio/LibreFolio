@@ -21,13 +21,17 @@
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
+    import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
+    import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {
         type SignalConfig,
         type SignalStyle,
         type MarkerType,
+        type RenderedSignal,
         getRegisteredSignalTypes,
         createSignal,
+        signalFromConfig,
         type SignalTypeInfo,
     } from '$lib/charts/signals';
 
@@ -43,6 +47,8 @@
         mode?: 'global' | 'pair';
         /** Available FX pairs for FxPairSignal dynamic options (slug format: 'EUR-GBP') */
         availablePairs?: string[];
+        /** Pair-specific data for preview chart (used in pair mode). If omitted, uses synthetic demo data. */
+        pairData?: LineDataPoint[];
         /** Called when user saves */
         onsave?: (settings: ChartSettings) => void;
         /** Called when user closes without saving */
@@ -54,6 +60,7 @@
         settings,
         mode = 'global',
         availablePairs = [],
+        pairData,
         onsave,
         onclose,
     }: Props = $props();
@@ -227,6 +234,57 @@
     function closeAllPopovers() {
         stylePopoverId = null;
     }
+
+    // =========================================================================
+    // Preview chart data — synthetic sinusoidal (global) or real pair data
+    // =========================================================================
+
+    /**
+     * Generate synthetic sinusoidal demo data for the preview chart.
+     * Sine wave oscillates around 1.0 with ±0.15 amplitude over 90 days,
+     * showing both positive and negative zones relative to baseline.
+     */
+    function generateSyntheticData(): LineDataPoint[] {
+        const points: LineDataPoint[] = [];
+        const today = new Date();
+        const DAYS = 90;
+        for (let i = 0; i < DAYS; i++) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - (DAYS - 1 - i));
+            const t = i / DAYS;
+            // Sine wave: ~2 full cycles, amplitude 0.15 around base 1.0
+            const value = 1.0 + 0.15 * Math.sin(t * 4 * Math.PI);
+            points.push({
+                date: d.toISOString().slice(0, 10),
+                value,
+            });
+        }
+        return points;
+    }
+
+    const syntheticData = generateSyntheticData();
+
+    /** Preview chart data: pair-specific if available, else synthetic */
+    let previewData = $derived(
+        mode === 'pair' && pairData && pairData.length > 0 ? pairData : syntheticData
+    );
+
+    /** Compute rendered overlay signals for the preview chart from current modal state */
+    let previewSignals = $derived.by((): RenderedSignal[] => {
+        if (signals.length === 0) return [];
+        const rendered: RenderedSignal[] = [];
+        for (const cfg of signals) {
+            const instance = signalFromConfig(cfg);
+            if (!instance) continue;
+            // For FxPairSignal, we don't have resolved data in preview — skip
+            if (cfg.signalType === 'fx-pair') continue;
+            const result = instance.render(previewData, 'absolute');
+            if (result.data.length > 0) {
+                rendered.push(result);
+            }
+        }
+        return rendered;
+    });
 </script>
 
 <ModalBase
@@ -330,6 +388,25 @@
                         </button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Preview Chart -->
+            <div>
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('chartSettings.preview')}</h3>
+                <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden bg-gray-50 dark:bg-slate-800/50">
+                    <PriceChartCompact
+                        data={previewData}
+                        height="100px"
+                        areaFill={areaFill}
+                        colorByBaseline={colorByBaseline}
+                        showGridLines={gridLines}
+                        viewMode="percentage"
+                        overlaySignals={previewSignals}
+                    />
+                </div>
+                <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 italic">
+                    {mode === 'global' ? $t('chartSettings.previewDescGlobal') : $t('chartSettings.previewDescPair')}
+                </p>
             </div>
 
             <!-- Signals Section -->

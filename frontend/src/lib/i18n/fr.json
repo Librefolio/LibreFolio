@@ -664,6 +664,9 @@
     "discardTitle": "Annuler les modifications ?",
     "discardMessage": "Vous avez des modifications non enregistrées. Les annuler ?",
     "discard": "Annuler",
-    "removeSignal": "Supprimer le signal"
+    "removeSignal": "Supprimer le signal",
+    "preview": "Aperçu",
+    "previewDescGlobal": "Données synthétiques — montre comment les paramètres affectent tous les graphiques",
+    "previewDescPair": "Aperçu en direct avec les données réelles de la paire et les signaux overlay"
   }
 }

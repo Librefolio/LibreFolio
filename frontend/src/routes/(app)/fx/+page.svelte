@@ -256,22 +256,21 @@
         await fetchAllPairData();
     }
 
-    async function handleRefreshPair(event: CustomEvent<{slug: string}>) {
-        const idx = pairs.findIndex(p => p.config.slug === event.detail.slug);
+    async function handleRefreshPair(detail: {slug: string}) {
+        const idx = pairs.findIndex(p => p.config.slug === detail.slug);
         if (idx < 0) return;
-        const store = getFxStore(event.detail.slug);
+        const store = getFxStore(detail.slug);
         store.invalidateRange(dateStart, dateEnd);
         await fetchPairData(idx);
     }
 
-    function handleEditPair(event: CustomEvent<{base: string; quote: string; slug: string}>) {
-        // Navigate to detail page via client-side routing
-        const {slug} = event.detail;
+    function handleEditPair(detail: {base: string; quote: string; slug: string}) {
+        const {slug} = detail;
         goto(`/fx/${slug}`);
     }
 
-    function handleDeletePair(event: CustomEvent<{base: string; quote: string; slug: string}>) {
-        deletingPair = event.detail;
+    function handleDeletePair(detail: {base: string; quote: string; slug: string}) {
+        deletingPair = detail;
         deleteDialogOpen = true;
     }
 
@@ -318,8 +317,8 @@
         syncModalOpen = true;
     }
 
-    async function handleSyncPair(event: CustomEvent<{slug: string; base: string; quote: string}>) {
-        const {slug, base, quote} = event.detail;
+    async function handleSyncPair(detail: {slug: string; base: string; quote: string}) {
+        const {slug, base, quote} = detail;
         const idx = pairs.findIndex(p => p.config.slug === slug);
         if (idx < 0) return;
         pairs[idx] = {...pairs[idx], loading: true};
@@ -534,10 +533,10 @@
                     loading={pair.loading}
                     manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
                     {globalViewMode}
-                    on:edit={handleEditPair}
-                    on:delete={handleDeletePair}
-                    on:refresh={handleRefreshPair}
-                    on:sync={handleSyncPair}
+                    onedit={handleEditPair}
+                    ondelete={handleDeletePair}
+                    onrefresh={handleRefreshPair}
+                    onsync={handleSyncPair}
                 />
             {/each}
         </div>

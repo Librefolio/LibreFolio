@@ -664,6 +664,9 @@
     "discardTitle": "Annullare le modifiche?",
     "discardMessage": "Hai modifiche non salvate nelle impostazioni del grafico. Annullarle?",
     "discard": "Annulla",
-    "removeSignal": "Rimuovi segnale"
+    "removeSignal": "Rimuovi segnale",
+    "preview": "Anteprima",
+    "previewDescGlobal": "Dati sintetici di esempio — mostra come le impostazioni influenzano tutti i grafici",
+    "previewDescPair": "Anteprima dal vivo con i dati reali della coppia e segnali overlay"
   }
 }
