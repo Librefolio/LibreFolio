@@ -43,7 +43,7 @@ export class LinearSignal extends ChartSignal {
         },
     ];
 
-    computePoints(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): LineDataPoint[] {
+    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         if (!baseData.length) return [];
 
         const rate = Number(this.params.annualRate ?? 2) / 100;
@@ -56,9 +56,7 @@ export class LinearSignal extends ChartSignal {
             const t = days / 365;
             return {
                 date: d.date,
-                value: viewMode === 'percentage'
-                    ? (offset + rate * t) * 100
-                    : baseValue * (1 + offset + rate * t),
+                value: baseValue * (1 + offset + rate * t),
             };
         });
     }

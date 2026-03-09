@@ -28,7 +28,7 @@ export class FxPairSignal extends ChartSignal {
         },
     ];
 
-    computePoints(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): LineDataPoint[] {
+    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         // _resolvedData is injected by the parent before calling computePoints
         const resolvedData = this.params._resolvedData as LineDataPoint[] | undefined;
         if (!resolvedData?.length || !baseData.length) return [];
@@ -41,12 +41,6 @@ export class FxPairSignal extends ChartSignal {
             if (val !== undefined) points.push({date: bd.date, value: val});
         }
 
-        if (viewMode === 'percentage' && points.length > 0) {
-            const base = points[0].value;
-            if (base !== 0) {
-                return points.map(p => ({...p, value: ((p.value - base) / base) * 100}));
-            }
-        }
         return points;
     }
 

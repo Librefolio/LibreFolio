@@ -27,6 +27,7 @@
         signalFromConfig,
         type RenderedSignal,
     } from '$lib/charts/signals';
+    import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
         createPairSlug, getFxStore, invalidateAllFxStores, removeFxStore,
         apiResultToFxDataPoint,
@@ -280,13 +281,15 @@
         }
     }
 
-    /** Get rendered overlay signals for a given pair slug (from its effective settings) */
-    function getRenderedSignals(slug: string, data: FxDataPoint[], vm: 'absolute' | 'percentage'): RenderedSignal[] {
+    /**
+     * Render overlay signals for a pair. Called by FxCard reactively whenever
+     * cardViewMode or inverted changes. Receives absolute chart data (post-inversion).
+     */
+    function getRenderedSignals(slug: string, absoluteData: LineDataPoint[], vm: 'absolute' | 'percentage'): RenderedSignal[] {
         // Access version to trigger reactivity
         void getSettingsVersion();
         const settings = getSettingsForPair(slug);
         if (!settings.signals.length) return [];
-        const chartData = data.map(d => ({date: d.date, value: d.rate}));
         const rendered: RenderedSignal[] = [];
         for (const cfg of settings.signals) {
             const instance = signalFromConfig(cfg);
@@ -310,7 +313,7 @@
                 }
             }
 
-            const result = instance.render(chartData, vm);
+            const result = instance.render(absoluteData, vm);
             if (result.data.length > 0) rendered.push(result);
         }
         return rendered;
@@ -604,7 +607,7 @@
                     manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
                     {globalViewMode}
                     chartSettings={getSettingsForPair(pair.config.slug)}
-                    overlaySignals={getRenderedSignals(pair.config.slug, pair.data, globalViewMode)}
+                    renderSignals={(chartData, vm) => getRenderedSignals(pair.config.slug, chartData, vm)}
                     onedit={handleEditPair}
                     ondelete={handleDeletePair}
                     onrefresh={handleRefreshPair}

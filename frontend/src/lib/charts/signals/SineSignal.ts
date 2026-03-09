@@ -58,7 +58,7 @@ export class SineSignal extends ChartSignal {
         },
     ];
 
-    computePoints(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): LineDataPoint[] {
+    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         if (!baseData.length) return [];
 
         const amplitude = Number(this.params.amplitude ?? 15) / 100;
@@ -70,9 +70,6 @@ export class SineSignal extends ChartSignal {
         return baseData.map(d => {
             const days = ChartSignal.daysBetween(startDate, d.date);
             const sine = amplitude * Math.sin((2 * Math.PI * days) / period);
-            if (viewMode === 'percentage') {
-                return {date: d.date, value: (offset + sine) * 100};
-            }
             return {date: d.date, value: y0 * (1 + offset + sine)};
         });
     }

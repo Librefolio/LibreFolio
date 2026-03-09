@@ -57,20 +57,18 @@ export class BollingerSignal extends ChartSignal {
      * Compute the middle (SMA) line as the primary data series.
      * All three bands are computed in _computeAllBands.
      */
-    computePoints(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): LineDataPoint[] {
+    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         if (baseData.length < 2) return [];
-        const {middle} = this._computeAllBands(baseData, viewMode);
+        const {middle} = this._computeAllBands(baseData);
         return middle;
     }
 
-    /** Compute upper, middle, lower arrays in one O(N) pass */
+    /** Compute upper, middle, lower arrays in one O(N) pass (absolute values) */
     private _computeAllBands(
         baseData: LineDataPoint[],
-        viewMode: 'absolute' | 'percentage',
     ): {upper: number[]; middle: LineDataPoint[]; lower: number[]} {
         const period = Math.max(2, Math.round(Number(this.params.period ?? 20)));
         const k = Number(this.params.multiplier ?? 2);
-        const y0 = baseData[0].value;
 
         const upperArr: number[] = [];
         const middleArr: LineDataPoint[] = [];
@@ -98,19 +96,9 @@ export class BollingerSignal extends ChartSignal {
             }
             const sigma = Math.sqrt(variance / n);
 
-            let upper = sma + k * sigma;
-            let mid = sma;
-            let lower = sma - k * sigma;
-
-            if (viewMode === 'percentage' && y0 !== 0) {
-                upper = ((upper / y0) - 1) * 100;
-                mid = ((mid / y0) - 1) * 100;
-                lower = ((lower / y0) - 1) * 100;
-            }
-
-            upperArr.push(upper);
-            middleArr.push({date: baseData[i].date, value: mid});
-            lowerArr.push(lower);
+            upperArr.push(sma + k * sigma);
+            middleArr.push({date: baseData[i].date, value: sma});
+            lowerArr.push(sma - k * sigma);
         }
 
         return {upper: upperArr, middle: middleArr, lower: lowerArr};
@@ -122,17 +110,31 @@ export class BollingerSignal extends ChartSignal {
      * stacked area series (Lower invisible + Upper-Lower shaded) + Middle line.
      */
     override render(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal {
-        const base = super.render(baseData, viewMode);
-        if (baseData.length < 2) return base;
+        const rendered = super.render(baseData, viewMode);
+        if (baseData.length < 2) return rendered;
 
-        const {upper, middle, lower} = this._computeAllBands(baseData, viewMode);
-        base.seriesType = 'band';
-        base.bandData = {
+        const {upper, middle, lower} = this._computeAllBands(baseData);
+        rendered.seriesType = 'band';
+
+        // Apply the same centralized % conversion to band data
+        if (viewMode === 'percentage' && baseData.length > 0) {
+            const p0 = baseData[0].value;
+            if (p0 !== 0) {
+                rendered.bandData = {
+                    upper: upper.map(v => ((v - p0) / p0) * 100),
+                    middle: middle.map(p => ((p.value - p0) / p0) * 100),
+                    lower: lower.map(v => ((v - p0) / p0) * 100),
+                };
+                return rendered;
+            }
+        }
+
+        rendered.bandData = {
             upper,
             middle: middle.map(p => p.value),
             lower,
         };
-        return base;
+        return rendered;
     }
 
     getLabel(): string {

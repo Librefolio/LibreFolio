@@ -49,7 +49,7 @@ export class CompoundSignal extends ChartSignal {
         },
     ];
 
-    computePoints(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): LineDataPoint[] {
+    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         if (!baseData.length) return [];
 
         const rate = Number(this.params.annualRate ?? 8) / 100;
@@ -71,21 +71,12 @@ export class CompoundSignal extends ChartSignal {
         for (let i = 0; i < baseData.length; i++) {
             const d = baseData[i];
             if (i === 0) {
-                result.push({
-                    date: d.date,
-                    value: viewMode === 'percentage' ? offset * 100 : startValue,
-                });
+                result.push({date: d.date, value: startValue});
             } else {
                 const daysDelta = ChartSignal.daysBetween(prevDate, d.date);
                 currentValue *= Math.pow(dailyFactor, daysDelta);
                 prevDate = d.date;
-
-                result.push({
-                    date: d.date,
-                    value: viewMode === 'percentage'
-                        ? ((currentValue / y0) - 1) * 100
-                        : currentValue,
-                });
+                result.push({date: d.date, value: currentValue});
             }
         }
 

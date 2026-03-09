@@ -32,8 +32,13 @@
         globalViewMode?: 'absolute' | 'percentage';
         /** Chart settings for this card (resolved from store by parent) */
         chartSettings?: ChartSettings;
-        /** Overlay signals pre-rendered by parent */
-        overlaySignals?: RenderedSignal[];
+        /**
+         * Callback to render overlay signals on demand.
+         * Called reactively whenever cardViewMode or inverted changes.
+         * @param chartData absolute chart data (after inversion)
+         * @param viewMode  current card view mode
+         */
+        renderSignals?: (chartData: LineDataPoint[], viewMode: 'absolute' | 'percentage') => RenderedSignal[];
         /** Callbacks */
         onedit?: (info: { base: string; quote: string; slug: string }) => void;
         ondelete?: (info: { base: string; quote: string; slug: string }) => void;
@@ -51,7 +56,7 @@
         manualOnly = false,
         globalViewMode = 'absolute',
         chartSettings,
-        overlaySignals = [],
+        renderSignals,
         onedit,
         ondelete,
         onrefresh,
@@ -114,6 +119,21 @@
             ...d,
             value: ((d.value - baseValue) / baseValue) * 100,
         }));
+    });
+
+    /** Absolute data for signal rendering (before % conversion) */
+    let absoluteData = $derived.by((): LineDataPoint[] =>
+        data.map((d): LineDataPoint => ({
+            date: d.date,
+            value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
+            staleDays: d.backwardFillInfo?.daysBack ?? 0,
+        }))
+    );
+
+    /** Overlay signals — re-rendered reactively when cardViewMode or inverted changes */
+    let overlaySignals = $derived.by((): RenderedSignal[] => {
+        if (!renderSignals || absoluteData.length === 0) return [];
+        return renderSignals(absoluteData, cardViewMode);
     });
 
     // =========================================================================
