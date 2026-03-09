@@ -329,9 +329,12 @@
         if (areaFill) {
             if (useBaselineColoring) {
                 // Area colored by visualMap (green/red segments)
+                // Use very low opacity so the colored LINE is clearly visible on top
                 mainSeries.areaStyle = {
-                    opacity: isDark ? 0.25 : 0.15,
+                    opacity: isDark ? 0.12 : 0.08,
                 };
+                // Boost line width slightly so the line stands out above the fill
+                mainSeries.lineStyle.width = compact ? 2 : 2.5;
             } else {
                 // Fixed color gradient area
                 const areaTopColor = hexToRgba(baseColor, isDark ? 0.35 : 0.2);

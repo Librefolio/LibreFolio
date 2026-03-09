@@ -33,12 +33,16 @@ export class FxPairSignal extends ChartSignal {
         const resolvedData = this.params._resolvedData as LineDataPoint[] | undefined;
         if (!resolvedData?.length || !baseData.length) return [];
 
+        const isInverted = Boolean(this.params._inverted);
+
         // Build date→value lookup, then align to base chart's date axis
         const lookup = new Map(resolvedData.map(d => [d.date, d.value]));
         const points: LineDataPoint[] = [];
         for (const bd of baseData) {
             const val = lookup.get(bd.date);
-            if (val !== undefined) points.push({date: bd.date, value: val});
+            if (val !== undefined && val !== 0) {
+                points.push({date: bd.date, value: isInverted ? 1 / val : val});
+            }
         }
 
         return points;
@@ -46,7 +50,10 @@ export class FxPairSignal extends ChartSignal {
 
     getLabel(): string {
         const slug = String(this.params.pairSlug || '');
-        return slug ? slug.replace('-', '/') : 'FX Pair';
+        const isInverted = Boolean(this.params._inverted);
+        if (!slug) return 'FX Pair';
+        const [a, b] = slug.split('-');
+        return isInverted ? `${b}/${a}` : `${a}/${b}`;
     }
 }
 

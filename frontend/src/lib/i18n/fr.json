@@ -661,9 +661,9 @@
       "pin": "Épingle"
     },
     "apply": "Appliquer",
-    "discardTitle": "Annuler les modifications ?",
-    "discardMessage": "Vous avez des modifications non enregistrées. Les annuler ?",
-    "discard": "Annuler",
+    "discardTitle": "Rejeter les modifications ?",
+    "discardMessage": "Vous avez des modifications non enregistrées. Les rejeter ?",
+    "discard": "Rejeter",
     "removeSignal": "Supprimer le signal",
     "preview": "Aperçu",
     "previewDescGlobal": "Données synthétiques — montre comment les paramètres affectent tous les graphiques",
@@ -692,7 +692,6 @@
       "fastPeriod": "Période Rapide",
       "slowPeriod": "Période Lente",
       "signalPeriod": "Période du Signal",
-      "component": "Composant",
       "multiplier": "Multiplicateur",
       "overbought": "Suracheté",
       "oversold": "Survendu"
