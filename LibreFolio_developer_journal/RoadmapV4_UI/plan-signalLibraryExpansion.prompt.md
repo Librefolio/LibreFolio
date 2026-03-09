@@ -9,7 +9,7 @@ in 3 dropdown categorizzati (usando i componenti `SimpleSelect` esistenti), dual
 scala indipendente (RSI, MACD), tooltip informativi con supporto LaTeX (KaTeX), e documentazione MkDocs
 completa sulla teoria finanziaria con equivalenze signal processing / controlli automatici.
 
-**Stato**: 🔄 IN PROGRESS — Steps 1-4 ✅, Step 4B ✅ (bug fix), Step 4C ✅ (chart evolution), Step 5-7 TODO
+**Stato**: 🔄 IN PROGRESS — Steps 1-4D ✅, Step 5-7 TODO
 **Data creazione**: 9 Marzo 2026
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
@@ -58,7 +58,7 @@ una sinusoide. Deve invece:
 - Creare un'istanza temporanea di `SineSignal` con ampiezza **±20%** (non 10%, per entrare nei
   negativi e testare baseline colors), periodo 120gg, offset 0%
 - Generare le date (365 giorni) come array di `LineDataPoint` con valore costante 1.0
-- Chiamare `sineInstance.computePoints(baseDates, 'absolute')` per ottenere i dati sintetici
+- Chiamare `sineInstance.computePoints(baseDates)` per ottenere i dati sintetici
 - Questo garantisce che se `SineSignal` viene aggiornato, anche il demo si aggiorna
 
 ### 1B. Aggiungere parametro `offset` (%) a `LinearSignal` e `CompoundSignal`
@@ -862,6 +862,74 @@ bandData?: { upper: number[]; middle: number[]; lower: number[] };
 - `frontend/src/lib/components/charts/LineChart.svelte` (rendering multi-tipo + tooltip avanzato)
 - `frontend/src/lib/components/charts/ChartSettingsModal.svelte` (+pairsDataMap, FxPair data injection)
 - `frontend/src/routes/(app)/fx/+page.svelte` (FxPair data injection + pairsDataMap prop)
+
+---
+
+## Step 4D — ✅ Centralizzazione % conversion + Dropdown auto + FxCard reattiva (Completato 9 Mar)
+
+### Problema: conversione abs↔% inconsistente tra segnali
+
+Ogni segnale gestiva `viewMode` internamente nel proprio `computePoints()`, con formule diverse.
+Alcuni usavano `offset` nella formula %, altri `(value/y0 - 1) * 100`, altri ignoravano viewMode.
+Risultato: passando da abs a %, segnali sintetici si rompevano o mostravano scale incongrue.
+
+### Soluzione: centralizzazione nella base class
+
+- **`ChartSignal.computePoints(baseData)`** — firma semplificata, calcola SOLO valori assoluti.
+  Rimosso il parametro `viewMode` da tutti gli 8 segnali (Linear, Compound, Sine, EMA, MACD,
+  RSI, Bollinger, FxPair).
+- **`ChartSignal.render(baseData, viewMode)`** — conversione % centralizzata:
+  ```
+  pct = ((value − p0) / p0) × 100
+  ```
+  dove `p0` è il primo punto del segnale. Segnali su asse secondario (yAxisIndex=1, RSI/MACD)
+  saltano la conversione: sono già in scala propria (RSI 0-100, MACD centrato su 0).
+- **`BollingerSignal.render()`** — override speciale: applica la stessa formula % anche ai
+  dati `bandData.upper/middle/lower` per coerenza con la band shaded area.
+
+### Problema: Dropdown si apre sotto il footer
+
+I `SimpleSelect` nella ChartSettingsModal si aprivano sempre verso il basso, nascondendosi
+sotto il footer della modale.
+
+### Soluzione: `dropdownPosition="auto"` su SimpleSelect
+
+- Aggiunto mode `'auto'` a `SimpleSelect.svelte` (come già esisteva in `SearchSelect.svelte`)
+- Calcola spazio disponibile sopra/sotto usando `getBoundingClientRect()` + scrollable parent
+- Se lo spazio sotto è < 200px e c'è più spazio sopra → apre verso l'alto
+- Tutti i `SimpleSelect` in `ChartSettingsModal` ora usano `dropdownPosition="auto"`
+
+### Problema: Invert rate e % locale non aggiornano i segnali overlay
+
+La pagina FX pre-renderizzava i segnali con `globalViewMode` e li passava come prop statica
+`overlaySignals` alla FxCard. Quando l'utente invertiva il rate (⇄) o cambiava la % locale
+nella card, il grafico si aggiornava ma i segnali overlay restavano calcolati sulla vista
+vecchia (non invertita, viewMode globale).
+
+### Soluzione: callback `renderSignals` reattivo
+
+- FxCard non riceve più `overlaySignals: RenderedSignal[]` (prop statica)
+- Riceve `renderSignals: (chartData, viewMode) => RenderedSignal[]` (callback)
+- FxCard calcola `absoluteData` (post-inversione) come `$derived`
+- `overlaySignals` è ora un `$derived` interno che chiama `renderSignals(absoluteData, cardViewMode)`
+- Si ricalcola automaticamente quando `inverted` o `cardViewMode` cambiano
+- La pagina FX passa: `renderSignals={(chartData, vm) => getRenderedSignals(slug, chartData, vm)}`
+- `getRenderedSignals` ora accetta `LineDataPoint[]` (dati assoluti post-inversione) anziché `FxDataPoint[]`
+
+**File coinvolti Step 4D:**
+- `frontend/src/lib/charts/signals/ChartSignal.ts` (refactor computePoints/render)
+- `frontend/src/lib/charts/signals/LinearSignal.ts` (abs-only)
+- `frontend/src/lib/charts/signals/CompoundSignal.ts` (abs-only)
+- `frontend/src/lib/charts/signals/SineSignal.ts` (abs-only)
+- `frontend/src/lib/charts/signals/EMASignal.ts` (abs-only)
+- `frontend/src/lib/charts/signals/MacdSignal.ts` (abs-only)
+- `frontend/src/lib/charts/signals/RSISignal.ts` (abs-only)
+- `frontend/src/lib/charts/signals/BollingerSignal.ts` (abs-only + band % override)
+- `frontend/src/lib/charts/signals/FxPairSignal.ts` (abs-only)
+- `frontend/src/lib/components/ui/select/SimpleSelect.svelte` (+auto position)
+- `frontend/src/lib/components/fx/FxCard.svelte` (renderSignals callback, reactive overlays)
+- `frontend/src/routes/(app)/fx/+page.svelte` (renderSignals prop, LineDataPoint import)
+- `frontend/src/lib/components/charts/ChartSettingsModal.svelte` (dropdownPosition auto, computePoints signature)
 
 ---
 

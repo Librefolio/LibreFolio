@@ -53,7 +53,7 @@ export class EmaSignal extends ChartSignal {
         },
     ];
 
-    computePoints(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): LineDataPoint[] {
+    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         if (!baseData.length) return [];
 
         const period = Math.max(2, Math.round(Number(this.params.period ?? 14)));
@@ -61,7 +61,6 @@ export class EmaSignal extends ChartSignal {
         // IIR filter coefficient: α = 2/(N+1)
         const alpha = 2 / (period + 1);
 
-        const y0 = baseData[0].value;
         const result: LineDataPoint[] = [];
         let ema = baseData[0].value; // Initialize with first price
 
@@ -74,12 +73,9 @@ export class EmaSignal extends ChartSignal {
                 ema = alpha * d.value + (1 - alpha) * ema;
             }
 
-            const emaWithOffset = ema * (1 + offset);
             result.push({
                 date: d.date,
-                value: viewMode === 'percentage'
-                    ? ((emaWithOffset / y0) - 1) * 100
-                    : emaWithOffset,
+                value: ema * (1 + offset),
             });
         }
 

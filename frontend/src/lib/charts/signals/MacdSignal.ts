@@ -80,7 +80,7 @@ export class MacdSignal extends ChartSignal {
         },
     ];
 
-    computePoints(baseData: LineDataPoint[], _viewMode: 'absolute' | 'percentage'): LineDataPoint[] {
+    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         if (baseData.length < 2) return [];
 
         const fastN = Math.max(2, Math.round(Number(this.params.fastPeriod ?? 12)));

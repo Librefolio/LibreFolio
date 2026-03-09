@@ -161,7 +161,7 @@ export interface RenderedSignal {
  *   - `paramDescriptors: SignalParamDescriptor[]`  — editable params
  *
  * Subclasses MUST implement:
- *   - `computePoints(baseData, viewMode)` — generate overlay data points
+ *   - `computePoints(baseData)` — generate overlay data points (absolute values only)
  *   - `getLabel()` — human-readable label for legend/tooltip
  */
 export abstract class ChartSignal {
@@ -201,15 +201,18 @@ export abstract class ChartSignal {
     }
 
     /**
-     * Compute overlay data points aligned to the primary chart's date axis.
+     * Compute overlay data points in ABSOLUTE values, aligned to the primary
+     * chart's date axis.
+     *
+     * Subclasses MUST return absolute (raw) values only.
+     * The base class `render()` handles the abs→% conversion centrally so that
+     * all signals share the same formula: pct = ((value − p0) / p0) × 100.
      *
      * @param baseData  Primary chart data (provides date axis + baseValue reference)
-     * @param viewMode  'absolute' or 'percentage' — signals adjust their output
-     * @returns         Points aligned to baseData dates
+     * @returns         Points aligned to baseData dates (absolute values)
      */
     abstract computePoints(
         baseData: LineDataPoint[],
-        viewMode: 'absolute' | 'percentage',
     ): LineDataPoint[];
 
     /** Human-readable label for ECharts legend and tooltip */
@@ -233,18 +236,41 @@ export abstract class ChartSignal {
 
     /**
      * Convenience: compute points and wrap into RenderedSignal format.
+     *
+     * The % conversion is centralized here: every signal computes absolute
+     * values in computePoints(), and render() converts to percentage using
+     * the standard formula: pct = ((value − p0) / p0) × 100
+     * where p0 is the signal's first data point value.
+     *
+     * Signals on the secondary axis (yAxisIndex=1, e.g. RSI, MACD) are
+     * inherently dimensionless — they skip the % conversion entirely.
      */
     render(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal {
+        const absData = this.computePoints(baseData);
+        const yAxis = (this.constructor as typeof ChartSignal).yAxisIndex;
+
+        // Signals on secondary axis are already in their own scale — no % conversion
+        let data = absData;
+        if (viewMode === 'percentage' && yAxis === 0 && absData.length > 0) {
+            const p0 = absData[0].value;
+            if (p0 !== 0) {
+                data = absData.map(d => ({
+                    ...d,
+                    value: ((d.value - p0) / p0) * 100,
+                }));
+            }
+        }
+
         return {
             id: this.id,
             label: this.getLabel(),
-            data: this.computePoints(baseData, viewMode),
+            data,
             color: this.style.color,
             lineWidth: this.style.lineWidth,
             lineType: this.style.lineType,
             markerStart: this.style.markerStart,
             markerEnd: this.style.markerEnd,
-            yAxisIndex: (this.constructor as typeof ChartSignal).yAxisIndex,
+            yAxisIndex: yAxis,
         };
     }
 }

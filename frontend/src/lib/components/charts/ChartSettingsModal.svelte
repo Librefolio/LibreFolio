@@ -319,7 +319,7 @@
             {color: '#000', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null},
             {amplitude: 20, period: 120, offset: 0},
         );
-        return sineInstance.computePoints(baseDates, 'absolute');
+        return sineInstance.computePoints(baseDates);
     }
 
     const syntheticData = generateSyntheticData();
@@ -606,6 +606,7 @@
                                                                     value={getParamString(signal, desc.key)}
                                                                     options={fxOptions}
                                                                     placeholder="— {$t('chartSettings.params.currencyPair')}"
+                                                                    dropdownPosition="auto"
                                                                     onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
                                                                 />
                                                             </div>
@@ -633,6 +634,7 @@
                                                             <SimpleSelect
                                                                 value={getParamString(signal, desc.key)}
                                                                 options={options}
+                                                                dropdownPosition="auto"
                                                                 onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
                                                             />
                                                         </div>

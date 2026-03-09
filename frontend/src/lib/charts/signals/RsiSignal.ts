@@ -58,7 +58,7 @@ export class RsiSignal extends ChartSignal {
         },
     ];
 
-    computePoints(baseData: LineDataPoint[], _viewMode: 'absolute' | 'percentage'): LineDataPoint[] {
+    computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         if (baseData.length < 2) return [];
 
         const period = Math.max(2, Math.round(Number(this.params.period ?? 14)));
