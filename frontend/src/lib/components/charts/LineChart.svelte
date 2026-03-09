@@ -135,8 +135,16 @@
 
     $effect(() => {
         if (chartContainer && data) {
-            // Touch overlaySignals to register dependency
+            // Touch all visual props to register reactive dependencies
             void overlaySignals;
+            void areaFill;
+            void colorByBaseline;
+            void showGridLines;
+            void viewMode;
+            void compact;
+            void showMiniAxis;
+            void lineColor;
+            void darkLineColor;
             tick().then(renderChart);
         }
     });
@@ -301,6 +309,7 @@
             symbol: compact && !showMiniAxis ? 'none' : (compact ? 'none' : 'circle'),
             symbolSize: compact ? 0 : 4,
             showSymbol: !compact,
+            yAxisIndex: 0,
             lineStyle: {
                 width: compact ? 1.5 : 2,
             },
@@ -358,11 +367,16 @@
             });
         }
 
-        // Overlay signals — rendered as additional line series (generic: chart doesn't
-        // know or care about signal types, it just renders whatever it receives)
+        // Overlay signals — rendered as additional series.
+        // Supports three seriesType modes:
+        //   'line' (default) — standard overlay line
+        //   'bar'            — vertical bars (e.g. MACD histogram) on secondary axis
+        //   'band'           — confidence band (e.g. Bollinger): stacked area lower→upper + middle line
         if (overlaySignals && overlaySignals.length > 0) {
             for (const signal of overlaySignals) {
                 if (!signal.data.length) continue;
+
+                const sType = signal.seriesType ?? 'line';
 
                 // Build date→value lookup, then align to main chart's date axis
                 const signalLookup = new Map(signal.data.map(d => [d.date, d.value]));
@@ -372,6 +386,116 @@
                     return useTupleFormat ? [i, val] : val;
                 });
 
+                // ─── BAND (Confidence Band / Bollinger) ─────────────────────
+                if (sType === 'band' && signal.bandData) {
+                    const {upper, middle, lower} = signal.bandData;
+                    const bandColor = signal.color;
+                    const bandOpacity = isDark ? 0.18 : 0.12;
+
+                    // Build date→index lookup from signal data for O(1) access
+                    const signalDateIdx = new Map(signal.data.map((d, idx) => [d.date, idx]));
+
+                    // Series 1: Lower bound (invisible line, base of the stack)
+                    const lowerData: any[] = dates.map((date, i) => {
+                        const idx = signalDateIdx.get(date);
+                        if (idx === undefined) return useTupleFormat ? [i, null] : null;
+                        return useTupleFormat ? [i, lower[idx]] : lower[idx];
+                    });
+                    series.push({
+                        type: 'line',
+                        name: `${signal.label} Lower`,
+                        data: lowerData,
+                        lineStyle: {opacity: 0},
+                        itemStyle: {color: bandColor},
+                        stack: `bb-${signal.id}`,
+                        symbol: 'none',
+                        yAxisIndex: signal.yAxisIndex ?? 0,
+                        silent: true,
+                        z: 0,
+                    });
+
+                    // Series 2: Upper - Lower delta (shaded area stacked on lower)
+                    const deltaData: any[] = dates.map((date, i) => {
+                        const idx = signalDateIdx.get(date);
+                        if (idx === undefined) return useTupleFormat ? [i, null] : null;
+                        const delta = upper[idx] - lower[idx];
+                        return useTupleFormat ? [i, delta] : delta;
+                    });
+                    series.push({
+                        type: 'line',
+                        name: `${signal.label} Band`,
+                        data: deltaData,
+                        lineStyle: {opacity: 0},
+                        areaStyle: {
+                            color: hexToRgba(bandColor, bandOpacity),
+                        },
+                        stack: `bb-${signal.id}`,
+                        symbol: 'none',
+                        yAxisIndex: signal.yAxisIndex ?? 0,
+                        silent: true,
+                        z: 0,
+                    });
+
+                    // Series 3: Middle line (SMA) — visible, styled
+                    const middleData: any[] = dates.map((date, i) => {
+                        const idx = signalDateIdx.get(date);
+                        if (idx === undefined) return useTupleFormat ? [i, null] : null;
+                        return useTupleFormat ? [i, middle[idx]] : middle[idx];
+                    });
+                    series.push({
+                        type: 'line',
+                        name: signal.label,
+                        data: middleData,
+                        connectNulls: true,
+                        smooth: false,
+                        symbol: 'none',
+                        yAxisIndex: signal.yAxisIndex ?? 0,
+                        lineStyle: {
+                            color: bandColor,
+                            width: signal.lineWidth,
+                            type: signal.lineType,
+                        },
+                        itemStyle: {color: bandColor},
+                        emphasis: {focus: 'none'},
+                        z: 1,
+                    });
+                    continue;
+                }
+
+                // ─── BAR (MACD Histogram) ───────────────────────────────────
+                if (sType === 'bar') {
+                    // Bar data with red/green coloring: positive = green, negative = red
+                    const barData: any[] = signalSeriesData.map((v) => {
+                        const val = useTupleFormat
+                            ? (Array.isArray(v) ? v[1] : null)
+                            : v;
+                        if (val === null || val === undefined) return v;
+                        return {
+                            value: useTupleFormat ? v : val,
+                            itemStyle: {
+                                color: val >= 0
+                                    ? (isDark ? GREEN_DARK : GREEN_LIGHT)
+                                    : (isDark ? RED_DARK : RED_LIGHT),
+                            },
+                        };
+                    });
+
+                    series.push({
+                        type: 'bar',
+                        name: signal.label,
+                        data: barData,
+                        yAxisIndex: signal.yAxisIndex ?? 0,
+                        barWidth: '60%',
+                        itemStyle: {
+                            color: signal.color,
+                        },
+                        emphasis: {focus: 'none'},
+                        z: 0, // behind lines
+                    });
+                    continue;
+                }
+
+                // ─── LINE (default) ─────────────────────────────────────────
                 const overlaySeries: any = {
                     type: 'line',
                     name: signal.label,
@@ -379,6 +503,7 @@
                     connectNulls: true,
                     smooth: false,
                     symbol: 'none',
+                    yAxisIndex: signal.yAxisIndex ?? 0,
                     lineStyle: {
                         color: signal.color,
                         width: signal.lineWidth,
@@ -394,9 +519,8 @@
                 };
 
                 // Endpoint markers at start/end of signal data
-                if (signal.markerStart || signal.markerEnd) {
+                if ((signal.markerStart || signal.markerEnd) && signalSeriesData.length > 0) {
                     const markData: any[] = [];
-                    // Find first non-null index for markerStart
                     if (signal.markerStart) {
                         for (let i = 0; i < signalSeriesData.length; i++) {
                             const v = useTupleFormat ? signalSeriesData[i]?.[1] : signalSeriesData[i];
@@ -412,7 +536,6 @@
                             }
                         }
                     }
-                    // Find last non-null index for markerEnd
                     if (signal.markerEnd) {
                         for (let i = signalSeriesData.length - 1; i >= 0; i--) {
                             const v = useTupleFormat ? signalSeriesData[i]?.[1] : signalSeriesData[i];
@@ -456,6 +579,9 @@
 
         // Grid configuration
         const showYAxis = !compact || showMiniAxis;
+        // Check if any overlay signal needs the secondary Y axis (yAxisIndex = 1)
+        const hasSecondaryAxis = !compact && overlaySignals.some(s => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
+
         const gridConfig = compact
             ? {
                 top: 5,
@@ -466,7 +592,7 @@
             }
             : {
                 top: 35,
-                right: 15,
+                right: hasSecondaryAxis ? 55 : 15,
                 bottom: 35,
                 left: 15,
                 containLabel: true,
@@ -492,35 +618,55 @@
                 axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11},
                 splitLine: {show: false},
             },
-            yAxis: {
-                type: 'value',
-                show: showYAxis,
-                position: compact && showMiniAxis ? 'right' : 'left',
-                axisLine: {show: !compact, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                axisTick: {show: !compact},
-                splitNumber: compact && showMiniAxis ? 2 : undefined,
-                axisLabel: {
+            yAxis: [
+                // Axis 0 — Primary (price scale, right in compact / left in full)
+                {
+                    type: 'value',
                     show: showYAxis,
-                    color: isDark ? '#94a3b8' : '#6b7280',
-                    fontSize: compact && showMiniAxis ? 9 : 11,
-                    formatter: isPercentage
-                        ? (v: number) => `${v.toFixed(1)}%`
-                        : (v: number) => {
-                            if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
-                            if (Math.abs(v) >= 1) return v.toFixed(2);
-                            return v.toFixed(4).replace(/\.?0+$/, '');
-                        },
-                },
-                splitLine: {
-                    show: showGridLines && showYAxis,
-                    lineStyle: {
-                        color: isDark ? '#334155' : '#e5e7eb',
-                        type: 'dashed',
-                        opacity: compact && showMiniAxis ? 0.5 : 1,
+                    position: compact && showMiniAxis ? 'right' : 'left',
+                    axisLine: {show: !compact, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                    axisTick: {show: !compact},
+                    splitNumber: compact && showMiniAxis ? 2 : undefined,
+                    axisLabel: {
+                        show: showYAxis,
+                        color: isDark ? '#94a3b8' : '#6b7280',
+                        fontSize: compact && showMiniAxis ? 9 : 11,
+                        formatter: isPercentage
+                            ? (v: number) => `${v.toFixed(1)}%`
+                            : (v: number) => {
+                                if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+                                if (Math.abs(v) >= 1) return v.toFixed(2);
+                                return v.toFixed(4).replace(/\.?0+$/, '');
+                            },
                     },
+                    splitLine: {
+                        show: showGridLines && showYAxis,
+                        lineStyle: {
+                            color: isDark ? '#4b5563' : '#d1d5db',
+                            type: 'dashed',
+                            opacity: compact && showMiniAxis ? 0.5 : 1,
+                        },
+                    },
+                    scale: true,
                 },
-                scale: true,
-            },
+                // Axis 1 — Secondary (left side, independent scale for RSI/MACD)
+                // Only visible when overlay signals use yAxisIndex=1
+                {
+                    type: 'value',
+                    show: !compact && overlaySignals.some(s => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0),
+                    position: 'right',
+                    axisLine: {show: true, lineStyle: {color: isDark ? '#64748b' : '#9ca3af'}},
+                    axisTick: {show: true},
+                    axisLabel: {
+                        show: true,
+                        color: isDark ? '#94a3b8' : '#9ca3af',
+                        fontSize: 10,
+                        formatter: (v: number) => v.toFixed(0),
+                    },
+                    splitLine: {show: false},
+                    scale: true,
+                },
+            ],
             tooltip: compact ? undefined : {
                 trigger: 'axis',
                 backgroundColor: isDark ? '#1e293b' : '#ffffff',
@@ -532,9 +678,27 @@
                     const date = items[0].axisValue || items[0].name;
                     let html = `<strong>${date}</strong>`;
 
+                    // Build a set of band helper series names to skip in tooltip
+                    const bandHelperNames = new Set<string>();
+                    for (const sig of overlaySignals) {
+                        if ((sig.seriesType ?? 'line') === 'band') {
+                            bandHelperNames.add(`${sig.label} Lower`);
+                            bandHelperNames.add(`${sig.label} Band`);
+                        }
+                    }
+
+                    // Build yAxisIndex lookup for overlay signals by name
+                    const signalAxisMap = new Map<string, number>();
+                    for (const sig of overlaySignals) {
+                        signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0);
+                    }
+
                     for (const p of items) {
                         // Skip pending scatter series
                         if (p.seriesName === 'Pending') continue;
+                        // Skip band helper series (Lower invisible + shaded delta)
+                        if (bandHelperNames.has(p.seriesName)) continue;
+
                         // Extract value (may be tuple [index, value] or plain number)
                         const rawVal = p.value;
                         const value = Array.isArray(rawVal) ? rawVal[1]
@@ -545,7 +709,20 @@
 
                         const suffix = isPercentage ? '%' : '';
                         const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                        html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${suffix}`;
+                        const axisIdx = signalAxisMap.get(p.seriesName) ?? 0;
+                        const axisNote = axisIdx === 1 ? ' <span style="font-size:10px;color:#94a3b8">[2nd]</span>' : '';
+                        html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${suffix}${axisNote}`;
+
+                        // For band signals, also show upper/lower in the tooltip
+                        const bandSignal = overlaySignals.find(
+                            s => s.label === p.seriesName && (s.seriesType ?? 'line') === 'band' && s.bandData
+                        );
+                        if (bandSignal?.bandData) {
+                            const dataIdx = bandSignal.data.findIndex(d => d.date === date);
+                            if (dataIdx >= 0) {
+                                html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">Upper: ${bandSignal.bandData.upper[dataIdx].toFixed(4)}${suffix} · Lower: ${bandSignal.bandData.lower[dataIdx].toFixed(4)}${suffix}</span>`;
+                            }
+                        }
                     }
 
                     // Stale warning for main series
