@@ -11,6 +11,7 @@ completa sulla teoria finanziaria con equivalenze signal processing / controlli 
 
 **Stato**: 🔄 IN PROGRESS — Steps 1-4D ✅, Step 5-7 TODO
 **Data creazione**: 9 Marzo 2026
+**Ultimo aggiornamento**: 9 Marzo 2026 (post-crash recovery)
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
@@ -477,6 +478,49 @@ Chiavi già definite in Step 1E: `signals.categories.indicator`, `.comparison`, 
 - `frontend/src/lib/charts/signals/registry.ts` (esporre categoria)
 - `frontend/src/lib/components/charts/ChartSettingsModal.svelte` (3 SimpleSelect)
 - `frontend/src/lib/i18n/*.json` (già coperte in Step 1E)
+
+### 4E. ✅ Fix critici % conversion, dropdown auto-position, FxPair invert (Completato 9 Mar)
+
+**Problema 1 — Conversione % nel preview chart:**
+Il `ChartSettingsModal` passava `previewData` (dati assoluti ~1.0) direttamente al `PriceChartCompact`
+anche in modalità percentuale. Il LineChart non fa conversione % internamente. Risultato: in % mode
+il grafico mostrava valori tipo "1.0" anziché "0%".
+
+**Soluzione:** Introdotto `previewDataAbs` (dati assoluti invariati) e `previewData` derivato che
+converte in % con formula `((value - p0) / p0) × 100` quando `previewViewMode === 'percentage'`.
+I segnali overlay usano `previewDataAbs` come input per `render()`.
+
+**Problema 2 — Offset annullato in modalità %:**
+Il `render()` centralizzato in `ChartSignal.ts` usava `p0 = absData[0].value` (primo punto del
+segnale) per la conversione %. Con offset +5%, il segnale partiva da `y0 * 1.05`, e la conversione
+faceva `(1.05 - 1.05) / 1.05 = 0%` — l'offset spariva.
+
+**Soluzione:** Cambiato `p0` da `absData[0].value` a `baseData[0].value` (primo punto del dato
+principale). Ora: `(y0*1.05 - y0) / y0 = 5%` — l'offset è visibile anche in % mode.
+
+**Problema 3 — SimpleSelect dropdown si nascondevano sotto footer:**
+I 3 `SimpleSelect` di categoria (indicator/comparison/benchmark) non avevano `dropdownPosition="auto"`.
+Si aprivano sempre verso il basso, nascondendosi sotto il footer della modale.
+
+**Soluzione:** Aggiunto `dropdownPosition="auto"` a tutti i `SimpleSelect` nella modale. Inoltre,
+in `SimpleSelect.svelte`, aggiunta variabile reattiva `dropdownMaxHeight` che limita l'altezza del
+dropdown allo spazio effettivamente disponibile (min 120px, max 240px), calcolato considerando il
+parent scrollabile più vicino.
+
+**Problema 4 — FxPair ⇄ invert non funzionava nel preview:**
+Il pulsante ⇄ cercava la coppia inversa (`GBP-EUR`) nelle opzioni configurate. Se non esisteva
+come coppia separata, non faceva nulla.
+
+**Soluzione:** Aggiunto parametro `_inverted: boolean` in `FxPairSignal`. Quando true,
+`computePoints()` restituisce `1/rate` anziché `rate`. Il pulsante ⇄ nel modal ora toglie
+`_inverted` invece di cercare lo slug invertito. `getLabel()` mostra la coppia invertita
+(es. "GBP/EUR" invece di "EUR/GBP"). Reset automatico di `_inverted` al cambio di coppia.
+
+**File modificati:**
+- `frontend/src/lib/charts/signals/ChartSignal.ts` (`render()`: p0 da baseData)
+- `frontend/src/lib/charts/signals/FxPairSignal.ts` (`_inverted` support)
+- `frontend/src/lib/components/charts/ChartSettingsModal.svelte` (previewDataAbs, dropdownPosition, invert logic)
+- `frontend/src/lib/components/ui/select/SimpleSelect.svelte` (dropdownMaxHeight adattiva)
 
 ---
 

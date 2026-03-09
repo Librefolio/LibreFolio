@@ -692,7 +692,6 @@
       "fastPeriod": "Período Rápido",
       "slowPeriod": "Período Lento",
       "signalPeriod": "Período de Señal",
-      "component": "Componente",
       "multiplier": "Multiplicador",
       "overbought": "Sobrecomprado",
       "oversold": "Sobrevendido"

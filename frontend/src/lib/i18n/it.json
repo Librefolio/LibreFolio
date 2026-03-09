@@ -661,9 +661,9 @@
       "pin": "Puntina"
     },
     "apply": "Applica",
-    "discardTitle": "Annullare le modifiche?",
-    "discardMessage": "Hai modifiche non salvate nelle impostazioni del grafico. Annullarle?",
-    "discard": "Annulla",
+    "discardTitle": "Scartare le modifiche?",
+    "discardMessage": "Hai modifiche non salvate nelle impostazioni del grafico. Scartarle?",
+    "discard": "Scarta",
     "removeSignal": "Rimuovi segnale",
     "preview": "Anteprima",
     "previewDescGlobal": "Dati sintetici di esempio — mostra come le impostazioni influenzano tutti i grafici",
@@ -692,7 +692,6 @@
       "fastPeriod": "Periodo Veloce",
       "slowPeriod": "Periodo Lento",
       "signalPeriod": "Periodo Segnale",
-      "component": "Componente",
       "multiplier": "Moltiplicatore",
       "overbought": "Ipercomprato",
       "oversold": "Ipervenduto"

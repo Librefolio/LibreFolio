@@ -22,6 +22,7 @@
     import {ConfirmModal} from '$lib/components/table';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
+    import LineChart from '$lib/components/charts/LineChart.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {
@@ -121,27 +122,9 @@
     // =========================================================================
 
     function addSignal(type: string) {
-        // MACD: auto-insert 3 components (MACD line, Signal, Histogram)
-        if (type === 'macd') {
-            const components = ['macd', 'signal', 'histogram'];
-            const colors = ['#3b82f6', '#f59e0b', '#94a3b8'];
-            const lineTypes: ('solid' | 'dashed' | 'dotted')[] = ['solid', 'dashed', 'solid'];
-            const newSignals: SignalConfig[] = [];
-            for (let i = 0; i < components.length; i++) {
-                const sig = createSignal(type, signals.length + i);
-                if (sig) {
-                    sig.params.component = components[i];
-                    sig.style.color = colors[i];
-                    sig.style.lineType = lineTypes[i];
-                    if (components[i] === 'histogram') sig.style.lineWidth = 1;
-                    newSignals.push(sig.toConfig());
-                }
-            }
-            signals = [...signals, ...newSignals];
-            return;
-        }
+        // MACD is now a composite signal: 1 card → 3 rendered series via renderMulti()
         // Bollinger: single signal renders all 3 bands as a confidence band area
-        // (No auto-bundle needed — BollingerSignal.render() handles band generation)
+        // Both handled generically — no special casing needed
         const signal = createSignal(type, signals.length);
         if (signal) {
             signals = [...signals, signal.toConfig()];
@@ -324,10 +307,21 @@
 
     const syntheticData = generateSyntheticData();
 
-    /** Preview chart data: pair-specific if available, else synthetic */
-    let previewData = $derived(
+    /** Raw (absolute) preview data: pair-specific if available, else synthetic */
+    let previewDataAbs = $derived(
         mode === 'pair' && pairData && pairData.length > 0 ? pairData : syntheticData
     );
+
+    /** Preview chart data — converted to % if viewMode is percentage */
+    let previewData = $derived.by((): LineDataPoint[] => {
+        if (previewViewMode !== 'percentage' || previewDataAbs.length === 0) return previewDataAbs;
+        const p0 = previewDataAbs[0].value;
+        if (p0 === 0) return previewDataAbs;
+        return previewDataAbs.map(d => ({
+            ...d,
+            value: ((d.value - p0) / p0) * 100,
+        }));
+    });
 
     /** Compute rendered overlay signals for the preview chart from current modal state */
     let previewSignals = $derived.by((): RenderedSignal[] => {
@@ -346,9 +340,11 @@
                 instance.params._resolvedData = resolvedData;
             }
 
-            const result = instance.render(previewData, previewViewMode);
-            if (result.data.length > 0) {
-                rendered.push(result);
+            const results = instance.renderMulti(previewDataAbs, previewViewMode);
+            for (const result of results) {
+                if (result.data.length > 0) {
+                    rendered.push(result);
+                }
             }
         }
         return rendered;
@@ -476,11 +472,14 @@
                     </div>
                 </div>
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden bg-gray-50 dark:bg-slate-800/50">
-                    <PriceChartCompact
+                    <LineChart
                         data={previewData}
-                        height="100px"
+                        height="140px"
                         areaFill={areaFill}
-                        colorByBaseline={colorByBaseline}
+                        compact={false}
+                        showMiniAxis={false}
+                        showGradient={false}
+                        colorByBaseline={colorByBaseline && previewViewMode === 'percentage'}
                         showGridLines={gridLines}
                         viewMode={previewViewMode}
                         overlaySignals={previewSignals}
@@ -505,6 +504,7 @@
                                     bind:value={indicatorSelect}
                                     options={indicatorOptions}
                                     placeholder={$t('common.select')}
+                                    dropdownPosition="auto"
                                     onchange={(v) => { addSignal(v); indicatorSelect = ''; }}
                                 />
                             </div>
@@ -516,6 +516,7 @@
                                     bind:value={comparisonSelect}
                                     options={comparisonOptions}
                                     placeholder={$t('common.select')}
+                                    dropdownPosition="auto"
                                     onchange={(v) => { addSignal(v); comparisonSelect = ''; }}
                                 />
                             </div>
@@ -527,6 +528,7 @@
                                     bind:value={benchmarkSelect}
                                     options={benchmarkOptions}
                                     placeholder={$t('common.select')}
+                                    dropdownPosition="auto"
                                     onchange={(v) => { addSignal(v); benchmarkSelect = ''; }}
                                 />
                             </div>
@@ -607,22 +609,20 @@
                                                                     options={fxOptions}
                                                                     placeholder="— {$t('chartSettings.params.currencyPair')}"
                                                                     dropdownPosition="auto"
-                                                                    onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
+                                                                    onchange={(v) => {
+                                                                        updateSignalParam(signal.id, desc.key, v);
+                                                                        // Reset inverted when pair changes
+                                                                        updateSignalParam(signal.id, '_inverted', false);
+                                                                    }}
                                                                 />
                                                             </div>
                                                             <button
                                                                 type="button"
-                                                                class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                                                                class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors
+                                                                    {signal.params._inverted ? 'text-libre-green' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
                                                                 title="Swap direction"
                                                                 onclick={() => {
-                                                                    const current = getParamString(signal, desc.key);
-                                                                    if (!current) return;
-                                                                    const [a, b] = current.split('-');
-                                                                    const swapped = `${b}-${a}`;
-                                                                    const available = fxOptions.map(o => o.value);
-                                                                    if (available.includes(swapped)) {
-                                                                        updateSignalParam(signal.id, desc.key, swapped);
-                                                                    }
+                                                                    updateSignalParam(signal.id, '_inverted', !signal.params._inverted);
                                                                 }}
                                                             >
                                                                 <ArrowLeftRight size={12} />

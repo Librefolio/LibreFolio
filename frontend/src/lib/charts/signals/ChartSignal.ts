@@ -240,19 +240,27 @@ export abstract class ChartSignal {
      * The % conversion is centralized here: every signal computes absolute
      * values in computePoints(), and render() converts to percentage using
      * the standard formula: pct = ((value − p0) / p0) × 100
-     * where p0 is the signal's first data point value.
+     * where p0 is the BASE DATA's first value (not the signal's own first value).
+     * This preserves the offset: if a LinearSignal starts at +5% above base,
+     * in % mode it shows +5% while the base data shows 0%.
      *
      * Signals on the secondary axis (yAxisIndex=1, e.g. RSI, MACD) are
      * inherently dimensionless — they skip the % conversion entirely.
+     * @param baseData  Primary chart data (provides date axis + baseValue reference)
+     * @param viewMode
+     * @returns RenderedSignal
      */
     render(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal {
         const absData = this.computePoints(baseData);
         const yAxis = (this.constructor as typeof ChartSignal).yAxisIndex;
 
         // Signals on secondary axis are already in their own scale — no % conversion
+        // For primary-axis signals, use p0 from BASE DATA (not from signal data)
+        // so that the offset is preserved in % mode:
+        //   signal starts at offset% while base data starts at 0%
         let data = absData;
-        if (viewMode === 'percentage' && yAxis === 0 && absData.length > 0) {
-            const p0 = absData[0].value;
+        if (viewMode === 'percentage' && yAxis === 0 && absData.length > 0 && baseData.length > 0) {
+            const p0 = baseData[0].value;
             if (p0 !== 0) {
                 data = absData.map(d => ({
                     ...d,
@@ -272,6 +280,21 @@ export abstract class ChartSignal {
             markerEnd: this.style.markerEnd,
             yAxisIndex: yAxis,
         };
+    }
+
+    /**
+     * Render this signal as one or more RenderedSignal items.
+     *
+     * By default returns a single-element array from `render()`.
+     * Composite signals (e.g. MACD: Line + Signal + Histogram) override this
+     * to return multiple RenderedSignal items from a single config/card.
+     *
+     * Callers should always use `renderMulti()` instead of `render()` to
+     * support both simple and composite signals uniformly.
+     */
+    renderMulti(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
+        const result = this.render(baseData, viewMode);
+        return result.data.length > 0 ? [result] : [];
     }
 }
 
