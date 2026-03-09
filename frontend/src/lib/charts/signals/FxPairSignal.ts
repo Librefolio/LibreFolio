@@ -16,7 +16,7 @@ export class FxPairSignal extends ChartSignal {
     static override signalType = 'fx-pair';
     static override displayName = 'FX Pair';                   // i18n: 'signals.fxPair'
     static override icon = '💱';
-    // maxInstances = undefined → unlimited (relaxed per user feedback)
+    static category: 'indicator' | 'comparison' | 'benchmark' = 'comparison';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {

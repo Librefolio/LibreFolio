@@ -15,7 +15,7 @@
   Used by: FX list page (global), FxCard (pair), FX detail page (pair)
 -->
 <script lang="ts">
-    import {X, Plus, Trash2, Settings} from 'lucide-svelte';
+    import {X, Trash2, Settings, ArrowLeftRight} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -49,6 +49,8 @@
         availablePairs?: string[];
         /** Pair-specific data for preview chart (used in pair mode). If omitted, uses synthetic demo data. */
         pairData?: LineDataPoint[];
+        /** Map of pair slug → data points for resolving FxPairSignal data in preview */
+        pairsDataMap?: Record<string, LineDataPoint[]>;
         /** Called when user saves */
         onsave?: (settings: ChartSettings) => void;
         /** Called when user closes without saving */
@@ -61,6 +63,7 @@
         mode = 'global',
         availablePairs = [],
         pairData,
+        pairsDataMap = {},
         onsave,
         onclose,
     }: Props = $props();
@@ -92,11 +95,53 @@
 
     const signalTypes: SignalTypeInfo[] = getRegisteredSignalTypes();
 
+    /** Signal types grouped by category for the 3 SimpleSelect dropdowns */
+    const indicatorOptions: SelectOption[] = signalTypes
+        .filter(st => st.category === 'indicator')
+        .map(st => ({value: st.type, label: st.displayName, icon: st.icon}));
+
+    const comparisonOptions: SelectOption[] = signalTypes
+        .filter(st => st.category === 'comparison')
+        .map(st => ({value: st.type, label: st.displayName, icon: st.icon}));
+
+    const benchmarkOptions: SelectOption[] = signalTypes
+        .filter(st => st.category === 'benchmark')
+        .map(st => ({value: st.type, label: st.displayName, icon: st.icon}));
+
+    /** Temporary selected values for SimpleSelect (reset after adding) */
+    let indicatorSelect = $state('');
+    let comparisonSelect = $state('');
+    let benchmarkSelect = $state('');
+
+    /** Line types for style popover */
+    const LINE_TYPES: ('solid' | 'dashed' | 'dotted')[] = ['solid', 'dashed', 'dotted'];
+
     // =========================================================================
     // Signal management
     // =========================================================================
 
     function addSignal(type: string) {
+        // MACD: auto-insert 3 components (MACD line, Signal, Histogram)
+        if (type === 'macd') {
+            const components = ['macd', 'signal', 'histogram'];
+            const colors = ['#3b82f6', '#f59e0b', '#94a3b8'];
+            const lineTypes: ('solid' | 'dashed' | 'dotted')[] = ['solid', 'dashed', 'solid'];
+            const newSignals: SignalConfig[] = [];
+            for (let i = 0; i < components.length; i++) {
+                const sig = createSignal(type, signals.length + i);
+                if (sig) {
+                    sig.params.component = components[i];
+                    sig.style.color = colors[i];
+                    sig.style.lineType = lineTypes[i];
+                    if (components[i] === 'histogram') sig.style.lineWidth = 1;
+                    newSignals.push(sig.toConfig());
+                }
+            }
+            signals = [...signals, ...newSignals];
+            return;
+        }
+        // Bollinger: single signal renders all 3 bands as a confidence band area
+        // (No auto-bundle needed — BollingerSignal.render() handles band generation)
         const signal = createSignal(type, signals.length);
         if (signal) {
             signals = [...signals, signal.toConfig()];
@@ -236,30 +281,45 @@
     }
 
     // =========================================================================
-    // Preview chart data — synthetic sinusoidal (global) or real pair data
+    // Preview chart data — synthetic 1-year (global) or real pair data
+    import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import type {SelectOption} from '$lib/components/ui/select/types';
+    import {SineSignal} from '$lib/charts/signals/SineSignal';
+    import {getCurrencyInfo} from '$lib/stores/currencyStore';
+
     // =========================================================================
 
+    /** Preview chart view mode toggle */
+    let previewViewMode = $state<'absolute' | 'percentage'>('percentage');
+
     /**
-     * Generate synthetic sinusoidal demo data for the preview chart.
-     * Sine wave oscillates around 1.0 with ±0.15 amplitude over 90 days,
-     * showing both positive and negative zones relative to baseline.
+     * Generate synthetic demo data for the preview chart.
+     * 365 days of a sinusoidal pattern using SineSignal with ±20% amplitude
+     * (enters negative territory to test baseline colors).
+     * If SineSignal is updated, the demo automatically reflects the change.
      */
     function generateSyntheticData(): LineDataPoint[] {
-        const points: LineDataPoint[] = [];
+        // First, generate 365 days of flat baseline at value 1.0
+        const baseDates: LineDataPoint[] = [];
         const today = new Date();
-        const DAYS = 90;
+        const DAYS = 365;
         for (let i = 0; i < DAYS; i++) {
             const d = new Date(today);
             d.setDate(d.getDate() - (DAYS - 1 - i));
-            const t = i / DAYS;
-            // Sine wave: ~2 full cycles, amplitude 0.15 around base 1.0
-            const value = 1.0 + 0.15 * Math.sin(t * 4 * Math.PI);
-            points.push({
+            baseDates.push({
                 date: d.toISOString().slice(0, 10),
-                value,
+                value: 1.0,
             });
         }
-        return points;
+
+        // Use SineSignal with amplitude 20% (enters negative for baseline color demo),
+        // period 120 days (3 full cycles in 365 days), offset 0%
+        const sineInstance = new SineSignal(
+            'demo-sine',
+            {color: '#000', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null},
+            {amplitude: 20, period: 120, offset: 0},
+        );
+        return sineInstance.computePoints(baseDates, 'absolute');
     }
 
     const syntheticData = generateSyntheticData();
@@ -276,9 +336,17 @@
         for (const cfg of signals) {
             const instance = signalFromConfig(cfg);
             if (!instance) continue;
-            // For FxPairSignal, we don't have resolved data in preview — skip
-            if (cfg.signalType === 'fx-pair') continue;
-            const result = instance.render(previewData, 'absolute');
+
+            // For FxPairSignal: resolve data from pairsDataMap if available
+            if (cfg.signalType === 'fx-pair') {
+                const pairSlug = String(cfg.params.pairSlug || '');
+                if (!pairSlug) continue;
+                const resolvedData = pairsDataMap[pairSlug];
+                if (!resolvedData || resolvedData.length === 0) continue;
+                instance.params._resolvedData = resolvedData;
+            }
+
+            const result = instance.render(previewData, previewViewMode);
             if (result.data.length > 0) {
                 rendered.push(result);
             }
@@ -289,7 +357,7 @@
 
 <ModalBase
     bind:open
-    maxWidth="xl"
+    maxWidth="3xl"
     onRequestClose={handleClose}
     testId="chart-settings-modal"
 >
@@ -392,7 +460,21 @@
 
             <!-- Preview Chart -->
             <div>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('chartSettings.preview')}</h3>
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">{$t('chartSettings.preview')}</h3>
+                    <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                        <button
+                            type="button"
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            onclick={() => previewViewMode = 'absolute'}
+                        >Abs</button>
+                        <button
+                            type="button"
+                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            onclick={() => previewViewMode = 'percentage'}
+                        >%</button>
+                    </div>
+                </div>
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden bg-gray-50 dark:bg-slate-800/50">
                     <PriceChartCompact
                         data={previewData}
@@ -400,7 +482,7 @@
                         areaFill={areaFill}
                         colorByBaseline={colorByBaseline}
                         showGridLines={gridLines}
-                        viewMode="percentage"
+                        viewMode={previewViewMode}
                         overlaySignals={previewSignals}
                     />
                 </div>
@@ -411,7 +493,46 @@
 
             <!-- Signals Section -->
             <div>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{$t('chartSettings.overlaySignals')}</h3>
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('chartSettings.overlaySignals')}</h3>
+
+                <!-- Add signal dropdowns by category -->
+                <div class="mb-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {#if indicatorOptions.length > 0}
+                            <div>
+                                <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">📊 {$t('chartSettings.categories.indicator')}</span>
+                                <SimpleSelect
+                                    bind:value={indicatorSelect}
+                                    options={indicatorOptions}
+                                    placeholder={$t('common.select')}
+                                    onchange={(v) => { addSignal(v); indicatorSelect = ''; }}
+                                />
+                            </div>
+                        {/if}
+                        {#if comparisonOptions.length > 0}
+                            <div>
+                                <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">💱 {$t('chartSettings.categories.comparison')}</span>
+                                <SimpleSelect
+                                    bind:value={comparisonSelect}
+                                    options={comparisonOptions}
+                                    placeholder={$t('common.select')}
+                                    onchange={(v) => { addSignal(v); comparisonSelect = ''; }}
+                                />
+                            </div>
+                        {/if}
+                        {#if benchmarkOptions.length > 0}
+                            <div>
+                                <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">📐 {$t('chartSettings.categories.benchmark')}</span>
+                                <SimpleSelect
+                                    bind:value={benchmarkSelect}
+                                    options={benchmarkOptions}
+                                    placeholder={$t('common.select')}
+                                    onchange={(v) => { addSignal(v); benchmarkSelect = ''; }}
+                                />
+                            </div>
+                        {/if}
+                    </div>
+                </div>
 
                 {#if signals.length === 0}
                     <p class="text-xs text-gray-400 dark:text-gray-500 italic mb-3">
@@ -471,15 +592,51 @@
                                                     {@const options = desc.dynamicOptionsKey
                                                         ? resolveDynamicOptions(desc.dynamicOptionsKey)
                                                         : desc.options ?? []}
-                                                    <select
-                                                        class="px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
-                                                        onchange={(e) => updateSignalParam(signal.id, desc.key, e.currentTarget.value)}
-                                                    >
-                                                        <option value="" selected={getParamString(signal, desc.key) === ''}>—</option>
-                                                        {#each options as opt}
-                                                            <option value={opt.value} selected={getParamString(signal, desc.key) === opt.value}>{opt.label}</option>
-                                                        {/each}
-                                                    </select>
+                                                    {#if desc.dynamicOptionsKey === 'configuredFxPairs'}
+                                                        <!-- FX Pair selector: use SimpleSelect with flag emojis -->
+                                                        {@const fxOptions = options.map(o => {
+                                                            const parts = o.value.split('-');
+                                                            const flag1 = getCurrencyInfo(parts[0]).flag_emoji;
+                                                            const flag2 = getCurrencyInfo(parts[1]).flag_emoji;
+                                                            return {value: o.value, label: `${flag1} ${parts[0]} → ${flag2} ${parts[1]}`};
+                                                        })}
+                                                        <div class="flex items-center gap-1">
+                                                            <div class="w-48">
+                                                                <SimpleSelect
+                                                                    value={getParamString(signal, desc.key)}
+                                                                    options={fxOptions}
+                                                                    placeholder="— {$t('chartSettings.params.currencyPair')}"
+                                                                    onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                                                                title="Swap direction"
+                                                                onclick={() => {
+                                                                    const current = getParamString(signal, desc.key);
+                                                                    if (!current) return;
+                                                                    const [a, b] = current.split('-');
+                                                                    const swapped = `${b}-${a}`;
+                                                                    const available = fxOptions.map(o => o.value);
+                                                                    if (available.includes(swapped)) {
+                                                                        updateSignalParam(signal.id, desc.key, swapped);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <ArrowLeftRight size={12} />
+                                                            </button>
+                                                        </div>
+                                                    {:else}
+                                                        <!-- Generic select (MACD component, Bollinger band, etc.) using custom SimpleSelect -->
+                                                        <div class="w-36">
+                                                            <SimpleSelect
+                                                                value={getParamString(signal, desc.key)}
+                                                                options={options}
+                                                                onchange={(v) => updateSignalParam(signal.id, desc.key, v)}
+                                                            />
+                                                        </div>
+                                                    {/if}
                                                 {:else}
                                                     <input
                                                         type="text"
@@ -593,7 +750,7 @@
                                                         <!-- Line type -->
                                                         <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.lineType')}</span>
                                                         <div class="flex gap-1.5 mb-3">
-                                                            {#each ['solid', 'dashed', 'dotted'] as lt}
+                                                            {#each LINE_TYPES as lt}
                                                                 <button
                                                                     type="button"
                                                                     aria-label={lt}
@@ -601,7 +758,7 @@
                                                                         {signal.style.lineType === lt
                                                                             ? 'border-libre-green bg-libre-green/10'
                                                                             : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
-                                                                    onclick={() => updateSignalStyle(signal.id, 'lineType', lt as 'solid' | 'dashed' | 'dotted')}
+                                                                    onclick={() => updateSignalStyle(signal.id, 'lineType', lt)}
                                                                 >
                                                                     <svg width="32" height="6">
                                                                         <line x1="2" y1="3" x2="30" y2="3"
@@ -666,27 +823,6 @@
                         {/snippet}
                     </OrderableList>
                 {/if}
-
-                <!-- Add signal buttons -->
-                <div class="mt-3">
-                    <div class="flex flex-wrap gap-2">
-                        {#each signalTypes as st}
-                            <button
-                                type="button"
-                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
-                                    border border-gray-200 dark:border-slate-600
-                                    bg-white dark:bg-slate-700
-                                    text-gray-600 dark:text-gray-300
-                                    hover:bg-libre-green/10 hover:border-libre-green/50
-                                    transition-colors"
-                                onclick={() => addSignal(st.type)}
-                            >
-                                <Plus size={12} />
-                                <span>{st.icon} {st.displayName}</span>
-                            </button>
-                        {/each}
-                    </div>
-                </div>
             </div>
         </div>
 

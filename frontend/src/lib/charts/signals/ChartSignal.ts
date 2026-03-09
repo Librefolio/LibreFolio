@@ -126,6 +126,25 @@ export interface RenderedSignal {
     markerStart: MarkerType;
     /** Marker at the last data point, null = no marker */
     markerEnd: MarkerType;
+    /** Y-axis index: 0 = primary (right), 1 = secondary (left). Default 0. */
+    yAxisIndex?: number;
+    /**
+     * Series rendering type:
+     * - 'line' (default): standard line series
+     * - 'bar': vertical bars (used for MACD histogram)
+     * - 'band': confidence band — requires bandData with upper/lower arrays
+     *           (used for Bollinger Bands)
+     */
+    seriesType?: 'line' | 'bar' | 'band';
+    /**
+     * Band data for confidence-band rendering (seriesType === 'band').
+     * Contains parallel arrays for upper, middle, lower values aligned to `data[].date`.
+     */
+    bandData?: {
+        upper: number[];
+        middle: number[];
+        lower: number[];
+    };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -155,6 +174,10 @@ export abstract class ChartSignal {
     static displayName: string;
     static icon: string;
     static paramDescriptors: SignalParamDescriptor[];
+    /** Category for UI grouping in ChartSettingsModal dropdown selectors */
+    static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
+    /** Y-axis index: 0 = primary (same scale as data), 1 = secondary (independent scale). */
+    static yAxisIndex: number = 0;
 
     constructor(id: string, style: SignalStyle, params: Record<string, unknown>) {
         this.id = id;
@@ -166,11 +189,15 @@ export abstract class ChartSignal {
      * Day difference between two YYYY-MM-DD date strings.
      * JS Date has no built-in day-diff, so we parse to UTC and divide once.
      * Shared by all subclasses for date arithmetic.
+     *
+     * Note: JavaScript doesn't have a native "days between" function.
+     * We use UTC dates to avoid timezone/DST issues, then integer division.
      */
-    protected static daysBetween(a: string, b: string): number {
-        const [ay, am, ad] = a.split('-').map(Number);
-        const [by, bm, bd] = b.split('-').map(Number);
-        return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
+    protected static daysBetween(dateA: string, dateB: string): number {
+        const a = new Date(dateA + 'T00:00:00Z');
+        const b = new Date(dateB + 'T00:00:00Z');
+        // 1 day = 24 * 60 * 60 * 1000 ms. Math.round handles any floating-point drift.
+        return Math.round((b.getTime() - a.getTime()) / 86_400_000);
     }
 
     /**
@@ -217,6 +244,7 @@ export abstract class ChartSignal {
             lineType: this.style.lineType,
             markerStart: this.style.markerStart,
             markerEnd: this.style.markerEnd,
+            yAxisIndex: (this.constructor as typeof ChartSignal).yAxisIndex,
         };
     }
 }

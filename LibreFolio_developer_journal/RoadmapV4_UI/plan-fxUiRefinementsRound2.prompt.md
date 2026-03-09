@@ -8,6 +8,8 @@
 **Riferimenti**:
 - `plan-phase05Fx.prompt.md` (piano principale Phase 5)
 - `plan-phase05-to-08-upgrade.md` §4
+- `plan-fxCardRedesignChartSettings.prompt.md` ← card redesign, signal library base
+- `plan-signalLibraryExpansion.prompt.md` ← espansione con indicatori tecnici, dual-axis, KaTeX, MkDocs
 - `plan-fxCardRedesignChartSettings.prompt.md` (card redesign, chart settings, signal library)
 - `plan-fxSyncApiRedesign.prompt.md` (sync API pair-based redesign)
 

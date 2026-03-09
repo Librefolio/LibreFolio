@@ -2,8 +2,8 @@
  * CompoundSignal — Synthetic signal: compound growth (exponential / interesse composto).
  *
  * Mathematical formula (for reference):
- *   absolute:   y(t) = y0 × (1 + rate)^t
- *   percentage: pct(t) = ((1 + rate)^t − 1) × 100
+ *   absolute:   y(t) = y0 × (1 + offset/100) × (1 + rate)^t
+ *   percentage: pct(t) = ((y(t) / y0) − 1) × 100
  *   where t = daysSinceStart / 365, rate = annualRate / 100
  *
  * For performance, since we need ALL data points in sequence, we compute iteratively:
@@ -12,6 +12,9 @@
  * instead of O(N) full power operations.
  *
  * Unlimited instances per chart.
+ *
+ * For detailed mathematical theory, see:
+ * docs/financial-theory/synthetic-benchmarks.md#compound-growth
  */
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
@@ -21,12 +24,12 @@ export class CompoundSignal extends ChartSignal {
     static override signalType = 'compound';
     static override displayName = 'Compound Growth';           // i18n: 'signals.compound'
     static override icon = '📊';
-    // maxInstances = undefined → unlimited
+    static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
             key: 'annualRate',
-            label: 'Annual Rate',                      // i18n: 'signals.params.annualRate'
+            label: 'Annual Rate',
             type: 'number',
             default: 8,
             min: -100,
@@ -34,13 +37,27 @@ export class CompoundSignal extends ChartSignal {
             step: 0.5,
             suffix: '%/yr',
         },
+        {
+            key: 'offset',
+            label: 'Offset',
+            type: 'number',
+            default: 0,
+            min: -100,
+            max: 100,
+            step: 0.5,
+            suffix: '%',
+        },
     ];
 
     computePoints(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): LineDataPoint[] {
         if (!baseData.length) return [];
 
         const rate = Number(this.params.annualRate ?? 8) / 100;
+        const offset = Number(this.params.offset ?? 0) / 100;
         const y0 = baseData[0].value;
+
+        // Starting value with offset applied
+        const startValue = y0 * (1 + offset);
 
         // Daily growth factor: (1 + rate)^(1/365)
         // We compute this once and multiply iteratively, which is much cheaper
@@ -48,7 +65,7 @@ export class CompoundSignal extends ChartSignal {
         const dailyFactor = Math.pow(1 + rate, 1 / 365);
 
         const result: LineDataPoint[] = [];
-        let currentValue = y0;
+        let currentValue = startValue;
         let prevDate = baseData[0].date;
 
         for (let i = 0; i < baseData.length; i++) {
@@ -56,7 +73,7 @@ export class CompoundSignal extends ChartSignal {
             if (i === 0) {
                 result.push({
                     date: d.date,
-                    value: viewMode === 'percentage' ? 0 : y0,
+                    value: viewMode === 'percentage' ? offset * 100 : startValue,
                 });
             } else {
                 const daysDelta = ChartSignal.daysBetween(prevDate, d.date);
@@ -76,7 +93,10 @@ export class CompoundSignal extends ChartSignal {
     }
 
     getLabel(): string {
-        return `Compound ${this.params.annualRate ?? 8}%/yr`;
+        const rate = this.params.annualRate ?? 8;
+        const offset = Number(this.params.offset ?? 0);
+        const offsetStr = offset !== 0 ? ` +${offset}%` : '';
+        return `Compound ${rate}%/yr${offsetStr}`;
     }
 }
 

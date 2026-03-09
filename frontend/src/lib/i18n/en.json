@@ -667,6 +667,35 @@
     "removeSignal": "Remove signal",
     "preview": "Preview",
     "previewDescGlobal": "Synthetic demo data — shows how aesthetics affect all charts",
-    "previewDescPair": "Live preview with actual pair data and overlay signals"
+    "previewDescPair": "Live preview with actual pair data and overlay signals",
+    "categories": {
+      "indicator": "Technical Indicators",
+      "comparison": "Data Comparison",
+      "benchmark": "Synthetic Benchmarks"
+    },
+    "signals": {
+      "linear": "Linear Growth",
+      "compound": "Compound Growth",
+      "sine": "Sine Wave",
+      "fxPair": "FX Pair",
+      "ema": "EMA",
+      "macd": "MACD",
+      "rsi": "RSI",
+      "bollinger": "Bollinger Bands"
+    },
+    "params": {
+      "annualRate": "Annual Rate",
+      "amplitude": "Amplitude",
+      "period": "Period",
+      "offset": "Offset",
+      "currencyPair": "Currency Pair",
+      "fastPeriod": "Fast Period",
+      "slowPeriod": "Slow Period",
+      "signalPeriod": "Signal Period",
+      "component": "Component",
+      "multiplier": "Multiplier",
+      "overbought": "Overbought",
+      "oversold": "Oversold"
+    }
   }
 }

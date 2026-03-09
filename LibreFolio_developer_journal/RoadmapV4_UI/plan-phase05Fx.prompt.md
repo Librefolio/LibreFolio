@@ -10,6 +10,9 @@
 - `plan-fxUiRefinementsRound2.prompt.md` ← **SUB-PLAN** con fix dettagliati (visualMap, stale gradient, layout, MeasureOverlay, OrderableList, settings ⚙️, overlay confronto, benchmark line)
 - `phases/phase-05-subplan/plan-manualFxProvider.prompt.md` ← **✅ COMPLETATO** provider MANUAL sentinel
 - `phases/phase-05-subplan/plan-fxPairAddModalRedesign.prompt.md` ← **✅ COMPLETATO** modale Add FX redesign
+- `plan-fxCardRedesignChartSettings.prompt.md` ← **🔄 IN PROGRESS** card redesign, chart settings, signal library, sync fix
+- `plan-fxSyncApiRedesign.prompt.md` ← **📋 TODO** sync API pair-based redesign
+- `plan-signalLibraryExpansion.prompt.md` ← **🔄 IN PROGRESS** indicatori tecnici (EMA, MACD, RSI, Bollinger), dual-axis, KaTeX tooltip, MkDocs docs
 - `TODO_FUTURI.md` §FX, §Cross-Rate
 
 ---

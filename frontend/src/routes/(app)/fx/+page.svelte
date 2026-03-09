@@ -10,7 +10,7 @@
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {Coins, Plus, RefreshCw, RotateCcw, Settings} from 'lucide-svelte';
+    import {Coins, Plus, RefreshCw, RotateCw, Settings} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
@@ -19,8 +19,14 @@
     import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {
-        getGlobalSettings, setGlobalSettings, type ChartSettings,
+        getGlobalSettings, setGlobalSettings,
+        getSettingsForPair, setPairSettings, getSettingsVersion,
+        type ChartSettings,
     } from '$lib/stores/chartSettingsStore.svelte';
+    import {
+        signalFromConfig,
+        type RenderedSignal,
+    } from '$lib/charts/signals';
     import {
         createPairSlug, getFxStore, invalidateAllFxStores, removeFxStore,
         apiResultToFxDataPoint,
@@ -63,6 +69,12 @@
     let addModalOpen = $state(false);
     let syncModalOpen = $state(false);
     let settingsModalOpen = $state(false);
+    /** Slug of the pair currently being configured via per-card ⚙️ (null = global) */
+    let settingsTargetSlug = $state<string | null>(null);
+    /** Settings to pass to the modal (global or pair-specific) */
+    let settingsForModal = $derived(
+        settingsTargetSlug ? getSettingsForPair(settingsTargetSlug) : getGlobalSettings()
+    );
 
     // Filter bar adaptive layout
     let filterBarRef = $state<HTMLDivElement | null>(null);
@@ -244,6 +256,64 @@
                 console.error(`Failed to fetch data for ${pair.config.slug}:`, e);
             }
         }
+    }
+
+    // =========================================================================
+    // Chart Settings Helpers
+    // =========================================================================
+
+    function handleCardSettings(detail: {slug: string}) {
+        settingsTargetSlug = detail.slug;
+        settingsModalOpen = true;
+    }
+
+    function handleGlobalSettings() {
+        settingsTargetSlug = null;
+        settingsModalOpen = true;
+    }
+
+    function handleSettingsSave(s: ChartSettings) {
+        if (settingsTargetSlug) {
+            setPairSettings(settingsTargetSlug, s);
+        } else {
+            setGlobalSettings(s);
+        }
+    }
+
+    /** Get rendered overlay signals for a given pair slug (from its effective settings) */
+    function getRenderedSignals(slug: string, data: FxDataPoint[], vm: 'absolute' | 'percentage'): RenderedSignal[] {
+        // Access version to trigger reactivity
+        void getSettingsVersion();
+        const settings = getSettingsForPair(slug);
+        if (!settings.signals.length) return [];
+        const chartData = data.map(d => ({date: d.date, value: d.rate}));
+        const rendered: RenderedSignal[] = [];
+        for (const cfg of settings.signals) {
+            const instance = signalFromConfig(cfg);
+            if (!instance) continue;
+
+            // For FxPairSignal: resolve data from the TimeSeriesStore before rendering
+            if (cfg.signalType === 'fx-pair') {
+                const pairSlug = String(cfg.params.pairSlug || '');
+                if (!pairSlug) continue;
+                try {
+                    const store = getFxStore(pairSlug);
+                    const storeData = store.getAllSorted();
+                    if (storeData.length === 0) continue;
+                    // Inject resolved data as LineDataPoint[]
+                    instance.params._resolvedData = storeData.map(d => ({
+                        date: d.date,
+                        value: d.rate,
+                    }));
+                } catch {
+                    continue; // Store not available for this pair
+                }
+            }
+
+            const result = instance.render(chartData, vm);
+            if (result.data.length > 0) rendered.push(result);
+        }
+        return rendered;
     }
 
     // =========================================================================
@@ -454,7 +524,7 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 title={$_('fx.actions.settings')}
-                onclick={() => settingsModalOpen = true}
+                onclick={handleGlobalSettings}
             >
                 <Settings size={14} />
                 {#if showActionLabels}<span>{$_('fx.actions.settings')}</span>{/if}
@@ -465,7 +535,7 @@
                 onclick={handleSyncAll}
                 title={$_('fx.actions.syncAll')}
             >
-                <RotateCcw size={14} />
+                <RotateCw size={14} />
                 {#if showActionLabels}<span>{$_('fx.actions.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
@@ -533,10 +603,13 @@
                     loading={pair.loading}
                     manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
                     {globalViewMode}
+                    chartSettings={getSettingsForPair(pair.config.slug)}
+                    overlaySignals={getRenderedSignals(pair.config.slug, pair.data, globalViewMode)}
                     onedit={handleEditPair}
                     ondelete={handleDeletePair}
                     onrefresh={handleRefreshPair}
                     onsync={handleSyncPair}
+                    onsettings={handleCardSettings}
                 />
             {/each}
         </div>
@@ -573,13 +646,21 @@
     onclose={() => syncModalOpen = false}
 />
 
-<!-- Chart Settings Modal (global) -->
+<!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal
     bind:open={settingsModalOpen}
-    settings={getGlobalSettings()}
-    mode="global"
+    settings={settingsForModal}
+    mode={settingsTargetSlug ? 'pair' : 'global'}
     availablePairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
-    onsave={(s: ChartSettings) => setGlobalSettings(s)}
-    onclose={() => settingsModalOpen = false}
+    pairData={settingsTargetSlug
+        ? pairs.find(p => p.config.slug === settingsTargetSlug)?.data?.map(d => ({date: d.date, value: d.rate}))
+        : undefined}
+    pairsDataMap={Object.fromEntries(
+        pairs
+            .filter(p => p.data.length > 0)
+            .map(p => [p.config.slug, p.data.map(d => ({date: d.date, value: d.rate}))])
+    )}
+    onsave={handleSettingsSave}
+    onclose={() => { settingsModalOpen = false; settingsTargetSlug = null; }}
 />
 

@@ -8,7 +8,7 @@
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {ArrowLeftRight, Pencil, Percent, RefreshCw, RotateCcw, Settings, Trash2} from 'lucide-svelte';
+    import {ArrowLeftRight, Pencil, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {getCurrencyInfo, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
@@ -242,14 +242,14 @@
                 onclick={(e) => { stop(e); onsync?.({ slug, base, quote }); }}
                 title="Sync rates from provider"
             >
-                <RotateCcw size={15} class={loading ? 'animate-spin' : ''} />
+                <RotateCw size={15} class={loading ? 'animate-spin' : ''} />
             </button>
             <button
                 class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
                 onclick={(e) => { stop(e); onrefresh?.({ slug }); }}
                 title="Refresh"
             >
-                <RefreshCw size={15} class={loading ? 'animate-spin' : ''} />
+                <RefreshCw size={15} />
             </button>
         </div>
         <div class="flex items-center gap-0.5">
