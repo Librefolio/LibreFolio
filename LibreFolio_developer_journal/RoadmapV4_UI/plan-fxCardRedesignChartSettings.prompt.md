@@ -1,8 +1,9 @@
 # Plan: FX Card Redesign, Chart Settings, Signal Library & Sync All Fix
 
 **Data creazione**: 5 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Steps 1-6 done. Step 5: FxCard Layout B + Svelte 5 runes + deltaPercent inversion fix (9 Mar). Step 4: preview chart added. Prossimo: Step 7 (DataTable refactor, optional) → Step 8 (Integration & Test)
+**Status**: 🔄 IN PROGRESS — Steps 1-6 done. Step 4 refined (9 Mar): preview Abs/% toggle, synthetic data 365d, SineSignal added, toggle estetici fix, add-buttons moved above list, per-card settings wired. Step 5 done (Layout B + Svelte 5). Sync icons fixed (RotateCw). Prossimo: Step 7 (DataTable refactor, optional) → Step 8 (Integration & Test)
 **Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5, plan-fxSyncApiRedesign (sync API pair-based)
+**Espansione**: `plan-signalLibraryExpansion.prompt.md` ← indicatori tecnici (EMA, MACD, RSI, Bollinger), dual-axis, KaTeX tooltip, MkDocs docs
 **Contesto**: Feedback utente su card layout, settings ⚙️ non collegato, Sync All non funzionante, overlay/benchmark da implementare come libreria di segnali
 
 ---
@@ -53,10 +54,11 @@
 
 ```
 signals/
-├── ChartSignal.ts       # Classe base astratta + tipi condivisi
+├── ChartSignal.ts       # Classe base astratta + tipi condivisi + daysBetween utility
 ├── FxPairSignal.ts      # Segnale dati reali (FX pair dal backend)
 ├── LinearSignal.ts      # Retta con pendenza annua costante
-├── CompoundSignal.ts    # Crescita con interesse composto (esponenziale)
+├── CompoundSignal.ts    # Crescita con interesse composto (iterativo, performance)
+├── SineSignal.ts        # Onda sinusoidale (amplitude, period, offset)
 ├── registry.ts          # Registry: signalType → constructor, factory, serializzazione
 └── index.ts             # Barrel export
 ```
@@ -1165,6 +1167,43 @@ Add a small preview chart at the top of the modal showing current aesthetics.
 - Uses same `PriceChartCompact` component
 - **Blocking on**: Step 5 (FxCard redesign) for the chart integration pattern
 
+### ✅ Step 4 Iteration — Preview Chart + Settings Polish — 9 Mar 2026
+**Issues fixed (from user testing feedback):**
+
+1. **Aesthetics toggles non riflessi nel preview** — `LineChart.$effect` solo toccava `data` e `overlaySignals`
+   come dipendenze reattive. Aggiunti `areaFill`, `colorByBaseline`, `showGridLines`, `viewMode`, `compact`,
+   `showMiniAxis`, `lineColor`, `darkLineColor` per registrarli e forzare re-render al cambio.
+
+2. **Preview Abs/% toggle** — Aggiunto `previewViewMode` $state con toggle button nell'header della sezione
+   Preview. Il preview chart ora può mostrare sia valori assoluti che percentuali.
+
+3. **Dati sintetici estesi a 365 giorni** — Modificato `generateSyntheticData()`: 90→365 giorni, 3 cicli
+   completi di sinusoide ±10%. Permette ai segnali LinearSignal e CompoundSignal di mostrare divergenza
+   significativa su arco temporale annuale.
+
+4. **SineSignal registrato** — Creato `SineSignal.ts` come segnale sintetico ufficiale (non più sinusoide
+   hardcoded). Parametri: `amplitude` (%), `period` (giorni), `offset` (%). Registrato in `registry.ts`.
+   Icona: 〰️. La sinusoide demo nel preview resta come dati base, i SineSignal sono overlay aggiuntivi.
+
+5. **"Add signal" buttons spostati sopra la lista** — I pulsanti "+" ora compaiono subito sotto il titolo
+   "Overlay Signals", prima della lista segnali. Più intuitivo per l'utente.
+
+6. **FX Pair in preview non più skippato** — Ora skippa solo se `_resolvedData` non è presente (prima
+   skippava tutti gli FxPairSignal indiscriminatamente).
+
+7. **Per-card ⚙️ settings** — Cablato handler completo nella pagina FX:
+   - `handleCardSettings(slug)` → apre modale in `mode='pair'` con dati coppia
+   - `settingsTargetSlug` traccia quale card ha la modale aperta (null = global)
+   - `settingsForModal` è un `$derived` che restituisce settings appropriati (pair o global)
+   - `handleSettingsSave` salva con `setPairSettings`/`setGlobalSettings` in base al target
+   - `getRenderedSignals(slug, data, viewMode)` calcola overlay signals per ogni card
+   - FxCard riceve ora `chartSettings` e `overlaySignals` come props
+
+8. **Icona sync corretta** — `RotateCcw` → `RotateCw` (senso orario) per sync, in FxCard e toolbar.
+   Refresh mantiene `RefreshCw` (icona circolare). Import puliti.
+
+**Verified**: `./dev.py front check` → 0 errors, 0 warnings. `./dev.py front build` → success.
+
 ---
 
 ## 🔍 Backend FX Sync Analysis (6 Mar 2026)
@@ -1210,14 +1249,15 @@ When writing MkDocs documentation for FX (Phase 5 docs step):
 | `frontend/src/lib/charts/signals/FxPairSignal.ts` | ✅ DONE — Real data signal (no maxInstances) |
 | `frontend/src/lib/charts/signals/LinearSignal.ts` | ✅ DONE — Linear slope |
 | `frontend/src/lib/charts/signals/CompoundSignal.ts` | ✅ DONE — Compound growth |
-| `frontend/src/lib/charts/signals/registry.ts` | ✅ DONE — Registry + factory (arrows in defaults) |
+| `frontend/src/lib/charts/signals/SineSignal.ts` | ✅ DONE — Sine wave (amplitude, period, offset) |
+| `frontend/src/lib/charts/signals/registry.ts` | ✅ DONE — Registry + factory (4 types) |
 | `frontend/src/lib/charts/signals/index.ts` | ✅ DONE — Barrel export |
 | `frontend/src/lib/stores/chartSettingsStore.svelte.ts` | ✅ DONE — Session-level store (renamed from .ts → .svelte.ts for $state) |
 | `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | ✅ DONE — Settings + i18n (25 keys) + Layout C v3 (marker popovers, SVG line popover upward, square caps) |
 | `frontend/src/lib/components/fx/FxSyncModal.svelte` | ✅ DONE — Pair-based (not currency-based), Svelte 5, padding fix |
-| `frontend/src/lib/components/fx/FxCard.svelte` | REWRITE — Layout B + Svelte 5 |
-| `frontend/src/lib/components/charts/LineChart.svelte` | ✅ DONE — overlaySignals prop + multi-series tooltip + arrows |
-| `frontend/src/lib/components/charts/PriceChartCompact.svelte` | MODIFY — passthrough `overlaySignals` + aesthetics |
+| `frontend/src/lib/components/fx/FxCard.svelte` | ✅ DONE — Layout B + Svelte 5 + RotateCw sync icon |
+| `frontend/src/lib/components/charts/LineChart.svelte` | ✅ DONE — overlaySignals + multi-series tooltip + reactive aesthetic props |
+| `frontend/src/lib/components/charts/PriceChartCompact.svelte` | ✅ DONE — passthrough overlaySignals + aesthetics |
 | `frontend/src/lib/components/charts/PriceChartFull.svelte` | MODIFY — passthrough `overlaySignals` + aesthetics |
 | `frontend/src/routes/(app)/fx/+page.svelte` | ✅ PARTIAL — pair-based sync + settings modal done, card integration pending |
 | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` | MODIFY — local settings, overlay |

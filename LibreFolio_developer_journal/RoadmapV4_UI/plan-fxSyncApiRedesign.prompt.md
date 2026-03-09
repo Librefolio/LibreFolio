@@ -1,5 +1,10 @@
 # Plan: FX Sync API Redesign — Pair-Based Bulk Sync
 
+**Riferimenti**:
+- `plan-phase05Fx.prompt.md` (piano principale Phase 5)
+- `plan-fxCardRedesignChartSettings.prompt.md` (card redesign, sync fix frontend)
+- `plan-signalLibraryExpansion.prompt.md` (signal library expansion)
+
 ## Contesto
 
 L'attuale endpoint `GET /api/v1/fx/currencies/sync` accetta una lista piatta di **valute** (`currencies=USD,GBP,CHF`), non di **coppie**. Il frontend deriva le valute dalle coppie configurate, ma questo causa problemi:

@@ -24,6 +24,11 @@ export {
 export {FxPairSignal} from './FxPairSignal';
 export {LinearSignal} from './LinearSignal';
 export {CompoundSignal} from './CompoundSignal';
+export {SineSignal} from './SineSignal';
+export {EmaSignal} from './EmaSignal';
+export {MacdSignal} from './MacdSignal';
+export {RsiSignal} from './RsiSignal';
+export {BollingerSignal} from './BollingerSignal';
 
 // Registry & factory
 export {

@@ -17,6 +17,11 @@ import {
 import {FxPairSignal} from './FxPairSignal';
 import {LinearSignal} from './LinearSignal';
 import {CompoundSignal} from './CompoundSignal';
+import {SineSignal} from './SineSignal';
+import {EmaSignal} from './EmaSignal';
+import {MacdSignal} from './MacdSignal';
+import {RsiSignal} from './RsiSignal';
+import {BollingerSignal} from './BollingerSignal';
 
 // Re-export for convenience
 export type {SignalConfig, SignalStyle};
@@ -33,6 +38,11 @@ const SIGNAL_REGISTRY = new Map<string, SignalConstructor>([
     [FxPairSignal.signalType, FxPairSignal as unknown as SignalConstructor],
     [LinearSignal.signalType, LinearSignal as unknown as SignalConstructor],
     [CompoundSignal.signalType, CompoundSignal as unknown as SignalConstructor],
+    [SineSignal.signalType, SineSignal as unknown as SignalConstructor],
+    [EmaSignal.signalType, EmaSignal as unknown as SignalConstructor],
+    [MacdSignal.signalType, MacdSignal as unknown as SignalConstructor],
+    [RsiSignal.signalType, RsiSignal as unknown as SignalConstructor],
+    [BollingerSignal.signalType, BollingerSignal as unknown as SignalConstructor],
 ]);
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -45,6 +55,7 @@ export interface SignalTypeInfo {
     type: string;
     displayName: string;
     icon: string;
+    category: 'indicator' | 'comparison' | 'benchmark';
     paramDescriptors: SignalParamDescriptor[];
 }
 
@@ -54,6 +65,7 @@ export function getRegisteredSignalTypes(): SignalTypeInfo[] {
         type: Cls.signalType,
         displayName: Cls.displayName,
         icon: Cls.icon,
+        category: Cls.category,
         paramDescriptors: Cls.paramDescriptors,
     }));
 }

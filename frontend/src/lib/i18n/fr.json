@@ -667,6 +667,35 @@
     "removeSignal": "Supprimer le signal",
     "preview": "Aperçu",
     "previewDescGlobal": "Données synthétiques — montre comment les paramètres affectent tous les graphiques",
-    "previewDescPair": "Aperçu en direct avec les données réelles de la paire et les signaux overlay"
+    "previewDescPair": "Aperçu en direct avec les données réelles de la paire et les signaux overlay",
+    "categories": {
+      "indicator": "Indicateurs Techniques",
+      "comparison": "Comparaison de Données",
+      "benchmark": "Benchmarks Synthétiques"
+    },
+    "signals": {
+      "linear": "Croissance Linéaire",
+      "compound": "Croissance Composée",
+      "sine": "Onde Sinusoïdale",
+      "fxPair": "Paire FX",
+      "ema": "EMA",
+      "macd": "MACD",
+      "rsi": "RSI",
+      "bollinger": "Bandes de Bollinger"
+    },
+    "params": {
+      "annualRate": "Taux Annuel",
+      "amplitude": "Amplitude",
+      "period": "Période",
+      "offset": "Décalage",
+      "currencyPair": "Paire de Devises",
+      "fastPeriod": "Période Rapide",
+      "slowPeriod": "Période Lente",
+      "signalPeriod": "Période du Signal",
+      "component": "Composant",
+      "multiplier": "Multiplicateur",
+      "overbought": "Suracheté",
+      "oversold": "Survendu"
+    }
   }
 }

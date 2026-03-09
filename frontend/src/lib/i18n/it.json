@@ -667,6 +667,35 @@
     "removeSignal": "Rimuovi segnale",
     "preview": "Anteprima",
     "previewDescGlobal": "Dati sintetici di esempio — mostra come le impostazioni influenzano tutti i grafici",
-    "previewDescPair": "Anteprima dal vivo con i dati reali della coppia e segnali overlay"
+    "previewDescPair": "Anteprima dal vivo con i dati reali della coppia e segnali overlay",
+    "categories": {
+      "indicator": "Indicatori Tecnici",
+      "comparison": "Confronto Dati",
+      "benchmark": "Benchmark Sintetici"
+    },
+    "signals": {
+      "linear": "Crescita Lineare",
+      "compound": "Crescita Composta",
+      "sine": "Onda Sinusoidale",
+      "fxPair": "Coppia FX",
+      "ema": "EMA",
+      "macd": "MACD",
+      "rsi": "RSI",
+      "bollinger": "Bande di Bollinger"
+    },
+    "params": {
+      "annualRate": "Tasso Annuo",
+      "amplitude": "Ampiezza",
+      "period": "Periodo",
+      "offset": "Offset",
+      "currencyPair": "Coppia Valutaria",
+      "fastPeriod": "Periodo Veloce",
+      "slowPeriod": "Periodo Lento",
+      "signalPeriod": "Periodo Segnale",
+      "component": "Componente",
+      "multiplier": "Moltiplicatore",
+      "overbought": "Ipercomprato",
+      "oversold": "Ipervenduto"
+    }
   }
 }
