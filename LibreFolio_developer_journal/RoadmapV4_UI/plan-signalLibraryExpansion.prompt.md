@@ -9,9 +9,9 @@ in 3 dropdown categorizzati (usando i componenti `SimpleSelect` esistenti), dual
 scala indipendente (RSI, MACD), tooltip informativi con supporto LaTeX (KaTeX), e documentazione MkDocs
 completa sulla teoria finanziaria con equivalenze signal processing / controlli automatici.
 
-**Stato**: 🔄 IN PROGRESS — Steps 1-4D ✅, Step 5-7 TODO
+**Stato**: 🔄 IN PROGRESS — Steps 1-4F ✅, Step 5-7 TODO
 **Data creazione**: 9 Marzo 2026
-**Ultimo aggiornamento**: 9 Marzo 2026 (post-crash recovery)
+**Ultimo aggiornamento**: 10 Marzo 2026 (segment-based baseline coloring, arrow markers, tooltip fix)
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
@@ -522,6 +522,53 @@ come coppia separata, non faceva nulla.
 - `frontend/src/lib/components/charts/ChartSettingsModal.svelte` (previewDataAbs, dropdownPosition, invert logic)
 - `frontend/src/lib/components/ui/select/SimpleSelect.svelte` (dropdownMaxHeight adattiva)
 
+### 4F. ✅ Segment-based baseline coloring + Tooltip + Arrow markers (Completato 10 Mar)
+
+**Problema 1 — `visualMap` crash con asse secondario (errore "coord undefined"):**
+L'approccio precedente usava `visualMap` piecewise con dati in formato tupla `[index, value]`
+per colorare la linea principale verde/rosso sopra/sotto baseline. Questo causava crash ECharts
+quando venivano aggiunti segnali su `yAxisIndex: 1` (RSI, MACD) perché `visualMap` tentava di
+risolvere coordinate su un asse non ancora completamente renderizzato, generando l'errore
+`TypeError: Cannot read properties of undefined (reading 'coord')`.
+
+Il two-phase rendering (Pass 1 senza visualMap, Pass 2 con `requestAnimationFrame`) era una
+soluzione parziale che funzionava solo senza asse secondario.
+
+**Soluzione definitiva:** Eliminato completamente `visualMap` e il formato dati tupla `[i, value]`.
+I dati ora sono sempre valori semplici (`number | null`). La colorazione baseline è ottenuta
+**spezzando la serie principale in 2 serie separate**: una verde (valori ≥ baseline) e una rossa
+(valori < baseline). Ai punti di incrocio della baseline, il valore viene duplicato in entrambe
+le serie per garantire continuità visiva. L'area fill viene applicata separatamente a ciascuna
+serie con colore appropriato.
+
+**Risultati:**
+- Nessun crash con asse secondario
+- Rendering in un singolo `setOption()` (niente `requestAnimationFrame`)
+- Area fill colorata correttamente (verde sopra, rossa sotto)
+- Tooltip con deduplicazione tramite `Set<string>` per evitare voci duplicate
+  (le serie segmentate condividono lo stesso nome)
+
+**Problema 2 — Tooltip troncato dalla modale:**
+Il tooltip ECharts veniva renderizzato come div interno al container del chart, ma la modale
+aveva `overflow: hidden`, troncando il tooltip quando si avvicinava ai bordi.
+
+**Soluzione:** Aggiunto `appendToBody: true` nella config tooltip di ECharts. Il tooltip ora
+viene renderizzato come figlio di `<body>`, uscendo dal contesto della modale.
+
+**Problema 3 — Frecce marker sempre verticali (su/giù):**
+Le frecce dei marker start/end degli overlay signal puntavano sempre verso l'alto o il basso
+(`symbolRotate: 0` o `180`), indipendentemente dalla direzione della linea. L'utente si aspetta
+che la freccia segua la pendenza della linea.
+
+**Soluzione:** Implementato calcolo della rotazione basato sulla pendenza (slope) della linea
+al punto del marker. Per il marker start, si cerca il primo punto valido successivo e si
+calcola `atan2(-dy, dx)` per ottenere l'angolo in screen coordinates (y invertita). Per il
+marker end, si cerca il punto precedente. La freccia start viene ruotata di 180° aggiuntivi
+perché deve puntare "all'indietro" (indica l'inizio della linea).
+
+**File modificati:**
+- `frontend/src/lib/components/charts/LineChart.svelte` (segment coloring, tooltip, markers)
+
 ---
 
 ## Step 5 — Tooltip informativi con supporto LaTeX (KaTeX)
@@ -832,8 +879,14 @@ Chiamato da `fxStoreRegistry.ts` e da `+page.svelte` (fx list e detail).
 Nessun cambio backend — la feature sarà implementata nel plan `fxSyncApiRedesign`.
 **Fix permanente**: Pianificato in `plan-fxSyncApiRedesign.prompt.md`.
 
-### 4B.7 — ✅ ECharts crash `coord` — guard length>0 su markPoint
-**Fix**: Guard `signalSeriesData.length > 0` aggiunto. I marker funzionano anche su secondary axis.
+### 4B.7 — ✅ ECharts crash `coord` — xAxis/yAxis + resize guard (Fix 9 Mar)
+**Problema**: `Cannot read properties of undefined (reading 'coord')` su apertura Settings e resize.
+Due cause: (1) `markPoint` usava `coord: [index, value]` che ECharts non riesce a risolvere su
+resize o quando l'asse non è pronto; (2) `ResizeObserver` scattava prima di `setOption()`.
+**Fix 1**: Sostituito `coord: [i, v]` con `{ xAxis: dates[i], yAxis: v }` nei markPoint — ECharts
+risolve correttamente le coordinate usando i valori dell'asse category.
+**Fix 2**: Aggiunto flag `chartOptionSet` che blocca `resize()` fino al primo `setOption()`.
+Reset nel `cleanup()`. Il `ResizeObserver` ora controlla `if (chartOptionSet) chartInstance?.resize()`.
 
 ### 4B.8 — ✅ Select nativi → SimpleSelect custom
 **Fix applicato**: Tutti i `<select>` nativi nel ChartSettingsModal sostituiti con `SimpleSelect`.
@@ -974,6 +1027,43 @@ vecchia (non invertita, viewMode globale).
 - `frontend/src/lib/components/fx/FxCard.svelte` (renderSignals callback, reactive overlays)
 - `frontend/src/routes/(app)/fx/+page.svelte` (renderSignals prop, LineDataPoint import)
 - `frontend/src/lib/components/charts/ChartSettingsModal.svelte` (dropdownPosition auto, computePoints signature)
+
+---
+
+## Bug Fix — ECharts visualMap + coord crash (10 Mar 2026)
+
+### Problema
+All'apertura della modale Settings (e anche dei chart card in modalità `%`), ECharts crashava con:
+```
+TypeError: Cannot read properties of undefined (reading 'coord')
+```
+Il crash avveniva dentro `markLine.render()` / `visualMap` perché il coordinateSystem non era ancora
+completamente inizializzato al momento del primo `setOption()`.
+
+### Root Cause
+Il `visualMap` con `type: 'piecewise'`, `dimension: 1` e dati in tuple format `[index, value]`
+richiede che il coordinateSystem sia completamente laid out per risolvere le coordinate. Al primo
+render (specialmente dentro una modale in apertura), gli assi non hanno ancora bounds validi.
+
+Il `markLine` con `{yAxis: baselineValue}` sulla stessa serie del `visualMap` amplificava il problema
+perché anch'esso richiede la risoluzione delle coordinate.
+
+### Soluzione: Two-Phase Rendering
+
+**Fase 1**: `setOption()` SENZA `visualMap` → stabilisce assi, dati, coordinate.
+
+**Fase 2**: In un `queueMicrotask()` (dopo il rendering sincrono), aggiunge il `visualMap`
+come aggiornamento incrementale con `setOption({visualMap}, false)` (merge mode).
+
+In aggiunta, il `markLine` è stato sostituito da una **serie flat-line dedicata** (`__baseline__`)
+che disegna una linea orizzontale tratteggiata al valore baseline, evitando il bug ECharts
+markLine+visualMap. La serie `__baseline__` è esclusa dal tooltip e ha `silent: true`.
+
+Fallback: se la fase 1 fallisce, stripa markPoint/markLine e visualMap e retenta. Se anche il
+retry fallisce, arrende silenziosamente.
+
+### File modificati
+- `frontend/src/lib/components/charts/LineChart.svelte` — two-phase setOption, baseline series
 
 ---
 
