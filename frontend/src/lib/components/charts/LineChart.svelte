@@ -576,12 +576,13 @@
                 {
                     type: 'value',
                     name: hasSecondaryAxis ? 'RSI' : '',
-                    nameLocation: 'middle',
-                    nameGap: 30,
+                    nameLocation: 'start',
+                    nameGap: 5,
                     nameTextStyle: {
                         color: isDark ? '#94a3b8' : '#9ca3af',
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: 'bold',
+                        align: 'center',
                     },
                     show: hasSecondaryAxis,
                     position: 'right',
@@ -603,12 +604,13 @@
                 {
                     type: 'value',
                     name: hasTertiaryAxis ? 'MACD' : '',
-                    nameLocation: 'middle',
-                    nameGap: 35,
+                    nameLocation: 'start',
+                    nameGap: 5,
                     nameTextStyle: {
                         color: isDark ? '#a78bfa' : '#7c3aed',
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: 'bold',
+                        align: 'center',
                     },
                     show: hasTertiaryAxis,
                     position: 'right',

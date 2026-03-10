@@ -95,6 +95,15 @@ export function createSignal(signalType: string, existingCount: number): ChartSi
         params[desc.key] = desc.default;
     }
 
+    // MACD composite: set signal-line defaults so they match renderMulti() and the UI
+    if (Cls.signalType === 'macd') {
+        params._signalColor = style.color;              // same color as primary
+        params._signalLineWidth = 1;                    // thinner than MACD line
+        params._signalLineType = 'dashed';              // dashed to distinguish
+        params._signalMarkerStart = null;
+        params._signalMarkerEnd = null;
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return new (Cls as any)(id, style, params);
 }
