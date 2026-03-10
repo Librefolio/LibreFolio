@@ -9,9 +9,9 @@ in 3 dropdown categorizzati (usando i componenti `SimpleSelect` esistenti), dual
 scala indipendente (RSI, MACD), tooltip informativi con supporto LaTeX (KaTeX), e documentazione MkDocs
 completa sulla teoria finanziaria con equivalenze signal processing / controlli automatici.
 
-**Stato**: 🔄 IN PROGRESS — Steps 1-4 ✅ (incl. MACD defaults fix, axis labels, code cleanup), Steps 5-7 TODO
+**Stato**: 🔄 IN PROGRESS — Steps 1-4 ✅ (incl. MACD dual-config, axis labels, Y-scale custom with auto-swap min>max, stale gradient, baseline colors, markers), Step 4J Y-scale min>max auto-swap ✅, Steps 5-7 TODO
 **Data creazione**: 9 Marzo 2026
-**Ultimo aggiornamento**: 10 Marzo 2026 (MACD configurator defaults sync, toConfig() fix, axis name positioning, refactoring MACD UI)
+**Ultimo aggiornamento**: 10 Marzo 2026 (Y-scale min>max auto-swap bug fix, final polish round)
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
