@@ -85,7 +85,7 @@ export function createSignal(signalType: string, existingCount: number): ChartSi
     const style: SignalStyle = {
         color: DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length],
         lineWidth: defaultWidth,
-        lineType: 'dashed',
+        lineType: Cls.signalType === 'macd' ? 'solid' : 'dashed',
         markerStart: null,
         markerEnd: null,
     };

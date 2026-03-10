@@ -9,9 +9,9 @@ in 3 dropdown categorizzati (usando i componenti `SimpleSelect` esistenti), dual
 scala indipendente (RSI, MACD), tooltip informativi con supporto LaTeX (KaTeX), e documentazione MkDocs
 completa sulla teoria finanziaria con equivalenze signal processing / controlli automatici.
 
-**Stato**: 🔄 IN PROGRESS — Steps 1-4K ✅, Steps 5-7 TODO
+**Stato**: 🔄 IN PROGRESS — Steps 1-4N ✅, Steps 5-7 TODO
 **Data creazione**: 9 Marzo 2026
-**Ultimo aggiornamento**: 10 Marzo 2026 (MACD scaleNote 2 decimali, Signal Line unified popover, marker support)
+**Ultimo aggiornamento**: 10 Marzo 2026 (y-axis name labels RSI/MACD, grid padding ridotto, Y-axis autoscale option)
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
@@ -1248,35 +1248,146 @@ non di elementi HTML.
 
 ---
 
+## Step 4L — ✅ Architettura 3 assi Y (RSI + MACD dedicati) + Bollinger % fix (10 Mar 2026)
+
+### Problema 1: MACD e RSI sullo stesso asse secondario
+Precedentemente, sia RSI (scala 0-100) che MACD (scala ~0.001) erano forzati sullo stesso asse
+secondario (index 1) tramite un fattore di scala moltiplicativo. Questo causava problemi:
+- In ABS il MACD "partiva per la tangente" con valori scalati incorrettamente
+- In % la conversione p0-based non aveva senso per MACD (segnale relativo per natura)
+- Il `histogramScale` parameter era un workaround fragile
+
+### Soluzione: 3 assi Y indipendenti
+ECharts supporta N assi Y senza limiti. Implementato:
+
+| Asse | Index | Posizione | Scala | Segnali |
+|------|-------|-----------|-------|---------|
+| Primario | 0 | Sinistra | Prezzo / % | Tutti tranne RSI e MACD |
+| RSI | 1 | Destra | 0-100 (dimensionless) | Solo RSI |
+| MACD | 2 | Destra + offset 55px | Auto (valori EMA differenziali) | MACD Line, Signal Line, Histogram |
+
+- L'asse 2 è spostato con `offset: 55` quando sia asse 1 che 2 sono visibili
+- Il grid `right` è espanso dinamicamente: 15 (nessun extra), 55 (1 extra), 110 (2 extra)
+- Ogni asse è **sempre dichiarato** (anche se nascosto con `show: false` e bounds fissi)
+  per evitare crash ECharts su `yAxisIndex` references
+- MACD values non subiscono conversione % — sono intrinsecamente relativi (fast EMA − slow EMA)
+- Il colore dell'asse MACD è viola (#7c3aed / #a78bfa in dark) per distinguerlo da RSI
+
+### Problema 2: Bollinger Bands in % mode — area tutta sopra
+In modalità %, quando il lower band andava negativo, l'area di riempimento risultava "ribaltata"
+(come se fosse applicato un modulo). Il problema era nel rendering stacked di ECharts: senza
+`stackStrategy: 'all'`, ECharts ignorava i valori negativi nel base stack.
+
+**Fix**: Aggiunto `stackStrategy: 'all'` alle serie Lower e Band in `buildBandSeries()`.
+Inoltre impostato `itemStyle.color: 'transparent'` sulla Lower per evitare che il suo colore
+"sporchi" il rendering.
+
+### Problema 3: Default MACD Line/Signal Line preset invertiti
+La MACD Line era renderizzata dashed e la Signal Line era renderizzata solid — l'opposto di
+quanto atteso. Ora:
+- MACD Line: default `lineType: 'solid'` (impostato in `createSignal()` per `signalType === 'macd'`)
+- Signal Line: default `lineType: 'dashed'` (hardcoded in `renderMulti()` come fallback)
+
+### Problema 4: Parametro `histogramScale` rimosso
+Con l'asse dedicato, non serve più scalare i valori MACD. Il parametro `histogramScale` è stato
+rimosso da `MacdSignal.paramDescriptors` e tutta la logica di scaling in `renderMulti()`.
+
+### File modificati
+- `MacdSignal.ts` — yAxisIndex=2, rimosso histogramScale, default solid, valori raw senza scaling
+- `registry.ts` — MACD default lineType='solid'
+- `LineChart.svelte` — 3 yAxis array, grid right dinamico, tooltip con label [RSI]/[MACD]
+- `lineChartHelpers.ts` — buildBandSeries con stackStrategy:'all' e itemStyle transparent
+
+---
+
+## Step 4M — ✅ Axis name labels "RSI" / "MACD" + Grid padding ridotto (10 Mar 2026)
+
+### Nome asse sulle Y secondarie/terziarie
+Per maggiore chiarezza, aggiunto `name` label ai 3 assi Y:
+- Asse 1 (RSI): mostra "RSI" ruotato verticalmente (`nameLocation: 'middle'`, `nameGap: 30`)
+  in grigio (#9ca3af light / #94a3b8 dark)
+- Asse 2 (MACD): mostra "MACD" ruotato verticalmente (`nameLocation: 'middle'`, `nameGap: 35`)
+  in viola (#7c3aed light / #a78bfa dark) — coerente con il colore dell'asse
+- Le label appaiono solo quando l'asse è attivo (`hasSecondaryAxis` / `hasTertiaryAxis`)
+
+### Grid padding ridotto
+Ridotto padding del grafico per sfruttare meglio lo spazio disponibile:
+- `top`: 35 → 20, `bottom`: 35 → 25, `left`: 15 → 10
+- `right` per extra axes: 110 → 115 (2 assi), 55 → 60 (1 asse), 15 → 12 (nessun extra)
+
+### File modificati
+- `LineChart.svelte` — name labels su axis 1/2, gridConfig ridotto
+
+---
+
+## Step 4N — ✅ Y-Axis autoscale option (Auto / Include 0 / Custom) (10 Mar 2026)
+
+### Contesto
+Con valute come lo Yen giapponese (USD/JPY ~ 150), in modalità assoluta l'asse Y forzava lo 0
+causando un grafico praticamente piatto. L'utente ha richiesto un controllo esplicito sulla scala.
+
+### Implementazione
+Aggiunto `yAxisMode: 'auto' | 'include0' | 'custom'` al tipo `ChartSettings`:
+
+| Modalità | `scale` ECharts | `min`/`max` | Effetto |
+|----------|-----------------|-------------|---------|
+| `auto` (default) | `true` | — | ECharts adatta la scala ai dati, potrebbe non includere 0 |
+| `include0` | `false` | — | ECharts include sempre 0 nell'asse (comportamento classico) |
+| `custom` | `true` | espliciti | L'utente imposta min e/o max manualmente |
+
+### UI nel ChartSettingsModal
+- 3 pulsanti segmented (Auto / Include 0 / Personalizzato) nella sezione Aesthetics
+- Quando `custom` è selezionato, appaiono 2 input number per Min e Max
+- I campi accettano valori vuoti (interpretati come `undefined` → ECharts gestisce automaticamente)
+- La riga occupa tutta la larghezza della grid 2-colonne (`sm:col-span-2`)
+
+### i18n
+Chiavi aggiunte con `dev.py i18n add`:
+- `chartSettings.yAxisScale` → "Y-Axis Scale" / "Scala Asse Y" / ...
+- `chartSettings.yAxisScaleDesc` → "Primary axis range control" / ...
+- `chartSettings.yAxisInclude0` → "Include 0" / "Includi 0" / ...
+- `chartSettings.yAxisCustom` → "Custom" / "Personalizzato" / ...
+
+### File modificati
+- `chartSettingsStore.svelte.ts` — +yAxisMode, +yAxisMin, +yAxisMax nel tipo `ChartSettings`
+- `LineChart.svelte` — +props yAxisMode/Min/Max, logica IIFE per axis 0 config
+- `ChartSettingsModal.svelte` — UI autoscale, binding a preview chart, isDirty, handleSave aggiornati
+- `en.json`, `it.json`, `fr.json`, `es.json` — chiavi i18n aggiunte
+
+---
+
 ## Riepilogo file coinvolti
 
 | Tipo | Categoria | Icona | Parametri | Asse Y | Note |
 |------|-----------|-------|-----------|--------|------|
-| `fx-pair` | comparison | 💱 | pairSlug, (invert) | 0 (primario/destra) | Dati reali dal backend |
+| `fx-pair` | comparison | 💱 | pairSlug, (invert) | 0 (primario/sinistra) | Dati reali dal backend |
 | `linear` | benchmark | 📈 | annualRate, offset | 0 | Retta pendenza costante |
 | `compound` | benchmark | 📊 | annualRate, offset | 0 | Crescita esponenziale iterativa |
 | `sine` | benchmark | 〰️ | amplitude, period, offset | 0 | Oscillazione sinusoidale |
 | `ema` | indicator | 📉 | period, offset | 0 | IIR low-pass 1° ordine |
-| `macd` | indicator | 📶 | fastPeriod, slowPeriod, signalPeriod, histogramScale | **0** (primario, auto-scaled) | Band-pass, auto-bundle 3 segnali. histogramScale=0 → auto (15% del range base). Histogram: seriesType='bar' red/green |
-| `rsi` | indicator | ⚡ | period, overbought, oversold | **1** (secondario, 0-100) | Duty-cycle, unico indicatore su asse secondario |
-| `bollinger` | indicator | 📏 | period, multiplier, offset | 0 | Confidence band: Upper+Middle(SMA)+Lower, seriesType='band' |
+| `macd` | indicator | 📶 | fastPeriod, slowPeriod, signalPeriod | **2** (terziario/destra+offset, auto-scaled) | Band-pass, auto-bundle 3 segnali. Histogram: seriesType='bar' red/green. Valori raw senza scaling. |
+| `rsi` | indicator | ⚡ | period, overbought, oversold | **1** (secondario/destra, 0-100) | Duty-cycle, scala indipendente |
+| `bollinger` | indicator | 📏 | period, multiplier, offset | 0 | Confidence band: Upper+Middle(SMA)+Lower, seriesType='band'. stackStrategy:'all' per % negativi |
 
 ---
 
-## Nota dual-axis Y
+## Nota tri-axis Y
 
-L'asse Y secondario (indice 1) è posizionato a **destra**, visibile solo quando almeno un
-segnale con `yAxisIndex === 1` è presente tra gli overlaySignals. L'asse primario (indice 0)
-resta a **sinistra**.
+Il grafico supporta fino a 3 assi Y, ognuno con scala indipendente:
 
-Attualmente **solo RSI** usa l'asse secondario (scala 0-100, indipendente).
+| Asse | Index | Posizione | Segnali | Scala | Nome asse |
+|------|-------|-----------|---------|-------|-----------|
+| Primario | 0 | Sinistra | Prezzo, FX Pair, EMA, Bollinger, Linear, Compound, Sine | Prezzo/% (auto/include0/custom) | — |
+| RSI | 1 | Destra | RSI | 0-100, dimensionless | "RSI" (grigio) |
+| MACD | 2 | Destra + offset 55px | MACD Line, Signal Line, Histogram | Auto (valori differenziali EMA) | "MACD" (viola) |
 
-**MACD**: tutte e 3 le componenti (MACD Line, Signal Line, Histogram) usano l'asse primario (0)
-con un multiplier auto-calcolato (`histogramScale=0` → auto). Il scale fa sì che i valori
-MACD tiny (~0.001) vengano amplificati per occupare ~15% del range del dato base. Nel tooltip
-le label includono `[Nx×]` per indicare il fattore di scala.
+Ogni asse è **sempre dichiarato** nell'array `yAxis` di ECharts (anche se nascosto) per evitare
+crash su reference a `yAxisIndex` inesistenti. Quando attivo, l'asse diventa visibile e la griglia
+si espande (`right: 55px` per 1 asse extra, `110px` per 2).
 
-Tutti gli altri segnali (EMA, Bollinger, FX Pair, benchmark sintetici) condividono l'asse 0.
+MACD non subisce conversione % — i valori fast EMA − slow EMA sono intrinsecamente relativi.
+RSI (0-100) similmente non subisce conversione % (gestito dal `ChartSignal.render()` che
+salta la conversione per `yAxisIndex !== 0`).
 
 ---
 
@@ -1304,6 +1415,8 @@ Tutti gli altri segnali (EMA, Bollinger, FX Pair, benchmark sintetici) condivido
 | `frontend/src/lib/charts/signals/index.ts` | +4 nuove export |
 | `frontend/src/lib/components/charts/ChartSettingsModal.svelte` | Refactor synth data, 3 SimpleSelect categorie, tooltip, help button, FX selector custom |
 | `frontend/src/lib/components/charts/LineChart.svelte` | Grid contrast fix, dual-axis Y |
+| `frontend/src/lib/components/charts/lineChartHelpers.ts` | buildMainSeries, buildBandSeries, buildBarSeries, computeArrowRotation |
+| `frontend/src/lib/stores/chartSettingsStore.svelte.ts` | +yAxisMode, +yAxisMin, +yAxisMax nel tipo ChartSettings |
 | `frontend/src/lib/components/ui/Tooltip.svelte` | +html prop, +math prop (KaTeX) |
 | `frontend/package.json` | +katex dependency |
 | `frontend/src/lib/i18n/en.json` | +sezione `signals` |

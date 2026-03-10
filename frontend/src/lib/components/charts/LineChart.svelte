@@ -78,6 +78,12 @@
         onZoomChange?: (start: number, end: number) => void;
         /** View mode (for tooltip formatting and segment colors) */
         viewMode?: 'absolute' | 'percentage';
+        /** Y-axis mode: 'auto' = fit to data, 'include0' = always show 0, 'custom' = user-defined min/max */
+        yAxisMode?: 'auto' | 'include0' | 'custom';
+        /** Custom Y-axis minimum (only when yAxisMode === 'custom') */
+        yAxisMin?: number;
+        /** Custom Y-axis maximum (only when yAxisMode === 'custom') */
+        yAxisMax?: number;
         /** Called when chart instance is ready (for coordinate mapping) */
         onChartReady?: (api: ChartApi) => void;
         /** Overlay signals to render as additional line series */
@@ -102,6 +108,9 @@
         zoomRange,
         onZoomChange,
         viewMode = 'absolute',
+        yAxisMode = 'auto',
+        yAxisMin,
+        yAxisMax,
         onChartReady,
         overlaySignals = [],
     }: Props = $props();
@@ -156,6 +165,10 @@
             void showMiniAxis;
             void lineColor;
             void darkLineColor;
+            // Touch yAxisMode to register reactive dependency
+            void yAxisMode;
+            void yAxisMin;
+            void yAxisMax;
             tick().then(renderChart);
         }
     });
@@ -472,8 +485,12 @@
 
         // Grid configuration
         const showYAxis = !compact || showMiniAxis;
-        // Check if any overlay signal needs the secondary Y axis (yAxisIndex = 1)
+        // Check which overlay axes are active (have at least one signal with data)
         const hasSecondaryAxis = !compact && overlaySignals.some(s => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
+        const hasTertiaryAxis = !compact && overlaySignals.some(s => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
+
+        // Count how many extra axes need right-side space
+        const extraAxesCount = (hasSecondaryAxis ? 1 : 0) + (hasTertiaryAxis ? 1 : 0);
 
         const gridConfig = compact
             ? {
@@ -484,10 +501,10 @@
                 containLabel: false,
             }
             : {
-                top: 35,
-                right: hasSecondaryAxis ? 55 : 15,
-                bottom: 35,
-                left: 15,
+                top: 20,
+                right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12,
+                bottom: 25,
+                left: 10,
                 containLabel: true,
             };
 
@@ -513,41 +530,59 @@
             },
             yAxis: [
                 // Axis 0 — Primary (price scale, right in compact / left in full)
-                {
-                    type: 'value',
-                    show: showYAxis,
-                    position: compact && showMiniAxis ? 'right' : 'left',
-                    axisLine: {show: !compact, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                    axisTick: {show: !compact},
-                    splitNumber: compact && showMiniAxis ? 2 : undefined,
-                    axisLabel: {
+                (() => {
+                    // Compute min/max/scale based on yAxisMode
+                    const isCustom = yAxisMode === 'custom';
+                    const isInclude0 = yAxisMode === 'include0';
+                    // 'auto' → scale:true (ECharts fits to data range, may not include 0)
+                    // 'include0' → scale:false (ECharts default, always includes 0)
+                    // 'custom' → explicit min/max
+                    return {
+                        type: 'value' as const,
                         show: showYAxis,
-                        color: isDark ? '#94a3b8' : '#6b7280',
-                        fontSize: compact && showMiniAxis ? 9 : 11,
-                        formatter: isPercentage
-                            ? (v: number) => `${v.toFixed(1)}%`
-                            : (v: number) => {
-                                if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
-                                if (Math.abs(v) >= 1) return v.toFixed(2);
-                                return v.toFixed(4).replace(/\.?0+$/, '');
-                            },
-                    },
-                    splitLine: {
-                        show: showGridLines && showYAxis,
-                        lineStyle: {
-                            color: isDark ? '#4b5563' : '#d1d5db',
-                            type: 'dashed',
-                            opacity: compact && showMiniAxis ? 0.5 : 1,
+                        position: compact && showMiniAxis ? 'right' as const : 'left' as const,
+                        min: isCustom && yAxisMin !== undefined ? yAxisMin : undefined,
+                        max: isCustom && yAxisMax !== undefined ? yAxisMax : undefined,
+                        axisLine: {show: !compact, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                        axisTick: {show: !compact},
+                        splitNumber: compact && showMiniAxis ? 2 : undefined,
+                        axisLabel: {
+                            show: showYAxis,
+                            color: isDark ? '#94a3b8' : '#6b7280',
+                            fontSize: compact && showMiniAxis ? 9 : 11,
+                            formatter: isPercentage
+                                ? (v: number) => `${v.toFixed(1)}%`
+                                : (v: number) => {
+                                    if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+                                    if (Math.abs(v) >= 1) return v.toFixed(2);
+                                    return v.toFixed(4).replace(/\.?0+$/, '');
+                                },
                         },
-                    },
-                    scale: true,
-                },
-                // Axis 1 — Secondary (right side, independent scale for RSI/MACD)
+                        splitLine: {
+                            show: showGridLines && showYAxis,
+                            lineStyle: {
+                                color: isDark ? '#4b5563' : '#d1d5db',
+                                type: 'dashed' as const,
+                                opacity: compact && showMiniAxis ? 0.5 : 1,
+                            },
+                        },
+                        scale: !isInclude0,
+                    };
+                })(),
+                // Axis 1 — Secondary (right side, independent scale for RSI 0-100)
                 // Always declared to prevent ECharts coord resolution crashes when
                 // axis count changes between renders. When no series use it, it's
                 // hidden with fixed bounds (min/max) so coord resolution never fails.
                 {
                     type: 'value',
+                    name: hasSecondaryAxis ? 'RSI' : '',
+                    nameLocation: 'middle',
+                    nameGap: 30,
+                    nameTextStyle: {
+                        color: isDark ? '#94a3b8' : '#9ca3af',
+                        fontSize: 10,
+                        fontWeight: 'bold',
+                    },
                     show: hasSecondaryAxis,
                     position: 'right',
                     min: hasSecondaryAxis ? undefined : 0,
@@ -562,6 +597,37 @@
                     },
                     splitLine: {show: false},
                     scale: hasSecondaryAxis,
+                },
+                // Axis 2 — Tertiary (right side with offset, independent scale for MACD)
+                // Always declared so ECharts never crashes on yAxisIndex=2 references.
+                {
+                    type: 'value',
+                    name: hasTertiaryAxis ? 'MACD' : '',
+                    nameLocation: 'middle',
+                    nameGap: 35,
+                    nameTextStyle: {
+                        color: isDark ? '#a78bfa' : '#7c3aed',
+                        fontSize: 10,
+                        fontWeight: 'bold',
+                    },
+                    show: hasTertiaryAxis,
+                    position: 'right',
+                    offset: hasSecondaryAxis && hasTertiaryAxis ? 55 : 0,
+                    min: hasTertiaryAxis ? undefined : 0,
+                    max: hasTertiaryAxis ? undefined : 1,
+                    axisLine: {show: hasTertiaryAxis, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}},
+                    axisTick: {show: hasTertiaryAxis},
+                    axisLabel: {
+                        show: hasTertiaryAxis,
+                        color: isDark ? '#a78bfa' : '#7c3aed',
+                        fontSize: 10,
+                        formatter: (v: number) => {
+                            if (Math.abs(v) >= 1) return v.toFixed(2);
+                            return v.toFixed(4).replace(/\.?0+$/, '');
+                        },
+                    },
+                    splitLine: {show: false},
+                    scale: hasTertiaryAxis,
                 },
             ],
             tooltip: compact ? undefined : {
@@ -617,8 +683,14 @@
                         const suffix = isPercentage ? '%' : '';
                         const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                         const axisIdx = signalAxisMap.get(p.seriesName) ?? 0;
-                        const axisNote = axisIdx === 1 ? ` <span style="font-size:10px;color:#94a3b8">[${$t('chart.tooltip.secondaryAxis')}]</span>` : '';
-                        html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${suffix}${axisNote}`;
+                        // Signals on non-primary axes have their own scale — show without % suffix
+                        const valueSuffix = axisIdx === 0 ? suffix : '';
+                        const axisNote = axisIdx === 1
+                            ? ` <span style="font-size:10px;color:#94a3b8">[RSI]</span>`
+                            : axisIdx === 2
+                                ? ` <span style="font-size:10px;color:#a78bfa">[MACD]</span>`
+                                : '';
+                        html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
 
                         // For band signals, also show upper/lower in the tooltip
                         const bandSignal = overlaySignals.find(

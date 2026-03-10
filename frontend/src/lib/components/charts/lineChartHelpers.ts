@@ -272,6 +272,9 @@ export function buildMainSeries(
  * Build an ECharts band series (Bollinger-style confidence band) from a
  * RenderedSignal with bandData. Returns 3 series: lower (invisible stack base),
  * delta (shaded area), and middle (visible line).
+ *
+ * Uses explicit upper + lower lines instead of stacking to avoid ECharts
+ * rendering artifacts when lower values go negative (common in % mode).
  */
 export function buildBandSeries(
     signal: RenderedSignal,
@@ -285,14 +288,10 @@ export function buildBandSeries(
 
     const signalDateIdx = new Map(signal.data.map((d, idx) => [d.date, idx]));
 
+
     const lowerData: any[] = dates.map((date) => {
         const idx = signalDateIdx.get(date);
         return idx === undefined ? null : lower[idx];
-    });
-
-    const deltaData: any[] = dates.map((date) => {
-        const idx = signalDateIdx.get(date);
-        return idx === undefined ? null : upper[idx] - lower[idx];
     });
 
     const middleData: any[] = dates.map((date) => {
@@ -300,19 +299,32 @@ export function buildBandSeries(
         return idx === undefined ? null : middle[idx];
     });
 
+    // Delta for stack: upper - lower (always positive since upper > lower by construction)
+    const deltaData: any[] = dates.map((date) => {
+        const idx = signalDateIdx.get(date);
+        if (idx === undefined) return null;
+        const u = upper[idx];
+        const l = lower[idx];
+        return (u !== undefined && l !== undefined) ? u - l : null;
+    });
+
     return [
+        // Stack base: lower values (invisible line)
         {
             type: 'line',
             name: `${signal.label} Lower`,
             data: lowerData,
             lineStyle: {opacity: 0},
-            itemStyle: {color: bandColor},
+            itemStyle: {color: 'transparent'},
             stack: `bb-${signal.id}`,
+            stackStrategy: 'all',
             symbol: 'none',
             yAxisIndex: signal.yAxisIndex ?? 0,
             silent: true,
             z: 0,
+            tooltip: {show: false},
         },
+        // Stacked delta: renders the shaded area from lower to upper
         {
             type: 'line',
             name: `${signal.label} Band`,
@@ -320,11 +332,14 @@ export function buildBandSeries(
             lineStyle: {opacity: 0},
             areaStyle: {color: hexToRgba(bandColor, bandOpacity)},
             stack: `bb-${signal.id}`,
+            stackStrategy: 'all',
             symbol: 'none',
             yAxisIndex: signal.yAxisIndex ?? 0,
             silent: true,
             z: 0,
+            tooltip: {show: false},
         },
+        // Middle line (visible)
         {
             type: 'line',
             name: signal.label,

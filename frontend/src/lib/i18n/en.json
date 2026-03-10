@@ -696,7 +696,11 @@
       "overbought": "Overbought",
       "oversold": "Oversold",
       "histogramScale": "Histogram Scale"
-    }
+    },
+    "yAxisScale": "Y-Axis Scale",
+    "yAxisScaleDesc": "Primary axis range control",
+    "yAxisInclude0": "Include 0",
+    "yAxisCustom": "Custom"
   },
   "chart": {
     "tooltip": {
