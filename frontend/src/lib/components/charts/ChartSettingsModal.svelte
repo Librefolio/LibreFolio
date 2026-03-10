@@ -21,7 +21,6 @@
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
-    import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import LineChart from '$lib/components/charts/LineChart.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
@@ -302,7 +301,30 @@
             {color: '#000', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null},
             {amplitude: 20, period: 120, offset: 0},
         );
-        return sineInstance.computePoints(baseDates);
+        const points = sineInstance.computePoints(baseDates);
+
+        // Add fake staleDays to some segments so the "Stale Gradient" toggle
+        // can be visually validated in the preview chart.
+        // Realistic pattern: incremental staleDays (1,2,3,5,7,10...) with
+        // values frozen at the last non-stale value — this is how real APIs
+        // behave when data is backfilled (they repeat the last known rate).
+        const stalePatches = [
+            {start: 80, days: Array.from({ length: 20 }, (_, i) => i + 1)},   // 20-day stale patch starting at day 80
+            {start: 220, days: Array.from({ length: 10 }, (_, i) => i + 1)},
+        ];
+        for (const patch of stalePatches) {
+            const lastFreshValue = patch.start > 0 ? points[patch.start - 1].value : points[0].value;
+            for (let j = 0; j < patch.days.length && (patch.start + j) < points.length; j++) {
+                const idx = patch.start + j;
+                points[idx] = {
+                    ...points[idx],
+                    value: lastFreshValue,   // Flat: repeat last known value
+                    staleDays: patch.days[j],
+                };
+            }
+        }
+
+        return points;
     }
 
     const syntheticData = generateSyntheticData();
@@ -474,12 +496,13 @@
                 <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden bg-gray-50 dark:bg-slate-800/50">
                     <LineChart
                         data={previewData}
+                        currency={mode === 'pair' && pairData && pairData.length > 0 ? '' : 'Preview'}
                         height="140px"
                         areaFill={areaFill}
                         compact={false}
                         showMiniAxis={false}
-                        showGradient={false}
-                        colorByBaseline={colorByBaseline && previewViewMode === 'percentage'}
+                        showGradient={staleGradient}
+                        colorByBaseline={colorByBaseline}
                         showGridLines={gridLines}
                         viewMode={previewViewMode}
                         overlaySignals={previewSignals}
@@ -653,7 +676,10 @@
                                 {/if}
 
                                 <!-- Row 3: Visual Style Strip — color + SVG preview (click opens unified popover) -->
-                                <div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700">
+                                {#if signal.signalType === 'macd'}
+                                    <span class="text-[9px] text-gray-500 dark:text-gray-400 uppercase pt-1.5 border-t border-gray-100 dark:border-slate-700">MACD Line</span>
+                                {/if}
+                                <div class="flex items-center gap-1.5 {signal.signalType !== 'macd' ? 'pt-1.5 border-t border-gray-100 dark:border-slate-700' : ''}">
                                     <!-- Color picker -->
                                     <input
                                         type="color"
@@ -821,6 +847,67 @@
                                         {/if}
                                     </div>
                                 </div>
+
+                                <!-- Row 4 (MACD only): Signal Line style row -->
+                                {#if signal.signalType === 'macd'}
+                                    <span class="text-[9px] text-gray-500 dark:text-gray-400 uppercase">Signal Line</span>
+                                    <div class="flex items-center gap-1.5">
+                                        <!-- Signal Line color picker -->
+                                        <input
+                                            type="color"
+                                            value={signal.params._signalColor?.toString() ?? '#f59e0b'}
+                                            class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
+                                            title="Signal Line Color"
+                                            oninput={(e) => updateSignalParam(signal.id, '_signalColor', e.currentTarget.value)}
+                                        />
+                                        <!-- Signal Line SVG preview -->
+                                        <div class="flex-1">
+                                            <div class="w-full h-7 flex items-center rounded relative">
+                                                <svg width="100%" height="24" class="absolute inset-0">
+                                                    <line
+                                                        x1="2%" y1="14" x2="98%" y2="14"
+                                                        stroke={signal.params._signalColor?.toString() ?? '#f59e0b'}
+                                                        stroke-width={Number(signal.params._signalLineWidth ?? 1)}
+                                                        stroke-dasharray={signal.params._signalLineType === 'dotted' ? '2,4' : signal.params._signalLineType === 'solid' ? 'none' : '8,4'}
+                                                    />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <!-- Signal Line style quick buttons -->
+                                        <div class="flex gap-0.5 shrink-0">
+                                            {#each LINE_TYPES as lt}
+                                                <button
+                                                    type="button"
+                                                    aria-label="Signal line style: {lt}"
+                                                    class="w-6 h-5 flex items-center justify-center rounded border transition-colors
+                                                        {(signal.params._signalLineType ?? 'dashed') === lt ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600'}"
+                                                    onclick={() => updateSignalParam(signal.id, '_signalLineType', lt)}
+                                                >
+                                                    <svg width="16" height="4">
+                                                        <line x1="1" y1="2" x2="15" y2="2"
+                                                            stroke={signal.params._signalColor?.toString() ?? '#f59e0b'}
+                                                            stroke-width="1.5"
+                                                            stroke-dasharray={lt === 'dashed' ? '4,2' : lt === 'dotted' ? '1,2' : 'none'}
+                                                        />
+                                                    </svg>
+                                                </button>
+                                            {/each}
+                                        </div>
+                                        <!-- Signal Line width quick buttons -->
+                                        <div class="flex gap-0.5 shrink-0">
+                                            {#each [1, 2, 3] as w}
+                                                <button
+                                                    type="button"
+                                                    class="w-5 h-5 flex items-center justify-center rounded border transition-colors text-[9px]
+                                                        {Number(signal.params._signalLineWidth ?? 1) === w ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600'}"
+                                                    onclick={() => updateSignalParam(signal.id, '_signalLineWidth', w)}
+                                                >
+                                                    {w}
+                                                </button>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
                             </div>
                         {/snippet}
                     </OrderableList>

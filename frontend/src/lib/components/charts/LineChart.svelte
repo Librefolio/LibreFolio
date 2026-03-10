@@ -19,7 +19,15 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
+    import {
+        COLORS,
+        buildMainSeries,
+        buildBandSeries,
+        buildBarSeries,
+        computeArrowRotation as computeArrowRotationHelper,
+    } from './lineChartHelpers';
 
     // =========================================================================
     // Types
@@ -98,13 +106,13 @@
         overlaySignals = [],
     }: Props = $props();
 
-    // Default colors
-    const DEFAULT_LINE_LIGHT = '#1a4031';
-    const DEFAULT_LINE_DARK = '#4ade80';
-    const GREEN_LIGHT = '#16a34a';
-    const GREEN_DARK = '#4ade80';
-    const RED_LIGHT = '#ef4444';
-    const RED_DARK = '#f87171';
+    // Default colors — imported from lineChartHelpers
+    const DEFAULT_LINE_LIGHT = COLORS.lineLight;
+    const DEFAULT_LINE_DARK = COLORS.lineDark;
+    const GREEN_LIGHT = COLORS.greenLight;
+    const GREEN_DARK = COLORS.greenDark;
+    const RED_LIGHT = COLORS.redLight;
+    const RED_DARK = COLORS.redDark;
 
     // =========================================================================
     // State
@@ -172,21 +180,8 @@
     }
 
     // =========================================================================
-    // Helpers
+    // Helpers — see lineChartHelpers.ts for color utilities
     // =========================================================================
-
-    function getOpacity(staleDays?: number): number {
-        if (!staleDays || staleDays === 0) return 1.0;
-        return Math.max(0.3, 1.0 - staleDays * 0.15);
-    }
-
-    function hexToRgba(hex: string, alpha: number): string {
-        const h = hex.replace('#', '');
-        const r = parseInt(h.substring(0, 2), 16);
-        const g = parseInt(h.substring(2, 4), 16);
-        const b = parseInt(h.substring(4, 6), 16);
-        return `rgba(${r},${g},${b},${alpha})`;
-    }
 
     // =========================================================================
     // ChartApi for external coordinate mapping
@@ -292,138 +287,33 @@
         const useBaselineColoring = colorByBaseline && !compact;
         const baselineValue = isPercentage ? 0 : (data[0]?.value ?? 0);
 
-        // Build per-point data with optional stale gradient opacity
-        const hasStaleData = showGradient && !useBaselineColoring && data.some(d => (d.staleDays ?? 0) > 0);
-
-        const seriesData: any[] = data.map((d) => {
-            const opacity = getOpacity(d.staleDays);
-            if (hasStaleData && opacity < 1.0) {
-                return {
-                    value: d.value,
-                    itemStyle: {
-                        color: hexToRgba(baseColor, opacity),
-                        borderColor: hexToRgba(baseColor, opacity),
-                    },
-                    lineStyle: {
-                        color: hexToRgba(baseColor, opacity),
-                    },
-                };
-            }
-            return d.value;
-        });
+        // Build per-point stale data array
+        const staleDaysArr = data.map(d => d.staleDays ?? 0);
 
         const series: any[] = [];
         // Tooltip needs a stable series name for the main data — we use this name
         // for both single-series mode and the segmented baseline-color mode.
         const mainSeriesName = currency || 'Value';
 
-        if (useBaselineColoring) {
-            // ── Segment-based baseline coloring ──────────────────────────────
-            // Instead of using visualMap (which crashes with secondary axes),
-            // split the main series data into contiguous green/red segments.
-            // Each segment is a separate ECharts series with the same name so
-            // the tooltip groups them as one. Null values create gaps so only
-            // the relevant part of each series is drawn.
-            //
-            // We iterate through points and detect zero-crossings relative to
-            // baselineValue. At crossings we interpolate the exact crossing point
-            // to avoid visual gaps.
-
+        // ── Unified main series: handles baseline coloring + stale gradient together ──
+        {
             const values = data.map(d => d.value);
-            const lineW = compact ? 2 : 2.5;
-
-            // Helper: create one segment series
-            const makeSegSeries = (segData: (number | null)[], color: string): any => {
-                const s: any = {
-                    type: 'line',
-                    name: mainSeriesName,
-                    data: segData,
-                    smooth: false,
-                    symbol: 'none',
-                    showSymbol: false,
-                    yAxisIndex: 0,
-                    lineStyle: {width: lineW, color},
-                    itemStyle: {color},
-                    emphasis: {focus: compact ? 'none' : 'series'},
-                    z: 2,
-                    // ECharts: only first series with this name shows in legend
-                };
-                if (areaFill) {
-                    const areaTop = hexToRgba(color, isDark ? 0.15 : 0.10);
-                    const areaBot = hexToRgba(color, isDark ? 0.03 : 0.02);
-                    s.areaStyle = {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            {offset: 0, color: areaTop},
-                            {offset: 1, color: areaBot},
-                        ]),
-                    };
-                }
-                return s;
-            };
-
-            // Build green (above baseline) and red (below baseline) data arrays
-            const greenData: (number | null)[] = new Array(values.length).fill(null);
-            const redData: (number | null)[] = new Array(values.length).fill(null);
-
-            for (let i = 0; i < values.length; i++) {
-                const v = values[i];
-                if (v >= baselineValue) {
-                    greenData[i] = v;
-                } else {
-                    redData[i] = v;
-                }
-
-                // At segment boundaries, duplicate the crossing point in both series
-                // so lines connect without gaps
-                if (i > 0) {
-                    const prev = values[i - 1];
-                    const curr = v;
-                    const crossedUp = prev < baselineValue && curr >= baselineValue;
-                    const crossedDown = prev >= baselineValue && curr < baselineValue;
-                    if (crossedUp || crossedDown) {
-                        // Both sides need the crossing value for continuity
-                        greenData[i - 1] = greenData[i - 1] ?? prev;
-                        redData[i - 1] = redData[i - 1] ?? prev;
-                        greenData[i] = greenData[i] ?? curr;
-                        redData[i] = redData[i] ?? curr;
-                    }
-                }
-            }
-
-            series.push(makeSegSeries(greenData, greenColor));
-            series.push(makeSegSeries(redData, redColor));
-        } else {
-            // ── Single-color main series ─────────────────────────────────────
-            const mainSeries: any = {
-                type: 'line',
-                name: mainSeriesName,
-                data: seriesData,
-                smooth: !!compact,
-                symbol: 'none',
-                symbolSize: compact ? 0 : 4,
-                showSymbol: false,
-                yAxisIndex: 0,
-                lineStyle: {
-                    width: compact ? 1.5 : 2,
-                    color: baseColor,
-                },
-                itemStyle: {color: baseColor},
-                emphasis: {
-                    focus: compact ? 'none' : 'series',
-                },
-            };
-
-            if (areaFill) {
-                const areaTopColor = hexToRgba(baseColor, isDark ? 0.35 : 0.2);
-                const areaBottomColor = hexToRgba(baseColor, isDark ? 0.05 : 0.02);
-                mainSeries.areaStyle = {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        {offset: 0, color: areaTopColor},
-                        {offset: 1, color: areaBottomColor},
-                    ]),
-                };
-            }
-            series.push(mainSeries);
+            const lineW = compact ? 1.5 : 2;
+            const mainSeriesList = buildMainSeries(
+                values,
+                staleDaysArr,
+                baseColor,
+                greenColor,
+                redColor,
+                isDark,
+                areaFill,
+                lineW,
+                mainSeriesName,
+                useBaselineColoring,
+                baselineValue,
+                showGradient,
+            );
+            series.push(...mainSeriesList);
         }
 
         // Pending edits overlay
@@ -466,106 +356,14 @@
 
                 // ─── BAND (Confidence Band / Bollinger) ─────────────────────
                 if (sType === 'band' && signal.bandData) {
-                    const {upper, middle, lower} = signal.bandData;
-                    const bandColor = signal.color;
-                    const bandOpacity = isDark ? 0.18 : 0.12;
-
-                    // Build date→index lookup from signal data for O(1) access
-                    const signalDateIdx = new Map(signal.data.map((d, idx) => [d.date, idx]));
-
-                    // Series 1: Lower bound (invisible line, base of the stack)
-                    const lowerData: any[] = dates.map((date) => {
-                        const idx = signalDateIdx.get(date);
-                        if (idx === undefined) return null;
-                        return lower[idx];
-                    });
-                    series.push({
-                        type: 'line',
-                        name: `${signal.label} Lower`,
-                        data: lowerData,
-                        lineStyle: {opacity: 0},
-                        itemStyle: {color: bandColor},
-                        stack: `bb-${signal.id}`,
-                        symbol: 'none',
-                        yAxisIndex: signal.yAxisIndex ?? 0,
-                        silent: true,
-                        z: 0,
-                    });
-
-                    // Series 2: Upper - Lower delta (shaded area stacked on lower)
-                    const deltaData: any[] = dates.map((date) => {
-                        const idx = signalDateIdx.get(date);
-                        if (idx === undefined) return null;
-                        return upper[idx] - lower[idx];
-                    });
-                    series.push({
-                        type: 'line',
-                        name: `${signal.label} Band`,
-                        data: deltaData,
-                        lineStyle: {opacity: 0},
-                        areaStyle: {
-                            color: hexToRgba(bandColor, bandOpacity),
-                        },
-                        stack: `bb-${signal.id}`,
-                        symbol: 'none',
-                        yAxisIndex: signal.yAxisIndex ?? 0,
-                        silent: true,
-                        z: 0,
-                    });
-
-                    // Series 3: Middle line (SMA) — visible, styled
-                    const middleData: any[] = dates.map((date) => {
-                        const idx = signalDateIdx.get(date);
-                        if (idx === undefined) return null;
-                        return middle[idx];
-                    });
-                    series.push({
-                        type: 'line',
-                        name: signal.label,
-                        data: middleData,
-                        connectNulls: true,
-                        smooth: false,
-                        symbol: 'none',
-                        yAxisIndex: signal.yAxisIndex ?? 0,
-                        lineStyle: {
-                            color: bandColor,
-                            width: signal.lineWidth,
-                            type: signal.lineType,
-                        },
-                        itemStyle: {color: bandColor},
-                        emphasis: {focus: 'none'},
-                        z: 1,
-                    });
+                    const bandSeries = buildBandSeries(signal, dates, isDark);
+                    series.push(...bandSeries);
                     continue;
                 }
 
                 // ─── BAR (MACD Histogram) ───────────────────────────────────
                 if (sType === 'bar') {
-                    // Bar data with red/green coloring: positive = green, negative = red
-                    const barData: any[] = signalSeriesData.map((val) => {
-                        if (val === null || val === undefined) return val;
-                        return {
-                            value: val,
-                            itemStyle: {
-                                color: val >= 0
-                                    ? (isDark ? GREEN_DARK : GREEN_LIGHT)
-                                    : (isDark ? RED_DARK : RED_LIGHT),
-                            },
-                        };
-                    });
-
-                    series.push({
-                        type: 'bar',
-                        name: signal.label,
-                        data: barData,
-                        yAxisIndex: signal.yAxisIndex ?? 0,
-                        barWidth: '60%',
-                        itemStyle: {
-                            color: signal.color,
-                        },
-                        emphasis: {focus: 'none'},
-                        z: 0, // behind lines
-                    });
+                    series.push(buildBarSeries(signal, signalSeriesData, isDark));
                     continue;
                 }
 
@@ -577,6 +375,7 @@
                     connectNulls: true,
                     smooth: false,
                     symbol: 'none',
+                    showSymbol: false,
                     yAxisIndex: signal.yAxisIndex ?? 0,
                     lineStyle: {
                         color: signal.color,
@@ -597,52 +396,12 @@
                 if ((signal.markerStart || signal.markerEnd) && signalSeriesData.length > 0) {
                     const markData: any[] = [];
 
-                    // Helper: compute rotation angle (degrees) for an arrow marker
-                    // based on the slope of the line at a given point index.
-                    // For 'start' the arrow points backwards (entering), for 'end' it points forward.
-                    const computeArrowRotation = (idx: number, isStart: boolean): number => {
-                        // Find a neighboring valid point to compute slope
-                        let neighborIdx = -1;
-                        if (isStart) {
-                            // Look right for next valid point
-                            for (let j = idx + 1; j < signalSeriesData.length; j++) {
-                                if (signalSeriesData[j] !== null && signalSeriesData[j] !== undefined) {
-                                    neighborIdx = j; break;
-                                }
-                            }
-                        } else {
-                            // Look left for previous valid point
-                            for (let j = idx - 1; j >= 0; j--) {
-                                if (signalSeriesData[j] !== null && signalSeriesData[j] !== undefined) {
-                                    neighborIdx = j; break;
-                                }
-                            }
-                        }
-                        if (neighborIdx < 0) return isStart ? 180 : 0;
-
-                        const v1 = signalSeriesData[idx] as number;
-                        const v2 = signalSeriesData[neighborIdx] as number;
-                        // Normalize: slope in "chart space" — x is index, y is value
-                        // Arrow points in the direction of travel; for start, we reverse.
-                        const dx = neighborIdx - idx;
-                        const dy = v2 - v1;
-                        // atan2 gives angle in radians, but ECharts arrow default points right (0°)
-                        // We want: positive slope → arrow tilts upward, etc.
-                        // ECharts symbolRotate is clockwise from "pointing up" for arrow symbol
-                        // arrow symbol default points up (90° in math coords)
-                        const angleRad = Math.atan2(-dy, dx); // negative dy because y-axis is inverted in screen
-                        let angleDeg = (angleRad * 180) / Math.PI;
-                        // For start marker: arrow should point in the opposite direction (incoming)
-                        if (isStart) angleDeg += 180;
-                        // ECharts 'arrow' points up by default, so rotate from "up" reference
-                        return angleDeg + 90;
-                    };
-
                     if (signal.markerStart) {
                         for (let i = 0; i < signalSeriesData.length; i++) {
                             const v = signalSeriesData[i];
                             if (v !== null && v !== undefined) {
-                                const rotate = signal.markerStart === 'arrow' ? computeArrowRotation(i, true) : 0;
+                                const rotate = signal.markerStart === 'arrow'
+                                    ? computeArrowRotationHelper(signalSeriesData, i, true) : 0;
                                 markData.push({
                                     coord: [dates[i], v],
                                     symbol: signal.markerStart,
@@ -658,7 +417,8 @@
                         for (let i = signalSeriesData.length - 1; i >= 0; i--) {
                             const v = signalSeriesData[i];
                             if (v !== null && v !== undefined) {
-                                const rotate = signal.markerEnd === 'arrow' ? computeArrowRotation(i, false) : 0;
+                                const rotate = signal.markerEnd === 'arrow'
+                                    ? computeArrowRotationHelper(signalSeriesData, i, false) : 0;
                                 markData.push({
                                     coord: [dates[i], v],
                                     symbol: signal.markerEnd,
@@ -856,7 +616,7 @@
                         const suffix = isPercentage ? '%' : '';
                         const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                         const axisIdx = signalAxisMap.get(p.seriesName) ?? 0;
-                        const axisNote = axisIdx === 1 ? ' <span style="font-size:10px;color:#94a3b8">[2nd]</span>' : '';
+                        const axisNote = axisIdx === 1 ? ` <span style="font-size:10px;color:#94a3b8">[${$t('chart.tooltip.secondaryAxis')}]</span>` : '';
                         html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${suffix}${axisNote}`;
 
                         // For band signals, also show upper/lower in the tooltip
@@ -866,7 +626,7 @@
                         if (bandSignal?.bandData) {
                             const dataIdx = bandSignal.data.findIndex(d => d.date === date);
                             if (dataIdx >= 0) {
-                                html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">Upper: ${bandSignal.bandData.upper[dataIdx].toFixed(4)}${suffix} · Lower: ${bandSignal.bandData.lower[dataIdx].toFixed(4)}${suffix}</span>`;
+                                html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">${$t('chart.tooltip.upper')}: ${bandSignal.bandData.upper[dataIdx].toFixed(4)}${suffix} · ${$t('chart.tooltip.lower')}: ${bandSignal.bandData.lower[dataIdx].toFixed(4)}${suffix}</span>`;
                             }
                         }
                     }
@@ -874,10 +634,10 @@
                     // Stale warning for main series
                     const dataPoint = data.find(d => d.date === date);
                     if (dataPoint?.staleDays && dataPoint.staleDays > 0) {
-                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ Stale: ${dataPoint.staleDays} day(s) old</span>`;
+                        html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: dataPoint.staleDays}})}</span>`;
                     }
                     if (isPercentage) {
-                        html += `<br/><span style="color:#94a3b8;font-size:10px">% relative to range start date</span>`;
+                        html += `<br/><span style="color:#94a3b8;font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;
                     }
                     return html;
                 },
@@ -887,8 +647,35 @@
 
         // Single pass: render everything at once — no visualMap needed
         // (baseline coloring is handled by segmented series above)
+
+        // Preserve user zoom state across re-renders (adding signals, toggling options).
+        // Without this, setOption({...}, true) replaces dataZoom and resets scroll position.
+        let savedZoom: {start: number; end: number} | null = null;
+        if (chartOptionSet && chartInstance) {
+            try {
+                const opt = chartInstance.getOption() as any;
+                if (opt?.dataZoom?.[0]) {
+                    const dz = opt.dataZoom[0];
+                    if (typeof dz.start === 'number' && typeof dz.end === 'number') {
+                        savedZoom = {start: dz.start, end: dz.end};
+                    }
+                }
+            } catch (_) { /* ignore */ }
+        }
+
         chartInstance.setOption(option, true);
         chartOptionSet = true;
+
+        // Restore zoom position if the user had zoomed/panned
+        if (savedZoom && !compact) {
+            suppressZoomEvent = true;
+            chartInstance.dispatchAction({
+                type: 'dataZoom',
+                start: savedZoom.start,
+                end: savedZoom.end,
+            });
+            setTimeout(() => { suppressZoomEvent = false; }, 50);
+        }
 
 
 

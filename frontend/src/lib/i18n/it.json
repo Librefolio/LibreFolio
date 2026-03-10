@@ -694,7 +694,17 @@
       "signalPeriod": "Periodo Segnale",
       "multiplier": "Moltiplicatore",
       "overbought": "Ipercomprato",
-      "oversold": "Ipervenduto"
+      "oversold": "Ipervenduto",
+      "histogramScale": "Scala Istogramma"
+    }
+  },
+  "chart": {
+    "tooltip": {
+      "stale": "Obsoleto: {days} giorno/i",
+      "percentNote": "% relativo alla data di inizio intervallo",
+      "upper": "Superiore",
+      "lower": "Inferiore",
+      "secondaryAxis": "2° asse"
     }
   }
 }
