@@ -76,6 +76,9 @@
     let areaFill = $state(true);
     let gridLines = $state(true);
     let staleGradient = $state(true);
+    let yAxisMode = $state<'auto' | 'include0' | 'custom'>('auto');
+    let yAxisMin = $state<number | undefined>(undefined);
+    let yAxisMax = $state<number | undefined>(undefined);
     let signals = $state<SignalConfig[]>([]);
 
     // Reset local state when modal opens
@@ -85,6 +88,9 @@
             areaFill = settings.areaFill;
             gridLines = settings.gridLines;
             staleGradient = settings.staleGradient;
+            yAxisMode = settings.yAxisMode ?? 'auto';
+            yAxisMin = settings.yAxisMin;
+            yAxisMax = settings.yAxisMax;
             signals = JSON.parse(JSON.stringify(settings.signals));
         }
     });
@@ -180,6 +186,9 @@
         if (areaFill !== settings.areaFill) return true;
         if (gridLines !== settings.gridLines) return true;
         if (staleGradient !== settings.staleGradient) return true;
+        if (yAxisMode !== (settings.yAxisMode ?? 'auto')) return true;
+        if (yAxisMin !== settings.yAxisMin) return true;
+        if (yAxisMax !== settings.yAxisMax) return true;
         if (JSON.stringify(signals) !== JSON.stringify(settings.signals)) return true;
         return false;
     }
@@ -193,6 +202,9 @@
             areaFill,
             gridLines,
             staleGradient,
+            yAxisMode,
+            yAxisMin: yAxisMode === 'custom' ? yAxisMin : undefined,
+            yAxisMax: yAxisMode === 'custom' ? yAxisMax : undefined,
             signals: deepClone(signals),
         };
         onsave?.(result);
@@ -473,6 +485,61 @@
                             <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {staleGradient ? 'translate-x-6' : 'translate-x-1'}"></span>
                         </button>
                     </div>
+
+                    <!-- Y-axis scale mode -->
+                    <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 sm:col-span-2">
+                        <span class="shrink-0">
+                            <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.yAxisScale')}</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.yAxisScaleDesc')}</span>
+                        </span>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                                <button
+                                    type="button"
+                                    class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'auto' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                    onclick={() => yAxisMode = 'auto'}
+                                >Auto</button>
+                                <button
+                                    type="button"
+                                    class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'include0' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                    onclick={() => yAxisMode = 'include0'}
+                                >{$t('chartSettings.yAxisInclude0')}</button>
+                                <button
+                                    type="button"
+                                    class="px-2.5 py-1 text-[10px] font-medium transition-colors {yAxisMode === 'custom' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                    onclick={() => yAxisMode = 'custom'}
+                                >{$t('chartSettings.yAxisCustom')}</button>
+                            </div>
+                            {#if yAxisMode === 'custom'}
+                                <div class="flex items-center gap-1.5 text-xs">
+                                    <span class="text-[10px] text-gray-500 dark:text-gray-400">Min</span>
+                                    <input
+                                        type="number"
+                                        class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        step="any"
+                                        value={yAxisMin ?? ''}
+                                        oninput={(e) => {
+                                            const v = e.currentTarget.value;
+                                            yAxisMin = v === '' ? undefined : Number(v);
+                                        }}
+                                        placeholder="—"
+                                    />
+                                    <span class="text-[10px] text-gray-500 dark:text-gray-400">Max</span>
+                                    <input
+                                        type="number"
+                                        class="w-20 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        step="any"
+                                        value={yAxisMax ?? ''}
+                                        oninput={(e) => {
+                                            const v = e.currentTarget.value;
+                                            yAxisMax = v === '' ? undefined : Number(v);
+                                        }}
+                                        placeholder="—"
+                                    />
+                                </div>
+                            {/if}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -505,6 +572,9 @@
                         colorByBaseline={colorByBaseline}
                         showGridLines={gridLines}
                         viewMode={previewViewMode}
+                        yAxisMode={yAxisMode}
+                        yAxisMin={yAxisMin}
+                        yAxisMax={yAxisMax}
                         overlaySignals={previewSignals}
                     />
                 </div>

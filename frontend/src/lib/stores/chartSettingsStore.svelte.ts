@@ -26,6 +26,12 @@ export interface ChartSettings {
     gridLines: boolean;
     /** Show stale-data gradient (per-point opacity for backward-filled data) */
     staleGradient: boolean;
+    /** Y-axis mode: 'auto' fits to data range, 'include0' always shows 0, 'custom' uses yAxisMin/Max */
+    yAxisMode: 'auto' | 'include0' | 'custom';
+    /** Custom Y-axis minimum (only used when yAxisMode === 'custom') */
+    yAxisMin?: number;
+    /** Custom Y-axis maximum (only used when yAxisMode === 'custom') */
+    yAxisMax?: number;
     /** Overlay signal configurations */
     signals: SignalConfig[];
 }
@@ -35,6 +41,9 @@ export const DEFAULT_CHART_SETTINGS: ChartSettings = {
     areaFill: true,
     gridLines: true,
     staleGradient: true,
+    yAxisMode: 'auto',
+    yAxisMin: undefined,
+    yAxisMax: undefined,
     signals: [],
 };
 

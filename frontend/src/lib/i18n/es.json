@@ -696,7 +696,11 @@
       "overbought": "Sobrecomprado",
       "oversold": "Sobrevendido",
       "histogramScale": "Escala Histograma"
-    }
+    },
+    "yAxisScale": "Escala Eje Y",
+    "yAxisScaleDesc": "Control del rango del eje primario",
+    "yAxisInclude0": "Incluir 0",
+    "yAxisCustom": "Personalizado"
   },
   "chart": {
     "tooltip": {
