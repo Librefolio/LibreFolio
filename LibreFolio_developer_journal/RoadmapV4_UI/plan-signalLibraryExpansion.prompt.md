@@ -9,9 +9,9 @@ in 3 dropdown categorizzati (usando i componenti `SimpleSelect` esistenti), dual
 scala indipendente (RSI, MACD), tooltip informativi con supporto LaTeX (KaTeX), e documentazione MkDocs
 completa sulla teoria finanziaria con equivalenze signal processing / controlli automatici.
 
-**Stato**: 🔄 IN PROGRESS — Steps 1-4N ✅, Steps 5-7 TODO
+**Stato**: 🔄 IN PROGRESS — Steps 1-4 ✅ (incl. MACD defaults fix, axis labels, code cleanup), Steps 5-7 TODO
 **Data creazione**: 9 Marzo 2026
-**Ultimo aggiornamento**: 10 Marzo 2026 (y-axis name labels RSI/MACD, grid padding ridotto, Y-axis autoscale option)
+**Ultimo aggiornamento**: 10 Marzo 2026 (MACD configurator defaults sync, toConfig() fix, axis name positioning, refactoring MACD UI)
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
@@ -1321,6 +1321,39 @@ Ridotto padding del grafico per sfruttare meglio lo spazio disponibile:
 ---
 
 ## Step 4N — ✅ Y-Axis autoscale option (Auto / Include 0 / Custom) (10 Mar 2026)
+
+---
+
+## Step 4O — ✅ MACD Defaults Sync + toConfig() Fix + Axis Labels + Code Cleanup (10 Mar 2026)
+
+**Problema 1**: Aggiungendo MACD, i mini-configuratori (MACD Line + Signal Line) non corrispondevano
+allo stile effettivamente renderizzato nel grafico. Causa: `createSignal()` impostava i default per
+`_signalColor`, `_signalLineType`, etc., ma `toConfig()` in `ChartSignal` filtrava TUTTE le chiavi
+che iniziavano con `_`. Questo significava che dopo `addSignal` → `signal.toConfig()`, i default
+MACD venivano persi.
+
+**Fix**:
+1. `ChartSignal.toConfig()`: cambiato filtro da `!k.startsWith('_')` a `k !== '_resolvedData'`
+   (solo `_resolvedData` è veramente transient, usato solo runtime da FxPairSignal)
+2. `registry.ts` → `createSignal()`: i default MACD signal line ora usano `style.color` (il colore
+   palette assegnato), non un hardcoded '#f59e0b'
+3. `ChartSettingsModal.svelte`: il fallback Signal Line color ora è `signal.style.color` (match
+   con `renderMulti()`) anziché un colore hardcoded
+
+**Problema 2**: Le label degli assi RSI/MACD occupavano spazio verticale inutile con `nameLocation: 'middle'`.
+
+**Fix**: Cambiato a `nameLocation: 'start'` (in basso), `nameGap: 5`, `fontSize: 9`, `align: 'center'`.
+Questo posiziona le label orizzontalmente sotto l'asse, risparmiando spazio per il grafico.
+
+**Cleanup code**: Il template MACD ora riusa la stessa struttura duplicata (Svelte 5 snippets con
+type annotations non sono supportati nel template) ma con defaults coerenti. Entrambi i configuratori
+hanno lo stesso set di controlli (colore, line preview con click → popover con markers/lineType/width).
+
+**File modificati:**
+- `frontend/src/lib/charts/signals/ChartSignal.ts` (toConfig filter)
+- `frontend/src/lib/charts/signals/registry.ts` (MACD signal-line defaults)
+- `frontend/src/lib/components/charts/ChartSettingsModal.svelte` (Signal Line fallback color)
+- `frontend/src/lib/components/charts/LineChart.svelte` (axis nameLocation/nameGap)
 
 ### Contesto
 Con valute come lo Yen giapponese (USD/JPY ~ 150), in modalità assoluta l'asse Y forzava lo 0
