@@ -46,6 +46,19 @@ LibreFolio/
 │   │   │   ├── transactions/  # Placeholder (Phase 7)
 │   │   │   ├── files/         # File management
 │   │   │   └── settings/      # User & global settings
+│   │   ├── lib/charts/        # Signal library (calcolo segnali)
+│   │   │   └── signals/       # Libreria segnali tecnici e sintetici
+│   │   │       ├── ChartSignal.ts     # Classe base astratta per tutti i segnali
+│   │   │       ├── LinearSignal.ts    # Crescita lineare (benchmark)
+│   │   │       ├── CompoundSignal.ts  # Crescita composta (interesse composto)
+│   │   │       ├── SineSignal.ts      # Sinusoide (test/demo)
+│   │   │       ├── EmaSignal.ts       # Exponential Moving Average
+│   │   │       ├── MacdSignal.ts      # MACD (3 sotto-segnali: line, signal, histogram)
+│   │   │       ├── RsiSignal.ts       # Relative Strength Index (asse secondario)
+│   │   │       ├── BollingerSignal.ts # Bande di Bollinger (confidence band)
+│   │   │       ├── FxPairSignal.ts    # Confronto con altra coppia FX
+│   │   │       ├── registry.ts        # Registry segnali per tipo
+│   │   │       └── index.ts           # Re-export
 │   │   ├── lib/components/    # Componenti riutilizzabili
 │   │   │   ├── ui/            # Componenti base
 │   │   │   │   ├── select/    # BaseDropdown, SimpleSelect, SearchSelect,
@@ -57,10 +70,12 @@ LibreFolio/
 │   │   │   │   ├── OrderableList.svelte    # Drag & drop + frecce riordinamento
 │   │   │   │   ├── ModalBase.svelte        # Base modale riusabile
 │   │   │   │   ├── ConfirmModal.svelte     # Modale di conferma
+│   │   │   │   ├── InfoBanner.svelte       # Banner info/warning/error riutilizzabile
 │   │   │   │   ├── Tooltip.svelte          # Tooltip hover
-│   │   │   │   └── ErrorBanner.svelte      # Banner errore
+│   │   │   │   └── ErrorBanner.svelte      # Banner errore (legacy)
 │   │   │   ├── charts/        # Libreria grafici ECharts ← NUOVA Phase 5
-│   │   │   │   ├── LineChart.svelte        # Grafico linee con visualMap colori
+│   │   │   │   ├── LineChart.svelte        # Grafico linee multi-asse, visualMap, stale gradient
+│   │   │   │   ├── ChartSettingsModal.svelte # ⚙️ Modale impostazioni grafici globali/locali
 │   │   │   │   ├── CandlestickChart.svelte # Grafico candele
 │   │   │   │   ├── DataZoomBar.svelte      # Barra zoom temporale
 │   │   │   │   ├── VolumeBar.svelte        # Barra variazione %
@@ -89,7 +104,7 @@ LibreFolio/
 │   │   │   ├── EditBuffer.ts         # Buffer edit con dirty tracking
 │   │   │   ├── auth.ts, settings.ts, language.ts, globalSettings.ts
 │   │   ├── lib/api/           # Zodios client + OpenAPI types
-│   │   └── lib/i18n/          # Traduzioni (EN, IT, FR, ES)
+│   │   └── lib/i18n/          # Traduzioni (EN, IT, FR, ES) — 620+ chiavi, 4 lingue
 │   ├── e2e/                   # Playwright E2E tests (67+ test)
 │   └── build/                 # Build statica (servita da FastAPI)
 │
@@ -154,15 +169,19 @@ LibreFolio/
 12. **E2E Test Gallery**: Screenshot automatici per documentazione (light/dark)
 13. **TimeSeriesStore<T>**: Cache client-side generica con gap-detection e merge incrementale
 14. **Componenti chart modulari**: Libreria ECharts con 10+ sotto-componenti riusabili per FX e futuri Asset
+15. **Signal Library**: Segnali tecnici (EMA, MACD, RSI, Bollinger) e sintetici (lineare, composto, seno) calcolati iterativamente in O(N) nel frontend
+16. **Multi-Axis Charts**: Fino a 3 assi Y (primario, RSI 0-100, MACD) con auto-label e offset
+17. **InfoBanner Component**: Banner info/warning/error/success riutilizzabile con varianti e dark mode, usato ovunque
+18. **ChartSettingsModal**: Modale unica per impostazioni grafici (estetica + segnali overlay) con preview live sinusoide
 
-## 📊 Stato Attuale (4 Marzo 2026)
+## 📊 Stato Attuale (10 Marzo 2026)
 
 ### ✅ Backend Completato
 
 - **Database**: Schema con Users, Brokers, Assets, Transactions, FX Rates, Price History
 - **API**: 84+ endpoints operativi per tutte le entità
 - **Auth**: Registrazione, Login, Session cookie, Password change, First user = admin
-- **FX Multi-Provider**: ECB, FED, BOE, SNB + MANUAL (sentinella) con fallback automatico
+- **FX Multi-Provider**: ECB, FED, BOE, SNB (JSON API con dimensioni dinamiche) + MANUAL (sentinella) con fallback automatico
 - **FX Provider API potenziata**: `GET /fx/providers` restituisce `base_currencies` + `target_currencies`, con filtro opzionale per provider codes
 - **Asset Providers**: yfinance, JustETF, CSS Scraper, Scheduled Investment
 - **BRIM**: 11 plugin (IBKR, Degiro, Directa, eToro, Coinbase, Revolut, Trading212, etc.)
@@ -209,13 +228,37 @@ LibreFolio/
 - **TimeSeriesStore<T>**: Cache client-side generica con `getRange()`, `merge()`, `invalidateRange()`, `invalidateAll()`. Registry condivisa tra card e detail page.
 
 - **Libreria Chart ECharts** (10+ componenti modulari):
-  - LineChart con visualMap piecewise (rosso < 0, verde > 0 in % mode)
+  - LineChart con multi-asse Y (primario + RSI + MACD), visualMap piecewise (rosso/verde), stale gradient
   - CandlestickChart per forex con apertura = chiusura giorno precedente
-  - DataZoomBar collegata bidirezionalmente al chart principale
+  - DataZoomBar collegata bidirezionalmente al chart principale (zoom preservato tra update)
   - VolumeBar per variazione % giornaliera
   - MeasureOverlay con coordinate pixel reali
   - PriceChartCompact con mini-axis per card
   - SemiDonutChart (estratto da broker sharing per riuso)
+  - **ChartSettingsModal**: Modale globale/locale per estetica grafici e segnali overlay
+    - Toggle: Baseline Colors (verde/rosso), Area Fill (gradiente), Grid Lines, Stale Gradient
+    - Y-Axis Scale: Auto / Custom (min/max) con validazione
+    - Preview live con sinusoide sintetica + segnali configurati
+    - Switch Abs/% nella preview
+    - 3 dropdown categorizzati per aggiungere segnali: Technical Indicators, Data Comparison, Synthetic Benchmarks
+    - Card segnale con style popover: matrice 2×3 marker (none/arrow/circle/diamond/rect/pin), stile linea, spessore
+    - Drag & drop + frecce mobile per riordinamento segnali
+    - Confirm discard se dirty
+
+- **Signal Library** (`frontend/src/lib/charts/signals/`):
+  - **ChartSignal.ts**: Classe base astratta con `render()`, `getDefaultStyle()`, `getAxisId()`
+  - **Segnali sintetici**: LinearSignal (crescita lineare), CompoundSignal (interesse composto iterativo), SineSignal (sinusoide parametrica)
+  - **Indicatori tecnici**: EmaSignal (EMA, filtro IIR 1° ordine), RsiSignal (RSI su asse secondario 0-100), MacdSignal (3 sotto-segnali: MACD line, Signal line, Histogram come barre), BollingerSignal (confidence band con area tra upper/lower)
+  - **Data Comparison**: FxPairSignal (confronto con altra coppia FX, con inversione rate)
+  - Ogni segnale calcola in O(N) con formula iterativa (commenti in-code)
+  - Offset percentuale rispetto al dato base per tutti i segnali
+  - Supporto multi-asse: primario (stessa scala), RSI (0-100), MACD (auto-scaled)
+
+- **InfoBanner Component** (`frontend/src/lib/components/ui/InfoBanner.svelte`):
+  - Varianti: info (blu), warning (ambra), error (rosso), success (verde)
+  - Dark mode con saturazione attenuata
+  - Icona opzionale, slot per contenuto custom
+  - Usato in: ChartSettingsModal, FxProviderConfig, BrokerSharingModal, GlobalSettingsTab, ProfileTab
 
 - **Provider MANUAL** (backend + frontend):
   - Backend: auto-insert con priority=999 quando nessun provider reale, auto-remove quando si aggiunge provider reale, auto-reinstate quando si rimuove l'ultimo, filtrato da GET /fx/providers
@@ -227,13 +270,16 @@ LibreFolio/
   - `CurrencySearchSelect`: SearchSelect specializzato per valute con simboli/emoji, prop `allowedCurrencies`
   - `FxProviderSelect`: SearchSelect specializzato per provider FX con icone e badge compatibilità
   - `ConfirmModal`: Modale conferma azione distruttiva
+  - `InfoBanner`: Banner info/warning/error/success riutilizzabile con dark mode
+  - `ChartSettingsModal`: Modale impostazioni grafici (estetica + segnali overlay) con preview live
 
 **Cosa resta da rifinire (Phase 5 — Refinements):**
 
-- **Step 8 del sub-plan**: Chart Settings ⚙️ popover (checkbox per baseline color, area fill, grid lines, stale gradient), overlay confronto tra coppie FX, linea di crescita sintetica (benchmark)
-- **Stale data gradient**: Opacità ridotta per punti con backward-fill (dato vecchio)
-- **Documentation**: Pagine MkDocs per FX (user guide), i18n MkDocs globale
-- **Micro-fix UX**: Colori percentuale negativi segmentati per tutta la linea, tooltip con nota baseline
+- **FX Sync API Redesign**: Endpoint bulk per coppie (non singole valute), risposta con dettagli per coppia e provider usato (piano: `plan-fxSyncApiRedesign.prompt.md`)
+- **Applicazione segnali ai grafici reali**: Collegare i segnali della modal al grafico della pagina FX list/detail tramite Apply
+- **MkDocs Documentation**: Pagine per FX (user guide), Financial Mathematics (formule LaTeX per EMA/MACD/RSI/Bollinger), Signal Processing equivalents
+- **Parameter tooltips**: Info icon (?) accanto a ogni parametro segnale con spiegazione intuitiva, link a docs
+- **Phase 5 cleanup**: Consolidamento codice, test, documentazione developer
 
 ### 🔲 Da Implementare (Phase 6+)
 
@@ -261,12 +307,13 @@ LibreFolio/
 | **Componenti UI Base**  | `frontend/src/lib/components/ui/`                         |
 | **Componenti Select**   | `frontend/src/lib/components/ui/select/`                  |
 | **Componenti Chart**    | `frontend/src/lib/components/charts/`                     |
+| **Signal Library**      | `frontend/src/lib/charts/signals/` (ChartSignal, EMA, MACD, RSI, Bollinger, etc.) |
 | **Componenti FX**       | `frontend/src/lib/components/fx/`                         |
 | **Componenti Settings** | `frontend/src/lib/components/settings/`                   |
 | **Stores (cache, auth)**| `frontend/src/lib/stores/`                                |
 | **E2E Tests**           | `frontend/e2e/`                                           |
 | **API Client (Zodios)** | `frontend/src/lib/api/`                                   |
-| **Traduzioni**          | `frontend/src/lib/i18n/locales/`                          |
+| **Traduzioni**          | `frontend/src/lib/i18n/{en,it,fr,es}.json`                |
 | **CLI Scripts**         | `scripts/`                                                |
 | **Roadmap UI**          | `LibreFolio_developer_journal/RoadmapV4_UI/`              |
 | **Plan attivi**         | `RoadmapV4_UI/plan-*.md` (root)                           |
@@ -329,7 +376,8 @@ dev.py [-h]
 │ ├──╴add KEY --en --it --fr --es     # Aggiungi chiave a tutte le lingue
 │ ├──╴remove KEY [-f]                 # Rimuovi chiave da tutte le lingue
 │ ├──╴update KEY [--en] [--it] [--fr] [--es]  # Modifica traduzioni
-│ ╰──╴search QUERY [-k] [-v] [-l LANG]  # Cerca in chiavi e/o valori, filtro per lingua
+│ ├──╴search QUERY [-k] [-v] [-l LANG]  # Cerca in chiavi e/o valori, filtro per lingua
+│ ╰──╴tree [PREFIX] [--counts] [-d]   # Mostra albero chiavi i18n (620+ keys)
 ├─┬╴cache [-h]
 │ ╰──╴js [--force]                    # Aggiorna cache JS
 ├─┬╴info [-h]
@@ -358,6 +406,7 @@ dev.py [-h]
 | **Cercare traduzioni**            | `./dev.py i18n search "query"`                                             |
 | **Cercare solo nelle chiavi**     | `./dev.py i18n search "common" --keys`                                     |
 | **Cercare solo nei valori IT**    | `./dev.py i18n search "Annulla" --values --lang it`                        |
+| **Albero chiavi i18n**            | `./dev.py i18n tree` (oppure `./dev.py i18n tree chartSettings`)           |
 | **Modificare traduzione**         | `./dev.py i18n update "key.path" --it "nuova traduzione"`                  |
 | **Build per produzione**          | `./dev.py front build && ./dev.py server`                                  |
 | **Nuovo utente**                  | `./dev.py user create admin admin@mail.com pass`                           |

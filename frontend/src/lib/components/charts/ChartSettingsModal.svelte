@@ -197,14 +197,23 @@
     let confirmCloseOpen = $state(false);
 
     function handleSave() {
+        // If custom mode and min > max, swap them automatically
+        let savedMin = yAxisMode === 'custom' ? yAxisMin : undefined;
+        let savedMax = yAxisMode === 'custom' ? yAxisMax : undefined;
+        if (savedMin !== undefined && savedMax !== undefined && savedMin > savedMax) {
+            [savedMin, savedMax] = [savedMax, savedMin];
+            // Also fix local state so re-opening shows corrected values
+            yAxisMin = savedMin;
+            yAxisMax = savedMax;
+        }
         const result: ChartSettings = {
             colorByBaseline,
             areaFill,
             gridLines,
             staleGradient,
             yAxisMode,
-            yAxisMin: yAxisMode === 'custom' ? yAxisMin : undefined,
-            yAxisMax: yAxisMode === 'custom' ? yAxisMax : undefined,
+            yAxisMin: savedMin,
+            yAxisMax: savedMax,
             signals: deepClone(signals),
         };
         onsave?.(result);
