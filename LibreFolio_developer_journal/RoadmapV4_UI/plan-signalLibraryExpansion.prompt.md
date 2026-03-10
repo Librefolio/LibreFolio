@@ -9,9 +9,9 @@ in 3 dropdown categorizzati (usando i componenti `SimpleSelect` esistenti), dual
 scala indipendente (RSI, MACD), tooltip informativi con supporto LaTeX (KaTeX), e documentazione MkDocs
 completa sulla teoria finanziaria con equivalenze signal processing / controlli automatici.
 
-**Stato**: 🔄 IN PROGRESS — Steps 1-4F ✅, Steps 4G-4I 🔄 IN PROGRESS, Steps 5-7 TODO
+**Stato**: 🔄 IN PROGRESS — Steps 1-4K ✅, Steps 5-7 TODO
 **Data creazione**: 9 Marzo 2026
-**Ultimo aggiornamento**: 10 Marzo 2026 (staleGradient reactivity fix, MACD auto-scale primary axis, RSI solo su secondary)
+**Ultimo aggiornamento**: 10 Marzo 2026 (MACD scaleNote 2 decimali, Signal Line unified popover, marker support)
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
@@ -1120,8 +1120,8 @@ Nuova soluzione:
 
 - **Tutte e 3 le componenti MACD** → `yAxisIndex: 0` (asse primario)
 - **Auto-scale**: quando `histogramScale = 0` (default), il multiplier viene calcolato automaticamente
-  affinché il valore massimo assoluto MACD occupi circa il 15% del range del dato base.
-  `histScale = (baseRange × 0.15) / maxMacdValue`
+   affinché il valore massimo assoluto MACD occupi circa il 25% del range del dato base.
+   `histScale = (baseRange × 0.25) / maxMacdValue`
 - Lo stesso moltiplicatore viene applicato uniformemente a MACD Line, Signal Line E Histogram.
 - Nel tooltip, ogni label include `[Nx×]` per indicare il fattore di scala.
 - Solo **RSI** usa `yAxisIndex: 1` (asse secondario, scala 0-100 indipendente).
@@ -1203,7 +1203,7 @@ asse con scale radicalmente diverse (MACD ~±0.01 vs RSI 0-100), rendendo uno de
 
 **Soluzione**: MACD → asse primario (0) con auto-scale. Solo RSI resta su asse secondario (1).
 - `histogramScale=0` (nuovo default) → auto-calcola il multiplier: `targetSize / maxMacdValue`
-  dove `targetSize = baseRange × 15%`. Il fattore è applicato uniformemente a tutte e 3 le componenti.
+  dove `targetSize = baseRange × 25%`. Il fattore è applicato uniformemente a tutte e 3 le componenti.
 - Nel tooltip label: `MACD(12,26,9) [42×]` per indicare il fattore.
 - Signal Line colore di default: eredita dalla card (era hardcoded #f59e0b amber).
 
@@ -1211,6 +1211,40 @@ asse con scale radicalmente diverse (MACD ~±0.01 vs RSI 0-100), rendendo uno de
 - `frontend/src/lib/components/charts/LineChart.svelte` — `showGradient` nel $effect
 - `frontend/src/lib/charts/signals/MacdSignal.ts` — yAxisIndex=0, auto-scale, default color
 - `frontend/src/lib/components/charts/ChartSettingsModal.svelte` — Signal Line color fallback
+
+---
+
+## Step 4K — ✅ MACD scaleNote 2 decimali + Signal Line unified popover (10 Mar 2026)
+
+### Bug 1: Moltiplicatore MACD arrotondato al primo intero nella leggenda
+Il `scaleNote` nella label del tooltip MACD mostrava il multiplier arrotondato con `Math.round()`
+(es. "2×" anziché "1.66×"). L'utente voleva vedere 2 cifre decimali per chiarezza.
+
+**Fix**: In `MacdSignal.ts`, la funzione `scaleNote` ora usa sempre `.toFixed(2)` per qualsiasi
+valore, eliminando il branch con `Math.round()`. Per valori ≥1000 usa `(v/1000).toFixed(2)k×`.
+
+### Bug 2: Signal Line del MACD non usava lo stesso componente della MACD Line
+La Signal Line nella card MACD aveva un controllo stile semplificato (3 pulsanti per lineType
+e 3 per lineWidth, senza popover unificato e senza marker). L'utente voleva lo stesso
+componente della riga MACD Line con il popover completo (start marker, line type/width, end marker).
+
+**Soluzione**:
+1. Rimosso completamente il vecchio blocco Signal Line (pulsanti stile/width inline)
+2. Sostituito con layout **side-by-side**: 2 colonne flex identiche, una per MACD Line e una per Signal Line
+3. Ogni colonna ha: label ("MACD Line" / "Signal Line"), color picker, SVG preview (con marker start/end + linea)
+4. Cliccando sulla SVG preview si apre il popover unificato identico, con griglia 2×3 marker start, line type/width, griglia 2×3 marker end
+5. Il popover MACD Line usa ID `signal.id + '-macd'`, il Signal Line usa `signal.id + '-signal'`
+6. Il Row 3 originale (style strip generico) è ora skippato per `signal.signalType === 'macd'`
+7. In `MacdSignal.ts`, aggiunti params `_signalMarkerStart` e `_signalMarkerEnd` (tipo `MarkerType`),
+   propagati nel `RenderedSignal` output della Signal Line
+
+**Le `{@const}` Svelte** per le variabili Signal Line (sigColor, sigLW, sigLT, sigMS, sigME) sono
+wrappate in `{#if true}` perché Svelte richiede `{@const}` come figli diretti di blocchi logici,
+non di elementi HTML.
+
+### File modificati
+- `frontend/src/lib/charts/signals/MacdSignal.ts` — scaleNote toFixed(2), +MarkerType import, +signalMarkerStart/End
+- `frontend/src/lib/components/charts/ChartSettingsModal.svelte` — MACD side-by-side style rows with unified popovers
 
 ---
 

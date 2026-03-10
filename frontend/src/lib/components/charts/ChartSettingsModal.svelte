@@ -676,10 +676,9 @@
                                 {/if}
 
                                 <!-- Row 3: Visual Style Strip — color + SVG preview (click opens unified popover) -->
-                                {#if signal.signalType === 'macd'}
-                                    <span class="text-[9px] text-gray-500 dark:text-gray-400 uppercase pt-1.5 border-t border-gray-100 dark:border-slate-700">MACD Line</span>
-                                {/if}
-                                <div class="flex items-center gap-1.5 {signal.signalType !== 'macd' ? 'pt-1.5 border-t border-gray-100 dark:border-slate-700' : ''}">
+                                <!-- Skip for MACD: handled in the dedicated side-by-side Row 4 below -->
+                                {#if signal.signalType !== 'macd'}
+                                <div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700">
                                     <!-- Color picker -->
                                     <input
                                         type="color"
@@ -847,65 +846,275 @@
                                         {/if}
                                     </div>
                                 </div>
+                                {/if}
 
-                                <!-- Row 4 (MACD only): Signal Line style row -->
+                                <!-- Row 4 (MACD only): Both style rows side-by-side -->
                                 {#if signal.signalType === 'macd'}
-                                    <span class="text-[9px] text-gray-500 dark:text-gray-400 uppercase">Signal Line</span>
-                                    <div class="flex items-center gap-1.5">
-                                        <!-- Signal Line color picker -->
-                                        <input
-                                            type="color"
-                                            value={signal.params._signalColor?.toString() ?? '#f59e0b'}
-                                            class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
-                                            title="Signal Line Color"
-                                            oninput={(e) => updateSignalParam(signal.id, '_signalColor', e.currentTarget.value)}
-                                        />
-                                        <!-- Signal Line SVG preview -->
-                                        <div class="flex-1">
-                                            <div class="w-full h-7 flex items-center rounded relative">
-                                                <svg width="100%" height="24" class="absolute inset-0">
-                                                    <line
-                                                        x1="2%" y1="14" x2="98%" y2="14"
-                                                        stroke={signal.params._signalColor?.toString() ?? '#f59e0b'}
-                                                        stroke-width={Number(signal.params._signalLineWidth ?? 1)}
-                                                        stroke-dasharray={signal.params._signalLineType === 'dotted' ? '2,4' : signal.params._signalLineType === 'solid' ? 'none' : '8,4'}
-                                                    />
-                                                </svg>
+                                    <div class="flex gap-3 pt-1.5 border-t border-gray-100 dark:border-slate-700">
+                                        <!-- MACD Line label -->
+                                        <div class="flex-1 min-w-0">
+                                            <span class="text-[9px] text-gray-500 dark:text-gray-400 uppercase block mb-1">MACD Line</span>
+                                            <div class="flex items-center gap-1.5">
+                                                <input
+                                                    type="color"
+                                                    value={signal.style.color}
+                                                    class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
+                                                    title={$t('chartSettings.style.color')}
+                                                    oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
+                                                />
+                                                <div class="flex-1 relative">
+                                                    <button
+                                                        type="button"
+                                                        class="w-full h-7 flex items-center cursor-pointer rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors relative"
+                                                        title={$t('chartSettings.style.lineType')}
+                                                        onclick={() => toggleStylePopover(signal.id + '-macd')}
+                                                    >
+                                                        <svg class="absolute left-0 top-1/2 -translate-y-1/2 overflow-visible" width="16" height="24">
+                                                            {#if signal.style.markerStart === 'arrow'}
+                                                                <polygon points="12,5 4,12 12,19" fill={signal.style.color} />
+                                                            {:else if signal.style.markerStart === 'circle'}
+                                                                <circle cx="8" cy="12" r="5" fill={signal.style.color} />
+                                                            {:else if signal.style.markerStart === 'diamond'}
+                                                                <polygon points="8,4 14,12 8,20 2,12" fill={signal.style.color} />
+                                                            {:else if signal.style.markerStart === 'rect'}
+                                                                <rect x="2" y="6" width="12" height="12" fill={signal.style.color} rx="1"></rect>
+                                                            {:else if signal.style.markerStart === 'pin'}
+                                                                <circle cx="8" cy="4" r="3.5" fill={signal.style.color} />
+                                                                <line x1="8" y1="7.5" x2="8" y2="12" stroke={signal.style.color} stroke-width="1.5" />
+                                                                <circle cx="8" cy="12" r="1.5" fill={signal.style.color} />
+                                                            {/if}
+                                                        </svg>
+                                                        <svg width="100%" height="24" class="absolute inset-0">
+                                                            <line
+                                                                x1="2%" y1="14" x2="98%" y2="14"
+                                                                stroke={signal.style.color}
+                                                                stroke-width={signal.style.lineWidth}
+                                                                stroke-dasharray={signal.style.lineType === 'dashed' ? '8,4' : signal.style.lineType === 'dotted' ? '2,4' : 'none'}
+                                                            />
+                                                        </svg>
+                                                        <svg class="absolute right-0 top-1/2 -translate-y-1/2 overflow-visible" width="16" height="24">
+                                                            {#if signal.style.markerEnd === 'arrow'}
+                                                                <polygon points="4,5 12,12 4,19" fill={signal.style.color} />
+                                                            {:else if signal.style.markerEnd === 'circle'}
+                                                                <circle cx="8" cy="12" r="5" fill={signal.style.color} />
+                                                            {:else if signal.style.markerEnd === 'diamond'}
+                                                                <polygon points="8,4 14,12 8,20 2,12" fill={signal.style.color} />
+                                                            {:else if signal.style.markerEnd === 'rect'}
+                                                                <rect x="2" y="6" width="12" height="12" fill={signal.style.color} rx="1" />
+                                                            {:else if signal.style.markerEnd === 'pin'}
+                                                                <circle cx="8" cy="4" r="3.5" fill={signal.style.color} />
+                                                                <line x1="8" y1="7.5" x2="8" y2="12" stroke={signal.style.color} stroke-width="1.5" />
+                                                                <circle cx="8" cy="12" r="1.5" fill={signal.style.color} />
+                                                            {/if}
+                                                        </svg>
+                                                    </button>
+                                                    <!-- MACD Line style popover -->
+                                                    {#if stylePopoverId === signal.id + '-macd'}
+                                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                                        <div class="fixed inset-0 z-10" onclick={closeAllPopovers}></div>
+                                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                                        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20
+                                                            bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
+                                                            rounded-lg shadow-lg p-3 w-max"
+                                                            onclick={(e) => e.stopPropagation()}>
+                                                            <div class="flex items-center gap-4">
+                                                                <div class="flex flex-col items-center">
+                                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerStart')}</span>
+                                                                    <div class="grid grid-cols-2 gap-1.5">
+                                                                        {#each MARKER_OPTIONS as mk}
+                                                                            <button type="button" aria-label={mk ?? 'none'}
+                                                                                class="w-8 h-8 flex items-center justify-center rounded border transition-colors
+                                                                                    {signal.style.markerStart === mk ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500'}"
+                                                                                onclick={() => updateSignalStyle(signal.id, 'markerStart', mk)}>
+                                                                                {#if mk === null}<span class="text-[10px] text-gray-400">✕</span>
+                                                                                {:else}<span style="color: {signal.style.color}" class="text-sm leading-none">{MARKER_SYMBOLS_START[mk]}</span>{/if}
+                                                                            </button>
+                                                                        {/each}
+                                                                    </div>
+                                                                </div>
+                                                                <div class="flex flex-col items-center border-x border-gray-200 dark:border-slate-600 px-4">
+                                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.lineType')}</span>
+                                                                    <div class="flex gap-1.5 mb-3">
+                                                                        {#each LINE_TYPES as lt}
+                                                                            <button type="button" aria-label={lt}
+                                                                                class="w-10 h-6 flex items-center justify-center rounded border transition-colors
+                                                                                    {signal.style.lineType === lt ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
+                                                                                onclick={() => updateSignalStyle(signal.id, 'lineType', lt)}>
+                                                                                <svg width="32" height="6"><line x1="2" y1="3" x2="30" y2="3" stroke={signal.style.color} stroke-width="2"
+                                                                                    stroke-dasharray={lt === 'dashed' ? '5,3' : lt === 'dotted' ? '2,3' : 'none'} /></svg>
+                                                                            </button>
+                                                                        {/each}
+                                                                    </div>
+                                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.width')}</span>
+                                                                    <div class="flex gap-1.5">
+                                                                        {#each [1, 2, 3, 4] as w}
+                                                                            <button type="button" aria-label="width {w}"
+                                                                                class="w-7 h-6 flex items-center justify-center rounded border transition-colors
+                                                                                    {signal.style.lineWidth === w ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
+                                                                                onclick={() => updateSignalStyle(signal.id, 'lineWidth', w)}>
+                                                                                <svg width="20" height="10"><line x1="2" y1="5" x2="18" y2="5" stroke={signal.style.color} stroke-width={w} /></svg>
+                                                                            </button>
+                                                                        {/each}
+                                                                    </div>
+                                                                </div>
+                                                                <div class="flex flex-col items-center">
+                                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerEnd')}</span>
+                                                                    <div class="grid grid-cols-2 gap-1.5">
+                                                                        {#each MARKER_OPTIONS as mk}
+                                                                            <button type="button" aria-label={mk ?? 'none'}
+                                                                                class="w-8 h-8 flex items-center justify-center rounded border transition-colors
+                                                                                    {signal.style.markerEnd === mk ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500'}"
+                                                                                onclick={() => updateSignalStyle(signal.id, 'markerEnd', mk)}>
+                                                                                {#if mk === null}<span class="text-[10px] text-gray-400">✕</span>
+                                                                                {:else}<span style="color: {signal.style.color}" class="text-sm leading-none">{MARKER_SYMBOLS_END[mk]}</span>{/if}
+                                                                            </button>
+                                                                        {/each}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    {/if}
+                                                </div>
                                             </div>
                                         </div>
-                                        <!-- Signal Line style quick buttons -->
-                                        <div class="flex gap-0.5 shrink-0">
-                                            {#each LINE_TYPES as lt}
-                                                <button
-                                                    type="button"
-                                                    aria-label="Signal line style: {lt}"
-                                                    class="w-6 h-5 flex items-center justify-center rounded border transition-colors
-                                                        {(signal.params._signalLineType ?? 'dashed') === lt ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600'}"
-                                                    onclick={() => updateSignalParam(signal.id, '_signalLineType', lt)}
-                                                >
-                                                    <svg width="16" height="4">
-                                                        <line x1="1" y1="2" x2="15" y2="2"
-                                                            stroke={signal.params._signalColor?.toString() ?? signal.style.color}
-                                                            stroke-width="1.5"
-                                                            stroke-dasharray={lt === 'dashed' ? '4,2' : lt === 'dotted' ? '1,2' : 'none'}
-                                                        />
-                                                    </svg>
-                                                </button>
-                                            {/each}
+
+                                        <!-- Signal Line label -->
+                                        {#if true}
+                                        {@const sigColor = signal.params._signalColor?.toString() ?? '#f59e0b'}
+                                        {@const sigLW = Number(signal.params._signalLineWidth ?? 1)}
+                                        {@const sigLT = (signal.params._signalLineType?.toString() ?? 'dashed')}
+                                        {@const sigMS = (signal.params._signalMarkerStart?.toString() ?? null)}
+                                        {@const sigME = (signal.params._signalMarkerEnd?.toString() ?? null)}
+                                        <div class="flex-1 min-w-0">
+                                            <span class="text-[9px] text-gray-500 dark:text-gray-400 uppercase block mb-1">Signal Line</span>
+                                            <div class="flex items-center gap-1.5">
+                                                <input
+                                                    type="color"
+                                                    value={sigColor}
+                                                    class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
+                                                    title="Signal Line Color"
+                                                    oninput={(e) => updateSignalParam(signal.id, '_signalColor', e.currentTarget.value)}
+                                                />
+                                                <div class="flex-1 relative">
+                                                    <button
+                                                        type="button"
+                                                        class="w-full h-7 flex items-center cursor-pointer rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors relative"
+                                                        title={$t('chartSettings.style.lineType')}
+                                                        onclick={() => toggleStylePopover(signal.id + '-signal')}
+                                                    >
+                                                        <svg class="absolute left-0 top-1/2 -translate-y-1/2 overflow-visible" width="16" height="24">
+                                                            {#if sigMS === 'arrow'}
+                                                                <polygon points="12,5 4,12 12,19" fill={sigColor} />
+                                                            {:else if sigMS === 'circle'}
+                                                                <circle cx="8" cy="12" r="5" fill={sigColor} />
+                                                            {:else if sigMS === 'diamond'}
+                                                                <polygon points="8,4 14,12 8,20 2,12" fill={sigColor} />
+                                                            {:else if sigMS === 'rect'}
+                                                                <rect x="2" y="6" width="12" height="12" fill={sigColor} rx="1"></rect>
+                                                            {:else if sigMS === 'pin'}
+                                                                <circle cx="8" cy="4" r="3.5" fill={sigColor} />
+                                                                <line x1="8" y1="7.5" x2="8" y2="12" stroke={sigColor} stroke-width="1.5" />
+                                                                <circle cx="8" cy="12" r="1.5" fill={sigColor} />
+                                                            {/if}
+                                                        </svg>
+                                                        <svg width="100%" height="24" class="absolute inset-0">
+                                                            <line
+                                                                x1="2%" y1="14" x2="98%" y2="14"
+                                                                stroke={sigColor}
+                                                                stroke-width={sigLW}
+                                                                stroke-dasharray={sigLT === 'dashed' ? '8,4' : sigLT === 'dotted' ? '2,4' : 'none'}
+                                                            />
+                                                        </svg>
+                                                        <svg class="absolute right-0 top-1/2 -translate-y-1/2 overflow-visible" width="16" height="24">
+                                                            {#if sigME === 'arrow'}
+                                                                <polygon points="4,5 12,12 4,19" fill={sigColor} />
+                                                            {:else if sigME === 'circle'}
+                                                                <circle cx="8" cy="12" r="5" fill={sigColor} />
+                                                            {:else if sigME === 'diamond'}
+                                                                <polygon points="8,4 14,12 8,20 2,12" fill={sigColor} />
+                                                            {:else if sigME === 'rect'}
+                                                                <rect x="2" y="6" width="12" height="12" fill={sigColor} rx="1" />
+                                                            {:else if sigME === 'pin'}
+                                                                <circle cx="8" cy="4" r="3.5" fill={sigColor} />
+                                                                <line x1="8" y1="7.5" x2="8" y2="12" stroke={sigColor} stroke-width="1.5" />
+                                                                <circle cx="8" cy="12" r="1.5" fill={sigColor} />
+                                                            {/if}
+                                                        </svg>
+                                                    </button>
+                                                    <!-- Signal Line style popover -->
+                                                    {#if stylePopoverId === signal.id + '-signal'}
+                                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                                        <div class="fixed inset-0 z-10" onclick={closeAllPopovers}></div>
+                                                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                                        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20
+                                                            bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
+                                                            rounded-lg shadow-lg p-3 w-max"
+                                                            onclick={(e) => e.stopPropagation()}>
+                                                            <div class="flex items-center gap-4">
+                                                                <div class="flex flex-col items-center">
+                                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerStart')}</span>
+                                                                    <div class="grid grid-cols-2 gap-1.5">
+                                                                        {#each MARKER_OPTIONS as mk}
+                                                                            <button type="button" aria-label={mk ?? 'none'}
+                                                                                class="w-8 h-8 flex items-center justify-center rounded border transition-colors
+                                                                                    {sigMS === (mk ?? '') || (!sigMS && mk === null) ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500'}"
+                                                                                onclick={() => updateSignalParam(signal.id, '_signalMarkerStart', mk)}>
+                                                                                {#if mk === null}<span class="text-[10px] text-gray-400">✕</span>
+                                                                                {:else}<span style="color: {sigColor}" class="text-sm leading-none">{MARKER_SYMBOLS_START[mk]}</span>{/if}
+                                                                            </button>
+                                                                        {/each}
+                                                                    </div>
+                                                                </div>
+                                                                <div class="flex flex-col items-center border-x border-gray-200 dark:border-slate-600 px-4">
+                                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.lineType')}</span>
+                                                                    <div class="flex gap-1.5 mb-3">
+                                                                        {#each LINE_TYPES as lt}
+                                                                            <button type="button" aria-label={lt}
+                                                                                class="w-10 h-6 flex items-center justify-center rounded border transition-colors
+                                                                                    {sigLT === lt ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
+                                                                                onclick={() => updateSignalParam(signal.id, '_signalLineType', lt)}>
+                                                                                <svg width="32" height="6"><line x1="2" y1="3" x2="30" y2="3" stroke={sigColor} stroke-width="2"
+                                                                                    stroke-dasharray={lt === 'dashed' ? '5,3' : lt === 'dotted' ? '2,3' : 'none'} /></svg>
+                                                                            </button>
+                                                                        {/each}
+                                                                    </div>
+                                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.width')}</span>
+                                                                    <div class="flex gap-1.5">
+                                                                        {#each [1, 2, 3, 4] as w}
+                                                                            <button type="button" aria-label="width {w}"
+                                                                                class="w-7 h-6 flex items-center justify-center rounded border transition-colors
+                                                                                    {sigLW === w ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
+                                                                                onclick={() => updateSignalParam(signal.id, '_signalLineWidth', w)}>
+                                                                                <svg width="20" height="10"><line x1="2" y1="5" x2="18" y2="5" stroke={sigColor} stroke-width={w} /></svg>
+                                                                            </button>
+                                                                        {/each}
+                                                                    </div>
+                                                                </div>
+                                                                <div class="flex flex-col items-center">
+                                                                    <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerEnd')}</span>
+                                                                    <div class="grid grid-cols-2 gap-1.5">
+                                                                        {#each MARKER_OPTIONS as mk}
+                                                                            <button type="button" aria-label={mk ?? 'none'}
+                                                                                class="w-8 h-8 flex items-center justify-center rounded border transition-colors
+                                                                                    {sigME === (mk ?? '') || (!sigME && mk === null) ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500'}"
+                                                                                onclick={() => updateSignalParam(signal.id, '_signalMarkerEnd', mk)}>
+                                                                                {#if mk === null}<span class="text-[10px] text-gray-400">✕</span>
+                                                                                {:else}<span style="color: {sigColor}" class="text-sm leading-none">{MARKER_SYMBOLS_END[mk]}</span>{/if}
+                                                                            </button>
+                                                                        {/each}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    {/if}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <!-- Signal Line width quick buttons -->
-                                        <div class="flex gap-0.5 shrink-0">
-                                            {#each [1, 2, 3] as w}
-                                                <button
-                                                    type="button"
-                                                    class="w-5 h-5 flex items-center justify-center rounded border transition-colors text-[9px]
-                                                        {Number(signal.params._signalLineWidth ?? 1) === w ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600'}"
-                                                    onclick={() => updateSignalParam(signal.id, '_signalLineWidth', w)}
-                                                >
-                                                    {w}
-                                                </button>
-                                            {/each}
-                                        </div>
+                                        {/if}
                                     </div>
                                 {/if}
                             </div>

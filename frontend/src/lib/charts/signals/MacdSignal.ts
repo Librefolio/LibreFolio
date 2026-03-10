@@ -29,7 +29,7 @@
  * docs/financial-theory/technical-indicators.md#macd
  */
 
-import {ChartSignal, type SignalParamDescriptor, type RenderedSignal} from './ChartSignal';
+import {ChartSignal, type SignalParamDescriptor, type RenderedSignal, type MarkerType} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 export class MacdSignal extends ChartSignal {
@@ -181,6 +181,8 @@ export class MacdSignal extends ChartSignal {
         const signalColor = this.params._signalColor as string || this.style.color;
         const signalLineWidth = Number(this.params._signalLineWidth ?? Math.max(1, this.style.lineWidth - 1));
         const signalLineType = (this.params._signalLineType as 'solid' | 'dashed' | 'dotted') || 'dashed';
+        const signalMarkerStart = (this.params._signalMarkerStart as MarkerType) ?? null;
+        const signalMarkerEnd = (this.params._signalMarkerEnd as MarkerType) ?? null;
 
         // ── Auto-scale computation ──
         let maxMacd = 0;
@@ -215,8 +217,7 @@ export class MacdSignal extends ChartSignal {
             return data.map(d => ({...d, value: (d.value / p0) * 100}));
         };
 
-        const scaleNote = histScale >= 1000 ? `${(histScale / 1000).toFixed(0)}k×`
-            : histScale >= 1 ? `${Math.round(histScale)}×`
+        const scaleNote = histScale >= 1000 ? `${(histScale / 1000).toFixed(2)}k×`
             : `${histScale.toFixed(2)}×`;
 
         return [
@@ -238,8 +239,8 @@ export class MacdSignal extends ChartSignal {
                 color: signalColor,
                 lineWidth: signalLineWidth,
                 lineType: signalLineType,
-                markerStart: null,
-                markerEnd: null,
+                markerStart: signalMarkerStart,
+                markerEnd: signalMarkerEnd,
                 yAxisIndex: 0,
             },
             {
