@@ -885,7 +885,7 @@
                                                 >
                                                     <svg width="16" height="4">
                                                         <line x1="1" y1="2" x2="15" y2="2"
-                                                            stroke={signal.params._signalColor?.toString() ?? '#f59e0b'}
+                                                            stroke={signal.params._signalColor?.toString() ?? signal.style.color}
                                                             stroke-width="1.5"
                                                             stroke-dasharray={lt === 'dashed' ? '4,2' : lt === 'dotted' ? '1,2' : 'none'}
                                                         />

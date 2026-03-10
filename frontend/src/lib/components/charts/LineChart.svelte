@@ -150,6 +150,7 @@
             void areaFill;
             void colorByBaseline;
             void showGridLines;
+            void showGradient;
             void viewMode;
             void compact;
             void showMiniAxis;

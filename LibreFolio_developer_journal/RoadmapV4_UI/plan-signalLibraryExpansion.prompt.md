@@ -11,7 +11,7 @@ completa sulla teoria finanziaria con equivalenze signal processing / controlli 
 
 **Stato**: 🔄 IN PROGRESS — Steps 1-4F ✅, Steps 4G-4I 🔄 IN PROGRESS, Steps 5-7 TODO
 **Data creazione**: 9 Marzo 2026
-**Ultimo aggiornamento**: 10 Marzo 2026 (stale gradient smooth, MACD → asse secondario, i18n tree)
+**Ultimo aggiornamento**: 10 Marzo 2026 (staleGradient reactivity fix, MACD auto-scale primary axis, RSI solo su secondary)
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
@@ -1111,34 +1111,32 @@ stesso gradiente.
 
 ### Problema 1: Valori MACD tutti a 0 sull'asse primario
 I valori MACD per coppie FX sono tipicamente ~0.001–0.01 (differenza tra due EMA di prezzi ≈0.8–1.3).
-Mettendoli sull'asse primario (scala ~0.8–1.3), le linee MACD sono completamente appiattite sullo 0.
-Il formatter con pochi decimali arrotondava tutti i tick a 0, rendendo i dati invisibili.
+Mettendoli sull'asse primario (scala ~0.8–1.3) senza scaling, le linee MACD erano appiattite sullo 0.
 
-### Soluzione Asse
-Spostare MACD Line e Signal Line su **yAxisIndex: 1** (asse secondario), dove hanno una scala
-propria auto-scalata ai loro valori piccoli. L'histogram (bar chart) resta su yAxisIndex: 0
-(asse primario) con il parametro `histogramScale` (multiplier, default 1000×) che moltiplica
-i valori per renderli visibili accanto ai dati prezzo.
+### Soluzione Asse — Auto-Scale su Asse Primario
+**Aggiornamento 10 Mar 2026**: Abbandonata la strategia "MACD su asse secondario" perché RSI e MACD
+avevano scale completamente diverse (RSI 0-100, MACD ~0.001) condividendo lo stesso asse secondario.
+Nuova soluzione:
 
-- MACD Line → `yAxisIndex: 1` (asse secondario destro, auto-scaled)
-- Signal Line → `yAxisIndex: 1` (asse secondario destro, stessa scala MACD)
-- Histogram → `yAxisIndex: 0` (asse primario, valori × histogramScale)
-
-L'asse secondario diventa visibile solo quando almeno un segnale lo usa (RSI o MACD).
+- **Tutte e 3 le componenti MACD** → `yAxisIndex: 0` (asse primario)
+- **Auto-scale**: quando `histogramScale = 0` (default), il multiplier viene calcolato automaticamente
+  affinché il valore massimo assoluto MACD occupi circa il 15% del range del dato base.
+  `histScale = (baseRange × 0.15) / maxMacdValue`
+- Lo stesso moltiplicatore viene applicato uniformemente a MACD Line, Signal Line E Histogram.
+- Nel tooltip, ogni label include `[Nx×]` per indicare il fattore di scala.
+- Solo **RSI** usa `yAxisIndex: 1` (asse secondario, scala 0-100 indipendente).
 
 ### Soluzione Card Modale
-La card MACD nel ChartSettingsModal deve mostrare:
-1. Riga parametri matematici: Fast Period, Slow Period, Signal Period, Histogram Scale
+La card MACD nel ChartSettingsModal mostra:
+1. Riga parametri: Fast Period, Slow Period, Signal Period, Histogram Scale (0=auto)
 2. Due righe di personalizzazione stile:
    - Riga 1: "MACD Line" — color picker + style popover (per la linea principale)
-   - Riga 2: "Signal Line" — color picker + style popover (per la linea segnale)
-3. Ciascuna riga con label che indica quale componente controlla
-4. L'histogram non ha personalizzazione stile (colori red/green automatici)
+   - Riga 2: "Signal Line" — color picker + style/width buttons (stesso colore di default)
+3. L'histogram non ha personalizzazione stile (colori red/green automatici)
 
 ### Parametri aggiuntivi in MacdSignal
-- `histogramScale`: tipo `number`, default 1000, min 1, max 100000, step 100
-  (moltiplica i valori histogram per visibilità sul grafico)
-- `_signalColor`: colore della Signal Line (gestito dalla 2° riga stile)
+- `histogramScale`: tipo `number`, default **0** (auto), min 0, max 100000, step 100
+- `_signalColor`: colore della Signal Line (default = colore card principale)
 - `_signalLineWidth`: spessore della Signal Line
 - `_signalLineType`: tipo tratto della Signal Line
 
@@ -1189,6 +1187,33 @@ Aggiungere un subcomando `tree` a `./dev.py i18n tree` che stampa l'albero delle
 
 ---
 
+## Step 4J — ✅ Stale Gradient Reactivity + MACD Auto-Scale Primary Axis (10 Mar 2026)
+
+### Bug 1: Stale gradient toggle non reattivo
+Attivare/disattivare lo switch "Gradiente Dati Vecchi" non aggiornava il grafico preview
+finché non si switchava abs/%. Causa: la prop `showGradient` non era elencata tra le
+dipendenze reattive nel `$effect()` di `LineChart.svelte`.
+
+**Fix**: Aggiunto `void showGradient;` tra le dipendenze nel `$effect()` — ora il toggle ha
+effetto immediato.
+
+### Bug 2: RSI e MACD sullo stesso asse secondario
+Con la precedente strategia (MACD su asse 1, RSI su asse 1), entrambi condividevano un
+asse con scale radicalmente diverse (MACD ~±0.01 vs RSI 0-100), rendendo uno dei due illeggibile.
+
+**Soluzione**: MACD → asse primario (0) con auto-scale. Solo RSI resta su asse secondario (1).
+- `histogramScale=0` (nuovo default) → auto-calcola il multiplier: `targetSize / maxMacdValue`
+  dove `targetSize = baseRange × 15%`. Il fattore è applicato uniformemente a tutte e 3 le componenti.
+- Nel tooltip label: `MACD(12,26,9) [42×]` per indicare il fattore.
+- Signal Line colore di default: eredita dalla card (era hardcoded #f59e0b amber).
+
+### File modificati
+- `frontend/src/lib/components/charts/LineChart.svelte` — `showGradient` nel $effect
+- `frontend/src/lib/charts/signals/MacdSignal.ts` — yAxisIndex=0, auto-scale, default color
+- `frontend/src/lib/components/charts/ChartSettingsModal.svelte` — Signal Line color fallback
+
+---
+
 ## Riepilogo file coinvolti
 
 | Tipo | Categoria | Icona | Parametri | Asse Y | Note |
@@ -1198,8 +1223,8 @@ Aggiungere un subcomando `tree` a `./dev.py i18n tree` che stampa l'albero delle
 | `compound` | benchmark | 📊 | annualRate, offset | 0 | Crescita esponenziale iterativa |
 | `sine` | benchmark | 〰️ | amplitude, period, offset | 0 | Oscillazione sinusoidale |
 | `ema` | indicator | 📉 | period, offset | 0 | IIR low-pass 1° ordine |
-| `macd` | indicator | 📶 | fastPeriod, slowPeriod, signalPeriod, histogramScale | **1** (line/signal secondario), **0** (hist primario) | Band-pass, auto-bundle 3 segnali. Histogram: seriesType='bar' red/green, hist scalato ×histogramScale |
-| `rsi` | indicator | ⚡ | period, overbought, oversold | **1** (secondario) | Duty-cycle, range 0-100 |
+| `macd` | indicator | 📶 | fastPeriod, slowPeriod, signalPeriod, histogramScale | **0** (primario, auto-scaled) | Band-pass, auto-bundle 3 segnali. histogramScale=0 → auto (15% del range base). Histogram: seriesType='bar' red/green |
+| `rsi` | indicator | ⚡ | period, overbought, oversold | **1** (secondario, 0-100) | Duty-cycle, unico indicatore su asse secondario |
 | `bollinger` | indicator | 📏 | period, multiplier, offset | 0 | Confidence band: Upper+Middle(SMA)+Lower, seriesType='band' |
 
 ---
@@ -1208,14 +1233,16 @@ Aggiungere un subcomando `tree` a `./dev.py i18n tree` che stampa l'albero delle
 
 L'asse Y secondario (indice 1) è posizionato a **destra**, visibile solo quando almeno un
 segnale con `yAxisIndex === 1` è presente tra gli overlaySignals. L'asse primario (indice 0)
-resta a **sinistra**. I segnali con scala propria (RSI 0-100, MACD line/signal centrati su 0)
-usano l'asse 1. L'histogram MACD usa l'asse 0 con valori scalati (×histogramScale).
-Tutti gli altri (EMA, Bollinger, FX Pair, benchmark sintetici) condividono l'asse 0 del dato
-principale.
+resta a **sinistra**.
 
-In modalità `compact` (card FX), l'asse secondario è nascosto (niente label/ticks) ma i dati
-vengono comunque plottati correttamente sulla scala propria dell'asse 1 — semplicemente
-`show: false`.
+Attualmente **solo RSI** usa l'asse secondario (scala 0-100, indipendente).
+
+**MACD**: tutte e 3 le componenti (MACD Line, Signal Line, Histogram) usano l'asse primario (0)
+con un multiplier auto-calcolato (`histogramScale=0` → auto). Il scale fa sì che i valori
+MACD tiny (~0.001) vengano amplificati per occupare ~15% del range del dato base. Nel tooltip
+le label includono `[Nx×]` per indicare il fattore di scala.
+
+Tutti gli altri segnali (EMA, Bollinger, FX Pair, benchmark sintetici) condividono l'asse 0.
 
 ---
 
