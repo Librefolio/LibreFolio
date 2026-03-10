@@ -696,7 +696,11 @@
       "overbought": "Suracheté",
       "oversold": "Survendu",
       "histogramScale": "Échelle Histogramme"
-    }
+    },
+    "yAxisScale": "Échelle Axe Y",
+    "yAxisScaleDesc": "Contrôle de la plage de l'axe primaire",
+    "yAxisInclude0": "Inclure 0",
+    "yAxisCustom": "Personnalisé"
   },
   "chart": {
     "tooltip": {

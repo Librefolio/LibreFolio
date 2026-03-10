@@ -20,10 +20,8 @@
  *   2. Signal Line (dashed, same color — customizable via card)
  *   3. Histogram bars (bar chart, green/red by value sign)
  *
- * Y-axis: primary (yAxisIndex = 0) — all 3 components share the price axis.
- * An auto-scale multiplier makes the tiny MACD values visible alongside prices.
- * When histogramScale=0 (auto, default), the scale is computed so that the max
- * MACD value occupies ~15% of the base data range.
+ * Y-axis: dedicated (yAxisIndex = 2) — all 3 components share their own
+ * independent MACD axis, auto-scaled by ECharts. No manual scaling needed.
  *
  * For detailed mathematical theory and signal processing equivalents, see:
  * docs/financial-theory/technical-indicators.md#macd
@@ -37,7 +35,7 @@ export class MacdSignal extends ChartSignal {
     static override displayName = 'MACD';
     static override icon = '📶';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
-    static yAxisIndex = 0;
+    static yAxisIndex = 2;
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
@@ -69,16 +67,6 @@ export class MacdSignal extends ChartSignal {
             max: 100,
             step: 1,
             suffix: 'days',
-        },
-        {
-            key: 'histogramScale',
-            label: 'Histogram Scale',
-            type: 'number',
-            default: 0,
-            min: 0,
-            max: 100000,
-            step: 100,
-            suffix: '× (0=auto)',
         },
     ];
 
@@ -158,20 +146,16 @@ export class MacdSignal extends ChartSignal {
 
     /**
      * Override renderMulti() to produce 3 RenderedSignals from a single config:
-     *  1. MACD Line (solid, uses the card's primary style)
-     *  2. Signal Line (customizable style via MACD card)
+     *  1. MACD Line (solid by default, primary color — uses the card's primary style)
+     *  2. Signal Line (dashed by default, same color — customizable via MACD card)
      *  3. Histogram bars (bar chart, green/red by value sign)
      *
-     * All 3 components use yAxisIndex=0 (primary axis).
+     * All 3 components use yAxisIndex=2 (dedicated MACD axis, auto-scaled by ECharts).
+     * No manual scaling is needed — the axis is independent from the price axis.
      *
-     * Auto-scaling: The raw MACD values are very small compared to prices
-     * (e.g. 0.001 for an FX pair at 0.85). The histogramScale multiplier
-     * makes them visible alongside the primary data. When histogramScale=0
-     * (auto), we compute the optimal scale so that the max absolute MACD value
-     * aligns with ~25% of the base data's range. The same scale is applied
-     * uniformly to MACD Line, Signal Line, AND Histogram.
-     *
-     * In the tooltip, the label includes "×N" to indicate scaling.
+     * MACD values are inherently relative (fast EMA - slow EMA) and don't use
+     * the standard p0-based % conversion. They are passed through as-is regardless
+     * of viewMode.
      */
     override renderMulti(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
         const {macdLine, signalLine, histogram} = this._computeAll(baseData);
@@ -184,78 +168,41 @@ export class MacdSignal extends ChartSignal {
         const signalMarkerStart = (this.params._signalMarkerStart as MarkerType) ?? null;
         const signalMarkerEnd = (this.params._signalMarkerEnd as MarkerType) ?? null;
 
-        // ── Auto-scale computation ──
-        let maxMacd = 0;
-        for (const d of macdLine) maxMacd = Math.max(maxMacd, Math.abs(d.value));
-        for (const d of signalLine) maxMacd = Math.max(maxMacd, Math.abs(d.value));
-        for (const d of histogram) maxMacd = Math.max(maxMacd, Math.abs(d.value));
-
-        let histScale: number;
-        const paramScale = Number(this.params.histogramScale ?? 0);
-        if (paramScale <= 0 || isNaN(paramScale)) {
-            const baseValues = baseData.map(d => d.value);
-            const baseMin = Math.min(...baseValues);
-            const baseMax = Math.max(...baseValues);
-            const baseRange = baseMax - baseMin || 1;
-            const targetSize = baseRange * 0.25;
-            histScale = maxMacd > 0 ? targetSize / maxMacd : 1;
-        } else {
-            histScale = paramScale;
-        }
-
-        const scaleData = (data: LineDataPoint[]): LineDataPoint[] =>
-            data.map(d => ({...d, value: d.value * histScale}));
-
-        const scaledMacd = scaleData(macdLine);
-        const scaledSignal = scaleData(signalLine);
-        const scaledHist = scaleData(histogram);
-
-        const p0 = baseData.length > 0 ? baseData[0].value : 1;
-        const applyPct = viewMode === 'percentage' && p0 !== 0;
-        const convertPct = (data: LineDataPoint[]): LineDataPoint[] => {
-            if (!applyPct) return data;
-            return data.map(d => ({...d, value: (d.value / p0) * 100}));
-        };
-
-        const scaleNote = histScale >= 1000 ? `${(histScale / 1000).toFixed(2)}k×`
-            : `${histScale.toFixed(2)}×`;
-
         return [
             {
                 id: `${this.id}-macd`,
-                label: `${label} [${scaleNote}]`,
-                data: convertPct(scaledMacd),
+                label: `${label}`,
+                data: macdLine,
                 color: this.style.color,
                 lineWidth: this.style.lineWidth,
-                lineType: 'solid',
+                lineType: this.style.lineType,
                 markerStart: this.style.markerStart,
                 markerEnd: this.style.markerEnd,
-                yAxisIndex: 0,
+                yAxisIndex: 2,
             },
             {
                 id: `${this.id}-signal`,
-                label: `${label} Signal [${scaleNote}]`,
-                data: convertPct(scaledSignal),
+                label: `${label} Signal`,
+                data: signalLine,
                 color: signalColor,
                 lineWidth: signalLineWidth,
                 lineType: signalLineType,
                 markerStart: signalMarkerStart,
                 markerEnd: signalMarkerEnd,
-                yAxisIndex: 0,
+                yAxisIndex: 2,
             },
             {
                 id: `${this.id}-hist`,
-                label: `${label} Hist [${scaleNote}]`,
-                data: convertPct(scaledHist),
+                label: `${label} Hist`,
+                data: histogram,
                 color: '#94a3b8',
                 lineWidth: 1,
                 lineType: 'solid',
                 markerStart: null,
                 markerEnd: null,
-                yAxisIndex: 0,
+                yAxisIndex: 2,
                 seriesType: 'bar',
             },
         ];
     }
 }
-
