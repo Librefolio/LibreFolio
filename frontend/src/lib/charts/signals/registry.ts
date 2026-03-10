@@ -79,9 +79,12 @@ export function createSignal(signalType: string, existingCount: number): ChartSi
     if (!Cls) return null;
 
     const id = crypto.randomUUID();
+    // Technical indicators get thinner lines (1px) by default — they are auxiliary.
+    // Benchmarks and comparisons get 2px.
+    const defaultWidth = Cls.category === 'indicator' ? 1 : 2;
     const style: SignalStyle = {
         color: DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length],
-        lineWidth: 2,
+        lineWidth: defaultWidth,
         lineType: 'dashed',
         markerStart: null,
         markerEnd: null,
