@@ -537,12 +537,18 @@
                     // 'auto' → scale:true (ECharts fits to data range, may not include 0)
                     // 'include0' → scale:false (ECharts default, always includes 0)
                     // 'custom' → explicit min/max
+                    // Auto-swap if min > max to prevent chart explosion
+                    let effectiveMin = isCustom && yAxisMin !== undefined ? yAxisMin : undefined;
+                    let effectiveMax = isCustom && yAxisMax !== undefined ? yAxisMax : undefined;
+                    if (effectiveMin !== undefined && effectiveMax !== undefined && effectiveMin > effectiveMax) {
+                        [effectiveMin, effectiveMax] = [effectiveMax, effectiveMin];
+                    }
                     return {
                         type: 'value' as const,
                         show: showYAxis,
                         position: compact && showMiniAxis ? 'right' as const : 'left' as const,
-                        min: isCustom && yAxisMin !== undefined ? yAxisMin : undefined,
-                        max: isCustom && yAxisMax !== undefined ? yAxisMax : undefined,
+                        min: effectiveMin,
+                        max: effectiveMax,
                         axisLine: {show: !compact, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
                         axisTick: {show: !compact},
                         splitNumber: compact && showMiniAxis ? 2 : undefined,
