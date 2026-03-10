@@ -921,7 +921,7 @@
                                 <!-- Row 4 (MACD only): Both style rows side-by-side -->
                                 {#if signal.signalType === 'macd'}
                                     <div class="flex gap-3 pt-1.5 border-t border-gray-100 dark:border-slate-700">
-                                        <!-- MACD Line label -->
+                                        <!-- MACD Line configurator -->
                                         <div class="flex-1 min-w-0">
                                             <span class="text-[9px] text-gray-500 dark:text-gray-400 uppercase block mb-1">MACD Line</span>
                                             <div class="flex items-center gap-1.5">
@@ -930,7 +930,7 @@
                                                     value={signal.style.color}
                                                     class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
                                                     title={$t('chartSettings.style.color')}
-                                                    oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)}
+                                                    oninput={(e: Event) => updateSignalStyle(signal.id, 'color', (e.currentTarget as HTMLInputElement).value)}
                                                 />
                                                 <div class="flex-1 relative">
                                                     <button
@@ -988,7 +988,7 @@
                                                         <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20
                                                             bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
                                                             rounded-lg shadow-lg p-3 w-max"
-                                                            onclick={(e) => e.stopPropagation()}>
+                                                            onclick={(e: MouseEvent) => e.stopPropagation()}>
                                                             <div class="flex items-center gap-4">
                                                                 <div class="flex flex-col items-center">
                                                                     <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerStart')}</span>
@@ -1050,10 +1050,10 @@
                                             </div>
                                         </div>
 
-                                        <!-- Signal Line label -->
+                                        <!-- Signal Line configurator (same structure as MACD Line) -->
                                         {#if true}
-                                        {@const sigColor = signal.params._signalColor?.toString() ?? '#f59e0b'}
-                                        {@const sigLW = Number(signal.params._signalLineWidth ?? 1)}
+                                        {@const sigColor = signal.params._signalColor?.toString() ?? signal.style.color}
+                                        {@const sigLW = Number(signal.params._signalLineWidth ?? Math.max(1, signal.style.lineWidth - 1))}
                                         {@const sigLT = (signal.params._signalLineType?.toString() ?? 'dashed')}
                                         {@const sigMS = (signal.params._signalMarkerStart?.toString() ?? null)}
                                         {@const sigME = (signal.params._signalMarkerEnd?.toString() ?? null)}
@@ -1065,7 +1065,7 @@
                                                     value={sigColor}
                                                     class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0"
                                                     title="Signal Line Color"
-                                                    oninput={(e) => updateSignalParam(signal.id, '_signalColor', e.currentTarget.value)}
+                                                    oninput={(e: Event) => updateSignalParam(signal.id, '_signalColor', (e.currentTarget as HTMLInputElement).value)}
                                                 />
                                                 <div class="flex-1 relative">
                                                     <button
@@ -1123,7 +1123,7 @@
                                                         <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20
                                                             bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
                                                             rounded-lg shadow-lg p-3 w-max"
-                                                            onclick={(e) => e.stopPropagation()}>
+                                                            onclick={(e: MouseEvent) => e.stopPropagation()}>
                                                             <div class="flex items-center gap-4">
                                                                 <div class="flex flex-col items-center">
                                                                     <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.markerStart')}</span>

@@ -220,11 +220,13 @@ export abstract class ChartSignal {
 
     /**
      * Serialize to storable config.
-     * Excludes fields prefixed with '_' (transient runtime data like _resolvedData).
+     * Excludes `_resolvedData` (transient runtime data injected by the modal for FxPairSignal).
+     * Other `_` prefixed params (e.g. MACD's `_signalColor`, `_signalLineType`)
+     * are persistent style overrides and must be included.
      */
     toConfig(): SignalConfig {
         const serializableParams = Object.fromEntries(
-            Object.entries(this.params).filter(([k]) => !k.startsWith('_')),
+            Object.entries(this.params).filter(([k]) => k !== '_resolvedData'),
         );
         return {
             id: this.id,
