@@ -694,7 +694,17 @@
       "signalPeriod": "Période du Signal",
       "multiplier": "Multiplicateur",
       "overbought": "Suracheté",
-      "oversold": "Survendu"
+      "oversold": "Survendu",
+      "histogramScale": "Échelle Histogramme"
+    }
+  },
+  "chart": {
+    "tooltip": {
+      "stale": "Périmé : {days} jour(s)",
+      "percentNote": "% par rapport à la date de début",
+      "upper": "Supérieure",
+      "lower": "Inférieure",
+      "secondaryAxis": "2ᵉ axe"
     }
   }
 }

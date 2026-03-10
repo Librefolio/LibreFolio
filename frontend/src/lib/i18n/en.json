@@ -694,7 +694,17 @@
       "signalPeriod": "Signal Period",
       "multiplier": "Multiplier",
       "overbought": "Overbought",
-      "oversold": "Oversold"
+      "oversold": "Oversold",
+      "histogramScale": "Histogram Scale"
+    }
+  },
+  "chart": {
+    "tooltip": {
+      "stale": "Stale: {days} day(s) old",
+      "percentNote": "% relative to range start date",
+      "upper": "Upper",
+      "lower": "Lower",
+      "secondaryAxis": "2nd axis"
     }
   }
 }

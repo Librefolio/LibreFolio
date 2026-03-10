@@ -9,9 +9,9 @@ in 3 dropdown categorizzati (usando i componenti `SimpleSelect` esistenti), dual
 scala indipendente (RSI, MACD), tooltip informativi con supporto LaTeX (KaTeX), e documentazione MkDocs
 completa sulla teoria finanziaria con equivalenze signal processing / controlli automatici.
 
-**Stato**: 🔄 IN PROGRESS — Steps 1-4F ✅, Step 5-7 TODO
+**Stato**: 🔄 IN PROGRESS — Steps 1-4F ✅, Steps 4G-4I 🔄 IN PROGRESS, Steps 5-7 TODO
 **Data creazione**: 9 Marzo 2026
-**Ultimo aggiornamento**: 10 Marzo 2026 (segment-based baseline coloring, arrow markers, tooltip fix)
+**Ultimo aggiornamento**: 10 Marzo 2026 (stale gradient smooth, MACD → asse secondario, i18n tree)
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
@@ -1067,6 +1067,128 @@ retry fallisce, arrende silenziosamente.
 
 ---
 
+## Step 4G — ✅ Stale Gradient Smooth Linear Fade (10 Mar 2026)
+
+### Problema
+La sfumatura stale mostrava transizioni a gradini visibili: il `roundOpacity()` creava step
+discreti di 0.02, producendo molti micro-segmenti con opacità leggermente diversa. L'effetto
+visivo era una serie di "salti" di opacità anziché un gradiente lineare smooth.
+
+### Root Cause
+`roundOpacity()` arrotondava ogni valore di opacità a step di 0.02, creando ~50 livelli possibili.
+Ogni cambio di livello creava un nuovo segmento ECharts con colore costante, causando transizioni
+discrete visibili. Inoltre, i segmenti si estendevano ±1 punto ai confini per continuità, ma la
+sovrapposizione delle aree fill causava un "flash" di opacità doppia ai boundary.
+
+### Soluzione: Binary Segmentation + Horizontal Gradient
+1. **`roundOpacity()` semplificato a binario**: tutti i punti freschi (staleDays=0) → opacity 1.0,
+   tutti i punti stale → sentinel 0.5. Questo produce al massimo 2 segmenti per sezione continua
+   (fresh + stale), senza micro-segmentazione.
+
+2. **Horizontal LinearGradient per segmenti stale**: anziché un colore solido uniforme, ogni
+   segmento stale usa `echarts.graphic.LinearGradient(0,0,1,0, [...])` che sfuma orizzontalmente
+   dall'opacità del primo punto stale a quella dell'ultimo. L'opacità per ogni punto è calcolata
+   da `getStaleOpacity(staleDays)` che interpola linearmente da 1.0 (0 giorni) a 0.15 (14+ giorni).
+
+3. **Area fill stale**: anche l'area sotto la linea usa un gradiente orizzontale, con opacità
+   proporzionale a quella della linea per mantenere coerenza visiva.
+
+4. **Bridge forward-only**: i segmenti si estendono solo in AVANTI (+1 punto), non indietro.
+   Il segmento fresh "copre" il punto boundary, evitando che il segmento stale sovrapponga
+   la sua opacità ridotta su un punto che dovrebbe essere fresco.
+
+### Risultato
+La transizione fresh→stale è ora completamente liscia: la linea sfuma progressivamente
+da piena opacità fino a quasi trasparente, senza salti discreti. L'area fill segue lo
+stesso gradiente.
+
+### File modificati
+- `frontend/src/lib/components/charts/lineChartHelpers.ts` — roundOpacity binary, segment gradient
+
+---
+
+## Step 4H — ✅ MACD Axis Fix & Card Redesign (10 Mar 2026)
+
+### Problema 1: Valori MACD tutti a 0 sull'asse primario
+I valori MACD per coppie FX sono tipicamente ~0.001–0.01 (differenza tra due EMA di prezzi ≈0.8–1.3).
+Mettendoli sull'asse primario (scala ~0.8–1.3), le linee MACD sono completamente appiattite sullo 0.
+Il formatter con pochi decimali arrotondava tutti i tick a 0, rendendo i dati invisibili.
+
+### Soluzione Asse
+Spostare MACD Line e Signal Line su **yAxisIndex: 1** (asse secondario), dove hanno una scala
+propria auto-scalata ai loro valori piccoli. L'histogram (bar chart) resta su yAxisIndex: 0
+(asse primario) con il parametro `histogramScale` (multiplier, default 1000×) che moltiplica
+i valori per renderli visibili accanto ai dati prezzo.
+
+- MACD Line → `yAxisIndex: 1` (asse secondario destro, auto-scaled)
+- Signal Line → `yAxisIndex: 1` (asse secondario destro, stessa scala MACD)
+- Histogram → `yAxisIndex: 0` (asse primario, valori × histogramScale)
+
+L'asse secondario diventa visibile solo quando almeno un segnale lo usa (RSI o MACD).
+
+### Soluzione Card Modale
+La card MACD nel ChartSettingsModal deve mostrare:
+1. Riga parametri matematici: Fast Period, Slow Period, Signal Period, Histogram Scale
+2. Due righe di personalizzazione stile:
+   - Riga 1: "MACD Line" — color picker + style popover (per la linea principale)
+   - Riga 2: "Signal Line" — color picker + style popover (per la linea segnale)
+3. Ciascuna riga con label che indica quale componente controlla
+4. L'histogram non ha personalizzazione stile (colori red/green automatici)
+
+### Parametri aggiuntivi in MacdSignal
+- `histogramScale`: tipo `number`, default 1000, min 1, max 100000, step 100
+  (moltiplica i valori histogram per visibilità sul grafico)
+- `_signalColor`: colore della Signal Line (gestito dalla 2° riga stile)
+- `_signalLineWidth`: spessore della Signal Line
+- `_signalLineType`: tipo tratto della Signal Line
+
+### File coinvolti
+- `frontend/src/lib/charts/signals/MacdSignal.ts` — yAxisIndex → 0, histogramScale param, style params per signal line
+- `frontend/src/lib/components/charts/ChartSettingsModal.svelte` — card MACD con 2 righe stile
+- `frontend/src/lib/i18n/*.json` — chiavi per "MACD Line", "Signal Line", "Histogram Scale"
+
+---
+
+## Step 4I — 🔄 i18n Tree Command (10 Mar 2026)
+
+### Problema
+L'utente (e l'agente) hanno spesso bisogno di capire la struttura gerarchica delle chiavi i18n
+per trovare quelle giuste. Attualmente bisogna cercare chiave per chiave o leggere il JSON grezzo.
+
+### Soluzione
+Aggiungere un subcomando `tree` a `./dev.py i18n tree` che stampa l'albero delle chiavi i18n:
+```
+📦 i18n Keys (en.json — 387 keys)
+├── common (24 keys)
+│   ├── loading, save, cancel, confirm, ...
+├── chart (8 keys)
+│   ├── tooltip (4 keys)
+│   │   ├── stale, percentNote, secondaryAxis, upper, lower
+│   ├── ...
+├── chartSettings (18 keys)
+│   ├── title, subtitle, aesthetics, ...
+│   ├── categories (3 keys)
+│   │   ├── indicator, comparison, benchmark
+│   ├── params (12 keys)
+│   │   ├── annualRate, amplitude, period, ...
+├── signals (15 keys)
+│   ├── linear, compound, sine, fxPair, ema, macd, rsi, bollinger
+│   ├── params (12 keys)
+│   ├── tooltips (12 keys)
+...
+```
+
+### Parametri CLI
+- `./dev.py i18n tree` — mostra albero con conteggio foglie per nodo (default: en.json)
+- `./dev.py i18n tree --lang it` — mostra albero di it.json
+- `./dev.py i18n tree --depth 2` — limita la profondità dell'albero
+- `./dev.py i18n tree --values` — mostra anche i valori delle foglie (troncati a 40 char)
+
+### File coinvolti
+- `frontend/scripts/i18n-audit.py` — aggiungere `cmd_tree()` + registrazione in `register_subparser()`
+
+---
+
 ## Riepilogo file coinvolti
 
 | Tipo | Categoria | Icona | Parametri | Asse Y | Note |
@@ -1076,7 +1198,7 @@ retry fallisce, arrende silenziosamente.
 | `compound` | benchmark | 📊 | annualRate, offset | 0 | Crescita esponenziale iterativa |
 | `sine` | benchmark | 〰️ | amplitude, period, offset | 0 | Oscillazione sinusoidale |
 | `ema` | indicator | 📉 | period, offset | 0 | IIR low-pass 1° ordine |
-| `macd` | indicator | 📶 | fastPeriod, slowPeriod, signalPeriod, component, offset | **1** (secondario) | Band-pass, auto-bundle 3 segnali. Histogram: seriesType='bar' red/green |
+| `macd` | indicator | 📶 | fastPeriod, slowPeriod, signalPeriod, histogramScale | **1** (line/signal secondario), **0** (hist primario) | Band-pass, auto-bundle 3 segnali. Histogram: seriesType='bar' red/green, hist scalato ×histogramScale |
 | `rsi` | indicator | ⚡ | period, overbought, oversold | **1** (secondario) | Duty-cycle, range 0-100 |
 | `bollinger` | indicator | 📏 | period, multiplier, offset | 0 | Confidence band: Upper+Middle(SMA)+Lower, seriesType='band' |
 
@@ -1084,9 +1206,10 @@ retry fallisce, arrende silenziosamente.
 
 ## Nota dual-axis Y
 
-L'asse Y secondario (indice 1) è posizionato a **sinistra**, visibile solo quando almeno un
+L'asse Y secondario (indice 1) è posizionato a **destra**, visibile solo quando almeno un
 segnale con `yAxisIndex === 1` è presente tra gli overlaySignals. L'asse primario (indice 0)
-resta a **destra**. I segnali con scala propria (RSI 0-100, MACD centrato su 0) usano l'asse 1.
+resta a **sinistra**. I segnali con scala propria (RSI 0-100, MACD line/signal centrati su 0)
+usano l'asse 1. L'histogram MACD usa l'asse 0 con valori scalati (×histogramScale).
 Tutti gli altri (EMA, Bollinger, FX Pair, benchmark sintetici) condividono l'asse 0 del dato
 principale.
 

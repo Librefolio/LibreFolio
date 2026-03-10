@@ -17,10 +17,12 @@
  *
  * This is a COMPOSITE signal: a single card/config generates 3 RenderedSignals:
  *   1. MACD Line (solid, primary color)
- *   2. Signal Line (dashed, secondary color)
- *   3. Histogram bars (bar chart, green/red)
+ *   2. Signal Line (dashed, secondary color — customizable via card)
+ *   3. Histogram bars (bar chart, green/red, scaled by histogramScale)
  *
- * Y-axis: secondary (left axis, independent scale) → yAxisIndex = 1
+ * Y-axis: primary (yAxisIndex = 0) — all 3 components share the price axis.
+ * The raw MACD values are very small for FX pairs (~0.001–0.01), so the histogram
+ * uses a configurable scale multiplier to make bars visible on the chart.
  *
  * For detailed mathematical theory and signal processing equivalents, see:
  * docs/financial-theory/technical-indicators.md#macd
@@ -34,7 +36,7 @@ export class MacdSignal extends ChartSignal {
     static override displayName = 'MACD';                      // i18n: 'signals.macd'
     static override icon = '📶';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
-    static yAxisIndex = 1; // independent scale on left axis
+    static yAxisIndex = 0; // primary axis — values are small but on the same scale as price
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
@@ -66,6 +68,16 @@ export class MacdSignal extends ChartSignal {
             max: 100,
             step: 1,
             suffix: 'days',
+        },
+        {
+            key: 'histogramScale',
+            label: 'Histogram Scale',                  // i18n: 'signals.params.histogramScale'
+            type: 'number',
+            default: 1000,
+            min: 1,
+            max: 100000,
+            step: 100,
+            suffix: '×',
         },
     ];
 
@@ -149,27 +161,50 @@ export class MacdSignal extends ChartSignal {
 
     /**
      * Override renderMulti() to produce 3 RenderedSignals from a single config:
-     *  1. MACD Line (solid, uses the card's style color)
-     *  2. Signal Line (dashed, dimmed variant of card color)
-     *  3. Histogram (bar chart, red/green determined by LineChart)
+     *  1. MACD Line (solid, uses the card's primary style) — secondary axis
+     *  2. Signal Line (customizable style) — secondary axis
+     *  3. Histogram (bar chart, values × histogramScale for visibility) — primary axis
      *
-     * No % conversion for secondary-axis signals (they're dimensionless).
+     * MACD Line/Signal on yAxisIndex=1 (secondary, auto-scaled to their small values).
+     * Histogram on yAxisIndex=0 (primary, scaled by histogramScale for visibility).
      */
     override renderMulti(baseData: LineDataPoint[], viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
         const {macdLine, signalLine, histogram} = this._computeAll(baseData);
         if (macdLine.length === 0) return [];
 
         const label = this.getLabel();
-        // Derive Signal Line color: use a complementary hue
         const signalColor = this.params._signalColor as string || '#f59e0b';
-        const histColor = this.params._histColor as string || '#94a3b8';
+        const signalLineWidth = Number(this.params._signalLineWidth ?? Math.max(1, this.style.lineWidth - 1));
+        const signalLineType = (this.params._signalLineType as 'solid' | 'dashed' | 'dotted') || 'dashed';
+        const histScale = Math.max(1, Number(this.params.histogramScale ?? 1000));
+
+        // Scale histogram values for visibility on the price axis
+        const scaledHistogram: LineDataPoint[] = histogram.map(d => ({
+            ...d,
+            value: d.value * histScale,
+        }));
+
+        // MACD Line/Signal are on secondary axis (yAxisIndex=1) — they use their own scale,
+        // so no % conversion needed. They are differential values, not price levels.
+        // Only the histogram (primary axis) gets % conversion if active.
+        const p0 = baseData.length > 0 ? baseData[0].value : 1;
+        const applyPct = viewMode === 'percentage' && p0 !== 0;
+
+
+        // For histogram in %, we convert the already-scaled values
+        const convertHistPct = (data: LineDataPoint[]): LineDataPoint[] => {
+            if (!applyPct) return data;
+            // Histogram is a differential value, not a price level.
+            // In % mode, express as % of p0.
+            return data.map(d => ({...d, value: (d.value / p0) * 100}));
+        };
 
         return [
-            // 1. MACD Line
+            // 1. MACD Line — secondary axis for visibility (raw MACD values are tiny vs price)
             {
                 id: `${this.id}-macd`,
                 label: `${label}`,
-                data: macdLine,
+                data: macdLine, // Raw values, no % conversion (secondary axis has own scale)
                 color: this.style.color,
                 lineWidth: this.style.lineWidth,
                 lineType: 'solid',
@@ -177,29 +212,30 @@ export class MacdSignal extends ChartSignal {
                 markerEnd: this.style.markerEnd,
                 yAxisIndex: 1,
             },
-            // 2. Signal Line
+            // 2. Signal Line — secondary axis, same scale as MACD Line
             {
                 id: `${this.id}-signal`,
                 label: `${label} Signal`,
-                data: signalLine,
+                data: signalLine, // Raw values, no % conversion (secondary axis)
                 color: signalColor,
-                lineWidth: Math.max(1, this.style.lineWidth - 1),
-                lineType: 'dashed',
+                lineWidth: signalLineWidth,
+                lineType: signalLineType,
                 markerStart: null,
                 markerEnd: null,
                 yAxisIndex: 1,
             },
             // 3. Histogram (bar chart — red/green coloring handled by LineChart)
+            //    On primary axis with scale multiplier for visibility
             {
                 id: `${this.id}-hist`,
                 label: `${label} Hist`,
-                data: histogram,
-                color: histColor,
+                data: convertHistPct(scaledHistogram),
+                color: '#94a3b8',
                 lineWidth: 1,
                 lineType: 'solid',
                 markerStart: null,
                 markerEnd: null,
-                yAxisIndex: 1,
+                yAxisIndex: 0,
                 seriesType: 'bar',
             },
         ];

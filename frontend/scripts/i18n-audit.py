@@ -933,6 +933,80 @@ def cmd_search(args) -> int:
     return 0
 
 
+def cmd_tree(args) -> int:
+    """Show translation key structure as an ASCII tree.
+
+    Displays the nested JSON structure of translation keys, useful
+    for understanding the i18n namespace hierarchy at a glance.
+
+    Usage:
+        ./dev.py i18n tree                     # Full tree
+        ./dev.py i18n tree chartSettings       # Only chartSettings subtree
+        ./dev.py i18n tree -d 2                # Limit depth to 2 levels
+        ./dev.py i18n tree --counts            # Show leaf count per branch
+    """
+    prefix = getattr(args, 'prefix', '') or ''
+    max_depth = getattr(args, 'depth', 0) or 0
+    show_counts = getattr(args, 'counts', False)
+
+    # Load English as the reference structure
+    data = load_lang_file("en")
+
+    # Navigate to prefix if specified
+    if prefix:
+        parts = prefix.split(".")
+        for part in parts:
+            if isinstance(data, dict) and part in data:
+                data = data[part]
+            else:
+                print(f"❌ Prefix '{prefix}' not found in en.json")
+                return 1
+        if not isinstance(data, dict):
+            print(f"'{prefix}' is a leaf node: \"{data}\"")
+            return 0
+
+    def count_leaves(d: dict | str) -> int:
+        """Count leaf (string) nodes recursively."""
+        if isinstance(d, str):
+            return 1
+        return sum(count_leaves(v) for v in d.values())
+
+    def print_tree(d: dict, indent: str = "", depth: int = 1) -> None:
+        """Print dict as an ASCII tree with ├── and └── connectors."""
+        keys = list(d.keys())
+        for i, key in enumerate(keys):
+            is_last = (i == len(keys) - 1)
+            connector = "└── " if is_last else "├── "
+            child = d[key]
+
+            if isinstance(child, dict):
+                count_str = f"  ({count_leaves(child)} keys)" if show_counts else ""
+                print(f"{indent}{connector}📂 {key}{count_str}")
+                if max_depth == 0 or depth < max_depth:
+                    next_indent = indent + ("    " if is_last else "│   ")
+                    print_tree(child, next_indent, depth + 1)
+                elif max_depth > 0:
+                    next_indent = indent + ("    " if is_last else "│   ")
+                    print(f"{next_indent}└── ...")
+            else:
+                # Leaf node — show truncated value
+                val_str = str(child)
+                if len(val_str) > 50:
+                    val_str = val_str[:47] + "..."
+                print(f"{indent}{connector}🔑 {key}: \"{val_str}\"")
+
+    # Header
+    total_leaves = count_leaves(data)
+    if prefix:
+        print(f"\n🌳 i18n tree for '{prefix}' ({total_leaves} keys):\n")
+    else:
+        print(f"\n🌳 i18n tree ({total_leaves} keys):\n")
+
+    print_tree(data)
+    print()
+    return 0
+
+
 def register_subparser(subparsers) -> None:
     """Register as subparser for dev.py integration."""
     p = subparsers.add_parser("i18n", help="📦 Translation commands")
@@ -977,6 +1051,16 @@ def register_subparser(subparsers) -> None:
     search_p.add_argument("-l", "--lang",
                           help="Restrict value search to specific language(s), comma-separated (e.g., 'it' or 'en,es')")
     search_p.set_defaults(func=cmd_search)
+
+    # Tree command
+    tree_p = i18n_sub.add_parser("tree", help="Show translation key structure as a tree")
+    tree_p.add_argument("prefix", nargs="?", default="",
+                        help="Filter tree to keys starting with this prefix (e.g., 'chartSettings')")
+    tree_p.add_argument("-d", "--depth", type=int, default=0,
+                        help="Max depth to display (0 = unlimited)")
+    tree_p.add_argument("--counts", action="store_true",
+                        help="Show leaf count per branch")
+    tree_p.set_defaults(func=cmd_tree)
 
 
 if __name__ == "__main__":
