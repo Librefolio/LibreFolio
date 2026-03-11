@@ -91,6 +91,8 @@ nav:
       - Day Count Conventions: financial-theory/day-count.md
       - Interest Types: financial-theory/interest-types.md
       - Compounding: financial-theory/compounding.md
+      - Technical Indicators: financial-theory/technical-indicators.md
+      - Synthetic Benchmarks: financial-theory/synthetic-benchmarks.md
   - Developer Manual:
       - Overview: developer/index.md
       - Technologies:
