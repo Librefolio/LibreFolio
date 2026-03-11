@@ -14,6 +14,9 @@
  *   percentage: pct(t) = offset + amplitude × sin(2π × days / period)
  *
  * Unlimited instances per chart.
+ *
+ * For detailed mathematical theory, see:
+ * docs/financial-theory/synthetic-benchmarks.md#sine-wave
  */
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';

@@ -14,3 +14,5 @@ data. This section covers the core concepts from asset types to the formulas use
 - **[Day Count Conventions](day-count.md)**: How the number of days between two dates is calculated for interest accrual.
 - **[Interest Types](interest-types.md)**: The difference between Simple and Compound interest.
 - **[Compounding](compounding.md)**: How compounding frequency affects the final value.
+- **[Technical Indicators](technical-indicators.md)**: EMA, MACD, RSI, Bollinger Bands — with signal processing equivalents.
+- **[Synthetic Benchmarks](synthetic-benchmarks.md)**: Linear, Compound, and Sine Wave reference overlays.
