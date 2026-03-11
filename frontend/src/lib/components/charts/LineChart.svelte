@@ -485,11 +485,13 @@
 
         // Grid configuration
         const showYAxis = !compact || showMiniAxis;
-        // Check which overlay axes are active (have at least one signal with data)
-        const hasSecondaryAxis = !compact && overlaySignals.some(s => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
-        const hasTertiaryAxis = !compact && overlaySignals.some(s => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
+        // Check which overlay axes are active (have at least one signal with data).
+        // In compact mode the axes are hidden but still auto-scaled so overlay
+        // lines render at the correct proportions — no fixed min/max fallback.
+        const hasSecondaryAxis = overlaySignals.some(s => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
+        const hasTertiaryAxis = overlaySignals.some(s => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
 
-        // Count how many extra axes need right-side space
+        // Count how many extra axes need right-side space (only visible in non-compact)
         const extraAxesCount = (hasSecondaryAxis ? 1 : 0) + (hasTertiaryAxis ? 1 : 0);
 
         const gridConfig = compact
@@ -578,10 +580,11 @@
                 // Axis 1 — Secondary (right side, independent scale for RSI 0-100)
                 // Always declared to prevent ECharts coord resolution crashes when
                 // axis count changes between renders. When no series use it, it's
-                // hidden with fixed bounds (min/max) so coord resolution never fails.
+                // hidden with fixed bounds so coord resolution never fails.
+                // In compact mode: hidden but auto-scaled so overlay lines render correctly.
                 {
                     type: 'value',
-                    name: hasSecondaryAxis ? 'RSI' : '',
+                    name: hasSecondaryAxis && !compact ? 'RSI' : '',
                     nameLocation: 'start',
                     nameGap: 5,
                     nameTextStyle: {
@@ -590,14 +593,15 @@
                         fontWeight: 'bold',
                         align: 'center',
                     },
-                    show: hasSecondaryAxis,
+                    show: hasSecondaryAxis && !compact,
                     position: 'right',
+                    // Always auto-scale when signals are present (no fixed min/max)
                     min: hasSecondaryAxis ? undefined : 0,
                     max: hasSecondaryAxis ? undefined : 100,
-                    axisLine: {show: hasSecondaryAxis, lineStyle: {color: isDark ? '#64748b' : '#9ca3af'}},
-                    axisTick: {show: hasSecondaryAxis},
+                    axisLine: {show: hasSecondaryAxis && !compact, lineStyle: {color: isDark ? '#64748b' : '#9ca3af'}},
+                    axisTick: {show: hasSecondaryAxis && !compact},
                     axisLabel: {
-                        show: hasSecondaryAxis,
+                        show: hasSecondaryAxis && !compact,
                         color: isDark ? '#94a3b8' : '#9ca3af',
                         fontSize: 10,
                         formatter: (v: number) => v.toFixed(0),
@@ -607,9 +611,10 @@
                 },
                 // Axis 2 — Tertiary (right side with offset, independent scale for MACD)
                 // Always declared so ECharts never crashes on yAxisIndex=2 references.
+                // In compact mode: hidden but auto-scaled so overlay lines render correctly.
                 {
                     type: 'value',
-                    name: hasTertiaryAxis ? 'MACD' : '',
+                    name: hasTertiaryAxis && !compact ? 'MACD' : '',
                     nameLocation: 'start',
                     nameGap: 5,
                     nameTextStyle: {
@@ -618,15 +623,15 @@
                         fontWeight: 'bold',
                         align: 'center',
                     },
-                    show: hasTertiaryAxis,
+                    show: hasTertiaryAxis && !compact,
                     position: 'right',
                     offset: hasSecondaryAxis && hasTertiaryAxis ? 55 : 0,
                     min: hasTertiaryAxis ? undefined : 0,
                     max: hasTertiaryAxis ? undefined : 1,
-                    axisLine: {show: hasTertiaryAxis, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}},
-                    axisTick: {show: hasTertiaryAxis},
+                    axisLine: {show: hasTertiaryAxis && !compact, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}},
+                    axisTick: {show: hasTertiaryAxis && !compact},
                     axisLabel: {
-                        show: hasTertiaryAxis,
+                        show: hasTertiaryAxis && !compact,
                         color: isDark ? '#a78bfa' : '#7c3aed',
                         fontSize: 10,
                         formatter: (v: number) => {
