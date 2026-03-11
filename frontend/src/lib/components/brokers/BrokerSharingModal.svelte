@@ -19,7 +19,6 @@
     } from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
-    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import SemiDonutChart from '$lib/components/charts/SemiDonutChart.svelte';
@@ -448,7 +447,7 @@
             {/if}
 
             <!-- Error / Success banners -->
-            <ErrorBanner message={error} on:dismiss={() => error = null} />
+            <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = null} />
             {#if successMessage}
                 <InfoBanner variant="success">
                     <span class="text-sm">{successMessage}</span>

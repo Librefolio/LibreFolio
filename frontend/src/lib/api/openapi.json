@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.2-3-g8024dd4-dirty"
+    "version": "v0.5.3-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -1040,95 +1040,31 @@
       }
     },
     "/api/v1/fx/currencies/sync": {
-      "get": {
+      "post": {
         "tags": [
           "FX (Forex)",
           "FX Currencies"
         ],
         "summary": "Sync Rates",
-        "description": "Synchronize FX rates for the specified date range and currencies.\n\n**Two modes of operation**:\n\n1. **Explicit Provider Mode** (provider parameter specified):\n   - Forces the specified provider for all currencies\n   - Ignores fx_currency_pair_sources configuration\n   - Backward compatible with previous API\n\n2. **Auto-Configuration Mode** (provider=NULL):\n   - Consults fx_currency_pair_sources table\n   - Uses priority=1 provider for each currency pair\n   - Fails with explicit error if configuration missing\n\nArgs:\n    start: Start date (inclusive)\n    end: End date (inclusive)\n    currencies: Comma-separated currency codes (e.g., \"USD,GBP,CHF\")\n    provider: (Optional) Force specific provider. If NULL, uses configuration.\n    base_currency: (Optional) Base currency for multi-base providers\n    session: Database session\n\nReturns:\n    Sync statistics",
-        "operationId": "sync_rates_api_v1_fx_currencies_sync_get",
-        "parameters": [
-          {
-            "name": "start",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date",
-              "description": "Start date (inclusive)",
-              "title": "Start"
-            },
-            "description": "Start date (inclusive)"
+        "description": "Synchronize FX rates for specified currency pairs and date range.\n\n**Pair-based sync** \u2014 accepts explicit pair slugs (e.g. ['EUR-USD', 'CHF-CNY']).\nEach pair is synced independently using configured providers from\nfx_currency_pair_sources table, with automatic fallback to lower-priority providers.\n\nPairs are normalized to alphabetical order (USD-EUR \u2192 EUR-USD).\n\n**Status per pair:**\n- `ok` \u2014 provider returned data, inserted/updated in DB\n- `partial` \u2014 provider returned empty or incomplete data\n- `failed` \u2014 all providers for this pair failed\n- `skipped` \u2014 pair is MANUAL-only, nothing to sync\n\nArgs:\n    body: FXSyncPairRequest with pairs list and date range\n\nReturns:\n    FXSyncBulkResponse with per-pair results and summary",
+        "operationId": "sync_rates_api_v1_fx_currencies_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FXSyncPairRequest"
+              }
+            }
           },
-          {
-            "name": "end",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date",
-              "description": "End date (inclusive)",
-              "title": "End"
-            },
-            "description": "End date (inclusive)"
-          },
-          {
-            "name": "currencies",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Comma-separated currency codes",
-              "default": "USD,GBP,CHF,JPY",
-              "title": "Currencies"
-            },
-            "description": "Comma-separated currency codes"
-          },
-          {
-            "name": "provider",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Provider code (ECB, FED, BOE, SNB). If NULL, uses fx_currency_pair_sources configuration.",
-              "title": "Provider"
-            },
-            "description": "Provider code (ECB, FED, BOE, SNB). If NULL, uses fx_currency_pair_sources configuration."
-          },
-          {
-            "name": "base_currency",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Base currency (for multi-base providers)",
-              "title": "Base Currency"
-            },
-            "description": "Base currency (for multi-base providers)"
-          }
-        ],
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FXSyncResponse"
+                  "$ref": "#/components/schemas/FXSyncBulkResponse"
                 }
               }
             }
@@ -8846,35 +8782,155 @@
         "title": "FXProviderInfo",
         "description": "Information about a single FX rate provider."
       },
-      "FXSyncResponse": {
+      "FXSyncBulkResponse": {
         "properties": {
-          "synced": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/FXSyncPairResult"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Per-item operation results"
+          },
+          "success_count": {
             "type": "integer",
-            "title": "Synced",
-            "description": "Number of new rates inserted/updated"
+            "minimum": 0.0,
+            "title": "Success Count",
+            "description": "Number of successful operations"
           },
-          "date_range": {
-            "$ref": "#/components/schemas/DateRangeModel",
-            "description": "Date range synced"
-          },
-          "currencies": {
+          "errors": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Currencies",
-            "description": "Currencies synced"
+            "title": "Errors",
+            "description": "Operation-level errors (not per-item)"
+          },
+          "date_range": {
+            "$ref": "#/components/schemas/DateRangeModel",
+            "description": "Requested date range"
+          },
+          "total_points_changed": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Points Changed",
+            "description": "Sum of points_changed across all pairs",
+            "default": 0
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "synced",
-          "date_range",
-          "currencies"
+          "results",
+          "success_count",
+          "date_range"
         ],
-        "title": "FXSyncResponse",
-        "description": "Response for FX rate synchronization from central banks.\n\nProvides summary of synced FX rates operation.\nDifferent structure from FA: summarizes overall sync with date range\nrather than per-asset results.\n\nMigrated from fx.py (was SyncResponseModel) to consolidate refresh/sync\noperations in single module for operational coherence."
+        "title": "FXSyncBulkResponse",
+        "description": "Response for bulk pair-based FX sync.\n\nInherits from BaseBulkResponse:\n- results: List[FXSyncPairResult]\n- success_count: int (pairs with status ok or partial)\n- errors: List[str] (operation-level errors)\n- failed_count: computed property\n\nAdditional fields:\n- date_range: requested date range\n- total_points_changed: aggregate across all pairs"
+      },
+      "FXSyncPairRequest": {
+        "properties": {
+          "pairs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Pairs",
+            "description": "Pair slugs, e.g. ['EUR-USD', 'CHF-CNY']"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start",
+            "description": "Start date (inclusive)"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End",
+            "description": "End date (inclusive)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pairs",
+          "start",
+          "end"
+        ],
+        "title": "FXSyncPairRequest",
+        "description": "Request body for pair-based FX sync.\n\nAccepts a list of pair slugs (e.g. ['EUR-USD', 'CHF-CNY']) and a date range.\nPairs are normalized to alphabetical order internally."
+      },
+      "FXSyncPairResult": {
+        "properties": {
+          "pair": {
+            "type": "string",
+            "title": "Pair",
+            "description": "Normalized pair slug, e.g. 'EUR-USD'"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FXSyncStatus",
+            "description": "Sync status for this pair"
+          },
+          "provider_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Used",
+            "description": "Provider code that served data (None if failed/skipped)"
+          },
+          "points_fetched": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Points Fetched",
+            "description": "Number of rate points fetched from provider",
+            "default": 0
+          },
+          "points_changed": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Points Changed",
+            "description": "Number of rate points actually inserted/updated in DB",
+            "default": 0
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "Optional note (e.g. 'monthly data only', 'fallback used')"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pair",
+          "status"
+        ],
+        "title": "FXSyncPairResult",
+        "description": "Result of sync operation for a single pair."
+      },
+      "FXSyncStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "partial",
+          "failed",
+          "skipped"
+        ],
+        "title": "FXSyncStatus",
+        "description": "Status of a single pair sync operation."
       },
       "FXUpsertItem": {
         "properties": {

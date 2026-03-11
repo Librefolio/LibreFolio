@@ -12,7 +12,7 @@
     import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
     import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
     import SettingTheme from '$lib/components/settings/SettingTheme.svelte';
-    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
 
     // Category definitions
@@ -292,7 +292,7 @@
             {success}
         </div>
     {/if}
-    <ErrorBanner message={error} className="mb-4" on:dismiss={() => error = ''} />
+    <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} class="mb-4" />
 
     <!-- Settings Fields -->
     {#if isLoading}

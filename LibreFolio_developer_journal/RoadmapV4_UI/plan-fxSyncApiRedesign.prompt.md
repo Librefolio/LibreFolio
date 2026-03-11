@@ -267,11 +267,52 @@ Quando l'utente preme il pulsante sync nella singola FxCard:
 
 ## Stato
 
-- [ ] Step 1: Schema Pydantic (FXSyncPairRequest, FXSyncPairResult, FXSyncBulkResponse)
-- [ ] Step 2: Service layer (sync_pair, sync_pairs_bulk)
-- [ ] Step 3: API endpoint (POST /fx/currencies/sync)
-- [ ] Step 4: Frontend SyncModal adattamento
-- [ ] Step 5: api sync + client regen
-- [ ] Step 6: Test
-- [ ] Step 7: Cleanup — rimuovere FXSyncResponse deprecato
+- [x] Step 1: Schema Pydantic (FXSyncPairRequest, FXSyncPairResult, FXSyncBulkResponse) ✅
+- [x] Step 2: Service layer (sync_pair, sync_pairs_bulk) ✅
+- [x] Step 3: API endpoint (POST /fx/currencies/sync) ✅
+- [x] Step 4: Frontend SyncModal adattamento ✅
+- [x] Step 4b: Toast per sync locale (per-card ⟳ button) ✅
+- [x] Step 5: api sync + client regen ✅
+- [x] Step 6: Test — backend API tests passano ✅
+- [x] Step 7: Cleanup — rimosso FXSyncResponse, rimosso ErrorBanner legacy ✅
 
+## Lavoro Aggiuntivo Completato
+
+### Track B: Consolidamento ErrorBanner → InfoBanner
+- Aggiunte props `message`, `dismissible`, `ondismiss` a `InfoBanner.svelte`
+- Migrati tutti i 9 consumer di ErrorBanner a `<InfoBanner variant="error" ...>`
+- Eliminato `ErrorBanner.svelte` e aggiornato `ui/index.ts`
+
+**File migrati:**
+- `files/+page.svelte`, `PreferencesTab.svelte`, `RegisterCard.svelte`
+- `BrokerSharingModal.svelte`, `PasswordChangeModal.svelte`, `BrokerModal.svelte`
+- `CashTransactionModal.svelte`, `BrokerImportFilesModal.svelte`, `BrokerImportFiles.svelte`
+
+### Track C: Sistema Toast Centralizzato
+- Creato `toastStore.svelte.ts` — store Svelte 5 `$state`-based con auto-dismiss
+- Creato `ToastContainer.svelte` — rendering fisso bottom-right con icone lucide
+- Aggiunto `<ToastContainer />` in `(app)/+layout.svelte`
+- Migrato toast inline di `FilesTable.svelte` (copy feedback) al sistema centralizzato
+
+### Track A: Frontend FX Sync
+- Riscritto `FxSyncModal.svelte` per API POST pair-based con risultati per-coppia
+- Riscritto `handleSyncPair` in `fx/+page.svelte` con toast feedback per status
+- Migrato `fx/[pair]/+page.svelte` handleSync a POST API
+- Migrato `FxPairAddModal.svelte` auto-sync a POST API
+
+### Bug fix pre-esistenti (non correlati al plan)
+- Fix `instance.icon` → `instance.get_icon()` in `assets.py` endpoint `list_providers`
+- Fix test infra: aggiunto `_ensure_db_populated()` in `test_runner.py` per `front_broker_sharing` e `front_all` — il test E2E broker-sharing richiedeva dati mock pre-popolati
+
+### File Backend Modificati
+- `backend/app/schemas/refresh.py` — nuovi schema, rimosso FXSyncResponse
+- `backend/app/schemas/__init__.py` — aggiornati export
+- `backend/app/services/fx.py` — aggiunti sync_pair(), sync_pairs_bulk()
+- `backend/app/api/v1/fx.py` — sostituito GET con POST endpoint
+- `backend/app/api/v1/assets.py` — fix get_icon()
+- `scripts/test_runner.py` — fix _ensure_db_populated()
+
+### Risultati Test Finali
+- ✅ Backend: tutti i test API passano (17/17 suite)
+- ✅ Frontend: svelte-check 0 errori, 0 warning
+- ✅ E2E: broker-sharing 15/15 passati
