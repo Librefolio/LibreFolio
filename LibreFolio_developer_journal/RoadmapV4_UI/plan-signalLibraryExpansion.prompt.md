@@ -690,11 +690,11 @@ bottone piccolo `?`:
 
 ---
 
-## Step 6 — Documentazione MkDocs: Technical Indicators & Signal Processing
+## Step 6 — ✅ Documentazione MkDocs: Technical Indicators & Signal Processing
 
 Interamente in **inglese**. Nuova sezione sotto Financial Theory.
 
-### 6A. `mkdocs_src/docs/financial-theory/technical-indicators.md`
+### 6A. ✅ `mkdocs_src/docs/financial-theory/technical-indicators.md`
 
 Struttura per ogni indicatore (EMA, MACD, RSI, Bollinger):
 
@@ -726,7 +726,7 @@ Sezioni signal processing (il differenziatore chiave della documentazione):
   Code grasse nei mercati → breaching più frequente. Squeeze = bassa varianza → precede
   esplosione di volatilità (transizione di regime).
 
-### 6B. `mkdocs_src/docs/financial-theory/synthetic-benchmarks.md`
+### 6B. ✅ `mkdocs_src/docs/financial-theory/synthetic-benchmarks.md`
 
 Documentare i benchmark sintetici:
 - **Linear Growth**: retta `y = y0(1 + r×t)`, uso come reference per crescita costante
@@ -735,7 +735,7 @@ Documentare i benchmark sintetici:
 - **Sine Wave**: oscillazione `y = y0 + A×sin(2πt/T + φ)`, uso come reference per volatilità periodica
 - Per tutti: spiegare il parametro `offset` (%)
 
-### 6C. Aggiornare `mkdocs.yml` nav
+### 6C. ✅ Aggiornare `mkdocs.yml` nav
 
 Aggiungere le nuove pagine nella sezione Financial Theory:
 ```yaml
@@ -745,7 +745,7 @@ Aggiungere le nuove pagine nella sezione Financial Theory:
     - Synthetic Benchmarks: financial-theory/synthetic-benchmarks.md
 ```
 
-### 6D. Aggiornare `financial-theory/index.md`
+### 6D. ✅ Aggiornare `financial-theory/index.md`
 
 Aggiungere i nuovi link nella lista "Key Concepts":
 ```markdown
@@ -753,7 +753,7 @@ Aggiungere i nuovi link nella lista "Key Concepts":
 - **[Synthetic Benchmarks](synthetic-benchmarks.md)**: Linear, Compound, and Sine wave reference signals.
 ```
 
-### 6E. Code-to-Doc linking
+### 6E. ✅ Code-to-Doc linking
 
 In ogni classe segnale, aggiornare il docstring con link alla sezione MkDocs:
 ```typescript
@@ -784,13 +784,13 @@ Quando `mode === 'pair'` nel `ChartSettingsModal`, sotto il titolo "Preview" mos
 - L'inversione diventa effettiva solo al click "Apply"
 - Toggle Abs/% nel preview (già implementato)
 
-### 7B. Stale Gradient: predisposizione
+### 7B. ✅ Stale Gradient: predisposizione
 
 Nel `generateSyntheticData()`, marcare artificialmente alcuni punti con `staleDays > 0`
 per testare il gradient stale nel preview. `LineChart` già supporta `staleDays` e calcola
 opacità — verificare che funzioni con le impostazioni della modale.
 
-### 7C. Verificare Apply → onsave salva effettivamente
+### 7C. ✅ Verificare Apply → onsave salva effettivamente
 
 Il callback `onsave` nella pagina FX deve chiamare `setGlobalSettings()` o `setPairSettings()`
 dal `chartSettingsStore` e lo stato si deve propagare a tutte le card / al detail.
