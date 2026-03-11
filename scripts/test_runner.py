@@ -1206,6 +1206,16 @@ def _ensure_frontend_build() -> bool:
     return True
 
 
+def _ensure_db_populated() -> bool:
+    """Ensure test database has been populated with mock data (brokers, assets, etc.).
+
+    Always runs populate --force to guarantee a clean, known state.
+    Required by tests that expect pre-existing data (e.g., broker-sharing).
+    """
+    print_info("Populating test DB with mock data...")
+    return db_populate(verbose=False, force=True)
+
+
 def _ensure_test_users() -> bool:
     """Ensure E2E test users exist in test database."""
     print_info("Ensuring E2E test users exist...")
@@ -1378,9 +1388,11 @@ def front_image_crop(verbose: bool = False, ui: bool = False, headed: bool = Fal
 
 
 def front_broker_sharing(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None) -> bool:
-    """Run broker sharing E2E tests."""
+    """Run broker sharing E2E tests (requires populated DB with brokers)."""
     print_section("Frontend Broker Sharing Tests")
     if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
         return False
     if not _ensure_test_users():
         return False
@@ -1395,6 +1407,10 @@ def front_all(verbose: bool = False, ui: bool = False, headed: bool = False, deb
 
     # Ensure frontend is built before running tests
     if not _ensure_frontend_build():
+        return False
+
+    # Ensure DB has mock data (needed by broker-sharing tests)
+    if not _ensure_db_populated():
         return False
 
     if not _ensure_test_users():

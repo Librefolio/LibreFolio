@@ -11,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select as sql_select, or_, and_
 from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from backend.app.db.models import FxRate
@@ -546,7 +547,6 @@ async def ensure_rates_multi_source(
             if currency not in changes_by_currency:
                 changes_by_currency[currency] = 0
             changes_by_currency[currency] += 1
-            logger.debug(f"New rate: {base}/{quote} on {obs_date} = {rate_truncated}")
         else:
             # Truncate old rate too for proper comparison
             old_rate_truncated = truncate_fx_rate(old_rate)
@@ -555,9 +555,7 @@ async def ensure_rates_multi_source(
                 if currency not in changes_by_currency:
                     changes_by_currency[currency] = 0
                 changes_by_currency[currency] += 1
-                logger.info(
-                    f"Updated rate: {base}/{quote} on {obs_date}: {old_rate_truncated} → {rate_truncated}"
-                    )
+                logger.debug(f"Updated rate: {base}/{quote} on {obs_date}: {old_rate_truncated} -> {rate_truncated}")
         # else: Same value after truncation, no change to log
 
     total_changed = sum(changes_by_currency.values())
@@ -622,6 +620,201 @@ async def ensure_rates_multi_source(
         "total_changed": total_changed,
         "currencies_synced": currencies_synced,
         }
+
+
+# ============================================================================
+# PAIR-BASED SYNC (New API)
+# ============================================================================
+
+
+async def sync_pair(
+    session,  # AsyncSession
+    base: str,
+    quote: str,
+    date_range: tuple[date, date],
+    pair_sources: list[tuple[str, int]],  # [(provider_code, priority), ...]
+    ) -> "FXSyncPairResult":
+    """
+    Sync a single FX pair using configured providers with fallback.
+
+    Tries each provider in priority order. MANUAL providers are skipped.
+    If all non-MANUAL providers fail, returns failed status.
+    If only MANUAL providers exist, returns skipped status.
+
+    Args:
+        session: Database session
+        base: Base currency (alphabetically normalized, base < quote)
+        quote: Quote currency
+        date_range: (start_date, end_date) inclusive
+        pair_sources: List of (provider_code, priority) ordered by priority ASC
+
+    Returns:
+        FXSyncPairResult with status, provider_used, points, message
+    """
+    from backend.app.schemas.refresh import FXSyncPairResult, FXSyncStatus
+
+    pair_slug = f"{base}-{quote}"
+
+    # Filter out MANUAL providers
+    real_providers = [(code, prio) for code, prio in pair_sources if code.upper() != "MANUAL"]
+
+    if not real_providers:
+        # Only MANUAL providers configured
+        logger.info(f"Pair {pair_slug}: MANUAL-only, skipping sync")
+        return FXSyncPairResult(
+            pair=pair_slug,
+            status=FXSyncStatus.SKIPPED,
+            provider_used=None,
+            points_fetched=0,
+            points_changed=0,
+            message="Manual-only pair, nothing to sync",
+            )
+
+    # Try each provider in priority order
+    errors_collected = []
+    for provider_code, priority in real_providers:
+        try:
+            logger.info(f"Pair {pair_slug}: trying provider {provider_code} (priority={priority})")
+
+            # Determine which currencies to pass to ensure_rates_multi_source
+            # The provider needs both currencies of the pair
+            currencies = [base, quote]
+
+            result = await ensure_rates_multi_source(
+                session,
+                date_range,
+                currencies,
+                provider_code=provider_code,
+                base_currency=None,
+                )
+
+            total_fetched = result["total_fetched"]
+            total_changed = result["total_changed"]
+
+            # Determine status based on results
+            if total_fetched > 0:
+                fallback_msg = None
+                if priority > 1:
+                    fallback_msg = f"Fallback provider (priority={priority})"
+
+                return FXSyncPairResult(
+                    pair=pair_slug,
+                    status=FXSyncStatus.OK,
+                    provider_used=provider_code,
+                    points_fetched=total_fetched,
+                    points_changed=total_changed,
+                    message=fallback_msg,
+                    )
+            else:
+                # Provider returned 0 points — could be partial or empty range
+                return FXSyncPairResult(
+                    pair=pair_slug,
+                    status=FXSyncStatus.PARTIAL,
+                    provider_used=provider_code,
+                    points_fetched=0,
+                    points_changed=0,
+                    message="Provider returned no data for this date range",
+                    )
+
+        except (FXServiceError, Exception) as e:
+            logger.warning(f"Pair {pair_slug}: provider {provider_code} (priority={priority}) failed: {e}")
+            errors_collected.append(f"{provider_code}: {str(e)}")
+            continue
+
+    # All providers failed
+    error_detail = "; ".join(errors_collected)
+    return FXSyncPairResult(
+        pair=pair_slug,
+        status=FXSyncStatus.FAILED,
+        provider_used=None,
+        points_fetched=0,
+        points_changed=0,
+        message=f"All providers failed: {error_detail}",
+        )
+
+
+async def sync_pairs_bulk(
+    session,  # AsyncSession — used only for reading pair config
+    pairs: list[str],  # ["EUR-USD", "CHF-CNY"]
+    date_range: tuple[date, date],
+    ) -> "FXSyncBulkResponse":
+    """
+    Sync multiple FX pairs using configured providers with fallback.
+
+    Parallelization strategy:
+    - HTTP fetches run in PARALLEL via asyncio.gather (the bottleneck)
+    - Each pair gets its own AsyncSession so DB writes are independent
+    - SQLite serializes concurrent writes internally (WAL mode)
+    - Each coroutine: fetch HTTP -> write DB -> commit (single atomic commit per pair)
+
+    Args:
+        session: Database session (used only for reading pair config upfront)
+        pairs: List of normalized pair slugs (base < quote alphabetically)
+        date_range: (start_date, end_date) inclusive
+
+    Returns:
+        FXSyncBulkResponse with per-pair results and summary
+    """
+    from backend.app.db.models import FxCurrencyPairSource
+    from backend.app.db.session import get_async_engine
+    from backend.app.schemas.common import DateRangeModel
+    from backend.app.schemas.refresh import FXSyncPairResult, FXSyncStatus, FXSyncBulkResponse
+
+    start_date, end_date = date_range
+
+    # Load ALL pair source configurations in one query
+    stmt = select(FxCurrencyPairSource).order_by(FxCurrencyPairSource.base, FxCurrencyPairSource.quote, FxCurrencyPairSource.priority)
+    db_result = await session.execute(stmt)
+    all_pair_sources = db_result.scalars().all()
+
+    # Build lookup: (base, quote) -> [(provider_code, priority), ...] ordered by priority
+    config_lookup: dict[tuple[str, str], list[tuple[str, int]]] = {}
+    for ps in all_pair_sources:
+        key = (ps.base, ps.quote)
+        if key not in config_lookup:
+            config_lookup[key] = []
+        config_lookup[key].append((ps.provider_code, ps.priority))
+
+    # Build tasks for parallel execution
+    async def _sync_one_pair(pair_slug: str) -> FXSyncPairResult:
+        """Sync a single pair with its own DB session."""
+        base, quote = pair_slug.split("-")
+
+        # Find provider sources for this pair (check both orderings)
+        pair_sources = config_lookup.get((base, quote), [])
+        pair_sources_rev = config_lookup.get((quote, base), [])
+        all_sources = sorted(pair_sources + pair_sources_rev, key=lambda x: x[1])
+
+        if not all_sources:
+            return FXSyncPairResult(
+                pair=pair_slug,
+                status=FXSyncStatus.FAILED,
+                provider_used=None,
+                points_fetched=0,
+                points_changed=0,
+                message=f"No provider configuration found for {pair_slug}",
+                )
+
+        # Each pair gets its own session to allow parallel DB operations
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
+            return await sync_pair(pair_session, base, quote, date_range, all_sources)
+
+    # Execute all pairs in parallel
+    tasks = [_sync_one_pair(pair_slug) for pair_slug in pairs]
+    results: list[FXSyncPairResult] = list(await asyncio.gather(*tasks))
+
+    # Build summary
+    success_count = sum(1 for r in results if r.status in (FXSyncStatus.OK, FXSyncStatus.PARTIAL))
+    total_points_changed = sum(r.points_changed for r in results)
+    operation_errors = [ r.message for r in results if r.status == FXSyncStatus.FAILED and r.message ]
+
+    return FXSyncBulkResponse(
+        results=results,
+        success_count=success_count,
+        errors=operation_errors,
+        date_range=DateRangeModel(start=start_date, end=end_date),
+        total_points_changed=total_points_changed,
+        )
 
 
 # ============================================================================
@@ -830,10 +1023,11 @@ async def convert_bulk(
             # Track if backward-fill was applied
             backward_fill_applied = rate_record.date < meta["date"]
 
-            # Log if using backward-fill
+            # Log if using backward-fill (level 5 = TRACE, below DEBUG)
             if backward_fill_applied:
                 days_back = (meta["date"] - rate_record.date).days
-                logger.debug(
+                logger.log(
+                    5,
                     f"Using backward-fill: rate for {meta['base']}/{meta['quote']} from {rate_record.date} "
                     f"({days_back} days back, requested: {meta['date']})"
                     )

@@ -10,6 +10,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {ArrowLeft, ArrowLeftRight, Pencil, RefreshCw, RotateCcw, TrendingDown, TrendingUp, X} from 'lucide-svelte';
+    import {toasts} from '$lib/stores/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import FxEditSection from '$lib/components/fx/FxEditSection.svelte';
     import FxProviderConfig from '$lib/components/fx/FxProviderConfig.svelte';
@@ -188,13 +189,24 @@
     async function handleSync() {
         syncing = true;
         try {
-            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_get({
-                queries: {
-                    start: dateStart,
-                    end: dateEnd,
-                    currencies: `${data.base},${data.quote}`,
-                }
+            const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                pairs: [data.slug],
+                start: dateStart,
+                end: dateEnd,
             });
+            const r = (response as any)?.results?.[0];
+            if (r) {
+                const label = data.slug.replace('-', '/');
+                if (r.status === 'ok') {
+                    toasts.success(`${label} synced — ${r.points_changed ?? 0} pts (${r.provider_used ?? '?'})`);
+                } else if (r.status === 'partial') {
+                    toasts.warning(`${label} — ${r.points_changed ?? 0} pts${r.message ? ': ' + r.message : ''}`);
+                } else if (r.status === 'skipped') {
+                    toasts.info(`${label} — manual only, nothing to sync`);
+                } else {
+                    toasts.error(`${label} sync failed${r.message ? ': ' + r.message : ''}`);
+                }
+            }
             // After sync, refresh the chart
             await handleRefresh();
         } catch (e: any) {

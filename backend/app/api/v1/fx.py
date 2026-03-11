@@ -43,11 +43,11 @@ from backend.app.schemas.fx import (
     FXPairItem,
     FXPairsListResponse,
     )
-from backend.app.schemas.refresh import FXSyncResponse
+from backend.app.schemas.refresh import FXSyncPairRequest, FXSyncBulkResponse
 from backend.app.services.fx import (
     FXServiceError,
     convert_bulk,
-    ensure_rates_multi_source,
+    sync_pairs_bulk,
     upsert_rates_bulk,
     delete_rates_bulk,
     )
@@ -138,217 +138,47 @@ async def list_providers(
         raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}")
 
 
-@router_currencies.get("/sync", response_model=FXSyncResponse)
+@router_currencies.post("/sync", response_model=FXSyncBulkResponse)
 async def sync_rates(
-    start: date = Query(..., description="Start date (inclusive)"),
-    end: date = Query(..., description="End date (inclusive)"),
-    currencies: str = Query("USD,GBP,CHF,JPY", description="Comma-separated currency codes"),
-    provider: str | None = Query(
-        None,
-        description="Provider code (ECB, FED, BOE, SNB). If NULL, uses fx_currency_pair_sources configuration.",
-        ),
-    base_currency: str | None = Query(None, description="Base currency (for multi-base providers)"),
+    body: FXSyncPairRequest,
     session: AsyncSession = Depends(get_session_generator),
     ):
     """
-    Synchronize FX rates for the specified date range and currencies.
+    Synchronize FX rates for specified currency pairs and date range.
 
-    **Two modes of operation**:
+    **Pair-based sync** — accepts explicit pair slugs (e.g. ['EUR-USD', 'CHF-CNY']).
+    Each pair is synced independently using configured providers from
+    fx_currency_pair_sources table, with automatic fallback to lower-priority providers.
 
-    1. **Explicit Provider Mode** (provider parameter specified):
-       - Forces the specified provider for all currencies
-       - Ignores fx_currency_pair_sources configuration
-       - Backward compatible with previous API
+    Pairs are normalized to alphabetical order (USD-EUR → EUR-USD).
 
-    2. **Auto-Configuration Mode** (provider=NULL):
-       - Consults fx_currency_pair_sources table
-       - Uses priority=1 provider for each currency pair
-       - Fails with explicit error if configuration missing
+    **Status per pair:**
+    - `ok` — provider returned data, inserted/updated in DB
+    - `partial` — provider returned empty or incomplete data
+    - `failed` — all providers for this pair failed
+    - `skipped` — pair is MANUAL-only, nothing to sync
 
     Args:
-        start: Start date (inclusive)
-        end: End date (inclusive)
-        currencies: Comma-separated currency codes (e.g., "USD,GBP,CHF")
-        provider: (Optional) Force specific provider. If NULL, uses configuration.
-        base_currency: (Optional) Base currency for multi-base providers
-        session: Database session
+        body: FXSyncPairRequest with pairs list and date range
 
     Returns:
-        Sync statistics
+        FXSyncBulkResponse with per-pair results and summary
     """
     # Validate date range
-    if start > end:
+    if body.start > body.end:
         raise HTTPException(
             status_code=400, detail="Start date must be before or equal to end date"
             )
-    if end > date.today():
+    if body.end > date.today():
         raise HTTPException(status_code=400, detail="End date cannot be in the future")
 
-    # Parse currencies
-    currency_list = [c.strip().upper() for c in currencies.split(",") if c.strip()]
-    if not currency_list:
-        raise HTTPException(status_code=400, detail="At least one currency must be specified")
-
     try:
-        if provider:
-            # EXPLICIT PROVIDER MODE: Force specified provider
-            result = await ensure_rates_multi_source(
-                session,
-                (start, end),
-                currency_list,
-                provider_code=provider,
-                base_currency=base_currency,
-                )
-            return FXSyncResponse(
-                synced=result["total_changed"],
-                date_range=DateRangeModel(start=start, end=end),
-                currencies=result["currencies_synced"],
-                )
-
-        else:
-            # AUTO-CONFIGURATION MODE: Use fx_currency_pair_sources with fallback logic
-            # Query ALL configured pair sources (all priorities), ordered by priority ASC
-            stmt = select(FxCurrencyPairSource).order_by(
-                FxCurrencyPairSource.base, FxCurrencyPairSource.quote, FxCurrencyPairSource.priority
-                )
-            result = await session.execute(stmt)
-            all_pair_sources = result.scalars().all()
-
-            if not all_pair_sources:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No currency pair sources configured. Please either: "
-                           "(1) specify 'provider' parameter explicitly, or "
-                           "(2) configure pair sources via POST /fx/pair-sources/bulk",
-                    )
-
-            # Build lookup: (base, quote) -> list of (provider_code, priority) ordered by priority
-            config_lookup = {}
-            for ps in all_pair_sources:
-                key = (ps.base, ps.quote)
-                if key not in config_lookup:
-                    config_lookup[key] = []
-                config_lookup[key].append((ps.provider_code, ps.priority))
-
-            # For each configured pair, assign to its primary provider
-            # This handles inverse pairs correctly (EUR/USD → ECB, USD/EUR → FED)
-            provider_pairs = {}  # provider_code -> set of (base, quote) tuples
-
-            for (base, quote), providers_list in config_lookup.items():
-                # Use primary provider (priority=1 or lowest)
-                primary_provider = providers_list[0][0]
-
-                if primary_provider not in provider_pairs:
-                    provider_pairs[primary_provider] = set()
-
-                provider_pairs[primary_provider].add((base, quote))
-
-            # Convert pairs to currencies for each provider
-            provider_currencies = {}
-            for provider_code, pairs in provider_pairs.items():
-                currencies = set()
-                for base, quote in pairs:
-                    currencies.add(base)
-                    currencies.add(quote)
-                provider_currencies[provider_code] = currencies
-
-            # Check if ALL requested currencies are covered
-            all_configured_currencies = set()
-            for currencies in provider_currencies.values():
-                all_configured_currencies.update(currencies)
-
-            missing_pairs = []
-            for curr in currency_list:
-                if curr not in all_configured_currencies:
-                    missing_pairs.append(curr)
-
-            if missing_pairs:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"No configuration found for currencies: {', '.join(missing_pairs)}. "
-                           f"Please configure pair sources via POST /fx/pair-sources/bulk "
-                           f"or use explicit 'provider' parameter.",
-                    )
-
-            # Execute sync with fallback logic
-            total_changed = 0
-            total_fetched = 0
-            all_currencies_synced = set()
-            final_errors = []
-
-            # Group by provider and try each one (with fallbacks if configured)
-            for provider_code, currencies_set in provider_currencies.items():
-                currencies_list = list(currencies_set)
-
-                # Try primary provider first
-                try:
-                    result = await ensure_rates_multi_source(
-                        session,
-                        (start, end),
-                        currencies_list,
-                        provider_code=provider_code,
-                        base_currency=None,
-                        )
-                    total_changed += result["total_changed"]
-                    total_fetched += result["total_fetched"]
-                    all_currencies_synced.update(result["currencies_synced"])
-
-                except FXServiceError as e:
-                    # Provider failed - try fallback providers if configured
-                    # hard to test in coverage because need fail of provider and fallback
-                    logger.warning(f"Provider {provider_code} (priority=1) failed: {str(e)}")
-
-                    # Find fallback providers for any pair in this currency set
-                    fallback_attempted = False
-                    for base, quote in [
-                        (c1, c2) for c1 in currencies_list for c2 in currencies_list if c1 < c2
-                        ]:
-                        pair_key = (base, quote)
-                        if pair_key in config_lookup and len(config_lookup[pair_key]) > 1:
-                            # Has fallback providers (priority > 1)
-                            for fallback_provider, fallback_priority in config_lookup[pair_key][1:]:
-                                logger.info(
-                                    f"Trying fallback provider {fallback_provider} (priority={fallback_priority}) for {base}/{quote}"
-                                    )
-                                fallback_attempted = True
-
-                                try:
-                                    result = await ensure_rates_multi_source(
-                                        session,
-                                        (start, end),
-                                        [base, quote],
-                                        provider_code=fallback_provider,
-                                        base_currency=None,
-                                        )
-                                    total_changed += result["total_changed"]
-                                    total_fetched += result["total_fetched"]
-                                    all_currencies_synced.update(result["currencies_synced"])
-                                    logger.info(
-                                        f"Fallback successful: {fallback_provider} provided {base}/{quote}"
-                                        )
-                                    break  # Success, no need to try more fallbacks for this pair
-
-                                except FXServiceError as fallback_e:
-                                    logger.warning(
-                                        f"Fallback provider {fallback_provider} (priority={fallback_priority}) also failed: {str(fallback_e)}"
-                                        )
-                                    continue  # Try next fallback
-
-                    if not fallback_attempted:
-                        # No fallbacks configured, record error
-                        final_errors.append(f"Provider {provider_code} failed: {str(e)}")
-
-            # If all providers failed and no currencies synced, raise error
-            if final_errors and not all_currencies_synced:
-                raise HTTPException(
-                    status_code=502, detail=f"All providers failed: {'; '.join(final_errors)}"
-                    )
-
-            return FXSyncResponse(
-                synced=total_changed,
-                date_range=DateRangeModel(start=start, end=end),
-                currencies=sorted(list(all_currencies_synced)),
-                )
+        result = await sync_pairs_bulk(
+            session,
+            pairs=body.pairs,
+            date_range=(body.start, body.end),
+            )
+        return result
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

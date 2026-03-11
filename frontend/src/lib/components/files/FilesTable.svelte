@@ -10,6 +10,7 @@
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
+    import {toasts} from '$lib/stores/toastStore.svelte';
     import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
     import {Download, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2} from 'lucide-svelte';
     import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
@@ -300,9 +301,6 @@
         return cols;
     }
 
-    // State for copy feedback
-    let copiedFileId = $state<string | null>(null);
-    let copyError = $state<string | null>(null);
 
     // Helper to copy to clipboard with fallback
     async function copyToClipboard(text: string): Promise<boolean> {
@@ -347,21 +345,12 @@
                 label: () => $t('uploads.copyLink') || 'Copy Link',
                 onClick: async (file) => {
                     const staticFile = file as UploadedFile;
-                    // Copy relative URL (path only, for internal use)
                     const url = staticFile.url;
                     const success = await copyToClipboard(url);
                     if (success) {
-                        copiedFileId = getFileId(file);
-                        copyError = null;
-                        // Reset after 2 seconds
-                        setTimeout(() => {
-                            copiedFileId = null;
-                        }, 2000);
+                        toasts.success($t('common.copied') || 'Copied!');
                     } else {
-                        copyError = 'Copy failed';
-                        setTimeout(() => {
-                            copyError = null;
-                        }, 2000);
+                        toasts.error('Copy failed');
                     }
                 },
             });
@@ -454,53 +443,4 @@
             storageKey="filesTable_{type}"
     />
 </div>
-
-<!-- Copy feedback toast -->
-{#if copiedFileId}
-    <div class="copy-toast success" role="status" aria-live="polite">
-        ✓ {$t('common.copied') || 'Copied!'}
-    </div>
-{/if}
-{#if copyError}
-    <div class="copy-toast error" role="alert" aria-live="assertive">
-        ✗ {copyError}
-    </div>
-{/if}
-
-<style>
-    .copy-toast {
-        position: fixed;
-        top: 24px;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 12px 24px;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 500;
-        z-index: 50;
-        animation: toast-in 0.2s ease-out;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .copy-toast.success {
-        background-color: #059669;
-        color: white;
-    }
-
-    .copy-toast.error {
-        background-color: #dc2626;
-        color: white;
-    }
-
-    @keyframes toast-in {
-        from {
-            opacity: 0;
-            transform: translateX(-50%) translateY(-20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-    }
-</style>
 

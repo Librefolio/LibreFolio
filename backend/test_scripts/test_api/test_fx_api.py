@@ -32,7 +32,7 @@ from backend.app.schemas.fx import (
     FXDeletePairSourceItem,
     FXProviderInfo,
     )
-from backend.app.schemas.refresh import FXSyncResponse
+from backend.app.schemas.refresh import FXSyncBulkResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_info, print_success
 
@@ -271,42 +271,53 @@ async def test_pair_sources_crud(test_server):
 
 @pytest.mark.asyncio
 async def test_sync_rates(test_server):
-    """Test 4: POST /fx/currencies/sync - Sync rates from providers."""
+    """Test 4: POST /fx/currencies/sync - Pair-based sync."""
     print_section("Test 4: POST /fx/currencies/sync")
 
     async with httpx.AsyncClient() as client:
         today = date.today()
         yesterday = today - timedelta(days=1)
 
-        # Sync rates using query parameters
-        params = {
-            "start": yesterday.isoformat(),
-            "end": yesterday.isoformat(),
-            "currencies": "EUR,GBP",
-            "provider": "ECB",
-            }
+        # Ensure pair sources exist
+        await client.post(
+            f"{API_BASE}/fx/providers/pair-sources",
+            json=[{"base": "EUR", "quote": "GBP", "provider_code": "ECB", "priority": 1}],
+            timeout=TIMEOUT,
+            )
 
-        response = await client.get(
-            f"{API_BASE}/fx/currencies/sync", params=params, timeout=TIMEOUT
+        # Sync rates using POST with pair slugs
+        response = await client.post(
+            f"{API_BASE}/fx/currencies/sync",
+            json={
+                "pairs": ["EUR-GBP"],
+                "start": yesterday.isoformat(),
+                "end": yesterday.isoformat(),
+                },
+            timeout=TIMEOUT,
             )
 
         assert (
             response.status_code == 200
         ), f"Expected 200, got {response.status_code}: {response.text}"
 
-        sync_response = FXSyncResponse(**response.json())
+        sync_response = FXSyncBulkResponse(**response.json())
+        assert len(sync_response.results) == 1
+        pr = sync_response.results[0]
+        assert pr.pair == "EUR-GBP"
+        print_success(f"✓ Sync completed: status={pr.status}, pts_changed={pr.points_changed}")
 
-        assert sync_response.synced >= 0, "Synced count should be non-negative"
-        assert sync_response.date_range.start == yesterday, "Start date should match"
-        assert sync_response.date_range.end == yesterday, "End date should match"
-
-        print_success(f"✓ Sync completed: {sync_response.synced} rates synced")
-        print_info(f"  Currencies: {', '.join(sync_response.currencies)}")
+        # Cleanup
+        await client.request(
+            "DELETE",
+            f"{API_BASE}/fx/providers/pair-sources",
+            json=[{"base": "EUR", "quote": "GBP"}],
+            timeout=TIMEOUT,
+            )
 
 
 @pytest.mark.asyncio
 async def test_sync_rates_auto_config(test_server):
-    """Test 4b: POST /fx/currencies/sync - Auto-config mode (no provider parameter)."""
+    """Test 4b: POST /fx/currencies/sync - Auto-config mode with pair sources."""
     print_section("Test 4b: POST /fx/currencies/sync - Auto-config")
 
     async with httpx.AsyncClient() as client:
@@ -318,12 +329,7 @@ async def test_sync_rates_auto_config(test_server):
 
         pair_sources = [
             FXPairSourceItem(base="EUR", quote="USD", provider_code="ECB", priority=1),
-            FXPairSourceItem(
-                base="GBP",
-                quote="USD",
-                provider_code="ECB",  # ECB also provides GBP rates
-                priority=1,
-                ),
+            FXPairSourceItem(base="GBP", quote="USD", provider_code="ECB", priority=1),
             ]
 
         create_response = await client.post(
@@ -339,60 +345,31 @@ async def test_sync_rates_auto_config(test_server):
         assert create_data.success_count >= 2, "Should create at least 2 pair sources"
         print_success(f"✓ Created {create_data.success_count} pair sources")
 
-        # Step 2: Sync rates WITHOUT provider parameter (auto-config mode)
-        print_info("Step 2: Sync rates using auto-config (no provider param)")
+        # Step 2: Sync rates using POST with pair slugs
+        print_info("Step 2: Sync rates using pair slugs")
 
-        # Important: Do NOT pass "provider" parameter
-        params = {
-            "start": yesterday.isoformat(),
-            "end": yesterday.isoformat(),
-            "currencies": "EUR,GBP",  # These currencies are configured in DB
-            }
-
-        sync_response = await client.get(
-            f"{API_BASE}/fx/currencies/sync", params=params, timeout=TIMEOUT
+        sync_response = await client.post(
+            f"{API_BASE}/fx/currencies/sync",
+            json={
+                "pairs": ["EUR-USD", "GBP-USD"],
+                "start": yesterday.isoformat(),
+                "end": yesterday.isoformat(),
+                },
+            timeout=TIMEOUT,
             )
 
         assert (
             sync_response.status_code == 200
         ), f"Expected 200, got {sync_response.status_code}: {sync_response.text}"
 
-        sync_data = FXSyncResponse(**sync_response.json())
+        sync_data = FXSyncBulkResponse(**sync_response.json())
+        assert len(sync_data.results) == 2
+        print_success(f"✓ Auto-config sync: {sync_data.success_count}/{len(sync_data.results)} ok")
+        for pr in sync_data.results:
+            print_info(f"  {pr.pair}: status={pr.status}, pts={pr.points_changed}")
 
-        assert sync_data.synced >= 0, "Synced count should be non-negative"
-        assert sync_data.date_range.start == yesterday, "Start date should match"
-        assert sync_data.date_range.end == yesterday, "End date should match"
-        # Note: currencies list may be empty on weekends/holidays when providers don't publish rates
-        print_success(f"✓ Auto-config sync completed: {sync_data.synced} rates synced")
-        if len(sync_data.currencies) > 0:
-            print_info(f"  Currencies: {', '.join(sync_data.currencies)}")
-        else:
-            print_info("  ℹ️  No currencies synced (normal for weekends/holidays)")
-
-        # Step 3: Test error case - currency not configured
-        print_info("Step 3: Test missing currency configuration")
-
-        params_missing = {
-            "start": yesterday.isoformat(),
-            "end": yesterday.isoformat(),
-            "currencies": "FALSE_CURRENCY",  # NOT configured in DB
-            }
-
-        error_response = await client.get(
-            f"{API_BASE}/fx/currencies/sync", params=params_missing, timeout=TIMEOUT
-            )
-
-        assert (
-            error_response.status_code == 400
-        ), f"Expected 400 for missing config, got {error_response.status_code}"
-        error_data = error_response.json()
-        assert (
-            "No configuration found" in error_data["detail"]
-        ), "Should mention missing configuration"
-        print_success("✓ Missing currency config properly rejected with 400")
-
-        # Step 4: Cleanup - delete pair sources
-        print_info("Step 4: Cleanup pair sources")
+        # Step 3: Cleanup - delete pair sources
+        print_info("Step 3: Cleanup pair sources")
 
         delete_sources = [
             FXDeletePairSourceItem(base="EUR", quote="USD"),
@@ -419,16 +396,20 @@ async def test_convert_currency(test_server):
     async with httpx.AsyncClient() as client:
         today = date.today()
 
-        # First, ensure we have a rate (sync or manual)
-        # Try to sync first
-        sync_params = {
-            "start": (today - timedelta(days=7)).isoformat(),
-            "end": today.isoformat(),
-            "currencies": "EUR,GBP",
-            "provider": "ECB",
-            }
-        await client.get(  # Sync is GET not POST
-            f"{API_BASE}/fx/currencies/sync", params=sync_params, timeout=TIMEOUT
+        # First, ensure we have rates (sync via POST)
+        await client.post(
+            f"{API_BASE}/fx/providers/pair-sources",
+            json=[{"base": "EUR", "quote": "GBP", "provider_code": "ECB", "priority": 1}],
+            timeout=TIMEOUT,
+            )
+        await client.post(
+            f"{API_BASE}/fx/currencies/sync",
+            json={
+                "pairs": ["EUR-GBP"],
+                "start": (today - timedelta(days=7)).isoformat(),
+                "end": today.isoformat(),
+                },
+            timeout=TIMEOUT,
             )
 
         # Now convert (use List directly)
@@ -943,16 +924,19 @@ async def test_manual_sync_returns_empty(test_server):
         assert response.status_code == 201
 
         # Attempt sync — should not error
-        # Specify ISK,TRY as currencies to focus on the MANUAL pair
-        response = await client.get(
+        # Specify ISK-TRY pair to focus on the MANUAL pair
+        response = await client.post(
             f"{API_BASE}/fx/currencies/sync",
-            params={"start": "2025-01-01", "end": "2025-01-05", "currencies": "ISK,TRY"},
+            json={"pairs": ["ISK-TRY"], "start": "2025-01-01", "end": "2025-01-05"},
             timeout=TIMEOUT
         )
-        # Sync should succeed (200) — MANUAL pairs are silently skipped
+        # Sync should succeed (200) — MANUAL pairs are skipped
         assert response.status_code == 200, \
             f"Sync should succeed with MANUAL pairs, got {response.status_code}: {response.text}"
-        print_success("✓ Sync completed successfully with MANUAL pair (silently skipped)")
+        sync_data = FXSyncBulkResponse(**response.json())
+        assert len(sync_data.results) == 1
+        assert sync_data.results[0].status == "skipped"
+        print_success("✓ Sync completed successfully with MANUAL pair (skipped status)")
 
         # Cleanup
         await client.request(

@@ -9,7 +9,7 @@
     import {X} from 'lucide-svelte';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -125,7 +125,7 @@
             </div>
 
             <!-- Error -->
-            <ErrorBanner message={error} className="mx-4 mt-4" on:dismiss={() => error = ''} />
+            <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} class="mx-4 mt-4" />
 
             <!-- Form -->
             <form on:submit|preventDefault={handleSubmit} class="p-4 space-y-4">

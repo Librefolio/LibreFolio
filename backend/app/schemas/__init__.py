@@ -143,7 +143,10 @@ from backend.app.schemas.refresh import (
     FARefreshItem,
     FABulkRefreshResponse,
     FARefreshResult,
-    FXSyncResponse,
+    FXSyncStatus,
+    FXSyncPairRequest,
+    FXSyncPairResult,
+    FXSyncBulkResponse,
     )
 from backend.app.schemas.transactions import (
     TXCreateItem,
@@ -260,7 +263,10 @@ __all__ = [
     "FARefreshItem",
     "FABulkRefreshResponse",
     "FARefreshResult",
-    "FXSyncResponse",
+    "FXSyncStatus",
+    "FXSyncPairRequest",
+    "FXSyncPairResult",
+    "FXSyncBulkResponse",
     # FX
     "FXProviderInfo",
     "FXConversionRequest",

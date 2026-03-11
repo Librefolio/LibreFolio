@@ -10,7 +10,7 @@
     import {Check, X} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
-    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
 
     const dispatch = createEventDispatcher<{
@@ -124,7 +124,7 @@
 
             <!-- Body -->
             <form on:submit|preventDefault={handleSubmit} class="p-4 space-y-4">
-                <ErrorBanner message={error} on:dismiss={() => error = ''} />
+                <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} />
 
                 {#if success}
                     <div class="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">

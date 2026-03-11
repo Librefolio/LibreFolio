@@ -10,6 +10,7 @@
     import {debug} from '$lib/debug';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';
     import Header from '$lib/components/layout/Header.svelte';
+    import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
 
     // Sidebar state for mobile
     let sidebarOpen = false;
@@ -102,6 +103,7 @@
             </main>
         </div>
     </div>
+    <ToastContainer />
 {:else}
     <!-- Loading while checking auth -->
     <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">

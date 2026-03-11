@@ -101,6 +101,7 @@ class JustETFProvider(AssetSourceProvider):
     def provider_name(self) -> str:
         return "JustETF"
 
+    @property
     def get_icon(self) -> str:
         """Return provider icon URL (hardcoded)."""
         return "https://www.justetf.com/android-chrome-144x144.png?v2"

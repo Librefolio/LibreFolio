@@ -171,12 +171,11 @@
             if (hasRealProvider && dateStart && dateEnd) {
                 syncing = true;
                 try {
-                    await zodiosApi.sync_rates_api_v1_fx_currencies_sync_get({
-                        queries: {
-                            start: dateStart,
-                            end: dateEnd,
-                            currencies: `${base},${quote}`,
-                        }
+                    const slug = base < quote ? `${base}-${quote}` : `${quote}-${base}`;
+                    await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                        pairs: [slug],
+                        start: dateStart,
+                        end: dateEnd,
                     });
                 } catch (e) {
                     console.warn('Auto-sync after pair creation failed:', e);

@@ -19,7 +19,6 @@
     import {Calendar, CalendarCheck, ChevronLeft, ChevronRight, Info} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
-    import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
 
     // =========================================================================
     // Types
@@ -123,16 +122,16 @@
         {key: '2Y', label: '2Y', years: 2},
     ];
 
-    const granularityOptions: {value: Granularity; labelKey: string}[] = [
-        {value: 'days', labelKey: 'datePicker.granularity.days'},
-        {value: 'weeks', labelKey: 'datePicker.granularity.weeks'},
-        {value: 'months', labelKey: 'datePicker.granularity.months'},
-        {value: 'years', labelKey: 'datePicker.granularity.years'},
+    const granularityOptions: {value: Granularity; labelKey: string; shortKey: string}[] = [
+        {value: 'days', labelKey: 'datePicker.granularity.days', shortKey: 'datePicker.granularity.daysShort'},
+        {value: 'weeks', labelKey: 'datePicker.granularity.weeks', shortKey: 'datePicker.granularity.weeksShort'},
+        {value: 'months', labelKey: 'datePicker.granularity.months', shortKey: 'datePicker.granularity.monthsShort'},
+        {value: 'years', labelKey: 'datePicker.granularity.years', shortKey: 'datePicker.granularity.yearsShort'},
     ];
 
-    // Granularity options as SelectOption[] for SimpleSelect (must be after granularityOptions)
+    // Granularity short options for the compact native select (must be after granularityOptions)
     let granularitySelectOptions = $derived(
-        granularityOptions.map(o => ({ value: o.value, label: $_(o.labelKey) }))
+        granularityOptions.map(o => ({ value: o.value, label: $_(o.shortKey).toUpperCase() }))
     );
 
     // =========================================================================
@@ -360,8 +359,14 @@
         hoveredDate = null;
     }
 
+    // Ref for the custom edit container to detect click-outside reliably
+    let customEditRef = $state<HTMLDivElement | null>(null);
+
     function handleClickOutside(e: MouseEvent) {
         const target = e.target as HTMLElement;
+        // If the target was detached from DOM (e.g., SimpleSelect dropdown option removed
+        // on mousedown before the click event), skip — don't close customEditing
+        if (!target.isConnected) return;
         if (!target.closest('.drp-popover') && !target.closest('.drp-trigger')) {
             closeCalendar();
             customEditing = false;
@@ -452,16 +457,22 @@
             {/each}
             {#if showCustomWindow}
                 {#if customEditing}
-                    <div class="flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg border border-amber-400/40 drp-trigger">
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <div bind:this={customEditRef}
+                         class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg border border-amber-400/40 drp-trigger"
+                         role="group"
+                         onclick={(e) => e.stopPropagation()}
+                         onkeydown={(e) => { if (e.key === 'Escape') customEditing = false; }}>
                         <input type="number" bind:value={customAmount} min="1" max="999"
-                            class="w-10 px-1 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                        <div class="w-24">
-                            <SimpleSelect
-                                bind:value={customGranularity}
-                                options={granularitySelectOptions}
-                                class="[&_button]:!px-1.5 [&_button]:!py-0.5 [&_button]:!text-xs [&_button]:!border-none [&_button]:!bg-transparent [&_button]:!text-amber-700 dark:[&_button]:!text-amber-300 [&_button]:!rounded [&_button]:!min-h-0"
-                            />
-                        </div>
+                            class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                        <select
+                            bind:value={customGranularity}
+                            class="pl-0.5 pr-3 py-0.5 text-xs border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none cursor-pointer"
+                        >
+                            {#each granularitySelectOptions as opt}
+                                <option value={opt.value}>{opt.label}</option>
+                            {/each}
+                        </select>
                     </div>
                 {:else}
                     <button type="button"
@@ -470,7 +481,7 @@
                                 ? 'bg-amber-500 text-white shadow-sm'
                                 : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
                         onclick={(e) => toggleCustomEdit(e)}
-                    >{activePreset === 'custom' ? `${customAmount} ${$_(granularityOptions.find(o => o.value === customGranularity)?.labelKey ?? 'datePicker.custom')}` : $_('datePicker.custom')}</button>
+                    >{activePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find(o => o.value === customGranularity)?.shortKey ?? 'datePicker.custom').toUpperCase()}` : $_('datePicker.custom')}</button>
                 {/if}
             {/if}
             <!-- Info tooltip -->
