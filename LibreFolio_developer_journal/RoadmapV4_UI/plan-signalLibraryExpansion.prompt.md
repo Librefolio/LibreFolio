@@ -9,9 +9,9 @@ in 3 dropdown categorizzati (usando i componenti `SimpleSelect` esistenti), dual
 scala indipendente (RSI, MACD), tooltip informativi con supporto LaTeX (KaTeX), e documentazione MkDocs
 completa sulla teoria finanziaria con equivalenze signal processing / controlli automatici.
 
-**Stato**: 🔄 IN PROGRESS — Steps 1-4 ✅ (incl. MACD dual-config, axis labels, Y-scale custom with auto-swap min>max, stale gradient, baseline colors, markers), Step 4J Y-scale min>max auto-swap ✅, Steps 5-7 TODO
+**Stato**: 🔄 IN PROGRESS — Steps 1-4 ✅, Step 5 ✅ (KaTeX tooltips, DocsLink component, fixed-position tooltips, translated param labels, expanded signal names), Steps 6-7 TODO
 **Data creazione**: 9 Marzo 2026
-**Ultimo aggiornamento**: 10 Marzo 2026 (Y-scale min>max auto-swap bug fix, final polish round)
+**Ultimo aggiornamento**: 11 Marzo 2026 (Step 5 polish: Tooltip fixed positioning, DocsLink reusable component, expanded signal names in dropdowns/headers, i18n param labels, 15 i18n keys added)
 **Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
@@ -571,9 +571,9 @@ perché deve puntare "all'indietro" (indica l'inizio della linea).
 
 ---
 
-## Step 5 — Tooltip informativi con supporto LaTeX (KaTeX)
+## Step 5 — ✅ Tooltip informativi con supporto LaTeX (KaTeX) (Completato 11 Mar)
 
-### 5A. Installare KaTeX nel frontend
+### 5A. ✅ Installare KaTeX nel frontend
 
 Aggiungere `katex` al `package.json` frontend:
 ```bash
@@ -582,7 +582,7 @@ cd frontend && npm install katex
 
 KaTeX è ~300KB gzip, molto più leggero di MathJax (~1MB), e adatto per rendering inline sincrono.
 
-### 5B. Evolvere `Tooltip.svelte` per supportare HTML/LaTeX
+### 5B. ✅ Evolvere `Tooltip.svelte` per supportare HTML/LaTeX
 
 Il componente attuale (`frontend/src/lib/components/ui/Tooltip.svelte`) accetta solo `text: string`
 e usa `{text}` come contenuto testo puro. Evolvere:
@@ -610,7 +610,7 @@ function renderMathInline(text: string): string {
 5. Importare il CSS di KaTeX: `import 'katex/dist/katex.min.css'` nel componente (o nel layout globale)
 6. Quando `math === true`, il contenuto diventa: `{@html renderMathInline(textOrHtml)}`
 
-### 5C. Aggiungere campo `tooltip` in `SignalParamDescriptor`
+### 5C. ✅ Aggiungere campo `tooltip` in `SignalParamDescriptor`
 
 In `ChartSignal.ts`:
 ```typescript
@@ -621,7 +621,7 @@ export interface SignalParamDescriptor {
 }
 ```
 
-### 5D. Rendere tooltip nel `ChartSettingsModal`
+### 5D. ✅ Rendere tooltip nel `ChartSettingsModal`
 
 Accanto a ogni input parametro nell'OrderableList, se `desc.tooltip` è definito, mostrare
 un'icona `ⓘ` (lucide `Info`, size 12) wrappata in `<Tooltip text={$t(desc.tooltip)} math>`.
@@ -635,7 +635,7 @@ Esempio rendering:
 {/if}
 ```
 
-### 5E. Testi tooltip per tutti i parametri (i18n, con LaTeX inline)
+### 5E. ✅ Testi tooltip per tutti i parametri (i18n, con LaTeX inline)
 
 Aggiungere sezione `signals.tooltips` nei file JSON i18n. Esempi (en):
 ```json
@@ -658,7 +658,7 @@ Aggiungere sezione `signals.tooltips` nei file JSON i18n. Esempi (en):
 }
 ```
 
-### 5F. Bottone `?` per aprire la documentazione MkDocs
+### 5F. ✅ Bottone `?` per aprire la documentazione MkDocs
 
 Aggiungere campo statico opzionale nelle classi segnale:
 ```typescript

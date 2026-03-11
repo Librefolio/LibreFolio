@@ -19,6 +19,7 @@ export class LinearSignal extends ChartSignal {
     static override displayName = 'Linear Growth';             // i18n: 'signals.linear'
     static override icon = '📈';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
+    static docsPath = 'financial-theory/synthetic-benchmarks/#linear-growth';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
@@ -30,6 +31,7 @@ export class LinearSignal extends ChartSignal {
             max: 1000,
             step: 0.5,
             suffix: '%/yr',
+            tooltip: 'chartSettings.tooltips.annualRate',
         },
         {
             key: 'offset',
@@ -40,6 +42,7 @@ export class LinearSignal extends ChartSignal {
             max: 100,
             step: 0.5,
             suffix: '%',
+            tooltip: 'chartSettings.tooltips.offset',
         },
     ];
 

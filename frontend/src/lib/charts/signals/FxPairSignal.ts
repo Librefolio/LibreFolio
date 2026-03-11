@@ -21,10 +21,11 @@ export class FxPairSignal extends ChartSignal {
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
             key: 'pairSlug',
-            label: 'Currency Pair',                    // i18n: 'signals.params.currencyPair'
+            label: 'Currency Pair',                    // i18n: 'chartSettings.params.currencyPair'
             type: 'select',
             default: '',
             dynamicOptionsKey: 'configuredFxPairs',    // resolved at runtime by the modal
+            tooltip: 'chartSettings.tooltips.currencyPair',
         },
     ];
 

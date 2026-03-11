@@ -57,6 +57,8 @@ export interface SignalTypeInfo {
     icon: string;
     category: 'indicator' | 'comparison' | 'benchmark';
     paramDescriptors: SignalParamDescriptor[];
+    /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-indicators/#ema' */
+    docsPath?: string;
 }
 
 /** All registered signal types (for "Add signal" dropdown in ChartSettingsModal). */
@@ -67,6 +69,7 @@ export function getRegisteredSignalTypes(): SignalTypeInfo[] {
         icon: Cls.icon,
         category: Cls.category,
         paramDescriptors: Cls.paramDescriptors,
+        docsPath: Cls.docsPath,
     }));
 }
 

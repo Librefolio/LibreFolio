@@ -47,6 +47,12 @@ export interface SignalParamDescriptor {
      * e.g. 'configuredFxPairs' → modal passes configured pairs as options
      */
     dynamicOptionsKey?: string;
+    /**
+     * i18n key for tooltip text shown on hover of the ⓘ icon next to the param.
+     * May contain $...$ inline LaTeX (rendered by KaTeX in the Tooltip component).
+     * e.g. 'chartSettings.tooltips.period'
+     */
+    tooltip?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -178,6 +184,8 @@ export abstract class ChartSignal {
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
     /** Y-axis index: 0 = primary (same scale as data), 1 = secondary (independent scale). */
     static yAxisIndex: number = 0;
+    /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-indicators/#ema' */
+    static docsPath?: string;
 
     constructor(id: string, style: SignalStyle, params: Record<string, unknown>) {
         this.id = id;

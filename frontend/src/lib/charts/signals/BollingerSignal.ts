@@ -28,6 +28,7 @@ export class BollingerSignal extends ChartSignal {
     static override displayName = 'Bollinger Bands';
     static override icon = '📏';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
+    static docsPath = 'financial-theory/technical-indicators/#bollinger-bands';
     // yAxisIndex = 0 (default, same scale as price)
 
     static override paramDescriptors: SignalParamDescriptor[] = [
@@ -40,6 +41,7 @@ export class BollingerSignal extends ChartSignal {
             max: 200,
             step: 1,
             suffix: 'days',
+            tooltip: 'chartSettings.tooltips.period',
         },
         {
             key: 'multiplier',
@@ -50,6 +52,7 @@ export class BollingerSignal extends ChartSignal {
             max: 5,
             step: 0.1,
             suffix: 'σ',
+            tooltip: 'chartSettings.tooltips.multiplier',
         },
     ];
 
