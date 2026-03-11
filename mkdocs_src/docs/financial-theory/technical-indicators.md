@@ -100,6 +100,8 @@ but the DC component (the long-run trend).
     the pole is at $z = 0.99$ — extremely close to the unit circle, which explains the
     heavy smoothing and large group delay.
 
+:material-link: [EMA on Wikipedia](https://en.wikipedia.org/wiki/Exponential_smoothing){ target="_blank" }
+
 ---
 
 ## MACD — Moving Average Convergence Divergence { #macd }
@@ -116,23 +118,23 @@ suggests exhaustion.
 
 The MACD system produces three series:
 
-1. **MACD Line** (the band-pass output):
+1.  **MACD Line** (the band-pass output):
 
-$$
-MACD_t = EMA_{fast}(C_t) - EMA_{slow}(C_t)
-$$
+    $$
+    MACD_t = EMA_{fast}(C_t) - EMA_{slow}(C_t)
+    $$
 
-2. **Signal Line** (smoothed MACD):
+2.  **Signal Line** (smoothed MACD):
 
-$$
-Signal_t = EMA_{signal}(MACD_t)
-$$
+    $$
+    Signal_t = EMA_{signal}(MACD_t)
+    $$
 
-3. **Histogram** (momentum delta):
+3.  **Histogram** (momentum delta):
 
-$$
-Histogram_t = MACD_t - Signal_t
-$$
+    $$
+    Histogram_t = MACD_t - Signal_t
+    $$
 
 ### Parameters
 
@@ -166,6 +168,8 @@ detections.
     derivative $\frac{d}{dt}[\text{trend}]$. When the histogram flips sign, the
     "velocity" of the trend changes direction.
 
+:material-link: [MACD on Wikipedia](https://en.wikipedia.org/wiki/MACD){ target="_blank" }
+
 ---
 
 ## RSI — Relative Strength Index { #rsi }
@@ -182,26 +186,26 @@ downward?"* The result is squeezed into a 0–100 range:
 
 ### Mathematical Formulas
 
-1. **Decompose** daily changes into gains and losses:
+1.  **Decompose** daily changes into gains and losses:
 
-$$
-U_t = \max(P_t - P_{t-1},\; 0), \qquad
-D_t = \max(P_{t-1} - P_t,\; 0)
-$$
+    $$
+    U_t = \max(P_t - P_{t-1},\; 0), \qquad
+    D_t = \max(P_{t-1} - P_t,\; 0)
+    $$
 
-2. **Smooth** each component with an exponential moving average (SMMA variant):
+2.  **Smooth** each component with an exponential moving average (SMMA variant):
 
-$$
-\overline{U} = SMMA_N(U), \qquad
-\overline{D} = SMMA_N(D)
-$$
+    $$
+    \overline{U} = SMMA_N(U), \qquad
+    \overline{D} = SMMA_N(D)
+    $$
 
-3. **Relative Strength** ratio and normalisation:
+3.  **Relative Strength** ratio and normalisation:
 
-$$
-RS = \frac{\overline{U}}{\overline{D}}, \qquad
-RSI = 100 - \frac{100}{1 + RS}
-$$
+    $$
+    RS = \frac{\overline{U}}{\overline{D}}, \qquad
+    RSI = 100 - \frac{100}{1 + RS}
+    $$
 
 The normalisation $100 - 100/(1+RS)$ is a monotonically increasing sigmoid that maps
 $RS \in [0, \infty)$ to $RSI \in [0, 100)$.
@@ -230,6 +234,8 @@ the stronger the restoring force — hence the mean-reverting property traders e
     trending markets the RSI can stay above 70 for weeks — it is a *probabilistic*
     indicator, not a deterministic one.
 
+:material-link: [RSI on Wikipedia](https://en.wikipedia.org/wiki/Relative_strength_index){ target="_blank" }
+
 ---
 
 ## Bollinger Bands { #bollinger-bands }
@@ -243,24 +249,24 @@ statistical exuberance; touching the lower band signals an abnormal dip.
 
 ### Mathematical Formulas
 
-1. **Middle Band** (expected value):
+1.  **Middle Band** (expected value):
 
-$$
-MB_t = SMA_N(C_t)
-$$
+    $$
+    MB_t = SMA_N(C_t)
+    $$
 
-2. **Standard deviation** of prices over the window:
+2.  **Standard deviation** of prices over the window:
 
-$$
-\sigma_t = \sqrt{\frac{1}{N} \sum_{i=0}^{N-1} (C_{t-i} - MB_t)^2}
-$$
+    $$
+    \sigma_t = \sqrt{\frac{1}{N} \sum_{i=0}^{N-1} (C_{t-i} - MB_t)^2}
+    $$
 
-3. **Upper and Lower Bands**:
+3.  **Upper and Lower Bands**:
 
-$$
-Upper_t = MB_t + k \cdot \sigma_t, \qquad
-Lower_t = MB_t - k \cdot \sigma_t
-$$
+    $$
+    Upper_t = MB_t + k \cdot \sigma_t, \qquad
+    Lower_t = MB_t - k \cdot \sigma_t
+    $$
 
 With $k = 2$, if returns were normally distributed the price would stay inside the bands
 ~95.4% of the time. In practice, financial returns have *fat tails* (leptokurtosis), so
@@ -291,3 +297,4 @@ explosions — making the squeeze one of the most watched setups in technical an
     group delay of $(N-1)/2$ samples. It trades off a wider transition band for
     zero-phase distortion — ideal for centring the confidence envelope.
 
+:material-link: [Bollinger Bands on Wikipedia](https://en.wikipedia.org/wiki/Bollinger_Bands){ target="_blank" }

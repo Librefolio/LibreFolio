@@ -12,7 +12,5 @@ data. This section covers the core concepts from asset types to the formulas use
 - **[Asset Types](asset-types.md)**: Definitions of all supported asset classes (Stocks, ETFs, Crypto, etc.).
 - **[Transaction Types](transaction-types.md)**: Definitions of all financial operations (Buy, Sell, Dividend, etc.).
 - **[Day Count Conventions](day-count.md)**: How the number of days between two dates is calculated for interest accrual.
-- **[Interest Types](interest-types.md)**: The difference between Simple and Compound interest.
-- **[Compounding](compounding.md)**: How compounding frequency affects the final value.
 - **[Technical Indicators](technical-indicators.md)**: EMA, MACD, RSI, Bollinger Bands — with signal processing equivalents.
-- **[Synthetic Benchmarks](synthetic-benchmarks.md)**: Linear, Compound, and Sine Wave reference overlays.
+- **[Synthetic Benchmarks](synthetic-benchmarks.md)**: Linear, Compound, and Sine Wave reference overlays (includes interest formulas and compounding frequencies).
