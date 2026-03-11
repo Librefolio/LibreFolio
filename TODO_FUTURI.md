@@ -308,3 +308,6 @@ Sarebbe più efficiente riutilizzare la risorsa già caricata a risoluzione magg
 - Questa ottimizzazione è puramente client-side per evitare roundtrip network
 - Valutare l'impatto su memoria del browser se molte immagini sono in griglia
 
+### 📊 Aggiungere al componente Linea altri stili della line al segnale
+
+Oltre l'attuale visualizzazione a segmenti spezzati, indagare se si possono mostrare le linee anche come spilne smoot, ed in quanti modi, e se si, renderlo un parametro estetico configurabile

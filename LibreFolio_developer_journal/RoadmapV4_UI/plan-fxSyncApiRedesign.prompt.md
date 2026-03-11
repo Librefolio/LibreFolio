@@ -2,8 +2,8 @@
 
 **Riferimenti**:
 - `plan-phase05Fx.prompt.md` (piano principale Phase 5)
-- `plan-fxCardRedesignChartSettings.prompt.md` (card redesign, sync fix frontend)
-- `plan-signalLibraryExpansion.prompt.md` (signal library expansion)
+- `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md` (✅ COMPLETATO — card redesign, sync fix frontend)
+- `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md` ← ✅ COMPLETATO (signal library expansion)
 
 ## Contesto
 
@@ -198,12 +198,25 @@ Per ogni coppia nel body:
 - Response: `FXSyncBulkResponse`
 - Validazione: date range, coppie valide
 
-### Step 4: Frontend (FxSyncModal.svelte)
+### Step 4: Frontend (FxSyncModal.svelte + per-card toast)
 - Adattare la chiamata da GET con query params a POST con body JSON
 - Mostrare risultati per-coppia nella modale:
   - Per ogni coppia: icona status (✅/⚠️/❌/⏭️), nome coppia con bandiere, punti, provider
   - Riassunto in fondo: "Synced 3/4 pairs, 128 points changed"
 - Tradurre tutti i testi (i18n)
+
+#### Step 4b: Toast per sync locale (per-card ⟳ button)
+Quando l'utente preme il pulsante sync nella singola FxCard:
+- **Successo**: toast verde con "🇪🇺EUR/🇯🇵JPY synced — 61 points updated (ECB)"
+  usando i dati dalla nuova `FXSyncPairResult` (pair, points_changed, provider_used)
+- **Fallimento**: toast rosso con "🇪🇺EUR/🇯🇵JPY sync failed — All providers failed"
+  usando `status: "failed"` e `message` dalla response
+- **Skipped** (MANUAL-only): toast ambra con "🇪🇺EUR/🇯🇵JPY — manual only, nothing to sync"
+- **Partial**: toast ambra con info punti + nota dal `message`
+- Usa il componente toast/notification già esistente nel progetto
+- Tradurre tutti i testi (i18n): `fx.sync.toast.success`, `fx.sync.toast.failed`, `fx.sync.toast.skipped`, `fx.sync.toast.partial`
+- **Nota**: Questo step dipende dal nuovo schema di risposta pair-based (Steps 1-3). Con l'API attuale
+  la response è troppo vaga (`synced: N, currencies: [...]`) per generare toast informativi per coppia.
 
 ### Step 5: Aggiornare api sync (./dev.py api sync)
 - Rigenerare il client TypeScript dopo le modifiche allo schema

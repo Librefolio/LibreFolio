@@ -12,7 +12,7 @@ completa sulla teoria finanziaria con equivalenze signal processing / controlli 
 **Stato**: 🔄 IN PROGRESS — Steps 1-4 ✅, Step 5 ✅ (KaTeX tooltips, DocsLink component, fixed-position tooltips, translated param labels, expanded signal names), Steps 6-7 TODO
 **Data creazione**: 9 Marzo 2026
 **Ultimo aggiornamento**: 11 Marzo 2026 (Step 5 polish: Tooltip fixed positioning, DocsLink reusable component, expanded signal names in dropdowns/headers, i18n param labels, 15 i18n keys added)
-**Dipendenze**: `plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 done, signal library esiste)
+**Dipendenze**: `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md` (✅ COMPLETATO, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
 
@@ -1463,7 +1463,7 @@ salta la conversione per `yAxisIndex !== 0`).
 
 ## Link ad altri plan
 
-- **`plan-fxCardRedesignChartSettings.prompt.md`** — base del sistema segnali (Steps 1-6 done)
+- **`plan-fxCardRedesignChartSettings.prompt.md`** — ✅ COMPLETATO — base del sistema segnali
 - **`plan-fxSyncApiRedesign.prompt.md`** — sync pair-based (da completare, indipendente)
 - **`plan-phase05Fx.prompt.md`** — master plan Phase 5, aggiungere riferimento a questo plan
 - **`plan-fxUiRefinementsRound2.prompt.md`** — Step 8 (settings ⚙️, overlay, benchmark) → coperto qui

@@ -175,24 +175,40 @@ export function buildMainSeries(
 
     // ── Step 3: Create one ECharts series per segment ──
     // Each segment's data array has null everywhere except in its range.
-    // The NEXT segment extends 1 point backward (drawStart - 1) to bridge the
-    // gap between segments, ensuring the line is visually continuous.
-    // We do NOT extend drawEnd forward (+1) because that creates an overlap zone
-    // where two segments' area fills stack, causing a visible opacity "flash"
-    // at the boundary (especially when transitioning normal → stale).
+    // Adjacent segments share a 1-point overlap so the line is visually continuous.
+    //
+    // Bridge strategy (direction depends on transition type):
+    //   COLOR transition → BACKWARD bridge: new segment extends 1 point back into
+    //     the previous segment's territory. This ensures the line ARRIVING at a
+    //     point carries that point's baseline color (destination-based coloring).
+    //   OPACITY-ONLY transition (same color) → FORWARD bridge: old segment extends
+    //     1 point forward into the next segment's territory. This prevents a
+    //     visible "flash" when transitioning from fresh to stale data.
     const result: any[] = [];
 
     for (let sIdx = 0; sIdx < segments.length; sIdx++) {
         const seg = segments[sIdx];
         const segData: (number | null)[] = new Array(n).fill(null);
-        // Bridge strategy: extend the segment FORWARD by 1 point into the next
-        // segment's territory. This means "fresh" segments paint the bridge point
-        // at fresh opacity, so the transition fresh→stale never shows a sudden
-        // opacity increase at the boundary.
-        // We do NOT extend backward (drawStart - 1) because that would cause
-        // a stale segment to paint a fresh point at stale opacity (visible flash).
-        const drawStart = seg.start;
-        const drawEnd = Math.min(n - 1, seg.end + 1);
+
+        const prevSeg = sIdx > 0 ? segments[sIdx - 1] : null;
+        const nextSeg = sIdx < segments.length - 1 ? segments[sIdx + 1] : null;
+
+        // Start: extend backward if previous segment had a DIFFERENT color
+        // (so the line arriving at this segment's first point carries this color)
+        const colorChangeAtStart = prevSeg != null && prevSeg.color !== seg.color;
+        const drawStart = colorChangeAtStart
+            ? Math.max(0, seg.start - 1)
+            : seg.start;
+
+        // End: extend forward ONLY if next segment has the SAME color
+        // (opacity-only boundary → fresh segment paints the bridge at full opacity).
+        // At color boundaries we do NOT extend forward — the next segment will
+        // bridge backward instead.
+        const colorChangeAtEnd = nextSeg != null && nextSeg.color !== seg.color;
+        const drawEnd = (!colorChangeAtEnd && nextSeg)
+            ? Math.min(n - 1, seg.end + 1)
+            : seg.end;
+
         for (let i = drawStart; i <= drawEnd; i++) {
             segData[i] = values[i];
         }

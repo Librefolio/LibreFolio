@@ -1,9 +1,9 @@
 # Plan: FX Card Redesign, Chart Settings, Signal Library & Sync All Fix
 
 **Data creazione**: 5 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Steps 1-6 done. Step 4 refined (9 Mar): preview Abs/% toggle, synthetic data 365d, SineSignal added, toggle estetici fix, add-buttons moved above list, per-card settings wired. Step 5 done (Layout B + Svelte 5). Sync icons fixed (RotateCw). Prossimo: Step 7 (DataTable refactor, optional) → Step 8 (Integration & Test)
+**Status**: ✅ COMPLETATO — Steps 1-6 done. Step 8 done (11 Mar): compact chart overlay fix (hidden axes, auto-scaled, lines render) + baseline segment color fix (backward bridge at color transitions). Step 7 (DataTable refactor) deferred to future iteration (optional, low priority).
 **Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5, plan-fxSyncApiRedesign (sync API pair-based)
-**Espansione**: `plan-signalLibraryExpansion.prompt.md` ← indicatori tecnici (EMA, MACD, RSI, Bollinger), dual-axis, KaTeX tooltip, MkDocs docs
+**Espansione**: `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md` ← ✅ COMPLETATO — indicatori tecnici (EMA, MACD, RSI, Bollinger), dual-axis, KaTeX tooltip, MkDocs docs
 **Contesto**: Feedback utente su card layout, settings ⚙️ non collegato, Sync All non funzionante, overlay/benchmark da implementare come libreria di segnali
 
 ---
@@ -780,10 +780,10 @@ Remove duplicated code.
 | 2 | Signal Library | Medium | ✅ Done (updated 6 Mar) | None |
 | 3 | Chart Settings Store | Low | ✅ Done | Step 2 (uses SignalConfig) |
 | 4 | Chart Settings Modal | High | ✅ Done | Step 2 + 3 |
-| 5 | Redesign FxCard | High | 🟡 High | Step 3 + 4 |
+| 5 | Redesign FxCard | High | ✅ Done | Step 3 + 4 |
 | 6 | Overlay rendering LineChart | Medium | ✅ Done | Step 2 (uses computePoints) |
 | 7 | Refactor DataTableToolbar | Low | 🟢 Low | None |
-| 8 | Integration & Test | Medium | 🟡 High | Step 1-6 |
+| 8 | Integration & Test | Medium | 🔄 In Progress | Step 1-6 |
 
 ```
 Step 1 (Sync All fix)           ← independent, urgent
@@ -1204,11 +1204,57 @@ Add a small preview chart at the top of the modal showing current aesthetics.
 
 **Verified**: `./dev.py front check` → 0 errors, 0 warnings. `./dev.py front build` → success.
 
----
+### ✅ Step 8 — Integration: Compact Chart Overlay Fix — 11 Mar 2026
+**Problem**: In FxCard compact view (80px), overlay signals (RSI, MACD, Bollinger, EMA) were invisible.
+Secondary/tertiary axes were completely suppressed by `!compact &&` guard in `LineChart.svelte` (line 489-490).
+When `hasSecondaryAxis=false`, ECharts fell back to fixed scales (`min:0/max:100`, `min:0/max:1`)
+making auto-scaling impossible and squashing real overlay data into nothing.
 
-## 🔍 Backend FX Sync Analysis (6 Mar 2026)
+**Root cause**: The original design assumed compact mode = no overlays. After SignalLibraryExpansion
+enabled per-card signals, the guard blocked their rendering.
 
-### Current API: `GET /api/v1/fx/currencies/sync`
+**Fix applied** (`LineChart.svelte`):
+1. **Removed `!compact` guard** from `hasSecondaryAxis`/`hasTertiaryAxis` — now calculated purely
+   from `overlaySignals` regardless of compact mode.
+2. **Axes hidden in compact, auto-scaled always**: `show: hasSecondaryAxis && !compact` hides the
+   axis UI (labels, ticks, line, name) but ECharts still uses `scale: hasSecondaryAxis` and
+   `min/max: undefined` to auto-fit the data range → overlay lines render at correct proportions.
+3. **Grid unchanged in compact**: no extra right margin needed since axes are hidden; space is
+   fully used for the chart area.
+4. **Non-compact mode untouched**: the modal preview (`compact=false`) and future detail page
+   continue showing full axes with labels, offset, names as before.
+
+**Design rationale**: In compact card view (80px, indicative), showing axis labels for RSI/MACD
+would consume too much space. Users see the overlay lines for a quick visual reference;
+for precise values they enter the detail page (Phase 5 Step 6+).
+
+**Verified**: `./dev.py front check` → 0 errors, 0 warnings. `./dev.py front build` → success.
+
+### ✅ Step 8b — Baseline Segment Color Fix — 11 Mar 2026
+**Problem**: At baseline crossover points (value crossing from above to below baseline or vice-versa),
+the line color and tooltip color were wrong. Example: point A above baseline (green), point B below (red).
+The line from A→B appeared green (from A's segment forward bridge), and hovering point A showed red
+(from B's segment tooltip dedup taking first match).
+
+**Root cause** (`lineChartHelpers.ts`): The bridge strategy was purely FORWARD (`seg.end + 1`).
+This meant the PREVIOUS segment's color painted the crossover line, contradicting the user's expectation
+that the line ARRIVING at a point should carry that point's baseline color.
+
+**Fix**: Mixed bridge strategy based on transition type:
+1. **COLOR transitions** (red↔green) → **backward bridge**: the new-color segment extends 1 point
+   backward into the previous segment's territory. The line arriving at the new-color's first point
+   carries the correct color. Tooltip dedup (first match) picks the original segment = correct.
+2. **OPACITY transitions** (fresh↔stale, same color) → **forward bridge** (unchanged): fresh segment
+   extends 1 point forward, preventing a visible opacity "flash" at the boundary.
+3. **Both** (rare) → backward bridge (color correctness takes priority).
+
+**Result**: The crossover line now transitions at the exact point where the value crosses the baseline.
+The line going UP toward a green point is green; the line going DOWN toward a red point is red.
+Tooltip always shows the color matching the point's actual baseline position.
+
+**File modified**: `frontend/src/lib/components/charts/lineChartHelpers.ts` — `buildMainSeries()` Step 3
+
+**Verified**: `./dev.py front check` → 0 errors, 0 warnings. `./dev.py front build` → success.
 The API accepts individual currencies (CSV: `"EUR,USD,GBP,..."`) not pairs.
 In Auto-Configuration mode (no provider param):
 1. Loads ALL `fx_currency_pair_sources` from DB
