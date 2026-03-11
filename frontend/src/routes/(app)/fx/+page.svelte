@@ -33,6 +33,7 @@
         apiResultToFxDataPoint,
         type FxDataPoint, type FxPairConfig
     } from '$lib/stores/fxStoreRegistry';
+    import {toasts} from '$lib/stores/toastStore.svelte';
 
     // =========================================================================
     // Types
@@ -393,23 +394,35 @@
     }
 
     async function handleSyncPair(detail: {slug: string; base: string; quote: string}) {
-        const {slug, base, quote} = detail;
+        const {slug} = detail;
         const idx = pairs.findIndex(p => p.config.slug === slug);
         if (idx < 0) return;
         pairs[idx] = {...pairs[idx], loading: true};
         try {
-            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_get({
-                queries: {
-                    start: dateStart,
-                    end: dateEnd,
-                    currencies: `${base},${quote}`,
-                }
+            const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                pairs: [slug],
+                start: dateStart,
+                end: dateEnd,
             });
+            const r = (response as any)?.results?.[0];
+            if (r) {
+                const label = slug.replace('-', '/');
+                if (r.status === 'ok') {
+                    toasts.success(`${label} synced — ${r.points_changed ?? 0} pts (${r.provider_used ?? '?'})`);
+                } else if (r.status === 'partial') {
+                    toasts.warning(`${label} — ${r.points_changed ?? 0} pts${r.message ? ': ' + r.message : ''}`);
+                } else if (r.status === 'skipped') {
+                    toasts.info(`${label} — manual only, nothing to sync`);
+                } else {
+                    toasts.error(`${label} sync failed${r.message ? ': ' + r.message : ''}`);
+                }
+            }
             // After sync, refresh the pair
             const store = getFxStore(slug);
             store.invalidateRange(dateStart, dateEnd);
             await fetchPairData(idx);
         } catch (e: any) {
+            toasts.error(`${slug.replace('-', '/')} sync failed`);
             console.error('Sync failed for', slug, e);
             pairs[idx] = {...pairs[idx], loading: false};
         }
@@ -646,7 +659,9 @@
     bind:open={syncModalOpen}
     {dateStart}
     {dateEnd}
-    pairs={pairs.map(p => `${p.config.base}-${p.config.quote}`)}
+    pairs={pairs
+        .filter(p => !(p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL'))
+        .map(p => `${p.config.base}-${p.config.quote}`)}
     onsynced={handleSynced}
     onclose={() => syncModalOpen = false}
 />

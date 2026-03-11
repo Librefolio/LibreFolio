@@ -258,9 +258,10 @@
                 <Settings size={15} />
             </button>
             <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600 transition-colors"
-                onclick={(e) => { stop(e); onsync?.({ slug, base, quote }); }}
-                title="Sync rates from provider"
+                class="p-1.5 rounded-md transition-colors {manualOnly ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
+                onclick={(e) => { stop(e); if (!manualOnly) onsync?.({ slug, base, quote }); }}
+                title={manualOnly ? 'Manual-only pair' : 'Sync rates from provider'}
+                disabled={manualOnly}
             >
                 <RotateCw size={15} class={loading ? 'animate-spin' : ''} />
             </button>

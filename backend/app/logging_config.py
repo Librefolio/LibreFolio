@@ -90,6 +90,9 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
     # sqlalchemy.engine logs SQL statements
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    # httpx/httpcore log every TCP connection, TLS handshake, request header etc.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     # Configure handlers
     handlers = []

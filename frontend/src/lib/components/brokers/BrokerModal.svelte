@@ -8,7 +8,7 @@
     import BrokerForm from './BrokerForm.svelte';
     import {zodiosApi} from '$lib/api';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import ErrorBanner from '$lib/components/ui/ErrorBanner.svelte';
+    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -150,7 +150,7 @@
             </div>
 
             <!-- Error message -->
-            <ErrorBanner message={error} className="mx-4 mt-4 shrink-0" on:dismiss={() => error = ''} />
+            <InfoBanner variant="error" message={error} dismissible ondismiss={() => error = ''} class="mx-4 mt-4 shrink-0" />
 
             <!-- Form (scrollable area with sticky footer inside) -->
             <div class="overflow-y-auto flex-1 min-h-0 scrollbar-hidden">

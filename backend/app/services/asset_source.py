@@ -181,6 +181,7 @@ class AssetSourceProvider(ABC):
         """
         pass
 
+    @property
     def get_icon(self) -> str | None:
         """
         Provider icon URL for UI display.

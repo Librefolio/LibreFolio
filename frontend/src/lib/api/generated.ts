@@ -2597,17 +2597,70 @@ type FXPairSourceItem = {
    */
   priority: number;
 };
-type FXSyncResponse = {
+type FXSyncBulkResponse = {
   /**
-   * Number of new rates inserted/updated
+   * Per-item operation results
    */
-  synced: number;
+  results: Array<FXSyncPairResult>;
+  /**
+   * Number of successful operations
+   *
+   * @minimum 0
+   */
+  success_count: number;
+  errors?: /**
+   * Operation-level errors (not per-item)
+   */
+  Array<string> | undefined;
   date_range: DateRangeModel;
-  /**
-   * Currencies synced
+  total_points_changed?: /**
+   * Sum of points_changed across all pairs
+   *
+   * @default 0
+   * @minimum 0
    */
-  currencies: Array<string>;
+  number | undefined;
 };
+type FXSyncPairResult = {
+  /**
+   * Normalized pair slug, e.g. 'EUR-USD'
+   */
+  pair: string;
+  status: FXSyncStatus;
+  provider_used?:
+    | /**
+     * Provider code that served data (None if failed/skipped)
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+  points_fetched?: /**
+   * Number of rate points fetched from provider
+   *
+   * @default 0
+   * @minimum 0
+   */
+  number | undefined;
+  points_changed?: /**
+   * Number of rate points actually inserted/updated in DB
+   *
+   * @default 0
+   * @minimum 0
+   */
+  number | undefined;
+  message?:
+    | /**
+     * Optional note (e.g. 'monthly data only', 'fallback used')
+     */
+    ((string | null) | Array<string | null>)
+    | undefined;
+};
+type FXSyncStatus =
+  /**
+   * Status of a single pair sync operation.
+   *
+   * @enum ok, partial, failed, skipped
+   */
+  "ok" | "partial" | "failed" | "skipped";
 type GlobalSettingsListResponse = Partial<{
   /**
    * List of items
@@ -3378,16 +3431,41 @@ const FXDeletePairSourcesResponse: z.ZodType<FXDeletePairSourcesResponse> =
       .gte(0)
       .describe("Total number of records deleted across all items"),
   });
-const provider = z
-  .union([z.string(), z.null()])
-  .describe(
-    "Provider code (ECB, FED, BOE, SNB). If NULL, uses fx_currency_pair_sources configuration."
-  )
-  .optional();
-const base_currency = z
-  .union([z.string(), z.null()])
-  .describe("Base currency (for multi-base providers)")
-  .optional();
+const FXSyncPairRequest = z.object({
+  pairs: z
+    .array(z.string())
+    .min(1)
+    .describe("Pair slugs, e.g. ['EUR-USD', 'CHF-CNY']"),
+  start: z.string().describe("Start date (inclusive)"),
+  end: z.string().describe("End date (inclusive)"),
+});
+const FXSyncStatus = z.enum(["ok", "partial", "failed", "skipped"]);
+const FXSyncPairResult: z.ZodType<FXSyncPairResult> = z.object({
+  pair: z.string().describe("Normalized pair slug, e.g. 'EUR-USD'"),
+  status: FXSyncStatus.describe("Status of a single pair sync operation."),
+  provider_used: z
+    .union([z.string(), z.null()])
+    .describe("Provider code that served data (None if failed/skipped)")
+    .optional(),
+  points_fetched: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of rate points fetched from provider")
+    .optional()
+    .default(0),
+  points_changed: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of rate points actually inserted/updated in DB")
+    .optional()
+    .default(0),
+  message: z
+    .union([z.string(), z.null()])
+    .describe("Optional note (e.g. 'monthly data only', 'fallback used')")
+    .optional(),
+});
 const DateRangeModel: z.ZodType<DateRangeModel> = z.object({
   start: z.string().describe("Start date (inclusive)"),
   end: z
@@ -3395,8 +3473,17 @@ const DateRangeModel: z.ZodType<DateRangeModel> = z.object({
     .describe("End date (inclusive, optional = single day)")
     .optional(),
 });
-const FXSyncResponse: z.ZodType<FXSyncResponse> = z.object({
-  synced: z.number().int().describe("Number of new rates inserted/updated"),
+const FXSyncBulkResponse: z.ZodType<FXSyncBulkResponse> = z.object({
+  results: z.array(FXSyncPairResult).describe("Per-item operation results"),
+  success_count: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Number of successful operations"),
+  errors: z
+    .array(z.string())
+    .describe("Operation-level errors (not per-item)")
+    .optional(),
   date_range:
     DateRangeModel.describe(`Reusable date range model for FA and FX operations.
 
@@ -3418,7 +3505,13 @@ Examples:
 
     # Range
     {"start": "2025-11-01", "end": "2025-11-30"}  # Entire November`),
-  currencies: z.array(z.string()).describe("Currencies synced"),
+  total_points_changed: z
+    .number()
+    .int()
+    .gte(0)
+    .describe("Sum of points_changed across all pairs")
+    .optional()
+    .default(0),
 });
 const FXUpsertItem = z
   .object({
@@ -5648,10 +5741,11 @@ export const schemas = {
   FXDeletePairSourceItem,
   FXDeletePairSourceResult,
   FXDeletePairSourcesResponse,
-  provider,
-  base_currency,
+  FXSyncPairRequest,
+  FXSyncStatus,
+  FXSyncPairResult,
   DateRangeModel,
-  FXSyncResponse,
+  FXSyncBulkResponse,
   FXUpsertItem,
   FXUpsertResult,
   FXBulkUpsertResponse,
@@ -7410,66 +7504,37 @@ Example:
     ],
   },
   {
-    method: "get",
+    method: "post",
     path: "/api/v1/fx/currencies/sync",
-    alias: "sync_rates_api_v1_fx_currencies_sync_get",
-    description: `Synchronize FX rates for the specified date range and currencies.
+    alias: "sync_rates_api_v1_fx_currencies_sync_post",
+    description: `Synchronize FX rates for specified currency pairs and date range.
 
-**Two modes of operation**:
+**Pair-based sync** — accepts explicit pair slugs (e.g. [&#x27;EUR-USD&#x27;, &#x27;CHF-CNY&#x27;]).
+Each pair is synced independently using configured providers from
+fx_currency_pair_sources table, with automatic fallback to lower-priority providers.
 
-1. **Explicit Provider Mode** (provider parameter specified):
-   - Forces the specified provider for all currencies
-   - Ignores fx_currency_pair_sources configuration
-   - Backward compatible with previous API
+Pairs are normalized to alphabetical order (USD-EUR → EUR-USD).
 
-2. **Auto-Configuration Mode** (provider&#x3D;NULL):
-   - Consults fx_currency_pair_sources table
-   - Uses priority&#x3D;1 provider for each currency pair
-   - Fails with explicit error if configuration missing
+**Status per pair:**
+- &#x60;ok&#x60; — provider returned data, inserted/updated in DB
+- &#x60;partial&#x60; — provider returned empty or incomplete data
+- &#x60;failed&#x60; — all providers for this pair failed
+- &#x60;skipped&#x60; — pair is MANUAL-only, nothing to sync
 
 Args:
-    start: Start date (inclusive)
-    end: End date (inclusive)
-    currencies: Comma-separated currency codes (e.g., &quot;USD,GBP,CHF&quot;)
-    provider: (Optional) Force specific provider. If NULL, uses configuration.
-    base_currency: (Optional) Base currency for multi-base providers
-    session: Database session
+    body: FXSyncPairRequest with pairs list and date range
 
 Returns:
-    Sync statistics`,
+    FXSyncBulkResponse with per-pair results and summary`,
     requestFormat: "json",
     parameters: [
       {
-        name: "start",
-        type: "Query",
-        schema: z.string().describe("Start date (inclusive)"),
-      },
-      {
-        name: "end",
-        type: "Query",
-        schema: z.string().describe("End date (inclusive)"),
-      },
-      {
-        name: "currencies",
-        type: "Query",
-        schema: z
-          .string()
-          .describe("Comma-separated currency codes")
-          .optional()
-          .default("USD,GBP,CHF,JPY"),
-      },
-      {
-        name: "provider",
-        type: "Query",
-        schema: provider,
-      },
-      {
-        name: "base_currency",
-        type: "Query",
-        schema: base_currency,
+        name: "body",
+        type: "Body",
+        schema: FXSyncPairRequest,
       },
     ],
-    response: FXSyncResponse,
+    response: FXSyncBulkResponse,
     errors: [
       {
         status: 422,

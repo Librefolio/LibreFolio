@@ -1,30 +1,32 @@
 <!--
   FxSyncModal — Modal for syncing FX rates with external providers.
-  Shows progress and results of the sync operation.
-
-  Accepts configured pairs (e.g. ['EUR-GBP', 'EUR-USD']) and extracts
-  unique currencies for the backend API call. Displays pair count and
-  pair names for user clarity.
+  Shows per-pair results after sync completes.
+  Features: editable timeout, countdown progress bar, per-pair elapsed time,
+  retry failed individually or bulk.
 -->
 <script lang="ts">
     import {zodiosApi} from '$lib/api';
-    import {RefreshCw, Check, X} from 'lucide-svelte';
+    import {RefreshCw, Check, X, AlertTriangle, SkipForward, AlertCircle, Clock, Timer, RotateCw} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {_ as t} from '$lib/i18n';
 
+    interface PairResult {
+        pair: string;
+        status: 'ok' | 'partial' | 'failed' | 'skipped';
+        provider_used?: string | null;
+        points_fetched?: number;
+        points_changed?: number;
+        message?: string | null;
+        elapsedMs?: number;
+    }
+
     interface Props {
-        /** Whether modal is open */
         open: boolean;
-        /** Start date for sync range */
         dateStart: string;
-        /** End date for sync range */
         dateEnd: string;
-        /** Configured pair slugs, e.g. ['EUR-GBP', 'EUR-USD'] */
         pairs: string[];
-        /** Called after successful sync */
         onsynced: () => void;
-        /** Called on close */
         onclose: () => void;
     }
 
@@ -37,54 +39,141 @@
         onclose,
     }: Props = $props();
 
-    // Derive unique currencies from pairs for the backend API
-    let currencies = $derived([...new Set(pairs.flatMap(p => p.split('-')))].sort());
-
     let syncing = $state(false);
-    let result = $state<{synced: number; currencies: string[]} | null>(null);
+    let pairResults = $state<PairResult[]>([]);
     let error = $state<string | null>(null);
+    let isTimeout = $state(false);
+    let timeoutSec = $state(10);
+    let elapsedMs = $state(0);
+    let countdownInterval: ReturnType<typeof setInterval> | null = null;
+    let hasResults = $derived(pairResults.length > 0);
 
-    // Map synced currencies back to pairs for display
-    let syncedPairs = $derived.by(() => {
-        if (!result) return [];
-        const syncedSet = new Set(result.currencies);
-        return pairs.filter(slug => {
-            const [base, quote] = slug.split('-');
-            return syncedSet.has(base) || syncedSet.has(quote);
-        });
-    });
+    const statusIcon: Record<string, typeof Check> = {
+        ok: Check,
+        partial: AlertTriangle,
+        failed: AlertCircle,
+        skipped: SkipForward,
+    };
+    const statusColor: Record<string, string> = {
+        ok: 'text-emerald-500',
+        partial: 'text-amber-500',
+        failed: 'text-red-500',
+        skipped: 'text-gray-400',
+    };
 
-    // Reset state when modal opens
+    let remainingSec = $derived(Math.max(0, timeoutSec - Math.floor(elapsedMs / 1000)));
+    let progressPct = $derived(Math.min(100, (elapsedMs / (timeoutSec * 1000)) * 100));
+    let failedPairs = $derived(pairResults.filter(r => r.status === 'failed'));
+    let successCount = $derived(pairResults.filter(r => r.status === 'ok' || r.status === 'partial').length);
+    let totalPointsChanged = $derived(pairResults.reduce((sum, r) => sum + (r.points_changed ?? 0), 0));
+    let totalPointsFetched = $derived(pairResults.reduce((sum, r) => sum + (r.points_fetched ?? 0), 0));
+
     $effect(() => {
         if (open) {
-            result = null;
+            pairResults = [];
             error = null;
+            isTimeout = false;
+            elapsedMs = 0;
         }
     });
 
-    async function handleSync() {
+    function startCountdown() {
+        elapsedMs = 0;
+        const start = Date.now();
+        countdownInterval = setInterval(() => {
+            elapsedMs = Date.now() - start;
+        }, 100);
+    }
+
+    function stopCountdown() {
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+        }
+    }
+
+    async function doSync(targetPairs: string[]) {
         syncing = true;
         error = null;
-        result = null;
+        isTimeout = false;
+        startCountdown();
+        const syncStart = Date.now();
         try {
-            const currenciesStr = currencies.join(',');
-            const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_get({
-                queries: {
+            const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post(
+                {
+                    pairs: targetPairs,
                     start: dateStart,
                     end: dateEnd,
-                    currencies: currenciesStr,
-                }
-            });
-            result = {
-                synced: (response as any)?.synced || 0,
-                currencies: (response as any)?.currencies || [],
-            };
+                },
+                { timeout: timeoutSec * 1000 },
+            );
+            const r = response as any;
+            const elapsed = Date.now() - syncStart;
+            const newResults: PairResult[] = (r.results ?? []).map((pr: any) => ({
+                ...pr,
+                elapsedMs: elapsed,
+            }));
+
+            // Merge: replace results for retried pairs, keep existing for others
+            const retriedSlugs = new Set(targetPairs);
+            pairResults = [
+                ...pairResults.filter(pr => !retriedSlugs.has(pr.pair)),
+                ...newResults,
+            ];
+
             onsynced();
         } catch (e: any) {
-            error = e?.message || 'Sync failed';
+            const elapsed = Date.now() - syncStart;
+            let errMsg: string;
+            if (e?.code === 'ECONNABORTED' || e?.message?.includes('timeout')) {
+                isTimeout = true;
+                errMsg = `Timeout after ${timeoutSec}s`;
+                error = `Request timed out after ${timeoutSec}s. Increase the timeout and retry.`;
+            } else {
+                errMsg = e?.response?.data?.detail || e?.message || 'Sync failed';
+                error = errMsg;
+            }
+
+            // Generate failed results for all targeted pairs so the retry UI appears
+            const failedResults: PairResult[] = targetPairs.map(pair => ({
+                pair,
+                status: 'failed' as const,
+                message: errMsg,
+                elapsedMs: elapsed,
+            }));
+            const retriedSlugs = new Set(targetPairs);
+            pairResults = [
+                ...pairResults.filter(pr => !retriedSlugs.has(pr.pair)),
+                ...failedResults,
+            ];
         } finally {
             syncing = false;
+            stopCountdown();
         }
+    }
+
+    function handleSyncAll() {
+        pairResults = [];
+        doSync(pairs);
+    }
+
+    function handleRetryFailed() {
+        doSync(failedPairs.map(r => r.pair));
+    }
+
+    function handleRetrySingle(pair: string) {
+        doSync([pair]);
+    }
+
+    function formatTime(sec: number): string {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`;
+    }
+
+    function formatElapsed(ms: number): string {
+        if (ms < 1000) return `${ms}ms`;
+        return `${(ms / 1000).toFixed(1)}s`;
     }
 </script>
 
@@ -112,6 +201,7 @@
         <p class="text-sm text-gray-600 dark:text-gray-400">
             {$t('fx.sync.description') ?? 'Synchronize exchange rates from configured providers for the selected date range.'}
         </p>
+        <!-- Date range + pairs info -->
         <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 rounded-lg px-3 py-2">
             <span class="font-medium text-gray-700 dark:text-gray-300">{dateStart}</span>
             <span>→</span>
@@ -120,24 +210,99 @@
             <span>{pairs.length} {$t('fx.sync.pairsCount') ?? 'pairs'}</span>
         </div>
 
-        {#if error}
-            <InfoBanner variant="error">
-                <span class="text-sm">{error}</span>
-            </InfoBanner>
+        <!-- Timeout setting (always visible when not completed or has failures) -->
+        {#if !hasResults || failedPairs.length > 0 || isTimeout}
+            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <Timer size={13} class="shrink-0" />
+                <span>{$t('fx.sync.timeout') ?? 'Timeout'}:</span>
+                <input
+                    type="number"
+                    min="10"
+                    max="600"
+                    step="10"
+                    bind:value={timeoutSec}
+                    disabled={syncing}
+                    class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                />
+                <span>sec</span>
+            </div>
         {/if}
 
-        {#if result}
-            <InfoBanner variant="success">
-                <div class="text-sm">
-                    <span class="font-medium">
-                        {$t('fx.sync.synced') ?? 'Synced'} {result.synced} rate{result.synced !== 1 ? 's' : ''}
+        <!-- Progress bar during sync -->
+        {#if syncing}
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span class="flex items-center gap-1.5">
+                        <Clock size={13} class="animate-pulse" />
+                        {$t('fx.sync.syncing') ?? 'Syncing...'}
                     </span>
-                    {#if syncedPairs.length > 0}
-                        <span class="opacity-80">
-                            — {syncedPairs.map(s => s.replace('-', '/')).join(', ')}
-                        </span>
-                    {/if}
+                    <span class="font-mono tabular-nums">{formatTime(remainingSec)}</span>
                 </div>
+                <div class="h-1.5 w-full bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                        class="h-full bg-amber-500 rounded-full transition-all duration-100"
+                        style="width: {progressPct}%"
+                    ></div>
+                </div>
+            </div>
+        {/if}
+
+        {#if error}
+            <InfoBanner variant="error" message={error} />
+        {/if}
+
+        {#if hasResults}
+            <!-- Retry all failed button -->
+            {#if failedPairs.length > 1 && !syncing}
+                <button
+                    class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    onclick={handleRetryFailed}
+                >
+                    <SkipForward size={13} />
+                    Retry {failedPairs.length} failed
+                </button>
+            {/if}
+
+            <!-- Per-pair results -->
+            <div class="space-y-1.5">
+                {#each pairResults as pr (pr.pair)}
+                    {@const Icon = statusIcon[pr.status] ?? AlertCircle}
+                    <div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 group">
+                        {#if pr.status === 'failed' && !syncing}
+                            <button
+                                class="shrink-0 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                                onclick={() => handleRetrySingle(pr.pair)}
+                                title="Retry this pair"
+                            >
+                                <RotateCw size={13} />
+                            </button>
+                        {:else}
+                            <Icon size={14} class="{statusColor[pr.status] ?? 'text-gray-400'} shrink-0" />
+                        {/if}
+                        <span class="font-medium">{pr.pair.replace('-', '/')}</span>
+                        {#if pr.status === 'ok' || pr.status === 'partial'}
+                            <span class="text-gray-400">—</span>
+                            <span>{pr.points_fetched ?? 0}↓ {pr.points_changed ?? 0}Δ</span>
+                            {#if pr.provider_used}
+                                <span class="text-gray-400">({pr.provider_used})</span>
+                            {/if}
+                        {/if}
+                        {#if pr.status === 'failed' && pr.message}
+                            <span class="text-red-400 truncate" title={pr.message}>{pr.message}</span>
+                        {/if}
+                        {#if pr.elapsedMs}
+                            <span class="ml-auto text-gray-400 font-mono tabular-nums text-[10px]">{formatElapsed(pr.elapsedMs)}</span>
+                        {/if}
+                    </div>
+                {/each}
+            </div>
+
+            <!-- Summary -->
+            <InfoBanner variant={successCount === pairResults.length ? 'success' : successCount > 0 ? 'warning' : 'error'}>
+                <span class="text-sm font-medium">
+                    {$t('fx.sync.synced') ?? 'Synced'} {successCount}/{pairResults.length} {$t('fx.sync.pairsCount') ?? 'pairs'}
+                    · {totalPointsFetched}↓ {totalPointsChanged}Δ
+                </span>
             </InfoBanner>
         {/if}
     </div>
@@ -148,16 +313,22 @@
             class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
             onclick={onclose}
         >
-            {result ? ($t('common.close') ?? 'Close') : ($t('common.cancel') ?? 'Cancel')}
+            {hasResults || isTimeout ? ($t('common.close') ?? 'Close') : ($t('common.cancel') ?? 'Cancel')}
         </button>
-        {#if !result}
+        {#if !hasResults || failedPairs.length > 0}
             <button
                 class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
-                onclick={handleSync}
+                onclick={hasResults && failedPairs.length > 0 ? handleRetryFailed : handleSyncAll}
                 disabled={syncing || pairs.length === 0}
             >
                 <RefreshCw size={15} class={syncing ? 'animate-spin' : ''} />
-                {syncing ? ($t('fx.sync.syncing') ?? 'Syncing...') : ($t('fx.sync.start') ?? 'Start Sync')}
+                {#if failedPairs.length > 0 && hasResults}
+                    {$t('common.retry') ?? 'Retry'} {failedPairs.length} failed
+                {:else if syncing}
+                    {$t('fx.sync.syncing') ?? 'Syncing...'}
+                {:else}
+                    {$t('fx.sync.start') ?? 'Start Sync'}
+                {/if}
             </button>
         {/if}
     </div>
