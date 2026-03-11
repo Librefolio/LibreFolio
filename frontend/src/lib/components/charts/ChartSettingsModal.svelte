@@ -15,10 +15,12 @@
   Used by: FX list page (global), FxCard (pair), FX detail page (pair)
 -->
 <script lang="ts">
-    import {X, Trash2, Settings, ArrowLeftRight} from 'lucide-svelte';
+    import {X, Trash2, Settings, ArrowLeftRight, Info} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import LineChart from '$lib/components/charts/LineChart.svelte';
@@ -101,18 +103,32 @@
 
     const signalTypes: SignalTypeInfo[] = getRegisteredSignalTypes();
 
-    /** Signal types grouped by category for the 3 SimpleSelect dropdowns */
-    const indicatorOptions: SelectOption[] = signalTypes
+    /** Signal types grouped by category for the 3 SimpleSelect dropdowns.
+     * Label includes both name and full for search; data carries split values for snippet rendering.
+     * Must be $derived so the $t() store subscription is resolved lazily (avoids TDZ errors). */
+    let indicatorOptions: SelectOption[] = $derived(signalTypes
         .filter(st => st.category === 'indicator')
-        .map(st => ({value: st.type, label: st.displayName, icon: st.icon}));
+        .map(st => {
+            const name = getSignalName(st);
+            const full = getSignalFullName(st.type);
+            return {value: st.type, label: full ? `${name} — ${full}` : name, icon: st.icon, data: {name, fullName: full}};
+        }));
 
-    const comparisonOptions: SelectOption[] = signalTypes
+    let comparisonOptions: SelectOption[] = $derived(signalTypes
         .filter(st => st.category === 'comparison')
-        .map(st => ({value: st.type, label: st.displayName, icon: st.icon}));
+        .map(st => {
+            const name = getSignalName(st);
+            const full = getSignalFullName(st.type);
+            return {value: st.type, label: full ? `${name} — ${full}` : name, icon: st.icon, data: {name, fullName: full}};
+        }));
 
-    const benchmarkOptions: SelectOption[] = signalTypes
+    let benchmarkOptions: SelectOption[] = $derived(signalTypes
         .filter(st => st.category === 'benchmark')
-        .map(st => ({value: st.type, label: st.displayName, icon: st.icon}));
+        .map(st => {
+            const name = getSignalName(st);
+            const full = getSignalFullName(st.type);
+            return {value: st.type, label: full ? `${name} — ${full}` : name, icon: st.icon, data: {name, fullName: full}};
+        }));
 
     /** Temporary selected values for SimpleSelect (reset after adding) */
     let indicatorSelect = $state('');
@@ -238,6 +254,47 @@
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    /**
+     * Map signal type keys to i18n base keys.
+     * For types like 'fx-pair' the i18n key uses camelCase 'fxPair'.
+     */
+    const SIGNAL_TYPE_I18N_KEY: Record<string, string> = {
+        'fx-pair': 'fxPair', 'linear': 'linear', 'compound': 'compound',
+        'sine': 'sine', 'ema': 'ema', 'macd': 'macd', 'rsi': 'rsi',
+        'bollinger': 'bollinger',
+    };
+
+    /** Get the translated signal name, with fallback to displayName */
+    function getSignalName(st: SignalTypeInfo): string {
+        const key = SIGNAL_TYPE_I18N_KEY[st.type];
+        return key ? $t(`chartSettings.signals.${key}`) : st.displayName;
+    }
+
+    /**
+     * Get the expanded full name for abbreviation-only signals (EMA, MACD, RSI).
+     * Returns empty string if the signal name is already descriptive.
+     */
+    function getSignalFullName(signalType: string): string {
+        const key = SIGNAL_TYPE_I18N_KEY[signalType];
+        if (!key) return '';
+        const fullKey = `chartSettings.signals.${key}Full`;
+        const full = $t(fullKey);
+        // If the key doesn't exist, svelte-i18n returns the key itself
+        return full !== fullKey ? full : '';
+    }
+
+    /**
+     * Get the formula description for a signal (LaTeX, for DocsLink tooltip).
+     * Returns the i18n key value if it exists, otherwise falls back to full name.
+     */
+    function getSignalDesc(signalType: string): string {
+        const key = SIGNAL_TYPE_I18N_KEY[signalType];
+        if (!key) return '';
+        const descKey = `chartSettings.signals.${key}Desc`;
+        const desc = $t(descKey);
+        return desc !== descKey ? desc : getSignalFullName(signalType);
+    }
 
     function getSignalTypeInfo(signalType: string): SignalTypeInfo | undefined {
         return signalTypes.find(t => t.type === signalType);
@@ -608,7 +665,15 @@
                                     placeholder={$t('common.select')}
                                     dropdownPosition="auto"
                                     onchange={(v) => { addSignal(v); indicatorSelect = ''; }}
-                                />
+                                >
+                                    {#snippet item(option)}
+                                        {@const d = option.data as {name: string, fullName: string}}
+                                        <span class="truncate">
+                                            {option.icon} <span class="font-medium">{d.name}</span>
+                                            {#if d.fullName}<span class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{d.fullName}</span>{/if}
+                                        </span>
+                                    {/snippet}
+                                </SimpleSelect>
                             </div>
                         {/if}
                         {#if comparisonOptions.length > 0}
@@ -620,7 +685,15 @@
                                     placeholder={$t('common.select')}
                                     dropdownPosition="auto"
                                     onchange={(v) => { addSignal(v); comparisonSelect = ''; }}
-                                />
+                                >
+                                    {#snippet item(option)}
+                                        {@const d = option.data as {name: string, fullName: string}}
+                                        <span class="truncate">
+                                            {option.icon} <span class="font-medium">{d.name}</span>
+                                            {#if d.fullName}<span class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{d.fullName}</span>{/if}
+                                        </span>
+                                    {/snippet}
+                                </SimpleSelect>
                             </div>
                         {/if}
                         {#if benchmarkOptions.length > 0}
@@ -632,7 +705,15 @@
                                     placeholder={$t('common.select')}
                                     dropdownPosition="auto"
                                     onchange={(v) => { addSignal(v); benchmarkSelect = ''; }}
-                                />
+                                >
+                                    {#snippet item(option)}
+                                        {@const d = option.data as {name: string, fullName: string}}
+                                        <span class="truncate">
+                                            {option.icon} <span class="font-medium">{d.name}</span>
+                                            {#if d.fullName}<span class="text-[11px] text-gray-400 dark:text-gray-500 ml-1">{d.fullName}</span>{/if}
+                                        </span>
+                                    {/snippet}
+                                </SimpleSelect>
                             </div>
                         {/if}
                     </div>
@@ -650,18 +731,29 @@
                     >
                         {#snippet children({ item: signal, index })}
                             {@const typeInfo = getSignalTypeInfo(signal.signalType)}
+                            {@const signalName = typeInfo ? getSignalName(typeInfo) : signal.signalType}
+                            {@const signalFullName = getSignalFullName(signal.signalType)}
+                            {@const signalDesc = getSignalDesc(signal.signalType)}
                             <div class="space-y-2">
-                                <!-- Signal header: icon + type name + remove button -->
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-sm">{typeInfo?.icon ?? '❓'}</span>
-                                        <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
-                                            {typeInfo?.displayName ?? signal.signalType}
+                                <!-- Signal header: icon + name + (full name) + docs ? + remove -->
+                                <div class="flex items-center justify-between gap-1">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span class="text-sm flex-shrink-0">{typeInfo?.icon ?? '❓'}</span>
+                                        <span class="text-xs font-medium text-gray-600 dark:text-gray-300 flex-shrink-0">
+                                            {signalName}
                                         </span>
+                                        {#if signalFullName}
+                                            <span class="text-[10px] text-gray-400 dark:text-gray-500 truncate">
+                                                {signalFullName}
+                                            </span>
+                                        {/if}
+                                        {#if typeInfo?.docsPath}
+                                            <DocsLink path={typeInfo.docsPath} label={signalDesc || signalName} math />
+                                        {/if}
                                     </div>
                                     <button
                                         type="button"
-                                        class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
+                                        class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
                                         title={$t('chartSettings.removeSignal')}
                                         onclick={() => removeSignal(signal.id)}
                                     >
@@ -675,8 +767,13 @@
                                         {#each typeInfo.paramDescriptors as desc}
                                             <div class="flex items-center gap-1.5">
                                                 <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
-                                                    {desc.label}
+                                                    {$t(`chartSettings.params.${desc.key}`) !== `chartSettings.params.${desc.key}` ? $t(`chartSettings.params.${desc.key}`) : desc.label}
                                                 </span>
+                                                {#if desc.tooltip}
+                                                    <Tooltip text={$t(desc.tooltip)} math position="top">
+                                                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                                                    </Tooltip>
+                                                {/if}
                                                 {#if desc.type === 'number'}
                                                     <div class="flex items-center gap-1">
                                                         <input

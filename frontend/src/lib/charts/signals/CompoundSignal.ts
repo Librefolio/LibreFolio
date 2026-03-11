@@ -25,6 +25,7 @@ export class CompoundSignal extends ChartSignal {
     static override displayName = 'Compound Growth';           // i18n: 'signals.compound'
     static override icon = '📊';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
+    static docsPath = 'financial-theory/synthetic-benchmarks/#compound-growth';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
@@ -36,6 +37,7 @@ export class CompoundSignal extends ChartSignal {
             max: 1000,
             step: 0.5,
             suffix: '%/yr',
+            tooltip: 'chartSettings.tooltips.annualRate',
         },
         {
             key: 'offset',
@@ -46,6 +48,7 @@ export class CompoundSignal extends ChartSignal {
             max: 100,
             step: 0.5,
             suffix: '%',
+            tooltip: 'chartSettings.tooltips.offset',
         },
     ];
 

@@ -28,28 +28,31 @@ export class EmaSignal extends ChartSignal {
     static override displayName = 'EMA';                       // i18n: 'signals.ema'
     static override icon = '📉';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
+    static docsPath = 'financial-theory/technical-indicators/#ema';
     // yAxisIndex = 0 (default, same scale as price)
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
             key: 'period',
-            label: 'Period',                           // i18n: 'signals.params.period'
+            label: 'Period',                           // i18n: 'chartSettings.params.period'
             type: 'number',
             default: 14,
             min: 2,
             max: 500,
             step: 1,
             suffix: 'days',
+            tooltip: 'chartSettings.tooltips.emaPeriod',
         },
         {
             key: 'offset',
-            label: 'Offset',                           // i18n: 'signals.params.offset'
+            label: 'Offset',                           // i18n: 'chartSettings.params.offset'
             type: 'number',
             default: 0,
             min: -100,
             max: 100,
             step: 0.5,
             suffix: '%',
+            tooltip: 'chartSettings.tooltips.offset',
         },
     ];
 

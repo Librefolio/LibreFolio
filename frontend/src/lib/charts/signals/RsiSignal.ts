@@ -24,6 +24,7 @@ export class RsiSignal extends ChartSignal {
     static override icon = '📊';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
     static yAxisIndex = 1;
+    static docsPath = 'financial-theory/technical-indicators/#rsi';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
@@ -35,6 +36,7 @@ export class RsiSignal extends ChartSignal {
             max: 200,
             step: 1,
             suffix: 'days',
+            tooltip: 'chartSettings.tooltips.period',
         },
         {
             key: 'overbought',
@@ -45,6 +47,7 @@ export class RsiSignal extends ChartSignal {
             max: 100,
             step: 1,
             suffix: '',
+            tooltip: 'chartSettings.tooltips.overbought',
         },
         {
             key: 'oversold',
@@ -55,6 +58,7 @@ export class RsiSignal extends ChartSignal {
             max: 50,
             step: 1,
             suffix: '',
+            tooltip: 'chartSettings.tooltips.oversold',
         },
     ];
 

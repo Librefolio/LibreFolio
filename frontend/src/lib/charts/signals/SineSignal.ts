@@ -24,6 +24,7 @@ export class SineSignal extends ChartSignal {
     static override displayName = 'Sine Wave';             // i18n: 'signals.sine'
     static override icon = '〰️';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'benchmark';
+    static docsPath = 'financial-theory/synthetic-benchmarks/#sine-wave';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
@@ -35,6 +36,7 @@ export class SineSignal extends ChartSignal {
             max: 200,
             step: 1,
             suffix: '%',
+            tooltip: 'chartSettings.tooltips.amplitude',
         },
         {
             key: 'period',
@@ -45,6 +47,7 @@ export class SineSignal extends ChartSignal {
             max: 3650,
             step: 1,
             suffix: 'days',
+            tooltip: 'chartSettings.tooltips.period',
         },
         {
             key: 'offset',
@@ -55,6 +58,7 @@ export class SineSignal extends ChartSignal {
             max: 100,
             step: 0.5,
             suffix: '%',
+            tooltip: 'chartSettings.tooltips.offset',
         },
     ];
 
@@ -80,4 +84,3 @@ export class SineSignal extends ChartSignal {
         return `Sine ±${amp}% / ${per}d`;
     }
 }
-

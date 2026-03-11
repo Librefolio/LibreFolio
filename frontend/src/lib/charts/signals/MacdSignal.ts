@@ -36,6 +36,7 @@ export class MacdSignal extends ChartSignal {
     static override icon = '📶';
     static category: 'indicator' | 'comparison' | 'benchmark' = 'indicator';
     static yAxisIndex = 2;
+    static docsPath = 'financial-theory/technical-indicators/#macd';
 
     static override paramDescriptors: SignalParamDescriptor[] = [
         {
@@ -47,6 +48,7 @@ export class MacdSignal extends ChartSignal {
             max: 200,
             step: 1,
             suffix: 'days',
+            tooltip: 'chartSettings.tooltips.fastPeriod',
         },
         {
             key: 'slowPeriod',
@@ -57,6 +59,7 @@ export class MacdSignal extends ChartSignal {
             max: 500,
             step: 1,
             suffix: 'days',
+            tooltip: 'chartSettings.tooltips.slowPeriod',
         },
         {
             key: 'signalPeriod',
@@ -67,6 +70,7 @@ export class MacdSignal extends ChartSignal {
             max: 100,
             step: 1,
             suffix: 'days',
+            tooltip: 'chartSettings.tooltips.signalPeriod',
         },
     ];
 
