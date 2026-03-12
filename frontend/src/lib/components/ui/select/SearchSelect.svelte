@@ -180,11 +180,25 @@
         searchQuery = '';
     }
 
-    function selectOption(option: SelectOption) {
+    function selectOption(option: SelectOption, advanceFocus = false) {
         if (option.disabled) return;
         value = option.value;
         onchange?.(option.value);
         closeDropdown();
+        if (advanceFocus && containerRef) {
+            // Move focus to the next focusable element after closing
+            setTimeout(() => {
+                const all = Array.from(
+                    document.querySelectorAll<HTMLElement>(
+                        '[tabindex]:not([tabindex="-1"]), input:not([disabled]), select:not([disabled]), button:not([disabled]), a[href]'
+                    )
+                ).filter(el => el.offsetParent !== null);
+                const idx = all.indexOf(containerRef!.querySelector<HTMLElement>('[tabindex]') ?? containerRef!);
+                if (idx >= 0 && idx + 1 < all.length) {
+                    all[idx + 1].focus();
+                }
+            }, 20);
+        }
     }
 
     function handleTriggerKeydown(event: KeyboardEvent) {
@@ -228,7 +242,7 @@
                     // Select highlighted or first option
                     const indexToSelect = highlightedIndex >= 0 ? highlightedIndex : 0;
                     if (filteredOptions[indexToSelect]) {
-                        selectOption(filteredOptions[indexToSelect]);
+                        selectOption(filteredOptions[indexToSelect], true);
                     }
                 }
                 break;
