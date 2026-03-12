@@ -350,7 +350,9 @@
       "start": "Avvia Sincronizzazione",
       "pairsCount": "coppie",
       "pointsChanged": "punti cambiati",
-      "timeout": "Timeout"
+      "timeout": "Timeout",
+      "tooltipFetched": "Punti dati scaricati dal provider",
+      "tooltipChanged": "Punti dati effettivamente inseriti o aggiornati nel database"
     }
   },
   "settings": {

@@ -282,7 +282,7 @@
                         <span class="font-medium">{pr.pair.replace('-', '/')}</span>
                         {#if pr.status === 'ok' || pr.status === 'partial'}
                             <span class="text-gray-400">—</span>
-                            <span>{pr.points_fetched ?? 0}↓ {pr.points_changed ?? 0}Δ</span>
+                            <span><span title={$t('fx.sync.tooltipFetched')}>{pr.points_fetched ?? 0}↓</span> <span title={$t('fx.sync.tooltipChanged')}>{pr.points_changed ?? 0}Δ</span></span>
                             {#if pr.provider_used}
                                 <span class="text-gray-400">({pr.provider_used})</span>
                             {/if}
@@ -301,7 +301,7 @@
             <InfoBanner variant={successCount === pairResults.length ? 'success' : successCount > 0 ? 'warning' : 'error'}>
                 <span class="text-sm font-medium">
                     {$t('fx.sync.synced') ?? 'Synced'} {successCount}/{pairResults.length} {$t('fx.sync.pairsCount') ?? 'pairs'}
-                    · {totalPointsFetched}↓ {totalPointsChanged}Δ
+                    · <span title={$t('fx.sync.tooltipFetched')}>{totalPointsFetched}↓</span> <span title={$t('fx.sync.tooltipChanged')}>{totalPointsChanged}Δ</span>
                 </span>
             </InfoBanner>
         {/if}

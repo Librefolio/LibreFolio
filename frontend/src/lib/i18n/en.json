@@ -350,7 +350,9 @@
       "start": "Start Sync",
       "pairsCount": "pairs",
       "pointsChanged": "points changed",
-      "timeout": "Timeout"
+      "timeout": "Timeout",
+      "tooltipFetched": "Rate data points downloaded from the provider",
+      "tooltipChanged": "Data points actually inserted or updated in the database"
     }
   },
   "settings": {
