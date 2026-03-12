@@ -194,6 +194,12 @@
             if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
                 event.preventDefault();
                 openDropdown();
+            } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                // Printable character: open dropdown and start searching
+                event.preventDefault();
+                openDropdown();
+                // Defer setting searchQuery so the input is mounted first
+                setTimeout(() => { searchQuery = event.key; }, 20);
             }
             return;
         }

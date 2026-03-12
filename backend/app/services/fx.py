@@ -473,9 +473,11 @@ async def ensure_rates_multi_source(
         try:
             rates_by_currency, db_result = await asyncio.gather(fetch_task, db_task)
             existing_rates = db_result.scalars().all()
-            existing_lookup = {
-                (rate.base, rate.quote, rate.date): rate.rate for rate in existing_rates
-                }
+            existing_lookup = {(rate.base, rate.quote, rate.date): rate.rate for rate in existing_rates}
+            logger.debug(
+                f"Change detection: {len(existing_lookup)} existing rate(s) found in DB "
+                f"for {len(all_pairs_conditions)} pair condition(s)"
+                )
         except Exception as e:
             # If table doesn't exist or other DB error, proceed with empty lookup
             # All rates will be considered new inserts
@@ -559,6 +561,12 @@ async def ensure_rates_multi_source(
         # else: Same value after truncation, no change to log
 
     total_changed = sum(changes_by_currency.values())
+
+    if total_changed == 0 and total_fetched > 0:
+        logger.info(
+            f"All {total_fetched} fetched rate(s) already exist in DB with same values "
+            f"(existing_lookup={len(existing_lookup)}, all_normalized={len(all_normalized)})"
+            )
 
     # Process each currency for batch insert
     for currency, observations in rates_by_currency.items():

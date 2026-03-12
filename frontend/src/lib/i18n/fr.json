@@ -350,7 +350,9 @@
       "start": "Démarrer la synchronisation",
       "pairsCount": "paires",
       "pointsChanged": "points modifiés",
-      "timeout": "Délai d'attente"
+      "timeout": "Délai d'attente",
+      "tooltipFetched": "Points de données téléchargés du fournisseur",
+      "tooltipChanged": "Points de données réellement insérés ou mis à jour dans la base"
     }
   },
   "settings": {

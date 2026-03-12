@@ -336,10 +336,29 @@ Sarebbe più efficiente riutilizzare la risorsa già caricata a risoluzione magg
 - Questa ottimizzazione è puramente client-side per evitare roundtrip network
 - Valutare l'impatto su memoria del browser se molte immagini sono in griglia
 
+---
+
 ### 📊 Aggiungere al componente Linea altri stili della line al segnale
 
 Oltre l'attuale visualizzazione a segmenti spezzati, indagare se si possono mostrare le linee anche come spilne smoot, ed in quanti modi, e se si, renderlo un parametro estetico configurabile
 
+---
+
 ### 📊 Grafico Asset con rendimento a N
 Con i dati degli asset ha senso mostrare i grafici oltre che per abs e % da P0, anche il rendimento a N (anni o giorni, parametrico) con il significato che ogni punto rappresenta il guadagno/perdita di valore percentuale dell'asset se vosse stato comprato N giorni prima e venduto nel giorno attuale.
 Questo da applicare sia all'asset principale che a quelli di confronto messi nel grafico, da mettere nella pagina di detail per le analisi di dettaglio.
+
+---
+
+## 🪵 Riorganizzazione livelli di log backend
+
+**Data aggiunta**: 12 Marzo 2026  
+**Status**: ⏳ Da fare  
+**Priorità**: Media
+
+Analizzare tutti i log generati dal backend e riorganizzarli in una struttura sensata con livelli appropriati. Attualmente i log del servizio FX (sync, backfill, convert) usano livelli inconsistenti:
+- Log informativi di routine (es. "Syncing FX rates...") sono a INFO ma dovrebbero essere a DEBUG
+- I log di backward-fill ripetitivi sono già stati spostati a DEBUG/livello 5, ma servono ulteriori verifiche
+- I log di sync per singola coppia/currency generano molto output anche a INFO
+
+**Azione**: Fare un audit completo dei livelli di log (DEBUG, INFO, WARNING, ERROR) in tutto il backend, definire una policy chiara e applicarla uniformemente.
