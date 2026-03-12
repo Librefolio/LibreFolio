@@ -1,5 +1,9 @@
 # Plan: FX Sync API Redesign — Pair-Based Bulk Sync
 
+**Data creazione**: 6 Marzo 2026
+**Status**: ✅ COMPLETATO (12 Marzo 2026)
+**Ultimo aggiornamento**: 12 Marzo 2026
+
 **Riferimenti**:
 - `plan-phase05Fx.prompt.md` (piano principale Phase 5)
 - `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md` (✅ COMPLETATO — card redesign, sync fix frontend)
@@ -316,3 +320,16 @@ Quando l'utente preme il pulsante sync nella singola FxCard:
 - ✅ Backend: tutti i test API passano (17/17 suite)
 - ✅ Frontend: svelte-check 0 errori, 0 warning
 - ✅ E2E: broker-sharing 15/15 passati
+
+### Sessione Finale (12 Marzo 2026) — Polish & UX
+
+**Attività completate:**
+
+1. **Tooltip su ↓ e Δ** — aggiunto `title` i18n su simboli fetched/changed nel FxSyncModal (per-pair e summary), così passando il mouse l'utente capisce cosa significano
+2. **Diagnostica "0 changed"** — aggiunto log DEBUG per `existing_lookup` size e log INFO quando fetched>0 ma changed=0. Causa reale identificata: `db populate` senza `--force` non resetta il DB, i dati ECB precedenti persistono
+3. **Keyboard navigation SearchSelect** — ora digitando un carattere stampabile quando il trigger ha il focus (es. via Tab), il dropdown si apre automaticamente con la ricerca attiva. Inoltre, dopo selezione con Enter, il focus avanza al prossimo elemento focusabile
+4. **DateRangePicker custom badge** — lettere abbreviate maiuscole (D/W/M/Y) con `<select>` compatto; badge editing non collassa fino a click esterno
+5. **Backfill log level** — spostato da DEBUG a livello 5 (TRACE) per ridurre rumore nei log
+6. **Timeout sync default** — portato a 10 secondi
+7. **TODO_FUTURI** — aggiunta nota per audit completo dei livelli di log backend
+

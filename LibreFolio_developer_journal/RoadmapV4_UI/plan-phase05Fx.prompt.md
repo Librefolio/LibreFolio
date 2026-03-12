@@ -1,7 +1,7 @@
 # Plan: Phase 5 — FX Management + Chart Library + User Docs + i18n MkDocs (v6)
 
 **Data creazione**: 2 Marzo 2026
-**Status**: 🔄 IN PROGRESS — Step 1-5 completati, Step 6 in corso (fix iterativi: sub-plan Steps 1-7,9 ✅ completati). FxCard Redesign + Chart Settings ✅ completato (→ `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md`). MANUAL Provider ✅ completato (→ `phases/phase-05-subplan/plan-manualFxProvider.prompt.md`). FxPairAddModal Redesign ✅ completato (→ `phases/phase-05-subplan/plan-fxPairAddModalRedesign.prompt.md`). Currency Fix + Layout + Flags ✅ completato (→ `phases/phase-05-subplan/plan-fxCurrencyFixLayoutFlags.prompt.md`). UI Feedback Round 3 (F1-F17) ✅ completato (→ `phases/phase-05-subplan/plan-fxUiFeedbackRound3.prompt.md`) — include F13 search fix + F14 localizzazione multi-lingua. Signal Library Expansion ✅ completato (→ `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md`). Prossimo: `plan-fxSyncApiRedesign.prompt.md`.
+**Status**: ✅ COMPLETATO (12 Marzo 2026) — Tutti i sub-plan completati. FxCard Redesign + Chart Settings ✅ completato (→ `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md`). MANUAL Provider ✅ completato (→ `phases/phase-05-subplan/plan-manualFxProvider.prompt.md`). FxPairAddModal Redesign ✅ completato (→ `phases/phase-05-subplan/plan-fxPairAddModalRedesign.prompt.md`). Currency Fix + Layout + Flags ✅ completato (→ `phases/phase-05-subplan/plan-fxCurrencyFixLayoutFlags.prompt.md`). UI Feedback Round 3 (F1-F17) ✅ completato (→ `phases/phase-05-subplan/plan-fxUiFeedbackRound3.prompt.md`) — include F13 search fix + F14 localizzazione multi-lingua. Signal Library Expansion ✅ completato (→ `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md`). FX Sync API Redesign ✅ completato (→ `phases/phase-05-subplan/plan-fxSyncApiRedesign.prompt.md`).
 **Durata stimata**: ~7-8 giorni
 **Dipendenze**: Phase 4 completata, Phase 4.8 (Broker Sharing) completata
 **Riferimenti**:
@@ -11,7 +11,7 @@
 - `phases/phase-05-subplan/plan-manualFxProvider.prompt.md` ← **✅ COMPLETATO** provider MANUAL sentinel
 - `phases/phase-05-subplan/plan-fxPairAddModalRedesign.prompt.md` ← **✅ COMPLETATO** modale Add FX redesign
 - `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md` ← **✅ COMPLETATO** card redesign, chart settings, signal library, sync fix, baseline segment color fix
-- `plan-fxSyncApiRedesign.prompt.md` ← **📋 TODO** sync API pair-based redesign
+- `phases/phase-05-subplan/plan-fxSyncApiRedesign.prompt.md` ← **✅ COMPLETATO** sync API pair-based redesign
 - `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md` ← **✅ COMPLETATO** indicatori tecnici (EMA, MACD, RSI, Bollinger), dual-axis, KaTeX tooltip, MkDocs docs
 - `TODO_FUTURI.md` §FX, §Cross-Rate
 
@@ -22,34 +22,35 @@ plan-frontendDevelopment.prompt.md ← INDICE PRINCIPALE (Phase 1-4 ✅ completa
  │
  └── plan-phase05-to-08-upgrade.md ← ROADMAP Phases 5-8 (architettura, overview)
       │
-      └── 📌 plan-phase05Fx.prompt.md ← MASTER PLAN Phase 5 (QUESTO FILE) 🔄 IN PROGRESS
-           │
-           ├─── plan-fxUiRefinementsRound2.prompt.md ✅ (Steps 1-7, 9 completati)
-           │     │   Fix visualMap, stale gradient, layout, MeasureOverlay,
-           │     │   OrderableList, settings ⚙️, overlay/benchmark
-           │     │
-           │     └─── Step 8 (Settings, Overlay, Benchmark) → ASSORBITO in fxCardRedesign
-           │
-           ├─── phases/phase-05-subplan/
-           │     ├── plan-manualFxProvider.prompt.md               ✅ COMPLETATO (4 Mar)
-           │     ├── plan-fxPairAddModalRedesign.prompt.md         ✅ COMPLETATO (3 Mar)
-           │     ├── plan-fxCurrencyFixLayoutFlags.prompt.md       ✅ COMPLETATO (4 Mar)
-           │     └── plan-fxUiFeedbackRound3.prompt.md             ✅ COMPLETATO (4 Mar) F1-F17
-           │
-           ├─── phases/phase-05-subplan/
-           │     └── plan-fxCardRedesignChartSettings.prompt.md    ✅ COMPLETATO (11 Mar)
-           │           Card redesign, chart settings store, signal library, sync fix,
-           │           compact overlay fix, baseline segment color fix
-           │           Steps 1-6 ✅, Step 8 ✅, Step 7 (DataTable refactor) deferred
-           │
-           │           └── plan-signalLibraryExpansion.prompt.md   ✅ COMPLETATO (11 Mar)
-           │                 EMA, MACD, RSI, Bollinger, dual-axis,
-           │                 KaTeX tooltips, DocsLink, MkDocs docs
-           │                 Dipende da: fxCardRedesign Steps 1-6
-           │
-           └─── plan-fxSyncApiRedesign.prompt.md                   📋 TODO
-                  Sync API pair-based (POST, response per-coppia)
-                  Dipende da: fxCardRedesign (frontend sync modal)
+       └── 📌 plan-phase05Fx.prompt.md ← MASTER PLAN Phase 5 (QUESTO FILE) ✅ COMPLETATO
+            │
+            ├─── plan-fxUiRefinementsRound2.prompt.md ✅ (Steps 1-7, 9 completati)
+            │     │   Fix visualMap, stale gradient, layout, MeasureOverlay,
+            │     │   OrderableList, settings ⚙️, overlay/benchmark
+            │     │
+            │     └─── Step 8 (Settings, Overlay, Benchmark) → ASSORBITO in fxCardRedesign
+            │
+            ├─── phases/phase-05-subplan/
+            │     ├── plan-manualFxProvider.prompt.md               ✅ COMPLETATO (4 Mar)
+            │     ├── plan-fxPairAddModalRedesign.prompt.md         ✅ COMPLETATO (3 Mar)
+            │     ├── plan-fxCurrencyFixLayoutFlags.prompt.md       ✅ COMPLETATO (4 Mar)
+            │     └── plan-fxUiFeedbackRound3.prompt.md             ✅ COMPLETATO (4 Mar) F1-F17
+            │
+            ├─── phases/phase-05-subplan/
+            │     └── plan-fxCardRedesignChartSettings.prompt.md    ✅ COMPLETATO (11 Mar)
+            │           Card redesign, chart settings store, signal library, sync fix,
+            │           compact overlay fix, baseline segment color fix
+            │           Steps 1-6 ✅, Step 8 ✅, Step 7 (DataTable refactor) deferred
+            │
+            │           └── plan-signalLibraryExpansion.prompt.md   ✅ COMPLETATO (11 Mar)
+            │                 EMA, MACD, RSI, Bollinger, dual-axis,
+            │                 KaTeX tooltips, DocsLink, MkDocs docs
+            │                 Dipende da: fxCardRedesign Steps 1-6
+            │
+            └─── phases/phase-05-subplan/
+                  └── plan-fxSyncApiRedesign.prompt.md              ✅ COMPLETATO (12 Mar)
+                        Sync API pair-based (POST, response per-coppia),
+                        ErrorBanner→InfoBanner, toast system, keyboard nav
 ```
 
 **Sequenza cronologica di completamento:**
@@ -64,8 +65,8 @@ Phase 1-4 ✅
        ├→ fxCardRedesignChartSettings Steps 1-6 ✅
        │    └→ signalLibraryExpansion Steps 1-5 ✅
        │
-       ├→ fxCardRedesignChartSettings Step 8 ✅ (compact overlay + baseline segment color)
-       └→ fxSyncApiRedesign 📋 ← PROSSIMO
+        ├→ fxCardRedesignChartSettings Step 8 ✅ (compact overlay + baseline segment color)
+        └→ fxSyncApiRedesign ✅ COMPLETATO (12 Mar)
 ```
 
 ---
@@ -858,9 +859,11 @@ La documentazione backend per il sistema FX è **obsoleta e incompleta**. Prima 
 5. **Currency utils**: sistema flag emoji da `pycountry` con overrides per major currencies, crypto incluse, localizzazione nomi con `babel` + fallback `pycountry`
 6. **Traduzione endpoints**: parametro `lang` su `/utilities/currencies` e `/utilities/countries` per nomi localizzati, mapping locale frontend↔backend (vedi `LANG_TO_BABEL_LOCALE` in `translation_utils.py`)
 
-### Sync API Redesign (sub-plan separato)
-Piano dettagliato in: `plan-fxSyncApiRedesign.prompt.md`
+### Sync API Redesign (✅ completato)
+Piano dettagliato in: `phases/phase-05-subplan/plan-fxSyncApiRedesign.prompt.md`
 - Endpoint pair-based con risultati per-coppia (provider usato, punti, status)
 - Frontend SyncModal con risultati dettagliati
+- ErrorBanner→InfoBanner consolidation, toast system centralizzato
+- Keyboard navigation SearchSelect
 
 

@@ -877,7 +877,7 @@ placeholder sia compatto ("Select pair...") e il valore selezionato non trunchi 
 Chiamato da `fxStoreRegistry.ts` e da `+page.svelte` (fx list e detail).
 **Fix a breve termine**: Wrappare le chiamate in try/catch con silent fallback.
 Nessun cambio backend — la feature sarà implementata nel plan `fxSyncApiRedesign`.
-**Fix permanente**: Pianificato in `plan-fxSyncApiRedesign.prompt.md`.
+**Fix permanente**: Completato in `plan-fxSyncApiRedesign.prompt.md` (✅).
 
 ### 4B.7 — ✅ ECharts crash `coord` — xAxis/yAxis + resize guard (Fix 9 Mar)
 **Problema**: `Cannot read properties of undefined (reading 'coord')` su apertura Settings e resize.
@@ -1464,7 +1464,7 @@ salta la conversione per `yAxisIndex !== 0`).
 ## Link ad altri plan
 
 - **`plan-fxCardRedesignChartSettings.prompt.md`** — ✅ COMPLETATO — base del sistema segnali
-- **`plan-fxSyncApiRedesign.prompt.md`** — sync pair-based (da completare, indipendente)
+- **`plan-fxSyncApiRedesign.prompt.md`** — sync pair-based (✅ completato)
 - **`plan-phase05Fx.prompt.md`** — master plan Phase 5, aggiungere riferimento a questo plan
 - **`plan-fxUiRefinementsRound2.prompt.md`** — Step 8 (settings ⚙️, overlay, benchmark) → coperto qui
 - Le pagine MkDocs (Step 6) coprono anche il TODO §Documentazione del plan Phase 5

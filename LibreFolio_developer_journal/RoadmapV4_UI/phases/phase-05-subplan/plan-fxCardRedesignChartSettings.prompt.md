@@ -2,7 +2,7 @@
 
 **Data creazione**: 5 Marzo 2026
 **Status**: ✅ COMPLETATO — Steps 1-6 done. Step 8 done (11 Mar): compact chart overlay fix (hidden axes, auto-scaled, lines render) + baseline segment color fix (backward bridge at color transitions). Step 7 (DataTable refactor) deferred to future iteration (optional, low priority).
-**Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5, plan-fxSyncApiRedesign (sync API pair-based)
+**Dipendenze**: plan-fxUiRefinementsRound2 Step 8, plan-phase05Fx Steps 3-5, plan-fxSyncApiRedesign ✅ (sync API pair-based)
 **Espansione**: `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md` ← ✅ COMPLETATO — indicatori tecnici (EMA, MACD, RSI, Bollinger), dual-axis, KaTeX tooltip, MkDocs docs
 **Contesto**: Feedback utente su card layout, settings ⚙️ non collegato, Sync All non funzionante, overlay/benchmark da implementare come libreria di segnali
 

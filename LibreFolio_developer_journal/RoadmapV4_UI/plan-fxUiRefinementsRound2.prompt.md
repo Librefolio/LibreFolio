@@ -11,7 +11,7 @@
 - `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md` ← ✅ COMPLETATO — card redesign, signal library base
 - `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md` ← ✅ COMPLETATO — indicatori tecnici, dual-axis, KaTeX, MkDocs
 - `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md` (card redesign, chart settings, signal library)
-- `plan-fxSyncApiRedesign.prompt.md` (sync API pair-based redesign)
+- `phases/phase-05-subplan/plan-fxSyncApiRedesign.prompt.md` (✅ COMPLETATO — sync API pair-based redesign)
 
 ---
 
