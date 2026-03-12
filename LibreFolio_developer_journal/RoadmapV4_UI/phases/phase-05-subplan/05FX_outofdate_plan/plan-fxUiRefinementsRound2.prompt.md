@@ -1,7 +1,7 @@
 # Plan: FX UI Refinements Round 2 — Chart Colors, Layout, MeasureOverlay, OrderableList, Overlay & Benchmark
 
 **Data creazione**: 2 Marzo 2026
-**Status**: 🔄 IN CORSO — Steps 1-7, 9 ✅ completati, Step 8 📋 TODO
+**Status**: ✅ COMPLETATO — Steps 1-7, 9 ✅ completati, Step 8 ✅ ASSORBITO in fxCardRedesignChartSettings
 **Durata stimata**: ~3-4 giorni
 **Ultimo aggiornamento**: 3 Marzo 2026
 **Dipendenze**: Phase 5 Step 1-5 completati, Step 6 parzialmente completato
@@ -431,7 +431,7 @@ In `PriceChartCompact.svelte`: passare `showMiniAxis={true}` a LineChart.
 
 ## Step 8: Chart Settings ⚙️ + Overlay Confronto + Linea Crescita Sintetica
 
-**Status**: 📋 TODO
+**Status**: ✅ ASSORBITO in `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md` (Steps 1-6 + Step 8) e `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md` (indicatori tecnici, overlay, signal library). Il settings popover ⚙️, l'overlay confronto, e la linea benchmark sono stati implementati come parte dell'architettura signal library completa.
 
 ### 8a. Settings Popover (⚙️)
 

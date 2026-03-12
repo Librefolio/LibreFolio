@@ -122,6 +122,17 @@ class FXRateProvider(ABC):
 
         Default implementation returns [self.base_currency] for backward compatibility.
 
+        # ARCHITECTURAL NOTE: multi-base
+        # As of March 2026, ALL implemented providers have exactly 1 base currency.
+        # The pipeline (sync_pairs_bulk, ensure_rates_multi_source, frontend currency
+        # graph) implicitly assumes single-base per provider. When adding a multi-base
+        # provider (e.g., Open Exchange Rates, Fixer.io), the following must be reworked:
+        #   1. Pipeline Phase 1 grouping key: (provider, base_currency) instead of just provider
+        #   2. ensure_rates_multi_source(): explicit base_currency routing
+        #   3. Frontend buildCurrencyGraph(): multi-base edge generation
+        #   4. chain_steps schema: may need explicit base_currency per step
+        # See: plan-fxConversionChain.prompt.md §"Nota architetturale: Multi-base provider"
+
         Returns:
             List of ISO 4217 currency codes that can be used as base
 

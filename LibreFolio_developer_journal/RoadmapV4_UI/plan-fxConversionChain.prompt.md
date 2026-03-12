@@ -1,0 +1,1044 @@
+# Plan: FX Conversion Chain — Route-based Multi-Step Currency Conversion
+
+**Data creazione**: 12 Marzo 2026
+**Status**: 📋 DA IMPLEMENTARE
+**Priorità**: Alta (prerequisito per completare Phase 5 FX)
+**Stima**: ~3-4 giorni
+**Dipendenze**: Tutti i sub-plan Phase 5 ✅ completati (vedi `phases/phase-05-subplan/`)
+**Riferimenti**:
+- `phases/phase-05-subplan/05FX_outofdate_plan/plan-phase05Fx.prompt.md` — vecchio master plan Phase 5 (📦 ARCHIVIATO)
+- `phases/phase-05-subplan/05FX_outofdate_plan/phase05-pending-audit.md` — audit task pendenti (C6)
+- `TODO_FUTURI.md` §FX, §Cross-Rate
+- `plan-phase05-to-08-upgrade.md` §4 (Phase 5 overview)
+
+---
+
+## Contesto e Obiettivo
+
+### Problema attuale
+
+Il sistema FX supporta solo conversioni **dirette**: per convertire RON→USD deve esistere un rate `RON/USD` in `fx_rates`. Ma nessuna banca centrale fornisce quella coppia direttamente. ECB fornisce EUR→RON e EUR→USD, FED fornisce USD→EUR, ecc.
+
+Se l'utente aggiunge la coppia RON-USD, il sync fallisce perché nessun provider la supporta.
+
+### Soluzione: Conversion Chain
+
+Permettere all'utente di configurare route **multi-step**:
+
+```
+RON → EUR (ECB) → USD (ECB)
+```
+
+Il sistema durante il sync:
+1. Scarica i rate delle gambe intermedie dal provider
+2. Calcola il rate derivato moltiplicando i rate delle gambe
+3. Salva il rate derivato in `fx_rates` come dato pre-computato
+
+### Principi di design
+
+1. **Pre-compute & store**: i rate derivati vengono calcolati al sync e salvati in `fx_rates` con source descrittivo (es. `CHAIN:ECB+ECB`). Questo permette edit manuali del rate derivato, esattamente come per i rate diretti.
+2. **No duplicazione fetch**: se nella stessa bulk sync sono richieste sia la catena RON→EUR→USD sia la gamba EUR→USD, il download avviene una sola volta.
+3. **Gambe non richieste = temporanee**: se la gamba EUR→RON NON è richiesta come sync separata, viene scaricata solo per il calcolo e non salvata in `fx_rates`, per evitare modifiche involontarie.
+4. **Lunghezza catena**: qualsiasi, purché senza archi ripetuti (vedi §Algoritmo DFS).
+5. **Cross-provider ok**: ogni step ha il suo `provider`. Se un provider nella catena fallisce, l'intera catena fallisce (documentare nella UI).
+6. **Modello unificato**: ogni route è SEMPRE una catena (`chain_steps`). Le conversioni "dirette" sono catene con 1 solo step. Nessuna distinzione `DIRECT`/`CHAIN` nel data model — semplifica tutto il codice.
+7. **Non retrocompatibile**: la tabella `fx_currency_pair_sources` viene sostituita. Migrazione = edit di `001_initial.py` + cancellazione DB.
+
+---
+
+## Step 1 — Data Model: `fx_conversion_routes`
+
+### Nuova tabella (sostituisce `fx_currency_pair_sources`)
+
+```sql
+CREATE TABLE fx_conversion_routes (
+    id              INTEGER PRIMARY KEY,
+    base            VARCHAR NOT NULL,       -- coppia desiderata, ordine alfabetico (base < quote)
+    quote           VARCHAR NOT NULL,
+    priority        INTEGER NOT NULL DEFAULT 1,  -- 1=primary, 2+=fallback
+
+    -- Catena di conversione (SEMPRE presente, anche per "diretti" con 1 step)
+    chain_steps     TEXT NOT NULL,           -- JSON array ordinato
+    -- 1-step (diretto): [{"from": "EUR", "to": "USD", "provider": "ECB"}]
+    -- Multi-step:       [{"from": "RON", "to": "EUR", "provider": "ECB"},
+    --                     {"from": "EUR", "to": "USD", "provider": "ECB"}]
+
+    fetch_interval  INTEGER,                -- frequenza fetch in minuti (NULL = default 1440)
+    created_at      DATETIME NOT NULL,
+    updated_at      DATETIME NOT NULL,
+
+    CONSTRAINT uq_route_base_quote_priority UNIQUE (base, quote, priority),
+    CONSTRAINT ck_route_base_less_than_quote CHECK (base < quote)
+);
+
+CREATE INDEX idx_route_base_quote ON fx_conversion_routes (base, quote);
+CREATE INDEX ix_fx_conversion_routes_base ON fx_conversion_routes (base);
+CREATE INDEX ix_fx_conversion_routes_quote ON fx_conversion_routes (quote);
+```
+
+### Formato `chain_steps` JSON
+
+**Diretto (1 step):**
+```json
+[{"from": "EUR", "to": "USD", "provider": "ECB"}]
+```
+
+**Multi-step (catena):**
+```json
+[
+  {"from": "RON", "to": "EUR", "provider": "ECB"},
+  {"from": "EUR", "to": "USD", "provider": "ECB"}
+]
+```
+
+**MANUAL-only pair:**
+```json
+[{"from": "NOK", "to": "SEK", "provider": "MANUAL"}]
+```
+
+Il campo `chain_steps` corrisponde direttamente alla lista di archi prodotta dall'algoritmo DFS di ricerca percorsi (vedi Step 6A). L'output dell'algoritmo frontend è quindi direttamente salvabile come `chain_steps` senza trasformazioni.
+
+### Regole di validazione
+
+1. **Continuità**: `step[i].to == step[i+1].from` per ogni coppia di step consecutivi
+2. **No archi ripetuti**: lo stesso arco (stessa coppia di valute, **qualsiasi direzione**) non può apparire due volte. Es.: se c'è uno step EUR→USD, non può esserci anche USD→EUR. Questo perché l'inversione produce lo stesso rate e sarebbe ridondante.
+3. **Coerenza con coppia target**: gli estremi della catena (`step[0].from` e `step[-1].to`) devono corrispondere a `(base, quote)` della route (in uno dei due ordini, gestito dalla normalizzazione alfabetica)
+4. **Provider validi**: ogni `provider` deve essere registrato nel `FXProviderRegistry`
+5. **Minimo 1 step**: array non vuoto
+
+### Tasks Step 1
+
+- [ ] Creare modello SQLModel `FxConversionRoute` in `backend/app/db/models.py`
+  - Sostituisce `FxCurrencyPairSource`
+  - Field: `chain_steps` come `str` (JSON serializzato, NOT NULL)
+  - Validator: `base < quote` (ordine alfabetico come `FxRate`)
+  - Validator: `chain_steps` deve essere JSON array valido con almeno 1 elemento
+  - Property helper: `is_chain` → `len(parsed_steps) > 1`
+  - Property helper: `providers_used` → set di provider codes da chain_steps
+- [ ] Aggiornare `001_initial.py`: sostituire `CREATE TABLE fx_currency_pair_sources` con `CREATE TABLE fx_conversion_routes`
+- [ ] Aggiornare `populate_mock_data.py`:
+  - Sostituire `FxCurrencyPairSource` con `FxConversionRoute`
+  - Migrare le coppie EUR esistenti a formato chain 1-step: `[{"from": "EUR", "to": "USD", "provider": "ECB"}]`
+  - Aggiungere almeno 1 route multi-step di esempio (es. CHF→JPY via EUR con ECB)
+  - Aggiornare la coppia MANUAL (NOK-SEK) a formato chain: `[{"from": "NOK", "to": "SEK", "provider": "MANUAL"}]`
+- [ ] Rimuovere la classe `FxCurrencyPairSource` da `models.py`
+
+---
+
+## Step 2 — Pydantic Schemas
+
+### 2A. Funzione helper `validate_chain_steps()` — validazione riutilizzabile
+
+La logica di validazione della catena (continuità, no archi ripetuti, estremi coerenti) viene usata sia nello schema Pydantic `FXConversionRouteItem` sia nel modello SQLModel `FxConversionRoute`. Per evitare duplicazione, la logica viene estratta in una funzione standalone.
+
+**Collocazione**: `backend/app/schemas/fx.py` (sezione utility, prima delle classi che la usano)
+
+```python
+def validate_chain_steps(
+    steps: list,  # list[FXRouteStep] o list[dict] con .from_currency/.to_currency
+    base: str,
+    quote: str,
+) -> None:
+    """
+    Valida la coerenza di una lista di chain_steps.
+
+    Usata sia dal Pydantic schema (FXConversionRouteItem.validate_chain)
+    sia dal SQLModel (FxConversionRoute validator).
+
+    Raises:
+        ValueError se una qualsiasi regola è violata.
+    """
+    if not steps:
+        raise ValueError("chain_steps must have at least 1 element")
+
+    # 1. Continuità: step[i].to == step[i+1].from
+    for i in range(len(steps) - 1):
+        to_cur = steps[i].to_currency if hasattr(steps[i], 'to_currency') else steps[i]['to']
+        from_cur = steps[i + 1].from_currency if hasattr(steps[i + 1], 'from_currency') else steps[i + 1]['from']
+        if to_cur != from_cur:
+            raise ValueError(
+                f"Chain discontinuity at step {i}: {to_cur} != {from_cur}"
+            )
+
+    # 2. No archi ripetuti (coppia non ordinata, qualsiasi direzione)
+    edges_seen: set[tuple[str, str]] = set()
+    for s in steps:
+        fc = s.from_currency if hasattr(s, 'from_currency') else s['from']
+        tc = s.to_currency if hasattr(s, 'to_currency') else s['to']
+        edge = tuple(sorted([fc, tc]))
+        if edge in edges_seen:
+            raise ValueError(f"Duplicate edge: {edge[0]}-{edge[1]}")
+        edges_seen.add(edge)
+
+    # 3. Estremi coerenti con (base, quote)
+    first_from = steps[0].from_currency if hasattr(steps[0], 'from_currency') else steps[0]['from']
+    last_to = steps[-1].to_currency if hasattr(steps[-1], 'to_currency') else steps[-1]['to']
+    endpoints = tuple(sorted([first_from, last_to]))
+    pair = tuple(sorted([base, quote]))
+    if endpoints != pair:
+        raise ValueError(
+            f"Chain endpoints {endpoints} don't match pair {pair}"
+        )
+```
+
+### 2B. Schema `FXRouteStep`
+
+```python
+class FXRouteStep(BaseModel):
+    """Singolo step (arco) in una conversion chain.
+
+    Corrisponde a un arco nel grafo valute costruito dall'algoritmo DFS.
+    """
+    model_config = ConfigDict(populate_by_name=True, str_strip_whitespace=True)
+
+    from_currency: str = Field(..., alias="from", min_length=3, max_length=3)
+    to_currency: str = Field(..., alias="to", min_length=3, max_length=3)
+    provider: str = Field(..., description="Provider code per questo step")
+
+    @field_validator("from_currency", "to_currency", mode="before")
+    @classmethod
+    def uppercase_currency(cls, v):
+        return Currency.validate_code(v)
+
+    @model_validator(mode="after")
+    def validate_different(self):
+        if self.from_currency == self.to_currency:
+            raise ValueError(f"from and to must differ (got {self.from_currency})")
+        return self
+```
+
+### 2C. Schema `FXConversionRouteItem`
+
+```python
+class FXConversionRouteItem(BaseModel):
+    """Configurazione per una conversion route.
+
+    Sostituisce FXPairSourceItem. Ogni route è una catena di step:
+    - 1 step = conversione diretta (es. EUR→USD via ECB)
+    - 2+ step = conversione a catena (es. RON→EUR→USD via ECB+ECB)
+    """
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    base: str = Field(..., min_length=3, max_length=3)
+    quote: str = Field(..., min_length=3, max_length=3)
+    priority: int = Field(..., ge=1)
+    chain_steps: list[FXRouteStep] = Field(..., min_length=1,
+        description="Lista ordinata di step di conversione (archi del grafo)")
+
+    @field_validator("base", "quote", mode="before")
+    @classmethod
+    def uppercase_currency(cls, v):
+        return Currency.validate_code(v)
+
+    @model_validator(mode="after")
+    def validate_chain(self):
+        # Delega a funzione helper riutilizzabile
+        validate_chain_steps(self.chain_steps, self.base, self.quote)
+        return self
+```
+
+**Nota**: Il modello SQLModel `FxConversionRoute` (Step 1) può usare la stessa `validate_chain_steps()` nel suo validator, deserializzando il JSON `chain_steps` in `list[dict]` e passandolo alla funzione.
+
+### Schemas da aggiornare
+
+| Vecchio | Nuovo | Note |
+|---------|-------|------|
+| `FXPairSourceItem` | `FXConversionRouteItem` | Sempre `chain_steps`, no `route_type`/`provider_code` |
+| `FXPairSourcesResponse` | `FXConversionRoutesResponse` | `BaseListResponse[FXConversionRouteItem]` |
+| `FXPairSourceResult` | `FXConversionRouteResult` | Result con `chain_steps` |
+| `FXCreatePairSourcesResponse` | `FXCreateRoutesResponse` | Stessa struttura base |
+| `FXDeletePairSourceItem` | `FXDeleteRouteItem` | Invariato semanticamente |
+| `FXDeletePairSourceResult` | `FXDeleteRouteResult` | Invariato |
+| `FXDeletePairSourcesResponse` | `FXDeleteRoutesResponse` | Invariato |
+| `FXSyncPairResult` | `FXSyncPairResult` (invariato nome) | **+campo `elapsed_ms`** |
+
+### Modifica `FXSyncPairResult` — aggiunta `elapsed_ms`
+
+```python
+class FXSyncPairResult(BaseModel):
+    # ...campi esistenti...
+    pair: str
+    status: FXSyncStatus
+    provider_used: Optional[str]
+    points_fetched: int
+    points_changed: int
+    message: Optional[str]
+
+    # NUOVO: tempo di sincronizzazione misurato dal backend (intero, millisecondi)
+    elapsed_ms: Optional[int] = Field(
+        None, ge=0,
+        description="Tempo di sync per questa coppia in millisecondi interi. "
+                    "Calcolato come (time.monotonic_ns() - t_start_ns) // 1_000_000 "
+                    "dove t_start_ns è catturato all'inizio della Fase 1 (= ricezione POST). "
+                    "None per SKIPPED/MANUAL (nessun lavoro effettivo)."
+    )
+```
+
+**Semantica `elapsed_ms`**:
+- **Misurazione**: `time.monotonic_ns()` (intero nanosecondi, no float). Convertito in millisecondi con divisione intera `// 1_000_000`.
+- **Punto di inizio (`t_start_ns`)**: catturato UNA sola volta all'inizio della Fase 1 di `sync_pairs_bulk()` (= il momento in cui il backend inizia a processare la POST). È lo stesso per tutte le coroutine.
+- **Punto di fine**: `time.monotonic_ns()` al completamento del commit DB di ciascuna coppia.
+- Nella pipeline bulk (Fase 3): include tutto — raccolta gambe, fetch provider, attesa Event, calcolo, upsert, commit. Cattura il tempo "dalla POST al salvataggio di questa coppia".
+- In `sync_pair()` (sync singola): stessa logica — `t_start_ns` catturato all'entrata, `elapsed_ms` calcolato dopo il commit.
+- Per route SKIPPED/MANUAL: `None` (nessun lavoro effettivo, tempo non significativo).
+- Il frontend può mostrare questo valore accanto al suo elapsed (tempo dalla POST), dando visibilità sul tempo reale di backend vs overhead di rete. Eventuali conversioni in secondi o formattazione sono responsabilità del frontend.
+
+### Tasks Step 2
+
+- [ ] Creare `validate_chain_steps()` come funzione helper standalone in `schemas/fx.py`
+  - Accetta sia `list[FXRouteStep]` (Pydantic) che `list[dict]` (SQLModel deserialized)
+  - Implementa: continuità, no archi ripetuti, estremi coerenti con (base, quote)
+- [ ] Creare `FXRouteStep` con validators (`from` ≠ `to`, codici ISO validi, provider uppercase)
+- [ ] Creare `FXConversionRouteItem` con model_validator che delega a `validate_chain_steps()`
+- [ ] Aggiornare il validator di `FxConversionRoute` (SQLModel, Step 1) per riusare `validate_chain_steps()`
+- [ ] Creare `FXConversionRouteResult` con campo `chain_steps`
+- [ ] Creare tutti i Response corrispondenti
+- [ ] Aggiornare imports in `api/v1/fx.py`
+- [ ] `FXSyncPairRequest` resta invariato (lavora su slug)
+- [ ] Aggiungere campo `elapsed_ms: Optional[int]` a `FXSyncPairResult` in `schemas/refresh.py`
+
+---
+
+## Step 3 — Service Layer
+
+### 3A. Analisi provider: capacità batch
+
+Studio effettuato sui provider esistenti — `fetch_rates()` accetta `currencies: list[str]` in tutti i provider, ma:
+
+| Provider | Comportamento interno | Batch reale? |
+|----------|----------------------|--------------|
+| **ECB** | `for currency in currencies` → 1 HTTP/currency | ❌ Loop sequenziale |
+| **FED** | `for currency in currencies` → 1 HTTP/currency | ❌ Loop sequenziale |
+| **BOE** | `for currency in currencies` → 1 HTTP/currency | ❌ Loop sequenziale |
+| **SNB** | Un singolo HTTP con `dimSel=D1(EUR1,CNY100,...)` | ✅ Batch nativo |
+
+**Implicazione**: l'interfaccia `fetch_rates(currencies: list[str])` è già "batch-like", ma ECB/FED/BOE fanno N chiamate HTTP interne in loop sequenziale. Per il nostro scopo:
+- Raggruppiamo le currency per provider → una sola invocazione di `fetch_rates()` per provider
+- Il provider stesso gestisce internamente se fare 1 o N HTTP call
+- **Parallelismo intra-provider (Step 3A-bis)**: PRIMA di implementare la pipeline bulk, modifichiamo `fetch_rates()` di ECB/FED/BOE per lanciare le HTTP call interne in parallelo con `asyncio.gather` anziché in loop sequenziale. Questo è uno step concreto, non un TODO futuro — il beneficio è immediato: se ECB deve scaricare 10 currency, oggi fa 10 call sequenziali (~3s), con `asyncio.gather` fa 10 call in parallelo (~0.3s). Il parallelismo inter-provider (Fase 2 della pipeline) moltiplica ulteriormente il guadagno.
+
+### 3A-bis. Parallelizzazione HTTP intra-provider (ECB/FED/BOE)
+
+Oggi `fetch_rates()` di ECB, FED e BOE itera `for currency in currencies` facendo 1 HTTP call per currency **in sequenza**. Questo è il collo di bottiglia principale quando un singolo provider deve scaricare molte coppie.
+
+**Modifica**: refactor il loop sequenziale in `asyncio.gather` per tutte e 3 i provider. SNB è già batch nativo (1 sola HTTP call), quindi non va toccato.
+
+**Pattern di refactor** (identico per ECB/FED/BOE):
+
+```python
+# PRIMA (sequenziale):
+async def fetch_rates(self, date_range, currencies, base_currency=None):
+    results = {}
+    for currency in currencies:
+        # ...setup...
+        async with httpx.AsyncClient(...) as client:
+            response = await client.get(url, params=params)
+        results[currency] = self._parse(response)
+    return results
+
+# DOPO (parallelo):
+async def fetch_rates(self, date_range, currencies, base_currency=None):
+    # Filtra currency valide (skip base, skip non supportate)
+    valid_currencies = [c for c in currencies if c != self.base_currency and ...]
+
+    async def _fetch_one(currency: str) -> tuple[str, list]:
+        """Fetch una singola currency — isolata per error handling."""
+        # ...setup url/params identico al codice attuale...
+        async with httpx.AsyncClient(...) as client:
+            response = await client.get(url, params=params)
+        return currency, self._parse(response)
+
+    # Lancia tutte le HTTP call in parallelo
+    tasks = [_fetch_one(c) for c in valid_currencies]
+    fetched = await asyncio.gather(*tasks)  # Se un task fallisce, l'eccezione propaga
+
+    return {currency: observations for currency, observations in fetched}
+```
+
+**Note implementative**:
+- Ogni `_fetch_one` crea il proprio `httpx.AsyncClient` (come fa il codice attuale) — nessun client condiviso
+- Se una singola currency fallisce, `asyncio.gather` propaga l'eccezione e l'intero `fetch_rates` fallisce — comportamento identico al loop sequenziale attuale
+- Il parsing (`_parse_csv`, `_parse_response`, parsing JSON inline) rimane identico, solo l'orchestrazione cambia
+- **Non toccare SNB**: è già batch nativo, nessuna modifica necessaria
+
+**Beneficio concreto**: se ECB deve scaricare 8 currency per la pipeline bulk, il tempo passa da ~2.4s (8 × 0.3s sequenziali) a ~0.3s (tutte in parallelo). Combinato con il parallelismo inter-provider (Fase 2), il sync di 20 coppie distribuite su 3 provider diventa quasi istantaneo.
+
+### 3B. Architettura `sync_pairs_bulk()` — Pipeline parallela con mutex
+
+L'architettura è progettata per massimizzare il parallelismo ed evitare download duplicati.
+
+**Fase 1 — Raccolta gambe e grouping per provider**
+
+```
+Input: lista route da sincronizzare (1-step e multi-step)
+
+# Timestamp di inizio comune (bulk start)
+# Catturare un singolo t_start_ns all'inizio della Fase 1 e passarlo (o renderlo
+# disponibile) a tutte le coroutine. Misurazione in nanosecondi interi evita float.
+# Uso suggerito: t_start_ns = time.monotonic_ns()
+
+Per ogni route:
+  Parsare chain_steps → estrarre le gambe necessarie
+  Ogni gamba = (from, to, provider)
+
+Raggruppare le gambe per provider:
+  provider_legs: dict[str, set[str]]
+  Es: {
+    "ECB": {"USD", "RON", "GBP"},   # tutte le currency target per ECB (base=EUR implicita)
+    "FED": {"EUR", "CHF"},           # tutte le currency target per FED (base=USD implicita)
+  }
+
+Per ogni gamba, creare un asyncio.Event (mutex):
+  leg_events: dict[tuple[str, str, str], asyncio.Event]
+  Key: (norm_base, norm_quote, provider)
+  Es: {
+    ("EUR", "USD", "ECB"): Event(),
+    ("EUR", "RON", "ECB"): Event(),
+    ("CHF", "USD", "FED"): Event(),
+  }
+
+Struttura dati condivisa per i rate scaricati:
+  leg_rates: dict[tuple[str, str, date], Decimal] = {}
+  Key: (norm_base, norm_quote, date) → rate normalizzato per storage
+```
+
+**Fase 2 — Fetch parallelo per provider**
+
+```
+Per ogni provider P nel provider_legs:
+  Creare un task async che:
+    1. Chiama provider.fetch_rates(date_range, currencies_list)
+       → currencies_list = tutte le currency raggruppate per P
+    2. Normalizza i rate ricevuti → popola leg_rates
+    3. Per ogni gamba completata: leg_events[gamba].set()
+       → Questo sblocca le coroutine in attesa su quella gamba
+    4. Se il fetch fallisce: segnare le gambe come failed
+       (usa un dict separato leg_errors o un valore sentinella)
+
+Tutti i provider task vengono lanciati in parallelo con asyncio.gather()
+```
+
+**Fase 3 — Coroutine per route: attesa Event, calcolo, salvataggio e timing**
+
+```
+Per ogni route R:
+  Creare un task async che riceve t_start_ns (catturato in Fase 1):
+    1. Identifica le gambe necessarie dalla chain (set di leg_events keys)
+    2. Attende TUTTI i suoi leg_events con asyncio.gather(*[e.wait() for e in my_events])
+       → La coroutine si sospende finché tutti i download delle sue gambe non terminano
+    3. Quando sbloccata:
+       a. Verifica che nessuna gamba sia failed → se sì, route FAILED
+       b. Se chain è 1-step:
+          - I rate della gamba sono già nel formato finale
+       c. Se chain è multi-step:
+          - Per ogni data nel date_range: compute_chain_rate()
+          - Source = "CHAIN:{p1}+{p2}+..."
+          - Se un arco non è nel verso richiesto (il provider fornisce B→A
+            ma serve A→B), basta invertire: rate = Decimal(1) / fetched_rate
+       d. Upsert dei rate di QUESTA route nel DB (sessione propria)
+          → Commit immediato: la coppia è consistente (tutti i suoi rate o nessuno)
+    4. elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+       → Intero, nanosecondi → millisecondi (divisione intera, no float)
+       → Il timing cattura: dall'inizio della Fase 1 (= ricezione POST)
+         fino al completamento commit di questa coppia
+    5. Restituisce FXSyncPairResult con elapsed_ms
+
+Tutte le route coroutine vengono lanciate in parallelo con asyncio.gather()
+```
+
+**Perché commit per coppia e non singolo commit atomico?**
+
+Il singolo commit atomico (tutte-o-nessuna) era l'approccio iniziale, ma non è il design giusto per questo caso:
+
+1. **Successo parziale è il comportamento desiderato**: se la sync coinvolge 15 coppie e la coppia #12 fallisce (es. provider down), le 14 riuscite DEVONO essere salvate. L'utente nell'interfaccia vedrà "14 OK, 1 FAILED" con dettaglio per coppia. Con commit atomico perderemmo 14 sync riuscite per 1 failure.
+
+2. **Consistenza a livello coppia, non bulk**: la garanzia è che per ogni singola coppia, tutti i suoi rate vengano salvati o nessuno (commit della sessione per coppia). Non serve che il batch sia atomico — le coppie sono logicamente indipendenti dal punto di vista dei dati.
+
+3. **asyncio è single-threaded — nessuna race condition**: il dict condiviso `leg_rates` è popolato nella Fase 2 e letto nella Fase 3. Anche se le coroutine della Fase 3 procedono in parallelo, asyncio esegue una sola coroutine alla volta (cooperative multitasking). Non ci sono corse critiche sul dizionario. I mutex (`asyncio.Event`) servono SOLO a far avanzare le coroutine appena i dati sono pronti, minimizzando i tempi morti.
+
+4. **Nessun rischio di coroutine a metà**: asyncio non interrompe una coroutine tra un `await` e il successivo. Il blocco "calcolo + upsert + commit" nella Fase 3d è sincrono dal punto di vista logico — non c'è un `await` tra il calcolo e il commit che possa lasciare la coroutine in stato inconsistente.
+
+```
+Nota: per le route 1-step dove la gamba È anche richiesta come sync separata,
+il rate viene salvato normalmente. Per le gambe intermedie che NON sono
+richieste come route propria, i rate raw NON vengono salvati — solo il rate
+derivato (composto) viene scritto in fx_rates.
+```
+
+**Diagramma sequenziale**:
+
+```
+sync_pairs_bulk() chiamata con [RON-USD (chain 2-step via EUR), EUR-USD (1-step), EUR-GBP (1-step)]
+
+── Fase 1: Raccolta ──
+  RON-USD chain: legs = [(EUR,RON,ECB), (EUR,USD,ECB)]
+  EUR-USD 1-step: legs = [(EUR,USD,ECB)]   ← stessa gamba di RON-USD!
+  EUR-GBP 1-step: legs = [(EUR,GBP,ECB)]
+
+  provider_legs = {"ECB": {"RON", "USD", "GBP"}}   ← 1 sola chiamata ECB
+  leg_events: 3 Event (EUR-RON, EUR-USD, EUR-GBP)
+
+── Fase 2: Fetch parallelo ──
+  Task ECB: fetch_rates(date_range, ["RON", "USD", "GBP"])
+    → 3 HTTP calls interne in parallelo (asyncio.gather, vedi §3A-bis)
+    → Popola leg_rates, poi set(EUR-RON), set(EUR-USD), set(EUR-GBP)
+
+── Fase 3: Route coroutine (in parallelo, ognuna con proprio commit) ──
+  t=0ms   Coroutine EUR-GBP: await Event(EUR-GBP) → sbloccata!
+          → direct rate, upsert+commit (sessione propria)
+          → elapsed: 285ms → FXSyncPairResult(pair="EUR-GBP", elapsed_ms=285, ...)
+
+  t=0ms   Coroutine EUR-USD: await Event(EUR-USD) → sbloccata!
+          → direct rate, upsert+commit (sessione propria)
+          → elapsed: 290ms → FXSyncPairResult(pair="EUR-USD", elapsed_ms=290, ...)
+
+  t=0ms   Coroutine RON-USD: await Event(EUR-RON) + Event(EUR-USD) → sbloccata!
+          → compute_chain_rate → upsert+commit (sessione propria)
+          → elapsed: 310ms → FXSyncPairResult(pair="RON-USD", elapsed_ms=310, ...)
+
+── Risultato ──
+  FXSyncBulkResponse con 3 FXSyncPairResult, ognuno con elapsed_ms
+  Se EUR-GBP avesse fallito: success_count=2, failed_count=1
+  Le altre 2 coppie sarebbero comunque salvate in DB
+```
+
+### 3C. Funzione helper `compute_chain_rate()`
+
+```python
+def compute_chain_rate(
+    steps: list[dict],                        # parsed chain_steps
+    leg_rates: dict[tuple, Decimal],          # {(norm_base, norm_quote, date): rate}
+    target_date: date,
+) -> Decimal | None:
+    """
+    Calcola il rate composto per una catena di conversioni in una data specifica.
+
+    Per ogni step (from_cur, to_cur):
+    - Normalizza in ordine alfabetico: (min, max) per lookup in leg_rates
+    - Se from_cur < to_cur (ordine diretto): moltiplica per rate
+    - Se from_cur > to_cur (ordine inverso): moltiplica per 1/rate
+
+    L'inversione è il meccanismo con cui gestiamo gli archi "al contrario":
+    se il provider fornisce solo EUR→USD (rate 1.08) ma lo step richiede
+    USD→EUR, usiamo 1/1.08 ≈ 0.9259. Questo è già gestito dalla
+    normalizzazione alfabetica: in leg_rates la chiave è sempre (EUR, USD),
+    e il verso dello step determina se usare il rate diretto o invertito.
+
+    Returns: rate composto finale, o None se manca un rate per qualche gamba.
+    """
+```
+
+### 3D. Aggiornamento `sync_pair()` — logica unificata chain
+
+La funzione `sync_pair()` rimane come entry point per sync di una singola coppia (chiamata anche da UI per sync manuale). In questo caso non c'è il beneficio della pipeline bulk, ma la logica è la stessa:
+
+```python
+async def sync_pair(
+    session,
+    route: FxConversionRoute,  # il nuovo modello (sostituisce base/quote/pair_sources)
+    date_range: tuple[date, date],
+) -> FXSyncPairResult:
+    """
+    Sync di una singola route.
+    Per 1-step: fetch + upsert diretto.
+    Per multi-step: fetch di ogni gamba sequenzialmente → compute_chain_rate → upsert.
+    """
+```
+
+### 3E. `convert_bulk()` — NESSUNA modifica
+
+I rate derivati sono pre-calcolati in `fx_rates`. `convert_bulk()` li trova con un semplice lookup, come qualsiasi rate diretto. Zero modifiche.
+
+### Tasks Step 3
+
+- [ ] **3A-bis: Parallelizzare HTTP intra-provider** (da fare PRIMA della pipeline bulk):
+  - [ ] Refactor `ECBProvider.fetch_rates()`: estrarre body del loop in `_fetch_one(currency)`, sostituire `for` con `asyncio.gather`
+  - [ ] Refactor `FEDProvider.fetch_rates()`: stesso pattern
+  - [ ] Refactor `BOEProvider.fetch_rates()`: stesso pattern
+  - [ ] SNB: nessuna modifica (già batch nativo)
+  - [ ] Aggiornare test provider esistenti per verificare che il comportamento sia invariato
+- [ ] Creare `compute_chain_rate()` in `services/fx.py`
+- [ ] Ridisegnare `sync_pairs_bulk()` con architettura a 3 fasi:
+  - Fase 1: `t_start_ns = time.monotonic_ns()`, raccolta gambe, grouping per provider, creazione `asyncio.Event` per gamba
+  - Fase 2: fetch parallelo per provider (`asyncio.gather` sui provider task), popola `leg_rates`, segnala `leg_events`
+  - Fase 3: route coroutine in parallelo, ciascuna `await` sui suoi `Event`, calcola, upsert+commit con sessione propria, calcola `elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000`
+- [ ] Ogni coroutine di Fase 3 deve:
+  - Creare la propria `AsyncSession` per il commit (indipendente dalle altre)
+  - Calcolare `elapsed_ms` rispetto al `t_start_ns` globale (catturato una volta sola all'inizio della Fase 1, uguale per tutte le coroutine). Risultato in millisecondi interi (divisione intera, no float)
+  - Restituire `FXSyncPairResult` con `elapsed_ms` popolato
+  - In caso di errore: restituire `FAILED` senza propagare l'eccezione (le altre coroutine continuano)
+- [ ] Modificare `sync_pair()`:
+  - Accettare `route: FxConversionRoute` con `chain_steps` parsed
+  - Logica unificata per 1-step e multi-step (semplificata senza pipeline)
+  - Misurare `elapsed_ms` anche per sync singola
+- [ ] Aggiornare `sync_pairs_bulk()`:
+  - Caricare `FxConversionRoute` al posto di `FxCurrencyPairSource`
+  - Implementare la pipeline 3 fasi
+- [ ] Source string per rate multi-step: formato `"CHAIN:{p1}+{p2}+..."`
+- [ ] Source string per rate 1-step: il provider code diretto (come prima)
+- [ ] Gestire provider MANUAL: una route 1-step con MANUAL → skip sync (come prima). Un multi-step con un step MANUAL mescolato a provider reali = errore validazione (rifiutato dallo schema Pydantic)
+
+---
+
+## Step 4 — API Layer
+
+### Endpoint da rinominare/aggiornare
+
+| Vecchio | Nuovo | Cambiamenti |
+|---------|-------|-------------|
+| `GET /fx/providers/pair-sources` | `GET /fx/providers/routes` | Response: `FXConversionRoutesResponse` con `chain_steps` |
+| `POST /fx/providers/pair-sources` | `POST /fx/providers/routes` | Accetta `List[FXConversionRouteItem]` con `chain_steps` |
+| `DELETE /fx/providers/pair-sources` | `DELETE /fx/providers/routes` | Schema rinominato, logica invariata |
+| `POST /fx/currencies/sync` | Invariato | Lavora su slug coppia |
+| `GET /fx/providers` | Invariato | Lista provider disponibili |
+
+### Logica MANUAL sentinel
+
+Adattata al modello unificato:
+- Quando si aggiunge una route con provider reali → rimuovere eventuali route MANUAL per la stessa coppia
+- Quando si rimuove l'ultima route non-MANUAL → reinserire MANUAL sentinel come `[{"from": base, "to": quote, "provider": "MANUAL"}]`
+- Per determinare se una route è "MANUAL-only": controllare se tutti gli step in `chain_steps` hanno `provider == "MANUAL"`
+
+### Tasks Step 4
+
+- [ ] Rinominare endpoints `/pair-sources` → `/routes` in `api/v1/fx.py`
+- [ ] Aggiornare handler `create_routes_bulk`:
+  - Validare `chain_steps` (Pydantic fa il grosso, ma verificare provider registrati nel registry)
+  - Logica MANUAL sentinel aggiornata
+- [ ] Aggiornare handler `delete_routes_bulk`
+- [ ] Aggiornare handler `list_routes`
+- [ ] Aggiornare handler `sync_rates` per usare il nuovo modello
+- [ ] Aggiornare `GET /fx/currencies/pairs` se usa pair_sources per `has_provider`
+
+---
+
+## Step 5 — Backend Tests
+
+### Test da scrivere/aggiornare
+
+```
+backend/test_scripts/test_api/test_fx_routes.py         # CRUD route
+backend/test_scripts/test_api/test_fx_chain_sync.py      # Sync chain E2E
+```
+
+**Scenari CRUD routes:**
+- [ ] Creare route 1-step (equivalente al vecchio "diretto")
+- [ ] Creare route 2-step (es. RON→EUR→USD)
+- [ ] Creare route 3-step (A→B→C→D)
+- [ ] Validazione: chain con arco ripetuto (stesso pair in 2 step) → 422
+- [ ] Validazione: chain con step non contigui → 422
+- [ ] Validazione: chain con provider inesistente → 400
+- [ ] Validazione: chain vuota (0 step) → 422
+- [ ] Delete route + MANUAL sentinel reinstatement
+- [ ] List routes: verifica chain_steps nella response
+
+**Scenari sync:**
+- [ ] Sync route 1-step: funziona come prima
+- [ ] Sync route multi-step: rate derivato calcolato e salvato in fx_rates
+- [ ] Sync route multi-step: source = "CHAIN:ECB+ECB"
+- [ ] Sync route multi-step con un provider fallito → intera route FAILED, ma le altre route OK vengono salvate (successo parziale)
+- [ ] Sync bulk con route 1-step + route multi-step che condivide una gamba → la gamba viene scaricata 1 sola volta (dedup via pipeline Fase 1)
+- [ ] Sync bulk: provider grouping corretto (tutte le currency target raggruppate per provider)
+- [ ] Sync bulk: ogni coppia riuscita è committata indipendentemente (commit per coppia, non atomico bulk)
+- [ ] Sync bulk successo parziale: se 1 coppia su 3 fallisce, le altre 2 sono salvate in DB e response ha `success_count=2, failed_count=1`
+- [ ] `elapsed_ms` presente in ogni `FXSyncPairResult` con status OK/PARTIAL/FAILED (>0ms)
+- [ ] `elapsed_ms` è None per route SKIPPED/MANUAL
+- [ ] `elapsed_ms` anche in `sync_pair()` (sync singola)
+
+### Tasks Step 5
+
+- [ ] Scrivere `test_fx_routes.py` con scenari CRUD
+- [ ] Scrivere `test_fx_chain_sync.py` con scenari sync
+- [ ] Aggiornare eventuali test esistenti che usano `FxCurrencyPairSource`
+- [ ] Verificare che `populate_mock_data.py` funzioni con il nuovo modello
+
+---
+
+## Step 6 — Frontend: Grafo Provider e Auto-Detection
+
+### 6A. Algoritmo di ricerca percorsi — DFS con Backtracking su Graphology
+
+Il frontend costruisce un **grafo multi-diretto delle valute** usando la libreria `graphology` (`MultiDirectedGraph`) e trova tutti i percorsi possibili tra due valute con un **DFS con backtracking**.
+
+**Perché DFS con backtracking e non BFS/shortest-path standard:**
+
+Le librerie standard di shortest-path (incluse quelle di `graphology`) trovano UN solo cammino minimo o il cammino più corto. Noi dobbiamo trovare **TUTTI** i cammini possibili, di lunghezze diverse, rispettando vincoli di business personalizzati:
+- Nessun arco ripetuto (stessa coppia di valute in qualsiasi direzione)
+- Max 2 utilizzi per provider nello stesso percorso (un provider ha 1 base e N target: per transitare attraverso la sua base servono 2 archi)
+
+Queste regole non sono esprimibili con gli algoritmi di pathfinding standard. Il DFS con backtracking è l'approccio corretto:
+1. Esplora un ramo alla volta, poi "smonta" l'ultimo passo (backtracking) per esplorare alternative
+2. Permette vincoli personalizzati ad ogni step nel ciclo di esplorazione
+3. Efficiente in memoria (un percorso alla volta nello stack ricorsivo)
+
+**Dipendenza**: `npm install graphology graphology-types`
+
+**Input**: lista provider con `base_currencies` e `target_currencies` (già disponibile da `GET /fx/providers`)
+
+**Grafo** (`MultiDirectedGraph`):
+- Nodi = tutte le valute (unione di base + target currencies di tutti i provider)
+- Archi = per ogni provider P, per ogni base B in `P.base_currencies`, per ogni target T in `P.target_currencies`: arco bidirezionale B↔T con attributo `{provider: P.code}`
+- Multi-directed: tra gli stessi 2 nodi possono esserci più archi (uno per provider)
+
+### 6A-bis. Caching del grafo — session-lifetime
+
+La risposta di `GET /fx/providers` è **costante** per l'intera sessione del server: i provider sono plugin registrati all'avvio e non cambiano senza riavvio. Questo significa che:
+
+1. Il **grafo** (output di `buildCurrencyGraph()`) può essere costruito **una sola volta** al primo utilizzo e cacheato nel client per tutta la sessione
+2. Non serve invalidation: la cache è valida finché l'utente non fa refresh della pagina (che ricreerebbe l'app Svelte)
+3. **Implementazione**: un modulo-level singleton (o Svelte store `derived`) che:
+   - Al primo accesso chiama `GET /fx/providers` e costruisce il grafo
+   - Alle chiamate successive restituisce il grafo cacheato
+   - Opzionale: espone un `invalidate()` per forzare il rebuild (non necessario in pratica)
+
+```typescript
+// src/lib/stores/currencyGraphStore.ts
+
+import { writable, derived } from 'svelte/store';
+import type MultiDirectedGraph from 'graphology';
+import { buildCurrencyGraph } from '$lib/utils/currencyGraph';
+
+// Cache del grafo — costruito al primo utilizzo, poi riusato
+let cachedGraph: MultiDirectedGraph | null = null;
+let cachedProvidersHash: string | null = null;
+
+/**
+ * Restituisce il grafo valute cacheato.
+ * Lo costruisce al primo utilizzo dalla risposta di GET /fx/providers.
+ * La cache è valida per l'intera sessione (i provider non cambiano senza riavvio server).
+ */
+export async function getCurrencyGraph(providers: ProviderInfo[]): MultiDirectedGraph {
+    // Opzionale: hash per invalidare se i provider cambiano (paranoia check)
+    const hash = JSON.stringify(providers.map(p => p.code).sort());
+    if (cachedGraph && cachedProvidersHash === hash) {
+        return cachedGraph;
+    }
+    cachedGraph = buildCurrencyGraph(providers);
+    cachedProvidersHash = hash;
+    return cachedGraph;
+}
+```
+
+Questo evita di ricostruire il grafo ogni volta che l'utente apre il modal di aggiunta coppia o cambia la selezione valute.
+
+```typescript
+// src/lib/utils/currencyGraph.ts
+
+import MultiDirectedGraph from 'graphology';
+
+interface ChainStep {
+    from: string;
+    to: string;
+    provider: string;
+}
+
+interface ProviderInfo {
+    code: string;
+    base_currencies: string[];
+    target_currencies: string[];
+}
+
+/**
+ * Costruisce un MultiDirectedGraph dalle info dei provider.
+ *
+ * Per ogni provider, per ogni (base, target):
+ * - Aggiunge arco base→target con attributo {provider: code}
+ * - Aggiunge arco target→base con attributo {provider: code}
+ * Questo perché un provider che offre EUR→USD permette anche la conversione inversa.
+ */
+export function buildCurrencyGraph(providers: ProviderInfo[]): MultiDirectedGraph;
+
+/**
+ * DFS con backtracking — trova tutti i percorsi da source a target.
+ *
+ * Ritorna array di percorsi, ordinati per lunghezza (più corti prima).
+ * Ogni percorso è un array di ChainStep direttamente utilizzabile come
+ * chain_steps nella POST /fx/providers/routes (nessuna trasformazione necessaria).
+ */
+export function findAllPaths(
+    graph: MultiDirectedGraph,
+    source: string,
+    target: string,
+    maxDepth?: number  // default 4
+): ChainStep[][];
+```
+
+#### Pseudo-codice DFS dettagliato
+
+> **Nota**: design originato da analisi collaborativa del dominio FX (routing valute con vincoli provider).
+> Da documentare in MkDocs: `developer/fx-chain-algorithm.en.md` (vedi plan-fxDocumentation)
+
+```javascript
+function findAllPaths(graph, source, target, maxDepth = 4) {
+    const validPaths = [];
+
+    /**
+     * DFS ricorsiva con backtracking.
+     *
+     * @param currentNode  - valuta corrente nel percorso
+     * @param pathNodes    - nodi (valute) visitati nel percorso corrente
+     * @param pathEdges    - archi (ChainStep) nel percorso corrente
+     * @param usedEdgePairs - Set di coppie valute già attraversate (es. "EUR-USD")
+     *                        indipendente dalla direzione e dal provider
+     * @param providerUseCount - Map<provider, count> utilizzi nel percorso corrente
+     */
+    function dfs(currentNode, pathNodes, pathEdges, usedEdgePairs, providerUseCount) {
+        // Condizione di uscita: raggiunto il target
+        if (currentNode === target) {
+            validPaths.push([...pathEdges]);
+            return;
+        }
+
+        // Profondità massima raggiunta
+        if (pathEdges.length >= maxDepth) return;
+
+        // Esplora tutti gli archi uscenti dal nodo corrente
+        // In graphology: graph.forEachOutboundEdge(currentNode, callback)
+        graph.forEachOutboundEdge(currentNode, (edgeKey, attrs, src, tgt) => {
+            const neighbor = tgt;
+            const provider = attrs.provider;
+
+            // --- VINCOLI ---
+
+            // 1. Arco non ripetuto: la stessa coppia di valute (in qualsiasi
+            //    direzione, con qualsiasi provider) non può comparire 2 volte.
+            //    Chiave: coppia ordinata (es. "EUR-USD" = "USD-EUR")
+            const edgePair = [src, tgt].sort().join('-');
+            if (usedEdgePairs.has(edgePair)) return;
+
+            // 2. Max 2 utilizzi per provider nel percorso.
+            //    Motivazione: un provider con base EUR e N target necessita
+            //    al massimo di 2 archi per fare ponte (target→EUR + EUR→target2).
+            const currentUses = providerUseCount.get(provider) || 0;
+            if (currentUses >= 2) return;
+
+            // --- AVANZAMENTO ---
+            pathNodes.push(neighbor);
+            pathEdges.push({ from: src, to: tgt, provider });
+            usedEdgePairs.add(edgePair);
+            providerUseCount.set(provider, currentUses + 1);
+
+            // RICORSIONE — esplora dal vicino
+            dfs(neighbor, pathNodes, pathEdges, usedEdgePairs, providerUseCount);
+
+            // --- BACKTRACKING — smonta l'ultimo passo per provare alternative ---
+            pathNodes.pop();
+            pathEdges.pop();
+            usedEdgePairs.delete(edgePair);
+            if (currentUses === 0) {
+                providerUseCount.delete(provider);
+            } else {
+                providerUseCount.set(provider, currentUses);
+            }
+        });
+    }
+
+    // Avvio dal nodo sorgente
+    dfs(source, [source], [], new Set(), new Map());
+
+    // Ordina per lunghezza percorso (più corti prima)
+    validPaths.sort((a, b) => a.length - b.length);
+    return validPaths;
+}
+```
+
+**Perché le valute POSSONO ripetersi**: non c'è un check su `currentPathNodes.includes(neighbor)`. Il vincolo primario è sugli **archi** (coppie di valute), non sui nodi. In pratica, con il vincolo sugli archi, i cicli banali (A→B→A) sono comunque impossibili perché richiederebbero lo stesso arco A-B due volte. Percorsi più complessi con nodi condivisi (A→B→C→A→D) sono teoricamente ammessi dal vincolo ma improbabili con maxDepth=4 e il numero limitato di provider.
+
+#### Enhancement TODO: Parallelizzazione DFS con Web Workers
+
+> **Stato**: 📋 Enhancement futuro, bassa priorità (l'algoritmo DFS è veloce con il grafo attuale di ~4 provider × ~25 currency)
+
+L'algoritmo DFS potrebbe essere parallelizzato usando **Web Workers** per esplorare rami diversi del grafo simultaneamente:
+
+**Idea**: dal nodo sorgente, ci sono N archi uscenti (uno per ogni provider/currency adiacente). Ogni arco iniziale può essere assegnato a un Worker diverso, che poi procede con il DFS standard dal suo arco in poi.
+
+```
+source = "RON"
+archi iniziali: RON→EUR(ECB), RON→CHF(SNB) ...
+
+Worker 1: DFS da RON→EUR (esplora tutti i percorsi che partono via ECB)
+Worker 2: DFS da RON→CHF (esplora tutti i percorsi che partono via SNB)
+...
+Main thread: raccoglie i risultati, merge, ordina
+```
+
+**Valutazione complessità**:
+- Il grafo deve essere serializzato e passato a ciascun Worker (overhead)
+- `graphology` potrebbe non essere facilmente serializzabile → potrebbe servire una rappresentazione lightweight del grafo (adjacency list) per i Workers
+- Con ~4 provider e maxDepth=4, il DFS completa in <1ms anche su grafi da 100+ nodi — il beneficio del parallelismo è trascurabile
+- Diventa rilevante se si aggiungono molti provider commerciali con migliaia di coppie
+
+**Decisione**: segnato come TODO, da implementare solo se profiling mostra colli di bottiglia.
+
+### 6B. UI Provider Selection in FxPairAddModal
+
+L'attuale `FxProviderSelect` mostra provider compatibili per la coppia selezionata.
+Va esteso per mostrare 3 categorie, calcolate dai risultati di `findAllPaths()`:
+
+```
+┌──────────────────────────────────────────────────┐
+│ Provider per EUR → RON                           │
+│                                                  │
+│ ── Conversione diretta (1 step) ──               │
+│   ✅ ECB - European Central Bank                 │
+│                                                  │
+│ ── Conversione a catena ──                       │
+│   🔗 via USD (FED + ECB)           [2 step]      │
+│   🔗 via GBP (BOE + ECB)           [2 step]      │
+│   🔗 via CHF (SNB + ECB)           [2 step]      │
+│                                                  │
+│ ── Non utilizzabili ──                           │
+│   ⚠️ Nessun percorso automatico per questa coppia │
+└──────────────────────────────────────────────────┘
+```
+
+**Nota: il provider `MANUAL` NON compare nella UI.** `MANUAL` è un sentinel gestito esclusivamente dal backend: viene inserito automaticamente quando una coppia non ha nessun provider automatico configurato, e rimosso quando se ne aggiunge uno. Il frontend non deve mai mostrarlo come opzione selezionabile.
+
+**Calcolo delle 3 sezioni** dall'output di `findAllPaths()`:
+1. **Diretta (1 step)**: percorsi con `path.length === 1`
+2. **Catena (multi-step)**: percorsi con `path.length >= 2`, ordinati per numero step
+3. **Non utilizzabili**: provider che **NON compaiono in NESSUN percorso** (né 1-step né multi-step). Se BOE compare anche in una sola catena, NON va qui. Qui vanno solo i provider completamente irraggiungibili per questa coppia di valute.
+
+Quando l'utente seleziona un percorso:
+- `chain_steps` viene popolato direttamente dall'output di `findAllPaths()` (identico formato)
+- I passaggi sono mostrati come badge inline (es. `RON →[ECB]→ EUR →[ECB]→ USD`)
+- Un'icona catena 🔗 distingue le multi-step
+
+### 6C. FxProviderConfig nel Detail Page
+
+L'attuale `FxProviderConfig.svelte` mostra una lista ordinabile di provider.
+Ogni riga ora mostra la catena:
+- **1-step**: nome provider come ora (es. `ECB — European Central Bank`)
+- **Multi-step**: badge 🔗 + lista step compatta (es. `RON →[ECB]→ EUR →[ECB]→ USD`)
+- Il reorder funziona sulla priority della route, non sui singoli step
+
+### 6D. FxSyncModal — Nessuna modifica
+
+Il sync modal lavora su slug di coppia, non conosce la struttura interna della route. Tutto invariato.
+
+### Tasks Step 6
+
+- [ ] Installare `graphology` e `graphology-types`: `cd frontend && npm install graphology graphology-types`
+- [ ] Creare `src/lib/utils/currencyGraph.ts`:
+  - `buildCurrencyGraph(providers)` → `MultiDirectedGraph`
+  - `findAllPaths(graph, source, target, maxDepth)` → `ChainStep[][]`
+  - Implementare DFS con backtracking come da pseudo-codice §6A
+- [ ] Creare `src/lib/stores/currencyGraphStore.ts`:
+  - Caching session-lifetime del grafo (costruito al primo utilizzo da `GET /fx/providers`)
+  - `getCurrencyGraph(providers)` con hash check per invalidation
+  - La risposta di `GET /fx/providers` è costante per sessione → cache sempre valida
+- [ ] Estendere `FxProviderSelect.svelte` (o creare `FxRouteSelect.svelte`):
+  - Sezione "Diretta" con percorsi 1-step
+  - Sezione "Catena" con percorsi multi-step, ordinati per lunghezza
+  - Sezione "Non utilizzabili": provider assenti da TUTTI i percorsi
+  - Selezione di un percorso → popola `chain_steps`
+- [ ] Aggiornare `FxPairAddModal.svelte`:
+  - Usare nuovo selettore route
+  - Salvare `chain_steps` nella POST
+- [ ] Aggiornare `FxProviderConfig.svelte`:
+  - Mostrare step catena per route multi-step
+  - Badge 🔗 per distinguere multi-step da 1-step
+- [ ] Aggiornare le chiamate API frontend (`pair-sources` → `routes`)
+- [ ] Aggiornare i18n: chiavi per "chain", "direct", "step", "via", "all providers must work for sync"
+  - Usare `./dev.py i18n add` + `./dev.py i18n update`
+- [ ] **Enhancement TODO**: Parallelizzazione DFS via Web Workers (vedi §6A-bis). Segnare come issue/TODO nel codice, implementare solo se profiling mostra necessità.
+
+---
+
+## Step 7 — Aggiornamento riferimenti e cleanup
+
+### Tasks Step 7
+
+- [ ] Aggiornare `TODO_FUTURI.md`: aggiornare sezione "Cross-Rate" (ora implementato come chain)
+- [ ] Aggiornare `plan-phase05-to-08-upgrade.md` §4 con riferimento a questo plan
+- [ ] Grep globale per `FxCurrencyPairSource` e `pair-sources` — sostituire tutti i riferimenti
+- [ ] Grep globale per `pair_sources` in frontend — aggiornare a `routes`
+- [ ] Verificare che `svelte-check` passi senza errori
+- [ ] Verificare che il build frontend passi
+- [ ] Cancellare DB e ricreare con `./dev.py test db populate --force`
+- [ ] Test manuale: aggiungere coppia multi-step da UI, sync, verificare rate derivato
+
+---
+
+## Dipendenze tra Steps
+
+```
+Step 1 (Data Model)
+  └──→ Step 2 (Pydantic Schemas)
+         └──→ Step 3 (Service Layer)
+                └──→ Step 4 (API Layer)
+                       └──→ Step 5 (Backend Tests)
+                              └──→ Step 6 (Frontend)
+                                     └──→ Step 7 (Cleanup)
+```
+
+Step 6 (Frontend) può parzialmente procedere in parallelo con Step 5 (Tests), dato che le API sono già funzionanti dopo Step 4.
+
+---
+
+## Note di implementazione
+
+### Source string per rate derivati
+
+I rate calcolati da una catena multi-step vengono salvati in `fx_rates` con:
+```
+source = "CHAIN:ECB+ECB"       # 2-step same provider
+source = "CHAIN:FED+ECB"       # 2-step cross provider
+source = "CHAIN:FED+BOE+ECB"   # 3-step
+```
+
+I rate da route 1-step usano il provider code diretto (come prima):
+```
+source = "ECB"
+source = "FED"
+```
+
+Questo permette di distinguerli per audit/debug. L'utente può comunque editarli manualmente (diventano `source = "MANUAL"`).
+
+### Libreria Graphology
+
+**Package**: `graphology` (core, ~15KB) + `graphology-types` (solo tipi TS, 0KB runtime)
+**Perché**: offre `MultiDirectedGraph` che supporta nativamente più archi tra gli stessi nodi (un arco per provider). L'iterazione `forEachOutboundEdge()` è l'API ideale per il DFS.
+**Non servono** le sotto-librerie di pathfinding (`graphology-shortest-path` ecc.) perché il nostro algoritmo ha vincoli custom non esprimibili con quelle API standard.
+**Caching**: il grafo viene costruito una sola volta dalla risposta di `GET /fx/providers` e cacheato per l'intera sessione client. La risposta è costante finché il server non viene riavviato (i provider sono plugin registrati all'avvio).
+
+### Provider batch capabilities
+
+Studio dei provider esistenti (vedi §3A per dettagli):
+- **ECB/FED/BOE**: `fetch_rates()` accetta `list[str]` ma internamente oggi fa 1 HTTP/currency in loop sequenziale. **Step 3A-bis parallelizza** queste call con `asyncio.gather`, trasformando il loop `for` in esecuzione concorrente
+- **SNB**: vero batch nativo — 1 HTTP call con tutti i currency code nel parametro `dimSel`. Non va toccato
+- Il parallelismo opera su due livelli: **intra-provider** (§3A-bis: le currency di uno stesso provider in parallelo) + **inter-provider** (Fase 2 della pipeline: provider diversi in parallelo)
+
+### Backward fill per rate derivati
+
+I rate derivati NON hanno `backward_fill_info` proprio. Se una gamba ha backward-fill, il rate derivato eredita la data effettiva più recente tra le gambe (worst-case backward fill).
+
+### Provider MANUAL in catene
+
+- Route 1-step con MANUAL: valida (la coppia è manual-only, skip sync come prima)
+- Route multi-step con un step MANUAL mescolato a provider reali: non ha senso (il sync fallirebbe per lo step MANUAL). Il validator Pydantic rifiuta catene multi-step che contengono `provider == "MANUAL"`.
+
+### Documentazione algoritmo DFS
+
+L'algoritmo DFS con backtracking descritto in §6A va documentato in MkDocs:
+- `developer/fx-chain-algorithm.en.md` — spiegazione del grafo, vincoli, pseudo-codice, complessità
+- Task incluso nel `plan-fxDocumentation.prompt.md`
+
+### ⚠️ Nota architetturale: Multi-base provider
+
+**Stato attuale**: tutti i provider implementati (ECB, FED, BOE, SNB) hanno **1 sola base currency** (`base_currencies` ritorna una lista con 1 elemento). La proprietà `base_currencies` nella classe base `FXRateProvider` (vedi `backend/app/services/fx.py`) supporta GIÀ la dichiarazione di basi multiple, ma:
+
+- **Nessun provider reale** la usa oggi
+- La pipeline `sync_pairs_bulk()`, l'orchestratore `ensure_rates_multi_source()`, il grouping per provider (§3B Fase 1), e il grafo frontend (§6A) assumono tutti **implicitamente** che un provider abbia 1 sola base
+- Il raggruppamento `provider_legs: dict[str, set[str]]` nella Fase 1 mappa `provider → set[currency_target]`, ma non gestisce il caso in cui lo stesso provider offra USD→JPY e EUR→JPY (2 basi diverse per lo stesso target)
+
+**Quando servirà cambiare**: al momento di aggiungere un provider commerciale (es. Open Exchange Rates, Fixer.io) che supporta più basi, sarà necessario:
+
+1. Ripensare il grouping nella Fase 1: la chiave dovrà diventare `(provider, base_currency)` anziché solo `provider`
+2. Ripensare `ensure_rates_multi_source()`: dovrà passare `base_currency` esplicita a `fetch_rates()`
+3. Ripensare il grafo frontend (§6A): `buildCurrencyGraph()` dovrà gestire archi multipli per lo stesso provider con basi diverse
+4. Ripensare i `chain_steps`: ogni step potrebbe necessitare anche di `base_currency` esplicita (oggi inferita dal provider)
+5. Rivedere tutti i plugin esistenti per verificare che il nuovo flusso non rompa nulla
+
+**Azione immediata**: aggiungere un commento `# ARCHITECTURAL NOTE: multi-base` nella classe `FXRateProvider` sulla proprietà `base_currencies` per documentare questa limitazione e linkare a questa nota del piano.
+

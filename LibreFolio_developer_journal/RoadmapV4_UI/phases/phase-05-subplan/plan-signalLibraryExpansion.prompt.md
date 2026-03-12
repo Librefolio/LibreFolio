@@ -9,9 +9,9 @@ in 3 dropdown categorizzati (usando i componenti `SimpleSelect` esistenti), dual
 scala indipendente (RSI, MACD), tooltip informativi con supporto LaTeX (KaTeX), e documentazione MkDocs
 completa sulla teoria finanziaria con equivalenze signal processing / controlli automatici.
 
-**Stato**: 🔄 IN PROGRESS — Steps 1-4 ✅, Step 5 ✅ (KaTeX tooltips, DocsLink component, fixed-position tooltips, translated param labels, expanded signal names), Steps 6-7 TODO
+**Stato**: ✅ COMPLETATO — Steps 1-6 ✅. Step 7: 7B ✅, 7C ✅. Solo 7A (preview pair mode: titolo coppia con bandiere + inversione) è 📋 PENDING (UX polish, bassa priorità).
 **Data creazione**: 9 Marzo 2026
-**Ultimo aggiornamento**: 11 Marzo 2026 (Step 5 polish: Tooltip fixed positioning, DocsLink reusable component, expanded signal names in dropdowns/headers, i18n param labels, 15 i18n keys added)
+**Ultimo aggiornamento**: 12 Marzo 2026 (audit: Step 6 ✅, Step 7A pending)
 **Dipendenze**: `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md` (✅ COMPLETATO, signal library esiste)
 **Link parent**: `plan-phase05Fx.prompt.md` (master plan Phase 5)
 **Nota i18n**: Le traduzioni di Step 1 sono state aggiunte manualmente ai JSON. Per le prossime, usare `./dev.py i18n add`.
