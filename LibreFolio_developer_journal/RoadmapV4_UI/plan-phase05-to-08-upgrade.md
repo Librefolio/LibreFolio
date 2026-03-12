@@ -2,7 +2,7 @@
 
 **Data creazione**: 25 Febbraio 2026  
 **Ultimo aggiornamento**: 25 Febbraio 2026 (aggiunto pre-step verifica, riferimenti incrociati, note per plan di dettaglio)  
-**Status**: 🟡 IN CORSO (Pre-work schema completato, Phase 4.8 Sharing GUI da fare)  
+**Status**: 🟡 IN CORSO (Phase 4.8 ✅ COMPLETATO, Phase 5 FX 🔄 IN CORSO — sub-plan completati, chain/detail/docs/test pendenti)  
 **Dipendenze**: Phase 4 COMPLETATA  
 **Stima totale**: ~30 giorni (~6 settimane lavorative, include Phase 4.8)
 
@@ -239,13 +239,13 @@ frontend/src/lib/components/brokers/BrokerSharingModal.svelte   # Modale sharing
 
 ### Tasks
 
-- [ ] Backend: endpoint search users + schema + service
-- [ ] Backend: avatar_url in BRAccessItem, user_role in BRSummary
-- [ ] Frontend: BrokerSharingModal con DataTable inline edit
-- [ ] Frontend: bottone Share in broker detail
-- [ ] i18n: chiavi sharing in EN/IT/FR/ES
-- [ ] E2E tests
-- [ ] Gallery screenshots
+- [x] Backend: endpoint search users + schema + service
+- [x] Backend: avatar_url in BRAccessItem, user_role in BRSummary
+- [x] Frontend: BrokerSharingModal con DataTable inline edit
+- [x] Frontend: bottone Share in broker detail
+- [x] i18n: chiavi sharing in EN/IT/FR/ES
+- [x] E2E tests
+- [x] Gallery screenshots
 
 ---
 
@@ -253,11 +253,13 @@ frontend/src/lib/components/brokers/BrokerSharingModal.svelte   # Modale sharing
 
 **Durata**: ~4 giorni  
 **Dipendenze**: Schema changes (pre-work), PriceChartShared, **Phase 4.8 (Broker Sharing GUI)**  
-**Status**: ⏳ TODO
+**Status**: 🔄 IN CORSO — Pagina lista FX ✅, sub-plan completati, chain/detail/docs/test pendenti.
 
-> **📌 Nota per il plan di dettaglio futuro**: Quando si arriva a creare il plan dedicato per Phase 5,
-> ripartire da questa sezione (§4) + la spec del chart (§9). Include: CurrencyGrid, FxRateChart con
-> gradiente stale, PairSources CRUD con DataTable, FxSyncModal con date range e warning sovrascrittura.
+> **📌 Plan modulari Phase 5** (soppiantano il vecchio `plan-phase05Fx.prompt.md`, ora in `phases/phase-05-subplan/05FX_outofdate_plan/`):
+> 1. `plan-fxConversionChain.prompt.md` — Route-based multi-step conversion (data model → frontend)
+> 2. `plan-fxDetailPage.prompt.md` — Candlestick, VolumeBar, EditPopup, bidirezionalità edit
+> 3. `plan-fxTestingCleanup.prompt.md` — E2E Playwright, unit test, i18n audit, gallery
+> 4. `plan-fxDocumentation.prompt.md` — MkDocs i18n globale, documentazione utente, traduzioni
 > Il componente PriceChartShared (§5.0) DEVE essere creato come primo step (§9 per la spec dettagliata).
 > Il gradiente opacità per dati stale deve seguire la formula: `max(0.3, 1.0 - staleDays * 0.15)`.
 > Verificare che `user_role` dal broker condizioni i permessi (VIEWER = sola lettura chart, no sync).
@@ -1118,9 +1120,9 @@ Phase 8 (Dashboard) ←─── uses ALL ────────────�
 | Fase                               | Giorni        | Cumulativo | Note                                     |
 |------------------------------------|---------------|------------|------------------------------------------|
 | **Schema Changes (pre-work)**      | 1             | 1          | ✅ COMPLETATO (25 Feb 2026)               |
-| **Phase 4.8 (Broker Sharing GUI)** | 5             | 6          | search users + BrokerSharingModal + E2E  |
-| **Phase 5.0 (PriceChartShared)**   | 1             | 7          | Componente chart condiviso               |
-| **Phase 5 (FX)**                   | 3             | 10         | Grid + Chart + Pair Sources + Sync       |
+| **Phase 4.8 (Broker Sharing GUI)** | 5             | 6          | ✅ COMPLETATO (1 Mar 2026)                |
+| **Phase 5.0 (PriceChartShared)**   | 1             | 7          | ✅ Chart library completa                 |
+| **Phase 5 (FX)**                   | 3             | 10         | 🔄 Core ✅, Steps 7-9 pendenti           |
 | **Phase 6 (Assets)**               | 5             | 15         | List + CRUD + Detail + Matching          |
 | **Phase 7 (Transactions)**         | 8             | 23         | List + CRUD + Fiscal + Matching + Import |
 | **Phase 7.5 (File Preview)**       | 2             | 25         | Preview inline (già pianificato)         |

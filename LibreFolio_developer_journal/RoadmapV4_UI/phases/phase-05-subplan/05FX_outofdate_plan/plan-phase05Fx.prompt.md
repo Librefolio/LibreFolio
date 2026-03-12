@@ -1,7 +1,7 @@
 # Plan: Phase 5 — FX Management + Chart Library + User Docs + i18n MkDocs (v6)
 
 **Data creazione**: 2 Marzo 2026
-**Status**: ✅ COMPLETATO (12 Marzo 2026) — Tutti i sub-plan completati. FxCard Redesign + Chart Settings ✅ completato (→ `phases/phase-05-subplan/plan-fxCardRedesignChartSettings.prompt.md`). MANUAL Provider ✅ completato (→ `phases/phase-05-subplan/plan-manualFxProvider.prompt.md`). FxPairAddModal Redesign ✅ completato (→ `phases/phase-05-subplan/plan-fxPairAddModalRedesign.prompt.md`). Currency Fix + Layout + Flags ✅ completato (→ `phases/phase-05-subplan/plan-fxCurrencyFixLayoutFlags.prompt.md`). UI Feedback Round 3 (F1-F17) ✅ completato (→ `phases/phase-05-subplan/plan-fxUiFeedbackRound3.prompt.md`) — include F13 search fix + F14 localizzazione multi-lingua. Signal Library Expansion ✅ completato (→ `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md`). FX Sync API Redesign ✅ completato (→ `phases/phase-05-subplan/plan-fxSyncApiRedesign.prompt.md`).
+**Status**: 📦 ARCHIVIATO (12 Marzo 2026) — Sub-plan tutti ✅ completati. Steps 1-5 ✅, Step 6 parziale (MeasureOverlay ✅, CandlestickChart/VolumeBar/EditPopup pendenti), Steps 7-9 (Docs, i18n MkDocs, E2E) interamente pendenti. Piano soppiantato da nuovi plan modulari (vedi cartella padre).
 **Durata stimata**: ~7-8 giorni
 **Dipendenze**: Phase 4 completata, Phase 4.8 (Broker Sharing) completata
 **Riferimenti**:
@@ -14,6 +14,7 @@
 - `phases/phase-05-subplan/plan-fxSyncApiRedesign.prompt.md` ← **✅ COMPLETATO** sync API pair-based redesign
 - `phases/phase-05-subplan/plan-signalLibraryExpansion.prompt.md` ← **✅ COMPLETATO** indicatori tecnici (EMA, MACD, RSI, Bollinger), dual-axis, KaTeX tooltip, MkDocs docs
 - `TODO_FUTURI.md` §FX, §Cross-Rate
+- `phase05-pending-audit.md` ← **AUDIT** stato reale e lavoro pendente (12 Marzo 2026)
 
 ### 🌳 Albero Dipendenze dei Plan (Phase 5)
 
@@ -22,7 +23,7 @@ plan-frontendDevelopment.prompt.md ← INDICE PRINCIPALE (Phase 1-4 ✅ completa
  │
  └── plan-phase05-to-08-upgrade.md ← ROADMAP Phases 5-8 (architettura, overview)
       │
-       └── 📌 plan-phase05Fx.prompt.md ← MASTER PLAN Phase 5 (QUESTO FILE) ✅ COMPLETATO
+       └── 📌 plan-phase05Fx.prompt.md ← MASTER PLAN Phase 5 (QUESTO FILE) 📦 ARCHIVIATO
             │
             ├─── plan-fxUiRefinementsRound2.prompt.md ✅ (Steps 1-7, 9 completati)
             │     │   Fix visualMap, stale gradient, layout, MeasureOverlay,
