@@ -152,7 +152,7 @@
 
     async function loadProviders() {
         try {
-            const response = await zodiosApi.list_pair_sources_api_v1_fx_providers_pair_sources_get();
+            const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
             const items = (response as any)?.items || [];
             providers = items
                 .filter((i: any) =>
@@ -258,7 +258,7 @@
 
     async function handleAddProvider(detail: {providerCode: string; priority: number}) {
         try {
-            await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post([{
+            await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([{
                 base: data.base,
                 quote: data.quote,
                 provider_code: detail.providerCode,
@@ -322,11 +322,11 @@
                 provider_code: p.providerCode,
                 priority: p.priority,
             }));
-            await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post(upsertItems);
+            await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(upsertItems);
         }
 
         // Step 2: GET fresh state from backend (after upsert — this is the real state now)
-        const freshResp = await zodiosApi.list_pair_sources_api_v1_fx_providers_pair_sources_get();
+        const freshResp = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
         const freshForPair = (freshResp.items ?? []).filter(
             (s: any) => s.base === data.base && s.quote === data.quote
         );
@@ -342,7 +342,7 @@
         );
 
         if (toDelete.length > 0) {
-            await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete(
+            await zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete(
                 toDelete.map((s: any) => ({
                     base: data.base,
                     quote: data.quote,

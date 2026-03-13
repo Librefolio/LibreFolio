@@ -4,6 +4,7 @@ Handles currency conversion and FX rate management with support for multiple pro
 """
 
 import asyncio
+import time
 from abc import ABC, abstractmethod
 from datetime import date
 from decimal import Decimal
@@ -14,9 +15,11 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from backend.app.db.models import FxRate
+from backend.app.db.models import FxConversionRoute, FxRate
+from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.refresh import FXSyncPairResult, FXSyncStatus, FXSyncBulkResponse
 from backend.app.services.provider_registry import FXProviderRegistry
 from backend.app.utils.decimal_utils import truncate_fx_rate
 
@@ -642,43 +645,76 @@ async def ensure_rates_multi_source(
 
 
 # ============================================================================
+# CHAIN COMPUTATION
+# ============================================================================
+
+
+def compute_chain_rate(
+    steps: list[dict],
+    leg_rates: dict[tuple, Decimal],
+    target_date: date,
+    ) -> Decimal | None:
+    """
+    Compute the composite rate for a chain of conversions on a specific date.
+
+    For each step (from_cur, to_cur):
+    - Normalize alphabetically: (min, max) for lookup in leg_rates
+    - If from_cur < to_cur (direct order): multiply by rate
+    - If from_cur > to_cur (inverse order): multiply by 1/rate
+
+    Returns: composite rate, or None if any leg is missing.
+    """
+    composite = Decimal("1")
+    for step in steps:
+        fc = step["from"]
+        tc = step["to"]
+        # Normalize alphabetically for lookup
+        norm_base = min(fc, tc)
+        norm_quote = max(fc, tc)
+        key = (norm_base, norm_quote, target_date)
+        rate = leg_rates.get(key)
+        if rate is None:
+            return None
+        if fc < tc:
+            # Direct order: multiply by rate
+            composite *= rate
+        else:
+            # Inverse order: multiply by 1/rate
+            composite *= Decimal("1") / rate
+    return composite
+
+
+# ============================================================================
 # PAIR-BASED SYNC (New API)
 # ============================================================================
 
 
 async def sync_pair(
     session,  # AsyncSession
-    base: str,
-    quote: str,
+    route: "FxConversionRoute",
     date_range: tuple[date, date],
-    pair_sources: list[tuple[str, int]],  # [(provider_code, priority), ...]
     ) -> "FXSyncPairResult":
     """
-    Sync a single FX pair using configured providers with fallback.
+    Sync a single FX pair using its configured route (1-step or multi-step).
 
-    Tries each provider in priority order. MANUAL providers are skipped.
-    If all non-MANUAL providers fail, returns failed status.
-    If only MANUAL providers exist, returns skipped status.
+    For 1-step routes: fetch + upsert directly (like the old sync_pair).
+    For multi-step routes: fetch each leg sequentially, compute chain rate, upsert.
 
     Args:
         session: Database session
-        base: Base currency (alphabetically normalized, base < quote)
-        quote: Quote currency
+        route: FxConversionRoute with chain_steps
         date_range: (start_date, end_date) inclusive
-        pair_sources: List of (provider_code, priority) ordered by priority ASC
 
     Returns:
-        FXSyncPairResult with status, provider_used, points, message
+        FXSyncPairResult with status, provider_used, points, message, elapsed_ms
     """
-    from backend.app.schemas.refresh import FXSyncPairResult, FXSyncStatus
+    t_start_ns = time.monotonic_ns()
+    pair_slug = f"{route.base}-{route.quote}"
+    steps = route.parsed_steps
 
-    pair_slug = f"{base}-{quote}"
-
-    # Filter out MANUAL providers
-    real_providers = [(code, prio) for code, prio in pair_sources if code.upper() != "MANUAL"]
-
-    if not real_providers:
-        # Only MANUAL providers configured
+    # Check MANUAL-only
+    all_manual = all(s["provider"].upper() == "MANUAL" for s in steps)
+    if all_manual:
         logger.info(f"Pair {pair_slug}: MANUAL-only, skipping sync")
         return FXSyncPairResult(
             pair=pair_slug,
@@ -687,45 +723,34 @@ async def sync_pair(
             points_fetched=0,
             points_changed=0,
             message="Manual-only pair, nothing to sync",
+            elapsed_ms=None,
             )
 
-    # Try each provider in priority order
-    errors_collected = []
-    for provider_code, priority in real_providers:
-        try:
-            logger.info(f"Pair {pair_slug}: trying provider {provider_code} (priority={priority})")
-
-            # Determine which currencies to pass to ensure_rates_multi_source
-            # The provider needs both currencies of the pair
-            currencies = [base, quote]
-
+    try:
+        if len(steps) == 1:
+            # 1-step direct route
+            step = steps[0]
+            provider_code = step["provider"]
             result = await ensure_rates_multi_source(
-                session,
-                date_range,
-                currencies,
+                session, date_range,
+                currencies=[step["from"], step["to"]],
                 provider_code=provider_code,
-                base_currency=None,
                 )
-
             total_fetched = result["total_fetched"]
             total_changed = result["total_changed"]
+            elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
 
-            # Determine status based on results
             if total_fetched > 0:
-                fallback_msg = None
-                if priority > 1:
-                    fallback_msg = f"Fallback provider (priority={priority})"
-
                 return FXSyncPairResult(
                     pair=pair_slug,
                     status=FXSyncStatus.OK,
                     provider_used=provider_code,
                     points_fetched=total_fetched,
                     points_changed=total_changed,
-                    message=fallback_msg,
+                    message=None,
+                    elapsed_ms=elapsed_ms,
                     )
             else:
-                # Provider returned 0 points — could be partial or empty range
                 return FXSyncPairResult(
                     pair=pair_slug,
                     status=FXSyncStatus.PARTIAL,
@@ -733,99 +758,409 @@ async def sync_pair(
                     points_fetched=0,
                     points_changed=0,
                     message="Provider returned no data for this date range",
+                    elapsed_ms=elapsed_ms,
                     )
+        else:
+            # Multi-step chain
+            leg_rates: dict[tuple, Decimal] = {}
+            providers_used = []
 
-        except (FXServiceError, Exception) as e:
-            logger.warning(f"Pair {pair_slug}: provider {provider_code} (priority={priority}) failed: {e}")
-            errors_collected.append(f"{provider_code}: {str(e)}")
-            continue
+            for step in steps:
+                provider_code = step["provider"]
+                providers_used.append(provider_code)
+                provider = FXProviderRegistry.get_provider_instance(provider_code)
+                if not provider:
+                    raise FXServiceError(f"Unknown provider: {provider_code}")
 
-    # All providers failed
-    error_detail = "; ".join(errors_collected)
-    return FXSyncPairResult(
-        pair=pair_slug,
-        status=FXSyncStatus.FAILED,
-        provider_used=None,
-        points_fetched=0,
-        points_changed=0,
-        message=f"All providers failed: {error_detail}",
-        )
+                fc, tc = step["from"], step["to"]
+                # Determine target currency from provider's perspective
+                base_cur = provider.base_currency
+                if fc == base_cur:
+                    target_cur = tc
+                elif tc == base_cur:
+                    target_cur = fc
+                else:
+                    raise FXServiceError(f"Neither {fc} nor {tc} is base currency of {provider_code} ({base_cur})")
+
+                rates_by_currency = await provider.fetch_rates(date_range, [target_cur], base_currency=None)
+
+                for currency, observations in rates_by_currency.items():
+                    for obs_date, obs_base, obs_quote, rate in observations:
+                        norm_base, norm_quote, norm_rate = normalize_rate_for_storage(obs_base, obs_quote, rate)
+                        leg_rates[(norm_base, norm_quote, obs_date)] = norm_rate
+
+            # Compute chain rates and upsert
+            start_date, end_date = date_range
+            source = "CHAIN:" + "+".join(providers_used)
+
+            # Collect all dates from leg_rates
+            all_dates = sorted({key[2] for key in leg_rates.keys()})
+            computed_rates = []
+            for d in all_dates:
+                if d < start_date or d > end_date:
+                    continue
+                chain_rate = compute_chain_rate(steps, leg_rates, d)
+                if chain_rate is not None:
+                    norm_base, norm_quote, norm_rate = normalize_rate_for_storage(
+                        route.base, route.quote, chain_rate
+                        )
+                    norm_rate = truncate_fx_rate(norm_rate)
+                    computed_rates.append((d, norm_base, norm_quote, norm_rate))
+
+            if computed_rates:
+                values_list = [
+                    {
+                        "date": d,
+                        "base": b,
+                        "quote": q,
+                        "rate": r,
+                        "source": source,
+                        "fetched_at": func.current_timestamp(),
+                        }
+                    for d, b, q, r in computed_rates
+                    ]
+
+                batch_stmt = insert(FxRate).values(values_list)
+                batch_stmt = batch_stmt.on_conflict_do_update(
+                    index_elements=["date", "base", "quote"],
+                    set_={
+                        "rate": batch_stmt.excluded.rate,
+                        "source": batch_stmt.excluded.source,
+                        "fetched_at": func.current_timestamp(),
+                        },
+                    )
+                await session.execute(batch_stmt)
+                await session.commit()
+
+            elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+
+            return FXSyncPairResult(
+                pair=pair_slug,
+                status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
+                provider_used=source,
+                points_fetched=len(computed_rates),
+                points_changed=len(computed_rates),
+                message=None,
+                elapsed_ms=elapsed_ms,
+                )
+
+    except Exception as e:
+        elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+        logger.error(f"Pair {pair_slug}: sync failed: {e}")
+        return FXSyncPairResult(
+            pair=pair_slug,
+            status=FXSyncStatus.FAILED,
+            provider_used=None,
+            points_fetched=0,
+            points_changed=0,
+            message=str(e),
+            elapsed_ms=elapsed_ms,
+            )
 
 
 async def sync_pairs_bulk(
-    session,  # AsyncSession — used only for reading pair config
+    session,  # AsyncSession — used only for reading route config
     pairs: list[str],  # ["EUR-USD", "CHF-CNY"]
     date_range: tuple[date, date],
     ) -> "FXSyncBulkResponse":
     """
-    Sync multiple FX pairs using configured providers with fallback.
+    Sync multiple FX pairs using the 3-phase pipeline:
 
-    Parallelization strategy:
-    - HTTP fetches run in PARALLEL via asyncio.gather (the bottleneck)
-    - Each pair gets its own AsyncSession so DB writes are independent
-    - SQLite serializes concurrent writes internally (WAL mode)
-    - Each coroutine: fetch HTTP -> write DB -> commit (single atomic commit per pair)
+    Phase 1: Collect legs from all routes, group by provider, create Events
+    Phase 2: Fetch in parallel per provider, populate leg_rates, signal Events
+    Phase 3: Route coroutines await Events, compute chain rates, upsert+commit
 
-    Args:
-        session: Database session (used only for reading pair config upfront)
-        pairs: List of normalized pair slugs (base < quote alphabetically)
-        date_range: (start_date, end_date) inclusive
+    Parallelization:
+    - Inter-provider: different providers fetched in parallel
+    - Intra-provider: currencies within same provider fetched in parallel (asyncio.gather in ECB/FED/BOE)
+    - Route computation: routes awaiting different legs proceed as soon as their data is ready
 
-    Returns:
-        FXSyncBulkResponse with per-pair results and summary
+    Commit per pair (not atomic bulk): partial success OK.
     """
-    from backend.app.db.models import FxCurrencyPairSource
-    from backend.app.db.session import get_async_engine
-    from backend.app.schemas.common import DateRangeModel
-    from backend.app.schemas.refresh import FXSyncPairResult, FXSyncStatus, FXSyncBulkResponse
-
     start_date, end_date = date_range
+    t_start_ns = time.monotonic_ns()
 
-    # Load ALL pair source configurations in one query
-    stmt = select(FxCurrencyPairSource).order_by(FxCurrencyPairSource.base, FxCurrencyPairSource.quote, FxCurrencyPairSource.priority)
+    # Load ALL route configurations in one query
+    stmt = select(FxConversionRoute).order_by(FxConversionRoute.base, FxConversionRoute.quote, FxConversionRoute.priority)
     db_result = await session.execute(stmt)
-    all_pair_sources = db_result.scalars().all()
+    all_routes = db_result.scalars().all()
 
-    # Build lookup: (base, quote) -> [(provider_code, priority), ...] ordered by priority
-    config_lookup: dict[tuple[str, str], list[tuple[str, int]]] = {}
-    for ps in all_pair_sources:
-        key = (ps.base, ps.quote)
-        if key not in config_lookup:
-            config_lookup[key] = []
-        config_lookup[key].append((ps.provider_code, ps.priority))
+    # Build lookup: (base, quote) → [route1, route2, ...] ordered by priority
+    route_lookup: dict[tuple[str, str], list] = {}
+    for r in all_routes:
+        key = (r.base, r.quote)
+        if key not in route_lookup:
+            route_lookup[key] = []
+        route_lookup[key].append(r)
 
-    # Build tasks for parallel execution
-    async def _sync_one_pair(pair_slug: str) -> FXSyncPairResult:
-        """Sync a single pair with its own DB session."""
+    # ── Phase 1: Collect legs, group by provider, create Events ──
+    # For each pair, use the primary (priority=1) route
+    pair_route_map: dict[str, "FxConversionRoute"] = {}  # pair_slug → route
+    provider_legs: dict[str, set[str]] = {}  # provider_code → {target_currencies}
+    leg_events: dict[tuple[str, str, str], asyncio.Event] = {}  # (norm_base, norm_quote, provider) → Event
+    leg_rates: dict[tuple, Decimal] = {}  # (norm_base, norm_quote, date) → rate
+    leg_errors: dict[tuple[str, str, str], str] = {}  # (norm_base, norm_quote, provider) → error msg
+
+    for pair_slug in pairs:
         base, quote = pair_slug.split("-")
+        routes = route_lookup.get((base, quote), [])
+        if not routes:
+            pair_route_map[pair_slug] = None
+            continue
 
-        # Find provider sources for this pair (check both orderings)
-        pair_sources = config_lookup.get((base, quote), [])
-        pair_sources_rev = config_lookup.get((quote, base), [])
-        all_sources = sorted(pair_sources + pair_sources_rev, key=lambda x: x[1])
+        # Use primary route (first by priority)
+        route = routes[0]
+        pair_route_map[pair_slug] = route
+        steps = route.parsed_steps
 
-        if not all_sources:
+        # Skip MANUAL-only routes
+        if all(s["provider"].upper() == "MANUAL" for s in steps):
+            continue
+
+        for step in steps:
+            provider_code = step["provider"]
+            if provider_code.upper() == "MANUAL":
+                continue
+
+            provider = FXProviderRegistry.get_provider_instance(provider_code)
+            if not provider:
+                continue
+
+            fc, tc = step["from"], step["to"]
+            base_cur = provider.base_currency
+
+            # Determine target currency from provider's perspective
+            if fc == base_cur:
+                target_cur = tc
+            elif tc == base_cur:
+                target_cur = fc
+            else:
+                # Neither from nor to is the provider's base — error
+                continue
+
+            if provider_code not in provider_legs:
+                provider_legs[provider_code] = set()
+            provider_legs[provider_code].add(target_cur)
+
+            # Create Event for this leg
+            norm_b = min(fc, tc)
+            norm_q = max(fc, tc)
+            leg_key = (norm_b, norm_q, provider_code)
+            if leg_key not in leg_events:
+                leg_events[leg_key] = asyncio.Event()
+
+    # ── Phase 2: Fetch in parallel per provider ──
+    async def _fetch_provider(provider_code: str, target_currencies: set[str]):
+        """Fetch all currencies for one provider, populate leg_rates, signal Events."""
+        try:
+            provider = FXProviderRegistry.get_provider_instance(provider_code)
+            if not provider:
+                raise FXServiceError(f"Unknown provider: {provider_code}")
+
+            rates_by_currency = await provider.fetch_rates(date_range, list(target_currencies), base_currency=None)
+
+            for currency, observations in rates_by_currency.items():
+                for obs_date, obs_base, obs_quote, rate in observations:
+                    norm_base, norm_quote, norm_rate = normalize_rate_for_storage(obs_base, obs_quote, rate)
+                    leg_rates[(norm_base, norm_quote, obs_date)] = norm_rate
+
+            # Signal all events for this provider
+            for target_cur in target_currencies:
+                base_cur = provider.base_currency
+                norm_b = min(base_cur, target_cur)
+                norm_q = max(base_cur, target_cur)
+                leg_key = (norm_b, norm_q, provider_code)
+                if leg_key in leg_events:
+                    leg_events[leg_key].set()
+
+        except Exception as e:
+            logger.error(f"Provider {provider_code} fetch failed: {e}")
+            provider = FXProviderRegistry.get_provider_instance(provider_code)
+            base_cur = provider.base_currency if provider else ""
+            for target_cur in target_currencies:
+                norm_b = min(base_cur, target_cur)
+                norm_q = max(base_cur, target_cur)
+                leg_key = (norm_b, norm_q, provider_code)
+                leg_errors[leg_key] = str(e)
+                if leg_key in leg_events:
+                    leg_events[leg_key].set()  # Signal anyway so coroutines don't hang
+
+    provider_tasks = [_fetch_provider(prov, targets) for prov, targets in provider_legs.items()]
+    if provider_tasks:
+        await asyncio.gather(*provider_tasks)
+
+    # ── Phase 3: Route coroutines — await Events, compute, upsert+commit ──
+    async def _process_route(pair_slug: str) -> FXSyncPairResult:
+        """Process a single route: await legs, compute chain rate, upsert."""
+        route = pair_route_map.get(pair_slug)
+
+        if route is None:
             return FXSyncPairResult(
                 pair=pair_slug,
                 status=FXSyncStatus.FAILED,
                 provider_used=None,
                 points_fetched=0,
                 points_changed=0,
-                message=f"No provider configuration found for {pair_slug}",
+                message=f"No route configuration found for {pair_slug}",
+                elapsed_ms=(time.monotonic_ns() - t_start_ns) // 1_000_000,
                 )
 
-        # Each pair gets its own session to allow parallel DB operations
-        async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
-            return await sync_pair(pair_session, base, quote, date_range, all_sources)
+        steps = route.parsed_steps
 
-    # Execute all pairs in parallel
-    tasks = [_sync_one_pair(pair_slug) for pair_slug in pairs]
-    results: list[FXSyncPairResult] = list(await asyncio.gather(*tasks))
+        # Check MANUAL-only
+        if all(s["provider"].upper() == "MANUAL" for s in steps):
+            return FXSyncPairResult(
+                pair=pair_slug,
+                status=FXSyncStatus.SKIPPED,
+                provider_used=None,
+                points_fetched=0,
+                points_changed=0,
+                message="Manual-only pair, nothing to sync",
+                elapsed_ms=None,
+                )
+
+        try:
+            # Wait for all leg events
+            my_events = []
+            my_leg_keys = []
+            for step in steps:
+                fc, tc = step["from"], step["to"]
+                prov = step["provider"]
+                norm_b = min(fc, tc)
+                norm_q = max(fc, tc)
+                leg_key = (norm_b, norm_q, prov)
+                if leg_key in leg_events:
+                    my_events.append(leg_events[leg_key].wait())
+                    my_leg_keys.append(leg_key)
+
+            if my_events:
+                await asyncio.gather(*my_events)
+
+            # Check for failed legs
+            for lk in my_leg_keys:
+                if lk in leg_errors:
+                    raise FXServiceError(f"Leg {lk[0]}-{lk[1]} ({lk[2]}) failed: {leg_errors[lk]}")
+
+            if len(steps) == 1:
+                # 1-step direct: rates already in leg_rates, just upsert the pair rate
+                step = steps[0]
+                provider_code = step["provider"]
+                fc, tc = step["from"], step["to"]
+
+                # Collect rates for this pair from leg_rates
+                norm_b = min(route.base, route.quote)
+                norm_q = max(route.base, route.quote)
+
+                computed_rates = []
+                for key, rate in leg_rates.items():
+                    if key[0] == norm_b and key[1] == norm_q:
+                        d = key[2]
+                        if start_date <= d <= end_date:
+                            computed_rates.append((d, norm_b, norm_q, truncate_fx_rate(rate)))
+
+                if computed_rates:
+                    async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
+                        values_list = [
+                            {
+                                "date": d, "base": b, "quote": q, "rate": r,
+                                "source": provider_code,
+                                "fetched_at": func.current_timestamp(),
+                                }
+                            for d, b, q, r in computed_rates
+                            ]
+                        batch_stmt = insert(FxRate).values(values_list)
+                        batch_stmt = batch_stmt.on_conflict_do_update(
+                            index_elements=["date", "base", "quote"],
+                            set_={
+                                "rate": batch_stmt.excluded.rate,
+                                "source": batch_stmt.excluded.source,
+                                "fetched_at": func.current_timestamp(),
+                                },
+                            )
+                        await pair_session.execute(batch_stmt)
+                        await pair_session.commit()
+
+                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+                return FXSyncPairResult(
+                    pair=pair_slug,
+                    status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
+                    provider_used=provider_code,
+                    points_fetched=len(computed_rates),
+                    points_changed=len(computed_rates),
+                    message=None,
+                    elapsed_ms=elapsed_ms,
+                    )
+            else:
+                # Multi-step chain
+                providers_used = [s["provider"] for s in steps]
+                source = "CHAIN:" + "+".join(providers_used)
+
+                # Collect all dates from leg_rates
+                all_dates = sorted({key[2] for key in leg_rates.keys()
+                                    if start_date <= key[2] <= end_date})
+
+                computed_rates = []
+                for d in all_dates:
+                    chain_rate = compute_chain_rate(steps, leg_rates, d)
+                    if chain_rate is not None:
+                        norm_base, norm_quote, norm_rate = normalize_rate_for_storage(route.base, route.quote, chain_rate)
+                        norm_rate = truncate_fx_rate(norm_rate)
+                        computed_rates.append((d, norm_base, norm_quote, norm_rate))
+
+                if computed_rates:
+                    async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
+                        values_list = [
+                            {
+                                "date": d, "base": b, "quote": q, "rate": r,
+                                "source": source,
+                                "fetched_at": func.current_timestamp(),
+                                }
+                            for d, b, q, r in computed_rates
+                            ]
+                        batch_stmt = insert(FxRate).values(values_list)
+                        batch_stmt = batch_stmt.on_conflict_do_update(
+                            index_elements=["date", "base", "quote"],
+                            set_={
+                                "rate": batch_stmt.excluded.rate,
+                                "source": batch_stmt.excluded.source,
+                                "fetched_at": func.current_timestamp(),
+                                },
+                            )
+                        await pair_session.execute(batch_stmt)
+                        await pair_session.commit()
+
+                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+                return FXSyncPairResult(
+                    pair=pair_slug,
+                    status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
+                    provider_used=source,
+                    points_fetched=len(computed_rates),
+                    points_changed=len(computed_rates),
+                    message=None,
+                    elapsed_ms=elapsed_ms,
+                    )
+
+        except Exception as e:
+            elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+            logger.error(f"Pair {pair_slug}: sync failed: {e}")
+            return FXSyncPairResult(
+                pair=pair_slug,
+                status=FXSyncStatus.FAILED,
+                provider_used=None,
+                points_fetched=0,
+                points_changed=0,
+                message=str(e),
+                elapsed_ms=elapsed_ms,
+                )
+
+    # Execute all route coroutines in parallel
+    route_tasks = [_process_route(pair_slug) for pair_slug in pairs]
+    results: list[FXSyncPairResult] = list(await asyncio.gather(*route_tasks))
 
     # Build summary
     success_count = sum(1 for r in results if r.status in (FXSyncStatus.OK, FXSyncStatus.PARTIAL))
     total_points_changed = sum(r.points_changed for r in results)
-    operation_errors = [ r.message for r in results if r.status == FXSyncStatus.FAILED and r.message ]
+    operation_errors = [r.message for r in results if r.status == FXSyncStatus.FAILED and r.message]
 
     return FXSyncBulkResponse(
         results=results,
@@ -1042,13 +1377,15 @@ async def convert_bulk(
             # Track if backward-fill was applied
             backward_fill_applied = rate_record.date < meta["date"]
 
-            # Log if using backward-fill (level 5 = TRACE, below DEBUG)
+            # Log if using backward-fill
             if backward_fill_applied:
                 days_back = (meta["date"] - rate_record.date).days
-                logger.log(
-                    5,
-                    f"Using backward-fill: rate for {meta['base']}/{meta['quote']} from {rate_record.date} "
-                    f"({days_back} days back, requested: {meta['date']})"
+                logger.debug(
+                    "backward_fill_applied",
+                    pair=f"{meta['base']}/{meta['quote']}",
+                    rate_date=str(rate_record.date),
+                    requested_date=str(meta["date"]),
+                    days_back=days_back,
                     )
 
             # Apply conversion

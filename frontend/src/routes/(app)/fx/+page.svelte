@@ -168,7 +168,7 @@
         loading = true;
         error = null;
         try {
-            const response = await zodiosApi.list_pair_sources_api_v1_fx_providers_pair_sources_get();
+            const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
             const items = (response as any)?.items || [];
 
             // Group by unique pair (base/quote)
@@ -355,7 +355,7 @@
         deleteLoading = true;
         try {
             // Step 1: Delete all provider sources for this pair (single item, no priority = delete all)
-            await zodiosApi.delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete([{
+            await zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{
                 base: deletingPair.base,
                 quote: deletingPair.quote,
             }]);

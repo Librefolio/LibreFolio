@@ -34,6 +34,8 @@ from backend.app.config import get_settings
 
 import argparse
 import json
+import random
+import traceback
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -52,12 +54,16 @@ from backend.app.db import (
     Transaction,
     PriceHistory,
     FxRate,
-    FxCurrencyPairSource,
+    FxConversionRoute,
     AssetType,
+    IdentifierType,
     TransactionType,
     User,
     UserSettings,
     )
+from backend.app.services.auth_service import hash_password
+from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
+from backend.app.services.static_uploads import seed_default_avatars, get_uploads_dir
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
 # This ensures we use the test database, not the production one
@@ -79,7 +85,7 @@ def cleanup_all_tables(session: Session):
             AssetProviderAssignment,
             BrokerUserAccess,  # Must be before Broker
             FxRate,
-            FxCurrencyPairSource,
+            FxConversionRoute,
             Asset,
             Broker,
             ]
@@ -179,8 +185,6 @@ def populate_broker_user_access(session: Session):
     """
     print("\n👥 Creating Broker User Access...")
     print("-" * 60)
-
-    from backend.app.services.auth_service import hash_password
 
     # All test users we need (must match test-users.ts and test_runner.py)
     test_user_defs = [
@@ -561,8 +565,6 @@ def populate_asset_provider_assignments(session: Session):
     """Assign data providers to assets that need price fetching."""
     print("\n🔌 Assigning Asset Providers...")
     print("-" * 60)
-
-    from backend.app.db.models import IdentifierType
 
     # Map assets to their provider configs
     provider_configs = [
@@ -951,8 +953,6 @@ def populate_price_history(session: Session):
             base_price = start_price + price_range * Decimal(str(progress))
 
             # Add some daily variation
-            import random
-
             random.seed(hash(f"{asset.id}-{price_date}"))
             variation = Decimal(str(random.uniform(-0.02, 0.02)))
             close_price = base_price * (1 + variation)
@@ -986,10 +986,25 @@ def populate_fx_rates(session: Session):
 
     # Base rates (approximate)
     fx_configs = [
+        # Core pairs (existing)
         ("EUR", "USD", Decimal("1.08"), Decimal("1.12")),
         ("EUR", "GBP", Decimal("0.85"), Decimal("0.88")),
         ("CHF", "EUR", Decimal("0.92"), Decimal("0.95")),
         ("EUR", "JPY", Decimal("158.00"), Decimal("165.00")),
+        # Leg rates for same-provider chains (ECB, base=EUR)
+        ("AUD", "EUR", Decimal("0.58"), Decimal("0.62")),  # AUD/GBP chain via EUR
+        ("CAD", "EUR", Decimal("0.67"), Decimal("0.70")),  # CAD/EUR direct route
+        # Leg rates for same-provider chains (FED, base=USD)
+        ("BRL", "USD", Decimal("0.18"), Decimal("0.20")),  # BRL/INR chain via USD
+        ("INR", "USD", Decimal("0.012"), Decimal("0.013")),  # BRL/INR chain via USD
+        ("GBP", "USD", Decimal("1.26"), Decimal("1.30")),  # CAD/GBP chain via USD
+        ("CAD", "USD", Decimal("0.73"), Decimal("0.76")),  # CAD/GBP chain via USD
+        # Leg rates for cross-provider chains
+        ("EUR", "RON", Decimal("4.90"), Decimal("5.00")),  # RON/USD chain (ECB leg)
+        ("EUR", "PLN", Decimal("4.25"), Decimal("4.35")),  # GBP/PLN chain (ECB leg)
+        ("EUR", "HUF", Decimal("390.00"), Decimal("400.00")),  # CHF/HUF chain (ECB leg)
+        ("EUR", "SEK", Decimal("11.20"), Decimal("11.50")),  # SEK/USD chain (ECB leg)
+        ("CHF", "USD", Decimal("1.10"), Decimal("1.14")),  # KRW/CHF chain (SNB leg)
         ]
 
     for base, quote, start_rate, end_rate in fx_configs:
@@ -1013,7 +1028,6 @@ def populate_fx_rates(session: Session):
             base_rate = start_rate + rate_range * Decimal(str(progress))
 
             # Add some variation
-            import random
 
             random.seed(hash(f"{base}-{quote}-{rate_date}"))
             variation = Decimal(str(random.uniform(-0.005, 0.005)))
@@ -1029,35 +1043,132 @@ def populate_fx_rates(session: Session):
 
 
 def populate_fx_currency_pair_sources(session: Session):
-    """Configure FX providers for currency pairs."""
-    print("\n⚙️  Configuring FX Currency Pair Sources...")
+    """Configure FX conversion routes for currency pairs."""
+    print("\n⚙️  Configuring FX Conversion Routes...")
     print("-" * 60)
 
-    # Common currency pairs that ECB should handle
-    eur_pairs = [
-        ("EUR", "USD"),
-        ("EUR", "GBP"),
-        ("CHF", "EUR"),
-        ("EUR", "JPY"),
-        ("AUD", "EUR"),
-        ("CAD", "EUR"),
+    # Common currency pairs that ECB should handle (1-step direct routes)
+    # Note: base < quote (alphabetical ordering enforced by CHECK constraint)
+    eur_direct_routes = [
+        ("EUR", "USD", [{"from": "EUR", "to": "USD", "provider": "ECB"}]),
+        ("EUR", "GBP", [{"from": "EUR", "to": "GBP", "provider": "ECB"}]),
+        ("CHF", "EUR", [{"from": "CHF", "to": "EUR", "provider": "ECB"}]),
+        ("EUR", "JPY", [{"from": "EUR", "to": "JPY", "provider": "ECB"}]),
+        ("AUD", "EUR", [{"from": "AUD", "to": "EUR", "provider": "ECB"}]),
+        ("CAD", "EUR", [{"from": "CAD", "to": "EUR", "provider": "ECB"}]),
         ]
 
-    for base, quote in eur_pairs:
-        pair_source = FxCurrencyPairSource(base=base, quote=quote, provider_code="ECB", priority=1)
-        session.add(pair_source)
-        print(f"  ✅ {base}/{quote} → ECB (priority=1)")
+    for base, quote, steps in eur_direct_routes:
+        route = FxConversionRoute(
+            base=base, quote=quote, priority=1,
+            chain_steps=json.dumps(steps),
+            )
+        session.add(route)
+        print(f"  ✅ {base}/{quote} → ECB (1-step, priority=1)")
 
-    # Add a MANUAL-only pair for testing (no automatic provider)
-    from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
-    manual_pair = FxCurrencyPairSource(
-        base="NOK", quote="SEK", provider_code="MANUAL", priority=MANUAL_PRIORITY
+    # ── Multi-step chains: same provider ──
+
+    # CHF→JPY via EUR, both legs ECB (ECB has EUR as base, covers CHF and JPY)
+    chain_routes = []
+
+    chain_routes.append(FxConversionRoute(
+        base="CHF", quote="JPY", priority=1,
+        chain_steps=json.dumps([
+            {"from": "CHF", "to": "EUR", "provider": "ECB"},
+            {"from": "EUR", "to": "JPY", "provider": "ECB"},
+            ]),
+        ))
+    print(f"  🔗 CHF/JPY → CHAIN:ECB+ECB (2-step via EUR)")
+
+    # AUD→GBP via EUR, both legs ECB
+    chain_routes.append(FxConversionRoute(
+        base="AUD", quote="GBP", priority=1,
+        chain_steps=json.dumps([
+            {"from": "AUD", "to": "EUR", "provider": "ECB"},
+            {"from": "EUR", "to": "GBP", "provider": "ECB"},
+            ]),
+        ))
+    print(f"  🔗 AUD/GBP → CHAIN:ECB+ECB (2-step via EUR)")
+
+    # BRL→INR via USD, both legs FED (FED has USD as base, covers BRL and INR)
+    chain_routes.append(FxConversionRoute(
+        base="BRL", quote="INR", priority=1,
+        chain_steps=json.dumps([
+            {"from": "BRL", "to": "USD", "provider": "FED"},
+            {"from": "USD", "to": "INR", "provider": "FED"},
+            ]),
+        ))
+    print(f"  🔗 BRL/INR → CHAIN:FED+FED (2-step via USD)")
+
+    # ── Multi-step chains: cross-provider ──
+
+    # RON→USD: ECB (RON→EUR) + FED (EUR→USD) — classic cross-provider
+    chain_routes.append(FxConversionRoute(
+        base="RON", quote="USD", priority=1,
+        chain_steps=json.dumps([
+            {"from": "RON", "to": "EUR", "provider": "ECB"},
+            {"from": "EUR", "to": "USD", "provider": "FED"},
+            ]),
+        ))
+    print(f"  🔗 RON/USD → CHAIN:ECB+FED (2-step via EUR, cross-provider)")
+
+    # PLN→GBP: ECB (PLN→EUR) + BOE (EUR→GBP) — ECB + BOE cross-provider
+    chain_routes.append(FxConversionRoute(
+        base="GBP", quote="PLN", priority=1,
+        chain_steps=json.dumps([
+            {"from": "PLN", "to": "EUR", "provider": "ECB"},
+            {"from": "EUR", "to": "GBP", "provider": "BOE"},
+            ]),
+        ))
+    print(f"  🔗 GBP/PLN → CHAIN:ECB+BOE (2-step via EUR, cross-provider)")
+
+    # HUF→CHF: ECB (HUF→EUR) + SNB (EUR→CHF) — ECB + SNB cross-provider
+    chain_routes.append(FxConversionRoute(
+        base="CHF", quote="HUF", priority=1,
+        chain_steps=json.dumps([
+            {"from": "HUF", "to": "EUR", "provider": "ECB"},
+            {"from": "EUR", "to": "CHF", "provider": "SNB"},
+            ]),
+        ))
+    print(f"  🔗 CHF/HUF → CHAIN:ECB+SNB (2-step via EUR, cross-provider)")
+
+    # SEK→USD: ECB (SEK→EUR) + FED (EUR→USD) — ECB + FED cross-provider
+    chain_routes.append(FxConversionRoute(
+        base="SEK", quote="USD", priority=1,
+        chain_steps=json.dumps([
+            {"from": "SEK", "to": "EUR", "provider": "ECB"},
+            {"from": "EUR", "to": "USD", "provider": "FED"},
+            ]),
+        ))
+    print(f"  🔗 SEK/USD → CHAIN:ECB+FED (2-step via EUR, cross-provider)")
+
+    # ── Additional same-provider chains ──
+
+    # CAD→GBP via USD, both legs FED (FED has USD as base, covers CAD and GBP)
+    chain_routes.append(FxConversionRoute(
+        base="CAD", quote="GBP", priority=1,
+        chain_steps=json.dumps([
+            {"from": "CAD", "to": "USD", "provider": "FED"},
+            {"from": "USD", "to": "GBP", "provider": "FED"},
+            ]),
+        ))
+    print(f"  🔗 CAD/GBP → CHAIN:FED+FED (2-step via USD)")
+
+    for cr in chain_routes:
+        session.add(cr)
+
+    # ── MANUAL-only pair for testing ──
+    manual_route = FxConversionRoute(
+        base="NOK", quote="SEK", priority=MANUAL_PRIORITY,
+        chain_steps=json.dumps([{"from": "NOK", "to": "SEK", "provider": "MANUAL"}]),
         )
-    session.add(manual_pair)
+    session.add(manual_route)
     print(f"  ✅ NOK/SEK → MANUAL (priority={MANUAL_PRIORITY}) — manual-only pair")
 
     session.commit()
-    print(f"\n  📊 Configured {len(eur_pairs)} currency pairs with ECB + 1 manual-only pair")
+    total = len(eur_direct_routes) + len(chain_routes) + 1  # direct + chains + manual
+    print(f"\n  📊 Configured {total} conversion routes "
+          f"({len(eur_direct_routes)} direct + {len(chain_routes)} chains + 1 manual)")
 
 
 def configure_user_avatars(session: Session):
@@ -1081,13 +1192,11 @@ def configure_user_avatars(session: Session):
     print("-" * 60)
 
     # Ensure avatars are seeded (normally happens at server startup)
-    from backend.app.services.static_uploads import seed_default_avatars
     seeded = seed_default_avatars()
     if seeded > 0:
         print(f"  📁 Seeded {seeded} default avatar images")
 
     # Build a map: original_name → file_id
-    from backend.app.services.static_uploads import get_uploads_dir
     uploads_dir = get_uploads_dir()
     avatar_map: dict[str, str] = {}  # original_name → file_id
 
@@ -1226,7 +1335,7 @@ def main():
                 "transactions": len(session.exec(select(Transaction)).all()),
                 "price_history": len(session.exec(select(PriceHistory)).all()),
                 "fx_rates": len(session.exec(select(FxRate)).all()),
-                "fx_pair_sources": len(session.exec(select(FxCurrencyPairSource)).all()),
+                "fx_pair_sources": len(session.exec(select(FxConversionRoute)).all()),
                 }
 
             print("\n📊 Summary:")
@@ -1243,7 +1352,6 @@ def main():
 
         except Exception as e:
             print(f"\n❌ Error: {e}")
-            import traceback
 
             traceback.print_exc()
             session.rollback()

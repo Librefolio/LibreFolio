@@ -18,7 +18,7 @@ from backend.app.db.base import (
     Transaction,
     PriceHistory,
     FxRate,
-    FxCurrencyPairSource,
+    FxConversionRoute,
     AssetProviderAssignment,
     )
 from backend.app.db.session import get_sync_engine, get_async_engine, get_session_generator
@@ -42,6 +42,6 @@ __all__ = [
     "Transaction",
     "PriceHistory",
     "FxRate",
-    "FxCurrencyPairSource",
+    "FxConversionRoute",
     "AssetProviderAssignment",
     ]

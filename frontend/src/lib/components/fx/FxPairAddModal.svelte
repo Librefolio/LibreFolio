@@ -155,12 +155,12 @@
                     provider_code: p.code,
                     priority: p.priority,
                 }));
-                await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post(items);
+                await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(items);
             } else {
                 // No providers — create MANUAL sentinel so the pair exists
                 // in pair-sources and appears in the list. The backend auto-manages
                 // MANUAL: removes it when a real provider is added, reinstates when removed.
-                await zodiosApi.create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post([{
+                await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([{
                     base, quote,
                     provider_code: 'MANUAL',
                     priority: 999,

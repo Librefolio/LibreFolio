@@ -4,6 +4,7 @@ Main entry point for the backend API.
 """
 
 import os
+import sqlite3
 import subprocess
 import sys
 from contextlib import asynccontextmanager
@@ -75,8 +76,6 @@ def ensure_database_exists():
             needs_migration = True
         else:
             # Check if database has tables using SQLite directly
-            # This is faster than importing SQLAlchemy
-            import sqlite3
 
             try:
                 conn = sqlite3.connect(str(db_path))

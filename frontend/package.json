@@ -49,6 +49,8 @@
     "cropperjs": "^2.1.0",
     "date-fns": "^4.1.0",
     "echarts": "^6.0.0",
+    "graphology": "^0.26.0",
+    "graphology-types": "^0.24.8",
     "katex": "^0.16.38",
     "lucide-svelte": "^0.559.0",
     "svelte-i18n": "^4.0.1",

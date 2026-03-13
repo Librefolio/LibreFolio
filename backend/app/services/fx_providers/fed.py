@@ -9,6 +9,7 @@ Data Source: H.10 Foreign Exchange Rates via FRED
 Note: No API key required for basic usage
 """
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 
@@ -159,21 +160,20 @@ class FEDProvider(FXRateProvider):
         start_date, end_date = date_range
         results = {}
 
-        for currency in currencies:
-            # Skip USD (base currency)
-            if currency == "USD":
-                continue
+        # Filter valid currencies
+        valid_currencies = [c for c in currencies if c != "USD" and c in self.CURRENCY_SERIES]
+        skipped = [c for c in currencies if c != "USD" and c not in self.CURRENCY_SERIES]
+        for c in skipped:
+            logger.warning(f"Currency {c} not supported by FED, skipping")
+            results[c] = []
 
-            # Check if we support this currency
-            if currency not in self.CURRENCY_SERIES:
-                logger.warning(f"Currency {currency} not supported by FED, skipping")
-                results[currency] = []
-                continue
+        if not valid_currencies:
+            return results
 
+        async def _fetch_one(currency: str) -> tuple[str, list[tuple[date, str, str, Decimal]]]:
+            """Fetch rates for a single currency — isolated for parallel execution."""
             series_id = self.CURRENCY_SERIES[currency]
 
-            # Build FRED CSV download request (no API key needed)
-            # Uses public fredgraph.csv endpoint
             params = {
                 "id": series_id,
                 "cosd": start_date.isoformat(),
@@ -185,9 +185,8 @@ class FEDProvider(FXRateProvider):
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 
-                    # Parse CSV with date range filter
                     observations = self._parse_csv(response.text, currency, start_date, end_date)
-                    results[currency] = observations
+                    return currency, observations
 
             except httpx.HTTPError as e:
                 logger.error(f"Failed to fetch FX rates for {currency} from FED/FRED: {e}")
@@ -197,6 +196,15 @@ class FEDProvider(FXRateProvider):
                 raise FXServiceError(
                     f"Unexpected FED/FRED response format for {currency}: {e}"
                     ) from e
+
+        # Launch all HTTP calls in parallel
+        tasks = [_fetch_one(c) for c in valid_currencies]
+        fetched = await asyncio.gather(*tasks)
+
+        for currency, observations in fetched:
+            results[currency] = observations
+
+        return results
 
         return results
 
