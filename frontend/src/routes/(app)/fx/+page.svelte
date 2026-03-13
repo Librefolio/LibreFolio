@@ -184,8 +184,9 @@
                     });
                 }
                 pairMap.get(slug)!.providers.push({
-                    providerCode: item.provider_code,
+                    providerCode: item.chain_steps?.[0]?.provider ?? 'UNKNOWN',
                     priority: item.priority,
+                    chainSteps: item.chain_steps ?? [],
                 });
             }
 
