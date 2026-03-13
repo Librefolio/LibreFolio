@@ -158,10 +158,14 @@
                 .filter((i: any) =>
                     ((i.base === data.base && i.quote === data.quote) ||
                     (i.base === data.quote && i.quote === data.base)) &&
-                    i.provider_code !== 'MANUAL'
+                    !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL')
                 )
                 .sort((a: any, b: any) => a.priority - b.priority)
-                .map((i: any) => ({providerCode: i.provider_code, priority: i.priority}));
+                .map((i: any) => ({
+                    providerCode: i.chain_steps?.[0]?.provider ?? 'UNKNOWN',
+                    priority: i.priority,
+                    chainSteps: i.chain_steps ?? [],
+                }));
         } catch (e) {
             console.error('Failed to load providers:', e);
         }
@@ -256,12 +260,13 @@
         editMode = false;
     }
 
-    async function handleAddProvider(detail: {providerCode: string; priority: number}) {
+    async function handleAddProvider(detail: {providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}) {
         try {
+            const steps = detail.chainSteps ?? [{from: data.base, to: data.quote, provider: detail.providerCode}];
             await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([{
                 base: data.base,
                 quote: data.quote,
-                provider_code: detail.providerCode,
+                chain_steps: steps,
                 priority: detail.priority,
             }]);
             await loadProviders();
@@ -296,30 +301,30 @@
     }
 
     /**
-     * Apply a differential update to pair sources for the current pair.
+     * Apply a differential update to conversion routes for the current pair.
      *
      * Strategy (safe — no "delete all", no data loss on connection failure):
-     * 1. POST desired state (backend upserts on base+quote+priority key:
-     *    creates missing priorities, updates provider_code on existing ones)
+     * 1. POST desired state (backend upserts on base+quote+priority key)
      * 2. GET fresh state from backend (source of truth after upsert)
      * 3. DELETE entries that don't match the desired configuration
      *
      * Order: POST first (never lose data), GET fresh, DELETE stale.
      */
-    async function applyProviderDiff(desired: Array<{providerCode: string; priority: number}>) {
+    async function applyProviderDiff(desired: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}>) {
         // Normalize desired with sequential priorities (1-based)
         const desiredNormalized = desired.map((p, idx) => ({
             providerCode: p.providerCode,
             priority: idx + 1,
+            chainSteps: p.chainSteps ?? [{from: data.base, to: data.quote, provider: p.providerCode}],
         }));
 
-        // Step 1: POST all desired entries — backend upserts (create or update provider_code)
+        // Step 1: POST all desired entries — backend upserts (create or update)
         // This is always safe: it only adds or modifies, never removes.
         if (desiredNormalized.length > 0) {
             const upsertItems = desiredNormalized.map(p => ({
                 base: data.base,
                 quote: data.quote,
-                provider_code: p.providerCode,
+                chain_steps: p.chainSteps,
                 priority: p.priority,
             }));
             await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(upsertItems);
@@ -332,13 +337,11 @@
         );
 
         // Step 3: DELETE entries that are NOT in the desired list
-        // Build a set of desired "provider@priority" keys for fast lookup
-        const desiredKeys = new Set(
-            desiredNormalized.map(p => `${p.providerCode}@${p.priority}`)
-        );
+        // Match by priority (unique per pair)
+        const desiredPriorities = new Set(desiredNormalized.map(p => p.priority));
 
         const toDelete = freshForPair.filter(
-            (s: any) => !desiredKeys.has(`${s.provider_code}@${s.priority}`)
+            (s: any) => !desiredPriorities.has(s.priority)
         );
 
         if (toDelete.length > 0) {
