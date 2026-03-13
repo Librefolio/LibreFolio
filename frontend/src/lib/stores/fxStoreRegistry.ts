@@ -35,8 +35,17 @@ export interface FxDataPoint extends TimeSeriesPoint {
 }
 
 /**
- * FX pair configuration derived from GET /fx/providers/pair-sources.
- * Represents a unique currency pair with its provider configuration.
+ * Single step in a conversion chain (matches backend FXRouteStep).
+ */
+export interface ChainStep {
+    from: string;
+    to: string;
+    provider: string;
+}
+
+/**
+ * FX pair configuration derived from GET /fx/providers/routes.
+ * Represents a unique currency pair with its route configuration.
  */
 export interface FxPairConfig {
     /** Base currency ISO code (alphabetically first) */
@@ -45,10 +54,13 @@ export interface FxPairConfig {
     quote: string;
     /** Slug for routing: "EUR-USD" */
     slug: string;
-    /** Provider configurations ordered by priority */
+    /** Route configurations ordered by priority */
     providers: Array<{
+        /** Primary provider code (first step's provider, for display) */
         providerCode: string;
         priority: number;
+        /** Full chain steps — 1 step = direct, 2+ = chain */
+        chainSteps: ChainStep[];
         fetchInterval?: number | null;
     }>;
 }
