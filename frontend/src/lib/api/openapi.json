@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.3-2-g2f67737-dirty"
+    "version": "v0.5.4-1-g842faaa-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -873,7 +873,7 @@
           "FX Providers"
         ],
         "summary": "List Providers",
-        "description": "Get the list of available FX rate providers.\n\nReturns information about each provider including:\n- Provider code and name\n- Default base currency\n- All supported base currencies (for multi-base providers)\n- All target currencies (from get_supported_currencies)\n- Description and icon URL\n\nNote: This endpoint absorbed the former GET /fx/currencies endpoint.\nTarget currencies are now returned per-provider instead of a separate call.\n\nInstalled providers: BOE, FED, ECB, SNB, MANUAL\n\nUse the `providers` query parameter to filter by specific provider codes.",
+        "description": "Get the list of available FX rate providers.\n\nReturns information about each provider including:\n- Provider code and name\n- Default base currency\n- All supported base currencies (for multi-base providers)\n- All target currencies (from get_supported_currencies)\n- Description and icon URL\n\nNote: This endpoint absorbed the former GET /fx/currencies endpoint.\nTarget currencies are now returned per-provider instead of a separate call.\n\nInstalled providers: MANUAL, BOE, FED, ECB, SNB\n\nUse the `providers` query parameter to filter by specific provider codes.",
         "operationId": "list_providers_api_v1_fx_providers_get",
         "parameters": [
           {
@@ -926,22 +926,22 @@
         }
       }
     },
-    "/api/v1/fx/providers/pair-sources": {
+    "/api/v1/fx/providers/routes": {
       "get": {
         "tags": [
           "FX (Forex)",
           "FX Providers"
         ],
-        "summary": "List Pair Sources",
-        "description": "Get the list of configured currency pair sources.\n\nReturns all configured mappings of currency pairs to providers,\nordered by base, quote, and priority.\n\nReturns:\n    List of pair source configurations",
-        "operationId": "list_pair_sources_api_v1_fx_providers_pair_sources_get",
+        "summary": "List Routes",
+        "description": "Get the list of configured conversion routes.\n\nReturns all configured routes ordered by base, quote, and priority.\nEach route contains chain_steps describing how to compute the rate.\n\nReturns:\n    List of conversion route configurations",
+        "operationId": "list_routes_api_v1_fx_providers_routes_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FXPairSourcesResponse"
+                  "$ref": "#/components/schemas/FXConversionRoutesResponse"
                 }
               }
             }
@@ -953,18 +953,18 @@
           "FX (Forex)",
           "FX Providers"
         ],
-        "summary": "Create Pair Sources Bulk",
-        "description": "Create or update multiple currency pair sources in a single atomic transaction.\n\nValidations:\n- base < quote (alphabetical ordering)\n- Provider code must be registered in FXProviderRegistry\n- Priority must be >= 1\n\nArgs:\n    sources: List of pair sources to create/update\n    session: Database session\n\nReturns:\n    Results for each pair source operation",
-        "operationId": "create_pair_sources_bulk_api_v1_fx_providers_pair_sources_post",
+        "summary": "Create Routes Bulk",
+        "description": "Create or update multiple conversion routes in a single atomic transaction.\n\nValidations:\n- base < quote (alphabetical ordering)\n- Provider codes must be registered in FXProviderRegistry\n- Chain steps must be valid (continuity, no repeated edges, matching endpoints)\n\nArgs:\n    routes: List of routes to create/update\n    session: Database session\n\nReturns:\n    Results for each route operation",
+        "operationId": "create_routes_bulk_api_v1_fx_providers_routes_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/FXPairSourceItem"
+                  "$ref": "#/components/schemas/FXConversionRouteItem"
                 },
                 "type": "array",
-                "title": "Sources"
+                "title": "Routes"
               }
             }
           },
@@ -976,7 +976,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FXCreatePairSourcesResponse"
+                  "$ref": "#/components/schemas/FXCreateRoutesResponse"
                 }
               }
             }
@@ -998,18 +998,18 @@
           "FX (Forex)",
           "FX Providers"
         ],
-        "summary": "Delete Pair Sources Bulk",
-        "description": "Delete multiple currency pair sources.\n\nIf priority is specified, deletes only that specific priority level.\nIf priority is omitted, deletes ALL priorities for that pair.\n\nWarnings (not errors):\n- If a pair doesn't exist, logs a warning but continues\n\nArgs:\n    sources: List of FXDeletePairSourceItem to delete\n    session: Database session\n\nReturns:\n    FXDeletePairSourcesResponse with results for each deletion operation",
-        "operationId": "delete_pair_sources_bulk_api_v1_fx_providers_pair_sources_delete",
+        "summary": "Delete Routes Bulk",
+        "description": "Delete multiple conversion routes.\n\nIf priority is specified, deletes only that specific priority level.\nIf priority is omitted, deletes ALL priorities for that pair.\n\nArgs:\n    routes: List of FXDeleteRouteItem to delete\n    session: Database session\n\nReturns:\n    FXDeleteRoutesResponse with results for each deletion operation",
+        "operationId": "delete_routes_bulk_api_v1_fx_providers_routes_delete",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "items": {
-                  "$ref": "#/components/schemas/FXDeletePairSourceItem"
+                  "$ref": "#/components/schemas/FXDeleteRouteItem"
                 },
                 "type": "array",
-                "title": "Sources"
+                "title": "Routes"
               }
             }
           },
@@ -1021,7 +1021,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FXDeletePairSourcesResponse"
+                  "$ref": "#/components/schemas/FXDeleteRoutesResponse"
                 }
               }
             }
@@ -1046,7 +1046,7 @@
           "FX Currencies"
         ],
         "summary": "Sync Rates",
-        "description": "Synchronize FX rates for specified currency pairs and date range.\n\n**Pair-based sync** \u2014 accepts explicit pair slugs (e.g. ['EUR-USD', 'CHF-CNY']).\nEach pair is synced independently using configured providers from\nfx_currency_pair_sources table, with automatic fallback to lower-priority providers.\n\nPairs are normalized to alphabetical order (USD-EUR \u2192 EUR-USD).\n\n**Status per pair:**\n- `ok` \u2014 provider returned data, inserted/updated in DB\n- `partial` \u2014 provider returned empty or incomplete data\n- `failed` \u2014 all providers for this pair failed\n- `skipped` \u2014 pair is MANUAL-only, nothing to sync\n\nArgs:\n    body: FXSyncPairRequest with pairs list and date range\n\nReturns:\n    FXSyncBulkResponse with per-pair results and summary",
+        "description": "Synchronize FX rates for specified currency pairs and date range.\n\n**Pair-based sync** \u2014 accepts explicit pair slugs (e.g. ['EUR-USD', 'CHF-CNY']).\nEach pair is synced independently using configured routes from\nfx_conversion_routes table, supporting both direct and chain conversions.\n\nPairs are normalized to alphabetical order (USD-EUR \u2192 EUR-USD).\n\n**Status per pair:**\n- `ok` \u2014 provider returned data, inserted/updated in DB\n- `partial` \u2014 provider returned empty or incomplete data\n- `failed` \u2014 all providers for this pair failed\n- `skipped` \u2014 pair is MANUAL-only, nothing to sync\n\nArgs:\n    body: FXSyncPairRequest with pairs list and date range\n\nReturns:\n    FXSyncBulkResponse with per-pair results and summary",
         "operationId": "sync_rates_api_v1_fx_currencies_sync_post",
         "requestBody": {
           "content": {
@@ -8297,6 +8297,121 @@
         "title": "FXConversionResult",
         "description": "Single conversion result.\n\nBreaking change: Now uses Currency objects for from_amount and to_amount\ninstead of separate amount/currency fields."
       },
+      "FXConversionRouteItem": {
+        "properties": {
+          "base": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Base"
+          },
+          "quote": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Quote"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Priority"
+          },
+          "chain_steps": {
+            "items": {
+              "$ref": "#/components/schemas/FXRouteStep"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Chain Steps",
+            "description": "Ordered list of conversion steps (edges of the graph)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "base",
+          "quote",
+          "priority",
+          "chain_steps"
+        ],
+        "title": "FXConversionRouteItem",
+        "description": "Configuration for a conversion route.\n\nReplaces FXPairSourceItem. Every route is a chain of steps:\n- 1 step = direct conversion (e.g., EUR\u2192USD via ECB)\n- 2+ steps = chain conversion (e.g., RON\u2192EUR\u2192USD via ECB+ECB)"
+      },
+      "FXConversionRouteResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Whether the operation succeeded"
+          },
+          "base": {
+            "type": "string",
+            "title": "Base",
+            "description": "Base currency"
+          },
+          "quote": {
+            "type": "string",
+            "title": "Quote",
+            "description": "Quote currency"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority",
+            "description": "Priority level"
+          },
+          "chain_steps": {
+            "items": {
+              "$ref": "#/components/schemas/FXRouteStep"
+            },
+            "type": "array",
+            "title": "Chain Steps",
+            "description": "Chain steps configured"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action",
+            "description": "Action taken: 'created' or 'updated'"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "Additional info/warning"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "base",
+          "quote",
+          "priority",
+          "chain_steps",
+          "action"
+        ],
+        "title": "FXConversionRouteResult",
+        "description": "Result of a single route creation/update."
+      },
+      "FXConversionRoutesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FXConversionRouteItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "List of items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FXConversionRoutesResponse",
+        "description": "Response model for listing conversion routes."
+      },
       "FXConvertResponse": {
         "properties": {
           "results": {
@@ -8331,11 +8446,11 @@
         "title": "FXConvertResponse",
         "description": "Response model for bulk currency conversion."
       },
-      "FXCreatePairSourcesResponse": {
+      "FXCreateRoutesResponse": {
         "properties": {
           "results": {
             "items": {
-              "$ref": "#/components/schemas/FXPairSourceResult"
+              "$ref": "#/components/schemas/FXConversionRouteResult"
             },
             "type": "array",
             "title": "Results",
@@ -8368,8 +8483,8 @@
           "results",
           "success_count"
         ],
-        "title": "FXCreatePairSourcesResponse",
-        "description": "Response model for bulk pair source creation."
+        "title": "FXCreateRoutesResponse",
+        "description": "Response model for bulk route creation."
       },
       "FXDeleteItem": {
         "properties": {
@@ -8412,144 +8527,6 @@
         ],
         "title": "FXDeleteItem",
         "description": "Single rate deletion request.\n\nEither `date_range` or `delete_all=True` must be specified.\nIf `delete_all=True`, all rates for the pair are deleted regardless of date_range."
-      },
-      "FXDeletePairSourceItem": {
-        "properties": {
-          "base": {
-            "type": "string",
-            "maxLength": 3,
-            "minLength": 3,
-            "title": "Base",
-            "description": "Base currency (ISO 4217)"
-          },
-          "quote": {
-            "type": "string",
-            "maxLength": 3,
-            "minLength": 3,
-            "title": "Quote",
-            "description": "Quote currency (ISO 4217)"
-          },
-          "priority": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Priority",
-            "description": "Priority level (optional, if not provided deletes all priorities)"
-          }
-        },
-        "type": "object",
-        "required": [
-          "base",
-          "quote"
-        ],
-        "title": "FXDeletePairSourceItem",
-        "description": "Single pair source to delete."
-      },
-      "FXDeletePairSourceResult": {
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "title": "Success",
-            "description": "Whether the deletion succeeded"
-          },
-          "deleted_count": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Deleted Count",
-            "description": "Number of items deleted"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message",
-            "description": "Info/warning/error message"
-          },
-          "base": {
-            "type": "string",
-            "title": "Base",
-            "description": "Base currency"
-          },
-          "quote": {
-            "type": "string",
-            "title": "Quote",
-            "description": "Quote currency"
-          },
-          "priority": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Priority",
-            "description": "Priority level (if specified)"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "success",
-          "deleted_count",
-          "base",
-          "quote"
-        ],
-        "title": "FXDeletePairSourceResult",
-        "description": "Result of a single pair source deletion."
-      },
-      "FXDeletePairSourcesResponse": {
-        "properties": {
-          "results": {
-            "items": {
-              "$ref": "#/components/schemas/FXDeletePairSourceResult"
-            },
-            "type": "array",
-            "title": "Results",
-            "description": "Per-item operation results"
-          },
-          "success_count": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Success Count",
-            "description": "Number of successful operations"
-          },
-          "errors": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Errors",
-            "description": "Operation-level errors (not per-item)"
-          },
-          "total_deleted": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Total Deleted",
-            "description": "Total number of records deleted across all items"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "results",
-          "success_count",
-          "total_deleted"
-        ],
-        "title": "FXDeletePairSourcesResponse",
-        "description": "Response model for DELETE /pair-sources/bulk."
       },
       "FXDeleteResult": {
         "properties": {
@@ -8609,7 +8586,7 @@
         "title": "FXDeleteResult",
         "description": "Single FX rate deletion result."
       },
-      "FXPairSourceItem": {
+      "FXDeleteRouteItem": {
         "properties": {
           "base": {
             "type": "string",
@@ -8625,59 +8602,40 @@
             "title": "Quote",
             "description": "Quote currency (ISO 4217)"
           },
-          "provider_code": {
-            "type": "string",
-            "title": "Provider Code",
-            "description": "Provider code (e.g., ECB, FED)"
-          },
           "priority": {
-            "type": "integer",
-            "minimum": 1.0,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Priority",
-            "description": "Priority (1 = primary, 2+ = fallback)"
+            "description": "Priority level (optional, if not provided deletes all priorities)"
           }
         },
         "type": "object",
         "required": [
           "base",
-          "quote",
-          "provider_code",
-          "priority"
+          "quote"
         ],
-        "title": "FXPairSourceItem",
-        "description": "Configuration for a currency pair source."
+        "title": "FXDeleteRouteItem",
+        "description": "Single route to delete."
       },
-      "FXPairSourceResult": {
+      "FXDeleteRouteResult": {
         "properties": {
           "success": {
             "type": "boolean",
             "title": "Success",
-            "description": "Whether the operation succeeded"
+            "description": "Whether the deletion succeeded"
           },
-          "base": {
-            "type": "string",
-            "title": "Base",
-            "description": "Base currency"
-          },
-          "quote": {
-            "type": "string",
-            "title": "Quote",
-            "description": "Quote currency"
-          },
-          "provider_code": {
-            "type": "string",
-            "title": "Provider Code",
-            "description": "Provider code"
-          },
-          "priority": {
+          "deleted_count": {
             "type": "integer",
-            "title": "Priority",
-            "description": "Priority level"
-          },
-          "action": {
-            "type": "string",
-            "title": "Action",
-            "description": "Action taken: 'created' or 'updated'"
+            "minimum": 0.0,
+            "title": "Deleted Count",
+            "description": "Number of items deleted"
           },
           "message": {
             "anyOf": [
@@ -8689,36 +8647,82 @@
               }
             ],
             "title": "Message",
-            "description": "Additional info/warning"
-          }
-        },
-        "type": "object",
-        "required": [
-          "success",
-          "base",
-          "quote",
-          "provider_code",
-          "priority",
-          "action"
-        ],
-        "title": "FXPairSourceResult",
-        "description": "Result of a single pair source creation/update."
-      },
-      "FXPairSourcesResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/FXPairSourceItem"
-            },
-            "type": "array",
-            "title": "Items",
-            "description": "List of items"
+            "description": "Info/warning/error message"
+          },
+          "base": {
+            "type": "string",
+            "title": "Base",
+            "description": "Base currency"
+          },
+          "quote": {
+            "type": "string",
+            "title": "Quote",
+            "description": "Quote currency"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority",
+            "description": "Priority level (if specified)"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "FXPairSourcesResponse",
-        "description": "Response model for listing pair sources."
+        "required": [
+          "success",
+          "deleted_count",
+          "base",
+          "quote"
+        ],
+        "title": "FXDeleteRouteResult",
+        "description": "Result of a single route deletion."
+      },
+      "FXDeleteRoutesResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/FXDeleteRouteResult"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Per-item operation results"
+          },
+          "success_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Success Count",
+            "description": "Number of successful operations"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "Operation-level errors (not per-item)"
+          },
+          "total_deleted": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Deleted",
+            "description": "Total number of records deleted across all items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "results",
+          "success_count",
+          "total_deleted"
+        ],
+        "title": "FXDeleteRoutesResponse",
+        "description": "Response model for DELETE /routes."
       },
       "FXProviderInfo": {
         "properties": {
@@ -8781,6 +8785,35 @@
         ],
         "title": "FXProviderInfo",
         "description": "Information about a single FX rate provider."
+      },
+      "FXRouteStep": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "To"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "description": "Provider code for this step"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "provider"
+        ],
+        "title": "FXRouteStep",
+        "description": "Single step (edge) in a conversion chain.\n\nCorresponds to an edge in the currency graph built by the DFS algorithm."
       },
       "FXSyncBulkResponse": {
         "properties": {
@@ -8910,6 +8943,19 @@
             ],
             "title": "Message",
             "description": "Optional note (e.g. 'monthly data only', 'fallback used')"
+          },
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Ms",
+            "description": "Backend sync time for this pair in integer milliseconds. Measured from bulk start (Phase 1) to commit completion, via time.monotonic_ns() with integer division (// 1_000_000). None for SKIPPED/MANUAL pairs."
           }
         },
         "additionalProperties": false,

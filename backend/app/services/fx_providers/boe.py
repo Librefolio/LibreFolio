@@ -7,6 +7,7 @@ BOE provides daily rates with GBP as base currency.
 API Documentation: https://www.bankofengland.co.uk/boeapps/database/
 """
 
+import asyncio
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -137,33 +138,31 @@ class BOEProvider(FXRateProvider):
         start_date, end_date = date_range
         results = {}
 
-        for currency in currencies:
-            # Skip GBP (base currency)
-            if currency == "GBP":
-                continue
+        # Filter valid currencies
+        valid_currencies = [c for c in currencies if c != "GBP" and c in self.CURRENCY_SERIES]
+        skipped = [c for c in currencies if c != "GBP" and c not in self.CURRENCY_SERIES]
+        for c in skipped:
+            logger.warning(f"Currency {c} not supported by BOE, skipping")
+            results[c] = []
 
-            # Check if we support this currency
-            if currency not in self.CURRENCY_SERIES:
-                logger.warning(f"Currency {currency} not supported by BOE, skipping")
-                results[currency] = []
-                continue
+        if not valid_currencies:
+            return results
 
+        async def _fetch_one(currency: str) -> tuple[str, list[tuple[date, str, str, Decimal]]]:
+            """Fetch rates for a single currency — isolated for parallel execution."""
             series_code = self.CURRENCY_SERIES[currency]
 
-            # Build BOE API request
-            # Format: XML-based API (returning CSV-like data)
             params = {
                 "Datefrom": start_date.strftime("%d/%b/%Y"),
                 "Dateto": end_date.strftime("%d/%b/%Y"),
                 "SeriesCodes": series_code,
-                "CSVF": "TN",  # Time series, no metadata
+                "CSVF": "TN",
                 "UsingCodes": "Y",
                 "VPD": "Y",
                 "VFD": "N",
                 }
 
             try:
-                # BOE requires a proper User-Agent header
                 headers = {
                     "User-Agent": "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)"
                     }
@@ -174,9 +173,8 @@ class BOEProvider(FXRateProvider):
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 
-                    # Parse CSV-like response
                     observations = self._parse_response(response.text, currency)
-                    results[currency] = observations
+                    return currency, observations
 
             except httpx.HTTPError as e:
                 logger.error(f"Failed to fetch FX rates for {currency} from BOE: {e}")
@@ -184,6 +182,13 @@ class BOEProvider(FXRateProvider):
             except Exception as e:
                 logger.error(f"Failed to parse BOE response for {currency}: {e}")
                 raise FXServiceError(f"Unexpected BOE response format for {currency}: {e}") from e
+
+        # Launch all HTTP calls in parallel
+        tasks = [_fetch_one(c) for c in valid_currencies]
+        fetched = await asyncio.gather(*tasks)
+
+        for currency, observations in fetched:
+            results[currency] = observations
 
         return results
 

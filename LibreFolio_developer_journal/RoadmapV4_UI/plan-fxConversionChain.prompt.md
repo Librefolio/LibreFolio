@@ -1,15 +1,42 @@
 # Plan: FX Conversion Chain — Route-based Multi-Step Currency Conversion
 
 **Data creazione**: 12 Marzo 2026
-**Status**: 📋 DA IMPLEMENTARE
+**Status**: 🔄 BACKEND COMPLETATO — Frontend da implementare (Step 6+)
 **Priorità**: Alta (prerequisito per completare Phase 5 FX)
-**Stima**: ~3-4 giorni
+**Stima**: ~3-4 giorni (backend done, frontend ~2 giorni)
 **Dipendenze**: Tutti i sub-plan Phase 5 ✅ completati (vedi `phases/phase-05-subplan/`)
 **Riferimenti**:
 - `phases/phase-05-subplan/05FX_outofdate_plan/plan-phase05Fx.prompt.md` — vecchio master plan Phase 5 (📦 ARCHIVIATO)
 - `phases/phase-05-subplan/05FX_outofdate_plan/phase05-pending-audit.md` — audit task pendenti (C6)
 - `TODO_FUTURI.md` §FX, §Cross-Rate
 - `plan-phase05-to-08-upgrade.md` §4 (Phase 5 overview)
+
+### Progress Log
+
+| Data | Stato | Dettagli |
+|------|-------|----------|
+| 12 Mar 2026 | 📋 Piano creato | Definiti Step 1-7 con architettura completa |
+| 13 Mar 2026 | ✅ Step 1-5 backend completati | Data model, schemas, service layer, API endpoints, test |
+| 13 Mar 2026 | 🔧 Bug fix sessione review | 3 fix critiche (vedi sotto) |
+
+### Bug fix — 13 Marzo 2026
+
+1. **`logger.log(5, ...)` → `logger.debug(...)`** in `convert_bulk()` (fx.py:1387-1394)
+   - **Causa**: structlog `BoundLogger.log(5, msg)` genera `KeyError(5)` perché il livello TRACE (5) non è registrato in structlog
+   - **Effetto**: conversioni con backward-fill (weekend) fallivano silenziosamente con errore "Conversion X failed: 5"
+   - **Fix**: sostituito con `logger.debug("backward_fill_applied", pair=..., ...)` con kwargs strutturati
+
+2. **Import inline spostati al top** in 5 file:
+   - `fx.py`: rimossi 5 import duplicati in `sync_pair()` e `sync_pairs_bulk()` (già al top del file)
+   - `api/v1/fx.py`: spostati `import json` (3 occorrenze) e `MANUAL_PRIORITY` al top
+   - `db/models.py`: spostato `import json` al top (usato in `parsed_steps` property)
+   - `main.py`: spostato `import sqlite3` al top
+   - `populate_mock_data.py`: spostati `import random`, `import traceback`, `hash_password`, `IdentifierType`, `MANUAL_PRIORITY`, `seed_default_avatars`, `get_uploads_dir` al top; consolidato `IdentifierType` import duplicato
+
+3. **Mock data arricchiti** in `populate_mock_data.py`:
+   - Aggiunti 13 nuovi rate pairs (AUD/EUR, BRL/USD, INR/USD, GBP/USD, CAD/USD, EUR/RON, EUR/PLN, EUR/HUF, EUR/SEK, CHF/USD) per supportare le catene 2-step
+   - Aggiunte 2 nuove catene: SEK/USD via EUR (ECB+FED cross-provider), CAD/GBP via USD (FED+FED same-provider)
+   - Totale catene mock: 5 same-provider + 4 cross-provider + 1 MANUAL = 10 routes chain
 
 ---
 
@@ -108,20 +135,21 @@ Il campo `chain_steps` corrisponde direttamente alla lista di archi prodotta dal
 
 ### Tasks Step 1
 
-- [ ] Creare modello SQLModel `FxConversionRoute` in `backend/app/db/models.py`
+- [x] Creare modello SQLModel `FxConversionRoute` in `backend/app/db/models.py`
   - Sostituisce `FxCurrencyPairSource`
   - Field: `chain_steps` come `str` (JSON serializzato, NOT NULL)
   - Validator: `base < quote` (ordine alfabetico come `FxRate`)
   - Validator: `chain_steps` deve essere JSON array valido con almeno 1 elemento
   - Property helper: `is_chain` → `len(parsed_steps) > 1`
   - Property helper: `providers_used` → set di provider codes da chain_steps
-- [ ] Aggiornare `001_initial.py`: sostituire `CREATE TABLE fx_currency_pair_sources` con `CREATE TABLE fx_conversion_routes`
-- [ ] Aggiornare `populate_mock_data.py`:
+- [x] Aggiornare `001_initial.py`: sostituire `CREATE TABLE fx_currency_pair_sources` con `CREATE TABLE fx_conversion_routes`
+- [x] Aggiornare `populate_mock_data.py`:
   - Sostituire `FxCurrencyPairSource` con `FxConversionRoute`
   - Migrare le coppie EUR esistenti a formato chain 1-step: `[{"from": "EUR", "to": "USD", "provider": "ECB"}]`
-  - Aggiungere almeno 1 route multi-step di esempio (es. CHF→JPY via EUR con ECB)
+  - Aggiungere route multi-step (3 same-provider ECB+ECB/FED+FED, 4 cross-provider ECB+FED/ECB+BOE/ECB+SNB)
   - Aggiornare la coppia MANUAL (NOK-SEK) a formato chain: `[{"from": "NOK", "to": "SEK", "provider": "MANUAL"}]`
-- [ ] Rimuovere la classe `FxCurrencyPairSource` da `models.py`
+  - Aggiunti mock rates per tutte le gambe delle catene (13 coppie aggiuntive)
+- [x] Rimuovere la classe `FxCurrencyPairSource` da `models.py`
 
 ---
 
@@ -285,17 +313,17 @@ class FXSyncPairResult(BaseModel):
 
 ### Tasks Step 2
 
-- [ ] Creare `validate_chain_steps()` come funzione helper standalone in `schemas/fx.py`
+- [x] Creare `validate_chain_steps()` come funzione helper standalone in `schemas/fx.py`
   - Accetta sia `list[FXRouteStep]` (Pydantic) che `list[dict]` (SQLModel deserialized)
   - Implementa: continuità, no archi ripetuti, estremi coerenti con (base, quote)
-- [ ] Creare `FXRouteStep` con validators (`from` ≠ `to`, codici ISO validi, provider uppercase)
-- [ ] Creare `FXConversionRouteItem` con model_validator che delega a `validate_chain_steps()`
-- [ ] Aggiornare il validator di `FxConversionRoute` (SQLModel, Step 1) per riusare `validate_chain_steps()`
-- [ ] Creare `FXConversionRouteResult` con campo `chain_steps`
-- [ ] Creare tutti i Response corrispondenti
-- [ ] Aggiornare imports in `api/v1/fx.py`
-- [ ] `FXSyncPairRequest` resta invariato (lavora su slug)
-- [ ] Aggiungere campo `elapsed_ms: Optional[int]` a `FXSyncPairResult` in `schemas/refresh.py`
+- [x] Creare `FXRouteStep` con validators (`from` ≠ `to`, codici ISO validi, provider uppercase)
+- [x] Creare `FXConversionRouteItem` con model_validator che delega a `validate_chain_steps()`
+- [x] Aggiornare il validator di `FxConversionRoute` (SQLModel, Step 1) per riusare `validate_chain_steps()`
+- [x] Creare `FXConversionRouteResult` con campo `chain_steps`
+- [x] Creare tutti i Response corrispondenti
+- [x] Aggiornare imports in `api/v1/fx.py`
+- [x] `FXSyncPairRequest` resta invariato (lavora su slug)
+- [x] Aggiungere campo `elapsed_ms: Optional[int]` a `FXSyncPairResult` in `schemas/refresh.py`
 
 ---
 
@@ -564,32 +592,32 @@ I rate derivati sono pre-calcolati in `fx_rates`. `convert_bulk()` li trova con 
 
 ### Tasks Step 3
 
-- [ ] **3A-bis: Parallelizzare HTTP intra-provider** (da fare PRIMA della pipeline bulk):
-  - [ ] Refactor `ECBProvider.fetch_rates()`: estrarre body del loop in `_fetch_one(currency)`, sostituire `for` con `asyncio.gather`
-  - [ ] Refactor `FEDProvider.fetch_rates()`: stesso pattern
-  - [ ] Refactor `BOEProvider.fetch_rates()`: stesso pattern
-  - [ ] SNB: nessuna modifica (già batch nativo)
-  - [ ] Aggiornare test provider esistenti per verificare che il comportamento sia invariato
-- [ ] Creare `compute_chain_rate()` in `services/fx.py`
-- [ ] Ridisegnare `sync_pairs_bulk()` con architettura a 3 fasi:
+- [x] **3A-bis: Parallelizzare HTTP intra-provider** (da fare PRIMA della pipeline bulk):
+  - [x] Refactor `ECBProvider.fetch_rates()`: estrarre body del loop in `_fetch_one(currency)`, sostituire `for` con `asyncio.gather`
+  - [x] Refactor `FEDProvider.fetch_rates()`: stesso pattern
+  - [x] Refactor `BOEProvider.fetch_rates()`: stesso pattern
+  - [x] SNB: nessuna modifica (già batch nativo)
+  - [x] Aggiornare test provider esistenti per verificare che il comportamento sia invariato
+- [x] Creare `compute_chain_rate()` in `services/fx.py`
+- [x] Ridisegnare `sync_pairs_bulk()` con architettura a 3 fasi:
   - Fase 1: `t_start_ns = time.monotonic_ns()`, raccolta gambe, grouping per provider, creazione `asyncio.Event` per gamba
   - Fase 2: fetch parallelo per provider (`asyncio.gather` sui provider task), popola `leg_rates`, segnala `leg_events`
   - Fase 3: route coroutine in parallelo, ciascuna `await` sui suoi `Event`, calcola, upsert+commit con sessione propria, calcola `elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000`
-- [ ] Ogni coroutine di Fase 3 deve:
+- [x] Ogni coroutine di Fase 3 deve:
   - Creare la propria `AsyncSession` per il commit (indipendente dalle altre)
   - Calcolare `elapsed_ms` rispetto al `t_start_ns` globale (catturato una volta sola all'inizio della Fase 1, uguale per tutte le coroutine). Risultato in millisecondi interi (divisione intera, no float)
   - Restituire `FXSyncPairResult` con `elapsed_ms` popolato
   - In caso di errore: restituire `FAILED` senza propagare l'eccezione (le altre coroutine continuano)
-- [ ] Modificare `sync_pair()`:
+- [x] Modificare `sync_pair()`:
   - Accettare `route: FxConversionRoute` con `chain_steps` parsed
   - Logica unificata per 1-step e multi-step (semplificata senza pipeline)
   - Misurare `elapsed_ms` anche per sync singola
-- [ ] Aggiornare `sync_pairs_bulk()`:
+- [x] Aggiornare `sync_pairs_bulk()`:
   - Caricare `FxConversionRoute` al posto di `FxCurrencyPairSource`
   - Implementare la pipeline 3 fasi
-- [ ] Source string per rate multi-step: formato `"CHAIN:{p1}+{p2}+..."`
-- [ ] Source string per rate 1-step: il provider code diretto (come prima)
-- [ ] Gestire provider MANUAL: una route 1-step con MANUAL → skip sync (come prima). Un multi-step con un step MANUAL mescolato a provider reali = errore validazione (rifiutato dallo schema Pydantic)
+- [x] Source string per rate multi-step: formato `"CHAIN:{p1}+{p2}+..."`
+- [x] Source string per rate 1-step: il provider code diretto (come prima)
+- [x] Gestire provider MANUAL: una route 1-step con MANUAL → skip sync (come prima). Un multi-step con un step MANUAL mescolato a provider reali = errore validazione (rifiutato dallo schema Pydantic)
 
 ---
 
@@ -614,14 +642,14 @@ Adattata al modello unificato:
 
 ### Tasks Step 4
 
-- [ ] Rinominare endpoints `/pair-sources` → `/routes` in `api/v1/fx.py`
-- [ ] Aggiornare handler `create_routes_bulk`:
+- [x] Rinominare endpoints `/pair-sources` → `/routes` in `api/v1/fx.py`
+- [x] Aggiornare handler `create_routes_bulk`:
   - Validare `chain_steps` (Pydantic fa il grosso, ma verificare provider registrati nel registry)
   - Logica MANUAL sentinel aggiornata
-- [ ] Aggiornare handler `delete_routes_bulk`
-- [ ] Aggiornare handler `list_routes`
-- [ ] Aggiornare handler `sync_rates` per usare il nuovo modello
-- [ ] Aggiornare `GET /fx/currencies/pairs` se usa pair_sources per `has_provider`
+- [x] Aggiornare handler `delete_routes_bulk`
+- [x] Aggiornare handler `list_routes`
+- [x] Aggiornare handler `sync_rates` per usare il nuovo modello
+- [x] Aggiornare `GET /fx/currencies/pairs` se usa pair_sources per `has_provider`
 
 ---
 
@@ -660,10 +688,17 @@ backend/test_scripts/test_api/test_fx_chain_sync.py      # Sync chain E2E
 
 ### Tasks Step 5
 
-- [ ] Scrivere `test_fx_routes.py` con scenari CRUD
-- [ ] Scrivere `test_fx_chain_sync.py` con scenari sync
-- [ ] Aggiornare eventuali test esistenti che usano `FxCurrencyPairSource`
-- [ ] Verificare che `populate_mock_data.py` funzioni con il nuovo modello
+- [x] Scrivere `test_fx_routes.py` → integrato in `test_fx_api.py` (test CRUD routes, 19/20 passed, 1 pre-existing `model_dump` issue)
+- [x] Scrivere `test_fx_chain_sync.py` → `test_fx_sync.py` con 6 test E2E: ✅ 6/6 passed
+  - test_sync_invalid_date_range: 400 su date invertite
+  - test_sync_auto_config: sync con routes auto-create
+  - test_sync_manual_only_skipped: pair MANUAL → status "skipped"
+  - test_sync_weekend_no_rates: weekend → 0 punti (ok/partial)
+  - test_convert_multi_day_process: conversione multi-giorno
+  - test_convert_bulk_multi_day: bulk 2 conversioni × 3 giorni = ≥3 successi
+- [x] Aggiornare eventuali test esistenti che usano `FxCurrencyPairSource`
+- [x] Verificare che `populate_mock_data.py` funzioni con il nuovo modello
+- [x] Test FX providers esterni: 20/20 passed, 15 skipped (multi-unit tests)
 
 ---
 

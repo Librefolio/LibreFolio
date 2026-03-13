@@ -4,7 +4,7 @@ Test Suite: FX Sync API Endpoints
 Tests for FX sync endpoints:
 - POST /api/v1/fx/currencies/sync - Pair-based sync with FXSyncBulkResponse
   - Per-pair status: ok, partial, failed, skipped
-  - Auto-config mode (using pair sources)
+  - Auto-config mode (using conversion routes)
   - Error handling (no pairs configured, invalid date range)
   - Multi-provider scenarios
 """
@@ -20,10 +20,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import (
     FXConversionRequest,
     FXConvertResponse,
-    FXPairSourceItem,
-    FXDeletePairSourceItem,
-    FXCreatePairSourcesResponse,
-    FXPairSourcesResponse,
+    FXCreateRoutesResponse,
     DateRangeModel,
     )
 from backend.app.schemas.refresh import FXSyncBulkResponse
@@ -62,6 +59,15 @@ def test_server():
         # Server automatically stopped by context manager
 
 
+# Helper to build route JSON payload
+def _route_json(base: str, quote: str, provider: str, priority: int = 1) -> dict:
+    """Build a 1-step route JSON payload for tests."""
+    return {
+        "base": base, "quote": quote, "priority": priority,
+        "chain_steps": [{"from": base, "to": quote, "provider": provider}],
+        }
+
+
 # ============================================================
 # Test 1: POST /fx/currencies/sync — Invalid date range
 # ============================================================
@@ -85,31 +91,31 @@ async def test_sync_invalid_date_range(test_server):
 
 
 # ============================================================
-# Test 2: POST /fx/currencies/sync — Auto-config with pair sources
+# Test 2: POST /fx/currencies/sync — Auto-config with routes
 # ============================================================
 @pytest.mark.asyncio
 async def test_sync_auto_config(test_server):
-    """Test 2: POST /fx/currencies/sync — Auto-config (pair sources)."""
+    """Test 2: POST /fx/currencies/sync — Auto-config (routes)."""
     print_section("Test 2: POST /fx/currencies/sync - Auto-config")
 
     async with httpx.AsyncClient() as client:
-        # Step 1: Create pair sources for EUR-USD and GBP-USD
-        pair_sources = [
-            FXPairSourceItem(base="EUR", quote="USD", provider_code="ECB", priority=1),
-            FXPairSourceItem(base="GBP", quote="USD", provider_code="ECB", priority=1),
+        # Step 1: Create routes for EUR-USD and GBP-USD
+        routes = [
+            _route_json("EUR", "USD", "ECB"),
+            _route_json("GBP", "USD", "ECB"),
             ]
 
         create_resp = await client.post(
-            f"{API_BASE}/fx/providers/pair-sources",
-            json=[s.model_dump(mode="json") for s in pair_sources],
+            f"{API_BASE}/fx/providers/routes",
+            json=routes,
             timeout=TIMEOUT,
             )
 
         if create_resp.status_code == 201:
-            create_data = FXCreatePairSourcesResponse(**create_resp.json())
-            print_info(f"  Created {create_data.success_count} pair sources")
+            create_data = FXCreateRoutesResponse(**create_resp.json())
+            print_info(f"  Created {create_data.success_count} routes")
         else:
-            print_info("  Pair sources already exist")
+            print_info("  Routes already exist")
 
         # Step 2: Sync using POST with pair slugs
         today = date.today()
@@ -133,15 +139,14 @@ async def test_sync_auto_config(test_server):
             print_info(f"    {pr.pair}: status={pr.status}, pts_changed={pr.points_changed}")
         print_success(f"✓ Auto-config sync: {sync_data.success_count}/{len(sync_data.results)} ok")
 
-        # Cleanup: delete pair sources
-        for source in pair_sources:
-            await client.request(
-                "DELETE",
-                f"{API_BASE}/fx/providers/pair-sources",
-                json=[source.model_dump(mode="json")],
-                timeout=TIMEOUT,
-                )
-        print_info("  Cleanup: Pair sources deleted")
+        # Cleanup: delete routes
+        await client.request(
+            "DELETE",
+            f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "EUR", "quote": "USD"}, {"base": "GBP", "quote": "USD"}],
+            timeout=TIMEOUT,
+            )
+        print_info("  Cleanup: Routes deleted")
 
 
 # ============================================================
@@ -153,18 +158,18 @@ async def test_sync_manual_only_skipped(test_server):
     print_section("Test 3: POST /fx/currencies/sync - MANUAL-only pair")
 
     async with httpx.AsyncClient() as client:
-        # Step 1: Create MANUAL-only pair source
+        # Use an isolated pair not present in populate_mock_data
+        # (CHF-JPY has a real chain in mock data, so it would sync OK)
         await client.post(
-            f"{API_BASE}/fx/providers/pair-sources",
-            json=[{"base": "CHF", "quote": "JPY", "provider_code": "MANUAL", "priority": 999}],
+            f"{API_BASE}/fx/providers/routes",
+            json=[_route_json("ILS", "PHP", "MANUAL", priority=999)],
             timeout=TIMEOUT,
             )
 
-        # Step 2: Sync → expect 'skipped' status
         sync_resp = await client.post(
             f"{API_BASE}/fx/currencies/sync",
             json={
-                "pairs": ["CHF-JPY"],
+                "pairs": ["ILS-PHP"],
                 "start": "2025-01-10",
                 "end": "2025-01-10",
                 },
@@ -180,8 +185,8 @@ async def test_sync_manual_only_skipped(test_server):
         # Cleanup
         await client.request(
             "DELETE",
-            f"{API_BASE}/fx/providers/pair-sources",
-            json=[{"base": "CHF", "quote": "JPY"}],
+            f"{API_BASE}/fx/providers/routes",
+            json=[{"base": "ILS", "quote": "PHP"}],
             timeout=TIMEOUT,
             )
 
@@ -195,10 +200,10 @@ async def test_sync_weekend_no_rates(test_server):
     print_section("Test 4: POST /fx/currencies/sync - Weekend sync")
 
     async with httpx.AsyncClient() as client:
-        # Ensure pair source exists
+        # Ensure route exists
         await client.post(
-            f"{API_BASE}/fx/providers/pair-sources",
-            json=[{"base": "EUR", "quote": "GBP", "provider_code": "ECB", "priority": 1}],
+            f"{API_BASE}/fx/providers/routes",
+            json=[_route_json("EUR", "GBP", "ECB")],
             timeout=TIMEOUT,
             )
 
@@ -216,7 +221,6 @@ async def test_sync_weekend_no_rates(test_server):
 
         assert sync_resp.status_code == 200, f"Sync failed: {sync_resp.status_code}"
         sync_data = FXSyncBulkResponse(**sync_resp.json())
-        # Weekend: provider returns empty → partial or ok with 0 points
         assert len(sync_data.results) == 1
         print_info(f"  Weekend result: status={sync_data.results[0].status}, pts={sync_data.results[0].points_changed}")
         print_success("✓ Weekend sync handled correctly")
@@ -224,7 +228,7 @@ async def test_sync_weekend_no_rates(test_server):
         # Cleanup
         await client.request(
             "DELETE",
-            f"{API_BASE}/fx/providers/pair-sources",
+            f"{API_BASE}/fx/providers/routes",
             json=[{"base": "EUR", "quote": "GBP"}],
             timeout=TIMEOUT,
             )
@@ -239,10 +243,10 @@ async def test_convert_multi_day_process(test_server):
     print_section("Test 5: POST /fx/currencies/convert - Multi-day")
 
     async with httpx.AsyncClient() as client:
-        # Step 1: Ensure pair source + sync rates
+        # Step 1: Ensure route + sync rates
         await client.post(
-            f"{API_BASE}/fx/providers/pair-sources",
-            json=[{"base": "EUR", "quote": "USD", "provider_code": "ECB", "priority": 1}],
+            f"{API_BASE}/fx/providers/routes",
+            json=[_route_json("EUR", "USD", "ECB")],
             timeout=TIMEOUT,
             )
 
@@ -290,7 +294,7 @@ async def test_convert_multi_day_process(test_server):
         # Cleanup
         await client.request(
             "DELETE",
-            f"{API_BASE}/fx/providers/pair-sources",
+            f"{API_BASE}/fx/providers/routes",
             json=[{"base": "EUR", "quote": "USD"}],
             timeout=TIMEOUT,
             )
@@ -305,12 +309,13 @@ async def test_convert_bulk_multi_day(test_server):
     print_section("Test 6: POST /fx/currencies/convert - Bulk multi-day")
 
     async with httpx.AsyncClient() as client:
-        # Step 1: Ensure pair sources + sync
+        # Step 1: Ensure routes + sync
+        # Use pairs that ECB supports directly (base=EUR)
         await client.post(
-            f"{API_BASE}/fx/providers/pair-sources",
+            f"{API_BASE}/fx/providers/routes",
             json=[
-                {"base": "EUR", "quote": "USD", "provider_code": "ECB", "priority": 1},
-                {"base": "GBP", "quote": "USD", "provider_code": "ECB", "priority": 1},
+                _route_json("EUR", "USD", "ECB"),
+                _route_json("EUR", "GBP", "ECB"),
                 ],
             timeout=TIMEOUT,
             )
@@ -321,7 +326,7 @@ async def test_convert_bulk_multi_day(test_server):
         await client.post(
             f"{API_BASE}/fx/currencies/sync",
             json={
-                "pairs": ["EUR-USD", "GBP-USD"],
+                "pairs": ["EUR-USD", "EUR-GBP"],
                 "start": start_date.isoformat(),
                 "end": today.isoformat(),
                 },
@@ -337,8 +342,8 @@ async def test_convert_bulk_multi_day(test_server):
                 date_range=DateRangeModel(start=start_date, end=start_date + timedelta(days=2)),
                 ),
             FXConversionRequest(
-                from_amount=Currency(code="USD", amount=Decimal("200")),
-                **{"to": "GBP"},
+                from_amount=Currency(code="GBP", amount=Decimal("200")),
+                **{"to": "EUR"},
                 date_range=DateRangeModel(start=start_date, end=start_date + timedelta(days=2)),
                 ),
             ]
@@ -367,11 +372,10 @@ async def test_convert_bulk_multi_day(test_server):
         # Cleanup
         await client.request(
             "DELETE",
-            f"{API_BASE}/fx/providers/pair-sources",
+            f"{API_BASE}/fx/providers/routes",
             json=[
                 {"base": "EUR", "quote": "USD"},
-                {"base": "GBP", "quote": "USD"},
+                {"base": "EUR", "quote": "GBP"},
                 ],
             timeout=TIMEOUT,
             )
-

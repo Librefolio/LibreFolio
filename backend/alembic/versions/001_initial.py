@@ -199,34 +199,35 @@ def upgrade() -> None:
         )
     print("  ✓ Index created")
 
-    # FX currency pair sources table
-    print("📦 Creating table: fx_currency_pair_sources...")
+    # FX conversion routes table
+    print("📦 Creating table: fx_conversion_routes...")
     conn.execute(
         sa.text(
-            """CREATE TABLE fx_currency_pair_sources
+            """CREATE TABLE fx_conversion_routes
                (
                    id             INTEGER PRIMARY KEY,
                    base           VARCHAR  NOT NULL,
                    quote          VARCHAR  NOT NULL,
-                   provider_code  VARCHAR  NOT NULL,
-                   priority       INTEGER  NOT NULL,
+                   priority       INTEGER  NOT NULL DEFAULT 1,
+                   chain_steps    TEXT     NOT NULL,
                    fetch_interval INTEGER,
                    created_at     DATETIME NOT NULL,
                    updated_at     DATETIME NOT NULL,
-                   CONSTRAINT uq_pair_source_base_quote_priority UNIQUE (base, quote, priority)
+                   CONSTRAINT uq_route_base_quote_priority UNIQUE (base, quote, priority),
+                   CONSTRAINT ck_route_base_less_than_quote CHECK (base < quote)
                )"""
             )
         )
     print("  ✓ Table created")
     conn.execute(
-        sa.text("CREATE INDEX idx_pair_source_base_quote ON fx_currency_pair_sources (base, quote)")
+        sa.text("CREATE INDEX idx_route_base_quote ON fx_conversion_routes (base, quote)")
         )
     conn.execute(
-        sa.text("CREATE INDEX ix_fx_currency_pair_sources_base ON fx_currency_pair_sources (base)")
+        sa.text("CREATE INDEX ix_fx_conversion_routes_base ON fx_conversion_routes (base)")
         )
     conn.execute(
         sa.text(
-            "CREATE INDEX ix_fx_currency_pair_sources_quote ON fx_currency_pair_sources (quote)"
+            "CREATE INDEX ix_fx_conversion_routes_quote ON fx_conversion_routes (quote)"
             )
         )
     print("  ✓ 3 Indexes created")
@@ -347,7 +348,7 @@ def downgrade() -> None:
         "transactions",
         "price_history",
         "asset_provider_assignments",
-        "fx_currency_pair_sources",
+        "fx_conversion_routes",
         "fx_rates",
         "broker_user_access",
         "brokers",

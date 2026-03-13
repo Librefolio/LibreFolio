@@ -136,6 +136,13 @@ class FXSyncPairResult(BaseModel):
     points_fetched: int = Field(0, ge=0, description="Number of rate points fetched from provider")
     points_changed: int = Field(0, ge=0, description="Number of rate points actually inserted/updated in DB")
     message: Optional[str] = Field(None, description="Optional note (e.g. 'monthly data only', 'fallback used')")
+    elapsed_ms: Optional[int] = Field(
+        None, ge=0,
+        description="Backend sync time for this pair in integer milliseconds. "
+                    "Measured from bulk start (Phase 1) to commit completion, "
+                    "via time.monotonic_ns() with integer division (// 1_000_000). "
+                    "None for SKIPPED/MANUAL pairs."
+    )
 
     @field_validator('pair')
     @classmethod

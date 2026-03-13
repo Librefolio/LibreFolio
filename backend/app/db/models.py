@@ -12,6 +12,7 @@ All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
 from datetime import date as date_type, datetime
 from decimal import Decimal
 from enum import Enum
+import json
 from typing import Optional, Any
 
 from pydantic import field_validator
@@ -725,37 +726,35 @@ class FxRate(SQLModel, table=True):
         return _validate_currency_field(v)
 
 
-class FxCurrencyPairSource(SQLModel, table=True):
+class FxConversionRoute(SQLModel, table=True):
     """
-    Configuration table: which FX provider to use for each currency pair.
+    Configuration table: conversion routes for FX currency pairs.
 
-    This table maps currency pairs to their authoritative data source.
-    When syncing rates, the system queries this table to determine
-    which provider (ECB, FED, BOE, etc.) should be used for each pair.
+    Each route describes HOW to obtain the rate for a currency pair.
+    Routes are stored as a chain of steps (chain_steps JSON):
+    - 1-step chain = direct conversion (e.g., EUR→USD via ECB)
+    - Multi-step chain = indirect conversion (e.g., RON→EUR→USD via ECB+ECB)
 
-    Important: Pair direction is semantically significant!
-    - EUR/USD (ECB base) ≠ USD/EUR (FED base)
-    - Both directions can coexist with DIFFERENT priorities
+    The pair (base, quote) is always in alphabetical order (base < quote),
+    consistent with fx_rates table.
 
-    Examples:
-    - EUR/USD priority=1 → ECB (European Central Bank, EUR base)
-    - USD/EUR priority=2 → FED (Federal Reserve, USD base, fallback)
-    - GBP/USD priority=1 → BOE (Bank of England, GBP base)
-    - USD/GBP priority=2 → FED (Federal Reserve, USD base, fallback)
-
-    Priority field allows fallback providers:
-    - priority=1: Primary source (used by default)
-    - priority=2: Fallback source (if primary fails)
+    Priority field allows fallback routes:
+    - priority=1: Primary route (used by default)
+    - priority=2: Fallback route (if primary fails)
     - priority=3+: Additional fallbacks
 
-    Note: Unlike fx_rates table, this table does NOT enforce alphabetical ordering.
-    The pair direction matters for selecting the correct provider's base currency.
+    chain_steps JSON format:
+    - 1-step: [{"from": "EUR", "to": "USD", "provider": "ECB"}]
+    - Multi-step: [{"from": "RON", "to": "EUR", "provider": "ECB"},
+                    {"from": "EUR", "to": "USD", "provider": "ECB"}]
+    - MANUAL: [{"from": "NOK", "to": "SEK", "provider": "MANUAL"}]
     """
 
-    __tablename__ = "fx_currency_pair_sources"
+    __tablename__ = "fx_conversion_routes"
     __table_args__ = (
-        UniqueConstraint("base", "quote", "priority", name="uq_pair_source_base_quote_priority"),
-        Index("idx_pair_source_base_quote", "base", "quote"),
+        UniqueConstraint("base", "quote", "priority", name="uq_route_base_quote_priority"),
+        CheckConstraint("base < quote", name="ck_route_base_less_than_quote"),
+        Index("idx_route_base_quote", "base", "quote"),
         )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -763,10 +762,13 @@ class FxCurrencyPairSource(SQLModel, table=True):
     base: str = Field(nullable=False, min_length=3, max_length=3, index=True)
     quote: str = Field(nullable=False, min_length=3, max_length=3, index=True)
 
-    provider_code: str = Field(nullable=False, description="Provider code (ECB, FED, BOE, etc.)")
-
     priority: int = Field(
         default=1, ge=1, description="Priority level (1=primary, 2=fallback, etc.)"
+        )
+
+    chain_steps: str = Field(
+        sa_column=Column(Text, nullable=False),
+        description="JSON array of conversion steps [{from, to, provider}, ...]",
         )
 
     fetch_interval: Optional[int] = Field(
@@ -781,6 +783,21 @@ class FxCurrencyPairSource(SQLModel, table=True):
     def validate_currencies(cls, v: Any) -> str:
         """Validate base/quote against ISO 4217 + crypto."""
         return _validate_currency_field(v)
+
+    @property
+    def parsed_steps(self) -> list[dict]:
+        """Parse chain_steps JSON string into a list of dicts."""
+        return json.loads(self.chain_steps)
+
+    @property
+    def is_chain(self) -> bool:
+        """True if this route has more than 1 step (multi-step chain)."""
+        return len(self.parsed_steps) > 1
+
+    @property
+    def providers_used(self) -> set[str]:
+        """Set of provider codes used in this route's chain."""
+        return {step["provider"] for step in self.parsed_steps}
 
 
 # ============================================================================
@@ -880,7 +897,7 @@ class AssetProviderAssignment(SQLModel, table=True):
 @event.listens_for(Asset, "before_update")
 @event.listens_for(Transaction, "before_update")
 @event.listens_for(AssetProviderAssignment, "before_update")
-@event.listens_for(FxCurrencyPairSource, "before_update")
+@event.listens_for(FxConversionRoute, "before_update")
 @event.listens_for(UserSettings, "before_update")
 @event.listens_for(BrokerUserAccess, "before_update")
 def receive_before_update(mapper, connection, target):
