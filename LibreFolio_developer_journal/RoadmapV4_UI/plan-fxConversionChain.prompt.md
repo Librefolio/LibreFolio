@@ -50,6 +50,10 @@
 | 15 Mar 2026 | 🔧 Remove direct name | FxProviderConfig: rimosso testo nome provider dal diretto (la leggenda lo mostra già). |
 | 15 Mar 2026 | 🔧 Chain info icon | Icona ℹ️ su ogni catena con tooltip che spiega "se un provider fallisce, tutta la catena fallisce". |
 | 15 Mar 2026 | 🐛 Sync deadlock fix | SQLite WAL mode abilitato (`PRAGMA journal_mode=WAL`) per evitare deadlock reader-writer nel sync pipeline. Aggiunto timeout 120s su event waiting + catch-all in endpoint. |
+| 15 Mar 2026 | 🔧 Direct picker label | Rimosso testo nome provider anche dal picker direct items (non solo selected). |
+| 15 Mar 2026 | 🔧 Chain info → titolo | Spostato ℹ️ info icon dai singoli item catena al titolo della sezione (sia picker che config page). |
+| 15 Mar 2026 | 🔧 Arrow alignment | FxPairAddModal: freccia base→quote centrata verticalmente (sm:mt-5 al posto di sm:pb-2). |
+| 15 Mar 2026 | 🔧 Dynamic timeout | FxSyncModal: timeout proporzionale — `max(10, pairs.length × 1)` secondi. Scala col numero di coppie. |
 
 ### Refinements — 13 Marzo 2026 (post-review utente)
 

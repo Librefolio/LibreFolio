@@ -80,6 +80,7 @@
 
     let usedCodes = $derived(new Set(providers.map(p => p.providerCode)));
     let unusedProviders = $derived(availableProviders.filter(p => !usedCodes.has(p.code)));
+    let hasChainRoutes = $derived(providers.some(p => p.chainSteps && p.chainSteps.length > 1));
 
     // =========================================================================
     // Handlers
@@ -150,7 +151,17 @@
 
 <div class="space-y-3">
     <div class="flex items-center justify-between">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Provider Configuration</h3>
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
+            Provider Configuration
+            {#if hasChainRoutes}
+                <span class="relative group/info flex-shrink-0 cursor-help">
+                    <Info size={12} class="text-blue-400 dark:text-blue-500" />
+                    <span class="provider-tooltip">
+                        {$t('fx.route.chainWarning')}
+                    </span>
+                </span>
+            {/if}
+        </h3>
         <div class="flex items-center gap-2">
             {#if hasChanges && !isReadonly}
                 <button
@@ -215,13 +226,6 @@
                                 </span>
                                 <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.to}</span>
                             {/each}
-                            <!-- Chain info icon -->
-                            <span class="relative group/info flex-shrink-0 ml-0.5 cursor-help">
-                                <Info size={11} class="text-blue-400 dark:text-blue-500" />
-                                <span class="provider-tooltip">
-                                    {$t('fx.route.chainWarning')}
-                                </span>
-                            </span>
                         </div>
                     {:else if item.chainSteps && item.chainSteps.length === 1}
                         <!-- 1-step (direct) route with arrows -->

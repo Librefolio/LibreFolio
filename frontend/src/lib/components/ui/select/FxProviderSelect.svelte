@@ -437,13 +437,6 @@
                                     <span class="text-sm">{toInfo.flag_emoji}</span>
                                     <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
                                 {/each}
-                                <!-- Chain info icon -->
-                                <span class="relative group/info flex-shrink-0 ml-0.5 cursor-help">
-                                    <Info size={11} class="text-blue-400 dark:text-blue-500" />
-                                    <span class="provider-tooltip">
-                                        {$_('fx.route.chainWarning')}
-                                    </span>
-                                </span>
                             </span>
                         {/if}
                         <!-- Priority badge (Fibonacci colors) -->
@@ -588,10 +581,7 @@
                                     </span>
                                     <span class="text-sm">{toInfo.flag_emoji}</span>
                                     <span class="font-medium text-gray-600 dark:text-gray-300 text-[11px]">{step.to}</span>
-                                    <span class="ml-auto flex items-center gap-1.5">
-                                        <span class="text-[10px] text-gray-500 dark:text-gray-400 truncate max-w-[100px]">{route.label}</span>
-                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex-shrink-0">1 step</span>
-                                    </span>
+                                    <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex-shrink-0">1 step</span>
                                 </span>
                             </button>
                         {/each}
@@ -616,6 +606,15 @@
                             <Link size={10} class="text-blue-500" />
                             {$_('fx.route.chainSection')} — {group.stepCount} {$_('fx.route.steps')}
                             <span class="ml-1 text-[9px] font-mono px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">{group.routes.length}</span>
+                            <!-- Chain risk info icon -->
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <span class="relative group/info flex-shrink-0 ml-0.5 cursor-help" onclick={(e) => e.stopPropagation()}>
+                                <Info size={10} class="text-blue-400 dark:text-blue-500" />
+                                <span class="provider-tooltip">
+                                    {$_('fx.route.chainWarning')}
+                                </span>
+                            </span>
                         </button>
 
                         <!-- Collapsible content -->
@@ -656,13 +655,6 @@
                                                 <span class="text-sm">{toInfo.flag_emoji}</span>
                                                 <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
                                             {/each}
-                                            <!-- Chain info icon -->
-                                            <span class="relative group/info flex-shrink-0 ml-0.5">
-                                                <Info size={10} class="text-blue-400 dark:text-blue-500" />
-                                                <span class="provider-tooltip">
-                                                    {$_('fx.route.chainWarning')}
-                                                </span>
-                                            </span>
                                         </span>
                                         <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex-shrink-0 whitespace-nowrap">
                                             {route.stepCount} {$_('fx.route.steps')}

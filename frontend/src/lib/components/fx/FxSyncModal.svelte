@@ -44,6 +44,7 @@
     let pairResults = $state<PairResult[]>([]);
     let error = $state<string | null>(null);
     let isTimeout = $state(false);
+    /** Dynamic timeout: min 10s, then ~1s per pair to accommodate large configs */
     let timeoutSec = $state(10);
     let elapsedMs = $state(0);
     let countdownInterval: ReturnType<typeof setInterval> | null = null;
@@ -75,6 +76,9 @@
             error = null;
             isTimeout = false;
             elapsedMs = 0;
+            // Dynamic timeout: base 10s + 1s per pair (providers are fetched in parallel,
+            // but DB writes and chain computations scale with pair count)
+            timeoutSec = Math.max(10, Math.ceil(pairs.length * 1));
         }
     });
 
