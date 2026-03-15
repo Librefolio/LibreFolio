@@ -20,7 +20,7 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {Link, Check, AlertTriangle, Loader2, ArrowRight, Search, X, Plus, Trash2, ChevronDown, ChevronUp, Info} from 'lucide-svelte';
+    import {Link, Check, AlertTriangle, Loader2, ArrowLeftRight, Search, X, Plus, Trash2, ChevronDown, ChevronUp, Info} from 'lucide-svelte';
     import {findConversionPaths, getCachedProviders} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import type {ChainStep, ProviderInfo} from '$lib/utils/currencyGraph';
@@ -413,13 +413,13 @@
                                   style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}"
                                   class:dark-override={true}
                             >
-                                <ArrowRight size={10} class="text-gray-400 flex-shrink-0" />
+                                <ArrowLeftRight size={10} class="text-gray-400 flex-shrink-0" />
                                 {#if iconUrl}
                                     <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
                                 {:else}
                                     <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
                                 {/if}
-                                <ArrowRight size={10} class="text-gray-400 flex-shrink-0" />
+                                <ArrowLeftRight size={10} class="text-gray-400 flex-shrink-0" />
                                 <span class="provider-tooltip">
                                     <span class="font-semibold">{getProviderName(step.provider)}</span><br/>
                                     {getProviderDescByCode(step.provider)}
@@ -442,13 +442,13 @@
                                     <span class="relative group/prov inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0 cursor-help"
                                           style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}"
                                     >
-                                        <ArrowRight size={8} class="text-gray-400 flex-shrink-0" />
+                                        <ArrowLeftRight size={8} class="text-gray-400 flex-shrink-0" />
                                         {#if iconUrl}
                                             <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
                                         {:else}
                                             <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
                                         {/if}
-                                        <ArrowRight size={8} class="text-gray-400 flex-shrink-0" />
+                                        <ArrowLeftRight size={8} class="text-gray-400 flex-shrink-0" />
                                         <span class="provider-tooltip">
                                             <span class="font-semibold">{getProviderName(step.provider)}</span><br/>
                                             {getProviderDescByCode(step.provider)}
@@ -587,13 +587,13 @@
                                     <span class="font-medium text-gray-600 dark:text-gray-300 text-[11px]">{step.from}</span>
                                     <span class="relative group/prov inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0"
                                           style="background: {provColor.bg}; border-color: {provColor.border}">
-                                        <ArrowRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                        <ArrowLeftRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                         {#if iconUrl}
                                             <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
                                         {:else}
                                             <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
                                         {/if}
-                                        <ArrowRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                        <ArrowLeftRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                         <span class="provider-tooltip">
                                             <span class="font-semibold">{getProviderName(step.provider)}</span><br/>
                                             {getProviderDescByCode(step.provider)}
@@ -660,13 +660,13 @@
                                                 {/if}
                                                 <span class="relative group/prov inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0"
                                                       style="background: {provColor.bg}; border-color: {provColor.border}">
-                                                    <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                                     {#if iconUrl}
                                                         <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
                                                     {:else}
                                                         <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
                                                     {/if}
-                                                    <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                                     <span class="provider-tooltip">
                                                         <span class="font-semibold">{getProviderName(step.provider)}</span><br/>
                                                         {getProviderDescByCode(step.provider)}

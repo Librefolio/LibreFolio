@@ -131,6 +131,7 @@ nav:
               - Authentication: developer/frontend/components/auth.md
               - Settings: developer/frontend/components/settings.md
               - File Upload: developer/frontend/components/file-upload.md
+          - FX Chain Algorithm: developer/frontend/fx-chain-algorithm.md
           - Pages: developer/frontend/pages/index.md
           - State Management: developer/frontend/state/index.md
           - Internationalization: developer/frontend/i18n.md

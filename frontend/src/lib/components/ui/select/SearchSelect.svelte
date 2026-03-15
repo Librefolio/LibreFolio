@@ -60,6 +60,8 @@
     let containerRef = $state<HTMLDivElement | null>(null);
     let computedPosition = $state<'top' | 'bottom'>('bottom');
     let dynamicMaxHeight = $state(0);
+    /** Timestamp when trigger received focus — used to debounce Enter after advanceFocus */
+    let triggerFocusedAt = $state(0);
 
     // Derived state
     let selectedOption = $derived(options.find(o => o.value === value));
@@ -206,6 +208,12 @@
 
         if (!isOpen) {
             if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                // Don't auto-open on Enter if trigger just received focus and a value is already set
+                // (prevents unwanted dropdown after advanceFocus/Tab from another select)
+                if (event.key === 'Enter' && value && Date.now() - triggerFocusedAt < 200) {
+                    event.preventDefault();
+                    return;
+                }
                 event.preventDefault();
                 openDropdown();
             } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
@@ -279,6 +287,7 @@
                {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' : 'bg-white dark:bg-slate-700 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer'}
                {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
             onclick={() => !isOpen && openDropdown()}
+            onfocus={() => { triggerFocusedAt = Date.now(); }}
             onkeydown={handleTriggerKeydown}
             role="combobox"
             tabindex={disabled ? -1 : 0}
