@@ -24,6 +24,8 @@
         value?: string;
         /** If provided, only these currency codes are shown */
         allowedCurrencies?: string[];
+        /** If provided, these currency codes are hidden from the dropdown */
+        excludedCurrencies?: Set<string>;
         /** If true, adds "All currencies" as first option with value '' */
         includeAll?: boolean;
         /** Custom placeholder text */
@@ -43,6 +45,7 @@
     let {
         value = $bindable(''),
         allowedCurrencies,
+        excludedCurrencies,
         includeAll = false,
         placeholder = '',
         disabled = false,
@@ -56,12 +59,16 @@
     let internalLoading = $state(true);
     let error = $state<string | null>(null);
 
-    // Filter currencies if allowedCurrencies is provided
-    let filteredCurrencies = $derived(
-        allowedCurrencies
+    // Filter currencies: allowedCurrencies (include list) then excludedCurrencies (exclude set)
+    let filteredCurrencies = $derived.by(() => {
+        let list = allowedCurrencies
             ? allCurrencies.filter(c => allowedCurrencies!.includes(c.code))
-            : allCurrencies
-    );
+            : allCurrencies;
+        if (excludedCurrencies && excludedCurrencies.size > 0) {
+            list = list.filter(c => !excludedCurrencies!.has(c.code));
+        }
+        return list;
+    });
 
     // Build SelectOption array — use flag_emoji as icon, symbol + country names in searchText
     let currencyOptions = $derived.by<SelectOption[]>(() => {

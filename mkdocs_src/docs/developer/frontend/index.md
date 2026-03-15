@@ -76,6 +76,7 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
 ## Documentation Sections
 
 - [Components](components/index.md) - Reusable UI components
+- [FX Chain Algorithm](fx-chain-algorithm.md) - DFS pathfinding for currency conversion chains
 - [Pages](pages/index.md) - Application pages and routing
 - [State Management](state/index.md) - Stores and reactive state
 - [Internationalization](i18n.md) - Multi-language support
@@ -86,6 +87,7 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
 | Topic                                    | Description                                        |
 |------------------------------------------|----------------------------------------------------|
 | [DataTable](components/data-table.md)    | Advanced table with sorting, filtering, pagination |
+| [FX Chain Algorithm](fx-chain-algorithm.md) | DFS + graphology for multi-step FX routes       |
 | [Authentication](components/auth.md)     | LoginCard, RegisterCard, ForgotPasswordCard        |
 | [Settings](components/settings.md)       | User preferences, profile, and global settings     |
 | [File Upload](components/file-upload.md) | File uploader, image crop, asset picker            |
