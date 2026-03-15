@@ -101,7 +101,7 @@ Il campo `chain_steps` corrisponde direttamente alla lista di archi prodotta dal
 ### Regole di validazione
 
 1. **Continuità**: `step[i].to == step[i+1].from` per ogni coppia di step consecutivi
-2. **No archi ripetuti**: lo stesso arco (stessa coppia di valute, **qualsiasi direzione**) non può apparire due volte. Es.: se c'è uno step EUR→USD, non può esserci anche USD→EUR. Questo perché l'inversione produce lo stesso rate e sarebbe ridondante.
+2. **No archi ripetuti**: lo stesso arco (stessa coppia di valute, **qualsiasi direzione**, **qualsiasi provider**) non può apparire due volte. Es.: se c'è uno step EUR→USD (ECB), non può esserci anche USD→EUR (FED) né EUR→USD (FED). Questo perché l'inversione produce lo stesso rate e sarebbe ridondante. Il vincolo è sulle coppie di nodi, non sugli archi individuali del grafo. Corrisponde al check `edgePair = [src, tgt].sort().join('-')` nel DFS frontend e a `edge = tuple(sorted([fc, tc]))` nel validator backend.
 3. **Coerenza con coppia target**: gli estremi della catena (`step[0].from` e `step[-1].to`) devono corrispondere a `(base, quote)` della route (in uno dei due ordini, gestito dalla normalizzazione alfabetica)
 4. **Provider validi**: ogni `provider` deve essere registrato nel `FXProviderRegistry`
 5. **Minimo 1 step**: array non vuoto
@@ -382,6 +382,12 @@ Per ogni route:
   Ogni gamba = (from, to, provider)
 
 Raggruppare le gambe per provider:
+  Per ogni gamba, determinare la currency target dal punto di vista del provider:
+    - provider.base_currency → base del provider (es. EUR per ECB)
+    - Se gamba.from == base → target_currency = gamba.to  (direzione nativa)
+    - Se gamba.to == base   → target_currency = gamba.from (arco attraversato al contrario)
+    - (Se nessuno match: errore di validazione — lo step non è compatibile col provider)
+
   provider_legs: dict[str, set[str]]
   Es: {
     "ECB": {"USD", "RON", "GBP"},   # tutte le currency target per ECB (base=EUR implicita)
@@ -518,11 +524,18 @@ def compute_chain_rate(
     - Se from_cur < to_cur (ordine diretto): moltiplica per rate
     - Se from_cur > to_cur (ordine inverso): moltiplica per 1/rate
 
-    L'inversione è il meccanismo con cui gestiamo gli archi "al contrario":
-    se il provider fornisce solo EUR→USD (rate 1.08) ma lo step richiede
-    USD→EUR, usiamo 1/1.08 ≈ 0.9259. Questo è già gestito dalla
-    normalizzazione alfabetica: in leg_rates la chiave è sempre (EUR, USD),
-    e il verso dello step determina se usare il rate diretto o invertito.
+    L'inversione è il meccanismo con cui gestiamo gli archi attraversati
+    al contrario nel grafo DFS:
+    - Il grafo ha archi direzionati base→target (es. EUR→USD con ECB)
+    - Il DFS può attraversarli al contrario via forEachInboundEdge
+      (es. USD→EUR) generando un ChainStep con from=USD, to=EUR
+    - In leg_rates la chiave è sempre normalizzata alfabeticamente (EUR, USD)
+    - compute_chain_rate vede from_cur="USD" > to_cur="EUR" → usa 1/rate
+    - Esempio: rate EUR/USD = 1.08, step USD→EUR → 1/1.08 ≈ 0.9259
+
+    Questa normalizzazione alfabetica è il PUNTO UNICO dove si decide
+    se usare rate o 1/rate. Né il frontend né il ChainStep devono
+    portare un flag 'inverted' — è tutto derivato dall'ordine delle valute.
 
     Returns: rate composto finale, o None se manca un rate per qualche gamba.
     """
@@ -673,21 +686,29 @@ Queste regole non sono esprimibili con gli algoritmi di pathfinding standard. Il
 
 **Dipendenza**: `npm install graphology graphology-types`
 
-**Input**: lista provider con `base_currencies` e `target_currencies` (già disponibile da `GET /fx/providers`)
+**Input**:
+- **Nodi**: elenco completo valute ISO da `GET /utilities/currencies` (`list_currencies_api_v1_utilities_currencies_get`). Questo garantisce che TUTTE le valute siano nodi nel grafo, anche quelle non coperte da alcun provider (in quel caso `findAllPaths` restituirà array vuoto, correttamente).
+- **Archi**: info provider da `GET /fx/providers` (`list_providers_api_v1_fx_providers_get`), che per ogni provider restituisce `base_currencies` e `target_currencies`.
 
 **Grafo** (`MultiDirectedGraph`):
-- Nodi = tutte le valute (unione di base + target currencies di tutti i provider)
-- Archi = per ogni provider P, per ogni base B in `P.base_currencies`, per ogni target T in `P.target_currencies`: arco bidirezionale B↔T con attributo `{provider: P.code}`
-- Multi-directed: tra gli stessi 2 nodi possono esserci più archi (uno per provider)
+- **Nodi** = tutte le valute ISO (dal backend utility endpoint, ~180 nodi). La maggior parte saranno disconnessi (nessun arco) — il DFS li gestisce correttamente restituendo zero percorsi.
+- **Archi** = per ogni provider P, per ogni base B in `P.base_currencies`, per ogni target T in `P.target_currencies`: **UN solo arco direzionato B→T** con attributo `{provider: P.code}`. La direzione dell'arco codifica il verso "nativo" del provider (es. ECB fornisce EUR→USD, non USD→EUR). Il DFS può **attraversare l'arco al contrario** (da T verso B) usando `forEachInboundEdge`, e il backend sa che in quel caso il rate va invertito (1/rate).
+- Multi-directed: tra gli stessi 2 nodi possono esserci più archi (uno per provider). Es.: EUR→USD ha archi ECB e FED (quest'ultimo come arco USD→EUR percorribile al contrario).
+- **NON si aggiungono archi bidirezionali** (non serve duplicare T→B): la bidirezionalità è gestita dal DFS che esplora sia outbound che inbound.
+
+**Perché archi direzionati singoli (non bidirezionali)**:
+1. Semantica pulita: l'arco codifica la relazione reale "il provider P fornisce rate da B a T"
+2. Il DFS sa quando sta attraversando un arco al contrario → il `ChainStep.from/to` indica la direzione logica, e il backend usa la normalizzazione alfabetica in `compute_chain_rate()` per determinare se usare `rate` o `1/rate`
+3. Nessun arco duplicato — il grafo è più compatto e le iterazioni più veloci
 
 ### 6A-bis. Caching del grafo — session-lifetime
 
-La risposta di `GET /fx/providers` è **costante** per l'intera sessione del server: i provider sono plugin registrati all'avvio e non cambiano senza riavvio. Questo significa che:
+La risposta di `GET /fx/providers` è **costante** per l'intera sessione del server: i provider sono plugin registrati all'avvio e non cambiano senza riavvio. La lista valute da `GET /utilities/currencies` è anch'essa stabile. Questo significa che:
 
 1. Il **grafo** (output di `buildCurrencyGraph()`) può essere costruito **una sola volta** al primo utilizzo e cacheato nel client per tutta la sessione
 2. Non serve invalidation: la cache è valida finché l'utente non fa refresh della pagina (che ricreerebbe l'app Svelte)
 3. **Implementazione**: un modulo-level singleton (o Svelte store `derived`) che:
-   - Al primo accesso chiama `GET /fx/providers` e costruisce il grafo
+   - Al primo accesso chiama `GET /fx/providers` e `GET /utilities/currencies`, poi costruisce il grafo
    - Alle chiamate successive restituisce il grafo cacheato
    - Opzionale: espone un `invalidate()` per forzare il rebuild (non necessario in pratica)
 
@@ -704,16 +725,22 @@ let cachedProvidersHash: string | null = null;
 
 /**
  * Restituisce il grafo valute cacheato.
- * Lo costruisce al primo utilizzo dalla risposta di GET /fx/providers.
- * La cache è valida per l'intera sessione (i provider non cambiano senza riavvio server).
+ * Lo costruisce al primo utilizzo dai dati di GET /fx/providers + GET /utilities/currencies.
+ * La cache è valida per l'intera sessione (provider e valute non cambiano senza riavvio).
+ *
+ * @param providers - lista provider con base_currencies e target_currencies
+ * @param allCurrencyCodes - tutti i codici ISO valuta (es. ["AED","AFN",...,"ZWL"])
  */
-export async function getCurrencyGraph(providers: ProviderInfo[]): MultiDirectedGraph {
-    // Opzionale: hash per invalidare se i provider cambiano (paranoia check)
+export async function getCurrencyGraph(
+    providers: ProviderInfo[],
+    allCurrencyCodes: string[],
+): MultiDirectedGraph {
+    // Hash per invalidare se i provider cambiano (paranoia check)
     const hash = JSON.stringify(providers.map(p => p.code).sort());
     if (cachedGraph && cachedProvidersHash === hash) {
         return cachedGraph;
     }
-    cachedGraph = buildCurrencyGraph(providers);
+    cachedGraph = buildCurrencyGraph(providers, allCurrencyCodes);
     cachedProvidersHash = hash;
     return cachedGraph;
 }
@@ -741,19 +768,40 @@ interface ProviderInfo {
 /**
  * Costruisce un MultiDirectedGraph dalle info dei provider.
  *
- * Per ogni provider, per ogni (base, target):
- * - Aggiunge arco base→target con attributo {provider: code}
- * - Aggiunge arco target→base con attributo {provider: code}
- * Questo perché un provider che offre EUR→USD permette anche la conversione inversa.
+ * Nodi: TUTTE le valute ISO da allCurrencyCodes (dal backend GET /utilities/currencies).
+ *       La maggior parte saranno disconnessi — il DFS restituisce [] per coppie irraggiungibili.
+ *
+ * Archi: per ogni provider P, per ogni (base B, target T):
+ *   - Aggiunge UN SOLO arco direzionato B→T con attributo {provider: P.code}
+ *   - La direzione codifica il verso "nativo" del provider
+ *   - L'arco può essere attraversato al contrario dal DFS (forEachInboundEdge)
+ *     e in quel caso il rate viene invertito (1/rate) a livello di compute_chain_rate
+ *   - NON si duplicano archi: se due provider offrono la stessa coppia,
+ *     ci sono 2 archi paralleli nello stesso verso (multi-graph).
+ *
+ * @param providers - da GET /fx/providers (con base_currencies e target_currencies)
+ * @param allCurrencyCodes - da GET /utilities/currencies (tutti i codici ISO, es. ["AED",...,"ZWL"])
  */
-export function buildCurrencyGraph(providers: ProviderInfo[]): MultiDirectedGraph;
+export function buildCurrencyGraph(
+    providers: ProviderInfo[],
+    allCurrencyCodes: string[],
+): MultiDirectedGraph;
 
 /**
  * DFS con backtracking — trova tutti i percorsi da source a target.
  *
+ * Esplora il grafo in entrambe le direzioni:
+ * - forEachOutboundEdge: archi uscenti (direzione nativa del provider)
+ * - forEachInboundEdge:  archi entranti (direzione inversa, rate = 1/nativo)
+ *
  * Ritorna array di percorsi, ordinati per lunghezza (più corti prima).
- * Ogni percorso è un array di ChainStep direttamente utilizzabile come
- * chain_steps nella POST /fx/providers/routes (nessuna trasformazione necessaria).
+ * Ogni percorso è un array di ChainStep con (from, to, provider) dove
+ * from/to rappresentano la direzione logica di conversione (non necessariamente
+ * la direzione nativa dell'arco). Il backend determina se invertire il rate
+ * tramite normalizzazione alfabetica in compute_chain_rate().
+ *
+ * Ogni ChainStep è direttamente utilizzabile come elemento di chain_steps
+ * nella POST /fx/providers/routes (nessuna trasformazione necessaria).
  */
 export function findAllPaths(
     graph: MultiDirectedGraph,
@@ -772,17 +820,30 @@ export function findAllPaths(
 function findAllPaths(graph, source, target, maxDepth = 4) {
     const validPaths = [];
 
+    // Se source o target non esistono nel grafo, nessun percorso possibile
+    if (!graph.hasNode(source) || !graph.hasNode(target)) return [];
+
     /**
      * DFS ricorsiva con backtracking.
      *
-     * @param currentNode  - valuta corrente nel percorso
-     * @param pathNodes    - nodi (valute) visitati nel percorso corrente
-     * @param pathEdges    - archi (ChainStep) nel percorso corrente
-     * @param usedEdgePairs - Set di coppie valute già attraversate (es. "EUR-USD")
-     *                        indipendente dalla direzione e dal provider
+     * Esplora il grafo in ENTRAMBE le direzioni ad ogni nodo:
+     * - Outbound edges (direzione nativa: currentNode è source dell'arco)
+     * - Inbound edges  (direzione inversa: currentNode è target dell'arco)
+     *
+     * Il ChainStep registra SEMPRE la direzione logica di conversione:
+     *   { from: currentNode, to: neighbor, provider }
+     * Il backend sa se invertire il rate usando la normalizzazione alfabetica
+     * in compute_chain_rate().
+     *
+     * @param currentNode     - valuta corrente nel percorso
+     * @param pathEdges       - archi (ChainStep) nel percorso corrente
+     * @param usedEdgePairs   - Set di coppie valute già attraversate (es. "EUR-USD")
+     *                          indipendente dalla direzione e dal provider.
+     *                          VINCOLO CHIAVE: la stessa coppia di nodi (A,B) o (B,A)
+     *                          non può comparire 2 volte, neanche con provider diversi.
      * @param providerUseCount - Map<provider, count> utilizzi nel percorso corrente
      */
-    function dfs(currentNode, pathNodes, pathEdges, usedEdgePairs, providerUseCount) {
+    function dfs(currentNode, pathEdges, usedEdgePairs, providerUseCount) {
         // Condizione di uscita: raggiunto il target
         if (currentNode === target) {
             validPaths.push([...pathEdges]);
@@ -792,37 +853,36 @@ function findAllPaths(graph, source, target, maxDepth = 4) {
         // Profondità massima raggiunta
         if (pathEdges.length >= maxDepth) return;
 
-        // Esplora tutti gli archi uscenti dal nodo corrente
-        // In graphology: graph.forEachOutboundEdge(currentNode, callback)
-        graph.forEachOutboundEdge(currentNode, (edgeKey, attrs, src, tgt) => {
-            const neighbor = tgt;
-            const provider = attrs.provider;
-
-            // --- VINCOLI ---
-
-            // 1. Arco non ripetuto: la stessa coppia di valute (in qualsiasi
-            //    direzione, con qualsiasi provider) non può comparire 2 volte.
-            //    Chiave: coppia ordinata (es. "EUR-USD" = "USD-EUR")
-            const edgePair = [src, tgt].sort().join('-');
+        /**
+         * Helper: tenta di avanzare verso un nodo adiacente.
+         * Usato sia per archi outbound (nativi) che inbound (inversi).
+         *
+         * @param neighbor  - nodo verso cui si tenta di avanzare
+         * @param edgeSrc   - source dell'arco nel grafo (nodo con la base del provider)
+         * @param edgeTgt   - target dell'arco nel grafo (nodo con la target del provider)
+         * @param provider  - codice del provider che offre questo arco
+         */
+        function tryEdge(neighbor, edgeSrc, edgeTgt, provider) {
+            // Vincolo 1: la stessa coppia (in qualsiasi ordine) non può
+            // apparire due volte — coppie ordinate alfabeticamente
+            const edgePair = [edgeSrc, edgeTgt].sort().join('-');
             if (usedEdgePairs.has(edgePair)) return;
 
-            // 2. Max 2 utilizzi per provider nel percorso.
-            //    Motivazione: un provider con base EUR e N target necessita
-            //    al massimo di 2 archi per fare ponte (target→EUR + EUR→target2).
+            // Vincolo 2: max 2 utilizzi per provider nel percorso.
+            // Un provider con base EUR e N target necessita al massimo
+            // di 2 archi per fare ponte (target→EUR + EUR→target2).
             const currentUses = providerUseCount.get(provider) || 0;
             if (currentUses >= 2) return;
 
             // --- AVANZAMENTO ---
-            pathNodes.push(neighbor);
-            pathEdges.push({ from: src, to: tgt, provider });
+            pathEdges.push({ from: currentNode, to: neighbor, provider });
             usedEdgePairs.add(edgePair);
             providerUseCount.set(provider, currentUses + 1);
 
             // RICORSIONE — esplora dal vicino
-            dfs(neighbor, pathNodes, pathEdges, usedEdgePairs, providerUseCount);
+            dfs(neighbor, pathEdges, usedEdgePairs, providerUseCount);
 
-            // --- BACKTRACKING — smonta l'ultimo passo per provare alternative ---
-            pathNodes.pop();
+            // --- BACKTRACKING — smonta l'ultimo passo ---
             pathEdges.pop();
             usedEdgePairs.delete(edgePair);
             if (currentUses === 0) {
@@ -830,11 +890,30 @@ function findAllPaths(graph, source, target, maxDepth = 4) {
             } else {
                 providerUseCount.set(provider, currentUses);
             }
+        }
+
+        // ── Outbound edges (direzione NATIVA: currentNode → neighbor) ──
+        // L'arco nel grafo è base→target, e currentNode è la base.
+        // Conversione: rate usato così com'è dal provider.
+        graph.forEachOutboundEdge(currentNode, (edgeKey, attrs, src, tgt) => {
+            tryEdge(/*neighbor*/ tgt, /*edgeSrc*/ src, /*edgeTgt*/ tgt, attrs.provider);
+        });
+
+        // ── Inbound edges (direzione INVERSA: currentNode ← source) ──
+        // L'arco nel grafo è source→currentNode, ma lo attraversiamo al contrario:
+        // andiamo da currentNode verso source dell'arco.
+        // Conversione: il rate va invertito (1/rate) in compute_chain_rate().
+        // Esempio: arco EUR→USD (ECB) — se siamo su USD, possiamo andare verso EUR
+        // usando 1/rate(EUR/USD).
+        graph.forEachInboundEdge(currentNode, (edgeKey, attrs, src, tgt) => {
+            // src = nodo da cui parte l'arco (es. EUR), tgt = currentNode (es. USD)
+            // neighbor = src (andiamo verso EUR)
+            tryEdge(/*neighbor*/ src, /*edgeSrc*/ src, /*edgeTgt*/ tgt, attrs.provider);
         });
     }
 
     // Avvio dal nodo sorgente
-    dfs(source, [source], [], new Set(), new Map());
+    dfs(source, [], new Set(), new Map());
 
     // Ordina per lunghezza percorso (più corti prima)
     validPaths.sort((a, b) => a.length - b.length);
@@ -842,7 +921,12 @@ function findAllPaths(graph, source, target, maxDepth = 4) {
 }
 ```
 
-**Perché le valute POSSONO ripetersi**: non c'è un check su `currentPathNodes.includes(neighbor)`. Il vincolo primario è sugli **archi** (coppie di valute), non sui nodi. In pratica, con il vincolo sugli archi, i cicli banali (A→B→A) sono comunque impossibili perché richiederebbero lo stesso arco A-B due volte. Percorsi più complessi con nodi condivisi (A→B→C→A→D) sono teoricamente ammessi dal vincolo ma improbabili con maxDepth=4 e il numero limitato di provider.
+**Perché le valute POSSONO ripetersi**: non c'è un check sui nodi visitati. Il vincolo primario è sugli **archi** (coppie di valute, indipendentemente da direzione e provider). In pratica, con il vincolo sugli archi, i cicli banali (A→B→A) sono comunque impossibili perché richiederebbero lo stesso arco A-B due volte. Percorsi più complessi con nodi condivisi (A→B→C→A→D) sono teoricamente ammessi dal vincolo ma improbabili con maxDepth=4 e il numero limitato di provider.
+
+**Perché archi singoli direzionati**: il grafo contiene UN solo arco direzionato per (provider, base, target). L'algoritmo DFS esplora entrambe le direzioni (`forEachOutboundEdge` + `forEachInboundEdge`). Questo approccio:
+1. Mantiene la semantica chiara: l'arco rappresenta "il provider fornisce rate da base a target"
+2. Il `ChainStep` registra la direzione logica (from=currentNode, to=neighbor): se va nella stessa direzione dell'arco → rate nativo; se al contrario → 1/rate
+3. `compute_chain_rate()` nel backend determina automaticamente se invertire tramite normalizzazione alfabetica, senza bisogno di un campo `inverted` nel ChainStep
 
 #### Enhancement TODO: Parallelizzazione DFS con Web Workers
 
@@ -850,7 +934,7 @@ function findAllPaths(graph, source, target, maxDepth = 4) {
 
 L'algoritmo DFS potrebbe essere parallelizzato usando **Web Workers** per esplorare rami diversi del grafo simultaneamente:
 
-**Idea**: dal nodo sorgente, ci sono N archi uscenti (uno per ogni provider/currency adiacente). Ogni arco iniziale può essere assegnato a un Worker diverso, che poi procede con il DFS standard dal suo arco in poi.
+**Idea**: dal nodo sorgente, ci sono N archi raggiungibili (outbound nativi + inbound inversi). Ogni arco iniziale può essere assegnato a un Worker diverso, che poi procede con il DFS standard dal suo arco in poi.
 
 ```
 source = "RON"
@@ -920,13 +1004,20 @@ Il sync modal lavora su slug di coppia, non conosce la struttura interna della r
 
 - [ ] Installare `graphology` e `graphology-types`: `cd frontend && npm install graphology graphology-types`
 - [ ] Creare `src/lib/utils/currencyGraph.ts`:
-  - `buildCurrencyGraph(providers)` → `MultiDirectedGraph`
+  - `buildCurrencyGraph(providers, allCurrencyCodes)` → `MultiDirectedGraph`
+    - Nodi: tutti i codici valuta da `allCurrencyCodes` (dal backend `GET /utilities/currencies`)
+    - Archi: UN solo arco direzionato base→target per ogni (provider, base, target). NO archi bidirezionali.
   - `findAllPaths(graph, source, target, maxDepth)` → `ChainStep[][]`
-  - Implementare DFS con backtracking come da pseudo-codice §6A
+  - Implementare DFS con backtracking come da pseudo-codice §6A:
+    - Ad ogni nodo esplorare **sia** `forEachOutboundEdge` (nativo) **sia** `forEachInboundEdge` (inverso)
+    - ChainStep registra direzione logica: `{from: currentNode, to: neighbor, provider}`
+    - Vincolo archi: `edgePair = [src, tgt].sort().join('-')` — stessa coppia non può ripetersi
+    - Vincolo provider: max 2 utilizzi per provider per percorso
 - [ ] Creare `src/lib/stores/currencyGraphStore.ts`:
-  - Caching session-lifetime del grafo (costruito al primo utilizzo da `GET /fx/providers`)
-  - `getCurrencyGraph(providers)` con hash check per invalidation
-  - La risposta di `GET /fx/providers` è costante per sessione → cache sempre valida
+  - Caching session-lifetime del grafo (costruito al primo utilizzo)
+  - Input: dati da `GET /fx/providers` + `GET /utilities/currencies`
+  - `getCurrencyGraph(providers, allCurrencyCodes)` con hash check per invalidation
+  - Entrambe le risposte sono costanti per sessione → cache sempre valida
 - [ ] Estendere `FxProviderSelect.svelte` (o creare `FxRouteSelect.svelte`):
   - Sezione "Diretta" con percorsi 1-step
   - Sezione "Catena" con percorsi multi-step, ordinati per lunghezza
@@ -998,9 +1089,9 @@ Questo permette di distinguerli per audit/debug. L'utente può comunque editarli
 ### Libreria Graphology
 
 **Package**: `graphology` (core, ~15KB) + `graphology-types` (solo tipi TS, 0KB runtime)
-**Perché**: offre `MultiDirectedGraph` che supporta nativamente più archi tra gli stessi nodi (un arco per provider). L'iterazione `forEachOutboundEdge()` è l'API ideale per il DFS.
+**Perché**: offre `MultiDirectedGraph` che supporta nativamente più archi diretti tra gli stessi nodi (un arco per provider). Le API `forEachOutboundEdge()` e `forEachInboundEdge()` permettono al DFS di esplorare entrambe le direzioni: outbound per la direzione nativa del provider, inbound per la direzione inversa (1/rate). Questo elimina la necessità di duplicare archi.
 **Non servono** le sotto-librerie di pathfinding (`graphology-shortest-path` ecc.) perché il nostro algoritmo ha vincoli custom non esprimibili con quelle API standard.
-**Caching**: il grafo viene costruito una sola volta dalla risposta di `GET /fx/providers` e cacheato per l'intera sessione client. La risposta è costante finché il server non viene riavviato (i provider sono plugin registrati all'avvio).
+**Caching**: il grafo viene costruito una sola volta dalla risposta di `GET /fx/providers` + `GET /utilities/currencies` e cacheato per l'intera sessione client. Entrambe le risposte sono costanti finché il server non viene riavviato.
 
 ### Provider batch capabilities
 
@@ -1039,6 +1130,6 @@ L'algoritmo DFS con backtracking descritto in §6A va documentato in MkDocs:
 3. Ripensare il grafo frontend (§6A): `buildCurrencyGraph()` dovrà gestire archi multipli per lo stesso provider con basi diverse
 4. Ripensare i `chain_steps`: ogni step potrebbe necessitare anche di `base_currency` esplicita (oggi inferita dal provider)
 5. Rivedere tutti i plugin esistenti per verificare che il nuovo flusso non rompa nulla
-
+Nota: Probabilemnte la soluzione sarà di cambiare le classi pydantic e fare un oggetto con una key per la base value e una key per la lista di target di quella key, e mettere questo oggetto in lista. Anche se dispendioso dovrebbe permettere di gestire anche conversioni non bilanciate dei provifer, forse, è solo un idea, ci arriviamo quando sarà il momento. Bisognerà però aggiornare la creazione del GRAFO per il calcolo della catena di conversione, qualsiasi sia il risultato.
 **Azione immediata**: aggiungere un commento `# ARCHITECTURAL NOTE: multi-base` nella classe `FXRateProvider` sulla proprietà `base_currencies` per documentare questa limitazione e linkare a questa nota del piano.
 
