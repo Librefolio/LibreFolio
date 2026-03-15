@@ -234,7 +234,7 @@
             <!-- ========================================================= -->
             <div class="space-y-1.5">
                 <div class="flex flex-col sm:flex-row items-stretch gap-2">
-                    <div class="flex-1">
+                    <div class="flex-1 min-w-0">
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.baseCurrency')}
                         </div>
@@ -261,7 +261,7 @@
                     <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:hidden">
                         <ArrowDown size={18} />
                     </div>
-                    <div class="flex-1" bind:this={quoteSelectRef}>
+                    <div class="flex-1 min-w-0" bind:this={quoteSelectRef}>
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.quoteCurrency')}
                         </div>
