@@ -1,12 +1,13 @@
 <!--
   FxPairAddModal — Svelte 5
 
-  Modal to add a new FX currency pair with provider configuration.
+  Modal to add a new FX currency pair with route configuration.
 
   Features:
   - CurrencySearchSelect for base and quote currency selection
-  - FxProviderSelect for adding compatible providers (auto-add on selection)
-  - OrderableList for provider priority with drag & drop
+  - FxProviderSelect for selecting conversion routes (direct 1-step or chain multi-step)
+  - Route selection with DFS pathfinding on currency graph
+  - Full-text search across providers, currencies, countries
   - Provider section disabled until both currencies are selected
   - Dirty state tracking with ConfirmDialog on close
   - Responsive mobile layout (currencies stack vertically)
@@ -16,13 +17,12 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {Trash2, Lock, X, ArrowDown, ArrowRight, RotateCcw} from 'lucide-svelte';
+    import {Lock, X, ArrowDown, ArrowRight, RotateCcw} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
-    import type {FxProviderInfo} from '$lib/components/ui/select/FxProviderSelect.svelte';
+    import type {ChainStep} from '$lib/utils/currencyGraph';
 
     // =========================================================================
     // Props (Svelte 5)
@@ -51,89 +51,30 @@
 
     let baseCurrency = $state('');
     let quoteCurrency = $state('');
-    let providerEntries = $state<ProviderEntry[]>([]);
+    let selectedRoutes = $state<ChainStep[][]>([]);
     let saving = $state(false);
     let syncing = $state(false);
     let error = $state<string | null>(null);
-
-    // Provider select (for auto-add)
-    let newProviderCode = $state('');
-    let allProviders = $state<FxProviderInfo[]>([]);
+    let quoteSelectRef = $state<HTMLDivElement | null>(null);
 
     // Dirty/discard state
     let showDiscardConfirm = $state(false);
-
-    // =========================================================================
-    // Types
-    // =========================================================================
-
-    interface ProviderEntry {
-        code: string;
-        name: string;
-        description: string;
-        icon_url: string | null;
-        priority: number;
-    }
 
     // =========================================================================
     // Derived
     // =========================================================================
 
     let hasCurrencies = $derived(!!baseCurrency && !!quoteCurrency && baseCurrency !== quoteCurrency);
-    let usedCodes = $derived(providerEntries.map(p => p.code));
-    let hasProviders = $derived(providerEntries.length > 0);
+    let hasRoutes = $derived(selectedRoutes.length > 0);
     let isValid = $derived(hasCurrencies);
-    let isDirty = $derived(baseCurrency !== '' || quoteCurrency !== '' || providerEntries.length > 0);
+    let isDirty = $derived(baseCurrency !== '' || quoteCurrency !== '' || selectedRoutes.length > 0);
 
     // =========================================================================
     // Handlers
     // =========================================================================
 
-    function handleProvidersLoaded(providers: FxProviderInfo[]) {
-        allProviders = providers;
-    }
-
-    /** Auto-add provider when selected from the dropdown */
-    function handleProviderSelected(code: string) {
-        if (!code) return;
-        const provider = allProviders.find(p => p.code === code);
-        if (!provider) return;
-
-        const nextPriority = providerEntries.length > 0
-            ? Math.max(...providerEntries.map(p => p.priority)) + 1
-            : 1;
-
-        providerEntries = [...providerEntries, {
-            code: provider.code,
-            name: provider.name,
-            description: provider.description,
-            icon_url: provider.icon_url,
-            priority: nextPriority,
-        }];
-
-        // Reset the select so user can pick another
-        newProviderCode = '';
-    }
-
-    function removeProvider(code: string) {
-        providerEntries = providerEntries
-            .filter(p => p.code !== code)
-            .map((p, i) => ({...p, priority: i + 1}));
-    }
-
-    function handleReorder(newItems: ProviderEntry[]) {
-        providerEntries = newItems.map((item, idx) => ({
-            ...item,
-            priority: idx + 1,
-        }));
-    }
-
-    function providerKey(prov: ProviderEntry): string {
-        return prov.code;
-    }
-
-    function getInitials(code: string): string {
-        return code.slice(0, 2).toUpperCase();
+    function handleRoutesChange(routes: ChainStep[][]) {
+        selectedRoutes = routes;
     }
 
     async function handleSave() {
@@ -148,16 +89,16 @@
             ? quoteCurrency.toUpperCase() : baseCurrency.toUpperCase();
 
         try {
-            if (providerEntries.length > 0) {
-                // Save with provider routes (chain_steps format)
-                const items = providerEntries.map(p => ({
+            if (selectedRoutes.length > 0) {
+                // Save with selected routes (each route has its own chain_steps)
+                const items = selectedRoutes.map((chainSteps, idx) => ({
                     base, quote,
-                    chain_steps: [{from: base, to: quote, provider: p.code}],
-                    priority: p.priority,
+                    chain_steps: chainSteps,
+                    priority: idx + 1,
                 }));
                 await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(items);
             } else {
-                // No providers — create MANUAL sentinel so the pair exists
+                // No routes selected — create MANUAL sentinel so the pair exists
                 // in routes and appears in the list. The backend auto-manages
                 // MANUAL: removes it when a real provider is added, reinstates when removed.
                 await zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([{
@@ -166,8 +107,8 @@
                     priority: 999,
                 }]);
             }
-            // Auto-sync if real providers exist (not MANUAL-only)
-            const hasRealProvider = providerEntries.length > 0;
+            // Auto-sync if real routes exist (not MANUAL-only)
+            const hasRealProvider = selectedRoutes.length > 0;
             if (hasRealProvider && dateStart && dateEnd) {
                 syncing = true;
                 try {
@@ -214,8 +155,7 @@
     function resetAndClose() {
         baseCurrency = '';
         quoteCurrency = '';
-        providerEntries = [];
-        newProviderCode = '';
+        selectedRoutes = [];
         error = null;
         showDiscardConfirm = false;
         onclose?.();
@@ -223,7 +163,7 @@
 </script>
 
 <ModalBase {open} onRequestClose={handleClose} maxWidth="lg" allowOverflow={true}>
-    <div class="flex flex-col max-h-[90vh] min-h-[50vh]">
+    <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="fx-add-pair-modal">
         <!-- ============================================================= -->
         <!-- Header -->
         <!-- ============================================================= -->
@@ -261,6 +201,14 @@
                         <CurrencySearchSelect
                             bind:value={baseCurrency}
                             placeholder={$_('fx.addPair.baseCurrency')}
+                            onchange={() => {
+                                // Auto-focus the quote currency select after picking base
+                                setTimeout(() => {
+                                    const trigger = quoteSelectRef?.querySelector<HTMLElement>('[tabindex], input');
+                                    trigger?.focus();
+                                    trigger?.click();
+                                }, 30);
+                            }}
                         />
                     </div>
                     <!-- Arrow: → on desktop, ↓ on mobile -->
@@ -268,7 +216,7 @@
                         <ArrowRight size={18} class="hidden sm:block" />
                         <ArrowDown size={18} class="sm:hidden" />
                     </span>
-                    <div class="flex-1">
+                    <div class="flex-1" bind:this={quoteSelectRef}>
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             {$_('fx.addPair.quoteCurrency')}
                         </div>
@@ -286,11 +234,11 @@
             </InfoBanner>
 
             <!-- ========================================================= -->
-            <!-- Provider Priority -->
+            <!-- Route Selection (DFS pathfinding) -->
             <!-- ========================================================= -->
             <div class="space-y-2 {!hasCurrencies ? 'opacity-50 pointer-events-none' : ''}">
                 <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide">
-                    {$_('fx.addPair.providerPriority')}
+                    {$_('fx.route.title')}
                 </h3>
 
                 <!-- Hint when currencies not selected -->
@@ -301,85 +249,21 @@
                     </div>
                 {/if}
 
-                <!-- Provider list (orderable) -->
-                {#if providerEntries.length > 0}
-                    <OrderableList
-                        items={providerEntries}
-                        keyFn={providerKey}
-                        onReorder={handleReorder}
-                    >
-                        {#snippet children({ item, index })}
-                            <div class="flex items-center gap-2 group">
-                                <!-- Provider icon -->
-                                {#if item.icon_url}
-                                    <img
-                                        src={item.icon_url}
-                                        alt={item.code}
-                                        class="w-6 h-6 rounded-md object-contain bg-gray-50 dark:bg-slate-700 p-0.5 flex-shrink-0"
-                                    />
-                                {:else}
-                                    <span class="w-6 h-6 flex items-center justify-center rounded-md bg-libre-green/15 text-libre-green text-[10px] font-bold flex-shrink-0">
-                                        {getInitials(item.code)}
-                                    </span>
-                                {/if}
-
-                                <!-- Provider info -->
-                                <div class="flex-1 min-w-0">
-                                    <span class="font-medium text-xs text-gray-700 dark:text-gray-200 truncate">
-                                        {item.name}
-                                    </span>
-                                    <span class="text-[10px] text-gray-400 dark:text-gray-500 ml-1">({item.code})</span>
-                                </div>
-
-                                <!-- Priority badge -->
-                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0
-                                    {index === 0
-                                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                                        : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}">
-                                    #{index + 1} {index === 0 ? $_('fx.provider.primary') : $_('fx.provider.fallback')}
-                                </span>
-
-                                <!-- Remove button -->
-                                <button
-                                    type="button"
-                                    class="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex-shrink-0"
-                                    onclick={() => removeProvider(item.code)}
-                                    title="Remove"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            </div>
-                        {/snippet}
-                    </OrderableList>
-                {/if}
-
-                <!-- Add provider (auto-add on selection, no separate + button) -->
-                {#if hasCurrencies}
-                    <FxProviderSelect
-                        bind:value={newProviderCode}
-                        {baseCurrency}
-                        {quoteCurrency}
-                        excludeCodes={usedCodes}
-                        onProvidersLoaded={handleProvidersLoaded}
-                        onchange={handleProviderSelected}
-                        placeholder={$_('fx.addPair.addProvider')}
-                    />
-                {/if}
-
-                <!-- Intermediate Route placeholder -->
-                <div class="p-2.5 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600">
-                    <div class="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
-                        <Lock size={12} />
-                        <span>{$_('fx.addPair.intermediateRouteComingSoon')}</span>
-                    </div>
-                </div>
+                <!-- Route selection (unified: DFS pathfinding + search + flags) -->
+                <FxProviderSelect
+                    {baseCurrency}
+                    {quoteCurrency}
+                    bind:selectedRoutes
+                    onSelectionChange={handleRoutesChange}
+                    disabled={!hasCurrencies}
+                />
             </div>
         </div>
 
         <!-- ============================================================= -->
         <!-- No-provider warning -->
         <!-- ============================================================= -->
-        {#if hasCurrencies && !hasProviders}
+        {#if hasCurrencies && !hasRoutes}
             <div class="mx-5 mb-0 mt-2">
                 <InfoBanner variant="warning">
                     {$_('fx.addPair.noProviderWarning')}
@@ -404,6 +288,7 @@
                 class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                 onclick={handleSave}
                 disabled={!isValid || saving || syncing}
+                data-testid="fx-add-pair-save"
             >
                 {#if syncing}
                     <RotateCcw size={14} class="animate-spin" />

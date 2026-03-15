@@ -1,9 +1,9 @@
 # Plan: FX Conversion Chain — Route-based Multi-Step Currency Conversion
 
 **Data creazione**: 12 Marzo 2026
-**Status**: 🔄 BACKEND COMPLETATO — Frontend da implementare (Step 6+)
+**Status**: ✅ COMPLETATO (Step 1-6 done, Step 7 cleanup remaining)
 **Priorità**: Alta (prerequisito per completare Phase 5 FX)
-**Stima**: ~3-4 giorni (backend done, frontend ~2 giorni)
+**Stima**: ~3-4 giorni (backend done, frontend done)
 **Dipendenze**: Tutti i sub-plan Phase 5 ✅ completati (vedi `phases/phase-05-subplan/`)
 **Riferimenti**:
 - `phases/phase-05-subplan/05FX_outofdate_plan/plan-phase05Fx.prompt.md` — vecchio master plan Phase 5 (📦 ARCHIVIATO)
@@ -18,8 +18,62 @@
 | 12 Mar 2026 | 📋 Piano creato | Definiti Step 1-7 con architettura completa |
 | 13 Mar 2026 | ✅ Step 1-5 backend completati | Data model, schemas, service layer, API endpoints, test |
 | 13 Mar 2026 | 🔧 Bug fix sessione review | 3 fix critiche (vedi sotto) |
+| 13 Mar 2026 | ✅ Step 6 frontend completato | currencyGraph.ts, currencyGraphStore.ts, FxRouteSelect.svelte, FxPairAddModal aggiornato, FxProviderConfig chain display, i18n 8 chiavi |
+| 13 Mar 2026 | 🔧 Refinements sessione review | 5 fix post-review utente (vedi §Refinements) |
+| 13 Mar 2026 | ✅ R1 + R5 completati | FxProviderSelect riscritto con DFS+OrderableList+collapsible picker+search+flags+icons. FxRouteSelect eliminato. |
+| 13 Mar 2026 | 🔧 Toast \n fix | Cambiato \\\\n → \\n nei JSON i18n + whitespace-pre-line su ToastContainer |
+| 13 Mar 2026 | 🔧 Tooltip instant | Sostituiti title= nativi con Tooltip component in FxSyncModal |
+| 13 Mar 2026 | 🔧 ProviderInfo esteso | Aggiunto icon_url e description a ProviderInfo + currencyGraphStore mapping |
+| 13 Mar 2026 | 🐛 BOE provider broken | BOE restituisce HTML (bot protection?) invece di CSV — Parsed 0 rates |
+| 13 Mar 2026 | 🐛 ECB provider cascade | asyncio.gather senza return_exceptions: se CAD fallisce, TUTTE le valute ECB falliscono |
+| 15 Mar 2026 | ✅ B1 fix applicato | BOE: aggiunto header Accept text/csv + guard HTML detection |
+| 15 Mar 2026 | ✅ B2 fix applicato | ECB+FED+BOE: `return_exceptions=True` in tutti e 3 i provider — niente più cascade failure |
+| 15 Mar 2026 | ✅ B3 pycountry warning | Soppresso warning "already taken in index" (leone, bolívar soberano) in main.py |
+| 15 Mar 2026 | 🔧 Toast layout fix | ToastContainer: items-start + mt-0.5 + text-left per multilinea corretta |
+| 15 Mar 2026 | 🔧 Info icon ↓Δ tooltip | FxSyncModal: sostituiti Tooltip wrapping con Info icon + Tooltip (come signal cards) |
+| 15 Mar 2026 | 🔧 Frecce bidirezionali | FxProviderSelect + FxProviderConfig: freccia prima E dopo il provider (anche direct) |
+| 15 Mar 2026 | 🔧 Badge priorità numerica | FxProviderSelect + FxProviderConfig: #1, #2, #3 invece di "primario"/"fallback" |
+| 15 Mar 2026 | ✅ B4 partial message | Backend: `sync_pairs_bulk` ora propaga `message` descrittivo per status PARTIAL (1-step e chain) |
+| 15 Mar 2026 | 🔧 SyncModal tooltip stato | Info icons solo su summary; tooltip su icona stato (▲) per partial/failed con dettagli + messaggio |
+| 15 Mar 2026 | 🔧 Toast partial+failed | Toast singolo: aggiunto fetched↓ + provider + append message/reason su nuova riga |
+| 15 Mar 2026 | 🔧 Provider colored rect | Rettangolo semitrasparente colorato attorno a `→ [provider] →` in tutti i 4 punti di rendering |
+| 15 Mar 2026 | 🔧 Fibonacci priority badge | Creato `colors.ts` con golden-ratio color generation. Badge priorità con colori Fibonacci. Refactored `getBrokerColor` in FilesTable. |
+| 15 Mar 2026 | 🐛 Fix else mancante fx.py | `else:` per ramo multi-step chain era stato perso → catene irraggiungibili nel bulk sync |
+| 15 Mar 2026 | 🔧 ECB anti-bot jitter | `ecb.py`: jitter random 0-100ms prima di ogni fetch parallelo. Se >50% falliscono → retry seriale con 50-200ms tra richieste. |
+| 15 Mar 2026 | 🔧 ECB → seriale puro | Jitter non sufficiente, rimosso parallelo: ECB ora fetch seriale puro (1 valuta alla volta). |
+| 15 Mar 2026 | 🔧 SyncModal partial retry | Partial rows ora mostrano bottone retry (come failed), tooltip con messaggio errore su hover. Rimosso testo errore inline. |
+| 15 Mar 2026 | 🔧 Provider color spread | Hue esplicite per ECB(220°)/FED(30°)/BOE(150°)/SNB(340°) — massima separazione visiva. |
+| 15 Mar 2026 | 🔧 AddPair auto-focus | Dopo selezione base currency con Enter, auto-focus+open sulla quote currency select. |
+| 15 Mar 2026 | 🔧 Remove system tooltip | Provider legend: rimosso `title=` nativo per evitare doppio tooltip (custom + browser). |
+| 15 Mar 2026 | 🔧 Accordion smart open | FxProviderSelect: se ci sono direct routes, nessuna catena auto-espansa. Se no direct, solo la prima catena. |
+| 15 Mar 2026 | 🔧 Provider box tooltips | Tooltip custom (nome+descrizione) sui rettangoli provider in FxProviderSelect + FxProviderConfig (tutti i contesti: selected, picker, detail). |
+| 15 Mar 2026 | 🔧 Remove direct name | FxProviderConfig: rimosso testo nome provider dal diretto (la leggenda lo mostra già). |
+| 15 Mar 2026 | 🔧 Chain info icon | Icona ℹ️ su ogni catena con tooltip che spiega "se un provider fallisce, tutta la catena fallisce". |
+| 15 Mar 2026 | 🐛 Sync deadlock fix | SQLite WAL mode abilitato (`PRAGMA journal_mode=WAL`) per evitare deadlock reader-writer nel sync pipeline. Aggiunto timeout 120s su event waiting + catch-all in endpoint. |
 
-### Bug fix — 13 Marzo 2026
+### Refinements — 13 Marzo 2026 (post-review utente)
+
+Feedback raccolti dopo la prima demo funzionante del frontend:
+
+- [x] **R1. FxRouteSelect → riassorbire in FxProviderSelect.svelte**: Il componente `FxRouteSelect.svelte` è stato eliminato. La logica DFS e le 3 sezioni (Direct/Chain/Unusable) sono integrate dentro `FxProviderSelect.svelte`, che è il selettore unificato. Implementato: OrderableList per priorità delle route selezionate (drag&drop), bandiere valute, icone provider (da icon_url con fallback iniziali), ricerca full-text (AND per token), bottone collapsabile "+ Aggiungi route" per il picker, rimozione route dall'OrderableList.
+
+- [x] **R2. Toast sync singola non i18n e manca simboli ↓Δ**: I toast in `handleSyncPair` (fx list page) e `handleSync` (fx detail page) usano stringhe hardcoded in inglese. Devono: (a) usare chiavi i18n, (b) mostrare su 2 righe, (c) includere i simboli ↓ (download) e Δ (changed) come nella modale Sync All.
+
+- [x] **R3. SyncModal elapsed_ms mostra tempo frontend, non backend**: In `FxSyncModal.svelte` riga 112-114, `elapsedMs: elapsed` assegna il tempo frontend globale (`Date.now() - syncStart`) a ogni risultato. Deve usare `pr.elapsed_ms` dal backend (per-pair), con fallback al frontend.
+
+- [x] **R4. Backend points_changed = points_fetched per catene e bulk 1-step**: In `sync_pair()` e `sync_pairs_bulk()`, le route (sia 1-step nel bulk che multi-step) usano `INSERT ON CONFLICT DO UPDATE` senza contare le righe effettivamente cambiate. Il risultato è `points_changed = len(computed_rates)` sempre uguale a `points_fetched`. Fix: prima dell'upsert, caricare i rate esistenti per le date coinvolte, confrontare con `truncate_fx_rate()`, contare solo le differenze reali.
+
+- [x] **R5. Cleanup FxRouteSelect.svelte**: File eliminato. Export rimosso da `fx/index.ts`. Import in FxPairAddModal cambiato a FxProviderSelect dal barrel `select/`. Commenti e2e aggiornati.
+
+### Bug — 13 Marzo 2026 (da risolvere)
+
+- [x] **B1. BOE provider restituisce HTML**: L'endpoint BOE (`fromshowcolumns.asp`) restituisce una pagina HTML completa (con `<meta>`, `<script>`, Google Tag Manager, etc.) invece dei dati CSV. Probabilmente Cloudflare/bot protection. Il parser skippa tutte le righe → 0 rates. **Fix applicato (15 Mar)**: aggiunto header `Accept: text/csv`, guard che rileva HTML nel body e lancia `FXServiceError` chiara, + `return_exceptions=True` nel gather per isolare il fallimento.
+
+- [x] **B2. ECB cascade failure su asyncio.gather**: In `ECBProvider.fetch_rates()` (ecb.py:234-236), `asyncio.gather(*tasks)` senza `return_exceptions=True` fa sì che se UNA valuta (es. CAD) fallisce, TUTTE le valute ECB falliscono e nessun dato viene restituito. **Fix applicato (15 Mar)**: `return_exceptions=True` su tutti e 3 i provider (ECB, FED, BOE), iterazione risultati con skip delle eccezioni e log warning.
+
+- [x] **B3. pycountry duplicate index warning**: `Currency 'leone' already taken in index 'name'` e `'bolívar soberano'` sono warning innocui da pycountry (ISO 4217 ha SLL/SLE e VEF/VES con nome uguale). **Fix applicato (15 Mar)**: `warnings.filterwarnings("ignore", ...)` in `main.py`.
+
+### Bug fix — 13 Marzo 2026 (risolti)
 
 1. **`logger.log(5, ...)` → `logger.debug(...)`** in `convert_bulk()` (fx.py:1387-1394)
    - **Causa**: structlog `BoundLogger.log(5, msg)` genera `KeyError(5)` perché il livello TRACE (5) non è registrato in structlog
@@ -1037,8 +1091,8 @@ Il sync modal lavora su slug di coppia, non conosce la struttura interna della r
 
 ### Tasks Step 6
 
-- [ ] Installare `graphology` e `graphology-types`: `cd frontend && npm install graphology graphology-types`
-- [ ] Creare `src/lib/utils/currencyGraph.ts`:
+- [x] Installare `graphology` e `graphology-types`: `cd frontend && npm install graphology graphology-types`
+- [x] Creare `src/lib/utils/currencyGraph.ts`:
   - `buildCurrencyGraph(providers, allCurrencyCodes)` → `MultiDirectedGraph`
     - Nodi: tutti i codici valuta da `allCurrencyCodes` (dal backend `GET /utilities/currencies`)
     - Archi: UN solo arco direzionato base→target per ogni (provider, base, target). NO archi bidirezionali.
@@ -1048,24 +1102,24 @@ Il sync modal lavora su slug di coppia, non conosce la struttura interna della r
     - ChainStep registra direzione logica: `{from: currentNode, to: neighbor, provider}`
     - Vincolo archi: `edgePair = [src, tgt].sort().join('-')` — stessa coppia non può ripetersi
     - Vincolo provider: max 2 utilizzi per provider per percorso
-- [ ] Creare `src/lib/stores/currencyGraphStore.ts`:
+- [x] Creare `src/lib/stores/currencyGraphStore.ts`:
   - Caching session-lifetime del grafo (costruito al primo utilizzo)
   - Input: dati da `GET /fx/providers` + `GET /utilities/currencies`
   - `getCurrencyGraph(providers, allCurrencyCodes)` con hash check per invalidation
   - Entrambe le risposte sono costanti per sessione → cache sempre valida
-- [ ] Estendere `FxProviderSelect.svelte` (o creare `FxRouteSelect.svelte`):
+- [x] Estendere `FxProviderSelect.svelte` (o creare `FxRouteSelect.svelte`):
   - Sezione "Diretta" con percorsi 1-step
   - Sezione "Catena" con percorsi multi-step, ordinati per lunghezza
   - Sezione "Non utilizzabili": provider assenti da TUTTI i percorsi
   - Selezione di un percorso → popola `chain_steps`
-- [ ] Aggiornare `FxPairAddModal.svelte`:
+- [x] Aggiornare `FxPairAddModal.svelte`:
   - Usare nuovo selettore route
   - Salvare `chain_steps` nella POST
-- [ ] Aggiornare `FxProviderConfig.svelte`:
+- [x] Aggiornare `FxProviderConfig.svelte`:
   - Mostrare step catena per route multi-step
   - Badge 🔗 per distinguere multi-step da 1-step
-- [ ] Aggiornare le chiamate API frontend (`pair-sources` → `routes`)
-- [ ] Aggiornare i18n: chiavi per "chain", "direct", "step", "via", "all providers must work for sync"
+- [x] Aggiornare le chiamate API frontend (`pair-sources` → `routes`)
+- [x] Aggiornare i18n: chiavi per "chain", "direct", "step", "via", "all providers must work for sync"
   - Usare `./dev.py i18n add` + `./dev.py i18n update`
 - [ ] **Enhancement TODO**: Parallelizzazione DFS via Web Workers (vedi §6A-bis). Segnare come issue/TODO nel codice, implementare solo se profiling mostra necessità.
 

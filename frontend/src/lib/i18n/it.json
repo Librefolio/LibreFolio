@@ -328,11 +328,9 @@
       "title": "Aggiungi Nuova Coppia FX",
       "baseCurrency": "Valuta Base",
       "quoteCurrency": "Valuta Quotata",
-      "providerPriority": "Priorità Provider",
       "addProvider": "Aggiungi Provider",
       "providerDisabledHint": "Seleziona prima entrambe le valute",
       "providerIncompatible": "Questo provider non supporta questa coppia",
-      "intermediateRouteComingSoon": "Conversione tramite valute intermedie — In arrivo",
       "saveConfiguration": "Salva Configurazione",
       "providerInfoBanner": "I provider recuperano automaticamente i tassi di cambio dalle banche centrali. Senza un provider, dovrai inserire i tassi manualmente.",
       "noProviderWarning": "Nessun provider configurato. Dovrai inserire manualmente i tassi di cambio per ogni data."
@@ -352,7 +350,27 @@
       "pointsChanged": "punti cambiati",
       "timeout": "Timeout",
       "tooltipFetched": "Punti dati scaricati dal provider",
-      "tooltipChanged": "Punti dati effettivamente inseriti o aggiornati nel database"
+      "tooltipChanged": "Punti dati effettivamente inseriti o aggiornati nel database",
+      "toastOk": "{pair} sincronizzato\n{fetched}↓ {changed}Δ ({provider})",
+      "toastPartial": "{pair} — parziale\n{fetched}↓ {changed}Δ ({provider})",
+      "toastSkipped": "{pair} — solo manuale, nulla da sincronizzare",
+      "toastFailed": "{pair} sincronizzazione fallita"
+    },
+    "route": {
+      "title": "Percorsi di Conversione",
+      "loading": "Caricamento percorsi...",
+      "directSection": "Conversione diretta (1 passo)",
+      "chainSection": "Conversione a catena",
+      "unusableSection": "Non utilizzabili",
+      "unusableHint": "Questi provider non hanno un percorso di conversione automatico per questa coppia di valute.",
+      "steps": "passi",
+      "noRoutesAvailable": "Nessun percorso di conversione automatico trovato per questa coppia. Puoi comunque salvare senza provider e inserire i tassi manualmente.",
+      "chainWarning": "Le catene richiedono che TUTTI i passaggi intermedi riescano durante il sync. Se un provider fallisce, l'intera catena fallisce per quella data.",
+      "searchPlaceholder": "Cerca provider, valute, paesi…",
+      "noSearchResults": "Nessun percorso corrisponde alla ricerca",
+      "addRoute": "Aggiungi percorso di conversione",
+      "hideRoutes": "Nascondi percorsi disponibili",
+      "providersLabel": "Provider"
     }
   },
   "settings": {

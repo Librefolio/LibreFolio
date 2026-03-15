@@ -8,7 +8,8 @@
      */
     import {onMount} from 'svelte';
     import {goto} from '$app/navigation';
-    import {_} from '$lib/i18n';
+    import {_, locale} from '$lib/i18n';
+    import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {Coins, Plus, RefreshCw, RotateCw, Settings} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
@@ -183,10 +184,14 @@
                         providers: [],
                     });
                 }
+                const steps = item.chain_steps ?? [];
+                const providerCode = steps.length === 1
+                    ? steps[0].provider
+                    : 'CHAIN:' + steps.map((s: any) => s.provider).join('+');
                 pairMap.get(slug)!.providers.push({
-                    providerCode: item.chain_steps?.[0]?.provider ?? 'UNKNOWN',
+                    providerCode,
                     priority: item.priority,
-                    chainSteps: item.chain_steps ?? [],
+                    chainSteps: steps,
                 });
             }
 
@@ -408,14 +413,19 @@
             const r = (response as any)?.results?.[0];
             if (r) {
                 const label = slug.replace('-', '/');
+                const t = get(_);
                 if (r.status === 'ok') {
-                    toasts.success(`${label} synced — ${r.points_changed ?? 0} pts (${r.provider_used ?? '?'})`);
+                    toasts.success(t('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}}));
                 } else if (r.status === 'partial') {
-                    toasts.warning(`${label} — ${r.points_changed ?? 0} pts${r.message ? ': ' + r.message : ''}`);
+                    let msg = t('fx.sync.toastPartial', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}});
+                    if (r.message) msg += '\n' + r.message;
+                    toasts.warning(msg);
                 } else if (r.status === 'skipped') {
-                    toasts.info(`${label} — manual only, nothing to sync`);
+                    toasts.info(t('fx.sync.toastSkipped', {values: {pair: label}}));
                 } else {
-                    toasts.error(`${label} sync failed${r.message ? ': ' + r.message : ''}`);
+                    let msg = t('fx.sync.toastFailed', {values: {pair: label}});
+                    if (r.message) msg += '\n' + r.message;
+                    toasts.error(msg);
                 }
             }
             // After sync, refresh the pair
@@ -423,7 +433,7 @@
             store.invalidateRange(dateStart, dateEnd);
             await fetchPairData(idx);
         } catch (e: any) {
-            toasts.error(`${slug.replace('-', '/')} sync failed`);
+            toasts.error(get(_)('fx.sync.toastFailed', {values: {pair: slug.replace('-', '/')}}));
             console.error('Sync failed for', slug, e);
             pairs[idx] = {...pairs[idx], loading: false};
         }
@@ -445,7 +455,7 @@
     }
 </script>
 
-<div class="space-y-6">
+<div class="space-y-6" data-testid="fx-page">
     <!-- Header: Title left, + Add Pair right -->
     <div class="flex items-center justify-between">
         <div>
@@ -455,6 +465,7 @@
         <button
             class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap"
             onclick={handleAddPair}
+            data-testid="fx-add-pair-button"
         >
             <Plus size={16} />
             {$_('fx.actions.addPair')}

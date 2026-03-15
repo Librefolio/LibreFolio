@@ -8,6 +8,7 @@
     import {onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
+    import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {ArrowLeft, ArrowLeftRight, Pencil, RefreshCw, RotateCcw, TrendingDown, TrendingUp, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
@@ -47,7 +48,7 @@
     let activePreset: any = '3M';
 
     // Provider config
-    let providers: Array<{providerCode: string; priority: number}> = [];
+    let providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}> = [];
     let availableProviders: Array<{code: string; name: string}> = [];
 
     // =========================================================================
@@ -161,11 +162,16 @@
                     !(i.chain_steps?.length === 1 && i.chain_steps[0].provider === 'MANUAL')
                 )
                 .sort((a: any, b: any) => a.priority - b.priority)
-                .map((i: any) => ({
-                    providerCode: i.chain_steps?.[0]?.provider ?? 'UNKNOWN',
-                    priority: i.priority,
-                    chainSteps: i.chain_steps ?? [],
-                }));
+                .map((i: any) => {
+                    const steps = i.chain_steps ?? [];
+                    return {
+                        providerCode: steps.length === 1
+                            ? steps[0].provider
+                            : 'CHAIN:' + steps.map((s: any) => s.provider).join('+'),
+                        priority: i.priority,
+                        chainSteps: steps,
+                    };
+                });
         } catch (e) {
             console.error('Failed to load providers:', e);
         }
@@ -201,14 +207,15 @@
             const r = (response as any)?.results?.[0];
             if (r) {
                 const label = data.slug.replace('-', '/');
+                const t = get(_);
                 if (r.status === 'ok') {
-                    toasts.success(`${label} synced — ${r.points_changed ?? 0} pts (${r.provider_used ?? '?'})`);
+                    toasts.success(t('fx.sync.toastOk', {values: {pair: label, fetched: r.points_fetched ?? 0, changed: r.points_changed ?? 0, provider: r.provider_used ?? '?'}}));
                 } else if (r.status === 'partial') {
-                    toasts.warning(`${label} — ${r.points_changed ?? 0} pts${r.message ? ': ' + r.message : ''}`);
+                    toasts.warning(t('fx.sync.toastPartial', {values: {pair: label, changed: r.points_changed ?? 0}}));
                 } else if (r.status === 'skipped') {
-                    toasts.info(`${label} — manual only, nothing to sync`);
+                    toasts.info(t('fx.sync.toastSkipped', {values: {pair: label}}));
                 } else {
-                    toasts.error(`${label} sync failed${r.message ? ': ' + r.message : ''}`);
+                    toasts.error(t('fx.sync.toastFailed', {values: {pair: label}}) + (r.message ? ': ' + r.message : ''));
                 }
             }
             // After sync, refresh the chart

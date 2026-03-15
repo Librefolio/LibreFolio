@@ -154,6 +154,35 @@ class FXRateProvider(ABC):
         return f"Official exchange rates from {self.name}"
 
     @property
+    def description_i18n(self) -> dict[str, str]:
+        """
+        Multilingual provider descriptions.
+
+        Returns a dict mapping language code → description string.
+        Override in subclasses to provide localized descriptions.
+
+        Must include at least 'en'. Frontend falls back to 'en' if
+        the requested language is not available.
+
+        Returns:
+            Dict[str, str] — e.g. {"en": "...", "it": "...", "fr": "...", "es": "..."}
+        """
+        return {"en": self.description}
+
+    @property
+    def docs_url(self) -> str | None:
+        """
+        URL to the documentation page for this provider.
+
+        Override in subclasses to point to a specific docs page.
+        Default returns the generic providers list page.
+
+        Returns:
+            Optional URL string
+        """
+        return "/mkdocs/developer/backend/fx/providers_list/"
+
+    @property
     def test_currencies(self) -> list[str]:
         """
         List of common currencies that should be available for testing.
@@ -689,6 +718,60 @@ def compute_chain_rate(
 # ============================================================================
 
 
+async def _count_actual_changes(
+    session,  # AsyncSession
+    computed_rates: list[tuple[date, str, str, Decimal]],
+    ) -> int:
+    """
+    Count how many of the computed rates are actually new or changed vs DB.
+
+    Loads existing rates for the same (base, quote, date) tuples from the DB,
+    compares with truncated precision, and returns the count of genuine changes.
+    This avoids reporting points_changed == points_fetched when re-syncing
+    the same date range with identical data.
+
+    Args:
+        session: AsyncSession for DB queries
+        computed_rates: list of (date, base, quote, rate) — rate already truncated
+
+    Returns:
+        Number of rates that are new inserts or actual value changes.
+    """
+    if not computed_rates:
+        return 0
+
+    # Build lookup of new rates
+    new_lookup = {(d, b, q): r for d, b, q, r in computed_rates}
+
+    # Load existing rates for comparison
+    conditions = []
+    for d, b, q, _ in computed_rates:
+        conditions.append(and_(FxRate.base == b, FxRate.quote == q, FxRate.date == d))
+
+    # Batch query — chunk if too many conditions (SQLite limit ~999 params)
+    existing_lookup: dict[tuple, Decimal] = {}
+    chunk_size = 200
+    for i in range(0, len(conditions), chunk_size):
+        chunk = conditions[i:i + chunk_size]
+        stmt = select(FxRate.base, FxRate.quote, FxRate.date, FxRate.rate).where(or_(*chunk))
+        result = await session.execute(stmt)
+        for row in result.all():
+            existing_lookup[(row[2], row[0], row[1])] = row[3]
+
+    # Count changes
+    changed = 0
+    for d, b, q, new_rate in computed_rates:
+        key = (d, b, q)
+        old_rate = existing_lookup.get(key)
+        if old_rate is None:
+            # New insert
+            changed += 1
+        elif truncate_fx_rate(old_rate) != new_rate:
+            # Value actually changed
+            changed += 1
+    return changed
+
+
 async def sync_pair(
     session,  # AsyncSession
     route: "FxConversionRoute",
@@ -808,6 +891,8 @@ async def sync_pair(
                     computed_rates.append((d, norm_base, norm_quote, norm_rate))
 
             if computed_rates:
+                actual_changed = await _count_actual_changes(session, computed_rates)
+
                 values_list = [
                     {
                         "date": d,
@@ -831,6 +916,8 @@ async def sync_pair(
                     )
                 await session.execute(batch_stmt)
                 await session.commit()
+            else:
+                actual_changed = 0
 
             elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
 
@@ -839,7 +926,7 @@ async def sync_pair(
                 status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
                 provider_used=source,
                 points_fetched=len(computed_rates),
-                points_changed=len(computed_rates),
+                points_changed=actual_changed,
                 message=None,
                 elapsed_ms=elapsed_ms,
                 )
@@ -992,6 +1079,7 @@ async def sync_pairs_bulk(
     # ── Phase 3: Route coroutines — await Events, compute, upsert+commit ──
     async def _process_route(pair_slug: str) -> FXSyncPairResult:
         """Process a single route: await legs, compute chain rate, upsert."""
+        t_route_start = time.monotonic_ns()  # Per-route timer
         route = pair_route_map.get(pair_slug)
 
         if route is None:
@@ -1002,7 +1090,7 @@ async def sync_pairs_bulk(
                 points_fetched=0,
                 points_changed=0,
                 message=f"No route configuration found for {pair_slug}",
-                elapsed_ms=(time.monotonic_ns() - t_start_ns) // 1_000_000,
+                elapsed_ms=(time.monotonic_ns() - t_route_start) // 1_000_000,
                 )
 
         steps = route.parsed_steps
@@ -1034,7 +1122,13 @@ async def sync_pairs_bulk(
                     my_leg_keys.append(leg_key)
 
             if my_events:
-                await asyncio.gather(*my_events)
+                try:
+                    await asyncio.wait_for(asyncio.gather(*my_events), timeout=120.0)
+                except asyncio.TimeoutError:
+                    raise FXServiceError(
+                        f"Timeout waiting for provider data for {pair_slug} "
+                        f"(waited 120s for {len(my_events)} leg(s))"
+                    )
 
             # Check for failed legs
             for lk in my_leg_keys:
@@ -1060,6 +1154,8 @@ async def sync_pairs_bulk(
 
                 if computed_rates:
                     async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
+                        actual_changed = await _count_actual_changes(pair_session, computed_rates)
+
                         values_list = [
                             {
                                 "date": d, "base": b, "quote": q, "rate": r,
@@ -1079,15 +1175,21 @@ async def sync_pairs_bulk(
                             )
                         await pair_session.execute(batch_stmt)
                         await pair_session.commit()
+                else:
+                    actual_changed = 0
 
-                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+                elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
+                partial_msg = None if computed_rates else (
+                    f"Provider {provider_code} returned no data for "
+                    f"{route.base}/{route.quote} in {start_date}–{end_date}"
+                )
                 return FXSyncPairResult(
                     pair=pair_slug,
                     status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
                     provider_used=provider_code,
                     points_fetched=len(computed_rates),
-                    points_changed=len(computed_rates),
-                    message=None,
+                    points_changed=actual_changed,
+                    message=partial_msg,
                     elapsed_ms=elapsed_ms,
                     )
             else:
@@ -1109,6 +1211,8 @@ async def sync_pairs_bulk(
 
                 if computed_rates:
                     async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
+                        actual_changed = await _count_actual_changes(pair_session, computed_rates)
+
                         values_list = [
                             {
                                 "date": d, "base": b, "quote": q, "rate": r,
@@ -1128,20 +1232,27 @@ async def sync_pairs_bulk(
                             )
                         await pair_session.execute(batch_stmt)
                         await pair_session.commit()
+                else:
+                    actual_changed = 0
 
-                elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+                elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
+                chain_partial_msg = None if computed_rates else (
+                    f"Chain {source} produced no data for "
+                    f"{route.base}/{route.quote} in {start_date}–{end_date} "
+                    f"({len(all_dates)} dates checked, no complete chain rates)"
+                )
                 return FXSyncPairResult(
                     pair=pair_slug,
                     status=FXSyncStatus.OK if computed_rates else FXSyncStatus.PARTIAL,
                     provider_used=source,
                     points_fetched=len(computed_rates),
-                    points_changed=len(computed_rates),
-                    message=None,
+                    points_changed=actual_changed,
+                    message=chain_partial_msg,
                     elapsed_ms=elapsed_ms,
                     )
 
         except Exception as e:
-            elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
+            elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
             logger.error(f"Pair {pair_slug}: sync failed: {e}")
             return FXSyncPairResult(
                 pair=pair_slug,

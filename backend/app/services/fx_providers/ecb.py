@@ -7,7 +7,6 @@ ECB provides daily rates with EUR as base currency.
 API Documentation: https://data.ecb.europa.eu/help/api/overview
 """
 
-import asyncio
 from datetime import date
 from decimal import Decimal
 
@@ -56,6 +55,15 @@ class ECBProvider(FXRateProvider):
     def icon(self) -> str | None:
         """Returns the icon for the ECB provider"""
         return "https://www.ecb.europa.eu/favicon-32.png"
+
+    @property
+    def description_i18n(self) -> dict[str, str]:
+        return {
+            "en": "European Central Bank — publishes daily reference exchange rates for 30+ currencies against EUR. Updated every business day around 16:00 CET. One data point per day.",
+            "it": "Banca Centrale Europea — pubblica tassi di cambio di riferimento giornalieri per 30+ valute contro EUR. Aggiornamento ogni giorno lavorativo verso le 16:00 CET. Un dato al giorno.",
+            "fr": "Banque Centrale Européenne — publie des taux de change de référence quotidiens pour 30+ devises contre EUR. Mise à jour chaque jour ouvrable vers 16h00 CET. Un point par jour.",
+            "es": "Banco Central Europeo — publica tipos de cambio de referencia diarios para 30+ monedas contra EUR. Actualizado cada día hábil alrededor de las 16:00 CET. Un dato por día.",
+        }
 
     @property
     def base_currency(self) -> str:
@@ -231,11 +239,13 @@ class ECBProvider(FXRateProvider):
                 logger.error(f"Failed to parse ECB response for {currency}: {e}")
                 raise FXServiceError(f"Unexpected ECB response format for {currency}: {e}") from e
 
-        # Launch all HTTP calls in parallel
-        tasks = [_fetch_one(c) for c in valid_currencies]
-        fetched = await asyncio.gather(*tasks)
-
-        for currency, observations in fetched:
-            results[currency] = observations
+        # ── Serial fetch: ECB triggers bot protection on parallel requests ──
+        for currency in valid_currencies:
+            try:
+                _, observations = await _fetch_one(currency)
+                results[currency] = observations
+            except Exception as e:
+                logger.warning(f"ECB fetch failed for {currency}, skipping: {e}")
+                results[currency] = []
 
         return results

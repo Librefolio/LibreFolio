@@ -328,11 +328,9 @@
       "title": "Add New Currency Pair",
       "baseCurrency": "Base Currency",
       "quoteCurrency": "Quote Currency",
-      "providerPriority": "Provider Priority",
       "addProvider": "Add Provider",
       "providerDisabledHint": "Select both currencies first",
       "providerIncompatible": "This provider doesn't support this pair",
-      "intermediateRouteComingSoon": "Intermediate conversion routes — Coming Soon",
       "saveConfiguration": "Save Configuration",
       "providerInfoBanner": "Providers automatically fetch exchange rates from central banks. Without a provider, you will need to insert rates manually.",
       "noProviderWarning": "No provider configured. You will need to manually insert exchange rates for each date."
@@ -352,7 +350,27 @@
       "pointsChanged": "points changed",
       "timeout": "Timeout",
       "tooltipFetched": "Rate data points downloaded from the provider",
-      "tooltipChanged": "Data points actually inserted or updated in the database"
+      "tooltipChanged": "Data points actually inserted or updated in the database",
+      "toastOk": "{pair} synced\n{fetched}↓ {changed}Δ ({provider})",
+      "toastPartial": "{pair} — partial\n{fetched}↓ {changed}Δ ({provider})",
+      "toastSkipped": "{pair} — manual only, nothing to sync",
+      "toastFailed": "{pair} sync failed"
+    },
+    "route": {
+      "title": "Conversion Routes",
+      "loading": "Loading routes...",
+      "directSection": "Direct conversion (1 step)",
+      "chainSection": "Chain conversion",
+      "unusableSection": "Not usable",
+      "unusableHint": "These providers have no automatic conversion path for this currency pair.",
+      "steps": "steps",
+      "noRoutesAvailable": "No automatic conversion routes found for this currency pair. You can still save without a provider and insert rates manually.",
+      "chainWarning": "Chain routes require ALL intermediate steps to succeed during sync. If any provider fails, the entire chain fails for that date.",
+      "searchPlaceholder": "Search providers, currencies, countries…",
+      "noSearchResults": "No routes match the search query",
+      "addRoute": "Add conversion route",
+      "hideRoutes": "Hide available routes",
+      "providersLabel": "Providers"
     }
   },
   "settings": {

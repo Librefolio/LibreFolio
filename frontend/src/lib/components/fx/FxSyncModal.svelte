@@ -6,9 +6,10 @@
 -->
 <script lang="ts">
     import {zodiosApi} from '$lib/api';
-    import {RefreshCw, Check, X, AlertTriangle, SkipForward, AlertCircle, Clock, Timer, RotateCw} from 'lucide-svelte';
+    import {RefreshCw, Check, X, AlertTriangle, SkipForward, AlertCircle, Clock, Timer, RotateCw, Info} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
 
     interface PairResult {
@@ -63,8 +64,8 @@
 
     let remainingSec = $derived(Math.max(0, timeoutSec - Math.floor(elapsedMs / 1000)));
     let progressPct = $derived(Math.min(100, (elapsedMs / (timeoutSec * 1000)) * 100));
-    let failedPairs = $derived(pairResults.filter(r => r.status === 'failed'));
-    let successCount = $derived(pairResults.filter(r => r.status === 'ok' || r.status === 'partial').length);
+    let failedPairs = $derived(pairResults.filter(r => r.status === 'failed' || r.status === 'partial'));
+    let successCount = $derived(pairResults.filter(r => r.status === 'ok').length);
     let totalPointsChanged = $derived(pairResults.reduce((sum, r) => sum + (r.points_changed ?? 0), 0));
     let totalPointsFetched = $derived(pairResults.reduce((sum, r) => sum + (r.points_fetched ?? 0), 0));
 
@@ -111,7 +112,7 @@
             const elapsed = Date.now() - syncStart;
             const newResults: PairResult[] = (r.results ?? []).map((pr: any) => ({
                 ...pr,
-                elapsedMs: elapsed,
+                elapsedMs: pr.elapsed_ms ?? elapsed,
             }));
 
             // Merge: replace results for retried pairs, keep existing for others
@@ -267,22 +268,33 @@
             <div class="space-y-1.5">
                 {#each pairResults as pr (pr.pair)}
                     {@const Icon = statusIcon[pr.status] ?? AlertCircle}
+                    {@const tooltipMsg = pr.message
+                        ? `${(pr.points_fetched ?? 0)}↓ ${(pr.points_changed ?? 0)}Δ\n${pr.message}`
+                        : `${(pr.points_fetched ?? 0)}↓ ${(pr.points_changed ?? 0)}Δ`}
                     <div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 group">
-                        {#if pr.status === 'failed' && !syncing}
-                            <button
-                                class="shrink-0 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
-                                onclick={() => handleRetrySingle(pr.pair)}
-                                title="Retry this pair"
-                            >
-                                <RotateCw size={13} />
-                            </button>
+                        {#if (pr.status === 'failed' || pr.status === 'partial') && !syncing}
+                            <Tooltip text={tooltipMsg} position="top">
+                                <button
+                                    class="shrink-0 p-0.5 rounded transition-colors
+                                        {pr.status === 'failed'
+                                            ? 'hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500'
+                                            : 'hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-500'}"
+                                    onclick={() => handleRetrySingle(pr.pair)}
+                                >
+                                    <RotateCw size={13} />
+                                </button>
+                            </Tooltip>
+                        {:else if pr.status === 'partial'}
+                            <Tooltip text={tooltipMsg} position="top">
+                                <Icon size={14} class="{statusColor[pr.status] ?? 'text-gray-400'} shrink-0 cursor-help" />
+                            </Tooltip>
                         {:else}
                             <Icon size={14} class="{statusColor[pr.status] ?? 'text-gray-400'} shrink-0" />
                         {/if}
                         <span class="font-medium">{pr.pair.replace('-', '/')}</span>
                         {#if pr.status === 'ok' || pr.status === 'partial'}
                             <span class="text-gray-400">—</span>
-                            <span><span title={$t('fx.sync.tooltipFetched')}>{pr.points_fetched ?? 0}↓</span> <span title={$t('fx.sync.tooltipChanged')}>{pr.points_changed ?? 0}Δ</span></span>
+                            <span>{pr.points_fetched ?? 0}↓ {pr.points_changed ?? 0}Δ</span>
                             {#if pr.provider_used}
                                 <span class="text-gray-400">({pr.provider_used})</span>
                             {/if}
@@ -299,9 +311,17 @@
 
             <!-- Summary -->
             <InfoBanner variant={successCount === pairResults.length ? 'success' : successCount > 0 ? 'warning' : 'error'}>
-                <span class="text-sm font-medium">
+                <span class="text-sm font-medium flex items-center gap-1 flex-wrap">
                     {$t('fx.sync.synced') ?? 'Synced'} {successCount}/{pairResults.length} {$t('fx.sync.pairsCount') ?? 'pairs'}
-                    · <span title={$t('fx.sync.tooltipFetched')}>{totalPointsFetched}↓</span> <span title={$t('fx.sync.tooltipChanged')}>{totalPointsChanged}Δ</span>
+                    ·
+                    <span>{totalPointsFetched}↓</span>
+                    <Tooltip text={$t('fx.sync.tooltipFetched')} position="top">
+                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                    </Tooltip>
+                    <span>{totalPointsChanged}Δ</span>
+                    <Tooltip text={$t('fx.sync.tooltipChanged')} position="top">
+                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                    </Tooltip>
                 </span>
             </InfoBanner>
         {/if}

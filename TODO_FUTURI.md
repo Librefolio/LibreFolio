@@ -362,3 +362,29 @@ Analizzare tutti i log generati dal backend e riorganizzarli in una struttura se
 - I log di sync per singola coppia/currency generano molto output anche a INFO
 
 **Azione**: Fare un audit completo dei livelli di log (DEBUG, INFO, WARNING, ERROR) in tutto il backend, definire una policy chiara e applicarla uniformemente.
+
+---
+
+## 📚 Documentazione Per-Plugin FX Provider
+
+**Data aggiunta**: 15 Marzo 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Bassa
+
+### Contesto
+Attualmente esiste solo una pagina generica che elenca tutti i provider FX:
+- `/mkdocs/developer/backend/fx/providers_list/`
+
+Ogni provider (ECB, FED, BOE, SNB) dovrebbe avere una **pagina dedicata** nella documentazione MkDocs con:
+- Descrizione dettagliata del provider
+- URL dell'API sorgente e formato dati
+- Base currency e valute supportate
+- Frequenza di aggiornamento (giornaliera vs mensile)
+- Eventuali limitazioni note (es. SNB solo mensile, nessun dato giornaliero)
+- Parametri di configurazione
+- Esempio di risposta API
+
+### Azione
+1. Creare una pagina MkDocs per ogni provider in `mkdocs_src/docs/developer/backend/fx/providers/`
+2. Aggiornare la property `docs_url` in ogni provider per puntare alla pagina specifica
+3. Il frontend già usa `docs_url` per il link nell'info bar del FxProviderSelect (cliccando sull'icona del provider)

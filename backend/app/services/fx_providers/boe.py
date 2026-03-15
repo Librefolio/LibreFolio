@@ -82,6 +82,15 @@ class BOEProvider(FXRateProvider):
         return "Official exchange rates from Bank of England"
 
     @property
+    def description_i18n(self) -> dict[str, str]:
+        return {
+            "en": "Bank of England — publishes daily spot exchange rates for 20+ currencies against GBP. Updated each business day. One data point per day.",
+            "it": "Bank of England — pubblica tassi di cambio spot giornalieri per 20+ valute contro GBP. Aggiornamento ogni giorno lavorativo. Un dato al giorno.",
+            "fr": "Banque d'Angleterre — publie des taux de change spot quotidiens pour 20+ devises contre GBP. Mise à jour chaque jour ouvrable. Un point par jour.",
+            "es": "Banco de Inglaterra — publica tipos de cambio spot diarios para 20+ monedas contra GBP. Actualizado cada día hábil. Un dato por día.",
+        }
+
+    @property
     def test_currencies(self) -> list[str]:
         """
         Common currencies that BOE should always provide.
@@ -164,7 +173,8 @@ class BOEProvider(FXRateProvider):
 
             try:
                 headers = {
-                    "User-Agent": "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)"
+                    "User-Agent": "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)",
+                    "Accept": "text/csv, text/plain, */*;q=0.1",
                     }
 
                 async with httpx.AsyncClient(
@@ -173,7 +183,19 @@ class BOEProvider(FXRateProvider):
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 
-                    observations = self._parse_response(response.text, currency)
+                    # Guard: detect HTML bot-protection pages
+                    body = response.text
+                    if "<html" in body.lower()[:500] or "<!doctype" in body.lower()[:500]:
+                        logger.error(
+                            f"BOE returned HTML instead of CSV for {currency} "
+                            f"(first 200 chars: {body[:200]})"
+                            )
+                        raise FXServiceError(
+                            f"BOE returned HTML instead of CSV for {currency} — "
+                            f"possible bot protection or endpoint change"
+                            )
+
+                    observations = self._parse_response(body, currency)
                     return currency, observations
 
             except httpx.HTTPError as e:
@@ -183,12 +205,18 @@ class BOEProvider(FXRateProvider):
                 logger.error(f"Failed to parse BOE response for {currency}: {e}")
                 raise FXServiceError(f"Unexpected BOE response format for {currency}: {e}") from e
 
-        # Launch all HTTP calls in parallel
+        # Launch all HTTP calls in parallel (return_exceptions to avoid cascade failure)
         tasks = [_fetch_one(c) for c in valid_currencies]
-        fetched = await asyncio.gather(*tasks)
+        fetched = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for currency, observations in fetched:
-            results[currency] = observations
+        for i, result in enumerate(fetched):
+            if isinstance(result, BaseException):
+                currency = valid_currencies[i]
+                logger.warning(f"BOE fetch failed for {currency}, skipping: {result}")
+                results[currency] = []
+            else:
+                currency, observations = result
+                results[currency] = observations
 
         return results
 

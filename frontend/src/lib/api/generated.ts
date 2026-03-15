@@ -3357,9 +3357,17 @@ const FXProviderInfo = z
       )
       .optional(),
     description: z.string().describe("Provider description"),
+    description_i18n: z
+      .record(z.string())
+      .describe("Multilingual provider descriptions {lang_code: description}")
+      .optional(),
     icon_url: z
       .union([z.string(), z.null()])
       .describe("Provider icon URL (hardcoded)")
+      .optional(),
+    docs_url: z
+      .union([z.string(), z.null()])
+      .describe("URL to documentation page for this provider")
       .optional(),
   })
   .passthrough();

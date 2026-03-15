@@ -328,11 +328,9 @@
       "title": "Ajouter une Paire de Devises",
       "baseCurrency": "Devise de Base",
       "quoteCurrency": "Devise Cotée",
-      "providerPriority": "Priorité des Fournisseurs",
       "addProvider": "Ajouter un Fournisseur",
       "providerDisabledHint": "Sélectionnez d'abord les deux devises",
       "providerIncompatible": "Ce fournisseur ne supporte pas cette paire",
-      "intermediateRouteComingSoon": "Routes de conversion intermédiaires — Bientôt",
       "saveConfiguration": "Enregistrer la Configuration",
       "providerInfoBanner": "Les fournisseurs récupèrent automatiquement les taux de change des banques centrales. Sans fournisseur, vous devrez saisir les taux manuellement.",
       "noProviderWarning": "Aucun fournisseur configuré. Vous devrez saisir manuellement les taux de change pour chaque date."
@@ -352,7 +350,27 @@
       "pointsChanged": "points modifiés",
       "timeout": "Délai d'attente",
       "tooltipFetched": "Points de données téléchargés du fournisseur",
-      "tooltipChanged": "Points de données réellement insérés ou mis à jour dans la base"
+      "tooltipChanged": "Points de données réellement insérés ou mis à jour dans la base",
+      "toastOk": "{pair} synchronisé\n{fetched}↓ {changed}Δ ({provider})",
+      "toastPartial": "{pair} — partiel\n{fetched}↓ {changed}Δ ({provider})",
+      "toastSkipped": "{pair} — manuel uniquement, rien à synchroniser",
+      "toastFailed": "{pair} échec de la synchronisation"
+    },
+    "route": {
+      "title": "Routes de Conversion",
+      "loading": "Chargement des routes...",
+      "directSection": "Conversion directe (1 étape)",
+      "chainSection": "Conversion en chaîne",
+      "unusableSection": "Non utilisables",
+      "unusableHint": "Ces fournisseurs n'ont pas de chemin de conversion automatique pour cette paire de devises.",
+      "steps": "étapes",
+      "noRoutesAvailable": "Aucune route de conversion automatique trouvée pour cette paire. Vous pouvez quand même sauvegarder sans fournisseur et insérer les taux manuellement.",
+      "chainWarning": "Les chaînes nécessitent que TOUTES les étapes intermédiaires réussissent lors de la synchronisation. Si un fournisseur échoue, toute la chaîne échoue pour cette date.",
+      "searchPlaceholder": "Rechercher fournisseurs, devises, pays…",
+      "noSearchResults": "Aucune route ne correspond à la recherche",
+      "addRoute": "Ajouter une route de conversion",
+      "hideRoutes": "Masquer les routes disponibles",
+      "providersLabel": "Fournisseurs"
     }
   },
   "settings": {

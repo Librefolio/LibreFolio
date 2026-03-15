@@ -13,6 +13,10 @@
 
 import {TimeSeriesStore} from './TimeSeriesStore';
 import type {TimeSeriesPoint} from './TimeSeriesStore';
+import type {ChainStep} from '$lib/utils/currencyGraph';
+
+// Re-export ChainStep for consumers that import from fxStoreRegistry
+export type {ChainStep};
 
 // ============================================================================
 // FX DATA TYPES
@@ -34,14 +38,6 @@ export interface FxDataPoint extends TimeSeriesPoint {
     } | null;
 }
 
-/**
- * Single step in a conversion chain (matches backend FXRouteStep).
- */
-export interface ChainStep {
-    from: string;
-    to: string;
-    provider: string;
-}
 
 /**
  * FX pair configuration derived from GET /fx/providers/routes.

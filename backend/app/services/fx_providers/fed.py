@@ -94,6 +94,15 @@ class FEDProvider(FXRateProvider):
         return "Official exchange rates from Federal Reserve (H.10 Release)"
 
     @property
+    def description_i18n(self) -> dict[str, str]:
+        return {
+            "en": "Federal Reserve Bank (FRED) — publishes daily exchange rates from the H.10 Statistical Release for 20+ currencies against USD. Updated each business day. One data point per day.",
+            "it": "Federal Reserve Bank (FRED) — pubblica tassi di cambio giornalieri dal bollettino statistico H.10 per 20+ valute contro USD. Aggiornamento ogni giorno lavorativo. Un dato al giorno.",
+            "fr": "Federal Reserve Bank (FRED) — publie des taux de change quotidiens du bulletin statistique H.10 pour 20+ devises contre USD. Mise à jour chaque jour ouvrable. Un point par jour.",
+            "es": "Federal Reserve Bank (FRED) — publica tipos de cambio diarios del boletín estadístico H.10 para 20+ monedas contra USD. Actualizado cada día hábil. Un dato por día.",
+        }
+
+    @property
     def test_currencies(self) -> list[str]:
         """
         Common currencies that FED should always provide.
@@ -197,14 +206,19 @@ class FEDProvider(FXRateProvider):
                     f"Unexpected FED/FRED response format for {currency}: {e}"
                     ) from e
 
-        # Launch all HTTP calls in parallel
+        # Launch all HTTP calls in parallel (return_exceptions to avoid cascade failure)
         tasks = [_fetch_one(c) for c in valid_currencies]
-        fetched = await asyncio.gather(*tasks)
+        fetched = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for currency, observations in fetched:
-            results[currency] = observations
+        for i, result in enumerate(fetched):
+            if isinstance(result, BaseException):
+                currency = valid_currencies[i]
+                logger.warning(f"FED fetch failed for {currency}, skipping: {result}")
+                results[currency] = []
+            else:
+                currency, observations = result
+                results[currency] = observations
 
-        return results
 
         return results
 

@@ -1,21 +1,33 @@
 <!--
-  FxProviderConfig — Provider configuration panel for a currency pair.
+  FxProviderConfig — Provider/Route configuration panel for a currency pair.
 
-  Shows the list of configured providers with priority badges,
+  Shows the list of configured routes with priority badges,
   allows add/delete/reorder via OrderableList, and has save/cancel when changed.
+  Supports both 1-step (direct) and multi-step (chain) routes with visual distinction.
 -->
 <script lang="ts">
-    import {_} from '$lib/i18n';
-    import {Plus, Trash2, Save, Undo2} from 'lucide-svelte';
+    import {Plus, Trash2, Save, Undo2, Link, ArrowRight, Info} from 'lucide-svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
+    import {getProviderColor, getPriorityBadgeStyle} from '$lib/utils/colors';
+    import {getCachedProviders} from '$lib/stores/currencyGraphStore';
+    import type {ProviderInfo} from '$lib/utils/currencyGraph';
+    import {_ as t} from '$lib/i18n';
 
     // =========================================================================
     // Types
     // =========================================================================
 
+    interface ChainStep {
+        from: string;
+        to: string;
+        provider: string;
+    }
+
     interface ProviderEntry {
         providerCode: string;
         priority: number;
+        /** Full chain steps — 1 step = direct, 2+ = chain */
+        chainSteps?: ChainStep[];
     }
 
     interface AvailableProvider {
@@ -31,6 +43,7 @@
         providers?: ProviderEntry[];
         availableProviders?: AvailableProvider[];
         readonly?: boolean;
+        language?: string;
         onSave?: (providers: ProviderEntry[]) => void;
         onAddProvider?: (detail: {providerCode: string; priority: number}) => void;
         onRemoveProvider?: (detail: {providerCode: string}) => void;
@@ -40,6 +53,7 @@
         providers = $bindable([]),
         availableProviders = [],
         readonly: isReadonly = false,
+        language = 'en',
         onSave,
         onAddProvider,
         onRemoveProvider,
@@ -116,6 +130,22 @@
     function providerKey(prov: ProviderEntry): string {
         return prov.providerCode;
     }
+
+    // Provider info from currencyGraphStore cache (for tooltips)
+    let providerInfoMap = $derived(new Map(getCachedProviders().map(p => [p.code, p])));
+
+    function getProviderDescription(code: string): string {
+        const prov = providerInfoMap.get(code);
+        if (!prov) return '';
+        if (prov.description_i18n && Object.keys(prov.description_i18n).length > 0) {
+            return prov.description_i18n[language] ?? prov.description_i18n['en'] ?? prov.description ?? '';
+        }
+        return prov.description ?? '';
+    }
+
+    function getProviderFullName(code: string): string {
+        return providerInfoMap.get(code)?.name ?? code;
+    }
 </script>
 
 <div class="space-y-3">
@@ -162,14 +192,66 @@
         >
             {#snippet children({ item, index })}
                 <div class="flex items-center gap-2">
-                    <span class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate">
-                        {getProviderName(item.providerCode)}
-                    </span>
-                    <span class="text-xs font-mono px-2 py-0.5 rounded flex-shrink-0
-                        {index === 0
-                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                            : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}">
-                        Priority {index + 1}{index === 0 ? ` (${$_('fx.provider.primary')})` : ` (${$_('fx.provider.fallback')})`}
+                    {#if item.chainSteps && item.chainSteps.length > 1}
+                        <!-- Multi-step (chain) route -->
+                        <Link size={12} class="text-blue-500 dark:text-blue-400 flex-shrink-0" />
+                        <div class="flex items-center gap-0.5 flex-wrap flex-1 min-w-0">
+                            {#each item.chainSteps as step, i}
+                                {@const provColor = getProviderColor(step.provider)}
+                                {#if i === 0}
+                                    <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.from}</span>
+                                {/if}
+                                <span class="relative group/prov inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0 cursor-help"
+                                      style="background: {provColor.bg}; border-color: {provColor.border}">
+                                    <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                    <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
+                                        {step.provider}
+                                    </span>
+                                    <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                    <span class="provider-tooltip">
+                                        <span class="font-semibold">{getProviderFullName(step.provider)}</span><br/>
+                                        {getProviderDescription(step.provider)}
+                                    </span>
+                                </span>
+                                <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.to}</span>
+                            {/each}
+                            <!-- Chain info icon -->
+                            <span class="relative group/info flex-shrink-0 ml-0.5 cursor-help">
+                                <Info size={11} class="text-blue-400 dark:text-blue-500" />
+                                <span class="provider-tooltip">
+                                    {$t('fx.route.chainWarning')}
+                                </span>
+                            </span>
+                        </div>
+                    {:else if item.chainSteps && item.chainSteps.length === 1}
+                        <!-- 1-step (direct) route with arrows -->
+                        {@const step = item.chainSteps[0]}
+                        {@const provColor = getProviderColor(step.provider)}
+                        <div class="flex items-center gap-1 flex-1 min-w-0">
+                            <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.from}</span>
+                            <span class="relative group/prov inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0 cursor-help"
+                                  style="background: {provColor.bg}; border-color: {provColor.border}">
+                                <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
+                                    {step.provider}
+                                </span>
+                                <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                <span class="provider-tooltip">
+                                    <span class="font-semibold">{getProviderFullName(step.provider)}</span><br/>
+                                    {getProviderDescription(step.provider)}
+                                </span>
+                            </span>
+                            <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.to}</span>
+                        </div>
+                    {:else}
+                        <!-- Legacy: no chain steps -->
+                        <span class="font-medium text-sm text-gray-700 dark:text-gray-200 truncate">
+                            {getProviderName(item.providerCode)}
+                        </span>
+                    {/if}
+                    <span class="text-xs font-mono px-2 py-0.5 rounded flex-shrink-0 priority-badge"
+                          style={getPriorityBadgeStyle(index)}>
+                        #{index + 1}
                     </span>
                     {#if !isReadonly}
                         <button
@@ -212,13 +294,52 @@
             </button>
         </div>
     {/if}
-
-    <!-- Intermediate Route placeholder -->
-    <div class="p-3 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-dashed border-gray-300 dark:border-slate-600">
-        <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
-            <span>🔒</span>
-            <span>{$_('fx.addPair.intermediateRouteComingSoon')}</span>
-        </div>
-    </div>
 </div>
 
+<style>
+    .priority-badge {
+        background-color: var(--badge-bg);
+        color: var(--badge-text);
+    }
+    :global(.dark) .priority-badge {
+        background-color: var(--badge-dark-bg);
+        color: var(--badge-dark-text);
+    }
+
+    /* Provider tooltip */
+    .provider-tooltip {
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        width: max-content;
+        max-width: 280px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 10px;
+        line-height: 1.4;
+        white-space: normal;
+        text-transform: none;
+        letter-spacing: normal;
+        font-weight: normal;
+        color: white;
+        background: rgba(15, 23, 42, 0.95);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        pointer-events: none;
+    }
+    .provider-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: rgba(15, 23, 42, 0.95);
+    }
+    :global(.group\/prov):hover > .provider-tooltip,
+    :global(.group\/info):hover > .provider-tooltip {
+        display: block;
+    }
+</style>
