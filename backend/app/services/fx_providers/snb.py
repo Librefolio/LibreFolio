@@ -108,6 +108,15 @@ class SNBProvider(FXRateProvider):
         return "Monthly average exchange rates from Swiss National Bank (no daily data available)"
 
     @property
+    def description_i18n(self) -> dict[str, str]:
+        return {
+            "en": "Swiss National Bank — publishes monthly average exchange rates for ~25 currencies against CHF. Updated around the 2nd business day of the following month. One data point per month (⚠️ no daily data).",
+            "it": "Banca Nazionale Svizzera — pubblica tassi di cambio medi mensili per ~25 valute contro CHF. Aggiornamento verso il 2° giorno lavorativo del mese successivo. Un dato al mese (⚠️ nessun dato giornaliero).",
+            "fr": "Banque Nationale Suisse — publie des taux de change moyens mensuels pour ~25 devises contre CHF. Mise à jour vers le 2e jour ouvrable du mois suivant. Un point par mois (⚠️ pas de données quotidiennes).",
+            "es": "Banco Nacional Suizo — publica tipos de cambio promedio mensuales para ~25 monedas contra CHF. Actualizado hacia el 2° día hábil del mes siguiente. Un dato por mes (⚠️ sin datos diarios).",
+        }
+
+    @property
     def test_currencies(self) -> list[str]:
         return ["CHF", "USD", "EUR", "GBP", "JPY"]
 

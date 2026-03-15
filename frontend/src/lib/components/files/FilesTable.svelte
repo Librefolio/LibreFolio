@@ -163,23 +163,11 @@
     }
 
     // Generate a consistent color based on broker id for visual distinction
-    // Uses HSL color space starting from green (120°) and rotating through hues
-    function getBrokerColor(brokerId: number): { bg: string; text: string; darkBg: string; darkText: string } {
-        // Golden ratio for better distribution
-        const goldenRatio = 0.618033988749895;
-        // Start at green hue (120°), rotate through spectrum
-        const hue = ((brokerId * goldenRatio) % 1) * 360;
-        // Keep saturation and lightness in pleasant ranges
-        const saturation = 35 + (brokerId % 5) * 5; // 35-55%
-        const lightness = 92; // Light background
-        const textLightness = 30; // Dark text
+    // Uses shared golden-ratio color utility
+    import {getIndexColor} from '$lib/utils/colors';
 
-        return {
-            bg: `hsl(${hue}, ${saturation}%, ${lightness}%)`,
-            text: `hsl(${hue}, ${saturation + 10}%, ${textLightness}%)`,
-            darkBg: `hsl(${hue}, ${saturation - 10}%, 20%)`,
-            darkText: `hsl(${hue}, ${saturation}%, 75%)`,
-        };
+    function getBrokerColor(brokerId: number): { bg: string; text: string; darkBg: string; darkText: string } {
+        return getIndexColor(brokerId, 120);
     }
 
     function getBrokerBadgeStyle(file: FileData): string | undefined {
