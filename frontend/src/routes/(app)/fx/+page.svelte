@@ -459,7 +459,12 @@
     <!-- Header: Title left, + Add Pair right -->
     <div class="flex items-center justify-between">
         <div>
-            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">{$_('fx.title')}</h2>
+            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                {$_('fx.title')}
+                {#if pairs.length > 0}
+                    <span class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{pairs.length}</span>
+                {/if}
+            </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
         </div>
         <button

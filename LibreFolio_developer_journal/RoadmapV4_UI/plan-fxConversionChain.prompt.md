@@ -60,6 +60,8 @@
 | 15 Mar 2026 | 🔧 Arrow alignment v3 | FxPairAddModal: freccia centrata ai selettori — `items-stretch` + invisible label spacer + `flex-1` per stretching verticale. |
 | 15 Mar 2026 | 🔧 Chain sort by configured | FxProviderSelect: catene ordinate per numero di coppie intermedie già configurate (discendente) — le catene che riutilizzano coppie esistenti appaiono prima. Nuova prop `configuredPairSlugs`. |
 | 15 Mar 2026 | ✅ Create intermediate pairs | FxPairAddModal: checkbox "Crea anche le coppie intermedie" (visibile solo con catene selezionate). Ogni step della catena viene salvato come coppia autonoma con il suo provider. Auto-sync anche delle coppie intermedie create. i18n 4 lingue (2 chiavi). |
+| 15 Mar 2026 | 🔧 Pairs count badge | FX list page: badge numerico nel titolo con conteggio coppie registrate (tondo, colore brand). |
+| 15 Mar 2026 | 🐛 Currency select overflow | FxPairAddModal: aggiunto `min-w-0` su entrambi i container flex-1 delle currency select per impedire che nomi lunghi espandano il div oltre lo spazio. |
 
 ### Refinements — 13 Marzo 2026 (post-review utente)
 
