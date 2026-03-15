@@ -22,13 +22,18 @@ from backend.app.config import get_settings
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_conn, connection_record):
     """
-    Enable foreign key constraints for SQLite.
-    This is required for proper referential integrity.
+    Enable essential SQLite PRAGMAs for proper operation.
+
+    - foreign_keys=ON: Required for referential integrity
+    - journal_mode=WAL: Write-Ahead Logging — allows concurrent readers and
+      one writer without blocking. Essential for the FX sync pipeline that
+      reads route config in one session while writing rates in parallel sessions.
 
     Note: This event listener applies to ALL sync engines (including the one backing async).
     """
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")
     cursor.close()
 
 

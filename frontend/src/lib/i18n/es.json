@@ -328,11 +328,9 @@
       "title": "Añadir Par de Divisas",
       "baseCurrency": "Divisa Base",
       "quoteCurrency": "Divisa Cotizada",
-      "providerPriority": "Prioridad de Proveedores",
       "addProvider": "Añadir Proveedor",
       "providerDisabledHint": "Seleccione primero ambas divisas",
       "providerIncompatible": "Este proveedor no soporta este par",
-      "intermediateRouteComingSoon": "Rutas de conversión intermedias — Próximamente",
       "saveConfiguration": "Guardar Configuración",
       "providerInfoBanner": "Los proveedores obtienen automáticamente los tipos de cambio de los bancos centrales. Sin un proveedor, deberá insertar los tipos manualmente.",
       "noProviderWarning": "Ningún proveedor configurado. Deberá insertar manualmente los tipos de cambio para cada fecha."
@@ -352,7 +350,27 @@
       "pointsChanged": "puntos cambiados",
       "timeout": "Tiempo de espera",
       "tooltipFetched": "Puntos de datos descargados del proveedor",
-      "tooltipChanged": "Puntos de datos insertados o actualizados en la base de datos"
+      "tooltipChanged": "Puntos de datos insertados o actualizados en la base de datos",
+      "toastOk": "{pair} sincronizado\n{fetched}↓ {changed}Δ ({provider})",
+      "toastPartial": "{pair} — parcial\n{fetched}↓ {changed}Δ ({provider})",
+      "toastSkipped": "{pair} — solo manual, nada que sincronizar",
+      "toastFailed": "{pair} sincronización fallida"
+    },
+    "route": {
+      "title": "Rutas de Conversión",
+      "loading": "Cargando rutas...",
+      "directSection": "Conversión directa (1 paso)",
+      "chainSection": "Conversión en cadena",
+      "unusableSection": "No utilizables",
+      "unusableHint": "Estos proveedores no tienen una ruta de conversión automática para este par de divisas.",
+      "steps": "pasos",
+      "noRoutesAvailable": "No se encontraron rutas de conversión automáticas para este par. Puede guardar sin proveedor e insertar las tasas manualmente.",
+      "chainWarning": "Las cadenas requieren que TODOS los pasos intermedios tengan éxito durante la sincronización. Si un proveedor falla, toda la cadena falla para esa fecha.",
+      "searchPlaceholder": "Buscar proveedores, divisas, países…",
+      "noSearchResults": "Ninguna ruta coincide con la búsqueda",
+      "addRoute": "Añadir ruta de conversión",
+      "hideRoutes": "Ocultar rutas disponibles",
+      "providersLabel": "Proveedores"
     }
   },
   "settings": {

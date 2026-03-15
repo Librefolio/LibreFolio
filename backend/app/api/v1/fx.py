@@ -130,7 +130,9 @@ async def list_providers(
                     description=getattr(
                         instance, "description", f'{provider_dict["name"]} FX rate provider'
                         ),
+                    description_i18n=getattr(instance, "description_i18n", {}),
                     icon_url=instance.icon,
+                    docs_url=getattr(instance, "docs_url", None),
                     )
                 )
 
@@ -185,6 +187,9 @@ async def sync_rates(
         raise HTTPException(status_code=400, detail=str(e))
     except FXServiceError as e:
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}")
+    except Exception as e:
+        # Catch-all to prevent hanging — always return a response
+        raise HTTPException(status_code=500, detail=f"Unexpected sync error: {str(e)}")
 
 
 @router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)

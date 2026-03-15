@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LibreFolio",
-    "version": "v0.5.4-1-g842faaa-dirty"
+    "version": "v0.5.4-3-gfd7f3a0-dirty"
   },
   "paths": {
     "/api/v1/auth/login": {
@@ -8762,6 +8762,14 @@
             "title": "Description",
             "description": "Provider description"
           },
+          "description_i18n": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Description I18N",
+            "description": "Multilingual provider descriptions {lang_code: description}"
+          },
           "icon_url": {
             "anyOf": [
               {
@@ -8773,6 +8781,18 @@
             ],
             "title": "Icon Url",
             "description": "Provider icon URL (hardcoded)"
+          },
+          "docs_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docs Url",
+            "description": "URL to documentation page for this provider"
           }
         },
         "type": "object",

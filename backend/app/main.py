@@ -7,9 +7,14 @@ import os
 import sqlite3
 import subprocess
 import sys
+import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
+
+# Suppress pycountry warnings about duplicate currency names (leone, bolívar soberano)
+# These are ISO 4217 duplicates (old SLL + new SLE, old VEF + new VES) — harmless.
+warnings.filterwarnings("ignore", message=".*already taken in index.*")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
