@@ -6,7 +6,7 @@
   Supports both 1-step (direct) and multi-step (chain) routes with visual distinction.
 -->
 <script lang="ts">
-    import {Plus, Trash2, Save, Undo2, Link, ArrowRight, Info} from 'lucide-svelte';
+    import {Plus, Trash2, Save, Undo2, Link, ArrowLeftRight, Info} from 'lucide-svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {getProviderColor, getPriorityBadgeStyle} from '$lib/utils/colors';
     import {getCachedProviders} from '$lib/stores/currencyGraphStore';
@@ -214,11 +214,11 @@
                                 {/if}
                                 <span class="relative group/prov inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0 cursor-help"
                                       style="background: {provColor.bg}; border-color: {provColor.border}">
-                                    <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                     <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
                                         {step.provider}
                                     </span>
-                                    <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                    <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                     <span class="provider-tooltip">
                                         <span class="font-semibold">{getProviderFullName(step.provider)}</span><br/>
                                         {getProviderDescription(step.provider)}
@@ -235,11 +235,11 @@
                             <span class="font-medium text-xs text-gray-600 dark:text-gray-300">{step.from}</span>
                             <span class="relative group/prov inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0 cursor-help"
                                   style="background: {provColor.bg}; border-color: {provColor.border}">
-                                <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                 <span class="text-[9px] font-mono px-0.5 font-bold flex-shrink-0">
                                     {step.provider}
                                 </span>
-                                <ArrowRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                 <span class="provider-tooltip">
                                     <span class="font-semibold">{getProviderFullName(step.provider)}</span><br/>
                                     {getProviderDescription(step.provider)}

@@ -164,7 +164,7 @@ Queste modifiche sono prioritarie perché la documentazione attuale è **errata*
 - **Database Schema (`developer/architecture/database.md`)**
     -   [x] **Aggiornare**: Rigenerare il diagramma Mermaid ER.
     -   [x] **Aggiungere**: Tabella `BrokerUserAccess` (cruciale per il multi-user).
-    -   [x] **Aggiungere**: Tabella `FxCurrencyPairSource` (cruciale per FX routing).
+    -   [x] **Aggiungere**: Tabella `FxConversionRoute` (cruciale per FX routing e catene di conversione, sostituisce `FxCurrencyPairSource`).
     -   [x] **Aggiornare**: Tabella `Asset` con i nuovi campi `identifier_*` e `classification_params`.
     -   [x] **Aggiornare**: Tabella `Transaction` con `related_transaction_id` (per Transfer/FX).
 

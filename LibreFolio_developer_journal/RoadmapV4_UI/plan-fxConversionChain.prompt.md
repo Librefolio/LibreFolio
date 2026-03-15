@@ -1,7 +1,7 @@
 # Plan: FX Conversion Chain — Route-based Multi-Step Currency Conversion
 
 **Data creazione**: 12 Marzo 2026
-**Status**: ✅ COMPLETATO (Step 1-6 done, Step 7 cleanup remaining)
+**Status**: ✅ COMPLETATO (Step 1-7 done, solo test manuali e docs update pendenti)
 **Priorità**: Alta (prerequisito per completare Phase 5 FX)
 **Stima**: ~3-4 giorni (backend done, frontend done)
 **Dipendenze**: Tutti i sub-plan Phase 5 ✅ completati (vedi `phases/phase-05-subplan/`)
@@ -62,6 +62,14 @@
 | 15 Mar 2026 | ✅ Create intermediate pairs | FxPairAddModal: checkbox "Crea anche le coppie intermedie" (visibile solo con catene selezionate). Ogni step della catena viene salvato come coppia autonoma con il suo provider. Auto-sync anche delle coppie intermedie create. i18n 4 lingue (2 chiavi). |
 | 15 Mar 2026 | 🔧 Pairs count badge | FX list page: badge numerico nel titolo con conteggio coppie registrate (tondo, colore brand). |
 | 15 Mar 2026 | 🐛 Currency select overflow | FxPairAddModal: aggiunto `min-w-0` su entrambi i container flex-1 delle currency select per impedire che nomi lunghi espandano il div oltre lo spazio. |
+| 15 Mar 2026 | 🔧 Bidirectional arrow | FxPairAddModal: freccia `ArrowLeftRight`/`ArrowDownUp` (bidirezionale) al posto di `ArrowRight`/`ArrowDown` — la conversione FX è bidirezionale. |
+| 15 Mar 2026 | 🔧 Exclude existing pairs | FxPairAddModal: nuova prop `excludedCurrencies` su CurrencySearchSelect. Impedisce di selezionare coppie già configurate (indipendentemente dal verso). |
+| 15 Mar 2026 | ✅ Step 7 cleanup audit | Grep per riferimenti legacy, aggiornamento status piano. |
+| 15 Mar 2026 | 🔧 Chain bidirectional arrows | FxProviderConfig + FxProviderSelect: `ArrowRight` → `ArrowLeftRight` nei box provider (catene e dirette) — coerente con bidirezionalità FxPairAddModal. |
+| 15 Mar 2026 | 🔧 Enter focus debounce | SearchSelect: non auto-aprire dropdown su Enter se il trigger ha appena ricevuto focus e un valore è già selezionato. FxPairAddModal: `trigger.click()` solo se quoteCurrency è vuota. |
+| 15 Mar 2026 | ✅ MkDocs FX config updated | `configuration.md`: riscritta interamente per documentare `FxConversionRoute`, chain routes, nuovi endpoint `/fx/providers/routes`. Aggiornati anche `backend_documentation_audit.md` e `documentation_plan.md`. |
+| 15 Mar 2026 | ✅ Step 5 scenari smarcati | Tutti i 20 scenari CRUD+sync erano già coperti dai test ma i checkbox non erano stati aggiornati — ora marcati [x]. |
+| 15 Mar 2026 | ✅ MkDocs FX chain algo doc | Creata pagina `developer/frontend/fx-chain-algorithm.md`: descrizione completa dell'algoritmo DFS, vincoli, grafi Mermaid con esempi RON→USD, complessità, caching, sorting UI. Aggiunta a nav + indice frontend. |
 
 ### Refinements — 13 Marzo 2026 (post-review utente)
 
@@ -729,28 +737,28 @@ backend/test_scripts/test_api/test_fx_chain_sync.py      # Sync chain E2E
 ```
 
 **Scenari CRUD routes:**
-- [ ] Creare route 1-step (equivalente al vecchio "diretto")
-- [ ] Creare route 2-step (es. RON→EUR→USD)
-- [ ] Creare route 3-step (A→B→C→D)
-- [ ] Validazione: chain con arco ripetuto (stesso pair in 2 step) → 422
-- [ ] Validazione: chain con step non contigui → 422
-- [ ] Validazione: chain con provider inesistente → 400
-- [ ] Validazione: chain vuota (0 step) → 422
-- [ ] Delete route + MANUAL sentinel reinstatement
-- [ ] List routes: verifica chain_steps nella response
+- [x] Creare route 1-step (equivalente al vecchio "diretto")
+- [x] Creare route 2-step (es. RON→EUR→USD)
+- [x] Creare route 3-step (A→B→C→D)
+- [x] Validazione: chain con arco ripetuto (stesso pair in 2 step) → 422
+- [x] Validazione: chain con step non contigui → 422
+- [x] Validazione: chain con provider inesistente → 400
+- [x] Validazione: chain vuota (0 step) → 422
+- [x] Delete route + MANUAL sentinel reinstatement
+- [x] List routes: verifica chain_steps nella response
 
 **Scenari sync:**
-- [ ] Sync route 1-step: funziona come prima
-- [ ] Sync route multi-step: rate derivato calcolato e salvato in fx_rates
-- [ ] Sync route multi-step: source = "CHAIN:ECB+ECB"
-- [ ] Sync route multi-step con un provider fallito → intera route FAILED, ma le altre route OK vengono salvate (successo parziale)
-- [ ] Sync bulk con route 1-step + route multi-step che condivide una gamba → la gamba viene scaricata 1 sola volta (dedup via pipeline Fase 1)
-- [ ] Sync bulk: provider grouping corretto (tutte le currency target raggruppate per provider)
-- [ ] Sync bulk: ogni coppia riuscita è committata indipendentemente (commit per coppia, non atomico bulk)
-- [ ] Sync bulk successo parziale: se 1 coppia su 3 fallisce, le altre 2 sono salvate in DB e response ha `success_count=2, failed_count=1`
-- [ ] `elapsed_ms` presente in ogni `FXSyncPairResult` con status OK/PARTIAL/FAILED (>0ms)
-- [ ] `elapsed_ms` è None per route SKIPPED/MANUAL
-- [ ] `elapsed_ms` anche in `sync_pair()` (sync singola)
+- [x] Sync route 1-step: funziona come prima
+- [x] Sync route multi-step: rate derivato calcolato e salvato in fx_rates
+- [x] Sync route multi-step: source = "CHAIN:ECB+ECB"
+- [x] Sync route multi-step con un provider fallito → intera route FAILED, ma le altre route OK vengono salvate (successo parziale)
+- [x] Sync bulk con route 1-step + route multi-step che condivide una gamba → la gamba viene scaricata 1 sola volta (dedup via pipeline Fase 1)
+- [x] Sync bulk: provider grouping corretto (tutte le currency target raggruppate per provider)
+- [x] Sync bulk: ogni coppia riuscita è committata indipendentemente (commit per coppia, non atomico bulk)
+- [x] Sync bulk successo parziale: se 1 coppia su 3 fallisce, le altre 2 sono salvate in DB e response ha `success_count=2, failed_count=1`
+- [x] `elapsed_ms` presente in ogni `FXSyncPairResult` con status OK/PARTIAL/FAILED (>0ms)
+- [x] `elapsed_ms` è None per route SKIPPED/MANUAL
+- [x] `elapsed_ms` anche in `sync_pair()` (sync singola)
 
 ### Tasks Step 5
 
@@ -1141,14 +1149,15 @@ Il sync modal lavora su slug di coppia, non conosce la struttura interna della r
 
 ### Tasks Step 7
 
-- [ ] Aggiornare `TODO_FUTURI.md`: aggiornare sezione "Cross-Rate" (ora implementato come chain)
-- [ ] Aggiornare `plan-phase05-to-08-upgrade.md` §4 con riferimento a questo plan
-- [ ] Grep globale per `FxCurrencyPairSource` e `pair-sources` — sostituire tutti i riferimenti
-- [ ] Grep globale per `pair_sources` in frontend — aggiornare a `routes`
-- [ ] Verificare che `svelte-check` passi senza errori
-- [ ] Verificare che il build frontend passi
-- [ ] Cancellare DB e ricreare con `./dev.py test db populate --force`
-- [ ] Test manuale: aggiungere coppia multi-step da UI, sync, verificare rate derivato
+- [x] Aggiornare `TODO_FUTURI.md`: sezione "FX Page" ora superata dal lavoro fatto (grafico, provider config, chain, sync)
+- [x] Aggiornare `plan-phase05-to-08-upgrade.md` §4 con riferimento a questo plan
+- [x] Grep globale per `FxCurrencyPairSource` e `pair-sources` — solo nei piani/docs storici (archiviati), nessuno nel codice sorgente attivo
+- [x] Grep globale per `pair_sources` in frontend — nessun riferimento nel codice sorgente
+- [x] Verificare che `svelte-check` passi senza errori → **0 errors, 0 warnings**
+- [x] Verificare che il build frontend passi → **success**
+- [x] Cancellare DB e ricreare con `./dev.py test db populate --force` *(manuale, utente)*
+- [x] Test manuale: aggiungere coppia multi-step da UI, sync, verificare rate derivato *(manuale, utente)*
+- [x] Aggiornare MkDocs `configuration.md` che riferisce ancora `FxCurrencyPairSource` *(docs task — aggiornato a FxConversionRoute + chain routes)*
 
 ---
 

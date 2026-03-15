@@ -17,7 +17,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {Lock, X, ArrowDown, ArrowRight, RotateCcw} from 'lucide-svelte';
+    import {Lock, X, ArrowDownUp, ArrowLeftRight, RotateCcw} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
@@ -74,6 +74,40 @@
     let isDirty = $derived(baseCurrency !== '' || quoteCurrency !== '' || selectedRoutes.length > 0);
     /** Slugs of already-configured FX pairs for sorting chain routes */
     let configuredPairSlugs = $derived(getRegisteredPairs());
+
+    /**
+     * Build a map: currency → Set of currencies it's already paired with.
+     * Slugs are "BASE-QUOTE" alphabetically ordered, so both directions are covered.
+     */
+    let pairedWith = $derived.by(() => {
+        const map = new Map<string, Set<string>>();
+        for (const slug of configuredPairSlugs) {
+            const [a, b] = slug.split('-');
+            if (!map.has(a)) map.set(a, new Set());
+            if (!map.has(b)) map.set(b, new Set());
+            map.get(a)!.add(b);
+            map.get(b)!.add(a);
+        }
+        return map;
+    });
+
+    /** Currencies the quote select must exclude: already paired with baseCurrency + baseCurrency itself */
+    let excludedForQuote = $derived.by(() => {
+        if (!baseCurrency) return new Set<string>();
+        const excluded = new Set<string>([baseCurrency]);
+        const partners = pairedWith.get(baseCurrency);
+        if (partners) for (const p of partners) excluded.add(p);
+        return excluded;
+    });
+
+    /** Currencies the base select must exclude: already paired with quoteCurrency + quoteCurrency itself */
+    let excludedForBase = $derived.by(() => {
+        if (!quoteCurrency) return new Set<string>();
+        const excluded = new Set<string>([quoteCurrency]);
+        const partners = pairedWith.get(quoteCurrency);
+        if (partners) for (const p of partners) excluded.add(p);
+        return excluded;
+    });
 
     // =========================================================================
     // Handlers
@@ -241,25 +275,29 @@
                         <CurrencySearchSelect
                             bind:value={baseCurrency}
                             placeholder={$_('fx.addPair.baseCurrency')}
+                            excludedCurrencies={excludedForBase}
                             onchange={() => {
                                 // Auto-focus the quote currency select after picking base
                                 setTimeout(() => {
                                     const trigger = quoteSelectRef?.querySelector<HTMLElement>('[tabindex], input');
                                     trigger?.focus();
-                                    trigger?.click();
+                                    // Only open dropdown if quote is not yet set
+                                    if (!quoteCurrency) {
+                                        trigger?.click();
+                                    }
                                 }, 30);
                             }}
                         />
                     </div>
-                    <!-- Arrow: → on desktop (invisible label + flex-1 for vertical centering), ↓ on mobile -->
+                    <!-- Arrow: ↔ on desktop (invisible label + flex-1 for vertical centering), ↕ on mobile -->
                     <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 hidden sm:flex flex-col items-center">
                         <div class="text-xs font-medium invisible mb-1 select-none" aria-hidden="true">&nbsp;</div>
                         <div class="flex-1 flex items-center justify-center px-1">
-                            <ArrowRight size={18} />
+                            <ArrowLeftRight size={18} />
                         </div>
                     </div>
                     <div class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:hidden">
-                        <ArrowDown size={18} />
+                        <ArrowDownUp size={18} />
                     </div>
                     <div class="flex-1 min-w-0" bind:this={quoteSelectRef}>
                         <div class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -268,6 +306,7 @@
                         <CurrencySearchSelect
                             bind:value={quoteCurrency}
                             placeholder={$_('fx.addPair.quoteCurrency')}
+                            excludedCurrencies={excludedForQuote}
                         />
                     </div>
                 </div>
