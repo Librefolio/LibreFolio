@@ -212,7 +212,7 @@
                         />
                     </div>
                     <!-- Arrow: → on desktop, ↓ on mobile -->
-                    <span class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:pb-2">
+                    <span class="text-gray-400 dark:text-gray-500 flex-shrink-0 flex items-center justify-center sm:mt-5">
                         <ArrowRight size={18} class="hidden sm:block" />
                         <ArrowDown size={18} class="sm:hidden" />
                     </span>
