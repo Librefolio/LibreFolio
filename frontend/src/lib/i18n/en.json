@@ -333,7 +333,9 @@
       "providerIncompatible": "This provider doesn't support this pair",
       "saveConfiguration": "Save Configuration",
       "providerInfoBanner": "Providers automatically fetch exchange rates from central banks. Without a provider, you will need to insert rates manually.",
-      "noProviderWarning": "No provider configured. You will need to manually insert exchange rates for each date."
+      "noProviderWarning": "No provider configured. You will need to manually insert exchange rates for each date.",
+      "createIntermediatePairs": "Also create intermediate pairs",
+      "createIntermediatePairsHint": "Each step of the selected chain routes will be saved as a standalone pair with its provider, so they can be synced independently."
     },
     "provider": {
       "primary": "Primary",

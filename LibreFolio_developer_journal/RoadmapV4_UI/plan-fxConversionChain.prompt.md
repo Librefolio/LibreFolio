@@ -54,6 +54,12 @@
 | 15 Mar 2026 | 🔧 Chain info → titolo | Spostato ℹ️ info icon dai singoli item catena al titolo della sezione (sia picker che config page). |
 | 15 Mar 2026 | 🔧 Arrow alignment | FxPairAddModal: freccia base→quote centrata verticalmente (sm:mt-5 al posto di sm:pb-2). |
 | 15 Mar 2026 | 🔧 Dynamic timeout | FxSyncModal: timeout proporzionale — `max(10, pairs.length × 1)` secondi. Scala col numero di coppie. |
+| 15 Mar 2026 | 🔧 Arrow alignment v2 | FxPairAddModal: freccia centrata con invisible label placeholder (stessa struttura dei select). `sm:items-start` + spacer. |
+| 15 Mar 2026 | 🐛 SyncModal reset fix | $effect tracciava `pairs.length` → resettava tutto al re-render. Ora usa `wasOpen` per resettare solo su transizione closed→open. |
+| 15 Mar 2026 | 🐛 DFS cycle elimination | `findAllPaths`: sostituito `usedEdgePairs` con `visitedNodes: Set<string>` — produce solo **simple paths** (nessun nodo ripetuto). Elimina catene ridondanti tipo EUR→USD→GBP→EUR→RON dove il round-trip è inutile. |
+| 15 Mar 2026 | 🔧 Arrow alignment v3 | FxPairAddModal: freccia centrata ai selettori — `items-stretch` + invisible label spacer + `flex-1` per stretching verticale. |
+| 15 Mar 2026 | 🔧 Chain sort by configured | FxProviderSelect: catene ordinate per numero di coppie intermedie già configurate (discendente) — le catene che riutilizzano coppie esistenti appaiono prima. Nuova prop `configuredPairSlugs`. |
+| 15 Mar 2026 | ✅ Create intermediate pairs | FxPairAddModal: checkbox "Crea anche le coppie intermedie" (visibile solo con catene selezionate). Ogni step della catena viene salvato come coppia autonoma con il suo provider. Auto-sync anche delle coppie intermedie create. i18n 4 lingue (2 chiavi). |
 
 ### Refinements — 13 Marzo 2026 (post-review utente)
 
